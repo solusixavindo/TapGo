@@ -47,6 +47,7 @@ Tapgo/
 - Midtrans docs: `docs/midtrans/`
 - Payment status: `docs/release/PAYMENT_GATEWAY_STATUS.md`
 - DOKU webhook UAT: `docs/doku/DOKU_WEBHOOK_END_TO_END_UAT.md`
+- DOKU final payment UAT: `docs/doku/DOKU_FINAL_PAYMENT_UAT.md`
 
 ## Operational Documentation
 
@@ -54,8 +55,14 @@ Tapgo/
 - Deployment guide: `docs/release/DEPLOYMENT_GUIDE.md`
 - Recovery guide: `docs/release/RECOVERY_GUIDE.md`
 - Production readiness checklist: `docs/release/PRODUCTION_READINESS_CHECKLIST.md`
+- Production infrastructure audit: `docs/release/PRODUCTION_INFRASTRUCTURE_AUDIT.md`
+- Internal UAT checklist: `docs/release/INTERNAL_UAT_CHECKLIST.md`
+- Closed beta plan: `docs/release/CLOSED_BETA_PLAN.md`
+- Google Play production readiness: `docs/release/GOOGLE_PLAY_PRODUCTION_READINESS.md`
+- Google Play closed testing plan: `docs/release/GOOGLE_PLAY_CLOSED_TESTING_PLAN.md`
 - Legal and SOP docs: `docs/legal/`
 - Historical audit docs: `docs/archive/`
+- Current project status: `PROJECT_STATUS.md`
 
 ## Cleanup Policy
 

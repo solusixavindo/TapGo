@@ -10,6 +10,7 @@ Lokasi: `docs/doku/`
 - `DOKU_UAT_CHECKLIST.md`
 - `DOKU_PRODUCTION_WEBHOOK_UAT_CHECKLIST.md`
 - `DOKU_WEBHOOK_END_TO_END_UAT.md`
+- `DOKU_FINAL_PAYMENT_UAT.md`
 - `DOKU_PAYMENT_INTEGRATION_REPORT.md`
 
 ## Midtrans Documents
@@ -54,10 +55,15 @@ Lokasi: `docs/release/`
 - `GOOGLE_PLAY_PRE_SUBMISSION_AUDIT.md`
 - `GOOGLE_PLAY_STORE_LISTING_DRAFT.md`
 - `GOOGLE_PLAY_PRODUCTION_PREP.md`
+- `GOOGLE_PLAY_PRODUCTION_READINESS.md`
+- `GOOGLE_PLAY_CLOSED_TESTING_PLAN.md`
 - `PAYMENT_GATEWAY_STATUS.md`
 - `DEPLOYMENT_GUIDE.md`
 - `RECOVERY_GUIDE.md`
 - `PRODUCTION_READINESS_CHECKLIST.md`
+- `PRODUCTION_INFRASTRUCTURE_AUDIT.md`
+- `INTERNAL_UAT_CHECKLIST.md`
+- `CLOSED_BETA_PLAN.md`
 - `FINAL_UAT_CHECKLIST.md`
 - `UAT_CHECKLIST.md`
 - `UAT_PHASE_A_FINAL_READINESS.md`
@@ -89,5 +95,6 @@ Release artifacts are intentionally kept in their original artifact folders.
 - Google Play AAB v3: `1.0.2+3`
 - DOKU integration mode: `checkout`
 - DOKU production webhook: `https://api.tapgolion.id/api/v1/webhooks/doku`
+- Production roadmap status: `PROJECT_STATUS.md`
 - Main backend package: `apps/backend`
 - Main Flutter user app: `apps/user_app`
