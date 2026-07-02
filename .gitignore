@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment and runtime secrets
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+!**/.env.*.example
+
+# Payment gateway credentials and sensitive captures
+*.secret
+*.secrets
+*.credentials
+*.credential
+*.private-key
+*.private_key
+*doku*credential*
+*midtrans*credential*
+*xendit*credential*
+*doku*secret*
+*midtrans*secret*
+*xendit*secret*
+doku-webhook-captures/
+**/doku-webhook-captures/
+webhook-captures/
+**/webhook-captures/
+
+# Build output
+dist/
+build/
+.next/
+coverage/
+apps/user_app/build/
+apps/driver_app/build/
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+
+# Android signing secrets
+android/key.properties
+android/keystore/
+apps/user_app/android/key.properties
+apps/user_app/android/keystore/
+apps/driver_app/android/key.properties
+apps/driver_app/android/keystore/
+*.jks
+*.keystore
+
+# Local files
+.DS_Store
+*.log
+apps/backend/prisma/dev.db
