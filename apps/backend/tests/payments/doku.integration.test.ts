@@ -104,8 +104,13 @@ describe.skipIf(!runIntegration)("DOKU checkout membership payments", () => {
       },
     });
     const order = await createOrderFor(user, "SILVER");
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      expect(url).toBe("https://api-sandbox.doku.com/checkout/v1/payment");
+    const realFetch = globalThis.fetch;
+    const dokuCheckoutUrl = "https://api-sandbox.doku.com/checkout/v1/payment";
+    const fetchMock = vi.fn(async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const requestUrl = String(url);
+      if (requestUrl !== dokuCheckoutUrl) {
+        return realFetch(url, init);
+      }
       const body = JSON.parse(String(init?.body ?? "{}")) as {
         order?: { amount?: number; invoice_number?: string };
       };
@@ -172,8 +177,59 @@ describe.skipIf(!runIntegration)("DOKU checkout membership payments", () => {
     const failedAfterPaid = await postDokuWebhook(order.invoiceNumber, "FAILED");
 
     expect(failedAfterPaid.status).toBe(200);
+    const body = (await failedAfterPaid.json()) as {
+      data: { status: string; idempotent: boolean };
+    };
+    expect(body.data.status).toBe("PAID");
+    expect(body.data.idempotent).toBe(true);
     await expectPaidOrder(order.id, user.id, "SILVER");
     await expectWalletTransactionCount(user.id, "PPOB_BENEFIT", 1);
+  });
+
+  it("unknown webhook status does not activate membership", async () => {
+    const user = await createApiUser("DOKU004");
+    const order = await createOrderFor(user, "SILVER");
+
+    const unknown = await postDokuWebhook(order.invoiceNumber, "REVIEW_REQUIRED");
+
+    expect(unknown.status).toBe(200);
+    const body = (await unknown.json()) as { data: { status: string } };
+    expect(body.data.status).toBe("UNKNOWN");
+    await expectPendingOrder(order.id, {
+      provider: "DOKU",
+      providerReference: `doku-${order.invoiceNumber}`,
+    });
+    await expectWalletTransactionCount(user.id, "PPOB_BENEFIT", 0);
+  });
+
+  it("invalid webhook signature is rejected", async () => {
+    const user = await createApiUser("DOKU005");
+    const order = await createOrderFor(user, "SILVER");
+
+    const invalid = await postDokuWebhook(order.invoiceNumber, "SUCCESS", {
+      signature: "HMACSHA256=invalid-signature",
+    });
+
+    expect(invalid.status).toBe(401);
+    const body = (await invalid.json()) as { code: string };
+    expect(body.code).toBe("DOKU_SIGNATURE_INVALID");
+    await expectPendingOrder(order.id, { provider: null, providerReference: null });
+    await expectWalletTransactionCount(user.id, "PPOB_BENEFIT", 0);
+  });
+
+  it("missing webhook signature headers are rejected", async () => {
+    const user = await createApiUser("DOKU006");
+    const order = await createOrderFor(user, "SILVER");
+
+    const missingHeaders = await postDokuWebhook(order.invoiceNumber, "SUCCESS", {
+      omitSignatureHeaders: true,
+    });
+
+    expect(missingHeaders.status).toBe(401);
+    const body = (await missingHeaders.json()) as { code: string };
+    expect(body.code).toBe("DOKU_SIGNATURE_INVALID");
+    await expectPendingOrder(order.id, { provider: null, providerReference: null });
+    await expectWalletTransactionCount(user.id, "PPOB_BENEFIT", 0);
   });
 });
 
@@ -236,7 +292,14 @@ async function createOrderFor(user: User, tier: MembershipTier) {
   };
 }
 
-async function postDokuWebhook(invoiceNumber: string, status: string) {
+async function postDokuWebhook(
+  invoiceNumber: string,
+  status: string,
+  options: {
+    signature?: string;
+    omitSignatureHeaders?: boolean;
+  } = {},
+) {
   const target = "/api/v1/webhooks/doku";
   const body = {
     order: { invoice_number: invoiceNumber, amount: "500000" },
@@ -257,12 +320,14 @@ async function postDokuWebhook(invoiceNumber: string, status: string) {
   return api(target, {
     method: "POST",
     body,
-    headers: {
-      "Client-Id": dokuClientId,
-      "Request-Id": signed.requestId,
-      "Request-Timestamp": signed.requestTimestamp,
-      Signature: signed.signature,
-    },
+    headers: options.omitSignatureHeaders
+      ? {}
+      : {
+          "Client-Id": dokuClientId,
+          "Request-Id": signed.requestId,
+          "Request-Timestamp": signed.requestTimestamp,
+          Signature: options.signature ?? signed.signature,
+        },
   });
 }
 
@@ -298,7 +363,13 @@ async function expectPaidOrder(
   expect(user.membership?.tier).toBe(tier);
 }
 
-async function expectPendingOrder(orderId: string) {
+async function expectPendingOrder(
+  orderId: string,
+  options: {
+    provider?: "DOKU" | null;
+    providerReference?: string | null;
+  } = {},
+) {
   const order = await prisma.membershipOrder.findUniqueOrThrow({
     where: { id: orderId },
     include: {
@@ -309,8 +380,16 @@ async function expectPendingOrder(orderId: string) {
 
   expect(order.status).toBe("PENDING");
   expect(order.invoice?.status).toBe("PENDING");
-  expect(order.payments[0]?.provider).toBe("DOKU");
-  expect(order.payments[0]?.providerReference).toBe(order.invoice?.number);
+  expect(order.payments[0]?.provider).toBe(
+    Object.prototype.hasOwnProperty.call(options, "provider")
+      ? options.provider
+      : "DOKU",
+  );
+  expect(order.payments[0]?.providerReference).toBe(
+    Object.prototype.hasOwnProperty.call(options, "providerReference")
+      ? options.providerReference
+      : order.invoice?.number,
+  );
 }
 
 async function expectWalletTransactionCount(
@@ -318,7 +397,11 @@ async function expectWalletTransactionCount(
   type: "PPOB_BENEFIT",
   count: number,
 ) {
-  const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId } });
+  const wallet = await prisma.wallet.findUnique({ where: { userId } });
+  if (!wallet) {
+    expect(count).toBe(0);
+    return;
+  }
   const transactions = await prisma.walletTransaction.findMany({
     where: { walletId: wallet.id, type },
   });
