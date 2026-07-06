@@ -1,25 +1,29 @@
 # TapGo Project Status
 
-Tanggal status: 2026-07-02
+Tanggal status: 2026-07-06
 
 Mode kerja: Production Stabilization.
 
 ## Executive Summary
 
-TapGo sudah memiliki payment architecture v1.0 yang jelas: DOKU sebagai primary gateway, Midtrans sebagai secondary/fallback, dan Xendit tidak digunakan. Production launch belum boleh dilakukan sampai DOKU production webhook UAT selesai dan semua checklist closed beta/Google Play final disetujui owner.
+TapGo berada pada fase Pre-Production dengan progress keseluruhan 97%. Payment architecture v1.0 sudah dikunci: DOKU sebagai primary gateway, Midtrans sebagai secondary/fallback, dan Xendit tidak digunakan. Target berikutnya adalah deploy backend manual, set webhook DOKU, lalu menjalankan DOKU Production Webhook UAT dengan transaksi nyata terkontrol.
 
 ## Progress Keseluruhan
 
 | Area | Status | Catatan |
 | --- | --- | --- |
-| Backend core | READY FOR UAT | Build/test lokal PASS. |
+| Overall progress | 97% | Sisa utama: deploy manual, webhook DOKU production UAT, final Google Play release. |
+| Current phase | PRE-PRODUCTION | Stabilization dan execution planning. |
+| Next milestone | DOKU PRODUCTION WEBHOOK UAT | Butuh deploy manual dan payment test terkontrol. |
+| Backend core | READY FOR PRODUCTION DEPLOY PREP | Build/test lokal PASS. |
 | DOKU create payment | PASS | Production endpoint pernah menghasilkan payment URL. |
-| DOKU webhook | READY FOR REAL UAT | Unit/integration coverage PASS; real production notification pending. |
+| DOKU webhook code/test | PASS | Unit/integration coverage PASS; real production notification pending. |
+| DOKU production UAT | PENDING MANUAL DEPLOY/PAYMENT | Butuh set webhook dashboard DOKU dan transaksi nyata terkontrol. |
 | Midtrans | WAITING REVIEW | Secondary/fallback sambil onboarding/review selesai. |
 | Xendit | NOT USED | Tidak masuk TapGo v1.0. |
 | Flutter user app | READY FOR VALIDATION | Analyze/test PASS; AAB tidak dibuild pada fase ini. |
-| Google Play | PREPARED, NOT READY FOR PRODUCTION | Menunggu DOKU webhook UAT dan owner action di Play Console. |
-| Documentation | UPDATED | Fase 1-6 roadmap docs dibuat. |
+| Google Play | PENDING AFTER PAYMENT ENGINE STABLE | Jangan build/upload final sebelum DOKU UAT PASS. |
+| Documentation | UPDATED | Final deploy steps, DOKU UAT execution, dan Google Play final checklist dibuat. |
 
 ## Status Modul
 
@@ -60,4 +64,3 @@ Manual owner/deployment milestone:
 | Public launch | NO-GO |
 | Google Play production upload | NO-GO |
 | Closed beta preparation | GO |
-
