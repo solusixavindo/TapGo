@@ -49,6 +49,7 @@ Tapgo/
 - DOKU webhook UAT: `docs/doku/DOKU_WEBHOOK_END_TO_END_UAT.md`
 - DOKU final payment UAT: `docs/doku/DOKU_FINAL_PAYMENT_UAT.md`
 - DOKU production UAT execution: `docs/doku/DOKU_PRODUCTION_UAT_EXECUTION.md`
+- DOKU merchant clarification response: `docs/doku/DOKU_BUSINESS_FLOW_RESPONSE.md`
 
 ## Operational Documentation
 
