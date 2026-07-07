@@ -1,0 +1,183 @@
+import { Router } from "express";
+import { prisma } from "../../../config/prisma.js";
+import { asyncHandler } from "../../../core/http/asyncHandler.js";
+import { validateRequest } from "../../../core/http/validateRequest.js";
+import { requireAuth, requireRoles } from "../../../core/security/authContext.js";
+import { AdminConsoleService } from "../application/AdminConsoleService.js";
+import { AdminConsoleController } from "./admin-console.controller.js";
+import { WalletService } from "../../wallets/application/WalletService.js";
+import { PrismaWalletRepository } from "../../wallets/infrastructure/PrismaWalletRepository.js";
+import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
+import {
+  adminCommissionQuerySchema,
+  adminFounderPlatinumGrantSchema,
+  adminGenericStatusQuerySchema,
+  adminInvoiceQuerySchema,
+  adminListQuerySchema,
+  adminFinancialReportQuerySchema,
+  adminMemberDetailSchema,
+  adminMemberRequestActionSchema,
+  adminOrderQuerySchema,
+  adminPaymentQuerySchema,
+  adminReportQuerySchema,
+  adminRewardActionSchema,
+  adminRewardDetailSchema,
+  adminRewardQuerySchema,
+  adminWalletTransactionSchema,
+  adminWithdrawalActionSchema,
+  adminWithdrawalDetailSchema,
+  adminWithdrawalQuerySchema
+} from "./admin-console.validators.js";
+
+const service = new AdminConsoleService(prisma);
+const walletService = new WalletService(new PrismaWalletRepository(prisma));
+const membershipOrderService = new MembershipOrderService(prisma);
+const controller = new AdminConsoleController(service, walletService, membershipOrderService);
+
+export const adminConsoleRouter = Router();
+
+adminConsoleRouter.use(requireAuth, requireRoles("ADMIN", "SUPER_ADMIN"));
+
+adminConsoleRouter.get("/dashboard/summary", asyncHandler(controller.summary));
+adminConsoleRouter.get("/dashboard", asyncHandler(controller.summary));
+adminConsoleRouter.get("/members", validateRequest(adminListQuerySchema), asyncHandler(controller.members));
+adminConsoleRouter.get("/members/:id", validateRequest(adminMemberDetailSchema), asyncHandler(controller.member));
+adminConsoleRouter.get("/member-requests", validateRequest(adminOrderQuerySchema), asyncHandler(controller.memberRequests));
+adminConsoleRouter.post(
+  "/member-requests/:id/approve",
+  validateRequest(adminMemberRequestActionSchema),
+  asyncHandler(controller.approveMemberRequest)
+);
+adminConsoleRouter.post(
+  "/member-requests/:id/reject",
+  validateRequest(adminMemberRequestActionSchema),
+  asyncHandler(controller.rejectMemberRequest)
+);
+adminConsoleRouter.post(
+  "/founder-platinum/grants",
+  requireRoles("SUPER_ADMIN"),
+  validateRequest(adminFounderPlatinumGrantSchema),
+  asyncHandler(controller.grantFounderPlatinum)
+);
+adminConsoleRouter.get("/payments", validateRequest(adminPaymentQuerySchema), asyncHandler(controller.payments));
+adminConsoleRouter.get("/invoices", validateRequest(adminInvoiceQuerySchema), asyncHandler(controller.invoices));
+adminConsoleRouter.get("/commissions", validateRequest(adminCommissionQuerySchema), asyncHandler(controller.commissions));
+adminConsoleRouter.get("/reports/bonus.csv", validateRequest(adminReportQuerySchema), asyncHandler(controller.bonusReportCsv));
+adminConsoleRouter.get("/reports/bonus", validateRequest(adminReportQuerySchema), asyncHandler(controller.bonusReport));
+adminConsoleRouter.get("/reports/ppob.csv", validateRequest(adminReportQuerySchema), asyncHandler(controller.ppobReportCsv));
+adminConsoleRouter.get("/reports/ppob", validateRequest(adminReportQuerySchema), asyncHandler(controller.ppobReport));
+adminConsoleRouter.get("/reports/reward.csv", validateRequest(adminReportQuerySchema), asyncHandler(controller.rewardReportCsv));
+adminConsoleRouter.get("/reports/reward", validateRequest(adminReportQuerySchema), asyncHandler(controller.rewardReport));
+adminConsoleRouter.get(
+  "/reports/financial-summary",
+  validateRequest(adminFinancialReportQuerySchema),
+  asyncHandler(controller.financialSummaryReport)
+);
+adminConsoleRouter.get(
+  "/reports/wallet-liability",
+  validateRequest(adminFinancialReportQuerySchema),
+  asyncHandler(controller.walletLiabilityReport)
+);
+adminConsoleRouter.get(
+  "/reports/commission-summary",
+  validateRequest(adminFinancialReportQuerySchema),
+  asyncHandler(controller.commissionSummaryReport)
+);
+adminConsoleRouter.get(
+  "/reports/reward-summary",
+  validateRequest(adminFinancialReportQuerySchema),
+  asyncHandler(controller.rewardSummaryReport)
+);
+adminConsoleRouter.get(
+  "/reports/profit-sharing-summary",
+  validateRequest(adminFinancialReportQuerySchema),
+  asyncHandler(controller.profitSharingSummaryReport)
+);
+adminConsoleRouter.get(
+  "/reports/ppob-summary",
+  validateRequest(adminFinancialReportQuerySchema),
+  asyncHandler(controller.ppobSummaryReport)
+);
+adminConsoleRouter.get("/rewards", validateRequest(adminRewardQuerySchema), asyncHandler(controller.rewards));
+adminConsoleRouter.get("/rewards/:id", validateRequest(adminRewardDetailSchema), asyncHandler(controller.reward));
+adminConsoleRouter.post(
+  "/rewards/:id/approve",
+  validateRequest(adminRewardActionSchema),
+  asyncHandler(controller.approveReward)
+);
+adminConsoleRouter.post(
+  "/rewards/:id/reject",
+  validateRequest(adminRewardActionSchema),
+  asyncHandler(controller.rejectReward)
+);
+adminConsoleRouter.post(
+  "/rewards/:id/mark-paid",
+  validateRequest(adminRewardActionSchema),
+  asyncHandler(controller.markRewardPaid)
+);
+adminConsoleRouter.get("/commission-settings", requireRoles("SUPER_ADMIN"), (_req, res) => {
+  res.status(501).json({
+    success: false,
+    code: "PRODUCTION_APPROVAL_REQUIRED",
+    message: "Fitur ini membutuhkan approval production."
+  });
+});
+adminConsoleRouter.get("/wallets", validateRequest(adminListQuerySchema), asyncHandler(controller.wallets));
+adminConsoleRouter.get(
+  "/wallets/:userId/transactions",
+  validateRequest(adminWalletTransactionSchema),
+  asyncHandler(controller.walletTransactions)
+);
+adminConsoleRouter.get("/withdrawals", validateRequest(adminWithdrawalQuerySchema), asyncHandler(controller.withdrawals));
+adminConsoleRouter.get("/withdraw-requests", validateRequest(adminWithdrawalQuerySchema), asyncHandler(controller.withdrawals));
+adminConsoleRouter.get("/withdrawals/:id", validateRequest(adminWithdrawalDetailSchema), asyncHandler(controller.withdrawal));
+adminConsoleRouter.get("/withdraw-requests/:id", validateRequest(adminWithdrawalDetailSchema), asyncHandler(controller.withdrawal));
+adminConsoleRouter.post(
+  "/withdrawals/:id/approve",
+  validateRequest(adminWithdrawalActionSchema),
+  asyncHandler(controller.approveWithdrawal)
+);
+adminConsoleRouter.post(
+  "/withdraw-requests/:id/approve",
+  validateRequest(adminWithdrawalActionSchema),
+  asyncHandler(controller.approveWithdrawal)
+);
+adminConsoleRouter.post(
+  "/withdrawals/:id/reject",
+  validateRequest(adminWithdrawalActionSchema),
+  asyncHandler(controller.rejectWithdrawal)
+);
+adminConsoleRouter.post(
+  "/withdraw-requests/:id/reject",
+  validateRequest(adminWithdrawalActionSchema),
+  asyncHandler(controller.rejectWithdrawal)
+);
+adminConsoleRouter.post(
+  "/withdrawals/:id/paid",
+  requireRoles("SUPER_ADMIN"),
+  validateRequest(adminWithdrawalActionSchema),
+  asyncHandler(controller.markWithdrawalPaid)
+);
+adminConsoleRouter.get("/delete-requests", validateRequest(adminGenericStatusQuerySchema), asyncHandler(controller.deleteRequests));
+adminConsoleRouter.get("/contact-messages", validateRequest(adminGenericStatusQuerySchema), asyncHandler(controller.contactMessages));
+adminConsoleRouter.post("/roles", requireRoles("SUPER_ADMIN"), (_req, res) => {
+  res.status(501).json({
+    success: false,
+    code: "PRODUCTION_APPROVAL_REQUIRED",
+    message: "Fitur ini membutuhkan approval production."
+  });
+});
+adminConsoleRouter.put("/roles/:userId", requireRoles("SUPER_ADMIN"), (_req, res) => {
+  res.status(501).json({
+    success: false,
+    code: "PRODUCTION_APPROVAL_REQUIRED",
+    message: "Fitur ini membutuhkan approval production."
+  });
+});
+adminConsoleRouter.put("/app-settings", requireRoles("SUPER_ADMIN"), (_req, res) => {
+  res.status(501).json({
+    success: false,
+    code: "PRODUCTION_APPROVAL_REQUIRED",
+    message: "Fitur ini membutuhkan approval production."
+  });
+});

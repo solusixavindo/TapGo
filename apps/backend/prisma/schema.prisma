@@ -1,0 +1,979 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  DRIVER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+  DELETED
+}
+
+enum DriverStatus {
+  OFFLINE
+  AVAILABLE
+  ON_TRIP
+  SUSPENDED
+}
+
+enum KycStatus {
+  NOT_SUBMITTED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RideStatus {
+  REQUESTED
+  MATCHING
+  DRIVER_ASSIGNED
+  DRIVER_ARRIVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum PaymentMethod {
+  CASH
+  WALLET
+  MIDTRANS
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  PAID
+  FAILED
+  EXPIRED
+  REFUNDED
+  CANCELLED
+}
+
+enum MembershipOrderStatus {
+  PENDING
+  PAID
+  FAILED
+  EXPIRED
+  CANCELLED
+}
+
+enum UserMembershipStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum MembershipDocumentType {
+  KTP
+  SELFIE
+}
+
+enum MembershipDocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum WalletTransactionType {
+  TOPUP
+  PAYMENT
+  REFUND
+  WITHDRAWAL
+  WITHDRAWAL_REQUEST
+  WITHDRAWAL_REFUND
+  COMMISSION
+  REGISTRATION_BONUS
+  BASIC_SPONSOR_BONUS
+  SPONSOR_BONUS
+  LEVEL_BONUS
+  REWARD_BONUS
+  PPOB_BENEFIT
+  PROFIT_SHARING
+  PROFIT_SHARING_BONUS
+  ADJUSTMENT
+}
+
+enum ChatSenderType {
+  USER
+  DRIVER
+  ADMIN
+}
+
+enum MembershipTier {
+  BASIC
+  SILVER
+  GOLD
+  PLATINUM
+}
+
+enum ReferralStatus {
+  ACTIVE
+  BLOCKED
+}
+
+enum CommissionType {
+  DIRECT_REFERRAL
+  BASIC_SPONSOR_BONUS
+  SPONSOR_BONUS
+  LEVEL_BONUS
+  LEVEL_COMMISSION
+  REWARD_BONUS
+  PROFIT_SHARING
+  PROFIT_SHARING_BONUS
+  MEMBERSHIP_UPGRADE
+  ADMIN_ADJUSTMENT
+}
+
+enum CommissionStatus {
+  PENDING
+  POSTED
+  REVERSED
+}
+
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+  CANCELLED
+}
+
+enum ProfitSharingPeriodStatus {
+  DRAFT
+  APPROVED
+  DISTRIBUTED
+  CANCELLED
+}
+
+enum ProfitSharingDistributionStatus {
+  PENDING
+  POSTED
+  FAILED
+}
+
+enum RewardTransactionStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+}
+
+enum AccountDeletionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum ContactMessageStatus {
+  NEW
+  IN_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+enum AbuseFlagStatus {
+  OPEN
+  REVIEWED
+  RESOLVED
+  DISMISSED
+}
+
+enum AbuseFlagSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum FounderRole {
+  FOUNDER_PLATINUM
+}
+
+model User {
+  id              String        @id @default(uuid()) @db.Uuid
+  role            UserRole      @default(USER)
+  status          AccountStatus @default(ACTIVE)
+  membershipId    String?       @map("membership_id") @db.Uuid
+  fullName        String        @db.VarChar(120)
+  email           String?       @unique @db.VarChar(180)
+  phone           String        @unique @db.VarChar(32)
+  passwordHash    String?       @map("password_hash")
+  avatarUrl       String?       @map("avatar_url")
+  bankAccount     Json?         @map("bank_account")
+  referralCode    String        @unique @map("referral_code") @db.VarChar(24)
+  lastLoginAt     DateTime?     @map("last_login_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  membership      Membership?   @relation(fields: [membershipId], references: [id])
+  driver          Driver?
+  sessions        Session[]
+  pushTokens      PushToken[]
+  rides           Ride[]        @relation("RideCustomer")
+  wallet          Wallet?
+  reviewsGiven    Review[]      @relation("ReviewsGiven")
+  auditLogs       AuditLog[]
+  sponsoredReferrals Referral[] @relation("ReferralSponsor")
+  referralRecord     Referral?  @relation("ReferralUser")
+  referralAncestors  ReferralLevel[] @relation("ReferralAncestor")
+  referralDescendants ReferralLevel[] @relation("ReferralDescendant")
+  commissions        Commission[] @relation("CommissionBeneficiary")
+  withdrawals        Withdrawal[]
+  userMemberships    UserMembership[]
+  membershipOrders   MembershipOrder[]
+  invoices           Invoice[]
+  membershipPayments MembershipPayment[]
+  membershipDocuments MembershipDocument[]
+  profitSharingDistributions ProfitSharingDistribution[]
+  rewardTransactions RewardTransaction[]
+  accountDeletionRequests AccountDeletionRequest[]
+  contactMessages ContactMessage[]
+  registrationEvents RegistrationEvent[] @relation("RegistrationEventUser")
+  abuseFlags AbuseFlag[] @relation("AbuseFlagUser")
+  founderProgramGrants FounderProgramGrant[] @relation("FounderGrantUser")
+  founderProgramGrantActions FounderProgramGrant[] @relation("FounderGrantActor")
+
+  @@index([role, status])
+  @@index([membershipId])
+  @@map("users")
+}
+
+model Membership {
+  id              String         @id @default(uuid()) @db.Uuid
+  tier            MembershipTier @unique
+  name            String         @db.VarChar(80)
+  price           Decimal        @default(0) @db.Decimal(14, 2)
+  directBonus     Decimal        @default(0) @map("direct_bonus") @db.Decimal(14, 2)
+  activeLevels    Int            @default(1) @map("active_levels")
+  ppobBalance     Decimal        @default(0) @map("ppob_balance") @db.Decimal(14, 2)
+  bpjsBenefit     String?        @map("bpjs_benefit")
+  merchandise     Json?
+  businessRight   String?        @map("business_right")
+  isActive        Boolean        @default(true) @map("is_active")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  users           User[]
+  benefits        MembershipBenefit[]
+  userMemberships UserMembership[]
+  orders          MembershipOrder[]
+  founderProgramGrants FounderProgramGrant[]
+
+  @@index([tier, isActive])
+  @@map("memberships")
+}
+
+model UserMembership {
+  id              String               @id @default(uuid()) @db.Uuid
+  userId          String               @map("user_id") @db.Uuid
+  membershipId    String               @map("membership_id") @db.Uuid
+  orderId         String?              @unique @map("order_id") @db.Uuid
+  status          UserMembershipStatus @default(ACTIVE)
+  founderRole     FounderRole?         @map("founder_role")
+  activeAt        DateTime             @default(now()) @map("active_at")
+  expiresAt       DateTime?            @map("expires_at")
+  metadata        Json?
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  membership      Membership           @relation(fields: [membershipId], references: [id])
+  order           MembershipOrder?     @relation(fields: [orderId], references: [id])
+  founderProgramGrant FounderProgramGrant?
+
+  @@index([userId, status])
+  @@index([membershipId, status])
+  @@index([founderRole, status])
+  @@map("user_memberships")
+}
+
+model FounderProgramGrant {
+  id               String       @id @default(uuid()) @db.Uuid
+  userId           String       @map("user_id") @db.Uuid
+  membershipId     String       @map("membership_id") @db.Uuid
+  userMembershipId String       @unique @map("user_membership_id") @db.Uuid
+  founderRole      FounderRole  @map("founder_role")
+  grantedBy        String?      @map("granted_by") @db.Uuid
+  reason           String?
+  revokedAt        DateTime?    @map("revoked_at")
+  revokedBy        String?      @map("revoked_by") @db.Uuid
+  metadata         Json?
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  user             User         @relation("FounderGrantUser", fields: [userId], references: [id], onDelete: Cascade)
+  actor            User?        @relation("FounderGrantActor", fields: [grantedBy], references: [id], onDelete: SetNull)
+  membership       Membership   @relation(fields: [membershipId], references: [id])
+  userMembership   UserMembership @relation(fields: [userMembershipId], references: [id], onDelete: Cascade)
+
+  @@index([founderRole, revokedAt])
+  @@index([userId, founderRole])
+  @@index([grantedBy, createdAt])
+  @@map("founder_program_grants")
+}
+
+model MembershipOrder {
+  id              String                @id @default(uuid()) @db.Uuid
+  userId          String                @map("user_id") @db.Uuid
+  membershipId    String                @map("membership_id") @db.Uuid
+  status          MembershipOrderStatus @default(PENDING)
+  totalAmount     Decimal               @map("total_amount") @db.Decimal(14, 2)
+  packageSnapshot Json                  @map("package_snapshot")
+  registrationData Json?                @map("registration_data")
+  expiresAt       DateTime?             @map("expires_at")
+  paidAt          DateTime?             @map("paid_at")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  membership      Membership            @relation(fields: [membershipId], references: [id])
+  invoice         Invoice?
+  payments        MembershipPayment[]
+  documents       MembershipDocument[]
+  userMembership  UserMembership?
+
+  @@index([userId, status])
+  @@index([membershipId, status])
+  @@map("membership_orders")
+}
+
+model Invoice {
+  id              String        @id @default(uuid()) @db.Uuid
+  orderId         String        @unique @map("order_id") @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
+  number          String        @unique @db.VarChar(40)
+  status          PaymentStatus @default(PENDING)
+  amount          Decimal       @db.Decimal(14, 2)
+  currency        String        @default("IDR") @db.VarChar(8)
+  dueAt           DateTime?     @map("due_at")
+  paidAt          DateTime?     @map("paid_at")
+  metadata        Json?
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  order           MembershipOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments        MembershipPayment[]
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@map("invoices")
+}
+
+model MembershipPayment {
+  id              String        @id @default(uuid()) @db.Uuid
+  orderId         String        @map("order_id") @db.Uuid
+  invoiceId       String        @map("invoice_id") @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
+  status          PaymentStatus @default(PENDING)
+  amount          Decimal       @db.Decimal(14, 2)
+  method          String        @default("DEVELOPMENT_SIMULATOR") @db.VarChar(60)
+  provider        String?       @db.VarChar(60)
+  providerReference String?     @map("provider_reference") @db.VarChar(120)
+  paidAt          DateTime?     @map("paid_at")
+  metadata        Json?
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  order           MembershipOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  invoice         Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([orderId, status])
+  @@index([providerReference])
+  @@map("membership_payments")
+}
+
+model MembershipDocument {
+  id              String                   @id @default(uuid()) @db.Uuid
+  orderId         String                   @map("order_id") @db.Uuid
+  userId          String                   @map("user_id") @db.Uuid
+  type            MembershipDocumentType
+  status          MembershipDocumentStatus @default(PENDING)
+  url             String?
+  localPath       String?                  @map("local_path")
+  metadata        Json?
+  createdAt       DateTime                 @default(now()) @map("created_at")
+  updatedAt       DateTime                 @updatedAt @map("updated_at")
+
+  order           MembershipOrder          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user            User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, type])
+  @@index([userId, type])
+  @@map("membership_documents")
+}
+
+model MembershipBenefit {
+  id              String         @id @default(uuid()) @db.Uuid
+  membershipId    String         @map("membership_id") @db.Uuid
+  level           Int
+  commissionRate  Decimal        @map("commission_rate") @db.Decimal(5, 2)
+  fixedBonus      Decimal        @default(0) @map("fixed_bonus") @db.Decimal(14, 2)
+  isActive        Boolean        @default(true) @map("is_active")
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  membership      Membership     @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, level])
+  @@index([level, isActive])
+  @@map("membership_benefits")
+}
+
+model Referral {
+  id              String         @id @default(uuid()) @db.Uuid
+  sponsorId       String         @map("sponsor_id") @db.Uuid
+  userId          String         @unique @map("user_id") @db.Uuid
+  status          ReferralStatus @default(ACTIVE)
+  joinedAt        DateTime       @default(now()) @map("joined_at")
+  blockedAt       DateTime?      @map("blocked_at")
+  metadata        Json?
+
+  sponsor         User           @relation("ReferralSponsor", fields: [sponsorId], references: [id])
+  user            User           @relation("ReferralUser", fields: [userId], references: [id], onDelete: Cascade)
+  commissions     Commission[]
+
+  @@index([sponsorId, joinedAt])
+  @@index([status])
+  @@map("referrals")
+}
+
+model ReferralLevel {
+  id              String   @id @default(uuid()) @db.Uuid
+  ancestorId      String   @map("ancestor_id") @db.Uuid
+  descendantId    String   @map("descendant_id") @db.Uuid
+  level           Int
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  ancestor        User     @relation("ReferralAncestor", fields: [ancestorId], references: [id], onDelete: Cascade)
+  descendant      User     @relation("ReferralDescendant", fields: [descendantId], references: [id], onDelete: Cascade)
+
+  @@unique([ancestorId, descendantId])
+  @@index([ancestorId, level])
+  @@index([descendantId, level])
+  @@map("referral_levels")
+}
+
+model Commission {
+  id                  String           @id @default(uuid()) @db.Uuid
+  beneficiaryId       String           @map("beneficiary_id") @db.Uuid
+  sourceUserId        String           @map("source_user_id") @db.Uuid
+  referralId          String?          @map("referral_id") @db.Uuid
+  walletTransactionId String?          @unique @map("wallet_transaction_id") @db.Uuid
+  type                CommissionType
+  status              CommissionStatus @default(PENDING)
+  level               Int?
+  amount              Decimal          @db.Decimal(14, 2)
+  rate                Decimal?         @db.Decimal(5, 2)
+  triggerType         String           @map("trigger_type") @db.VarChar(80)
+  triggerId           String           @map("trigger_id") @db.VarChar(120)
+  metadata            Json?
+  postedAt            DateTime?        @map("posted_at")
+  reversedAt          DateTime?        @map("reversed_at")
+  createdAt           DateTime         @default(now()) @map("created_at")
+
+  beneficiary         User             @relation("CommissionBeneficiary", fields: [beneficiaryId], references: [id])
+  referral            Referral?        @relation(fields: [referralId], references: [id])
+  walletTransaction   WalletTransaction? @relation(fields: [walletTransactionId], references: [id])
+  profitSharingDistribution ProfitSharingDistribution?
+
+  @@unique([beneficiaryId, triggerType, triggerId, type, level])
+  @@index([beneficiaryId, createdAt])
+  @@index([sourceUserId, createdAt])
+  @@index([status, type])
+  @@map("commissions")
+}
+
+model ProfitSharingPeriod {
+  id              String                    @id @default(uuid()) @db.Uuid
+  periodMonth     Int                       @map("period_month")
+  periodYear      Int                       @map("period_year")
+  netProfitAmount Decimal                   @default(0) @map("net_profit_amount") @db.Decimal(14, 2)
+  totalPoolAmount Decimal                   @map("total_pool_amount") @db.Decimal(14, 2)
+  silverAllocation Decimal                  @default(0) @map("silver_allocation") @db.Decimal(14, 2)
+  goldAllocation   Decimal                  @default(0) @map("gold_allocation") @db.Decimal(14, 2)
+  platinumAllocation Decimal                @default(0) @map("platinum_allocation") @db.Decimal(14, 2)
+  retainedAmount Decimal                    @default(0) @map("retained_amount") @db.Decimal(14, 2)
+  status          ProfitSharingPeriodStatus @default(DRAFT)
+  createdAt       DateTime                  @default(now()) @map("created_at")
+  approvedAt      DateTime?                 @map("approved_at")
+  distributedAt   DateTime?                 @map("distributed_at")
+
+  distributions   ProfitSharingDistribution[]
+
+  @@unique([periodMonth, periodYear])
+  @@index([status, periodYear, periodMonth])
+  @@map("profit_sharing_periods")
+}
+
+model ProfitSharingDistribution {
+  id                  String                          @id @default(uuid()) @db.Uuid
+  periodId            String                          @map("period_id") @db.Uuid
+  userId              String                          @map("user_id") @db.Uuid
+  amount              Decimal                         @db.Decimal(14, 2)
+  status              ProfitSharingDistributionStatus @default(PENDING)
+  walletTransactionId String?                         @unique @map("wallet_transaction_id") @db.Uuid
+  commissionId        String?                         @unique @map("commission_id") @db.Uuid
+  createdAt           DateTime                        @default(now()) @map("created_at")
+  postedAt            DateTime?                       @map("posted_at")
+
+  period              ProfitSharingPeriod             @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  user                User                            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletTransaction   WalletTransaction?              @relation(fields: [walletTransactionId], references: [id], onDelete: SetNull)
+  commission          Commission?                     @relation(fields: [commissionId], references: [id], onDelete: SetNull)
+
+  @@unique([periodId, userId])
+  @@index([userId, status])
+  @@index([periodId, status])
+  @@map("profit_sharing_distributions")
+}
+
+model Session {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  refreshTokenHash String    @map("refresh_token_hash")
+  userAgent        String?   @map("user_agent")
+  ipAddress        String?   @map("ip_address") @db.Inet
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@map("sessions")
+}
+
+model OtpChallenge {
+  id          String    @id @default(uuid()) @db.Uuid
+  phone       String    @db.VarChar(32)
+  codeHash    String    @map("code_hash")
+  purpose     String    @db.VarChar(40)
+  attempts    Int       @default(0)
+  expiresAt   DateTime  @map("expires_at")
+  consumedAt  DateTime? @map("consumed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([phone, purpose, expiresAt])
+  @@map("otp_challenges")
+}
+
+model Driver {
+  id              String       @id @default(uuid()) @db.Uuid
+  userId          String       @unique @map("user_id") @db.Uuid
+  status          DriverStatus @default(OFFLINE)
+  kycStatus       KycStatus    @default(NOT_SUBMITTED) @map("kyc_status")
+  licenseNumber   String?      @unique @map("license_number") @db.VarChar(80)
+  vehicleType     String       @default("BIKE") @map("vehicle_type") @db.VarChar(40)
+  vehiclePlate    String?      @map("vehicle_plate") @db.VarChar(24)
+  ratingAverage   Decimal      @default(5.0) @map("rating_average") @db.Decimal(3, 2)
+  ratingCount     Int          @default(0) @map("rating_count")
+  currentLat      Decimal?     @map("current_lat") @db.Decimal(10, 7)
+  currentLng      Decimal?     @map("current_lng") @db.Decimal(10, 7)
+  lastLocationAt  DateTime?    @map("last_location_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rides           Ride[]       @relation("RideDriver")
+  documents       DriverDocument[]
+  earnings        DriverEarning[]
+  withdrawals     WithdrawalRequest[]
+
+  @@index([status, vehicleType])
+  @@index([currentLat, currentLng])
+  @@map("drivers")
+}
+
+model DriverDocument {
+  id          String    @id @default(uuid()) @db.Uuid
+  driverId    String    @map("driver_id") @db.Uuid
+  type        String    @db.VarChar(60)
+  url         String
+  status      KycStatus @default(PENDING)
+  reviewedBy  String?   @map("reviewed_by") @db.Uuid
+  reviewedAt  DateTime? @map("reviewed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  driver      Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@index([driverId, type])
+  @@map("driver_documents")
+}
+
+model Ride {
+  id                String        @id @default(uuid()) @db.Uuid
+  customerId        String        @map("customer_id") @db.Uuid
+  driverId          String?       @map("driver_id") @db.Uuid
+  status            RideStatus    @default(REQUESTED)
+  serviceType       String        @map("service_type") @db.VarChar(40)
+  pickupAddress     String        @map("pickup_address")
+  pickupLat         Decimal       @map("pickup_lat") @db.Decimal(10, 7)
+  pickupLng         Decimal       @map("pickup_lng") @db.Decimal(10, 7)
+  destinationAddress String       @map("destination_address")
+  destinationLat     Decimal      @map("destination_lat") @db.Decimal(10, 7)
+  destinationLng     Decimal      @map("destination_lng") @db.Decimal(10, 7)
+  distanceKm        Decimal       @map("distance_km") @db.Decimal(8, 2)
+  estimatedFare     Decimal       @map("estimated_fare") @db.Decimal(12, 2)
+  finalFare         Decimal?      @map("final_fare") @db.Decimal(12, 2)
+  promoCode         String?       @map("promo_code") @db.VarChar(40)
+  requestedAt       DateTime      @default(now()) @map("requested_at")
+  acceptedAt        DateTime?     @map("accepted_at")
+  startedAt         DateTime?     @map("started_at")
+  completedAt       DateTime?     @map("completed_at")
+  cancelledAt       DateTime?     @map("cancelled_at")
+  cancellationReason String?      @map("cancellation_reason")
+
+  customer          User          @relation("RideCustomer", fields: [customerId], references: [id])
+  driver            Driver?       @relation("RideDriver", fields: [driverId], references: [id])
+  payment           Payment?
+  messages          ChatMessage[]
+  reviews           Review[]
+  statusEvents      RideStatusEvent[]
+
+  @@index([customerId, requestedAt])
+  @@index([driverId, requestedAt])
+  @@index([status, serviceType])
+  @@index([pickupLat, pickupLng])
+  @@map("rides")
+}
+
+model RideStatusEvent {
+  id        String     @id @default(uuid()) @db.Uuid
+  rideId    String     @map("ride_id") @db.Uuid
+  status    RideStatus
+  metadata  Json?
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  ride      Ride       @relation(fields: [rideId], references: [id], onDelete: Cascade)
+
+  @@index([rideId, createdAt])
+  @@map("ride_status_events")
+}
+
+model Payment {
+  id                   String        @id @default(uuid()) @db.Uuid
+  rideId               String        @unique @map("ride_id") @db.Uuid
+  method               PaymentMethod
+  status               PaymentStatus @default(PENDING)
+  amount               Decimal       @db.Decimal(12, 2)
+  provider             String?       @db.VarChar(40)
+  providerReference    String?       @map("provider_reference") @db.VarChar(120)
+  paidAt               DateTime?     @map("paid_at")
+  createdAt            DateTime      @default(now()) @map("created_at")
+  updatedAt            DateTime      @updatedAt @map("updated_at")
+
+  ride                 Ride          @relation(fields: [rideId], references: [id])
+
+  @@index([status, method])
+  @@map("payments")
+}
+
+model Wallet {
+  id          String              @id @default(uuid()) @db.Uuid
+  userId      String              @unique @map("user_id") @db.Uuid
+  balance     Decimal             @default(0) @db.Decimal(14, 2)
+  cashBalance Decimal             @default(0) @map("cash_balance") @db.Decimal(14, 2)
+  ppobBalance Decimal             @default(0) @map("ppob_balance") @db.Decimal(14, 2)
+  currency    String              @default("IDR") @db.VarChar(8)
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ledger      WalletTransaction[]
+  withdrawals Withdrawal[]
+  rewardTransactions RewardTransaction[]
+
+  @@map("wallets")
+}
+
+model WalletTransaction {
+  id            String                @id @default(uuid()) @db.Uuid
+  walletId      String                @map("wallet_id") @db.Uuid
+  type          WalletTransactionType
+  amount        Decimal               @db.Decimal(14, 2)
+  referenceType String?               @map("reference_type") @db.VarChar(60)
+  referenceId   String?               @map("reference_id") @db.VarChar(80)
+  metadata      Json?
+  createdAt     DateTime              @default(now()) @map("created_at")
+
+  wallet        Wallet                @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  commission    Commission?
+  profitSharingDistribution ProfitSharingDistribution?
+  rewardTransaction RewardTransaction?
+
+  @@index([walletId, createdAt])
+  @@index([referenceType, referenceId])
+  @@map("wallet_transactions")
+}
+
+model RewardTransaction {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  userId              String                  @map("user_id") @db.Uuid
+  walletId            String?                 @map("wallet_id") @db.Uuid
+  walletTransactionId String?                 @unique @map("wallet_transaction_id") @db.Uuid
+  threshold           Int
+  directSilverCount   Int                     @map("direct_silver_count")
+  amount              Decimal                 @db.Decimal(14, 2)
+  status              RewardTransactionStatus @default(PENDING)
+  referenceType       String                  @default("REWARD_MILESTONE") @map("reference_type") @db.VarChar(80)
+  referenceId         String                  @map("reference_id") @db.VarChar(120)
+  metadata            Json?
+  approvedAt          DateTime?               @map("approved_at")
+  paidAt              DateTime?               @map("paid_at")
+  rejectedAt          DateTime?               @map("rejected_at")
+  createdAt           DateTime                @default(now()) @map("created_at")
+
+  user                User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet              Wallet?                 @relation(fields: [walletId], references: [id], onDelete: SetNull)
+  walletTransaction   WalletTransaction?      @relation(fields: [walletTransactionId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, referenceType, referenceId])
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@map("reward_transactions")
+}
+
+model PromoCode {
+  id            String   @id @default(uuid()) @db.Uuid
+  code          String   @unique @db.VarChar(40)
+  description   String
+  discountType  String   @map("discount_type") @db.VarChar(20)
+  discountValue Decimal  @map("discount_value") @db.Decimal(12, 2)
+  maxDiscount   Decimal? @map("max_discount") @db.Decimal(12, 2)
+  minSpend      Decimal? @map("min_spend") @db.Decimal(12, 2)
+  quota         Int?
+  usedCount     Int      @default(0) @map("used_count")
+  startsAt      DateTime @map("starts_at")
+  endsAt        DateTime @map("ends_at")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([code, isActive])
+  @@map("promo_codes")
+}
+
+model ChatMessage {
+  id          String         @id @default(uuid()) @db.Uuid
+  rideId      String         @map("ride_id") @db.Uuid
+  senderId    String         @map("sender_id") @db.Uuid
+  senderType  ChatSenderType @map("sender_type")
+  message     String
+  readAt      DateTime?      @map("read_at")
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  ride        Ride           @relation(fields: [rideId], references: [id], onDelete: Cascade)
+
+  @@index([rideId, createdAt])
+  @@map("chat_messages")
+}
+
+model Review {
+  id          String   @id @default(uuid()) @db.Uuid
+  rideId      String   @map("ride_id") @db.Uuid
+  reviewerId  String   @map("reviewer_id") @db.Uuid
+  driverId    String?  @map("driver_id") @db.Uuid
+  rating      Int
+  comment     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  ride        Ride     @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  reviewer    User     @relation("ReviewsGiven", fields: [reviewerId], references: [id])
+
+  @@index([rideId])
+  @@index([driverId])
+  @@map("reviews")
+}
+
+model PushToken {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  platform    String   @db.VarChar(20)
+  token       String   @unique
+  deviceId    String?  @map("device_id") @db.VarChar(120)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, platform])
+  @@map("push_tokens")
+}
+
+model DriverEarning {
+  id          String   @id @default(uuid()) @db.Uuid
+  driverId    String   @map("driver_id") @db.Uuid
+  rideId      String?  @map("ride_id") @db.Uuid
+  grossAmount Decimal  @map("gross_amount") @db.Decimal(12, 2)
+  commission  Decimal  @db.Decimal(12, 2)
+  netAmount   Decimal  @map("net_amount") @db.Decimal(12, 2)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  driver      Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@index([driverId, createdAt])
+  @@map("driver_earnings")
+}
+
+model WithdrawalRequest {
+  id          String   @id @default(uuid()) @db.Uuid
+  driverId    String   @map("driver_id") @db.Uuid
+  amount      Decimal  @db.Decimal(12, 2)
+  status      String   @default("PENDING") @db.VarChar(30)
+  bankAccount Json     @map("bank_account")
+  processedAt DateTime? @map("processed_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  driver      Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@index([driverId, status])
+  @@map("withdrawal_requests")
+}
+
+model Withdrawal {
+  id          String           @id @default(uuid()) @db.Uuid
+  walletId    String           @map("wallet_id") @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  amount      Decimal          @db.Decimal(14, 2)
+  fee         Decimal          @default(0) @db.Decimal(14, 2)
+  finalAmount Decimal          @default(0) @map("final_amount") @db.Decimal(14, 2)
+  status      WithdrawalStatus @default(PENDING)
+  bankName    String?          @map("bank_name") @db.VarChar(80)
+  accountNumber String?        @map("account_number") @db.VarChar(40)
+  accountHolderName String?    @map("account_holder_name") @db.VarChar(120)
+  bankAccount Json             @map("bank_account")
+  requestedAt DateTime         @default(now()) @map("requested_at")
+  approvedBy  String?          @map("approved_by") @db.Uuid
+  approvedAt  DateTime?        @map("approved_at")
+  rejectedBy  String?          @map("rejected_by") @db.Uuid
+  rejectedAt  DateTime?        @map("rejected_at")
+  reviewedBy  String?          @map("reviewed_by") @db.Uuid
+  reviewedAt  DateTime?        @map("reviewed_at")
+  paidAt      DateTime?        @map("paid_at")
+  notes       String?
+  note        String?
+
+  wallet      Wallet           @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  user        User             @relation(fields: [userId], references: [id])
+
+  @@index([userId, status])
+  @@index([walletId, requestedAt])
+  @@map("withdrawals")
+}
+
+model AccountDeletionRequest {
+  id          String                       @id @default(uuid()) @db.Uuid
+  userId      String                       @map("user_id") @db.Uuid
+  status      AccountDeletionRequestStatus @default(PENDING)
+  reason      String?
+  reviewedBy  String?                      @map("reviewed_by") @db.Uuid
+  reviewedAt  DateTime?                    @map("reviewed_at")
+  completedAt DateTime?                    @map("completed_at")
+  createdAt   DateTime                     @default(now()) @map("created_at")
+  updatedAt   DateTime                     @updatedAt @map("updated_at")
+
+  user        User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@map("account_deletion_requests")
+}
+
+model ContactMessage {
+  id          String               @id @default(uuid()) @db.Uuid
+  userId      String?              @map("user_id") @db.Uuid
+  name        String               @db.VarChar(120)
+  contact     String               @db.VarChar(180)
+  category    String               @db.VarChar(80)
+  message     String
+  status      ContactMessageStatus @default(NEW)
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+
+  user        User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("contact_messages")
+}
+
+model RegistrationEvent {
+  id                    String   @id @default(uuid()) @db.Uuid
+  userId                String?  @map("user_id") @db.Uuid
+  normalizedPhone       String   @map("normalized_phone") @db.VarChar(32)
+  phoneHash             String   @map("phone_hash") @db.VarChar(64)
+  deviceFingerprintHash String?  @map("device_fingerprint_hash") @db.VarChar(64)
+  ipAddress             String?  @map("ip_address") @db.Inet
+  userAgent             String?  @map("user_agent") @db.VarChar(500)
+  referralCodeUsed      String?  @map("referral_code_used") @db.VarChar(24)
+  suspicious            Boolean  @default(false)
+  suspiciousReasons     Json?    @map("suspicious_reasons")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  user                  User?    @relation("RegistrationEventUser", fields: [userId], references: [id], onDelete: SetNull)
+  abuseFlags            AbuseFlag[]
+
+  @@index([userId, createdAt])
+  @@index([normalizedPhone, createdAt])
+  @@index([phoneHash, createdAt])
+  @@index([deviceFingerprintHash, createdAt])
+  @@index([ipAddress, createdAt])
+  @@index([referralCodeUsed, createdAt])
+  @@index([suspicious, createdAt])
+  @@map("registration_events")
+}
+
+model AbuseFlag {
+  id                  String           @id @default(uuid()) @db.Uuid
+  userId              String?          @map("user_id") @db.Uuid
+  registrationEventId String?          @map("registration_event_id") @db.Uuid
+  flagType            String           @map("flag_type") @db.VarChar(80)
+  severity            AbuseFlagSeverity @default(LOW)
+  status              AbuseFlagStatus  @default(OPEN)
+  reason              String
+  metadata            Json?
+  reviewedBy          String?          @map("reviewed_by") @db.Uuid
+  reviewedAt          DateTime?        @map("reviewed_at")
+  createdAt           DateTime         @default(now()) @map("created_at")
+
+  user                User?            @relation("AbuseFlagUser", fields: [userId], references: [id], onDelete: SetNull)
+  registrationEvent   RegistrationEvent? @relation(fields: [registrationEventId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@index([registrationEventId])
+  @@index([flagType, status])
+  @@index([severity, status])
+  @@index([createdAt])
+  @@map("abuse_flags")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorId     String?  @map("actor_id") @db.Uuid
+  action      String   @db.VarChar(120)
+  entityType  String   @map("entity_type") @db.VarChar(80)
+  entityId    String?  @map("entity_id") @db.VarChar(80)
+  metadata    Json?
+  ipAddress   String?  @map("ip_address") @db.Inet
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  actor       User?    @relation(fields: [actorId], references: [id])
+
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
