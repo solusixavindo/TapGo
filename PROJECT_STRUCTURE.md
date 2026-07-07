@@ -50,6 +50,8 @@ Tapgo/
 - DOKU final payment UAT: `docs/doku/DOKU_FINAL_PAYMENT_UAT.md`
 - DOKU production UAT execution: `docs/doku/DOKU_PRODUCTION_UAT_EXECUTION.md`
 - DOKU merchant clarification response: `docs/doku/DOKU_BUSINESS_FLOW_RESPONSE.md`
+- DOKU premium merchant verification book: `docs/doku/TAPGO_DOKU_MERCHANT_VERIFICATION_BOOK.pdf`
+- DOKU final email response: `docs/doku/DOKU_EMAIL_RESPONSE_FINAL.md`
 
 ## Operational Documentation
 
