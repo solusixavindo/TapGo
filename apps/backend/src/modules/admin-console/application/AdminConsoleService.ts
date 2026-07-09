@@ -66,6 +66,15 @@ type FounderPlatinumGrantInput = {
   reason?: string;
 };
 
+type FounderProgramStatus = "ACTIVE" | "SUSPENDED" | "REVOKED";
+
+type FounderPlatinumStatusInput = {
+  actorId: string;
+  founderId: string;
+  status: FounderProgramStatus;
+  reason?: string;
+};
+
 const sponsorTypes: CommissionType[] = ["SPONSOR_BONUS", "BASIC_SPONSOR_BONUS"];
 const levelTypes: CommissionType[] = ["LEVEL_BONUS", "LEVEL_COMMISSION"];
 const rewardTypes: CommissionType[] = ["REWARD_BONUS"];
@@ -270,6 +279,216 @@ export class AdminConsoleService {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       timeout: 15000
     });
+  }
+
+  async founderPlatinumList() {
+    const grants = await this.prisma.founderProgramGrant.findMany({
+      where: { founderRole: "FOUNDER_PLATINUM" },
+      include: {
+        user: {
+          include: {
+            wallet: true,
+            membership: true,
+            sponsoredReferrals: { select: { id: true } },
+            commissions: {
+              where: { status: "POSTED" },
+              select: { amount: true, type: true }
+            }
+          }
+        },
+        membership: true,
+        actor: { select: { id: true, fullName: true, phone: true, role: true } }
+      },
+      orderBy: { createdAt: "asc" }
+    });
+
+    const items = grants.map((grant) => this.founderSummary(grant));
+    const active = items.filter((item) => item.status === "ACTIVE").length;
+    const suspended = items.filter((item) => item.status === "SUSPENDED").length;
+    const revoked = items.filter((item) => item.status === "REVOKED").length;
+
+    return {
+      totalSlot: 10,
+      usedSlot: active + suspended,
+      availableSlot: Math.max(0, 10 - active - suspended),
+      statusSummary: {
+        ACTIVE: active,
+        SUSPENDED: suspended,
+        REVOKED: revoked
+      },
+      items
+    };
+  }
+
+  async founderPlatinumDetail(founderId: string) {
+    const grant = await this.prisma.founderProgramGrant.findFirst({
+      where: {
+        founderRole: "FOUNDER_PLATINUM",
+        user: { referralCode: founderId.trim().toUpperCase() }
+      },
+      include: {
+        user: {
+          include: {
+            wallet: true,
+            membership: true,
+            sponsoredReferrals: { select: { id: true } },
+            commissions: {
+              where: { status: "POSTED" },
+              orderBy: { createdAt: "desc" },
+              select: { amount: true, type: true, level: true, createdAt: true, triggerId: true }
+            }
+          }
+        },
+        membership: true,
+        actor: { select: { id: true, fullName: true, phone: true, role: true } },
+        userMembership: { include: { membership: true } }
+      }
+    });
+
+    if (!grant) {
+      throw new AppError("Founder Platinum account not found", StatusCodes.NOT_FOUND, "FOUNDER_PLATINUM_NOT_FOUND");
+    }
+
+    const auditTrail = await this.prisma.auditLog.findMany({
+      where: {
+        entityType: "FOUNDER_PROGRAM_GRANT",
+        entityId: grant.id
+      },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      include: { actor: { select: { id: true, fullName: true, role: true } } }
+    });
+
+    return {
+      ...this.founderSummary(grant),
+      auditTrail: auditTrail.map((log) => ({
+        id: log.id,
+        action: log.action,
+        actor: log.actor,
+        metadata: log.metadata,
+        createdAt: log.createdAt
+      }))
+    };
+  }
+
+  async updateFounderPlatinumStatus(input: FounderPlatinumStatusInput) {
+    const founderId = input.founderId.trim().toUpperCase();
+    const targetStatus = input.status;
+    const reason = input.reason?.trim();
+
+    if ((targetStatus === "SUSPENDED" || targetStatus === "REVOKED") && !reason) {
+      throw new AppError("Reason is required for suspend or revoke", StatusCodes.BAD_REQUEST, "FOUNDER_STATUS_REASON_REQUIRED");
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const grant = await tx.founderProgramGrant.findFirst({
+        where: {
+          founderRole: "FOUNDER_PLATINUM",
+          user: { referralCode: founderId }
+        },
+        include: { user: true }
+      });
+
+      if (!grant) {
+        throw new AppError("Founder Platinum account not found", StatusCodes.NOT_FOUND, "FOUNDER_PLATINUM_NOT_FOUND");
+      }
+
+      const currentStatus = this.founderStatusFromGrant(grant);
+      this.assertFounderStatusTransition(currentStatus, targetStatus);
+
+      const now = new Date();
+      const history = [
+        ...this.founderStatusHistory(grant.metadata),
+        {
+          from: currentStatus,
+          to: targetStatus,
+          actorId: input.actorId,
+          reason: reason ?? null,
+          at: now.toISOString()
+        }
+      ];
+
+      if (targetStatus === "SUSPENDED") {
+        await tx.user.update({
+          where: { id: grant.userId },
+          data: { status: "SUSPENDED" }
+        });
+        await tx.founderProgramGrant.update({
+          where: { id: grant.id },
+          data: {
+            metadata: {
+              ...this.asObject(grant.metadata),
+              founderStatus: "SUSPENDED",
+              suspendedAt: now.toISOString(),
+              suspendedBy: input.actorId,
+              suspendReason: reason,
+              statusHistory: history
+            }
+          }
+        });
+      } else if (targetStatus === "ACTIVE") {
+        await tx.user.update({
+          where: { id: grant.userId },
+          data: { status: "ACTIVE" }
+        });
+        await tx.founderProgramGrant.update({
+          where: { id: grant.id },
+          data: {
+            metadata: {
+              ...this.asObject(grant.metadata),
+              founderStatus: "ACTIVE",
+              reactivatedAt: now.toISOString(),
+              reactivatedBy: input.actorId,
+              reactivateReason: reason ?? null,
+              statusHistory: history
+            }
+          }
+        });
+      } else {
+        await tx.user.update({
+          where: { id: grant.userId },
+          data: { status: "SUSPENDED" }
+        });
+        await tx.founderProgramGrant.update({
+          where: { id: grant.id },
+          data: {
+            revokedAt: now,
+            revokedBy: input.actorId,
+            metadata: {
+              ...this.asObject(grant.metadata),
+              founderStatus: "REVOKED",
+              revokedAt: now.toISOString(),
+              revokedBy: input.actorId,
+              revokeReason: reason,
+              statusHistory: history
+            }
+          }
+        });
+      }
+
+      const action = `FOUNDER_PLATINUM_${targetStatus}`;
+      await tx.auditLog.create({
+        data: {
+          actorId: input.actorId,
+          action,
+          entityType: "FOUNDER_PROGRAM_GRANT",
+          entityId: grant.id,
+          metadata: {
+            founderId,
+            targetUserId: grant.userId,
+            from: currentStatus,
+            to: targetStatus,
+            reason: reason ?? null
+          }
+        }
+      });
+
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      timeout: 15000
+    });
+
+    return this.founderPlatinumDetail(founderId);
   }
 
   async dashboardSummary() {
@@ -1317,6 +1536,101 @@ export class AdminConsoleService {
 
   private decimal(value: Prisma.Decimal | null | undefined) {
     return value?.toFixed(2) ?? "0.00";
+  }
+
+  private founderStatusFromGrant(grant: {
+    revokedAt: Date | null;
+    user: { status: string };
+  }): FounderProgramStatus {
+    if (grant.revokedAt) {
+      return "REVOKED";
+    }
+    if (grant.user.status === "SUSPENDED") {
+      return "SUSPENDED";
+    }
+    return "ACTIVE";
+  }
+
+  private founderStatusHistory(value: Prisma.JsonValue | null | undefined) {
+    const metadata = this.asObject(value);
+    const history = metadata.statusHistory;
+    return Array.isArray(history) ? history : [];
+  }
+
+  private assertFounderStatusTransition(current: FounderProgramStatus, target: FounderProgramStatus) {
+    if (current === target) {
+      throw new AppError("Founder Platinum already has this status", StatusCodes.CONFLICT, "FOUNDER_STATUS_UNCHANGED");
+    }
+
+    const allowed: Record<FounderProgramStatus, FounderProgramStatus[]> = {
+      ACTIVE: ["SUSPENDED", "REVOKED"],
+      SUSPENDED: ["ACTIVE", "REVOKED"],
+      REVOKED: []
+    };
+
+    if (!allowed[current].includes(target)) {
+      throw new AppError("Founder Platinum status transition is not allowed", StatusCodes.CONFLICT, "FOUNDER_STATUS_TRANSITION_INVALID");
+    }
+  }
+
+  private founderSummary(grant: {
+    id: string;
+    userId: string;
+    founderRole: string;
+    grantedBy: string | null;
+    revokedAt: Date | null;
+    revokedBy: string | null;
+    createdAt: Date;
+    metadata: Prisma.JsonValue | null;
+    user: {
+      id: string;
+      fullName: string;
+      phone: string;
+      email: string | null;
+      referralCode: string;
+      status: string;
+      wallet: { balance: Prisma.Decimal; cashBalance: Prisma.Decimal; ppobBalance: Prisma.Decimal } | null;
+      membership: { tier: MembershipTier; name: string } | null;
+      sponsoredReferrals: Array<{ id: string }>;
+      commissions: Array<{ amount: Prisma.Decimal; type: CommissionType }>;
+    };
+    membership: { tier: MembershipTier; name: string };
+    actor: { id: string; fullName: string; phone: string; role: string } | null;
+  }) {
+    const sponsorBonus = grant.user.commissions
+      .filter((item) => sponsorTypes.includes(item.type))
+      .reduce((sum, item) => sum.add(item.amount), new Prisma.Decimal(0));
+    const levelBonus = grant.user.commissions
+      .filter((item) => levelTypes.includes(item.type))
+      .reduce((sum, item) => sum.add(item.amount), new Prisma.Decimal(0));
+    const totalCommission = grant.user.commissions
+      .reduce((sum, item) => sum.add(item.amount), new Prisma.Decimal(0));
+
+    return {
+      id: grant.id,
+      founderId: grant.user.referralCode,
+      userId: grant.userId,
+      name: grant.user.fullName,
+      phone: grant.user.phone,
+      email: grant.user.email,
+      membership: "Founder Platinum",
+      membershipTier: grant.membership.tier,
+      founderRole: grant.founderRole,
+      status: this.founderStatusFromGrant(grant),
+      accountStatus: grant.user.status,
+      grantedDate: grant.createdAt,
+      grantedAt: grant.createdAt,
+      grantedBy: grant.actor,
+      revokedAt: grant.revokedAt,
+      revokedBy: grant.revokedBy,
+      referralCount: grant.user.sponsoredReferrals.length,
+      walletCash: this.decimal(grant.user.wallet?.cashBalance),
+      walletPpob: this.decimal(grant.user.wallet?.ppobBalance),
+      totalSponsorBonus: this.decimal(sponsorBonus),
+      totalLevelBonus: this.decimal(levelBonus),
+      totalCommission: this.decimal(totalCommission),
+      metadata: grant.metadata
+    };
   }
 
   private async generateFounderReferralCode(tx: Prisma.TransactionClient) {

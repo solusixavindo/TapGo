@@ -158,6 +158,26 @@ export class AdminConsoleController {
     res.status(201).json({ success: true, data: result });
   };
 
+  founderPlatinumList = async (_req: Request, res: Response) => {
+    const result = await this.adminConsoleService.founderPlatinumList();
+    res.json({ success: true, data: result });
+  };
+
+  founderPlatinumDetail = async (req: Request, res: Response) => {
+    const result = await this.adminConsoleService.founderPlatinumDetail(String(req.params.founderId));
+    res.json({ success: true, data: result });
+  };
+
+  updateFounderPlatinumStatus = async (req: Request, res: Response) => {
+    const result = await this.adminConsoleService.updateFounderPlatinumStatus({
+      actorId: req.auth!.userId,
+      founderId: String(req.params.founderId),
+      status: req.body.status,
+      ...(typeof req.body.reason === "string" ? { reason: req.body.reason } : {})
+    });
+    res.json({ success: true, data: result });
+  };
+
   bonusReport = async (req: Request, res: Response) => {
     const result = await this.adminConsoleService.bonusReport({
       page: Number(req.query.page),

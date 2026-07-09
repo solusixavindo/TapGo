@@ -224,6 +224,121 @@ describe.skipIf(!runIntegration)("Admin console API", () => {
     expect(await prisma.founderProgramGrant.count({ where: { founderRole: "FOUNDER_PLATINUM", revokedAt: null } })).toBe(10);
   });
 
+  it("manages Founder Platinum console status without deleting history or paying suspended founders", async () => {
+    const superAdmin = await createUser("SUPERFP2", "SUPER_ADMIN");
+    const normalUser = await createUser("USERFP2", "USER");
+
+    const granted = await api("/api/v1/admin/founder-platinum/grants", {
+      method: "POST",
+      token: tokenFor(superAdmin),
+      body: {
+        fullName: "Founder Lifecycle",
+        phone: "081300002001",
+        password: "Founder123",
+        founderId: "FND-001",
+        reason: "Founder lifecycle UAT"
+      }
+    });
+    expect(granted.status).toBe(201);
+    const grantBody = await granted.json() as { data: { user: { id: string; referralCode: string }; founderGrant: { id: string } } };
+    const founderId = grantBody.data.user.referralCode;
+    const founderUserId = grantBody.data.user.id;
+
+    expect((await api("/api/v1/admin/founder-platinum", { token: tokenFor(normalUser) })).status).toBe(403);
+
+    const list = await api("/api/v1/admin/founder-platinum", { token: tokenFor(superAdmin) });
+    expect(list.status).toBe(200);
+    const listBody = await list.json() as { data: { totalSlot: number; usedSlot: number; availableSlot: number; statusSummary: { ACTIVE: number; SUSPENDED: number; REVOKED: number }; items: Array<{ founderId: string; status: string }> } };
+    expect(listBody.data.totalSlot).toBe(10);
+    expect(listBody.data.usedSlot).toBe(1);
+    expect(listBody.data.availableSlot).toBe(9);
+    expect(listBody.data.statusSummary.ACTIVE).toBe(1);
+    expect(listBody.data.items[0]?.founderId).toBe("FND-001");
+    expect(listBody.data.items[0]?.status).toBe("ACTIVE");
+
+    const detail = await api(`/api/v1/admin/founder-platinum/${founderId}`, { token: tokenFor(superAdmin) });
+    expect(detail.status).toBe(200);
+    const detailBody = await detail.json() as { data: { founderId: string; walletCash: string; walletPpob: string; auditTrail: unknown[] } };
+    expect(detailBody.data.founderId).toBe("FND-001");
+    expect(detailBody.data.walletCash).toBe("0.00");
+    expect(detailBody.data.walletPpob).toBe("0.00");
+    expect(detailBody.data.auditTrail.length).toBeGreaterThan(0);
+
+    const firstPaidOrderId = await createPaidSilverDownline(founderUserId, "FND-BUYER-A", "FOUNDER-ACTIVE-PAID");
+    expect(await prisma.commission.count({ where: { beneficiaryId: founderUserId, triggerId: firstPaidOrderId } })).toBe(2);
+
+    const emptyReasonSuspend = await api(`/api/v1/admin/founder-platinum/${founderId}/status`, {
+      method: "PATCH",
+      token: tokenFor(superAdmin),
+      body: { status: "SUSPENDED" }
+    });
+    expect(emptyReasonSuspend.status).toBe(400);
+
+    const suspended = await api(`/api/v1/admin/founder-platinum/${founderId}/status`, {
+      method: "PATCH",
+      token: tokenFor(superAdmin),
+      body: { status: "SUSPENDED", reason: "temporary compliance review" }
+    });
+    expect(suspended.status).toBe(200);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: founderUserId } })).status).toBe("SUSPENDED");
+
+    const suspendedPaidOrderId = await createPaidSilverDownline(founderUserId, "FND-BUYER-B", "FOUNDER-SUSPENDED-PAID");
+    expect(await prisma.commission.count({ where: { beneficiaryId: founderUserId, triggerId: suspendedPaidOrderId } })).toBe(0);
+
+    const reactivated = await api(`/api/v1/admin/founder-platinum/${founderId}/status`, {
+      method: "PATCH",
+      token: tokenFor(superAdmin),
+      body: { status: "ACTIVE" }
+    });
+    expect(reactivated.status).toBe(200);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: founderUserId } })).status).toBe("ACTIVE");
+
+    const activeAgainPaidOrderId = await createPaidSilverDownline(founderUserId, "FND-BUYER-C", "FOUNDER-REACTIVE-PAID");
+    expect(await prisma.commission.count({ where: { beneficiaryId: founderUserId, triggerId: activeAgainPaidOrderId } })).toBe(2);
+
+    const emptyReasonRevoke = await api(`/api/v1/admin/founder-platinum/${founderId}/status`, {
+      method: "PATCH",
+      token: tokenFor(superAdmin),
+      body: { status: "REVOKED" }
+    });
+    expect(emptyReasonRevoke.status).toBe(400);
+
+    const revoked = await api(`/api/v1/admin/founder-platinum/${founderId}/status`, {
+      method: "PATCH",
+      token: tokenFor(superAdmin),
+      body: { status: "REVOKED", reason: "owner request" }
+    });
+    expect(revoked.status).toBe(200);
+    const revokedGrant = await prisma.founderProgramGrant.findUniqueOrThrow({ where: { id: grantBody.data.founderGrant.id } });
+    expect(revokedGrant.revokedAt).toBeTruthy();
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: founderUserId } })).status).toBe("SUSPENDED");
+
+    const revokedPaidOrderId = await createPaidSilverDownline(founderUserId, "FND-BUYER-D", "FOUNDER-REVOKED-PAID");
+    expect(await prisma.commission.count({ where: { beneficiaryId: founderUserId, triggerId: revokedPaidOrderId } })).toBe(0);
+
+    const reactivateRevoked = await api(`/api/v1/admin/founder-platinum/${founderId}/status`, {
+      method: "PATCH",
+      token: tokenFor(superAdmin),
+      body: { status: "ACTIVE" }
+    });
+    expect(reactivateRevoked.status).toBe(409);
+
+    const deleteAttempt = await api(`/api/v1/admin/founder-platinum/${founderId}`, {
+      method: "DELETE",
+      token: tokenFor(superAdmin)
+    });
+    expect(deleteAttempt.status).toBe(404);
+
+    const auditCount = await prisma.auditLog.count({
+      where: {
+        entityType: "FOUNDER_PROGRAM_GRANT",
+        entityId: grantBody.data.founderGrant.id,
+        action: { in: ["FOUNDER_PLATINUM_SUSPENDED", "FOUNDER_PLATINUM_ACTIVE", "FOUNDER_PLATINUM_REVOKED"] }
+      }
+    });
+    expect(auditCount).toBe(3);
+  });
+
   it("manages reward lifecycle without double cash ledger", async () => {
     const admin = await createUser("ADMIN002", "ADMIN");
     const user = await createUser("REWARD001", "USER");
@@ -475,6 +590,42 @@ async function createUser(referralCode: string, role: UserRole): Promise<User> {
       membershipId: basic.id
     }
   });
+}
+
+async function createPaidSilverDownline(sponsorId: string, referralCode: string, paymentReference: string) {
+  const buyer = await createUser(referralCode, "USER");
+  await prisma.referral.create({
+    data: {
+      sponsorId,
+      userId: buyer.id,
+      metadata: { source: "founder_platinum_status_test" }
+    }
+  });
+  await prisma.referralLevel.create({
+    data: {
+      ancestorId: sponsorId,
+      descendantId: buyer.id,
+      level: 1
+    }
+  });
+
+  const silver = await prisma.membership.findUniqueOrThrow({ where: { tier: "SILVER" } });
+  const orderResponse = await api("/api/v1/membership/orders", {
+    method: "POST",
+    token: tokenFor(buyer),
+    body: { packageId: silver.id }
+  });
+  expect(orderResponse.status).toBe(201);
+  const orderBody = await orderResponse.json() as { data: { id: string } };
+
+  const paidResponse = await api(`/api/v1/membership/orders/${orderBody.data.id}/payment-success`, {
+    method: "POST",
+    token: tokenFor(buyer),
+    body: { paymentReference }
+  });
+  expect(paidResponse.status).toBe(200);
+
+  return orderBody.data.id;
 }
 
 function tokenFor(user: User) {

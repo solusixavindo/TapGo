@@ -66,6 +66,8 @@ Tapgo/
 - Google Play production readiness: `docs/release/GOOGLE_PLAY_PRODUCTION_READINESS.md`
 - Google Play final release checklist: `docs/release/GOOGLE_PLAY_FINAL_RELEASE_CHECKLIST.md`
 - Google Play closed testing plan: `docs/release/GOOGLE_PLAY_CLOSED_TESTING_PLAN.md`
+- Founder Platinum implementation report: `docs/release/FOUNDER_PLATINUM_IMPLEMENTATION_REPORT.md`
+- Founder Platinum admin guide: `docs/release/FOUNDER_PLATINUM_ADMIN_GUIDE.md`
 - Legal and SOP docs: `docs/legal/`
 - Historical audit docs: `docs/archive/`
 - Current project status: `PROJECT_STATUS.md`

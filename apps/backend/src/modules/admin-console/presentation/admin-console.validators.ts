@@ -110,6 +110,22 @@ export const adminFounderPlatinumGrantSchema = z.object({
   })
 });
 
+export const adminFounderPlatinumDetailSchema = z.object({
+  params: z.object({
+    founderId: z.string().trim().regex(/^FND-\d{3}$/)
+  })
+});
+
+export const adminFounderPlatinumStatusSchema = z.object({
+  params: z.object({
+    founderId: z.string().trim().regex(/^FND-\d{3}$/)
+  }),
+  body: z.object({
+    status: z.enum(["ACTIVE", "SUSPENDED", "REVOKED"]),
+    reason: z.string().trim().max(500).optional()
+  })
+});
+
 export const adminReportQuerySchema = z.object({
   query: z.object({
     ...paginationQuery,

@@ -45,6 +45,38 @@ Body:
 }
 ```
 
+Founder Experience endpoint tambahan:
+
+- `GET /api/v1/admin/founder-platinum`
+- `GET /api/v1/admin/founder-platinum/:founderId`
+- `PATCH /api/v1/admin/founder-platinum/:founderId/status`
+
+Semua endpoint Founder Experience adalah `SUPER_ADMIN` only. Tidak ada endpoint `DELETE` untuk Founder Platinum.
+
+`PATCH /api/v1/admin/founder-platinum/:founderId/status` menerima:
+
+```json
+{
+  "status": "SUSPENDED",
+  "reason": "Review kepatuhan"
+}
+```
+
+Status yang didukung:
+
+- `ACTIVE`
+- `SUSPENDED`
+- `REVOKED`
+
+Transition yang diizinkan:
+
+- `ACTIVE -> SUSPENDED`
+- `SUSPENDED -> ACTIVE`
+- `ACTIVE -> REVOKED`
+- `SUSPENDED -> REVOKED`
+
+`REVOKED` tidak dapat kembali `ACTIVE` lewat endpoint normal. Jika suatu hari dibutuhkan override, harus dibuat flow `SUPER_ADMIN` khusus dengan audit approval terpisah.
+
 ## Database Migration
 
 Migration baru:
@@ -69,6 +101,39 @@ Migration bersifat additive dan tidak mengubah data existing.
 - Sponsor referral opsional tetap membentuk genealogy referral.
 - `founderId` opsional dapat dipakai sebagai referral code deterministik seperti `FND-001`.
 - Audit log dibuat dengan action `FOUNDER_PLATINUM_GRANTED`.
+- Perubahan status Founder membuat audit log:
+  - `FOUNDER_PLATINUM_SUSPENDED`
+  - `FOUNDER_PLATINUM_ACTIVE`
+  - `FOUNDER_PLATINUM_REVOKED`
+- Suspend/revoke wajib menyertakan reason.
+- Status change tidak menghapus user, membership, founder grant, wallet, ledger, invoice, atau bonus history.
+
+## Founder Experience
+
+Super Admin console sekarang memiliki menu `Founder Program`.
+
+Console menampilkan:
+
+- Total slot: 10.
+- Used slot: jumlah Founder Platinum `ACTIVE` dan `SUSPENDED`.
+- Available slot.
+- Summary status `ACTIVE`, `SUSPENDED`, dan `REVOKED`.
+- Daftar Founder berisi Founder ID, nama, phone, email, membership, status, granted date, granted by, referral count, wallet cash, wallet PPOB, sponsor bonus, level bonus, dan total commission.
+- Detail Founder dengan audit trail ringkas.
+
+Action yang tersedia:
+
+- `Suspend`: mengubah `ACTIVE` menjadi `SUSPENDED`.
+- `Aktifkan`: mengubah `SUSPENDED` menjadi `ACTIVE`.
+- `Revoke`: mengubah `ACTIVE` atau `SUSPENDED` menjadi `REVOKED`.
+
+Tidak ada action delete.
+
+User app menampilkan badge kecil premium `Founder Platinum` untuk akun Founder Platinum pada:
+
+- Dashboard top bar.
+- Account/Profile.
+- Membership Saya.
 
 ## Bonus dan Profit Sharing
 
@@ -79,6 +144,9 @@ Perbedaan yang dijaga:
 - Founder Platinum sebagai penerima bonus dari downline valid: boleh, karena status membership aktif adalah `PLATINUM`.
 - Founder Platinum grant sebagai transaksi pembelian/revenue: tidak boleh, karena tidak ada order paid, invoice paid, payment, atau trigger `MEMBERSHIP_ORDER`.
 - Bonus sponsor, level bonus, dan reward tetap hanya diproses oleh flow membership order yang benar-benar paid/valid.
+- Founder Platinum `ACTIVE` tetap boleh menerima bonus baru dari downline paid valid.
+- Founder Platinum `SUSPENDED` atau `REVOKED` tidak menerima bonus baru sampai status kembali `ACTIVE`.
+- Bonus history yang sudah posted sebelum suspend/revoke tetap disimpan dan tidak dihapus.
 
 ## Seed Script 10 Founder Platinum
 

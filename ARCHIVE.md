@@ -76,6 +76,8 @@ Lokasi: `docs/release/`
 - `UAT_CHECKLIST.md`
 - `UAT_PHASE_A_FINAL_READINESS.md`
 - `UAT_PHASE_B_FINAL_READINESS.md`
+- `FOUNDER_PLATINUM_IMPLEMENTATION_REPORT.md`
+- `FOUNDER_PLATINUM_ADMIN_GUIDE.md`
 - User guide, FAQ, launch content, and tester guide.
 
 ## Historical Audit Archive
