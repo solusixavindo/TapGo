@@ -181,8 +181,19 @@ describe.skipIf(!runIntegration)("Admin console API", () => {
     expect(sponsorBonus.amount.toFixed(2)).toBe("40000.00");
     expect(sponsorBonus.rate?.toFixed(2)).toBe("8.00");
 
+    const levelBonus = await prisma.commission.findFirstOrThrow({
+      where: {
+        beneficiaryId: body.data.user.id,
+        sourceUserId: buyer.id,
+        type: "LEVEL_BONUS",
+        triggerId: orderBody.data.id
+      }
+    });
+    expect(levelBonus.amount.toFixed(2)).toBe("40000.00");
+    expect(levelBonus.rate?.toFixed(2)).toBe("8.00");
+
     const founderWalletAfterBonus = await prisma.wallet.findUniqueOrThrow({ where: { userId: body.data.user.id } });
-    expect(founderWalletAfterBonus.cashBalance.toFixed(2)).toBe("40000.00");
+    expect(founderWalletAfterBonus.cashBalance.toFixed(2)).toBe("80000.00");
     expect(founderWalletAfterBonus.ppobBalance.toFixed(2)).toBe("0.00");
 
     for (let index = 2; index <= 10; index += 1) {

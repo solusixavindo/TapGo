@@ -1,6 +1,6 @@
 # Founder Platinum Program Implementation Report
 
-Tanggal: 2026-07-07
+Tanggal: 2026-07-09
 
 ## Ringkasan
 
@@ -133,6 +133,17 @@ Rollback production harus dilakukan hanya setelah backup database dan review dat
 - `npm --workspace apps/backend run build`: PASS
 - `DATABASE_URL=postgresql://tapgo:tapgo_password@localhost:5433/tapgo_test?schema=public npx prisma validate --schema apps/backend/prisma/schema.prisma`: PASS
 - `npm --workspace apps/backend run test`: PASS untuk unit tests; integration tests skipped karena `TAPGO_TEST_DATABASE_URL` tidak aktif.
-- `npm --workspace apps/backend run seed:founder-platinum -- --dry-run`: BLOCKED oleh sandbox `tsx` IPC permission sebelum koneksi database dibuat.
+- `DATABASE_URL=postgresql://tapgo:tapgo_password@localhost:5433/tapgo_migrate_clean?schema=public npm --workspace apps/backend run db:deploy`: PASS dari database fresh.
+- `TAPGO_FOUNDER_PLATINUM_CONFIRM=YES FOUNDER_PLATINUM_INITIAL_PASSWORD=<local-test-password> DATABASE_URL=postgresql://tapgo:tapgo_password@localhost:5433/tapgo_migrate_clean?schema=public npm --workspace apps/backend run seed:founder-platinum -- --execute`: PASS.
+- Clean database verification:
+  - 10 akun Founder Platinum aktif dibuat.
+  - Founder ID `FND-001` sampai `FND-010` sesuai.
+  - Membership tier `PLATINUM` dan status `ACTIVE`.
+  - Wallet `balance = 0`, `cashBalance = 0`, `ppobBalance = 0`.
+  - Tidak ada membership order, invoice, payment, wallet transaction, commission, atau revenue saat grant.
+  - Grant ke-11 ditolak dengan `FOUNDER_PLATINUM_LIMIT_REACHED`.
+- Targeted integration test:
+  - `TAPGO_TEST_DATABASE_URL=postgresql://tapgo:tapgo_password@localhost:5433/tapgo_test_founder_integration?schema=public DATABASE_URL=postgresql://tapgo:tapgo_password@localhost:5433/tapgo_test_founder_integration?schema=public npm --workspace apps/backend run test -- tests/admin-console/adminConsole.integration.test.ts`: PASS, 5 tests.
+  - Test Founder Platinum membuktikan grant tidak membuat invoice/revenue/PPOB, grant ke-11 ditolak, dan Founder Platinum dapat menerima sponsor bonus serta level bonus dari downline paid valid.
 
-Catatan: Docker daemon lokal tidak berjalan, sehingga integration test Founder Platinum belum bisa dieksekusi terhadap database test lokal pada sesi ini.
+Catatan migration deploy: kegagalan sebelumnya berasal dari script Prisma tanpa schema path eksplisit pada workspace. Script `db:deploy`, `db:migrate`, dan `db:generate` sudah dikunci ke `prisma/schema.prisma`, sehingga deployment tidak perlu apply SQL manual.
