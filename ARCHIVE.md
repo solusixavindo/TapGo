@@ -54,6 +54,8 @@ Lokasi: `docs/legal/`
 
 Lokasi: `docs/release/`
 
+- `RELEASE_WORKFLOW.md`
+- `VERSIONING_POLICY.md`
 - `AAB_V3_FINAL_RELEASE_REPORT.md`
 - `AAB_V3_PRE_UPLOAD_AUDIT.md`
 - `FINAL_GOOGLE_PLAY_ACCOUNT_RECOMMENDATION.md`
@@ -102,6 +104,8 @@ Release artifacts are intentionally kept in their original artifact folders.
 
 ## Important Versions
 
+- Current product version: `v1.0.0-alpha`
+- Current branch strategy: `main` + `develop`
 - Google Play AAB v3: `1.0.2+3`
 - DOKU integration mode: `checkout`
 - DOKU production webhook: `https://api.tapgolion.id/api/v1/webhooks/doku`

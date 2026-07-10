@@ -27,6 +27,7 @@ Tapgo/
 ├── tools/                    # Validation and utility tools
 ├── dist/                     # Preserved APK/UAT release artifacts
 ├── ARCHIVE.md                # Index for important documents and artifacts
+├── CHANGELOG.md              # Release changelog
 ├── PROJECT_STRUCTURE.md      # This file
 ├── README.md                 # Main project README
 ├── package.json              # Workspace package manifest
@@ -66,6 +67,8 @@ Tapgo/
 - Google Play production readiness: `docs/release/GOOGLE_PLAY_PRODUCTION_READINESS.md`
 - Google Play final release checklist: `docs/release/GOOGLE_PLAY_FINAL_RELEASE_CHECKLIST.md`
 - Google Play closed testing plan: `docs/release/GOOGLE_PLAY_CLOSED_TESTING_PLAN.md`
+- Release workflow: `docs/release/RELEASE_WORKFLOW.md`
+- Versioning policy: `docs/release/VERSIONING_POLICY.md`
 - Founder Platinum implementation report: `docs/release/FOUNDER_PLATINUM_IMPLEMENTATION_REPORT.md`
 - Founder Platinum admin guide: `docs/release/FOUNDER_PLATINUM_ADMIN_GUIDE.md`
 - Legal and SOP docs: `docs/legal/`

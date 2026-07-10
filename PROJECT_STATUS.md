@@ -1,8 +1,16 @@
 # TapGo Project Status
 
-Tanggal status: 2026-07-06
+Tanggal status: 2026-07-11
 
 Mode kerja: Production Stabilization.
+
+Current Version: `v1.0.0-alpha`
+
+Current Branch Strategy: `main` + `develop`
+
+Current Phase: Pre-Production
+
+Next Version: `v1.0.0-beta`
 
 ## Executive Summary
 
@@ -24,6 +32,18 @@ TapGo berada pada fase Pre-Production dengan progress keseluruhan 97%. Payment a
 | Flutter user app | READY FOR VALIDATION | Analyze/test PASS; AAB tidak dibuild pada fase ini. |
 | Google Play | PENDING AFTER PAYMENT ENGINE STABLE | Jangan build/upload final sebelum DOKU UAT PASS. |
 | Documentation | UPDATED | Final deploy steps, DOKU UAT execution, dan Google Play final checklist dibuat. |
+
+## Gate Menuju `v1.0.0-beta`
+
+TapGo dapat naik dari `v1.0.0-alpha` ke `v1.0.0-beta` setelah semua gate berikut PASS:
+
+- Backend production deployed.
+- DOKU webhook production registered.
+- Real/controlled payment transaction successful.
+- Invoice berubah menjadi `PAID`.
+- Membership aktif otomatis.
+- Bonus/referral idempotent.
+- Tidak ada critical payment bug.
 
 ## Status Modul
 

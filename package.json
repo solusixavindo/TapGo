@@ -1,6 +1,6 @@
 {
   "name": "tapgo-platform",
-  "version": "1.0.0",
+  "version": "1.0.0-alpha",
   "private": true,
   "description": "Production-ready Gojek-style super app platform: user app, driver app, admin dashboard, and backend.",
   "workspaces": [
