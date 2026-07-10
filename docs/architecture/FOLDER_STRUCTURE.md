@@ -1,0 +1,62 @@
+# Folder Structure
+
+```text
+Tapgo/
+  apps/
+    backend/
+      prisma/
+        migrations/
+          0001_init/
+            migration.sql
+        schema.prisma
+        seed.ts
+      src/
+        config/
+        core/
+          errors/
+          http/
+          logger/
+          security/
+        modules/
+          auth/
+            application/
+            domain/
+            infrastructure/
+            presentation/
+          audit/
+          drivers/
+          notifications/
+          payments/
+          rides/
+          users/
+        app.ts
+        server.ts
+    user_app/
+      lib/
+        core/
+        features/
+          auth/
+          home/
+        shared/
+    driver_app/
+      lib/
+        core/
+        features/
+          auth/
+          orders/
+        shared/
+    admin_dashboard/
+      src/
+        app/
+        components/
+        lib/
+  docs/
+    architecture/
+  infra/
+    docker-compose.yml
+  packages/
+    shared/
+      src/
+```
+
+Every new backend capability should be added as a module with `domain`, `application`, `infrastructure`, and `presentation` folders. Mobile features should stay feature-first with shared networking, theme, routing, and widgets under `shared` or `core`.

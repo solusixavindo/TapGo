@@ -29,6 +29,21 @@ doku-webhook-captures/
 webhook-captures/
 **/webhook-captures/
 
+# Local UAT credential seed files must stay outside Git
+apps/backend/prisma/seed-uat-credentials.ts
+apps/backend/prisma/demo-seed-utils.ts
+apps/backend/prisma/seed-admin.ts
+apps/backend/prisma/seed-demo.ts
+docs/ADMIN_SETUP.md
+docs/FINAL_PRESENTATION_REPORT.md
+docs/PRODUCTION_DEPLOY_CHECKLIST.md
+docs/UAT_CLIENT_GUIDE.md
+docs/UAT_FINAL_PRESENTASI_TAPGO.md
+docs/release/ADMIN_UAT_REPORT.md
+docs/release/DEPLOY_VPS.md
+docs/release/UAT_BLOCKER_FIX_REPORT.md
+docs/release/SUPER_ADMIN_UAT_REPORT.md
+
 # Build output
 dist/
 build/
@@ -53,4 +68,20 @@ apps/driver_app/android/keystore/
 # Local files
 .DS_Store
 *.log
+.idea/
+*.iml
 apps/backend/prisma/dev.db
+
+# Local tunnel binaries and downloaded archives
+cloudflared
+cloudflared.tgz
+
+# Legal/private verification packages stay local unless explicitly approved
+docs/legal/
+docs/midtrans/
+MIDTRANS_VERIFICATION/
+DNB_XAVINDO_DUNS_UPLOAD/
+*.apk
+*.aab
+*.zip
+*.pdf

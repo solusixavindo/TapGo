@@ -1,0 +1,24 @@
+{
+  "name": "tapgo-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production-ready Gojek-style super app platform: user app, driver app, admin dashboard, and backend.",
+  "workspaces": [
+    "apps/backend",
+    "apps/admin_dashboard",
+    "apps/landing-page",
+    "packages/shared"
+  ],
+  "scripts": {
+    "dev:backend": "npm --workspace apps/backend run dev",
+    "build": "npm --workspace apps/backend run build",
+    "test": "npm --workspace apps/backend run test",
+    "lint": "npm --workspace apps/backend run lint",
+    "validate:structure": "node tools/validate-structure.mjs",
+    "db:migrate": "npm --workspace apps/backend run db:migrate",
+    "db:seed": "npm --workspace apps/backend run db:seed"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

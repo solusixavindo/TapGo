@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #102033;
+  background: #f7fbfc;
+  scroll-behavior: smooth;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 15% 12%, rgba(19, 184, 200, 0.16), transparent 28rem),
+    radial-gradient(circle at 82% 8%, rgba(18, 185, 129, 0.14), transparent 24rem),
+    linear-gradient(180deg, #f7fbfc 0%, #ffffff 42%, #f4fafb 100%);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+::selection {
+  background: rgba(18, 185, 129, 0.22);
+}
+
+.glass {
+  border: 1px solid rgba(255, 255, 255, 0.68);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.48));
+  box-shadow: 0 24px 70px rgba(8, 35, 63, 0.12);
+  backdrop-filter: blur(20px);
+}
+
+.mesh-grid {
+  background-image:
+    linear-gradient(rgba(11, 102, 228, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(18, 185, 129, 0.07) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(to bottom, black 25%, transparent 100%);
+}
+
+.float-slow {
+  animation: floatSlow 7s ease-in-out infinite;
+}
+
+.float-delay {
+  animation: floatSlow 8s ease-in-out infinite;
+  animation-delay: -2.5s;
+}
+
+.spin-slow {
+  animation: spinSlow 16s linear infinite;
+}
+
+.pulse-line {
+  stroke-dasharray: 9 9;
+  animation: dash 14s linear infinite;
+}
+
+.legal-content h2 {
+  margin-top: 2rem;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #08233f;
+}
+
+.tilt-card {
+  transform-style: preserve-3d;
+  transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+}
+
+.tilt-card:hover {
+  border-color: rgba(19, 184, 200, 0.48);
+  box-shadow: 0 30px 80px rgba(11, 102, 228, 0.18);
+  transform: translateY(-6px) rotateX(3deg) rotateY(-3deg);
+}
+
+@keyframes floatSlow {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotateZ(0deg);
+  }
+  50% {
+    transform: translate3d(0, -18px, 0) rotateZ(1.5deg);
+  }
+}
+
+@keyframes spinSlow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: -220;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,1360 @@
+part of '../main.dart';
+
+class _TapGoApiClient {
+  _TapGoApiClient({
+    Dio? dio,
+    _TapGoDeviceContextStore? deviceContextStore,
+    this.baseUrl = 'https://api.tapgolion.id/api/v1/',
+  })  : _dio = dio ??
+            Dio(
+              BaseOptions(
+                baseUrl: _normalizeApiBaseUrl(baseUrl),
+                connectTimeout: const Duration(seconds: 8),
+                receiveTimeout: const Duration(seconds: 12),
+                headers: {'Accept': 'application/json'},
+              ),
+            ),
+        _deviceContextStore = deviceContextStore ?? _TapGoDeviceContextStore() {
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) async {
+          try {
+            final context = await _deviceContextStore.load().timeout(
+                  const Duration(seconds: 1),
+                );
+            options.headers.addAll(context.headers);
+          } catch (error) {
+            debugPrint('[TapGo Device] fingerprint skipped: $error');
+            options.headers.addAll(_TapGoDeviceContextStore.fallbackHeaders);
+          }
+          handler.next(options);
+        },
+      ),
+    );
+  }
+
+  final Dio _dio;
+  final _TapGoDeviceContextStore _deviceContextStore;
+  String baseUrl;
+
+  String get rootUrl => _rootUrlFromApiBaseUrl(baseUrl);
+
+  void setBaseUrl(String value) {
+    baseUrl = _normalizeApiBaseUrl(value);
+    _dio.options.baseUrl = baseUrl;
+  }
+
+  void setAccessToken(String? token) {
+    if (token == null || token.isEmpty) {
+      _dio.options.headers.remove('Authorization');
+      return;
+    }
+    _dio.options.headers['Authorization'] = 'Bearer $token';
+  }
+
+  Future<Map<String, dynamic>> post(
+    String path, {
+    Map<String, dynamic>? body,
+  }) async {
+    final response =
+        await _dio.post<Map<String, dynamic>>(_apiPath(path), data: body);
+    return _unwrap(response.data);
+  }
+
+  Future<Map<String, dynamic>> get(
+    String path, {
+    Map<String, dynamic>? query,
+  }) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      _apiPath(path),
+      queryParameters: query,
+    );
+    return _unwrap(response.data);
+  }
+
+  Future<Map<String, dynamic>> put(
+    String path, {
+    Map<String, dynamic>? body,
+  }) async {
+    final response =
+        await _dio.put<Map<String, dynamic>>(_apiPath(path), data: body);
+    return _unwrap(response.data);
+  }
+
+  Future<Map<String, dynamic>> patch(
+    String path, {
+    Map<String, dynamic>? body,
+  }) async {
+    final response =
+        await _dio.patch<Map<String, dynamic>>(_apiPath(path), data: body);
+    return _unwrap(response.data);
+  }
+
+  Future<_TapGoAuthResult> register({
+    required String name,
+    required String phone,
+    required String password,
+    String? referralCode,
+  }) async {
+    final deviceContext = await _deviceContextStore.load().timeout(
+          const Duration(seconds: 1),
+          onTimeout: _TapGoDeviceContextStore.fallbackContext,
+        );
+    final body = {
+      'name': name,
+      'fullName': name,
+      'phone': _normalizePhone(phone),
+      'password': password,
+      'deviceId': deviceContext.deviceId,
+      'deviceFingerprint': deviceContext.deviceFingerprint,
+      if (referralCode != null && referralCode.trim().isNotEmpty)
+        'referralCode': referralCode.trim().toUpperCase(),
+    };
+    final safeBody = {...body, 'password': '***'};
+    final registerUrl = _fullApiUrl('auth/register');
+    debugPrint('ACTIVE ROOT URL: $rootUrl');
+    debugPrint('REGISTER URL: $registerUrl');
+    debugPrint('REGISTER PAYLOAD: $safeBody');
+    try {
+      final response =
+          await _dio.post<dynamic>(_apiPath('auth/register'), data: body);
+      debugPrint('REGISTER RESPONSE STATUS: ${response.statusCode}');
+      debugPrint('REGISTER RESPONSE: ${response.data}');
+      return _TapGoAuthResult.fromMap(_unwrapDynamic(response.data));
+    } on DioException catch (error) {
+      debugPrint('REGISTER ERROR: ${error.message}');
+      debugPrint('REGISTER ERROR STATUS: ${error.response?.statusCode}');
+      debugPrint('REGISTER ERROR BODY: ${error.response?.data}');
+      rethrow;
+    }
+  }
+
+  Future<_TapGoAuthResult> login({
+    required String phone,
+    required String password,
+  }) async {
+    final body = {
+      'phone': _normalizePhone(phone),
+      'password': password,
+    };
+    final safeBody = {...body, 'password': '***'};
+    final loginUrl = _fullApiUrl('auth/login');
+    debugPrint('ACTIVE ROOT URL: $rootUrl');
+    debugPrint('LOGIN URL: $loginUrl');
+    debugPrint('LOGIN PAYLOAD: $safeBody');
+    try {
+      final response =
+          await _dio.post<dynamic>(_apiPath('auth/login'), data: body);
+      debugPrint('LOGIN RESPONSE STATUS: ${response.statusCode}');
+      debugPrint('LOGIN RESPONSE: ${response.data}');
+      return _TapGoAuthResult.fromMap(_unwrapDynamic(response.data));
+    } on DioException catch (error) {
+      debugPrint('LOGIN ERROR: ${error.message}');
+      debugPrint('LOGIN ERROR STATUS: ${error.response?.statusCode}');
+      debugPrint('LOGIN ERROR BODY: ${error.response?.data}');
+      rethrow;
+    }
+  }
+
+  Future<_TapGoHealthCheckResult> testConnection(
+      {String? baseUrlOverride}) async {
+    final normalized = _normalizeApiBaseUrl(baseUrlOverride ?? baseUrl);
+    final healthUrl = _healthUrlFromApiBaseUrl(normalized);
+    debugPrint('ACTIVE ROOT URL: ${_rootUrlFromApiBaseUrl(normalized)}');
+    debugPrint('HEALTH URL: $healthUrl');
+    final response = await Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 8),
+      receiveTimeout: const Duration(seconds: 10),
+      headers: {'Accept': 'application/json'},
+    )).get<Map<String, dynamic>>(healthUrl);
+    final data = response.data;
+    debugPrint('HEALTH RESPONSE STATUS: ${response.statusCode}');
+    debugPrint('HEALTH RESPONSE BODY: $data');
+    if (response.statusCode != 200 ||
+        data?['success'] != true ||
+        data?['status'] != 'ok') {
+      throw DioException(
+        requestOptions: response.requestOptions,
+        response: response,
+        type: DioExceptionType.badResponse,
+        message: 'Health check TapGo tidak valid.',
+      );
+    }
+    return _TapGoHealthCheckResult(
+      url: healthUrl,
+      statusCode: response.statusCode ?? 0,
+      message: data?['status']?.toString() ?? 'ok',
+    );
+  }
+
+  Future<Map<String, dynamic>> claimReferral(String referralCode) {
+    return post(
+      '/referrals/claim',
+      body: {
+        'sponsorCode': referralCode.trim().toUpperCase(),
+        'triggerType': 'REFERRAL_JOIN',
+        'triggerId': 'register:${DateTime.now().millisecondsSinceEpoch}',
+        'baseAmount': 0,
+      },
+    );
+  }
+
+  Future<_TapGoAuthUser> me() async {
+    final response = await _dio.get<Map<String, dynamic>>(_apiPath('auth/me'));
+    debugPrint('[TapGo Auth] auth/me response status: ${response.statusCode}');
+    return _TapGoAuthUser.fromMap(_unwrap(response.data));
+  }
+
+  Future<_TapGoProductionSnapshot> productionSnapshot() async {
+    final responses = await Future.wait([
+      _productionSnapshotPart('membership', () => get('/membership/me')),
+      _productionSnapshotPart('wallet', _walletForSnapshot, requiredPart: true),
+      _productionSnapshotPart(
+        'wallet transactions',
+        () => get('/wallet/transactions', query: {'page': 1, 'pageSize': 20}),
+      ),
+      _productionSnapshotPart(
+          'referral summary', () => get('/referrals/summary')),
+      _productionSnapshotPart(
+        'referral tree',
+        () => get('/referrals/downlines',
+            query: {'maxLevel': 10, 'page': 1, 'pageSize': 100}),
+      ),
+      _productionSnapshotPart(
+        'referral commissions',
+        () => get('/referrals/commissions', query: {'page': 1, 'pageSize': 50}),
+      ),
+    ]);
+
+    return _TapGoProductionSnapshot.fromMaps(
+      membership: responses[0],
+      wallet: responses[1],
+      transactions: responses[2],
+      referralSummary: responses[3],
+      referralTree: responses[4],
+      commissions: responses[5],
+    );
+  }
+
+  Future<Map<String, dynamic>> _walletForSnapshot() async {
+    final walletUrl = _fullApiUrl('wallet');
+    debugPrint('ACTIVE API BASE URL: $baseUrl');
+    debugPrint('WALLET URL: $walletUrl');
+    debugPrint(
+      'AUTH TOKEN EXISTS: ${_dio.options.headers['Authorization'] != null}',
+    );
+    try {
+      final response = await _dio.get<dynamic>(_apiPath('wallet'));
+      debugPrint('WALLET RESPONSE STATUS: ${response.statusCode}');
+      debugPrint('WALLET RESPONSE BODY: ${response.data}');
+      return _unwrapDynamic(response.data);
+    } on DioException catch (error) {
+      debugPrint('WALLET ERROR: ${error.message}');
+      debugPrint('WALLET ERROR STATUS: ${error.response?.statusCode}');
+      debugPrint('WALLET ERROR BODY: ${error.response?.data}');
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> membershipPackages() async {
+    final data = await get('/membership/packages');
+    return _items(data);
+  }
+
+  Future<Map<String, dynamic>> createMembershipOrder({
+    required String packageId,
+    required Map<String, dynamic> registrationData,
+  }) {
+    return post(
+      '/membership/orders',
+      body: {
+        'packageId': packageId,
+        'registrationData': registrationData,
+      },
+    );
+  }
+
+  Future<_TapGoPaymentIntent> payMembershipOrder(String orderId) async {
+    final data = await post('/membership/orders/$orderId/pay');
+    return _TapGoPaymentIntent.fromMap(data);
+  }
+
+  Future<Map<String, dynamic>> membershipOrder(String orderId) {
+    return get('/membership/orders/$orderId');
+  }
+
+  Future<List<Map<String, dynamic>>> membershipOrders() async {
+    final data = await get('/membership/orders/me');
+    return _items(data);
+  }
+
+  Future<Map<String, dynamic>> invoice(String invoiceIdOrNumber) {
+    return get('/invoices/$invoiceIdOrNumber');
+  }
+
+  Future<List<Map<String, dynamic>>> adminWithdrawals() async {
+    final data =
+        await get('/admin/withdrawals', query: {'page': 1, 'pageSize': 50});
+    return _items(data);
+  }
+
+  Future<List<Map<String, dynamic>>> withdrawals() async {
+    final data =
+        await get('/wallet/withdrawals', query: {'page': 1, 'pageSize': 50});
+    return _items(data);
+  }
+
+  Future<Map<String, dynamic>> bankAccount() {
+    return get('/wallet/bank-account');
+  }
+
+  Future<Map<String, dynamic>> updateBankAccount({
+    required String bankName,
+    String? bankCode,
+    required String accountNumber,
+    required String accountHolderName,
+  }) {
+    return put('/wallet/bank-account', body: {
+      'bankName': bankName,
+      if (bankCode != null && bankCode.isNotEmpty) 'bankCode': bankCode,
+      'accountNumber': accountNumber,
+      'accountHolderName': accountHolderName,
+    });
+  }
+
+  Future<Map<String, dynamic>> requestWithdrawal({
+    required int amount,
+    required String bankName,
+    String? bankCode,
+    required String accountNumber,
+    required String accountHolderName,
+  }) {
+    return post('/wallet/withdrawals', body: {
+      'amount': amount,
+      'bankName': bankName,
+      if (bankCode != null && bankCode.isNotEmpty) 'bankCode': bankCode,
+      'accountNumber': accountNumber,
+      'accountHolderName': accountHolderName,
+    });
+  }
+
+  Future<Map<String, dynamic>> accountDeletionRequest() {
+    return get('/account/delete-request');
+  }
+
+  Future<Map<String, dynamic>> submitAccountDeletionRequest({
+    String? reason,
+  }) {
+    return post('/account/delete-request', body: {
+      if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+    });
+  }
+
+  Future<Map<String, dynamic>> submitContactMessage({
+    required String name,
+    required String contact,
+    required String category,
+    required String message,
+  }) {
+    return post('/contact', body: {
+      'name': name,
+      'contact': contact,
+      'category': category,
+      'message': message,
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> adminProfitSharingPeriods() async {
+    final data = await get('/admin/profit-sharing/periods');
+    return _items(data);
+  }
+
+  Future<List<Map<String, dynamic>>> referralUplink() async {
+    final data = await get('/referrals/uplink', query: {'maxLevel': 10});
+    return _items(data);
+  }
+
+  Future<List<Map<String, dynamic>>> membershipOrdersMe() async {
+    final data = await get('/membership/orders/me');
+    return _items(data);
+  }
+
+  Future<Map<String, dynamic>> adminDashboardSummary() {
+    return get('/admin/dashboard/summary');
+  }
+
+  Future<List<Map<String, dynamic>>> adminMembers() async {
+    final data =
+        await get('/admin/members', query: {'page': 1, 'pageSize': 50});
+    return _items(data);
+  }
+
+  Future<List<Map<String, dynamic>>> adminPayments() async {
+    final data =
+        await get('/admin/payments', query: {'page': 1, 'pageSize': 50});
+    return _items(data);
+  }
+
+  Future<List<Map<String, dynamic>>> adminInvoices() async {
+    final data =
+        await get('/admin/invoices', query: {'page': 1, 'pageSize': 50});
+    return _items(data);
+  }
+
+  Future<List<Map<String, dynamic>>> adminCommissions() async {
+    final data =
+        await get('/admin/commissions', query: {'page': 1, 'pageSize': 50});
+    return _items(data);
+  }
+
+  Future<Map<String, dynamic>> adminFounderPlatinum() {
+    return get('/admin/founder-platinum');
+  }
+
+  Future<Map<String, dynamic>> adminFounderPlatinumDetail(String founderId) {
+    return get('/admin/founder-platinum/$founderId');
+  }
+
+  Future<Map<String, dynamic>> updateFounderPlatinumStatus({
+    required String founderId,
+    required String status,
+    String? reason,
+  }) {
+    return patch('/admin/founder-platinum/$founderId/status', body: {
+      'status': status,
+      if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> adminMemberRequests() async {
+    final data =
+        await get('/admin/member-requests', query: {'page': 1, 'pageSize': 50});
+    return _items(data);
+  }
+
+  Future<Map<String, dynamic>> approveMemberRequest(String id) {
+    return post('/admin/member-requests/$id/approve');
+  }
+
+  Future<Map<String, dynamic>> rejectMemberRequest(
+    String id, {
+    String? reason,
+  }) {
+    return post('/admin/member-requests/$id/reject', body: {
+      if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+    });
+  }
+
+  Future<Map<String, dynamic>> adminBonusReport({
+    Map<String, dynamic>? query,
+  }) {
+    return get('/admin/reports/bonus', query: {
+      'page': 1,
+      'pageSize': 50,
+      ...?query,
+    });
+  }
+
+  Future<Map<String, dynamic>> adminPpobReport({
+    Map<String, dynamic>? query,
+  }) {
+    return get('/admin/reports/ppob', query: {
+      'page': 1,
+      'pageSize': 50,
+      ...?query,
+    });
+  }
+
+  Future<Map<String, dynamic>> adminRewardReport({
+    Map<String, dynamic>? query,
+  }) {
+    return get('/admin/reports/reward', query: {
+      'page': 1,
+      'pageSize': 50,
+      ...?query,
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> adminDeleteRequests() async {
+    final data =
+        await get('/admin/delete-requests', query: {'page': 1, 'pageSize': 50});
+    return _items(data);
+  }
+
+  Future<List<Map<String, dynamic>>> adminContactMessages() async {
+    final data = await get('/admin/contact-messages',
+        query: {'page': 1, 'pageSize': 50});
+    return _items(data);
+  }
+
+  Future<List<Map<String, dynamic>>> adminWallets() async {
+    final data =
+        await get('/admin/wallets', query: {'page': 1, 'pageSize': 50});
+    return _items(data);
+  }
+
+  Future<Map<String, dynamic>> approveWithdrawal(String id) {
+    return post('/admin/withdrawals/$id/approve');
+  }
+
+  Future<Map<String, dynamic>> rejectWithdrawal(String id) {
+    return post('/admin/withdrawals/$id/reject');
+  }
+
+  Future<Map<String, dynamic>> markWithdrawalPaid(String id) {
+    return post('/admin/withdrawals/$id/paid');
+  }
+
+  Map<String, dynamic> _unwrap(Map<String, dynamic>? data) {
+    if (data == null) {
+      return {};
+    }
+    final payload = data['data'];
+    if (payload is Map<String, dynamic>) {
+      return payload;
+    }
+    return {'items': payload};
+  }
+
+  Map<String, dynamic> _unwrapDynamic(Object? data) {
+    if (data is Map<String, dynamic>) {
+      return _unwrap(data);
+    }
+    if (data is Map) {
+      return _unwrap(data.cast<String, dynamic>());
+    }
+    return {};
+  }
+
+  String _apiPath(String path) {
+    return path.startsWith('/') ? path.substring(1) : path;
+  }
+
+  String _fullApiUrl(String path) {
+    return '${baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl}/${_apiPath(path)}';
+  }
+
+  List<Map<String, dynamic>> _items(Map<String, dynamic> data) {
+    final items = data['items'];
+    if (items is List) {
+      return items
+          .whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .toList();
+    }
+    return const [];
+  }
+}
+
+class _TapGoDeviceContext {
+  const _TapGoDeviceContext({
+    required this.deviceId,
+    required this.deviceFingerprint,
+    required this.appVersion,
+    required this.platform,
+  });
+
+  final String deviceId;
+  final String deviceFingerprint;
+  final String appVersion;
+  final String platform;
+
+  Map<String, String> get headers => {
+        'X-TapGo-Device-Id': deviceId,
+        'X-TapGo-Device-Fingerprint': deviceFingerprint,
+        'X-TapGo-App-Version': appVersion,
+        'X-TapGo-Platform': platform,
+      };
+}
+
+class _TapGoDeviceContextStore {
+  _TapGoDeviceContextStore({
+    FlutterSecureStorage? storage,
+  }) : _storage = storage ??
+            const FlutterSecureStorage(
+              aOptions: AndroidOptions(encryptedSharedPreferences: true),
+            );
+
+  static const _deviceIdKey = 'tapgo.device_id.v1';
+  static const _deviceFingerprintKey = 'tapgo.device_fingerprint.v1';
+  static const _appVersion = '1.0.1+2';
+
+  static _TapGoDeviceContext fallbackContext() => _TapGoDeviceContext(
+        deviceId: 'tapgo-session-${DateTime.now().millisecondsSinceEpoch}',
+        deviceFingerprint:
+            'tapgo:${Platform.operatingSystem}:session-unavailable',
+        appVersion: _appVersion,
+        platform: Platform.operatingSystem,
+      );
+
+  static Map<String, String> get fallbackHeaders => {
+        'X-TapGo-App-Version': _appVersion,
+        'X-TapGo-Platform': Platform.operatingSystem,
+      };
+
+  final FlutterSecureStorage _storage;
+  final Map<String, String> _memoryCache = {};
+
+  Future<_TapGoDeviceContext> load() async {
+    if (tapGoDisablePersistenceForTests) {
+      return const _TapGoDeviceContext(
+        deviceId: 'tapgo-test-installation',
+        deviceFingerprint: 'tapgo-test-fingerprint',
+        appVersion: _appVersion,
+        platform: 'test',
+      );
+    }
+
+    final deviceId = await _readOrCreate(_deviceIdKey, _newDeviceId);
+    final fingerprint = await _readOrCreate(
+      _deviceFingerprintKey,
+      () => 'tapgo:${Platform.operatingSystem}:$deviceId',
+    );
+    return _TapGoDeviceContext(
+      deviceId: deviceId,
+      deviceFingerprint: fingerprint,
+      appVersion: _appVersion,
+      platform: Platform.operatingSystem,
+    );
+  }
+
+  Future<String> _readOrCreate(String key, String Function() create) async {
+    final memoryValue = _memoryCache[key];
+    if (memoryValue != null && memoryValue.trim().isNotEmpty) {
+      return memoryValue;
+    }
+    String? saved;
+    try {
+      saved = await _storage.read(key: key).timeout(
+            const Duration(milliseconds: 700),
+          );
+    } catch (error) {
+      debugPrint('[TapGo Device] secure read skipped for $key: $error');
+    }
+    if (saved != null && saved.trim().isNotEmpty) {
+      _memoryCache[key] = saved;
+      return saved;
+    }
+    final value = create();
+    _memoryCache[key] = value;
+    try {
+      await _storage.write(key: key, value: value).timeout(
+            const Duration(milliseconds: 700),
+          );
+    } catch (error) {
+      debugPrint('[TapGo Device] secure write skipped for $key: $error');
+    }
+    return value;
+  }
+
+  String _newDeviceId() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(24, (_) => random.nextInt(256));
+    return 'tapgo-${base64UrlEncode(bytes).replaceAll('=', '')}';
+  }
+}
+
+class _TapGoProductionSnapshot {
+  const _TapGoProductionSnapshot({
+    required this.sessionPatch,
+    required this.referralTree,
+    required this.commissionTransactions,
+    required this.loadedAt,
+  });
+
+  final DemoClientSession sessionPatch;
+  final DemoReferralNode? referralTree;
+  final List<WalletTransactionModel> commissionTransactions;
+  final DateTime loadedAt;
+
+  factory _TapGoProductionSnapshot.fromMaps({
+    required Map<String, dynamic> membership,
+    required Map<String, dynamic> wallet,
+    required Map<String, dynamic> transactions,
+    required Map<String, dynamic> referralSummary,
+    required Map<String, dynamic> referralTree,
+    required Map<String, dynamic> commissions,
+  }) {
+    final membershipData =
+        (membership['membership'] as Map?)?.cast<String, dynamic>();
+    final packageData =
+        (membershipData?['membership'] as Map?)?.cast<String, dynamic>();
+    final orderData =
+        (membershipData?['order'] as Map?)?.cast<String, dynamic>();
+    final invoiceData =
+        (orderData?['invoice'] as Map?)?.cast<String, dynamic>();
+    final membershipMetadata =
+        (membershipData?['metadata'] as Map?)?.cast<String, dynamic>();
+    final walletBalance = _intFrom(wallet['balance']);
+    final txItems = _listFromPayload(transactions)
+        .map(_walletTransactionFromApi)
+        .toList(growable: false);
+    final commissionItems = _listFromPayload(commissions);
+    final commissionLedgerItems = commissionItems
+        .map(_commissionTransactionFromApi)
+        .toList(growable: false);
+    final directSponsor = _intFrom(
+        referralSummary['directDownlines'] ?? referralSummary['directSponsor']);
+    final totalDownline = _intFrom(
+        referralSummary['totalDownlines'] ?? referralSummary['totalDownline']);
+    final activePackageName = _titleCase(packageData?['tier']?.toString() ??
+        packageData?['name']?.toString() ??
+        'Basic');
+    final ppobBalance = _intFrom(packageData?['ppobBalance']);
+    final todayBonus = _todayBonusFrom(commissionItems);
+    final founderRole = (membershipData?['founderRole'] ??
+            membershipMetadata?['founderRole'] ??
+            membershipData?['founderProgramRole'])
+        ?.toString()
+        .toUpperCase();
+    final isFounderPlatinum = founderRole == 'FOUNDER_PLATINUM';
+
+    return _TapGoProductionSnapshot(
+      sessionPatch: DemoClientSession.initial().copyWith(
+        activePackageName: activePackageName,
+        isFounderPlatinum: isFounderPlatinum,
+        walletBalance: walletBalance,
+        ppobBalance: ppobBalance,
+        directSponsor: directSponsor,
+        downline: totalDownline,
+        activeLevel: _activeLevelFromDirectSponsor(directSponsor),
+        todayBonus: todayBonus,
+        lastInvoiceNumber: invoiceData?['number']?.toString(),
+        membershipJoinedAt: _dateLabel(membershipData?['activeAt']),
+        transactions: txItems,
+      ),
+      referralTree: _referralTreeFromApi(referralTree),
+      commissionTransactions: commissionLedgerItems,
+      loadedAt: DateTime.now(),
+    );
+  }
+}
+
+final _productionSnapshotProvider =
+    FutureProvider<_TapGoProductionSnapshot>((ref) async {
+  final session = ref.read(_demoSessionProvider);
+  if (session.accessToken == null || session.accessToken!.isEmpty) {
+    throw StateError('Belum ada token backend.');
+  }
+  _apiClient.setAccessToken(session.accessToken);
+  final snapshot = await _apiClient.productionSnapshot();
+  final patched = session.copyWith(
+    activePackageName: snapshot.sessionPatch.activePackageName,
+    walletBalance: snapshot.sessionPatch.walletBalance,
+    ppobBalance: snapshot.sessionPatch.ppobBalance,
+    isFounderPlatinum: snapshot.sessionPatch.isFounderPlatinum,
+    directSponsor: snapshot.sessionPatch.directSponsor,
+    downline: snapshot.sessionPatch.downline,
+    activeLevel: snapshot.sessionPatch.activeLevel,
+    todayBonus: snapshot.sessionPatch.todayBonus,
+    lastInvoiceNumber: snapshot.sessionPatch.lastInvoiceNumber,
+    membershipJoinedAt: snapshot.sessionPatch.membershipJoinedAt,
+    transactions: snapshot.sessionPatch.transactions,
+    isDemoMode: false,
+  );
+  ref.read(_demoSessionProvider.notifier).state = patched;
+  await _persistentStore.saveSession(patched);
+  return snapshot;
+});
+
+Future<Map<String, dynamic>> _productionSnapshotPart(
+  String label,
+  Future<Map<String, dynamic>> Function() loader, {
+  bool requiredPart = false,
+}) async {
+  try {
+    return await loader();
+  } catch (error) {
+    debugPrint('[TapGo Binding] $label unavailable: $error');
+    if (requiredPart) {
+      rethrow;
+    }
+    return const <String, dynamic>{};
+  }
+}
+
+final _adminConsoleSnapshotProvider =
+    FutureProvider<_AdminConsoleApiSnapshot>((ref) async {
+  final session = ref.read(_demoSessionProvider);
+  if (session.accessToken == null || session.accessToken!.isEmpty) {
+    throw StateError('Belum ada token admin backend.');
+  }
+  if (!session.isAdmin) {
+    throw StateError('Anda tidak memiliki akses admin.');
+  }
+  _apiClient.setAccessToken(session.accessToken);
+  final summary = await _apiClient.adminDashboardSummary();
+  final results = await Future.wait<Object>([
+    _adminSnapshotPart(
+      label: 'admin members',
+      loader: _apiClient.adminMembers,
+      fallback: const <Map<String, dynamic>>[],
+    ),
+    _adminSnapshotPart(
+      label: 'admin payments',
+      loader: _apiClient.adminPayments,
+      fallback: const <Map<String, dynamic>>[],
+    ),
+    _adminSnapshotPart(
+      label: 'admin invoices',
+      loader: _apiClient.adminInvoices,
+      fallback: const <Map<String, dynamic>>[],
+    ),
+    _adminSnapshotPart(
+      label: 'admin commissions',
+      loader: _apiClient.adminCommissions,
+      fallback: const <Map<String, dynamic>>[],
+    ),
+    _adminSnapshotPart(
+      label: 'admin wallets',
+      loader: _apiClient.adminWallets,
+      fallback: const <Map<String, dynamic>>[],
+    ),
+    _adminSnapshotPart(
+      label: 'admin withdrawals',
+      loader: _apiClient.adminWithdrawals,
+      fallback: const <Map<String, dynamic>>[],
+    ),
+    _adminSnapshotPart(
+      label: 'admin profit sharing periods',
+      loader: _apiClient.adminProfitSharingPeriods,
+      fallback: const <Map<String, dynamic>>[],
+    ),
+    session.isSuperAdmin
+        ? _adminSnapshotPart(
+            label: 'founder platinum',
+            loader: _apiClient.adminFounderPlatinum,
+            fallback: const <String, dynamic>{},
+          )
+        : Future.value(const <String, dynamic>{}),
+  ]);
+  return _AdminConsoleApiSnapshot(
+    summary: summary,
+    members: results[0] as List<Map<String, dynamic>>,
+    payments: results[1] as List<Map<String, dynamic>>,
+    invoices: results[2] as List<Map<String, dynamic>>,
+    commissions: results[3] as List<Map<String, dynamic>>,
+    wallets: results[4] as List<Map<String, dynamic>>,
+    withdrawals: results[5] as List<Map<String, dynamic>>,
+    profitSharingPeriods: results[6] as List<Map<String, dynamic>>,
+    founderProgram: results[7] as Map<String, dynamic>,
+  );
+});
+
+Future<T> _adminSnapshotPart<T>({
+  required String label,
+  required Future<T> Function() loader,
+  required T fallback,
+}) async {
+  try {
+    return await loader();
+  } catch (error) {
+    debugPrint('[TapGo Admin] $label unavailable: $error');
+    if (!_isTapGoDevelopmentBuild) {
+      rethrow;
+    }
+    return fallback;
+  }
+}
+
+class _AdminConsoleApiSnapshot {
+  const _AdminConsoleApiSnapshot({
+    required this.summary,
+    required this.members,
+    required this.payments,
+    required this.invoices,
+    required this.commissions,
+    required this.wallets,
+    required this.withdrawals,
+    required this.profitSharingPeriods,
+    required this.founderProgram,
+  });
+
+  final Map<String, dynamic> summary;
+  final List<Map<String, dynamic>> members;
+  final List<Map<String, dynamic>> payments;
+  final List<Map<String, dynamic>> invoices;
+  final List<Map<String, dynamic>> commissions;
+  final List<Map<String, dynamic>> wallets;
+  final List<Map<String, dynamic>> withdrawals;
+  final List<Map<String, dynamic>> profitSharingPeriods;
+  final Map<String, dynamic> founderProgram;
+}
+
+class _TapGoPaymentIntent {
+  const _TapGoPaymentIntent({
+    required this.snapToken,
+    required this.redirectUrl,
+    required this.orderId,
+    required this.invoiceNumber,
+    required this.paid,
+    this.referenceId,
+    this.expiredAt,
+    this.gateway,
+  });
+
+  final String snapToken;
+  final String redirectUrl;
+  final String orderId;
+  final String invoiceNumber;
+  final bool paid;
+  final String? referenceId;
+  final String? expiredAt;
+  final String? gateway;
+
+  factory _TapGoPaymentIntent.fromMap(Map<String, dynamic> map) {
+    final paymentUrl = map['paymentUrl']?.toString();
+    return _TapGoPaymentIntent(
+      snapToken: map['snapToken']?.toString() ?? '',
+      redirectUrl: paymentUrl ?? map['redirectUrl']?.toString() ?? '',
+      orderId: map['orderId']?.toString() ?? '',
+      invoiceNumber: map['invoiceNumber']?.toString() ?? '',
+      paid: map['paid'] == true,
+      referenceId: map['referenceId']?.toString(),
+      expiredAt: map['expiredAt']?.toString(),
+      gateway: map['gateway']?.toString(),
+    );
+  }
+}
+
+class _TapGoAuthResult {
+  const _TapGoAuthResult({
+    required this.user,
+    this.accessToken,
+    this.refreshToken,
+  });
+
+  final _TapGoAuthUser user;
+  final String? accessToken;
+  final String? refreshToken;
+
+  factory _TapGoAuthResult.fromMap(Map<String, dynamic> map) {
+    return _TapGoAuthResult(
+      user: _TapGoAuthUser.fromMap(
+        (map['user'] as Map?)?.cast<String, dynamic>() ?? map,
+      ),
+      accessToken: map['accessToken']?.toString(),
+      refreshToken: map['refreshToken']?.toString(),
+    );
+  }
+}
+
+class _TapGoHealthCheckResult {
+  const _TapGoHealthCheckResult({
+    required this.url,
+    required this.statusCode,
+    required this.message,
+  });
+
+  final String url;
+  final int statusCode;
+  final String message;
+}
+
+class _TapGoAuthUser {
+  const _TapGoAuthUser({
+    required this.id,
+    required this.name,
+    required this.phone,
+    required this.role,
+    this.email,
+    this.referralCode,
+    this.isFounderPlatinum = false,
+  });
+
+  final String id;
+  final String name;
+  final String phone;
+  final String role;
+  final String? email;
+  final String? referralCode;
+  final bool isFounderPlatinum;
+
+  factory _TapGoAuthUser.fromMap(Map<String, dynamic> map) {
+    return _TapGoAuthUser(
+      id: map['id']?.toString() ?? '',
+      name: (map['fullName'] ?? map['name'] ?? 'Member TapGo').toString(),
+      phone: map['phone']?.toString() ?? '',
+      role: _normalizeUserRole(map['role']?.toString()),
+      email: map['email']?.toString(),
+      referralCode: map['referralCode']?.toString(),
+      isFounderPlatinum:
+          map['founderRole']?.toString().toUpperCase() == 'FOUNDER_PLATINUM' ||
+              map['isFounderPlatinum'] == true,
+    );
+  }
+}
+
+String _normalizePhone(String phone) {
+  final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.startsWith('0')) {
+    return '+62${digits.substring(1)}';
+  }
+  if (digits.startsWith('62')) {
+    return '+$digits';
+  }
+  if (phone.trim().startsWith('+')) {
+    return phone.trim();
+  }
+  return '+62$digits';
+}
+
+String _normalizeApiBaseUrl(String value) {
+  final rootUrl = _normalizeApiRootUrl(value);
+  if (rootUrl.isEmpty) {
+    return 'https://api.tapgolion.id/api/v1/';
+  }
+  return '$rootUrl/api/v1/';
+}
+
+String _normalizeApiRootUrl(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return '';
+  }
+  var normalized = trimmed.endsWith('/')
+      ? trimmed.substring(0, trimmed.length - 1)
+      : trimmed;
+  if (normalized.endsWith('/api/v1')) {
+    normalized = normalized.substring(0, normalized.length - '/api/v1'.length);
+  } else if (normalized.endsWith('/api/v1/')) {
+    normalized = normalized.substring(0, normalized.length - '/api/v1/'.length);
+  }
+  return normalized.endsWith('/')
+      ? normalized.substring(0, normalized.length - 1)
+      : normalized;
+}
+
+String _rootUrlFromApiBaseUrl(String value) {
+  final rootUrl = _normalizeApiRootUrl(value);
+  return rootUrl.isEmpty ? 'https://api.tapgolion.id' : rootUrl;
+}
+
+String _healthUrlFromApiBaseUrl(String value) {
+  return '${_rootUrlFromApiBaseUrl(value)}/health';
+}
+
+class _TapGoServerConfigStore {
+  static const _apiBaseUrlKey = 'tapgo.uat.apiBaseUrl.v1';
+
+  Future<String?> loadApiBaseUrl() async {
+    if (tapGoDisablePersistenceForTests) {
+      return null;
+    }
+    final preferences = await SharedPreferences.getInstance();
+    final saved = preferences.getString(_apiBaseUrlKey);
+    if (saved == null || saved.trim().isEmpty) {
+      return null;
+    }
+    final normalizedRoot = _normalizeApiRootUrl(saved);
+    if (normalizedRoot != saved) {
+      await preferences.setString(_apiBaseUrlKey, normalizedRoot);
+    }
+    return normalizedRoot;
+  }
+
+  Future<void> saveApiBaseUrl(String value) async {
+    if (tapGoDisablePersistenceForTests) {
+      return;
+    }
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_apiBaseUrlKey, _normalizeApiRootUrl(value));
+  }
+
+  Future<void> resetApiBaseUrl() async {
+    if (tapGoDisablePersistenceForTests) {
+      return;
+    }
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(_apiBaseUrlKey);
+  }
+}
+
+String _normalizeUserRole(String? role) {
+  final normalized = (role ?? 'USER').trim().toUpperCase();
+  if (normalized == 'SUPER_ADMIN' ||
+      normalized == 'ADMIN' ||
+      normalized == 'MEMBER' ||
+      normalized == 'USER') {
+    return normalized == 'MEMBER' ? 'USER' : normalized;
+  }
+  return 'USER';
+}
+
+DemoClientSession _sessionFromAuthUser(
+  _TapGoAuthUser user, {
+  String? accessToken,
+  String? refreshToken,
+  DemoClientSession? fallback,
+}) {
+  return DemoClientSession.initial().copyWith(
+    userId: user.id.isEmpty ? fallback?.userId : user.id,
+    email: user.email,
+    role: user.role,
+    accessToken: accessToken,
+    refreshToken: refreshToken,
+    isDemoMode: false,
+    userName: user.name,
+    phone: user.phone.isEmpty ? fallback?.phone : user.phone,
+    referralCode: user.referralCode ?? fallback?.referralCode ?? '-',
+    isFounderPlatinum:
+        user.isFounderPlatinum || (fallback?.isFounderPlatinum ?? false),
+  );
+}
+
+class _TapGoEndpointCatalog {
+  const _TapGoEndpointCatalog._();
+
+  static const register = 'POST /api/v1/auth/register';
+  static const login = 'POST /api/v1/auth/login';
+  static const refresh = 'POST /api/v1/auth/refresh';
+  static const logout = 'POST /api/v1/auth/logout';
+  static const me = 'GET /api/v1/auth/me';
+  static const membershipPlans = 'GET /api/v1/memberships/plans';
+  static const membershipMe = 'GET /api/v1/membership/me';
+  static const membershipUpgrade = 'POST /api/v1/memberships/upgrade';
+  static const membershipPackages = 'GET /api/v1/membership/packages';
+  static const membershipOrders = 'POST /api/v1/membership/orders';
+  static const invoiceDetail = 'GET /api/v1/invoices/:id';
+  static const membershipOrderPay = 'POST /api/v1/membership/orders/:id/pay';
+  static const midtransNotification =
+      'POST /api/v1/payments/midtrans/notification';
+  static const referralSummary = 'GET /api/v1/referrals/summary';
+  static const referralTree = 'GET /api/v1/referrals/downlines';
+  static const referralCommissions = 'GET /api/v1/referrals/commissions';
+  static const wallet = 'GET /api/v1/wallet';
+  static const walletTransactions = 'GET /api/v1/wallet/transactions';
+  static const bankAccount = 'GET /api/v1/wallet/bank-account';
+  static const bankAccountUpdate = 'PUT /api/v1/wallet/bank-account';
+  static const withdrawalRequest = 'POST /api/v1/wallet/withdrawals';
+  static const withdrawalHistory = 'GET /api/v1/wallet/withdrawals';
+  static const accountDeleteRequest = 'POST /api/v1/account/delete-request';
+  static const contactMessage = 'POST /api/v1/contact';
+  static const adminMemberRequests = 'GET /api/v1/admin/member-requests';
+  static const adminBonusReport = 'GET /api/v1/admin/reports/bonus';
+  static const adminPpobReport = 'GET /api/v1/admin/reports/ppob';
+  static const adminRewardReport = 'GET /api/v1/admin/reports/reward';
+  static const adminWithdrawals = 'GET /api/v1/admin/withdrawals';
+  static const adminDashboardSummary = 'GET /api/v1/admin/dashboard/summary';
+  static const adminMembers = 'GET /api/v1/admin/members';
+  static const adminMemberDetail = 'GET /api/v1/admin/members/:id';
+  static const adminPayments = 'GET /api/v1/admin/payments';
+  static const adminInvoices = 'GET /api/v1/admin/invoices';
+  static const adminCommissions = 'GET /api/v1/admin/commissions';
+  static const adminCommissionSettings =
+      'GET /api/v1/admin/commission-settings';
+  static const adminWallets = 'GET /api/v1/admin/wallets';
+  static const adminWalletTransactions =
+      'GET /api/v1/admin/wallets/:userId/transactions';
+  static const adminApproveWithdrawal =
+      'POST /api/v1/admin/withdrawals/:id/approve';
+  static const adminRejectWithdrawal =
+      'POST /api/v1/admin/withdrawals/:id/reject';
+  static const adminPaidWithdrawal = 'POST /api/v1/admin/withdrawals/:id/paid';
+  static const adminProfitSharingPeriods =
+      'GET /api/v1/admin/profit-sharing/periods';
+  static const adminProfitSharingApprove =
+      'POST /api/v1/admin/profit-sharing/periods/:id/approve';
+  static const adminProfitSharingDistribute =
+      'POST /api/v1/admin/profit-sharing/periods/:id/distribute';
+  static const adminRoleManagement = 'PUT /api/v1/admin/roles/:userId';
+  static const adminAppSettings = 'PUT /api/v1/admin/app-settings';
+  static const membershipPackageSettings =
+      'PUT /api/v1/memberships/admin/plans/:tier';
+}
+
+List<Map<String, dynamic>> _listFromPayload(Map<String, dynamic> payload) {
+  final items = payload['items'] ??
+      payload['data'] ??
+      payload['downlines'] ??
+      payload['nodes'] ??
+      payload['rows'] ??
+      payload['results'];
+  if (items is List) {
+    return items
+        .whereType<Map>()
+        .map((item) => item.cast<String, dynamic>())
+        .toList();
+  }
+  return const [];
+}
+
+int _intFrom(Object? value) {
+  if (value is num) {
+    return value.round();
+  }
+  if (value is String) {
+    return double.tryParse(value)?.round() ?? 0;
+  }
+  return 0;
+}
+
+String _titleCase(String value) {
+  final clean = value.trim();
+  if (clean.isEmpty) {
+    return 'Basic';
+  }
+  final lower = clean.toLowerCase();
+  return lower[0].toUpperCase() + lower.substring(1);
+}
+
+int _activeLevelFromDirectSponsor(int directSponsor) {
+  if (directSponsor >= 10) {
+    return 10;
+  }
+  if (directSponsor >= 5) {
+    return 5;
+  }
+  if (directSponsor >= 3) {
+    return 3;
+  }
+  return 0;
+}
+
+int _todayBonusFrom(List<Map<String, dynamic>> commissions) {
+  final now = DateTime.now();
+  return commissions.fold<int>(0, (total, item) {
+    final createdAt = DateTime.tryParse(item['createdAt']?.toString() ?? '');
+    if (createdAt == null ||
+        createdAt.year != now.year ||
+        createdAt.month != now.month ||
+        createdAt.day != now.day) {
+      return total;
+    }
+    return total + _intFrom(item['amount']);
+  });
+}
+
+WalletTransactionModel _walletTransactionFromApi(Map<String, dynamic> item) {
+  final type = item['type']?.toString() ?? 'TRANSAKSI';
+  return WalletTransactionModel(
+    title: _labelFromType(type),
+    description: item['referenceType']?.toString() ?? 'Ledger TapGo',
+    amount: _intFrom(item['amount']),
+    status: 'Sukses',
+  );
+}
+
+WalletTransactionModel _commissionTransactionFromApi(
+    Map<String, dynamic> item) {
+  final type = item['type']?.toString() ?? 'KOMISI';
+  return WalletTransactionModel(
+    title: _labelFromType(type),
+    description: item['triggerType']?.toString() ?? 'Komisi TapGo',
+    amount: _intFrom(item['amount']),
+    status: item['status']?.toString() ?? 'POSTED',
+  );
+}
+
+String _labelFromType(String type) {
+  return switch (type) {
+    'REGISTRATION_BONUS' => 'Bonus Registrasi',
+    'BASIC_REGISTER_BONUS' => 'Bonus Registrasi',
+    'PPOB_BENEFIT' => 'Saldo PPOB',
+    'SPONSOR_BONUS' => 'Bonus Sponsor',
+    'BASIC_SPONSOR_BONUS' => 'Bonus Sponsor',
+    'LEVEL_BONUS' => 'Level Bonus',
+    'REWARD_BONUS' => 'Reward Bonus',
+    'PROFIT_SHARING' => 'Profit Sharing',
+    'WITHDRAWAL' => 'Withdraw',
+    _ => type.replaceAll('_', ' '),
+  };
+}
+
+String? _dateLabel(Object? value) {
+  final parsed = DateTime.tryParse(value?.toString() ?? '');
+  if (parsed == null) {
+    return null;
+  }
+  return '${parsed.day}/${parsed.month}/${parsed.year}';
+}
+
+DemoReferralNode? _referralTreeFromApi(Map<String, dynamic> payload) {
+  final rows = _listFromPayload(payload);
+  if (rows.isEmpty) {
+    return null;
+  }
+  final rootMap = (payload['root'] as Map?)?.cast<String, dynamic>();
+  final rootId = rootMap?['userId']?.toString() ??
+      rootMap?['id']?.toString() ??
+      rows
+          .map((item) => item['sponsorId']?.toString())
+          .firstWhere((id) => id != null && id.isNotEmpty, orElse: () => null);
+  final childrenBySponsor = <String, List<Map<String, dynamic>>>{};
+  for (final item in rows) {
+    final sponsorMap = (item['sponsor'] as Map?)?.cast<String, dynamic>();
+    final sponsorId = item['sponsorId']?.toString() ??
+        item['sponsor_id']?.toString() ??
+        sponsorMap?['id']?.toString() ??
+        sponsorMap?['userId']?.toString();
+    if (sponsorId == null || sponsorId.isEmpty) {
+      continue;
+    }
+    childrenBySponsor.putIfAbsent(sponsorId, () => []).add(item);
+  }
+
+  DemoReferralNode nodeFromItem(Map<String, dynamic> item) {
+    final userMap = (item['user'] as Map?)?.cast<String, dynamic>();
+    final memberMap = (item['member'] as Map?)?.cast<String, dynamic>();
+    final userId = item['userId']?.toString() ??
+        item['user_id']?.toString() ??
+        item['id']?.toString() ??
+        userMap?['id']?.toString() ??
+        memberMap?['id']?.toString() ??
+        'api-${DateTime.now().microsecondsSinceEpoch}';
+    final level = _intFrom(item['level'] ?? item['depth']);
+    final children =
+        (childrenBySponsor[userId] ?? const <Map<String, dynamic>>[])
+            .map(nodeFromItem)
+            .toList(growable: false);
+    return DemoReferralNode(
+      id: userId,
+      name: item['fullName']?.toString() ??
+          item['full_name']?.toString() ??
+          item['name']?.toString() ??
+          userMap?['fullName']?.toString() ??
+          userMap?['name']?.toString() ??
+          memberMap?['fullName']?.toString() ??
+          memberMap?['name']?.toString() ??
+          'Member TapGo',
+      packageName: _titleCase(item['membershipTier']?.toString() ??
+          item['membership_tier']?.toString() ??
+          item['packageName']?.toString() ??
+          'Basic'),
+      level: level == 0 ? 1 : level,
+      bonus: _intFrom(item['bonus'] ?? item['totalBonus']),
+      totalDownline: _intFrom(item['totalDownline'] ??
+          item['totalDownlines'] ??
+          item['downlineCount'] ??
+          children.length),
+      isExpanded: level <= 2,
+      children: children,
+    );
+  }
+
+  final nestedChildren = rootId == null
+      ? const <DemoReferralNode>[]
+      : (childrenBySponsor[rootId] ?? const <Map<String, dynamic>>[])
+          .map(nodeFromItem)
+          .toList(growable: false);
+  final flatChildren = rows.take(20).map(nodeFromItem).toList(growable: false);
+
+  return DemoReferralNode(
+    id: rootId ?? 'backend-root',
+    name: rootMap?['fullName']?.toString() ??
+        rootMap?['name']?.toString() ??
+        'Referral Anda',
+    packageName: _titleCase(
+      rootMap?['membershipTier']?.toString() ??
+          rootMap?['packageName']?.toString() ??
+          'Basic',
+    ),
+    level: 0,
+    bonus: _intFrom(rootMap?['bonus']),
+    totalDownline: _intFrom(
+      rootMap?['totalDownline'] ?? rootMap?['totalDownlines'],
+    ),
+    isExpanded: true,
+    children: nestedChildren.isEmpty ? flatChildren : nestedChildren,
+  );
+}

@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tapgo-postgres
+    environment:
+      POSTGRES_DB: tapgo
+      POSTGRES_USER: tapgo
+      POSTGRES_PASSWORD: tapgo_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - tapgo-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tapgo -d tapgo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: tapgo-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - tapgo-redis-data:/data
+
+volumes:
+  tapgo-postgres-data:
+  tapgo-redis-data:

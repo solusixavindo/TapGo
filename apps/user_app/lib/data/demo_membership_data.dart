@@ -1,0 +1,60 @@
+part of '../main.dart';
+
+const _demoMemberships = [
+  _MembershipPackage(
+    name: 'Basic',
+    price: 'Gratis',
+    benefits: ['Akses aplikasi TapGo', 'Bonus saldo registrasi Rp5.000'],
+    sponsorBonus: 'Rp2.000 untuk referral Basic',
+    levelBonus: 'Belum membuka bonus level',
+    ppobBalance: 'Rp0',
+    bpjsBenefit: 'Tidak termasuk',
+    businessRight: 'Akses pengguna',
+    accent: Color(0xFF697386),
+  ),
+  _MembershipPackage(
+    name: 'Silver',
+    price: 'Rp500.000',
+    benefits: [
+      'Kaos TAPGO',
+      'Saldo PPOB Rp100.000',
+      'BPJS Ketenagakerjaan',
+      'JKK, JKM'
+    ],
+    sponsorBonus: '8% dari paket direct referral',
+    levelBonus: 'Level 1-10 sesuai unlock 3/5/10 sponsor',
+    ppobBalance: 'Rp100.000',
+    bpjsBenefit: 'BPJS TK, JKK, JKM',
+    businessRight: 'Hak Usaha',
+    accent: Color(0xFF0877EE),
+  ),
+  _MembershipPackage(
+    name: 'Gold',
+    price: 'Rp3.000.000',
+    benefits: ['Kaos + Topi', 'Saldo PPOB Rp600.000', 'BPJS TK', 'JKK, JKM'],
+    sponsorBonus: '8% dari paket direct referral',
+    levelBonus: 'Unlock sampai level 5 dengan 5 sponsor',
+    ppobBalance: 'Rp600.000',
+    bpjsBenefit: 'BPJS TK, JKK, JKM',
+    businessRight: 'Hak Usaha',
+    accent: Color(0xFFFF8A00),
+  ),
+  _MembershipPackage(
+    name: 'Platinum',
+    price: 'Rp5.500.000',
+    benefits: [
+      'Kaos',
+      'Jaket',
+      'Rompi',
+      'Saldo PPOB Rp1.000.000',
+      'BPJS TK',
+      'JKK, JKM, JHT'
+    ],
+    sponsorBonus: '8% dari paket direct referral',
+    levelBonus: 'Unlock sampai level 10 dengan 10 sponsor',
+    ppobBalance: 'Rp1.000.000',
+    bpjsBenefit: 'BPJS TK, JKK, JKM, JHT',
+    businessRight: 'Hak Usaha MITRA',
+    accent: Color(0xFF0A2A43),
+  ),
+];

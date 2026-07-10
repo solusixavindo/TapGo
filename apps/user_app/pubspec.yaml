@@ -1,0 +1,44 @@
+name: tapgo_user_app
+description: TapGo customer super app.
+publish_to: "none"
+version: 1.0.2+3
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.6.1
+  dio: ^5.7.0
+  google_maps_flutter: ^2.9.0
+  firebase_messaging: ^15.1.3
+  flutter_secure_storage: ^9.2.2
+  shared_preferences: ^2.3.3
+  image_picker: ^1.1.2
+  socket_io_client: ^3.0.0
+  url_launcher: ^6.3.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/tapgo_logo.jpeg
+    - assets/images/promo_food_10k.png
+    - assets/images/promo_food_pizza.jpg
+    - assets/images/banners/
+    - assets/images/services/
+    - assets/icons/
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.3
+  image_picker_platform_interface: ^2.11.1
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/images/tapgo_logo.jpeg
+  adaptive_icon_background: "#06284A"
+  adaptive_icon_foreground: assets/images/tapgo_logo.jpeg
