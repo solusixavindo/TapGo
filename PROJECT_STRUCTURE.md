@@ -53,6 +53,7 @@ Tapgo/
 - DOKU merchant clarification response: `docs/doku/DOKU_BUSINESS_FLOW_RESPONSE.md`
 - DOKU premium merchant verification book: `docs/doku/TAPGO_DOKU_MERCHANT_VERIFICATION_BOOK.pdf`
 - DOKU final email response: `docs/doku/DOKU_EMAIL_RESPONSE_FINAL.md`
+- Midtrans mobile application clarification: `docs/midtrans/Klarifikasi_Mobile_Application_TapGo_Midtrans.pdf`
 
 ## Operational Documentation
 
