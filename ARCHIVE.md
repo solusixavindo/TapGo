@@ -25,6 +25,8 @@ Lokasi: `docs/midtrans/`
 
 - `Klarifikasi_Mobile_Application_TapGo_Midtrans.pdf`
 - `Klarifikasi_Mobile_Application_TapGo_Midtrans.pptx`
+- `Klarifikasi_Mobile_Application_TapGo_Midtrans_v2.pdf`
+- `Klarifikasi_Mobile_Application_TapGo_Midtrans_v2.pptx`
 - `MIDTRANS_TRANSACTION_FLOW_TAPGO_FINAL.pdf`
 - `MIDTRANS_TRANSACTION_FLOW_WITH_CHANNEL_BLOCKER.pdf`
 - `MIDTRANS_ONBOARDING_TRANSACTION_FLOW.pdf`
