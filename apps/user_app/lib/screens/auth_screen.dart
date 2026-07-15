@@ -47,7 +47,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           if (code != 'REFERRAL_ALREADY_CLAIMED') {
             rethrow;
           }
-          debugPrint('[TapGo Auth] referral already persisted by backend.');
+          _tapGoDebugLog('[TapGo Auth] referral already persisted by backend.');
         }
       }
       var session = _sessionFromAuthUser(
@@ -66,15 +66,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         );
       }
       session = await _persistentStore.restoreMembershipSnapshot(session);
-      debugPrint('[TapGo Auth] active user name: ${session.userName}');
+      _tapGoDebugLog('[TapGo Auth] active user session restored.');
       await _saveAuthenticatedSession(session);
     } on DioException catch (error) {
-      debugPrint('[TapGo Auth] backend auth failed: ${error.message}');
-      debugPrint('[TapGo Auth] error status: ${error.response?.statusCode}');
-      debugPrint('[TapGo Auth] error body: ${error.response?.data}');
+      _tapGoDebugLog('[TapGo Auth] backend auth failed: ${error.message}');
+      _tapGoDebugLog(
+          '[TapGo Auth] error status: ${error.response?.statusCode}');
+      _tapGoDebugLog('[TapGo Auth] error body: <redacted>');
       _showAuthError(_authErrorMessage(error, isRegister: _isRegister));
     } catch (error) {
-      debugPrint('[TapGo Auth] auth failed: $error');
+      _tapGoDebugLog('[TapGo Auth] auth failed: $error');
       _showAuthError(
           'Login berhasil, tetapi session lokal gagal disimpan. Coba ulangi.');
     } finally {

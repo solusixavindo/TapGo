@@ -15,6 +15,7 @@ Tapgo/
 │   ├── midtrans/             # Midtrans onboarding, verification, transaction flow docs
 │   ├── legal/                # Legal, SOP, compliance, D&B package docs
 │   ├── release/              # Google Play, UAT, deploy, recovery, launch, release docs
+│   ├── google-play/          # Play Console permission, data safety, listing, reviewer docs
 │   ├── archive/              # Historical audits, old plans, investor deck sources
 │   ├── architecture/         # Existing architecture documentation
 │   └── referral/             # Existing referral/wallet/membership documentation
@@ -67,6 +68,7 @@ Tapgo/
 - Google Play production readiness: `docs/release/GOOGLE_PLAY_PRODUCTION_READINESS.md`
 - Google Play final release checklist: `docs/release/GOOGLE_PLAY_FINAL_RELEASE_CHECKLIST.md`
 - Google Play closed testing plan: `docs/release/GOOGLE_PLAY_CLOSED_TESTING_PLAN.md`
+- Google Play submission docs: `docs/google-play/`
 - Release workflow: `docs/release/RELEASE_WORKFLOW.md`
 - Versioning policy: `docs/release/VERSIONING_POLICY.md`
 - Founder Platinum implementation report: `docs/release/FOUNDER_PLATINUM_IMPLEMENTATION_REPORT.md`

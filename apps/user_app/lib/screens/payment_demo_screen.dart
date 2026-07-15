@@ -239,7 +239,8 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
 
   Future<void> _openSuccessFromBackend() async {
     final snapshot = await ref.refresh(_productionSnapshotProvider.future);
-    debugPrint('[TapGo Payment] snapshot refreshed at ${snapshot.loadedAt}');
+    _tapGoDebugLog(
+        '[TapGo Payment] snapshot refreshed at ${snapshot.loadedAt}');
     if (!mounted) {
       return;
     }

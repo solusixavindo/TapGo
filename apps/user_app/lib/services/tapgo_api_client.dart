@@ -24,7 +24,7 @@ class _TapGoApiClient {
                 );
             options.headers.addAll(context.headers);
           } catch (error) {
-            debugPrint('[TapGo Device] fingerprint skipped: $error');
+            _tapGoDebugLog('[TapGo Device] fingerprint skipped: $error');
             options.headers.addAll(_TapGoDeviceContextStore.fallbackHeaders);
           }
           handler.next(options);
@@ -112,19 +112,19 @@ class _TapGoApiClient {
     };
     final safeBody = {...body, 'password': '***'};
     final registerUrl = _fullApiUrl('auth/register');
-    debugPrint('ACTIVE ROOT URL: $rootUrl');
-    debugPrint('REGISTER URL: $registerUrl');
-    debugPrint('REGISTER PAYLOAD: $safeBody');
+    _tapGoDebugLog('ACTIVE ROOT URL: $rootUrl');
+    _tapGoDebugLog('REGISTER URL: $registerUrl');
+    _tapGoDebugLog('REGISTER PAYLOAD: $safeBody');
     try {
       final response =
           await _dio.post<dynamic>(_apiPath('auth/register'), data: body);
-      debugPrint('REGISTER RESPONSE STATUS: ${response.statusCode}');
-      debugPrint('REGISTER RESPONSE: ${response.data}');
+      _tapGoDebugLog('REGISTER RESPONSE STATUS: ${response.statusCode}');
+      _tapGoDebugLog('REGISTER RESPONSE: <redacted>');
       return _TapGoAuthResult.fromMap(_unwrapDynamic(response.data));
     } on DioException catch (error) {
-      debugPrint('REGISTER ERROR: ${error.message}');
-      debugPrint('REGISTER ERROR STATUS: ${error.response?.statusCode}');
-      debugPrint('REGISTER ERROR BODY: ${error.response?.data}');
+      _tapGoDebugLog('REGISTER ERROR: ${error.message}');
+      _tapGoDebugLog('REGISTER ERROR STATUS: ${error.response?.statusCode}');
+      _tapGoDebugLog('REGISTER ERROR BODY: <redacted>');
       rethrow;
     }
   }
@@ -139,19 +139,19 @@ class _TapGoApiClient {
     };
     final safeBody = {...body, 'password': '***'};
     final loginUrl = _fullApiUrl('auth/login');
-    debugPrint('ACTIVE ROOT URL: $rootUrl');
-    debugPrint('LOGIN URL: $loginUrl');
-    debugPrint('LOGIN PAYLOAD: $safeBody');
+    _tapGoDebugLog('ACTIVE ROOT URL: $rootUrl');
+    _tapGoDebugLog('LOGIN URL: $loginUrl');
+    _tapGoDebugLog('LOGIN PAYLOAD: $safeBody');
     try {
       final response =
           await _dio.post<dynamic>(_apiPath('auth/login'), data: body);
-      debugPrint('LOGIN RESPONSE STATUS: ${response.statusCode}');
-      debugPrint('LOGIN RESPONSE: ${response.data}');
+      _tapGoDebugLog('LOGIN RESPONSE STATUS: ${response.statusCode}');
+      _tapGoDebugLog('LOGIN RESPONSE: <redacted>');
       return _TapGoAuthResult.fromMap(_unwrapDynamic(response.data));
     } on DioException catch (error) {
-      debugPrint('LOGIN ERROR: ${error.message}');
-      debugPrint('LOGIN ERROR STATUS: ${error.response?.statusCode}');
-      debugPrint('LOGIN ERROR BODY: ${error.response?.data}');
+      _tapGoDebugLog('LOGIN ERROR: ${error.message}');
+      _tapGoDebugLog('LOGIN ERROR STATUS: ${error.response?.statusCode}');
+      _tapGoDebugLog('LOGIN ERROR BODY: <redacted>');
       rethrow;
     }
   }
@@ -160,16 +160,16 @@ class _TapGoApiClient {
       {String? baseUrlOverride}) async {
     final normalized = _normalizeApiBaseUrl(baseUrlOverride ?? baseUrl);
     final healthUrl = _healthUrlFromApiBaseUrl(normalized);
-    debugPrint('ACTIVE ROOT URL: ${_rootUrlFromApiBaseUrl(normalized)}');
-    debugPrint('HEALTH URL: $healthUrl');
+    _tapGoDebugLog('ACTIVE ROOT URL: ${_rootUrlFromApiBaseUrl(normalized)}');
+    _tapGoDebugLog('HEALTH URL: $healthUrl');
     final response = await Dio(BaseOptions(
       connectTimeout: const Duration(seconds: 8),
       receiveTimeout: const Duration(seconds: 10),
       headers: {'Accept': 'application/json'},
     )).get<Map<String, dynamic>>(healthUrl);
     final data = response.data;
-    debugPrint('HEALTH RESPONSE STATUS: ${response.statusCode}');
-    debugPrint('HEALTH RESPONSE BODY: $data');
+    _tapGoDebugLog('HEALTH RESPONSE STATUS: ${response.statusCode}');
+    _tapGoDebugLog('HEALTH RESPONSE BODY: <redacted>');
     if (response.statusCode != 200 ||
         data?['success'] != true ||
         data?['status'] != 'ok') {
@@ -201,7 +201,8 @@ class _TapGoApiClient {
 
   Future<_TapGoAuthUser> me() async {
     final response = await _dio.get<Map<String, dynamic>>(_apiPath('auth/me'));
-    debugPrint('[TapGo Auth] auth/me response status: ${response.statusCode}');
+    _tapGoDebugLog(
+        '[TapGo Auth] auth/me response status: ${response.statusCode}');
     return _TapGoAuthUser.fromMap(_unwrap(response.data));
   }
 
@@ -238,20 +239,20 @@ class _TapGoApiClient {
 
   Future<Map<String, dynamic>> _walletForSnapshot() async {
     final walletUrl = _fullApiUrl('wallet');
-    debugPrint('ACTIVE API BASE URL: $baseUrl');
-    debugPrint('WALLET URL: $walletUrl');
-    debugPrint(
+    _tapGoDebugLog('ACTIVE API BASE URL: $baseUrl');
+    _tapGoDebugLog('WALLET URL: $walletUrl');
+    _tapGoDebugLog(
       'AUTH TOKEN EXISTS: ${_dio.options.headers['Authorization'] != null}',
     );
     try {
       final response = await _dio.get<dynamic>(_apiPath('wallet'));
-      debugPrint('WALLET RESPONSE STATUS: ${response.statusCode}');
-      debugPrint('WALLET RESPONSE BODY: ${response.data}');
+      _tapGoDebugLog('WALLET RESPONSE STATUS: ${response.statusCode}');
+      _tapGoDebugLog('WALLET RESPONSE BODY: <redacted>');
       return _unwrapDynamic(response.data);
     } on DioException catch (error) {
-      debugPrint('WALLET ERROR: ${error.message}');
-      debugPrint('WALLET ERROR STATUS: ${error.response?.statusCode}');
-      debugPrint('WALLET ERROR BODY: ${error.response?.data}');
+      _tapGoDebugLog('WALLET ERROR: ${error.message}');
+      _tapGoDebugLog('WALLET ERROR STATUS: ${error.response?.statusCode}');
+      _tapGoDebugLog('WALLET ERROR BODY: <redacted>');
       rethrow;
     }
   }
@@ -629,7 +630,7 @@ class _TapGoDeviceContextStore {
             const Duration(milliseconds: 700),
           );
     } catch (error) {
-      debugPrint('[TapGo Device] secure read skipped for $key: $error');
+      _tapGoDebugLog('[TapGo Device] secure read skipped for $key: $error');
     }
     if (saved != null && saved.trim().isNotEmpty) {
       _memoryCache[key] = saved;
@@ -642,7 +643,7 @@ class _TapGoDeviceContextStore {
             const Duration(milliseconds: 700),
           );
     } catch (error) {
-      debugPrint('[TapGo Device] secure write skipped for $key: $error');
+      _tapGoDebugLog('[TapGo Device] secure write skipped for $key: $error');
     }
     return value;
   }
@@ -765,7 +766,7 @@ Future<Map<String, dynamic>> _productionSnapshotPart(
   try {
     return await loader();
   } catch (error) {
-    debugPrint('[TapGo Binding] $label unavailable: $error');
+    _tapGoDebugLog('[TapGo Binding] $label unavailable: $error');
     if (requiredPart) {
       rethrow;
     }
@@ -849,7 +850,7 @@ Future<T> _adminSnapshotPart<T>({
   try {
     return await loader();
   } catch (error) {
-    debugPrint('[TapGo Admin] $label unavailable: $error');
+    _tapGoDebugLog('[TapGo Admin] $label unavailable: $error');
     if (!_isTapGoDevelopmentBuild) {
       rethrow;
     }

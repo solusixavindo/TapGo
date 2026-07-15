@@ -344,9 +344,9 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
       if (tokens.accessToken != null && tokens.accessToken!.isNotEmpty) {
         _apiClient.setAccessToken(tokens.accessToken);
         try {
-          debugPrint('[TapGo Auth] auth/me restore request');
+          _tapGoDebugLog('[TapGo Auth] auth/me restore request');
           final user = await _apiClient.me();
-          debugPrint('[TapGo Auth] auth/me restore success: ${user.name}');
+          _tapGoDebugLog('[TapGo Auth] auth/me restore success.');
           restoredSession = _sessionFromAuthUser(
             user,
             accessToken: tokens.accessToken,
@@ -377,7 +377,7 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
               isDemoMode: false,
             );
           } catch (error) {
-            debugPrint(
+            _tapGoDebugLog(
                 '[TapGo Binding] restore production sync failed: $error');
           }
           auth = true;
@@ -386,7 +386,7 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
                 onTimeout: () {},
               );
         } catch (error) {
-          debugPrint('[TapGo Auth] auth/me restore failed: $error');
+          _tapGoDebugLog('[TapGo Auth] auth/me restore failed: $error');
           await _persistentStore.clearSession().timeout(
                 const Duration(seconds: 2),
                 onTimeout: () {},
@@ -409,7 +409,7 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
       }
       ref.read(_isAuthenticatedProvider.notifier).state = auth;
     } catch (error) {
-      debugPrint('[TapGo Startup] session bootstrap failed open: $error');
+      _tapGoDebugLog('[TapGo Startup] session bootstrap failed open: $error');
       _apiClient.setAccessToken(null);
       if (mounted) {
         ref.read(_isAuthenticatedProvider.notifier).state = false;

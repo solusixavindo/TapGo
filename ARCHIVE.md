@@ -82,6 +82,19 @@ Lokasi: `docs/release/`
 - `FOUNDER_PLATINUM_ADMIN_GUIDE.md`
 - User guide, FAQ, launch content, and tester guide.
 
+Lokasi: `docs/google-play/`
+
+- `ANDROID_PERMISSION_AUDIT.md`
+- `ACCOUNT_DELETION_COMPLIANCE.md`
+- `DATA_SAFETY_MAPPING.md`
+- `PLAY_CONSOLE_DATA_SAFETY_ANSWERS.md`
+- `FINANCIAL_FEATURES_DECLARATION.md`
+- `STORE_LISTING_ID.md`
+- `RELEASE_NOTES_v1.0.0-alpha.md`
+- `PLAY_CONSOLE_APP_CONTENT_ANSWERS.md`
+- `REVIEWER_ACCESS_GUIDE.md`
+- `PRE_SUBMISSION_UAT_CHECKLIST.md`
+
 ## Historical Audit Archive
 
 Lokasi: `docs/archive/`

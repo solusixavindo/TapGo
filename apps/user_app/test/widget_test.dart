@@ -8,6 +8,7 @@ import 'package:tapgo_user_app/main.dart';
 void main() {
   Future<void> openAuth(WidgetTester tester) async {
     tapGoDisablePersistenceForTests = true;
+    tapGoEnablePaymentSimulatorForTests = false;
     ImagePickerPlatform.instance = _FakeImagePickerPlatform();
     await tester.pumpWidget(const ProviderScope(child: TapGoUserApp()));
     await tester.pump();
@@ -16,8 +17,12 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Future<void> openDashboard(WidgetTester tester) async {
+  Future<void> openDashboard(
+    WidgetTester tester, {
+    bool enablePaymentSimulator = false,
+  }) async {
     tapGoDisablePersistenceForTests = true;
+    tapGoEnablePaymentSimulatorForTests = enablePaymentSimulator;
     ImagePickerPlatform.instance = _FakeImagePickerPlatform();
     await tester.pumpWidget(
       const ProviderScope(
@@ -156,7 +161,7 @@ void main() {
 
   testWidgets('client membership flow reaches payment success',
       (WidgetTester tester) async {
-    await openDashboard(tester);
+    await openDashboard(tester, enablePaymentSimulator: true);
 
     await tester.ensureVisible(find.text('Membership'));
     await tester.pumpAndSettle();

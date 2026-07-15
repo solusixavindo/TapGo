@@ -49,7 +49,7 @@ const _brandBlue = Color(0xFF0569E8);
 const _brandOrange = Color(0xFFFF8A00);
 const _softBackground = Color(0xFFF4F8FB);
 const _tapGoAppMode =
-    String.fromEnvironment('TAPGO_APP_MODE', defaultValue: 'staging');
+    String.fromEnvironment('TAPGO_APP_MODE', defaultValue: 'production');
 const _tapGoApiBaseUrl = String.fromEnvironment(
   'TAPGO_API_BASE_URL',
   defaultValue: 'https://api.tapgolion.id/api/v1',
@@ -57,7 +57,18 @@ const _tapGoApiBaseUrl = String.fromEnvironment(
 const _isTapGoProductionBuild = _tapGoAppMode == 'production';
 const _isTapGoUatBuild = _tapGoAppMode == 'staging';
 const _isTapGoDevelopmentBuild = _tapGoAppMode == 'development';
-const _isPaymentSimulatorEnabled = _isTapGoDevelopmentBuild || _isTapGoUatBuild;
+bool tapGoEnablePaymentSimulatorForTests = false;
+
+bool get _isPaymentSimulatorEnabled =>
+    tapGoEnablePaymentSimulatorForTests ||
+    _isTapGoDevelopmentBuild ||
+    _isTapGoUatBuild;
+
+void _tapGoDebugLog(String message) {
+  if (_isTapGoDevelopmentBuild) {
+    debugPrint(message);
+  }
+}
 
 final _persistentStore = _TapGoPersistentStore();
 final _serverConfigStore = _TapGoServerConfigStore();
@@ -125,7 +136,7 @@ Future<void> main() async {
       await _prepareProductionFinalSync().timeout(
         const Duration(seconds: 3),
         onTimeout: () {
-          debugPrint('[TapGo Startup] production cache reset timed out.');
+          _tapGoDebugLog('[TapGo Startup] production cache reset timed out.');
         },
       );
       _apiClient.setBaseUrl(_productionApiRootUrl);
@@ -139,7 +150,7 @@ Future<void> main() async {
       }
     }
   } catch (error) {
-    debugPrint('[TapGo Startup] init skipped: $error');
+    _tapGoDebugLog('[TapGo Startup] init skipped: $error');
     if (_isTapGoProductionBuild) {
       _apiClient.setBaseUrl(_productionApiRootUrl);
     }
@@ -162,21 +173,21 @@ Future<void> _prepareProductionFinalSync() async {
           const Duration(seconds: 1),
         );
   } catch (error) {
-    debugPrint('[TapGo Startup] server config reset skipped: $error');
+    _tapGoDebugLog('[TapGo Startup] server config reset skipped: $error');
   }
   try {
     await _persistentStore.clearProductionRuntimeCache().timeout(
           const Duration(seconds: 2),
         );
   } catch (error) {
-    debugPrint('[TapGo Startup] secure cache reset skipped: $error');
+    _tapGoDebugLog('[TapGo Startup] secure cache reset skipped: $error');
   }
   try {
     await preferences.setBool(_productionFinalSyncResetKey, true).timeout(
           const Duration(seconds: 1),
         );
   } catch (error) {
-    debugPrint('[TapGo Startup] reset marker write skipped: $error');
+    _tapGoDebugLog('[TapGo Startup] reset marker write skipped: $error');
   }
 }
 
