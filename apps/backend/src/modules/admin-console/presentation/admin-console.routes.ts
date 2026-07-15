@@ -10,6 +10,9 @@ import { PrismaWalletRepository } from "../../wallets/infrastructure/PrismaWalle
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
 import {
   adminCommissionQuerySchema,
+  adminFounderChairmanDetailSchema,
+  adminFounderChairmanGrantSchema,
+  adminFounderChairmanStatusSchema,
   adminFounderPlatinumDetailSchema,
   adminFounderPlatinumGrantSchema,
   adminFounderPlatinumStatusSchema,
@@ -54,6 +57,29 @@ adminConsoleRouter.post(
   "/member-requests/:id/reject",
   validateRequest(adminMemberRequestActionSchema),
   asyncHandler(controller.rejectMemberRequest)
+);
+adminConsoleRouter.post(
+  "/founder-chairman/grant",
+  requireRoles("SUPER_ADMIN"),
+  validateRequest(adminFounderChairmanGrantSchema),
+  asyncHandler(controller.grantFounderChairman)
+);
+adminConsoleRouter.get(
+  "/founder-chairman",
+  requireRoles("SUPER_ADMIN"),
+  asyncHandler(controller.founderChairman)
+);
+adminConsoleRouter.get(
+  "/founder-chairman/:founderId",
+  requireRoles("SUPER_ADMIN"),
+  validateRequest(adminFounderChairmanDetailSchema),
+  asyncHandler(controller.founderChairmanDetail)
+);
+adminConsoleRouter.patch(
+  "/founder-chairman/:founderId/status",
+  requireRoles("SUPER_ADMIN"),
+  validateRequest(adminFounderChairmanStatusSchema),
+  asyncHandler(controller.updateFounderChairmanStatus)
 );
 adminConsoleRouter.post(
   "/founder-platinum/grants",

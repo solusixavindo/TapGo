@@ -158,6 +158,50 @@ export class AdminConsoleController {
     res.status(201).json({ success: true, data: result });
   };
 
+  grantFounderChairman = async (req: Request, res: Response) => {
+    const result = await this.adminConsoleService.grantFounderChairman({
+      actorId: req.auth!.userId,
+      fullName: String(req.body.fullName),
+      phone: String(req.body.phone),
+      password: String(req.body.password),
+      reason: String(req.body.reason),
+      ...(typeof req.body.email === "string" ? { email: req.body.email } : {}),
+      ...(typeof req.body.secureBankAccountReference === "string"
+        ? { secureBankAccountReference: req.body.secureBankAccountReference }
+        : {}),
+      ...(req.body.bankAccount && typeof req.body.bankAccount === "object"
+        ? {
+          bankAccount: {
+            bankName: String(req.body.bankAccount.bankName),
+            accountHolderName: String(req.body.bankAccount.accountHolderName),
+            accountNumber: String(req.body.bankAccount.accountNumber)
+          }
+        }
+        : {})
+    });
+    res.status(201).json({ success: true, data: result });
+  };
+
+  founderChairman = async (_req: Request, res: Response) => {
+    const result = await this.adminConsoleService.founderChairman();
+    res.json({ success: true, data: result });
+  };
+
+  founderChairmanDetail = async (req: Request, res: Response) => {
+    const result = await this.adminConsoleService.founderChairmanDetail(String(req.params.founderId));
+    res.json({ success: true, data: result });
+  };
+
+  updateFounderChairmanStatus = async (req: Request, res: Response) => {
+    const result = await this.adminConsoleService.updateFounderChairmanStatus({
+      actorId: req.auth!.userId,
+      founderId: String(req.params.founderId),
+      status: req.body.status,
+      ...(typeof req.body.reason === "string" ? { reason: req.body.reason } : {})
+    });
+    res.json({ success: true, data: result });
+  };
+
   founderPlatinumList = async (_req: Request, res: Response) => {
     const result = await this.adminConsoleService.founderPlatinumList();
     res.json({ success: true, data: result });

@@ -412,8 +412,16 @@ class _TapGoApiClient {
     return get('/admin/founder-platinum');
   }
 
+  Future<Map<String, dynamic>> adminFounderChairman() {
+    return get('/admin/founder-chairman');
+  }
+
   Future<Map<String, dynamic>> adminFounderPlatinumDetail(String founderId) {
     return get('/admin/founder-platinum/$founderId');
+  }
+
+  Future<Map<String, dynamic>> adminFounderChairmanDetail(String founderId) {
+    return get('/admin/founder-chairman/$founderId');
   }
 
   Future<Map<String, dynamic>> updateFounderPlatinumStatus({
@@ -422,6 +430,17 @@ class _TapGoApiClient {
     String? reason,
   }) {
     return patch('/admin/founder-platinum/$founderId/status', body: {
+      'status': status,
+      if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+    });
+  }
+
+  Future<Map<String, dynamic>> updateFounderChairmanStatus({
+    required String founderId,
+    required String status,
+    String? reason,
+  }) {
+    return patch('/admin/founder-chairman/$founderId/status', body: {
       'status': status,
       if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
     });
@@ -708,11 +727,13 @@ class _TapGoProductionSnapshot {
             membershipData?['founderProgramRole'])
         ?.toString()
         .toUpperCase();
+    final isFounderChairman = founderRole == 'FOUNDER_CHAIRMAN';
     final isFounderPlatinum = founderRole == 'FOUNDER_PLATINUM';
 
     return _TapGoProductionSnapshot(
       sessionPatch: DemoClientSession.initial().copyWith(
         activePackageName: activePackageName,
+        isFounderChairman: isFounderChairman,
         isFounderPlatinum: isFounderPlatinum,
         walletBalance: walletBalance,
         ppobBalance: ppobBalance,
@@ -744,6 +765,7 @@ final _productionSnapshotProvider =
     walletBalance: snapshot.sessionPatch.walletBalance,
     ppobBalance: snapshot.sessionPatch.ppobBalance,
     isFounderPlatinum: snapshot.sessionPatch.isFounderPlatinum,
+    isFounderChairman: snapshot.sessionPatch.isFounderChairman,
     directSponsor: snapshot.sessionPatch.directSponsor,
     downline: snapshot.sessionPatch.downline,
     activeLevel: snapshot.sessionPatch.activeLevel,
@@ -960,6 +982,7 @@ class _TapGoAuthUser {
     required this.role,
     this.email,
     this.referralCode,
+    this.isFounderChairman = false,
     this.isFounderPlatinum = false,
   });
 
@@ -969,6 +992,7 @@ class _TapGoAuthUser {
   final String role;
   final String? email;
   final String? referralCode;
+  final bool isFounderChairman;
   final bool isFounderPlatinum;
 
   factory _TapGoAuthUser.fromMap(Map<String, dynamic> map) {
@@ -979,6 +1003,9 @@ class _TapGoAuthUser {
       role: _normalizeUserRole(map['role']?.toString()),
       email: map['email']?.toString(),
       referralCode: map['referralCode']?.toString(),
+      isFounderChairman:
+          map['founderRole']?.toString().toUpperCase() == 'FOUNDER_CHAIRMAN' ||
+              map['isFounderChairman'] == true,
       isFounderPlatinum:
           map['founderRole']?.toString().toUpperCase() == 'FOUNDER_PLATINUM' ||
               map['isFounderPlatinum'] == true,
@@ -1098,6 +1125,8 @@ DemoClientSession _sessionFromAuthUser(
     userName: user.name,
     phone: user.phone.isEmpty ? fallback?.phone : user.phone,
     referralCode: user.referralCode ?? fallback?.referralCode ?? '-',
+    isFounderChairman:
+        user.isFounderChairman || (fallback?.isFounderChairman ?? false),
     isFounderPlatinum:
         user.isFounderPlatinum || (fallback?.isFounderPlatinum ?? false),
   );

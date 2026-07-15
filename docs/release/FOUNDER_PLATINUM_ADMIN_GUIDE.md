@@ -6,6 +6,8 @@ Tanggal: 2026-07-09
 
 Dokumen ini menjadi panduan operasional Super Admin untuk mengelola 10 akun Founder Platinum TapGo tanpa melanggar aturan bisnis yang sudah divalidasi.
 
+Founder Program juga memiliki satu akun tertinggi `Founder Chairman` dengan Founder ID `FCH-001`. Akun ini dikelola dari menu yang sama, tetapi tidak termasuk kuota 10 Founder Platinum.
+
 ## Aturan Utama
 
 - Founder Platinum maksimal 10 akun aktif/granted.
@@ -18,6 +20,8 @@ Dokumen ini menjadi panduan operasional Super Admin untuk mengelola 10 akun Foun
 - Founder Platinum `ACTIVE` tetap boleh menerima sponsor bonus dan level bonus dari downline yang benar-benar membayar membership valid.
 - Founder Platinum `SUSPENDED` atau `REVOKED` tidak boleh menerima bonus baru.
 - Bonus history yang sudah terjadi tidak boleh dihapus.
+- Founder Chairman mengikuti prinsip finansial yang sama: tidak ada invoice/payment/revenue/PPOB benefit saat grant, tetapi akun `ACTIVE` boleh menerima bonus dari transaksi downline paid valid.
+- Data rekening Founder Chairman bersifat sensitif dan hanya boleh tampil dalam bentuk masked, misalnya `******1234`.
 
 ## Cara Grant Founder Platinum
 
@@ -59,6 +63,8 @@ Super Admin membuka menu:
 
 `Super Admin Dashboard -> Founder Program`
 
+Menu ini juga menampilkan card khusus Founder Chairman jika `FCH-001` sudah dibuat.
+
 Atau gunakan endpoint:
 
 ```http
@@ -81,6 +87,14 @@ Data yang harus dicek:
 - Total sponsor bonus.
 - Total level bonus.
 - Total commission.
+
+Untuk Founder Chairman, cek tambahan:
+
+- Founder ID `FCH-001`.
+- Membership `Founder Chairman / Platinum`.
+- Bank account masked.
+- Status lifecycle.
+- Audit trail grant/status.
 
 ## Cara Melihat Detail Founder
 
@@ -257,4 +271,3 @@ Jika salah revoke:
 - Cek tidak ada wallet PPOB otomatis dari Founder grant.
 - Cek bonus Founder hanya berasal dari downline paid valid.
 - Cek audit trail setelah perubahan status.
-

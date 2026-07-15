@@ -577,9 +577,16 @@ class _AccountHero extends StatelessWidget {
               fontWeight: FontWeight.w900,
             ),
           ),
-          if (session.isFounderPlatinum) ...[
+          if (session.isFounderChairman || session.isFounderPlatinum) ...[
             const SizedBox(height: 8),
-            const _FounderPlatinumBadge(),
+            _FounderPlatinumBadge(
+              label: session.isFounderChairman
+                  ? 'Founder Chairman'
+                  : 'Founder Platinum',
+              icon: session.isFounderChairman
+                  ? Icons.emoji_events_rounded
+                  : Icons.workspace_premium_rounded,
+            ),
           ],
           const SizedBox(height: 6),
           Text(
@@ -606,7 +613,13 @@ class _AccountHero extends StatelessWidget {
 }
 
 class _FounderPlatinumBadge extends StatelessWidget {
-  const _FounderPlatinumBadge();
+  const _FounderPlatinumBadge({
+    this.label = 'Founder Platinum',
+    this.icon = Icons.workspace_premium_rounded,
+  });
+
+  final String label;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -617,15 +630,14 @@ class _FounderPlatinumBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: const Color(0xFFE3B341)),
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.workspace_premium_rounded,
-              color: Color(0xFF9A6A00), size: 16),
-          SizedBox(width: 6),
+          Icon(icon, color: const Color(0xFF9A6A00), size: 16),
+          const SizedBox(width: 6),
           Text(
-            'Founder Platinum',
-            style: TextStyle(
+            label,
+            style: const TextStyle(
               color: Color(0xFF7A5200),
               fontWeight: FontWeight.w900,
               fontSize: 12,

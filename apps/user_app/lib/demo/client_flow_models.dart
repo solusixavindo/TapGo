@@ -125,6 +125,7 @@ class DemoClientSession {
     this.ktpImagePath,
     this.lastInvoiceNumber,
     this.membershipJoinedAt,
+    this.isFounderChairman = false,
     this.isFounderPlatinum = false,
     required this.userName,
     required this.phone,
@@ -165,6 +166,7 @@ class DemoClientSession {
   final String? ktpImagePath;
   final String? lastInvoiceNumber;
   final String? membershipJoinedAt;
+  final bool isFounderChairman;
   final bool isFounderPlatinum;
   final String userName;
   final String phone;
@@ -193,6 +195,7 @@ class DemoClientSession {
     String? ktpImagePath,
     String? lastInvoiceNumber,
     String? membershipJoinedAt,
+    bool? isFounderChairman,
     bool? isFounderPlatinum,
     String? userName,
     String? phone,
@@ -217,6 +220,7 @@ class DemoClientSession {
       ktpImagePath: ktpImagePath ?? this.ktpImagePath,
       lastInvoiceNumber: lastInvoiceNumber ?? this.lastInvoiceNumber,
       membershipJoinedAt: membershipJoinedAt ?? this.membershipJoinedAt,
+      isFounderChairman: isFounderChairman ?? this.isFounderChairman,
       isFounderPlatinum: isFounderPlatinum ?? this.isFounderPlatinum,
       userName: userName ?? this.userName,
       phone: phone ?? this.phone,

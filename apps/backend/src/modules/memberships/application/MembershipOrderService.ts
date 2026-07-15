@@ -1017,9 +1017,9 @@ export class MembershipOrderService {
   private async canReceiveNewFounderBonus(tx: PrismaTransaction, userId: string) {
     const founderGrant = await tx.founderProgramGrant.findFirst({
       where: {
-        userId,
-        founderRole: "FOUNDER_PLATINUM"
+        userId
       },
+      orderBy: { createdAt: "desc" },
       include: { user: { select: { status: true } } }
     });
 

@@ -530,11 +530,22 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
   @override
   void initState() {
     super.initState();
-    _future = _apiClient.adminFounderPlatinum();
+    _future = _loadFounderProgram();
+  }
+
+  Future<Map<String, dynamic>> _loadFounderProgram() async {
+    final results = await Future.wait([
+      _apiClient.adminFounderChairman(),
+      _apiClient.adminFounderPlatinum(),
+    ]);
+    return {
+      'chairman': results[0],
+      'platinum': results[1],
+    };
   }
 
   void _reload() {
-    setState(() => _future = _apiClient.adminFounderPlatinum());
+    setState(() => _future = _loadFounderProgram());
   }
 
   Future<void> _changeStatus(
@@ -553,11 +564,19 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
 
     setState(() => _processing[founderId] = true);
     try {
-      await _apiClient.updateFounderPlatinumStatus(
-        founderId: founderId,
-        status: status,
-        reason: reason,
-      );
+      if (founderId.startsWith('FCH-')) {
+        await _apiClient.updateFounderChairmanStatus(
+          founderId: founderId,
+          status: status,
+          reason: reason,
+        );
+      } else {
+        await _apiClient.updateFounderPlatinumStatus(
+          founderId: founderId,
+          status: status,
+          reason: reason,
+        );
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Status Founder $founderId diperbarui')),
@@ -580,7 +599,7 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
   Widget build(BuildContext context) {
     return _DemoScaffold(
       title: 'Founder Program',
-      subtitle: 'Founder Platinum eksklusif untuk Super Admin',
+      subtitle: 'Founder Chairman dan Founder Platinum',
       child: FutureBuilder<Map<String, dynamic>>(
         future: _future,
         builder: (context, snapshot) {
@@ -588,7 +607,7 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
             return const _StatusSurface(
               icon: Icons.sync_rounded,
               title: 'Memuat Founder Program',
-              subtitle: 'Mengambil daftar Founder Platinum...',
+              subtitle: 'Mengambil data Founder Chairman dan Platinum...',
             );
           }
           if (snapshot.hasError) {
@@ -601,13 +620,27 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
           }
 
           final data = snapshot.data ?? const <String, dynamic>{};
-          final items = ((data['items'] as List?) ?? const [])
+          final chairman =
+              (data['chairman'] as Map?)?.cast<String, dynamic>() ??
+                  const <String, dynamic>{};
+          final platinum =
+              (data['platinum'] as Map?)?.cast<String, dynamic>() ??
+                  const <String, dynamic>{};
+          final chairmanItem =
+              (chairman['item'] as Map?)?.cast<String, dynamic>();
+          final items = ((platinum['items'] as List?) ?? const [])
               .whereType<Map>()
               .map((item) => item.cast<String, dynamic>())
               .toList(growable: false);
           final statusSummary =
-              (data['statusSummary'] as Map?)?.cast<String, dynamic>() ??
+              (platinum['statusSummary'] as Map?)?.cast<String, dynamic>() ??
                   const <String, dynamic>{};
+          final chairmanStatusSummary =
+              (chairman['statusSummary'] as Map?)?.cast<String, dynamic>() ??
+                  const <String, dynamic>{};
+          int combinedStatus(String status) =>
+              _intFrom(statusSummary[status]) +
+              _intFrom(chairmanStatusSummary[status]);
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -617,14 +650,16 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
                   Expanded(
                     child: _StatCard(
                       label: 'Total Slot',
-                      value: '${_intFrom(data['totalSlot'])}',
+                      value:
+                          '${_intFrom(platinum['totalSlot']) + _intFrom(chairman['totalSlot'])}',
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: _StatCard(
                       label: 'Terpakai',
-                      value: '${_intFrom(data['usedSlot'])}',
+                      value:
+                          '${_intFrom(platinum['usedSlot']) + _intFrom(chairman['usedSlot'])}',
                     ),
                   ),
                 ],
@@ -635,7 +670,8 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
                   Expanded(
                     child: _StatCard(
                       label: 'Sisa Slot',
-                      value: '${_intFrom(data['availableSlot'])}',
+                      value:
+                          '${_intFrom(platinum['availableSlot']) + _intFrom(chairman['availableSlot'])}',
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -652,8 +688,18 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
                 icon: Icons.verified_user_rounded,
                 title: 'Lifecycle Founder',
                 subtitle:
-                    'ACTIVE ${_intFrom(statusSummary['ACTIVE'])} • SUSPENDED ${_intFrom(statusSummary['SUSPENDED'])} • REVOKED ${_intFrom(statusSummary['REVOKED'])}',
+                    'ACTIVE ${combinedStatus('ACTIVE')} • SUSPENDED ${combinedStatus('SUSPENDED')} • REVOKED ${combinedStatus('REVOKED')}',
               ),
+              const SizedBox(height: 12),
+              if (chairmanItem != null) ...[
+                _founderCard(chairmanItem),
+                const SizedBox(height: 4),
+              ] else
+                const _StatusSurface(
+                  icon: Icons.emoji_events_rounded,
+                  title: 'Founder Chairman',
+                  subtitle: 'Slot FCH-001 belum diberikan.',
+                ),
               const SizedBox(height: 12),
               if (items.isEmpty)
                 const _EmptyState(
@@ -675,6 +721,7 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
     final status = item['status']?.toString() ?? 'ACTIVE';
     final busy = _processing[founderId] == true;
     final isRevoked = status == 'REVOKED';
+    final isChairman = founderId.startsWith('FCH-');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -720,6 +767,13 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
             'Sponsor ${item['totalSponsorBonus'] ?? '0.00'} • Level ${item['totalLevelBonus'] ?? '0.00'} • Total ${item['totalCommission'] ?? '0.00'}',
             style: const TextStyle(color: Color(0xFF94A3B8)),
           ),
+          if (isChairman && item['bankAccountMasked'] != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Bank Account ${item['bankAccountMasked']}',
+              style: const TextStyle(color: Color(0xFF94A3B8)),
+            ),
+          ],
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
@@ -789,13 +843,15 @@ class FounderProgramDetailScreen extends StatelessWidget {
       title: 'Detail Founder',
       subtitle: founderId,
       child: FutureBuilder<Map<String, dynamic>>(
-        future: _apiClient.adminFounderPlatinumDetail(founderId),
+        future: founderId.startsWith('FCH-')
+            ? _apiClient.adminFounderChairmanDetail(founderId)
+            : _apiClient.adminFounderPlatinumDetail(founderId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const _StatusSurface(
               icon: Icons.sync_rounded,
               title: 'Memuat detail Founder',
-              subtitle: 'Mengambil data Founder Platinum...',
+              subtitle: 'Mengambil data Founder Program...',
             );
           }
           if (snapshot.hasError) {
@@ -828,6 +884,8 @@ class FounderProgramDetailScreen extends StatelessWidget {
               _FounderDetailRow('Granted At', _dateLabel(data['grantedAt'])),
               _FounderDetailRow('Wallet Cash', data['walletCash']),
               _FounderDetailRow('Wallet PPOB', data['walletPpob']),
+              if (data['bankAccountMasked'] != null)
+                _FounderDetailRow('Bank Account', data['bankAccountMasked']),
               _FounderDetailRow('Referral Count', data['referralCount']),
               _FounderDetailRow('Sponsor Bonus', data['totalSponsorBonus']),
               _FounderDetailRow('Level Bonus', data['totalLevelBonus']),

@@ -126,6 +126,38 @@ export const adminFounderPlatinumStatusSchema = z.object({
   })
 });
 
+export const adminFounderChairmanGrantSchema = z.object({
+  body: z.object({
+    fullName: z.string().trim().min(2).max(120),
+    phone: z.string().trim().min(8).max(32),
+    password: z.string().min(6).max(120),
+    email: z.string().trim().email().max(180).optional(),
+    reason: z.string().trim().min(3).max(500),
+    secureBankAccountReference: z.string().trim().max(120).optional(),
+    bankAccount: z.object({
+      bankName: z.string().trim().min(2).max(80),
+      accountHolderName: z.string().trim().min(2).max(120),
+      accountNumber: z.string().trim().min(4).max(40)
+    }).optional()
+  })
+});
+
+export const adminFounderChairmanDetailSchema = z.object({
+  params: z.object({
+    founderId: z.string().trim().regex(/^FCH-\d{3}$/)
+  })
+});
+
+export const adminFounderChairmanStatusSchema = z.object({
+  params: z.object({
+    founderId: z.string().trim().regex(/^FCH-\d{3}$/)
+  }),
+  body: z.object({
+    status: z.enum(["ACTIVE", "SUSPENDED", "REVOKED"]),
+    reason: z.string().trim().max(500).optional()
+  })
+});
+
 export const adminReportQuerySchema = z.object({
   query: z.object({
     ...paginationQuery,
