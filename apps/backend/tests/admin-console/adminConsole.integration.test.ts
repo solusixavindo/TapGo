@@ -340,6 +340,7 @@ describe.skipIf(!runIntegration)("Admin console API", () => {
   });
 
   it("manages the single Founder Chairman without revenue, PPOB benefit, duplicate grant, or unmasked bank data", async () => {
+    const admin = await createUser("ADMINFCH1", "ADMIN");
     const superAdmin = await createUser("SUPERFCH1", "SUPER_ADMIN");
     const normalUser = await createUser("USERFCH1", "USER");
 
@@ -355,6 +356,19 @@ describe.skipIf(!runIntegration)("Admin console API", () => {
       }
     });
     expect(blocked.status).toBe(403);
+
+    const adminBlocked = await api("/api/v1/admin/founder-chairman/grant", {
+      method: "POST",
+      token: tokenFor(admin),
+      body: {
+        fullName: "Founder Chairman Admin Blocked",
+        phone: "083890700099",
+        email: "admin-blocked-chairman@example.com",
+        password: "Founder123",
+        reason: "admin blocked"
+      }
+    });
+    expect(adminBlocked.status).toBe(403);
 
     const granted = await api("/api/v1/admin/founder-chairman/grant", {
       method: "POST",
@@ -437,6 +451,13 @@ describe.skipIf(!runIntegration)("Admin console API", () => {
     const activePaidOrderId = await createPaidSilverDownline(grantedBody.data.userId, "FCH-BUYER-A", "CHAIRMAN-ACTIVE-PAID");
     expect(await prisma.commission.count({ where: { beneficiaryId: grantedBody.data.userId, triggerId: activePaidOrderId } })).toBe(2);
 
+    const emptyReasonSuspend = await api("/api/v1/admin/founder-chairman/FCH-001/status", {
+      method: "PATCH",
+      token: tokenFor(superAdmin),
+      body: { status: "SUSPENDED" }
+    });
+    expect(emptyReasonSuspend.status).toBe(400);
+
     const suspended = await api("/api/v1/admin/founder-chairman/FCH-001/status", {
       method: "PATCH",
       token: tokenFor(superAdmin),
@@ -457,6 +478,13 @@ describe.skipIf(!runIntegration)("Admin console API", () => {
     const activeAgainPaidOrderId = await createPaidSilverDownline(grantedBody.data.userId, "FCH-BUYER-C", "CHAIRMAN-REACTIVE-PAID");
     expect(await prisma.commission.count({ where: { beneficiaryId: grantedBody.data.userId, triggerId: activeAgainPaidOrderId } })).toBe(2);
 
+    const emptyReasonRevoke = await api("/api/v1/admin/founder-chairman/FCH-001/status", {
+      method: "PATCH",
+      token: tokenFor(superAdmin),
+      body: { status: "REVOKED" }
+    });
+    expect(emptyReasonRevoke.status).toBe(400);
+
     const revoked = await api("/api/v1/admin/founder-chairman/FCH-001/status", {
       method: "PATCH",
       token: tokenFor(superAdmin),
@@ -472,6 +500,38 @@ describe.skipIf(!runIntegration)("Admin console API", () => {
       token: tokenFor(superAdmin)
     });
     expect(deleteAttempt.status).toBe(404);
+  });
+
+  it("allows only one Founder Chairman grant under concurrent requests", async () => {
+    const superAdmin = await createUser("SUPERFCH2", "SUPER_ADMIN");
+    const token = tokenFor(superAdmin);
+    const firstBody = {
+      fullName: "Ahmad Zulhi",
+      phone: "083890782273",
+      email: "ahmadzulhi87@example.com",
+      password: "Founder1234",
+      reason: "Founder Chairman concurrent grant A"
+    };
+    const secondBody = {
+      fullName: "Second Chairman",
+      phone: "083890700003",
+      email: "second-chairman-concurrent@example.com",
+      password: "Founder1234",
+      reason: "Founder Chairman concurrent grant B"
+    };
+
+    const responses = await Promise.all([
+      api("/api/v1/admin/founder-chairman/grant", { method: "POST", token, body: firstBody }),
+      api("/api/v1/admin/founder-chairman/grant", { method: "POST", token, body: secondBody })
+    ]);
+    const statuses = responses.map((response) => response.status).sort();
+    expect(statuses).toEqual([201, 409]);
+
+    const conflict = responses.find((response) => response.status === 409);
+    const conflictBody = await conflict!.json() as { code: string };
+    expect(conflictBody.code).toBe("FOUNDER_CHAIRMAN_ALREADY_EXISTS");
+    expect(await prisma.founderProgramGrant.count({ where: { founderRole: "FOUNDER_CHAIRMAN" } })).toBe(1);
+    expect(await prisma.user.count({ where: { referralCode: "FCH-001" } })).toBe(1);
   });
 
   it("manages reward lifecycle without double cash ledger", async () => {

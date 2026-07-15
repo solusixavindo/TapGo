@@ -304,7 +304,8 @@ export class AdminConsoleService {
     const founderId = "FCH-001";
     const reason = input.reason.trim();
 
-    return this.prisma.$transaction(async (tx) => {
+    try {
+      await this.prisma.$transaction(async (tx) => {
       const existingChairman = await tx.founderProgramGrant.findFirst({
         where: { founderRole: "FOUNDER_CHAIRMAN" },
         select: { id: true }
@@ -449,10 +450,20 @@ export class AdminConsoleService {
           }
         }
       });
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      timeout: 15000
-    });
+      }, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        timeout: 15000
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && (error.code === "P2002" || error.code === "P2034")) {
+        throw new AppError(
+          "Founder Chairman already exists",
+          StatusCodes.CONFLICT,
+          "FOUNDER_CHAIRMAN_ALREADY_EXISTS"
+        );
+      }
+      throw error;
+    }
 
     return this.founderChairmanDetail(founderId);
   }
