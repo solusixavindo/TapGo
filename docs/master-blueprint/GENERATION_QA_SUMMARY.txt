@@ -1,0 +1,6 @@
+Master PDF pages: 123
+Executive PDF pages: 20
+PPTX slides: 60
+Workbook sheets: 25
+Safety findings: none
+Generated: 2026-07-15

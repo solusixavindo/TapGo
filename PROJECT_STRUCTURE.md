@@ -15,6 +15,7 @@ Tapgo/
 │   ├── midtrans/             # Midtrans onboarding, verification, transaction flow docs
 │   ├── legal/                # Legal, SOP, compliance, D&B package docs
 │   ├── release/              # Google Play, UAT, deploy, recovery, launch, release docs
+│   ├── master-blueprint/     # TapGo Master Blueprint 2026-2035 package
 │   ├── archive/              # Historical audits, old plans, investor deck sources
 │   ├── architecture/         # Existing architecture documentation
 │   └── referral/             # Existing referral/wallet/membership documentation
@@ -72,6 +73,7 @@ Tapgo/
 - Founder Platinum implementation report: `docs/release/FOUNDER_PLATINUM_IMPLEMENTATION_REPORT.md`
 - Founder Platinum admin guide: `docs/release/FOUNDER_PLATINUM_ADMIN_GUIDE.md`
 - Legal and SOP docs: `docs/legal/`
+- TapGo Master Blueprint 2026-2035: `docs/master-blueprint/`
 - Historical audit docs: `docs/archive/`
 - Current project status: `PROJECT_STATUS.md`
 

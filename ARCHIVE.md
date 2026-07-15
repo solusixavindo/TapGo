@@ -82,6 +82,17 @@ Lokasi: `docs/release/`
 - `FOUNDER_PLATINUM_ADMIN_GUIDE.md`
 - User guide, FAQ, launch content, and tester guide.
 
+## Master Blueprint Documents
+
+Lokasi: `docs/master-blueprint/`
+
+- `TAPGO_MASTER_BLUEPRINT_2026_2035.pdf`
+- `TAPGO_MASTER_BLUEPRINT_2026_2035.pptx`
+- `TAPGO_FINANCIAL_MODEL_2026_2035.xlsx`
+- `TAPGO_EXECUTIVE_BOOK_2026_2035.pdf`
+- `TAPGO_MASTER_BLUEPRINT_ASSUMPTIONS.md`
+- `GENERATION_QA_SUMMARY.txt`
+
 ## Historical Audit Archive
 
 Lokasi: `docs/archive/`
