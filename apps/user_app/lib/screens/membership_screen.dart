@@ -326,16 +326,26 @@ class MembershipScreen extends ConsumerWidget {
           _InfoPanel(
             color: _packageAccent(package.name),
             title: 'Paket Aktif',
-            value:
-                session.isFounderPlatinum ? 'Founder Platinum' : package.name,
+            value: session.isFounderChairman
+                ? 'Founder Chairman'
+                : session.isFounderPlatinum
+                    ? 'Founder Platinum'
+                    : package.name,
             subtitle: 'Status: Aktif / Lunas',
             icon: Icons.workspace_premium_rounded,
           ),
-          if (session.isFounderPlatinum) ...[
+          if (session.isFounderChairman || session.isFounderPlatinum) ...[
             const SizedBox(height: 10),
-            const Align(
+            Align(
               alignment: Alignment.centerLeft,
-              child: _FounderPlatinumBadge(),
+              child: _FounderPlatinumBadge(
+                label: session.isFounderChairman
+                    ? 'Founder Chairman'
+                    : 'Founder Platinum',
+                icon: session.isFounderChairman
+                    ? Icons.emoji_events_rounded
+                    : Icons.workspace_premium_rounded,
+              ),
             ),
           ],
           const SizedBox(height: 14),

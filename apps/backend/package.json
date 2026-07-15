@@ -18,6 +18,7 @@
     "seed:admin": "tsx prisma/seed-admin.ts",
     "seed:uat": "tsx prisma/seed-uat-credentials.ts",
     "seed:founder-platinum": "tsx ../../scripts/seed-founder-platinum.ts",
+    "seed:founder-chairman": "tsx ../../scripts/seed-founder-chairman.ts",
     "promote:admin": "tsx prisma/promote-admin.ts",
     "seed:demo": "tsx prisma/seed-demo.ts",
     "reset:demo": "tsx prisma/reset-demo.ts",

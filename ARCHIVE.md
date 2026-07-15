@@ -80,6 +80,8 @@ Lokasi: `docs/release/`
 - `UAT_PHASE_B_FINAL_READINESS.md`
 - `FOUNDER_PLATINUM_IMPLEMENTATION_REPORT.md`
 - `FOUNDER_PLATINUM_ADMIN_GUIDE.md`
+- `FOUNDER_CHAIRMAN_IMPLEMENTATION_REPORT.md`
+- `FOUNDER_PROGRAM_STRUCTURE.md`
 - User guide, FAQ, launch content, and tester guide.
 
 Lokasi: `docs/google-play/`

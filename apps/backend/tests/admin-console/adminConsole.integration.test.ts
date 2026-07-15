@@ -339,6 +339,201 @@ describe.skipIf(!runIntegration)("Admin console API", () => {
     expect(auditCount).toBe(3);
   });
 
+  it("manages the single Founder Chairman without revenue, PPOB benefit, duplicate grant, or unmasked bank data", async () => {
+    const admin = await createUser("ADMINFCH1", "ADMIN");
+    const superAdmin = await createUser("SUPERFCH1", "SUPER_ADMIN");
+    const normalUser = await createUser("USERFCH1", "USER");
+
+    const blocked = await api("/api/v1/admin/founder-chairman/grant", {
+      method: "POST",
+      token: tokenFor(normalUser),
+      body: {
+        fullName: "Founder Chairman Blocked",
+        phone: "083890700001",
+        email: "blocked-chairman@example.com",
+        password: "Founder123",
+        reason: "blocked"
+      }
+    });
+    expect(blocked.status).toBe(403);
+
+    const adminBlocked = await api("/api/v1/admin/founder-chairman/grant", {
+      method: "POST",
+      token: tokenFor(admin),
+      body: {
+        fullName: "Founder Chairman Admin Blocked",
+        phone: "083890700099",
+        email: "admin-blocked-chairman@example.com",
+        password: "Founder123",
+        reason: "admin blocked"
+      }
+    });
+    expect(adminBlocked.status).toBe(403);
+
+    const granted = await api("/api/v1/admin/founder-chairman/grant", {
+      method: "POST",
+      token: tokenFor(superAdmin),
+      body: {
+        fullName: "Ahmad Zulhi",
+        phone: "083890782273",
+        email: "ahmadzulhi87@example.com",
+        password: "Founder1234",
+        reason: "Founder Chairman official single founder account",
+        bankAccount: {
+          bankName: "Test Bank",
+          accountHolderName: "TEST ACCOUNT HOLDER",
+          accountNumber: "1234567890123"
+        }
+      }
+    });
+
+    expect(granted.status).toBe(201);
+    const grantedBody = await granted.json() as {
+      data: {
+        founderId: string;
+        userId: string;
+        founderRole: string;
+        membership: string;
+        membershipTier: string;
+        status: string;
+        walletCash: string;
+        walletPpob: string;
+        bankAccountMasked: string | null;
+      };
+    };
+
+    expect(grantedBody.data.founderId).toBe("FCH-001");
+    expect(grantedBody.data.founderRole).toBe("FOUNDER_CHAIRMAN");
+    expect(grantedBody.data.membership).toBe("Founder Chairman / Platinum");
+    expect(grantedBody.data.membershipTier).toBe("PLATINUM");
+    expect(grantedBody.data.status).toBe("ACTIVE");
+    expect(grantedBody.data.walletCash).toBe("0.00");
+    expect(grantedBody.data.walletPpob).toBe("0.00");
+    expect(grantedBody.data.bankAccountMasked).toBe("*********0123");
+    expect(JSON.stringify(grantedBody)).not.toContain("1234567890123");
+
+    const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: grantedBody.data.userId } });
+    expect(wallet.cashBalance.toFixed(2)).toBe("0.00");
+    expect(wallet.ppobBalance.toFixed(2)).toBe("0.00");
+    expect(await prisma.walletTransaction.count({ where: { walletId: wallet.id } })).toBe(0);
+    expect(await prisma.membershipOrder.count({ where: { userId: grantedBody.data.userId } })).toBe(0);
+    expect(await prisma.invoice.count({ where: { userId: grantedBody.data.userId } })).toBe(0);
+    expect(await prisma.membershipPayment.count({ where: { userId: grantedBody.data.userId } })).toBe(0);
+    expect(await prisma.commission.count({ where: { sourceUserId: grantedBody.data.userId } })).toBe(0);
+    expect(await prisma.rewardTransaction.count({ where: { userId: grantedBody.data.userId } })).toBe(0);
+    expect(await prisma.auditLog.count({ where: { action: "FOUNDER_CHAIRMAN_GRANTED" } })).toBe(1);
+
+    const duplicate = await api("/api/v1/admin/founder-chairman/grant", {
+      method: "POST",
+      token: tokenFor(superAdmin),
+      body: {
+        fullName: "Second Chairman",
+        phone: "083890700002",
+        email: "second-chairman@example.com",
+        password: "Founder1234",
+        reason: "second attempt"
+      }
+    });
+    expect(duplicate.status).toBe(409);
+    const duplicateBody = await duplicate.json() as { code: string };
+    expect(duplicateBody.code).toBe("FOUNDER_CHAIRMAN_ALREADY_EXISTS");
+
+    const list = await api("/api/v1/admin/founder-chairman", { token: tokenFor(superAdmin) });
+    expect(list.status).toBe(200);
+    const listBody = await list.json() as { data: { totalSlot: number; usedSlot: number; availableSlot: number; item: { founderId: string; bankAccountMasked: string | null } } };
+    expect(listBody.data.totalSlot).toBe(1);
+    expect(listBody.data.usedSlot).toBe(1);
+    expect(listBody.data.availableSlot).toBe(0);
+    expect(listBody.data.item.founderId).toBe("FCH-001");
+    expect(listBody.data.item.bankAccountMasked).toBe("*********0123");
+    expect(JSON.stringify(listBody)).not.toContain("1234567890123");
+
+    const activePaidOrderId = await createPaidSilverDownline(grantedBody.data.userId, "FCH-BUYER-A", "CHAIRMAN-ACTIVE-PAID");
+    expect(await prisma.commission.count({ where: { beneficiaryId: grantedBody.data.userId, triggerId: activePaidOrderId } })).toBe(2);
+
+    const emptyReasonSuspend = await api("/api/v1/admin/founder-chairman/FCH-001/status", {
+      method: "PATCH",
+      token: tokenFor(superAdmin),
+      body: { status: "SUSPENDED" }
+    });
+    expect(emptyReasonSuspend.status).toBe(400);
+
+    const suspended = await api("/api/v1/admin/founder-chairman/FCH-001/status", {
+      method: "PATCH",
+      token: tokenFor(superAdmin),
+      body: { status: "SUSPENDED", reason: "temporary compliance review" }
+    });
+    expect(suspended.status).toBe(200);
+
+    const suspendedPaidOrderId = await createPaidSilverDownline(grantedBody.data.userId, "FCH-BUYER-B", "CHAIRMAN-SUSPENDED-PAID");
+    expect(await prisma.commission.count({ where: { beneficiaryId: grantedBody.data.userId, triggerId: suspendedPaidOrderId } })).toBe(0);
+
+    const reactivated = await api("/api/v1/admin/founder-chairman/FCH-001/status", {
+      method: "PATCH",
+      token: tokenFor(superAdmin),
+      body: { status: "ACTIVE" }
+    });
+    expect(reactivated.status).toBe(200);
+
+    const activeAgainPaidOrderId = await createPaidSilverDownline(grantedBody.data.userId, "FCH-BUYER-C", "CHAIRMAN-REACTIVE-PAID");
+    expect(await prisma.commission.count({ where: { beneficiaryId: grantedBody.data.userId, triggerId: activeAgainPaidOrderId } })).toBe(2);
+
+    const emptyReasonRevoke = await api("/api/v1/admin/founder-chairman/FCH-001/status", {
+      method: "PATCH",
+      token: tokenFor(superAdmin),
+      body: { status: "REVOKED" }
+    });
+    expect(emptyReasonRevoke.status).toBe(400);
+
+    const revoked = await api("/api/v1/admin/founder-chairman/FCH-001/status", {
+      method: "PATCH",
+      token: tokenFor(superAdmin),
+      body: { status: "REVOKED", reason: "owner request" }
+    });
+    expect(revoked.status).toBe(200);
+
+    const revokedPaidOrderId = await createPaidSilverDownline(grantedBody.data.userId, "FCH-BUYER-D", "CHAIRMAN-REVOKED-PAID");
+    expect(await prisma.commission.count({ where: { beneficiaryId: grantedBody.data.userId, triggerId: revokedPaidOrderId } })).toBe(0);
+
+    const deleteAttempt = await api("/api/v1/admin/founder-chairman/FCH-001", {
+      method: "DELETE",
+      token: tokenFor(superAdmin)
+    });
+    expect(deleteAttempt.status).toBe(404);
+  });
+
+  it("allows only one Founder Chairman grant under concurrent requests", async () => {
+    const superAdmin = await createUser("SUPERFCH2", "SUPER_ADMIN");
+    const token = tokenFor(superAdmin);
+    const firstBody = {
+      fullName: "Ahmad Zulhi",
+      phone: "083890782273",
+      email: "ahmadzulhi87@example.com",
+      password: "Founder1234",
+      reason: "Founder Chairman concurrent grant A"
+    };
+    const secondBody = {
+      fullName: "Second Chairman",
+      phone: "083890700003",
+      email: "second-chairman-concurrent@example.com",
+      password: "Founder1234",
+      reason: "Founder Chairman concurrent grant B"
+    };
+
+    const responses = await Promise.all([
+      api("/api/v1/admin/founder-chairman/grant", { method: "POST", token, body: firstBody }),
+      api("/api/v1/admin/founder-chairman/grant", { method: "POST", token, body: secondBody })
+    ]);
+    const statuses = responses.map((response) => response.status).sort();
+    expect(statuses).toEqual([201, 409]);
+
+    const conflict = responses.find((response) => response.status === 409);
+    const conflictBody = await conflict!.json() as { code: string };
+    expect(conflictBody.code).toBe("FOUNDER_CHAIRMAN_ALREADY_EXISTS");
+    expect(await prisma.founderProgramGrant.count({ where: { founderRole: "FOUNDER_CHAIRMAN" } })).toBe(1);
+    expect(await prisma.user.count({ where: { referralCode: "FCH-001" } })).toBe(1);
+  });
+
   it("manages reward lifecycle without double cash ledger", async () => {
     const admin = await createUser("ADMIN002", "ADMIN");
     const user = await createUser("REWARD001", "USER");

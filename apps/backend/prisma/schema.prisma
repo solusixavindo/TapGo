@@ -199,6 +199,7 @@ enum AbuseFlagSeverity {
 }
 
 enum FounderRole {
+  FOUNDER_CHAIRMAN
   FOUNDER_PLATINUM
 }
 

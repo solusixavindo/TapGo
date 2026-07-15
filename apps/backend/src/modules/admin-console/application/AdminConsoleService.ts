@@ -66,6 +66,21 @@ type FounderPlatinumGrantInput = {
   reason?: string;
 };
 
+type FounderChairmanGrantInput = {
+  actorId: string;
+  fullName: string;
+  phone: string;
+  password: string;
+  email?: string;
+  reason: string;
+  secureBankAccountReference?: string;
+  bankAccount?: {
+    bankName: string;
+    accountHolderName: string;
+    accountNumber: string;
+  };
+};
+
 type FounderProgramStatus = "ACTIVE" | "SUSPENDED" | "REVOKED";
 
 type FounderPlatinumStatusInput = {
@@ -74,6 +89,8 @@ type FounderPlatinumStatusInput = {
   status: FounderProgramStatus;
   reason?: string;
 };
+
+type FounderChairmanStatusInput = FounderPlatinumStatusInput;
 
 const sponsorTypes: CommissionType[] = ["SPONSOR_BONUS", "BASIC_SPONSOR_BONUS"];
 const levelTypes: CommissionType[] = ["LEVEL_BONUS", "LEVEL_COMMISSION"];
@@ -279,6 +296,176 @@ export class AdminConsoleService {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       timeout: 15000
     });
+  }
+
+  async grantFounderChairman(input: FounderChairmanGrantInput) {
+    const normalizedPhone = normalizePhoneNumber(input.phone);
+    const passwordHash = await hashPassword(input.password);
+    const founderId = "FCH-001";
+    const reason = input.reason.trim();
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+      const existingChairman = await tx.founderProgramGrant.findFirst({
+        where: { founderRole: "FOUNDER_CHAIRMAN" },
+        select: { id: true }
+      });
+
+      if (existingChairman) {
+        throw new AppError(
+          "Founder Chairman already exists",
+          StatusCodes.CONFLICT,
+          "FOUNDER_CHAIRMAN_ALREADY_EXISTS"
+        );
+      }
+
+      const existingUser = await tx.user.findFirst({
+        where: {
+          OR: [
+            { phone: { in: phoneLookupVariants(normalizedPhone) } },
+            ...(input.email ? [{ email: input.email }] : [])
+          ]
+        },
+        select: { id: true }
+      });
+
+      if (existingUser) {
+        throw new AppError(
+          "Founder Chairman can only be granted to a new verified user account",
+          StatusCodes.CONFLICT,
+          "FOUNDER_CHAIRMAN_USER_ALREADY_EXISTS"
+        );
+      }
+
+      const platinum = await tx.membership.findUnique({
+        where: { tier: "PLATINUM" },
+        select: { id: true, tier: true, name: true }
+      });
+
+      if (!platinum) {
+        throw new AppError("Platinum membership package is unavailable", StatusCodes.CONFLICT, "PLATINUM_PACKAGE_NOT_FOUND");
+      }
+
+      const existingReferralCode = await tx.user.findUnique({
+        where: { referralCode: founderId },
+        select: { id: true }
+      });
+
+      if (existingReferralCode) {
+        throw new AppError("Founder Chairman ID is already used", StatusCodes.CONFLICT, "FOUNDER_CHAIRMAN_ALREADY_EXISTS");
+      }
+
+      const now = new Date();
+      const bankAccount = input.bankAccount
+        ? {
+          bankName: input.bankAccount.bankName,
+          accountHolderName: input.bankAccount.accountHolderName,
+          accountNumber: input.bankAccount.accountNumber,
+          source: "FOUNDER_CHAIRMAN_SECURE_INPUT"
+        }
+        : undefined;
+      const bankAccountMasked = this.maskBankAccount(bankAccount);
+
+      const user = await tx.user.create({
+        data: {
+          fullName: input.fullName,
+          ...(input.email ? { email: input.email } : {}),
+          phone: normalizedPhone,
+          passwordHash,
+          role: "USER",
+          status: "ACTIVE",
+          referralCode: founderId,
+          membershipId: platinum.id,
+          ...(bankAccount ? { bankAccount } : {})
+        },
+        select: { id: true }
+      });
+
+      await tx.wallet.create({
+        data: {
+          userId: user.id,
+          balance: new Prisma.Decimal(0),
+          cashBalance: new Prisma.Decimal(0),
+          ppobBalance: new Prisma.Decimal(0),
+          currency: "IDR"
+        }
+      });
+
+      const userMembership = await tx.userMembership.create({
+        data: {
+          userId: user.id,
+          membershipId: platinum.id,
+          status: "ACTIVE",
+          founderRole: "FOUNDER_CHAIRMAN",
+          activeAt: now,
+          metadata: {
+            source: "FOUNDER_CHAIRMAN",
+            founderRole: "FOUNDER_CHAIRMAN",
+            founderId,
+            grantedBy: input.actorId,
+            grantedAt: now.toISOString(),
+            reason,
+            noInvoice: true,
+            noPayment: true,
+            noRevenueRecognition: true,
+            noAutomaticPpobBenefit: true
+          }
+        }
+      });
+
+      const grant = await tx.founderProgramGrant.create({
+        data: {
+          userId: user.id,
+          membershipId: platinum.id,
+          userMembershipId: userMembership.id,
+          founderRole: "FOUNDER_CHAIRMAN",
+          grantedBy: input.actorId,
+          reason,
+          metadata: {
+            founderId,
+            secureBankAccountReference: input.secureBankAccountReference ?? null,
+            bankAccountMasked,
+            noInvoice: true,
+            noPayment: true,
+            noRevenueRecognition: true,
+            noAutomaticPpobBenefit: true
+          }
+        }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: input.actorId,
+          action: "FOUNDER_CHAIRMAN_GRANTED",
+          entityType: "FOUNDER_PROGRAM_GRANT",
+          entityId: grant.id,
+          metadata: {
+            targetUserId: user.id,
+            founderRole: "FOUNDER_CHAIRMAN",
+            founderId,
+            membershipId: platinum.id,
+            reason,
+            secureBankAccountReference: input.secureBankAccountReference ?? null,
+            bankAccountMasked
+          }
+        }
+      });
+      }, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        timeout: 15000
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && (error.code === "P2002" || error.code === "P2034")) {
+        throw new AppError(
+          "Founder Chairman already exists",
+          StatusCodes.CONFLICT,
+          "FOUNDER_CHAIRMAN_ALREADY_EXISTS"
+        );
+      }
+      throw error;
+    }
+
+    return this.founderChairmanDetail(founderId);
   }
 
   async founderPlatinumList() {
@@ -489,6 +676,216 @@ export class AdminConsoleService {
     });
 
     return this.founderPlatinumDetail(founderId);
+  }
+
+  async founderChairman() {
+    const grants = await this.prisma.founderProgramGrant.findMany({
+      where: { founderRole: "FOUNDER_CHAIRMAN" },
+      include: {
+        user: {
+          include: {
+            wallet: true,
+            membership: true,
+            sponsoredReferrals: { select: { id: true } },
+            commissions: {
+              where: { status: "POSTED" },
+              select: { amount: true, type: true }
+            }
+          }
+        },
+        membership: true,
+        actor: { select: { id: true, fullName: true, phone: true, role: true } }
+      },
+      orderBy: { createdAt: "asc" }
+    });
+
+    const items = grants.map((grant) => this.founderSummary(grant));
+    const active = items.filter((item) => item.status === "ACTIVE").length;
+    const suspended = items.filter((item) => item.status === "SUSPENDED").length;
+    const revoked = items.filter((item) => item.status === "REVOKED").length;
+
+    return {
+      totalSlot: 1,
+      usedSlot: items.length > 0 ? 1 : 0,
+      availableSlot: items.length > 0 ? 0 : 1,
+      statusSummary: {
+        ACTIVE: active,
+        SUSPENDED: suspended,
+        REVOKED: revoked
+      },
+      item: items[0] ?? null,
+      items
+    };
+  }
+
+  async founderChairmanDetail(founderId: string) {
+    const grant = await this.prisma.founderProgramGrant.findFirst({
+      where: {
+        founderRole: "FOUNDER_CHAIRMAN",
+        user: { referralCode: founderId.trim().toUpperCase() }
+      },
+      include: {
+        user: {
+          include: {
+            wallet: true,
+            membership: true,
+            sponsoredReferrals: { select: { id: true } },
+            commissions: {
+              where: { status: "POSTED" },
+              orderBy: { createdAt: "desc" },
+              select: { amount: true, type: true, level: true, createdAt: true, triggerId: true }
+            }
+          }
+        },
+        membership: true,
+        actor: { select: { id: true, fullName: true, phone: true, role: true } },
+        userMembership: { include: { membership: true } }
+      }
+    });
+
+    if (!grant) {
+      throw new AppError("Founder Chairman account not found", StatusCodes.NOT_FOUND, "FOUNDER_CHAIRMAN_NOT_FOUND");
+    }
+
+    const auditTrail = await this.prisma.auditLog.findMany({
+      where: {
+        entityType: "FOUNDER_PROGRAM_GRANT",
+        entityId: grant.id
+      },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      include: { actor: { select: { id: true, fullName: true, role: true } } }
+    });
+
+    return {
+      ...this.founderSummary(grant),
+      auditTrail: auditTrail.map((log) => ({
+        id: log.id,
+        action: log.action,
+        actor: log.actor,
+        metadata: log.metadata,
+        createdAt: log.createdAt
+      }))
+    };
+  }
+
+  async updateFounderChairmanStatus(input: FounderChairmanStatusInput) {
+    const founderId = input.founderId.trim().toUpperCase();
+    const targetStatus = input.status;
+    const reason = input.reason?.trim();
+
+    if ((targetStatus === "SUSPENDED" || targetStatus === "REVOKED") && !reason) {
+      throw new AppError("Reason is required for suspend or revoke", StatusCodes.BAD_REQUEST, "FOUNDER_STATUS_REASON_REQUIRED");
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const grant = await tx.founderProgramGrant.findFirst({
+        where: {
+          founderRole: "FOUNDER_CHAIRMAN",
+          user: { referralCode: founderId }
+        },
+        include: { user: true }
+      });
+
+      if (!grant) {
+        throw new AppError("Founder Chairman account not found", StatusCodes.NOT_FOUND, "FOUNDER_CHAIRMAN_NOT_FOUND");
+      }
+
+      const currentStatus = this.founderStatusFromGrant(grant);
+      this.assertFounderStatusTransition(currentStatus, targetStatus);
+
+      const now = new Date();
+      const history = [
+        ...this.founderStatusHistory(grant.metadata),
+        {
+          from: currentStatus,
+          to: targetStatus,
+          actorId: input.actorId,
+          reason: reason ?? null,
+          at: now.toISOString()
+        }
+      ];
+
+      if (targetStatus === "SUSPENDED") {
+        await tx.user.update({
+          where: { id: grant.userId },
+          data: { status: "SUSPENDED" }
+        });
+        await tx.founderProgramGrant.update({
+          where: { id: grant.id },
+          data: {
+            metadata: {
+              ...this.asObject(grant.metadata),
+              founderStatus: "SUSPENDED",
+              suspendedAt: now.toISOString(),
+              suspendedBy: input.actorId,
+              suspendReason: reason,
+              statusHistory: history
+            }
+          }
+        });
+      } else if (targetStatus === "ACTIVE") {
+        await tx.user.update({
+          where: { id: grant.userId },
+          data: { status: "ACTIVE" }
+        });
+        await tx.founderProgramGrant.update({
+          where: { id: grant.id },
+          data: {
+            metadata: {
+              ...this.asObject(grant.metadata),
+              founderStatus: "ACTIVE",
+              reactivatedAt: now.toISOString(),
+              reactivatedBy: input.actorId,
+              reactivateReason: reason ?? null,
+              statusHistory: history
+            }
+          }
+        });
+      } else {
+        await tx.user.update({
+          where: { id: grant.userId },
+          data: { status: "SUSPENDED" }
+        });
+        await tx.founderProgramGrant.update({
+          where: { id: grant.id },
+          data: {
+            revokedAt: now,
+            revokedBy: input.actorId,
+            metadata: {
+              ...this.asObject(grant.metadata),
+              founderStatus: "REVOKED",
+              revokedAt: now.toISOString(),
+              revokedBy: input.actorId,
+              revokeReason: reason,
+              statusHistory: history
+            }
+          }
+        });
+      }
+
+      const action = `FOUNDER_CHAIRMAN_${targetStatus}`;
+      await tx.auditLog.create({
+        data: {
+          actorId: input.actorId,
+          action,
+          entityType: "FOUNDER_PROGRAM_GRANT",
+          entityId: grant.id,
+          metadata: {
+            founderId,
+            targetUserId: grant.userId,
+            from: currentStatus,
+            to: targetStatus,
+            reason: reason ?? null
+          }
+        }
+      });
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      timeout: 15000
+    });
+
+    return this.founderChairmanDetail(founderId);
   }
 
   async dashboardSummary() {
@@ -1559,7 +1956,7 @@ export class AdminConsoleService {
 
   private assertFounderStatusTransition(current: FounderProgramStatus, target: FounderProgramStatus) {
     if (current === target) {
-      throw new AppError("Founder Platinum already has this status", StatusCodes.CONFLICT, "FOUNDER_STATUS_UNCHANGED");
+      throw new AppError("Founder already has this status", StatusCodes.CONFLICT, "FOUNDER_STATUS_UNCHANGED");
     }
 
     const allowed: Record<FounderProgramStatus, FounderProgramStatus[]> = {
@@ -1569,8 +1966,19 @@ export class AdminConsoleService {
     };
 
     if (!allowed[current].includes(target)) {
-      throw new AppError("Founder Platinum status transition is not allowed", StatusCodes.CONFLICT, "FOUNDER_STATUS_TRANSITION_INVALID");
+      throw new AppError("Founder status transition is not allowed", StatusCodes.CONFLICT, "FOUNDER_STATUS_TRANSITION_INVALID");
     }
+  }
+
+  private maskBankAccount(value: Prisma.JsonValue | null | undefined) {
+    const account = this.asObject(value);
+    const accountNumber = account.accountNumber?.toString();
+    if (!accountNumber) {
+      return null;
+    }
+
+    const visible = accountNumber.slice(-4);
+    return `${"*".repeat(Math.max(6, accountNumber.length - visible.length))}${visible}`;
   }
 
   private founderSummary(grant: {
@@ -1589,6 +1997,7 @@ export class AdminConsoleService {
       email: string | null;
       referralCode: string;
       status: string;
+      bankAccount: Prisma.JsonValue | null;
       wallet: { balance: Prisma.Decimal; cashBalance: Prisma.Decimal; ppobBalance: Prisma.Decimal } | null;
       membership: { tier: MembershipTier; name: string } | null;
       sponsoredReferrals: Array<{ id: string }>;
@@ -1613,7 +2022,7 @@ export class AdminConsoleService {
       name: grant.user.fullName,
       phone: grant.user.phone,
       email: grant.user.email,
-      membership: "Founder Platinum",
+      membership: grant.founderRole === "FOUNDER_CHAIRMAN" ? "Founder Chairman / Platinum" : "Founder Platinum",
       membershipTier: grant.membership.tier,
       founderRole: grant.founderRole,
       status: this.founderStatusFromGrant(grant),
@@ -1626,6 +2035,7 @@ export class AdminConsoleService {
       referralCount: grant.user.sponsoredReferrals.length,
       walletCash: this.decimal(grant.user.wallet?.cashBalance),
       walletPpob: this.decimal(grant.user.wallet?.ppobBalance),
+      bankAccountMasked: this.maskBankAccount(grant.user.bankAccount),
       totalSponsorBonus: this.decimal(sponsorBonus),
       totalLevelBonus: this.decimal(levelBonus),
       totalCommission: this.decimal(totalCommission),

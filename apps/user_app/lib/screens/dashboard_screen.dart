@@ -417,9 +417,11 @@ class _TopBar extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
-                    session.isFounderPlatinum
-                        ? 'Founder Platinum'
-                        : session.activePackageName,
+                    session.isFounderChairman
+                        ? 'Founder Chairman'
+                        : session.isFounderPlatinum
+                            ? 'Founder Platinum'
+                            : session.activePackageName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(

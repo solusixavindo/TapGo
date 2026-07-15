@@ -73,6 +73,8 @@ Tapgo/
 - Versioning policy: `docs/release/VERSIONING_POLICY.md`
 - Founder Platinum implementation report: `docs/release/FOUNDER_PLATINUM_IMPLEMENTATION_REPORT.md`
 - Founder Platinum admin guide: `docs/release/FOUNDER_PLATINUM_ADMIN_GUIDE.md`
+- Founder Chairman implementation report: `docs/release/FOUNDER_CHAIRMAN_IMPLEMENTATION_REPORT.md`
+- Founder Program structure: `docs/release/FOUNDER_PROGRAM_STRUCTURE.md`
 - Legal and SOP docs: `docs/legal/`
 - Historical audit docs: `docs/archive/`
 - Current project status: `PROJECT_STATUS.md`
