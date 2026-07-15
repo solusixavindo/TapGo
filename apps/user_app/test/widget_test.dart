@@ -159,6 +159,36 @@ void main() {
     expect(find.text('Super Admin Dashboard'), findsNothing);
   });
 
+  testWidgets('account deletion request requires confirmation',
+      (WidgetTester tester) async {
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Akun'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Hapus Akun'));
+    await tester.tap(find.text('Hapus Akun'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hapus Akun'), findsWidgets);
+    expect(find.text('Ajukan Penghapusan Akun'), findsOneWidget);
+    expect(find.text('Konfirmasi hapus akun'), findsNothing);
+
+    await tester.enterText(
+      find.byType(TextField).last,
+      'Permintaan review Google Play',
+    );
+    await tester.tap(find.text('Ajukan Penghapusan Akun'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Konfirmasi hapus akun'), findsOneWidget);
+    expect(find.text('Kirim Pengajuan'), findsOneWidget);
+
+    await tester.tap(find.text('Batal'));
+    await tester.pumpAndSettle();
+    expect(find.text('Konfirmasi hapus akun'), findsNothing);
+    expect(find.text('Pengajuan hapus akun berhasil dikirim.'), findsNothing);
+  });
+
   testWidgets('client membership flow reaches payment success',
       (WidgetTester tester) async {
     await openDashboard(tester, enablePaymentSimulator: true);

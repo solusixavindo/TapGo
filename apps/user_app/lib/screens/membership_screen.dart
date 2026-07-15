@@ -1495,6 +1495,32 @@ class _DeleteAccountRequestScreenState
   }
 
   Future<void> _submit() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Konfirmasi hapus akun'),
+        content: const Text(
+          'Permintaan ini akan ditinjau tim TapGo. Data transaksi penting '
+          'seperti invoice, wallet ledger, dan withdrawal dapat tetap '
+          'disimpan untuk audit dan kepatuhan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Kirim Pengajuan'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
     setState(() => _submitting = true);
     try {
       final data = await _apiClient.submitAccountDeletionRequest(
