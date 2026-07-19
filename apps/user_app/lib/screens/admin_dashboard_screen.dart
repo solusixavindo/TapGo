@@ -239,14 +239,14 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
       _AdminDashboardMenuItem(
         icon: Icons.campaign_rounded,
         title: 'Broadcast',
-        subtitle: 'Membutuhkan approval production',
+        subtitle: 'Memerlukan persetujuan admin utama',
         open: (context) => _openDemo(
             context, const _AdminProductionApprovalScreen(title: 'Broadcast')),
       ),
       _AdminDashboardMenuItem(
         icon: Icons.support_agent_rounded,
         title: 'Support',
-        subtitle: 'Membutuhkan approval production',
+        subtitle: 'Memerlukan persetujuan admin utama',
         open: (context) => _openDemo(
           context,
           const _AdminProductionApprovalScreen(title: 'Support'),
@@ -269,7 +269,7 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
     _AdminDashboardMenuItem(
       icon: Icons.pie_chart_rounded,
       title: 'Profit Sharing',
-      subtitle: 'Membutuhkan approval production',
+      subtitle: 'Memerlukan persetujuan admin utama',
       open: (context) => _openDemo(
         context,
         const _AdminProductionApprovalScreen(title: 'Profit Sharing'),
@@ -278,7 +278,7 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
     _AdminDashboardMenuItem(
       icon: Icons.tune_rounded,
       title: 'Commission Settings',
-      subtitle: 'Membutuhkan approval production',
+      subtitle: 'Memerlukan persetujuan admin utama',
       open: (context) => _openDemo(
         context,
         const _AdminProductionApprovalScreen(title: 'Commission Settings'),
@@ -287,7 +287,7 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
     _AdminDashboardMenuItem(
       icon: Icons.workspace_premium_rounded,
       title: 'Membership Package Settings',
-      subtitle: 'Membutuhkan approval production',
+      subtitle: 'Memerlukan persetujuan admin utama',
       open: (context) => _openDemo(
         context,
         const _AdminProductionApprovalScreen(
@@ -298,7 +298,7 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
     _AdminDashboardMenuItem(
       icon: Icons.admin_panel_settings_rounded,
       title: 'Admin & Role Management',
-      subtitle: 'Membutuhkan approval production',
+      subtitle: 'Memerlukan persetujuan admin utama',
       open: (context) => _openDemo(
         context,
         const _AdminProductionApprovalScreen(title: 'Admin & Role Management'),
@@ -307,7 +307,7 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
     _AdminDashboardMenuItem(
       icon: Icons.fact_check_rounded,
       title: 'Audit Log',
-      subtitle: 'Membutuhkan approval production',
+      subtitle: 'Memerlukan persetujuan admin utama',
       open: (context) => _openDemo(
         context,
         const _AdminProductionApprovalScreen(title: 'Audit Log'),
@@ -316,7 +316,7 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
     _AdminDashboardMenuItem(
       icon: Icons.settings_rounded,
       title: 'App Settings',
-      subtitle: 'Membutuhkan approval production',
+      subtitle: 'Memerlukan persetujuan admin utama',
       open: (context) => _openDemo(
         context,
         const _AdminProductionApprovalScreen(title: 'App Settings'),
@@ -335,8 +335,8 @@ class _AdminApiStatusTile extends ConsumerWidget {
     if (state.isLoading) {
       return const _StatusSurface(
         icon: Icons.sync_rounded,
-        title: 'Memuat Admin API',
-        subtitle: 'Mengecek endpoint admin backend...',
+        title: 'Memuat data admin',
+        subtitle: 'Mengecek layanan admin TapGo...',
       );
     }
 
@@ -352,7 +352,7 @@ class _AdminApiStatusTile extends ConsumerWidget {
     final data = state.value!;
     return _StatusSurface(
       icon: Icons.cloud_done_rounded,
-      title: 'Live Data',
+      title: 'Data Aktif',
       subtitle:
           '${data.members.length} member, ${data.invoices.length} invoice, ${data.withdrawals.length} withdrawal.',
     );
@@ -411,11 +411,11 @@ class _AdminProductionApprovalScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return _DemoScaffold(
       title: title,
-      subtitle: 'Membutuhkan approval production',
+      subtitle: 'Memerlukan persetujuan admin utama',
       child: const _StatusSurface(
         icon: Icons.lock_clock_rounded,
-        title: 'Fitur ini membutuhkan approval production.',
-        subtitle: 'Endpoint produksi belum tersedia atau belum diaktifkan.',
+        title: 'Fitur ini memerlukan persetujuan admin utama.',
+        subtitle: 'Layanan belum aktif untuk akun ini.',
       ),
     );
   }
@@ -432,7 +432,7 @@ class AdminBusinessOverviewScreen extends ConsumerWidget {
     return _DemoScaffold(
       title: 'Business Overview',
       subtitle: adminSnapshot.hasValue
-          ? 'Ringkasan real dari backend production'
+          ? 'Ringkasan data TapGo'
           : 'Ringkasan bisnis TapGo',
       child: Column(
         children: [
@@ -440,7 +440,7 @@ class AdminBusinessOverviewScreen extends ConsumerWidget {
             const _StatusSurface(
               icon: Icons.sync_rounded,
               title: 'Memuat Business Overview',
-              subtitle: 'Mengambil ringkasan bisnis dari backend...',
+              subtitle: 'Mengambil ringkasan bisnis TapGo...',
             )
           else if (adminSnapshot.hasError)
             _RetryStatusSurface(
@@ -1208,7 +1208,7 @@ class _AdminMemberRequestScreenState
   Widget build(BuildContext context) {
     return _DemoScaffold(
       title: 'Approve Member',
-      subtitle: 'Pengajuan upgrade membership real dari backend',
+      subtitle: 'Pengajuan upgrade membership',
       child: FutureBuilder<List<Map<String, dynamic>>>(
         future: _future,
         builder: (context, snapshot) {
@@ -1377,7 +1377,7 @@ class _AdminReportScreenState extends State<_AdminReportScreen> {
   Widget build(BuildContext context) {
     return _DemoScaffold(
       title: widget.title,
-      subtitle: 'Laporan real dari backend',
+      subtitle: 'Laporan transaksi TapGo',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1390,7 +1390,7 @@ class _AdminReportScreenState extends State<_AdminReportScreen> {
                 return const _StatusSurface(
                   icon: Icons.sync_rounded,
                   title: 'Memuat laporan',
-                  subtitle: 'Mengambil data backend...',
+                  subtitle: 'Mengambil data laporan...',
                 );
               }
               if (snapshot.hasError) {
@@ -1411,8 +1411,7 @@ class _AdminReportScreenState extends State<_AdminReportScreen> {
                 return const _EmptyState(
                   icon: Icons.assessment_rounded,
                   title: 'Belum ada data laporan',
-                  subtitle:
-                      'Transaksi akan muncul setelah tercatat di backend.',
+                  subtitle: 'Transaksi akan muncul setelah tercatat.',
                 );
               }
               return Column(
@@ -1537,7 +1536,7 @@ class _AdminReportScreenState extends State<_AdminReportScreen> {
           ),
           const SizedBox(height: 6),
           const Text(
-            'CSV tersedia dari endpoint backend .csv dengan filter yang sama.',
+            'CSV tersedia dengan filter laporan yang sama.',
             textAlign: TextAlign.center,
             style: TextStyle(
                 color: Color(0xFF64748B), fontWeight: FontWeight.w700),

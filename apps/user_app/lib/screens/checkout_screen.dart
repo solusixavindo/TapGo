@@ -77,7 +77,7 @@ class CheckoutScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Preview WhatsApp',
+              'Pratinjau WhatsApp',
               style: TextStyle(
                 color: Color(0xFF0A2A43),
                 fontSize: 20,

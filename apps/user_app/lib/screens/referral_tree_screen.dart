@@ -62,7 +62,7 @@ class _ReferralTreeScreenState extends ConsumerState<ReferralTreeScreen> {
     return _DemoScaffold(
       title: 'Referral Tree',
       subtitle: production.hasValue
-          ? 'Jaringan unilevel dari backend'
+          ? 'Jaringan unilevel TapGo'
           : 'Jaringan unilevel TapGo 10 level',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

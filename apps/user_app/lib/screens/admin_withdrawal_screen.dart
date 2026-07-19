@@ -46,7 +46,7 @@ class _AdminWithdrawalScreenState extends ConsumerState<AdminWithdrawalScreen> {
             const _StatusSurface(
               icon: Icons.sync_rounded,
               title: 'Memuat withdrawal',
-              subtitle: 'Mengambil daftar withdrawal backend...',
+              subtitle: 'Mengambil daftar withdrawal...',
             )
           else if (withdrawals.isEmpty)
             const _StatusSurface(

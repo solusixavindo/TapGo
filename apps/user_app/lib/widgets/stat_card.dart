@@ -326,7 +326,7 @@ class RewardScreen extends ConsumerWidget {
         .toList(growable: false);
     return _DemoScaffold(
       title: 'Reward',
-      subtitle: 'Reward real dari database',
+      subtitle: 'Reward dari aktivitas TapGo',
       child: Column(
         children: [
           _ProductionStatusTile(state: production),

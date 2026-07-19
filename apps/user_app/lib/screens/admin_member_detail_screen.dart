@@ -78,9 +78,9 @@ class AdminMemberDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             _DemoDocumentPreview(
-              title: 'Preview KTP',
+              title: 'Pratinjau KTP',
               imagePath: member.ktpImagePath,
-              emptyLabel: 'Belum ada preview KTP',
+              emptyLabel: 'Belum ada pratinjau KTP',
             ),
           ],
           _DemoMenuTile(

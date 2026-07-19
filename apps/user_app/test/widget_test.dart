@@ -241,13 +241,13 @@ void main() {
 
     await tester.tap(find.text('Kirim Notifikasi WhatsApp'));
     await tester.pumpAndSettle();
-    expect(find.text('Preview WhatsApp'), findsOneWidget);
+    expect(find.text('Pratinjau WhatsApp'), findsOneWidget);
     await tester.tapAt(const Offset(20, 20));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Bayar Sekarang'));
     await tester.pumpAndSettle();
-    expect(find.text('Payment Sandbox'), findsOneWidget);
+    expect(find.text('Pembayaran'), findsOneWidget);
     await tester.ensureVisible(find.text('Bayar'));
     await tester.tap(find.text('Bayar'));
     await tester.pumpAndSettle();

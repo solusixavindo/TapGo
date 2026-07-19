@@ -28,9 +28,8 @@ class _AdminMemberListScreenState extends ConsumerState<AdminMemberListScreen> {
         const <DemoAdminMember>[];
     return _DemoScaffold(
       title: 'Member Management',
-      subtitle: adminSnapshot.hasValue
-          ? 'Live Data member backend'
-          : 'Data member TapGo',
+      subtitle:
+          adminSnapshot.hasValue ? 'Data member TapGo' : 'Data member TapGo',
       child: FutureBuilder<List<DemoAdminMember>>(
         future: _registeredUsersFuture,
         builder: (context, snapshot) {
@@ -41,9 +40,9 @@ class _AdminMemberListScreenState extends ConsumerState<AdminMemberListScreen> {
               const _SearchBox(hint: 'Cari member, sponsor, atau paket...'),
               const SizedBox(height: 14),
               if (adminSnapshot.isLoading) ...[
-                const _AdminListSectionLabel('Memuat Admin API...'),
+                const _AdminListSectionLabel('Memuat data admin...'),
               ] else if (apiMembers.isNotEmpty) ...[
-                const _AdminListSectionLabel('Backend Members'),
+                const _AdminListSectionLabel('Member TapGo'),
                 ...apiMembers.map((member) => _AdminMemberTile(member: member)),
                 const SizedBox(height: 10),
               ],

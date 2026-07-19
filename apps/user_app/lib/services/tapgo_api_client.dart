@@ -597,7 +597,7 @@ class _TapGoDeviceContextStore {
 
   static const _deviceIdKey = 'tapgo.device_id.v1';
   static const _deviceFingerprintKey = 'tapgo.device_fingerprint.v1';
-  static const _appVersion = '1.0.1+2';
+  static const _appVersion = '1.0.3+4';
 
   static _TapGoDeviceContext fallbackContext() => _TapGoDeviceContext(
         deviceId: 'tapgo-session-${DateTime.now().millisecondsSinceEpoch}',

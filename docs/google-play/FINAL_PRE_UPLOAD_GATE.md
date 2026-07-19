@@ -2,7 +2,7 @@
 
 Tanggal: 15 Juli 2026  
 Branch: `release/google-play-readiness`  
-Version: `1.0.0-alpha+1`
+Version: `1.0.3+4`
 
 ## Final Decision
 
@@ -21,7 +21,7 @@ Dengan catatan manual:
 |---|---:|---|
 | Branch release benar | PASS | `release/google-play-readiness`. |
 | Package ID final | PASS | `id.tapgolion.tapgo`. |
-| Version | PASS | `1.0.0-alpha+1`; setelah AAB ini diupload, build berikutnya wajib `versionCode=2`. |
+| Version | PASS | `1.0.3+4`; setelah AAB ini diupload, build berikutnya wajib `versionCode=5`. |
 | compile/target/min SDK | PASS | `compileSdk=36`, `targetSdk=35`, `minSdk=24` via Flutter default. |
 | Release signing | PASS | Build release sukses; `jarsigner` result: `jar verified`; release signing fail-closed jika `key.properties` tidak ada. |
 | AAB build | PASS | `apps/user_app/build/app/outputs/bundle/release/app-release.aab`. |
@@ -38,8 +38,8 @@ Dengan catatan manual:
 | Account deletion is not logout-only | PASS | Request is persisted through backend `accountDeletionRequest`. |
 | Retention/anonymization docs | PASS | `ACCOUNT_DELETION_COMPLIANCE.md`, privacy policy, legal endpoint explain retained transaction/legal data. |
 | Account deletion test | PASS | Widget test covers menu, dialog, cancel path, and no immediate success without confirmation. |
-| Public delete URL source | PASS | `apps/landing-page/src/app/hapus-akun/page.tsx`. |
-| Public delete URL live | MANUAL ACTION REQUIRED | Needs landing page deploy; final URL: `https://tapgolion.id/hapus-akun`. |
+| Public delete URL source | PASS | `apps/landing-page/src/app/delete-account/page.tsx`; alias `hapus-akun` juga tersedia di source. |
+| Public delete URL live | PASS | Live URL: `https://tapgolion.id/delete-account`. |
 | Privacy Policy URL source | PASS | `apps/landing-page/src/app/privacy-policy/page.tsx`. |
 | Terms URL source | PASS | `apps/landing-page/src/app/terms-and-conditions/page.tsx`. |
 | Refund Policy URL source | PASS | `apps/landing-page/src/app/refund-policy/page.tsx`. |
@@ -54,7 +54,7 @@ Dengan catatan manual:
 | Privacy Policy | `https://tapgolion.id/privacy-policy` | PASS | MANUAL VERIFY LIVE |
 | Terms & Conditions | `https://tapgolion.id/terms-and-conditions` | PASS | MANUAL VERIFY LIVE |
 | Refund Policy | `https://tapgolion.id/refund-policy` | PASS | MANUAL VERIFY LIVE |
-| Account Deletion | `https://tapgolion.id/hapus-akun` | PASS | NEEDS DEPLOY IF NOT LIVE |
+| Account Deletion | `https://tapgolion.id/delete-account` | PASS | VERIFIED LIVE |
 | Contact/Support | `https://tapgolion.id/contact` | PASS | MANUAL VERIFY LIVE |
 
 ## Reviewer Account Flow
@@ -98,8 +98,8 @@ Signature note:
 
 ## Remaining Manual Actions
 
-1. Deploy landing page so `https://tapgolion.id/hapus-akun` is live.
+1. Optional: deploy landing page alias so `https://tapgolion.id/hapus-akun` is also live.
 2. Verify all public compliance URLs from a non-authenticated browser.
 3. Add reviewer access credentials in Play Console only.
 4. Upload AAB to Internal Testing.
-5. After this AAB is uploaded, increment the next build to `versionCode=2`.
+5. After this AAB is uploaded, increment the next build to `versionCode=5`.

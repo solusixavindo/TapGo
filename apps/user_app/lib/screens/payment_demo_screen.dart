@@ -30,8 +30,8 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
   @override
   Widget build(BuildContext context) {
     return _DemoScaffold(
-      title: 'Payment Sandbox',
-      subtitle: 'DOKU checkout / simulator pembayaran',
+      title: 'Pembayaran',
+      subtitle: 'Pilih metode pembayaran yang tersedia',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -119,7 +119,7 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
           SnackBar(
             content: Text(
               _isPaymentSimulatorEnabled
-                  ? 'DOKU checkout belum siap. Simulator development digunakan. $error'
+                  ? 'Pembayaran belum dapat diproses melalui gateway. Silakan coba kembali.'
                   : 'Pembayaran belum dapat diproses. Silakan ulangi proses pembayaran.',
             ),
           ),
@@ -164,7 +164,7 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Status Pembayaran'),
         content: const Text(
-          'Selesaikan pembayaran di halaman DOKU, lalu cek status. Untuk UAT lokal tanpa callback publik, gunakan simulator development.',
+          'Selesaikan pembayaran di halaman DOKU, lalu cek status pembayaran Anda.',
         ),
         actions: [
           TextButton(
@@ -187,7 +187,7 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
                 Navigator.of(context).pop();
                 _completePayment();
               },
-              child: const Text('Simulator Dev'),
+              child: const Text('Konfirmasi Pembayaran'),
             ),
         ],
       ),

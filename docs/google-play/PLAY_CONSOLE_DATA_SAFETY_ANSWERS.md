@@ -41,6 +41,5 @@ Data tidak dijual dan tidak digunakan untuk iklan pihak ketiga.
 ## Security Practices
 
 - Data encrypted in transit: Yes, HTTPS.
-- User can request data deletion: Yes, melalui `https://tapgolion.id/hapus-akun` atau menu aplikasi.
+- User can request data deletion: Yes, melalui `https://tapgolion.id/delete-account` atau menu aplikasi.
 - Data minimization: Use only for account, membership, payment, wallet, support, and security.
-

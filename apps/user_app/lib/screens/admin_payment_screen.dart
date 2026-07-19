@@ -37,7 +37,7 @@ class AdminPaymentScreen extends ConsumerWidget {
             const _StatusSurface(
               icon: Icons.sync_rounded,
               title: 'Memuat invoice',
-              subtitle: 'Mengambil data payment backend...',
+              subtitle: 'Mengambil data pembayaran...',
             )
           else if (invoices.isEmpty)
             const _StatusSurface(

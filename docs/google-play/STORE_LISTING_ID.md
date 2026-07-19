@@ -10,7 +10,7 @@ Category recommendation: Business / Productivity, dengan deklarasi financial fea
 Contact email: support@tapgolion.id  
 Website: https://tapgolion.id  
 Privacy Policy URL: https://tapgolion.id/privacy-policy  
-Delete Account URL: https://tapgolion.id/hapus-akun
+Delete Account URL: https://tapgolion.id/delete-account
 
 ## Short Description
 
@@ -46,4 +46,3 @@ https://tapgolion.id
 ## Catatan Reviewer
 
 TapGo menggunakan login akun. Jika akses reviewer dibutuhkan, gunakan akun reviewer yang disediakan owner melalui Play Console App Access, bukan melalui repository.
-

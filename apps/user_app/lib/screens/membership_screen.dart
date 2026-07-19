@@ -141,7 +141,8 @@ class _SuperMenuSearchBar extends StatelessWidget {
       color: Colors.white,
       borderRadius: BorderRadius.circular(24),
       child: InkWell(
-        onTap: () => _showInfoSnack(context, 'Pencarian segera tersedia'),
+        onTap: () =>
+            _showInfoSnack(context, 'Pencarian belum dapat digunakan saat ini'),
         borderRadius: BorderRadius.circular(24),
         child: Container(
           height: 56,
@@ -221,11 +222,11 @@ class FeatureDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return _DemoScaffold(
       title: title,
-      subtitle: 'Kesiapan UAT',
+      subtitle: 'Informasi layanan',
       child: _EmptyState(
         icon: Icons.rocket_launch_rounded,
-        title: '$title siap dikembangkan',
-        subtitle: 'Fitur ini siap dikembangkan untuk versi production.',
+        title: '$title belum dapat dibuka saat ini',
+        subtitle: 'Silakan gunakan menu TapGo lain yang sudah tersedia.',
       ),
     );
   }
@@ -381,7 +382,7 @@ class MembershipScreen extends ConsumerWidget {
           _DemoDocumentPreview(
             title: 'KTP',
             imagePath: session.ktpImagePath,
-            emptyLabel: 'Belum ada preview KTP',
+            emptyLabel: 'Belum ada pratinjau KTP',
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
@@ -452,7 +453,7 @@ class MembershipInvoiceScreen extends ConsumerWidget {
             return const _StatusSurface(
               icon: Icons.sync_rounded,
               title: 'Memuat invoice',
-              subtitle: 'Mengambil detail invoice dari backend...',
+              subtitle: 'Mengambil detail invoice...',
             );
           }
           if (snapshot.hasError) {
@@ -649,9 +650,8 @@ class ReferralDashboardScreen extends ConsumerWidget {
     final session = ref.watch(_demoSessionProvider);
     return _DemoScaffold(
       title: 'Referral Dashboard',
-      subtitle: production.hasValue
-          ? 'Data referral backend'
-          : 'Referral member TapGo',
+      subtitle:
+          production.hasValue ? 'Data referral TapGo' : 'Referral member TapGo',
       child: Column(
         children: [
           _ProductionStatusTile(state: production),
@@ -714,7 +714,7 @@ class CommissionHistoryScreen extends ConsumerWidget {
         const <WalletTransactionModel>[];
     return _DemoScaffold(
       title: 'Riwayat Komisi',
-      subtitle: 'Komisi real dari database',
+      subtitle: 'Komisi dari transaksi TapGo',
       child: Column(
         children: [
           _ProductionStatusTile(state: production),
@@ -723,7 +723,7 @@ class CommissionHistoryScreen extends ConsumerWidget {
             const _StatusSurface(
               icon: Icons.sync_rounded,
               title: 'Memuat komisi',
-              subtitle: 'Mengambil riwayat komisi dari backend...',
+              subtitle: 'Mengambil riwayat komisi...',
             )
           else if (production.hasError)
             _RetryStatusSurface(
@@ -763,7 +763,7 @@ class DemoWalletScreen extends ConsumerWidget {
     return _DemoScaffold(
       title: 'Wallet',
       subtitle: production.hasValue
-          ? 'Ledger bonus dan saldo backend'
+          ? 'Ledger bonus dan saldo TapGo'
           : 'Saldo dan transaksi TapGo',
       child: Column(
         children: [
@@ -793,7 +793,7 @@ class DemoWalletScreen extends ConsumerWidget {
             const _EmptyState(
               icon: Icons.receipt_long_rounded,
               title: 'Belum ada transaksi',
-              subtitle: 'Transaksi wallet dari backend akan muncul di sini.',
+              subtitle: 'Transaksi wallet akan muncul di sini.',
             ),
           if (_isTapGoDevelopmentBuild && !production.hasValue) ...[
             const _WalletLedgerItem(
@@ -817,7 +817,7 @@ class DemoWalletScreen extends ConsumerWidget {
             const _WalletLedgerItem(
               title: 'Profit Sharing',
               amount: 'Menunggu',
-              note: 'Placeholder bonus bulanan',
+              note: 'Menunggu periode distribusi',
               color: Color(0xFF697386),
             ),
           ],
@@ -832,7 +832,7 @@ class DemoWalletScreen extends ConsumerWidget {
                   return const _StatusSurface(
                     icon: Icons.sync_rounded,
                     title: 'Memuat withdraw',
-                    subtitle: 'Mengambil riwayat withdrawal backend...',
+                    subtitle: 'Mengambil riwayat withdrawal...',
                   );
                 }
                 if (withdrawals.isEmpty) {
@@ -846,7 +846,7 @@ class DemoWalletScreen extends ConsumerWidget {
                       title: 'Withdraw $status',
                       amount: '- ${formatRupiah(_intFrom(item['amount']))}',
                       note:
-                          '${item['bankName'] ?? 'Bank'} • ${_dateLabel(item['requestedAt']) ?? 'Backend'}',
+                          '${item['bankName'] ?? 'Bank'} • ${_dateLabel(item['requestedAt']) ?? 'Tanggal belum tersedia'}',
                       color: switch (status) {
                         'Rejected' => const Color(0xFFE51E3E),
                         'Paid' => const Color(0xFF00A86B),
@@ -1274,7 +1274,7 @@ class _BankAccountScreenState extends ConsumerState<BankAccountScreen> {
               const _StatusSurface(
                 icon: Icons.sync_rounded,
                 title: 'Memuat rekening',
-                subtitle: 'Mengambil data rekening dari backend...',
+                subtitle: 'Mengambil data rekening...',
               ),
             _BankDropdownField(
               controller: _bankController,

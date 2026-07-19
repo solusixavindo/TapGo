@@ -38,7 +38,7 @@ Do not commit or upload to Git:
 5. Upload:
    `apps/user_app/build/app/outputs/bundle/release/app-release.aab`
 6. Add release notes from:
-   `docs/google-play/RELEASE_NOTES_v1.0.0-alpha.md`
+   `docs/google-play/RELEASE_NOTES_v1.0.3.md`
 7. Review warnings.
 8. Do not ignore financial/account/policy warnings.
 9. Save and submit for Internal Testing review.
@@ -46,9 +46,9 @@ Do not commit or upload to Git:
 ## Post-Upload
 
 1. Record uploaded version:
-   - versionName: `1.0.0-alpha`
-   - versionCode: `1`
-2. Next AAB after this upload must use `versionCode=2`.
+   - versionName: `1.0.3`
+   - versionCode: `4`
+2. Next AAB after this upload must use `versionCode=5`.
 3. Install as tester and run:
    - fresh install
    - login/register
@@ -70,4 +70,3 @@ If the internal testing release has a blocker:
 4. Increment versionCode.
 5. Rebuild AAB.
 6. Re-run `FINAL_PRE_UPLOAD_GATE`.
-

@@ -319,7 +319,7 @@ class _MembershipRegistrationScreenState
       }
       final packageId = packageData?['id']?.toString();
       if (packageId == null || packageId.isEmpty) {
-        throw StateError('Paket backend tidak ditemukan.');
+        throw StateError('Paket tidak ditemukan.');
       }
 
       final order = await _apiClient.createMembershipOrder(
@@ -363,7 +363,7 @@ class _MembershipRegistrationScreenState
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Backend payment belum siap. Simulator development digunakan. ${responseData?['message'] ?? error.message}',
+              'Pembayaran belum dapat disiapkan. Silakan ulangi beberapa saat lagi. ${responseData?['message'] ?? error.message}',
             ),
           ),
         );
@@ -372,9 +372,9 @@ class _MembershipRegistrationScreenState
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text(
-              'Backend payment belum siap. Simulator development digunakan. $error',
+              'Pembayaran belum dapat disiapkan. Silakan ulangi beberapa saat lagi.',
             ),
           ),
         );

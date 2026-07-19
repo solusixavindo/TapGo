@@ -8,7 +8,7 @@ URL: `https://tapgolion.id/privacy-policy`
 
 ## Account Deletion
 
-URL: `https://tapgolion.id/hapus-akun`  
+URL: `https://tapgolion.id/delete-account`  
 In-app path: `Akun` -> `Hapus Akun`
 
 ## App Access
@@ -51,4 +51,3 @@ No public UGC/social feed found in current user app scope. User-submitted suppor
 ## Permission Declaration
 
 Camera/media permissions are used for KTP/selfie/profile document upload. No location, SMS, contacts, phone state, background location, exact alarm, or foreground service permission found in manifest.
-

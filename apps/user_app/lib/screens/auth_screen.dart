@@ -125,7 +125,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       return 'Kode referral tidak bisa memakai kode sendiri.';
     }
     if (_isNetworkFailure(error)) {
-      return 'Server TapGo belum dapat dihubungi. Pastikan server UAT aktif.';
+      return 'Server TapGo belum dapat dihubungi. Silakan coba beberapa saat lagi.';
     }
     return message ??
         (isRegister
@@ -413,7 +413,7 @@ class _ServerConfigurationDialogState
     if (!_isValidServerUrl(value)) {
       setState(() {
         _isSuccess = false;
-        _statusMessage = 'API Base URL tidak valid.';
+        _statusMessage = 'Alamat server TapGo tidak valid.';
       });
       return;
     }
@@ -442,7 +442,7 @@ class _ServerConfigurationDialogState
     }
     setState(() {
       _isSuccess = true;
-      _statusMessage = 'Server configuration dikembalikan ke default.';
+      _statusMessage = 'Pengaturan server dikembalikan ke default.';
       _urlController.text = rootUrl;
     });
   }
@@ -452,7 +452,7 @@ class _ServerConfigurationDialogState
     if (!_isValidServerUrl(value)) {
       setState(() {
         _isSuccess = false;
-        _statusMessage = 'API Base URL tidak valid.';
+        _statusMessage = 'Alamat server TapGo tidak valid.';
       });
       return;
     }
@@ -468,7 +468,7 @@ class _ServerConfigurationDialogState
       setState(() {
         _isSuccess = true;
         _statusMessage =
-            'Connection OK\nURL: ${result.url}\nStatus: ${result.statusCode}\nMessage: ${result.message}';
+            'Koneksi berhasil\nURL: ${result.url}\nStatus: ${result.statusCode}\nPesan: ${result.message}';
       });
     } on DioException catch (error) {
       if (!mounted) {
@@ -513,7 +513,7 @@ class _ServerConfigurationDialogState
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Server Configuration'),
+      title: const Text('Pengaturan Server TapGo'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -523,14 +523,14 @@ class _ServerConfigurationDialogState
               controller: _urlController,
               keyboardType: TextInputType.url,
               decoration: const InputDecoration(
-                labelText: 'API Base URL',
+                labelText: 'Alamat Server TapGo',
                 hintText: 'https://api.tapgolion.id',
                 border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 10),
             Text(
-              'Boleh isi root URL tunnel atau URL lengkap sampai /api/v1.',
+              'Masukkan alamat server resmi TapGo.',
               style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
             ),
             if (_statusMessage != null) ...[

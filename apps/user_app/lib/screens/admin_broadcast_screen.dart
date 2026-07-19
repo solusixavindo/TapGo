@@ -26,7 +26,7 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
   Widget build(BuildContext context) {
     return _DemoScaffold(
       title: 'Broadcast',
-      subtitle: 'Preview pengumuman dan WhatsApp broadcast',
+      subtitle: 'Pratinjau pengumuman dan WhatsApp broadcast',
       child: Column(
         children: [
           _InputField(
@@ -63,12 +63,12 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
               onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Broadcast tersimpan sebagai preview.'),
+                    content: Text('Broadcast tersimpan sebagai pratinjau.'),
                   ),
                 );
               },
               icon: const Icon(Icons.send_rounded),
-              label: const Text('Preview Kirim Broadcast'),
+              label: const Text('Pratinjau Kirim Broadcast'),
             ),
           ),
         ],
@@ -96,7 +96,7 @@ class _BroadcastPreview extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Preview WhatsApp / Push Notification',
+            'Pratinjau WhatsApp / Push Notification',
             style: TextStyle(
               color: Color(0xFF00A86B),
               fontWeight: FontWeight.w900,

@@ -43,7 +43,7 @@ Tanggal: 15 Juli 2026
 - [ ] Privacy Policy opens in app.
 - [ ] Terms & Conditions opens in app.
 - [ ] Hapus Akun opens in app.
-- [ ] Public delete-account page live: `https://tapgolion.id/hapus-akun`.
+- [ ] Public delete-account page live: `https://tapgolion.id/delete-account`.
 - [ ] Support email visible: `support@tapgolion.id`.
 
 ## Visual QA
@@ -54,4 +54,3 @@ Tanggal: 15 Juli 2026
 - [ ] No placeholder/developer text visible.
 - [ ] No test password/token/API secret shown.
 - [ ] No screenshot/listing asset contains private account, KTP, or full bank account data.
-

@@ -271,8 +271,8 @@ class _ProductionStatusTile extends ConsumerWidget {
     if (state.isLoading) {
       return const _StatusSurface(
         icon: Icons.sync_rounded,
-        title: 'Memuat data backend',
-        subtitle: 'Menyiapkan data production TapGo...',
+        title: 'Memuat data TapGo',
+        subtitle: 'Menyiapkan data TapGo...',
       );
     }
 
@@ -287,7 +287,7 @@ class _ProductionStatusTile extends ConsumerWidget {
 
     return const _StatusSurface(
       icon: Icons.cloud_done_rounded,
-      title: 'Data backend aktif',
+      title: 'Data TapGo aktif',
       subtitle: 'Membership, referral, dan wallet tersinkron.',
     );
   }

@@ -8,7 +8,7 @@ TapGo menyediakan jalur pengajuan penghapusan akun melalui:
 
 - In-app: `Akun` -> `Hapus Akun`
 - Web publik: `https://tapgolion.id/delete-account`
-- Alias Bahasa Indonesia: `https://tapgolion.id/hapus-akun`
+- Alias Bahasa Indonesia: `https://tapgolion.id/hapus-akun` tersedia di source landing page dan akan aktif setelah deploy website berikutnya.
 - Support: `support@tapgolion.id`
 
 ## In-App Flow
@@ -47,8 +47,7 @@ Halaman `apps/landing-page/src/app/delete-account/page.tsx` sudah tersedia. Rout
 
 ## Play Console Answer
 
-Gunakan URL: `https://tapgolion.id/hapus-akun`  
-Alternatif: `https://tapgolion.id/delete-account`
+Gunakan URL live Play Console: `https://tapgolion.id/delete-account`  
+Alternatif source route setelah deploy berikutnya: `https://tapgolion.id/hapus-akun`
 
 Estimasi proses: 7-14 hari kerja setelah verifikasi.
-

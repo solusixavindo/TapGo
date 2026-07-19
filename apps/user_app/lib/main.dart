@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -43,6 +44,7 @@ part 'widgets/invoice_card.dart';
 part 'widgets/package_card.dart';
 part 'widgets/referral_tree_node_widget.dart';
 part 'widgets/stat_card.dart';
+part 'widgets/tapgo_service_illustration.dart';
 part 'widgets/tapgo_button.dart';
 
 const _brandBlue = Color(0xFF0569E8);

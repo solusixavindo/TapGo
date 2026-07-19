@@ -196,7 +196,7 @@ class _ProductionBindingBanner extends ConsumerWidget {
 
     return const _InlineStatePill(
       icon: Icons.cloud_done_rounded,
-      label: 'Data backend tersinkron',
+      label: 'Data TapGo tersinkron',
     );
   }
 }
@@ -438,7 +438,10 @@ class _TopBar extends ConsumerWidget {
             icon: Icons.notifications_none_rounded,
             tooltip: 'Notifikasi',
             badge: '2',
-            onTap: () => _showInfoSnack(context, 'Notifikasi segera tersedia'),
+            onTap: () => _showInfoSnack(
+              context,
+              'Notifikasi belum dapat dibuka saat ini',
+            ),
           ),
           const SizedBox(width: 8),
           _HeaderIconButton(
@@ -677,7 +680,7 @@ class _SearchPulseIcon extends StatelessWidget {
 
 void _showSoon(BuildContext context) {
   ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Fitur segera tersedia')),
+    const SnackBar(content: Text('Layanan belum dapat dibuka saat ini')),
   );
 }
 
@@ -743,7 +746,10 @@ void _showSearchMenu(BuildContext context) {
                     borderRadius: BorderRadius.circular(18),
                     onTap: () {
                       Navigator.of(context).pop();
-                      _showInfoSnack(context, '${item.label} segera tersedia');
+                      _showInfoSnack(
+                        context,
+                        '${item.label} belum dapat dibuka saat ini',
+                      );
                     },
                     child: _SearchServiceTile(item: item),
                   );
@@ -1328,14 +1334,18 @@ class _WalletCard extends ConsumerWidget {
                   ),
                   _WalletAction(
                     icon: Icons.add_rounded,
-                    onTap: () =>
-                        _showInfoSnack(context, 'Top up segera tersedia'),
+                    onTap: () => _showInfoSnack(
+                      context,
+                      'Top up belum dapat diproses saat ini',
+                    ),
                   ),
                   const SizedBox(width: 12),
                   _WalletAction(
                     icon: Icons.near_me_rounded,
-                    onTap: () =>
-                        _showInfoSnack(context, 'Transfer segera tersedia'),
+                    onTap: () => _showInfoSnack(
+                      context,
+                      'Transfer belum dapat diproses saat ini',
+                    ),
                   ),
                 ],
               ),
@@ -1606,8 +1616,8 @@ class _ServiceGrid extends StatelessWidget {
         'TapGo Food', Icons.restaurant_menu_rounded, Color(0xFFE85D04), null),
     _ServiceItem(
         'TapGo Mart', Icons.storefront_rounded, Color(0xFF0088A6), null),
-    _ServiceItem('TapGo Jasa', Icons.home_repair_service_rounded,
-        Color(0xFFD97706), null),
+    _ServiceItem(
+        'Jasa', Icons.home_repair_service_rounded, Color(0xFFD97706), null),
     _ServiceItem('Pulsa', Icons.phone_iphone_rounded, Color(0xFF1486B8), null),
     _ServiceItem('TapGo Bantu', Icons.volunteer_activism_rounded,
         Color(0xFF0569E8), 'Baru'),
@@ -2060,7 +2070,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
             const _StatusSurface(
               icon: Icons.sync_rounded,
               title: 'Memuat aktivitas',
-              subtitle: 'Mengambil histori transaksi dari backend...',
+              subtitle: 'Mengambil histori transaksi TapGo...',
             )
           else if (production.hasError)
             _RetryStatusSurface(
@@ -2402,7 +2412,7 @@ class SettingsScreen extends ConsumerWidget {
           const _SettingsTile(
             icon: Icons.verified_rounded,
             title: 'Versi aplikasi',
-            subtitle: 'UAT Production',
+            subtitle: '1.0.3',
           ),
           _SettingsTile(
             icon: Icons.logout_rounded,
@@ -2717,30 +2727,6 @@ class _ServiceIconStyle {
   final Color background;
 }
 
-const _serviceIconAssets = {
-  'TapGo Ride': 'assets/icons/coride.png',
-  'TapGo Car': 'assets/icons/cocar.png',
-  'TapGo Food': 'assets/icons/cofood.png',
-  'TapGo Jasa': 'assets/icons/cojasa.png',
-  'TapGo Bantu': 'assets/icons/cobantu.png',
-  'TapGo Mart': 'assets/icons/tapgo_mart.png',
-  'Pulsa': 'assets/icons/pulsa.png',
-  'PPOB': 'assets/icons/ppob.png',
-  'BPJS': 'assets/icons/bpjs.png',
-  'Tagihan': 'assets/icons/tagihan.png',
-  'Lainnya': 'assets/icons/lainnya.png',
-  'Membership': 'assets/icons/membership.png',
-  'Referral': 'assets/icons/referral.png',
-  'Marketing Plan': 'assets/icons/marketing_plan.png',
-  'Reward': 'assets/icons/reward.png',
-  'Kelas Online': 'assets/icons/kelas_online.png',
-  'Webinar': 'assets/icons/webinar.png',
-  'Event': 'assets/icons/event.png',
-  'Support': 'assets/icons/support.png',
-};
-
-String? _serviceIconAssetFor(String label) => _serviceIconAssets[label];
-
 class _ServiceAssetIcon extends StatelessWidget {
   const _ServiceAssetIcon({
     required this.label,
@@ -2756,10 +2742,6 @@ class _ServiceAssetIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final asset = _serviceIconAssetFor(label);
-    if (asset == null) {
-      return _ServiceIcon3D(icon: icon, style: style, size: size);
-    }
     return Container(
       width: size,
       height: size,
@@ -2811,10 +2793,11 @@ class _ServiceAssetIcon extends StatelessWidget {
           ),
           Padding(
             padding: EdgeInsets.all(size * 0.03),
-            child: Image.asset(
-              asset,
-              fit: BoxFit.contain,
-              filterQuality: FilterQuality.high,
+            child: _TapGoServiceIllustration(
+              label: label,
+              fallbackIcon: icon,
+              fallbackStyle: style,
+              size: size,
             ),
           ),
         ],
@@ -2845,7 +2828,7 @@ _ServiceIconStyle _serviceIconStyle(String label) {
         secondary: Color(0xFF13C2C2),
         background: Color(0xFFE8FAFF),
       ),
-    'TapGo Jasa' => const _ServiceIconStyle(
+    'Jasa' || 'TapGo Jasa' || 'Toko & Jasa' => const _ServiceIconStyle(
         primary: Color(0xFF1565D8),
         secondary: Color(0xFF4D96FF),
         background: Color(0xFFEAF3FF),

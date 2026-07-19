@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" fill="none">
+  <defs>
+    <linearGradient id="blue" x1="22" y1="18" x2="74" y2="76" gradientUnits="userSpaceOnUse"><stop stop-color="#1E76FF"/><stop offset="1" stop-color="#17C8DC"/></linearGradient>
+    <linearGradient id="orange" x1="20" y1="18" x2="76" y2="78" gradientUnits="userSpaceOnUse"><stop stop-color="#FFB45F"/><stop offset="1" stop-color="#F97316"/></linearGradient>
+    <linearGradient id="purple" x1="20" y1="18" x2="76" y2="78" gradientUnits="userSpaceOnUse"><stop stop-color="#AE96FF"/><stop offset="1" stop-color="#7557F6"/></linearGradient>
+    <linearGradient id="gold" x1="24" y1="20" x2="72" y2="74" gradientUnits="userSpaceOnUse"><stop stop-color="#FFD66B"/><stop offset="1" stop-color="#F59E0B"/></linearGradient>
+    <linearGradient id="green" x1="20" y1="18" x2="76" y2="78" gradientUnits="userSpaceOnUse"><stop stop-color="#5DD9A5"/><stop offset="1" stop-color="#17B376"/></linearGradient>
+  </defs>
+  <ellipse cx="48" cy="82" rx="24" ry="5" fill="#061F38" opacity="0.12"/>
+  <g>
+    <rect x="26" y="18" width="44" height="58" rx="14" fill="url(#blue)"/>
+    <path d="M37 31h22M37 43h18M37 55h12" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    <path d="M34 67c7-4 21-4 28 0" stroke="#BFEFFF" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="63" cy="58" r="10" fill="#FFD66B"/>
+    <path d="M59 58l3 3 7-8" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M60 25l5-5v10" stroke="#FFD66B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
