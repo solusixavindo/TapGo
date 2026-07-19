@@ -911,7 +911,7 @@ class DemoWalletScreen extends ConsumerWidget {
             ref.read(_demoSessionProvider).userName);
     final formKey = GlobalKey<FormState>();
 
-    await showModalBottomSheet<void>(
+    await _showTapGoBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -1147,7 +1147,7 @@ class _BankDropdownField extends StatelessWidget {
     String current,
   ) {
     final searchController = TextEditingController();
-    return showModalBottomSheet<_BankOption>(
+    return _showTapGoBottomSheet<_BankOption>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -1505,7 +1505,7 @@ class _DeleteAccountRequestScreenState
   }
 
   Future<void> _submit() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await _showTapGoDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Konfirmasi hapus akun'),

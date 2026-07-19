@@ -33,7 +33,15 @@ class _TapGoDashboardState extends State<TapGoDashboard> {
       body: SafeArea(
         child: Stack(
           children: [
-            IndexedStack(index: _selectedIndex, children: _pages),
+            AnimatedSwitcher(
+              duration: _TapGoMotion.duration(context, _TapGoMotion.quick),
+              switchInCurve: _TapGoMotion.standardCurve,
+              switchOutCurve: _TapGoMotion.exitCurve,
+              child: KeyedSubtree(
+                key: ValueKey(_selectedIndex),
+                child: _pages[_selectedIndex],
+              ),
+            ),
             _BottomNav(
               selectedIndex: _selectedIndex,
               onTabSelected: _selectTab,
@@ -501,7 +509,7 @@ class _HeaderIconButton extends StatelessWidget {
   }
 }
 
-class _TapScale extends StatefulWidget {
+class _TapScale extends StatelessWidget {
   const _TapScale({
     required this.child,
     required this.onTap,
@@ -513,30 +521,12 @@ class _TapScale extends StatefulWidget {
   final BorderRadius borderRadius;
 
   @override
-  State<_TapScale> createState() => _TapScaleState();
-}
-
-class _TapScaleState extends State<_TapScale> {
-  bool _pressed = false;
-
-  @override
   Widget build(BuildContext context) {
-    return AnimatedScale(
-      scale: _pressed ? 0.96 : 1,
-      duration: const Duration(milliseconds: 110),
-      curve: Curves.easeOut,
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: widget.borderRadius,
-        child: InkWell(
-          borderRadius: widget.borderRadius,
-          onTap: widget.onTap,
-          onTapDown: (_) => setState(() => _pressed = true),
-          onTapCancel: () => setState(() => _pressed = false),
-          onTapUp: (_) => setState(() => _pressed = false),
-          child: widget.child,
-        ),
-      ),
+    return _TapGoPressable(
+      onTap: onTap,
+      borderRadius: borderRadius,
+      pressedScale: 0.96,
+      child: child,
     );
   }
 }
@@ -706,7 +696,7 @@ void _showSearchMenu(BuildContext context) {
     _ServiceItem('Reward', Icons.emoji_events_rounded, Color(0xFFF59E0B), null),
   ];
 
-  showModalBottomSheet<void>(
+  _showTapGoBottomSheet<void>(
     context: context,
     showDragHandle: true,
     backgroundColor: const Color(0xFFF4F8FB),
@@ -1883,8 +1873,10 @@ class _BottomNav extends StatelessWidget {
           right: 0,
           bottom: 42,
           child: Center(
-            child: GestureDetector(
+            child: _TapGoPressable(
               onTap: onCenterTap,
+              borderRadius: BorderRadius.circular(999),
+              pressedScale: 0.96,
               child: Container(
                 width: 72,
                 height: 72,
@@ -1933,9 +1925,10 @@ class _NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = active ? _brandBlue : const Color(0xFF4B5563);
 
-    return GestureDetector(
+    return _TapGoPressable(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      borderRadius: BorderRadius.circular(18),
+      pressedScale: 0.97,
       child: SizedBox(
         width: 58,
         child: Column(
@@ -1980,13 +1973,18 @@ class _NavItem extends StatelessWidget {
                 borderRadius: BorderRadius.circular(999),
               ),
             ),
-            Text(
-              label,
-              maxLines: 1,
-              style: TextStyle(
-                color: color,
-                fontSize: 12,
-                fontWeight: active ? FontWeight.w900 : FontWeight.w700,
+            AnimatedOpacity(
+              opacity: active ? 1 : 0.74,
+              duration: _TapGoMotion.duration(context, _TapGoMotion.quick),
+              curve: _TapGoMotion.standardCurve,
+              child: Text(
+                label,
+                maxLines: 1,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: active ? FontWeight.w900 : FontWeight.w700,
+                ),
               ),
             ),
           ],

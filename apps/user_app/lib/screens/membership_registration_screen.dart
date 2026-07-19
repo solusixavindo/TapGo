@@ -443,7 +443,7 @@ class _MembershipRegistrationScreenState
   }
 
   Future<void> _showUploadOptions(_DocumentKind kind) async {
-    final source = await showModalBottomSheet<ImageSource>(
+    final source = await _showTapGoBottomSheet<ImageSource>(
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(

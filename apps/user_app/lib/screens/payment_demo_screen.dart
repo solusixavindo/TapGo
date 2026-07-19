@@ -140,7 +140,7 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
     if (!mounted) {
       return;
     }
-    await showDialog<void>(
+    await _showTapGoDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Link Pembayaran DOKU'),
@@ -159,7 +159,7 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
     if (!mounted) {
       return;
     }
-    await showDialog<void>(
+    await _showTapGoDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Status Pembayaran'),

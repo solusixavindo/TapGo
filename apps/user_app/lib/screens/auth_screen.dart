@@ -181,7 +181,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     if (!mounted) {
       return;
     }
-    await showDialog<void>(
+    await _showTapGoDialog<void>(
       context: context,
       builder: (_) => _ServerConfigurationDialog(
         initialUrl: saved ?? _apiClient.rootUrl,

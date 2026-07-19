@@ -156,7 +156,7 @@ class _AdminPaymentDetailScreenState
       if (!mounted) {
         return;
       }
-      await showDialog<void>(
+      await _showTapGoDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('DOKU Status'),

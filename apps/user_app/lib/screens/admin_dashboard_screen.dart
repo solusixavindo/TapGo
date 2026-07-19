@@ -1004,7 +1004,7 @@ Future<String?> _statusReasonDialog(
   required bool requireReason,
 }) async {
   final controller = TextEditingController();
-  return showDialog<String?>(
+  return _showTapGoDialog<String?>(
     context: context,
     builder: (context) {
       return AlertDialog(

@@ -2,7 +2,111 @@ part of '../main.dart';
 
 void _openDemo(BuildContext context, Widget screen) {
   Navigator.of(context).push(
-    MaterialPageRoute(builder: (_) => screen),
+    _tapGoPageRoute((_) => screen),
+  );
+}
+
+class _TapGoMotion {
+  const _TapGoMotion._();
+
+  static const fast = Duration(milliseconds: 120);
+  static const quick = Duration(milliseconds: 160);
+  static const standard = Duration(milliseconds: 220);
+  static const page = Duration(milliseconds: 280);
+  static const standardCurve = Curves.easeOutCubic;
+  static const exitCurve = Curves.easeInCubic;
+
+  static bool reduce(BuildContext context) =>
+      MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+  static Duration duration(BuildContext context, Duration value) =>
+      reduce(context) ? Duration.zero : value;
+}
+
+PageRoute<T> _tapGoPageRoute<T>(WidgetBuilder builder) {
+  return PageRouteBuilder<T>(
+    pageBuilder: (context, animation, secondaryAnimation) => builder(context),
+    transitionDuration: _TapGoMotion.page,
+    reverseTransitionDuration: _TapGoMotion.standard,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      if (_TapGoMotion.reduce(context)) {
+        return child;
+      }
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: _TapGoMotion.standardCurve,
+        reverseCurve: _TapGoMotion.exitCurve,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.025),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+Future<T?> _showTapGoDialog<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool barrierDismissible = true,
+}) {
+  return showGeneralDialog<T>(
+    context: context,
+    barrierDismissible: barrierDismissible,
+    barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+    barrierColor: Colors.black54,
+    transitionDuration: _TapGoMotion.duration(context, _TapGoMotion.standard),
+    pageBuilder: (dialogContext, animation, secondaryAnimation) {
+      return Theme(
+        data: Theme.of(context),
+        child: Builder(builder: builder),
+      );
+    },
+    transitionBuilder: (context, animation, secondaryAnimation, child) {
+      if (_TapGoMotion.reduce(context)) {
+        return child;
+      }
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: _TapGoMotion.standardCurve,
+        reverseCurve: _TapGoMotion.exitCurve,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.98, end: 1).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+Future<T?> _showTapGoBottomSheet<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool isScrollControlled = false,
+  bool showDragHandle = false,
+  Color? backgroundColor,
+  ShapeBorder? shape,
+}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    isScrollControlled: isScrollControlled,
+    showDragHandle: showDragHandle,
+    backgroundColor: backgroundColor,
+    shape: shape,
+    sheetAnimationStyle: AnimationStyle(
+      duration: _TapGoMotion.duration(context, _TapGoMotion.page),
+      reverseDuration: _TapGoMotion.duration(context, _TapGoMotion.standard),
+    ),
+    builder: builder,
   );
 }
 
@@ -26,14 +130,12 @@ void _safeBack(BuildContext context, {Widget? fallback}) {
   }
 
   navigator.pushReplacement(
-    MaterialPageRoute(
-      builder: (_) => fallback ?? _roleDashboardForContext(context),
-    ),
+    _tapGoPageRoute((_) => fallback ?? _roleDashboardForContext(context)),
   );
 }
 
 Future<void> _confirmAndLogout(BuildContext context, WidgetRef ref) async {
-  final confirmed = await showDialog<bool>(
+  final confirmed = await _showTapGoDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
       title: const Text('Logout'),
@@ -68,9 +170,59 @@ Future<void> _confirmAndLogout(BuildContext context, WidgetRef ref) async {
     return;
   }
   Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-    MaterialPageRoute(builder: (_) => const AuthScreen()),
+    _tapGoPageRoute((_) => const AuthScreen()),
     (_) => false,
   );
+}
+
+class _TapGoPressable extends StatefulWidget {
+  const _TapGoPressable({
+    required this.child,
+    required this.onTap,
+    required this.borderRadius,
+    this.pressedScale = 0.98,
+  });
+
+  final Widget child;
+  final VoidCallback onTap;
+  final BorderRadius borderRadius;
+  final double pressedScale;
+
+  @override
+  State<_TapGoPressable> createState() => _TapGoPressableState();
+}
+
+class _TapGoPressableState extends State<_TapGoPressable> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value || !mounted) {
+      return;
+    }
+    setState(() => _pressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reduced = _TapGoMotion.reduce(context);
+    return AnimatedScale(
+      scale: !reduced && _pressed ? widget.pressedScale : 1,
+      duration: _TapGoMotion.duration(context, _TapGoMotion.fast),
+      curve: _TapGoMotion.standardCurve,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: widget.borderRadius,
+        child: InkWell(
+          borderRadius: widget.borderRadius,
+          onTap: widget.onTap,
+          onTapDown: (_) => _setPressed(true),
+          onTapCancel: () => _setPressed(false),
+          onTapUp: (_) => _setPressed(false),
+          child: widget.child,
+        ),
+      ),
+    );
+  }
 }
 
 class _UploadDocumentField extends StatelessWidget {
@@ -421,12 +573,14 @@ class _DemoMenuTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: Colors.white,
+      child: _TapGoPressable(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(

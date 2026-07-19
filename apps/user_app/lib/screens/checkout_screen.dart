@@ -67,7 +67,7 @@ class CheckoutScreen extends StatelessWidget {
   }
 
   void _showWhatsAppPreview(BuildContext context, InvoiceModel invoice) {
-    showModalBottomSheet<void>(
+    _showTapGoBottomSheet<void>(
       context: context,
       showDragHandle: true,
       builder: (context) => Padding(
