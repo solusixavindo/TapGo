@@ -620,7 +620,7 @@ class _AccountHero extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: () => _copyAccountReferralLink(context, session),
                   icon: const Icon(Icons.copy_rounded),
-                  label: const Text('Copy referral link'),
+                  label: const Text('Salin link referral'),
                 ),
               ),
             ],

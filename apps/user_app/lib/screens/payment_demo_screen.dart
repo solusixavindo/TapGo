@@ -238,7 +238,7 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
               status == 'EXPIRED' ||
               invoiceStatus == 'FAILED' ||
               invoiceStatus == 'EXPIRED'
-          ? 'Pembayaran gagal/expired. Silakan coba lagi.'
+          ? 'Pembayaran gagal atau kedaluwarsa. Silakan coba lagi.'
           : 'Pembayaran masih pending. Coba cek lagi setelah callback masuk.';
       _TapGoSnackbar.warning(context, message);
     } catch (error) {

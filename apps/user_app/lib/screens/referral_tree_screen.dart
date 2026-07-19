@@ -60,7 +60,7 @@ class _ReferralTreeScreenState extends ConsumerState<ReferralTreeScreen> {
         ? _root
         : _applyExpansionState(_rootFromBackendTree(backendTree, session));
     return _DemoScaffold(
-      title: 'Referral Tree',
+      title: 'Jaringan Referral',
       subtitle: production.hasValue
           ? 'Jaringan unilevel TapGo'
           : 'Jaringan unilevel TapGo 10 level',

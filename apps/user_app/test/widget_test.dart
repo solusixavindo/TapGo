@@ -112,7 +112,7 @@ void main() {
     await tester.tap(find.text('Akun'));
     await tester.pumpAndSettle();
     expect(find.text('Membership Saya'), findsOneWidget);
-    expect(find.text('Copy referral link'), findsOneWidget);
+    expect(find.text('Salin link referral'), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.apps_rounded));
     await tester.pumpAndSettle();
@@ -149,7 +149,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Membership Saya'), findsOneWidget);
-    expect(find.text('Copy referral link'), findsOneWidget);
+    expect(find.text('Salin link referral'), findsOneWidget);
   });
 
   testWidgets('referral tree uses realistic names in widget test mode',

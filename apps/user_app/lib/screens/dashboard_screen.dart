@@ -665,29 +665,34 @@ class _HeaderIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
-      child: _TapScale(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.16),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: _TapScale(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(999),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.16),
+                  shape: BoxShape.circle,
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.20)),
+                ),
+                child: Icon(icon, color: Colors.white, size: 23),
               ),
-              child: Icon(icon, color: Colors.white, size: 23),
-            ),
-            if (badge != null)
-              Positioned(
-                right: -2,
-                top: -3,
-                child: _PulseBadge(label: badge!),
-              ),
-          ],
+              if (badge != null)
+                Positioned(
+                  right: -2,
+                  top: -3,
+                  child: _PulseBadge(label: badge!),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -2435,16 +2440,16 @@ class AccountScreen extends ConsumerWidget {
           _AccountMenuTile('Rekening Bank', Icons.account_balance_rounded,
               () => _openDemo(context, const BankAccountScreen())),
           _AccountMenuTile(
-              'Privacy Policy',
+              'Kebijakan Privasi',
               Icons.privacy_tip_rounded,
               () => _openDemo(
                   context,
                   const LegalInfoScreen(
-                    title: 'Privacy Policy',
+                    title: 'Kebijakan Privasi',
                     content: _privacyPolicyContent,
                   ))),
           _AccountMenuTile(
-              'Terms & Conditions',
+              'Syarat & Ketentuan',
               Icons.gavel_rounded,
               () => _openDemo(
                   context,

@@ -68,7 +68,7 @@ class CheckoutScreen extends StatelessWidget {
                 _TapGoSnackbar.info(context, 'Invoice siap diunduh.');
               },
               icon: const Icon(Icons.download_rounded),
-              label: const Text('Download Invoice'),
+              label: const Text('Unduh Invoice'),
             ),
           ),
         ],

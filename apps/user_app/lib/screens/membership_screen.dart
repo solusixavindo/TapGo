@@ -267,7 +267,7 @@ class MarketingPlanScreen extends StatelessWidget {
           ),
           _DemoMenuTile(
             icon: Icons.account_tree_rounded,
-            title: 'Referral Tree',
+            title: 'Jaringan Referral',
             subtitle: 'Visual struktur downline level 1 sampai 10',
             onTap: () => _openDemo(context, const ReferralTreeScreen()),
           ),

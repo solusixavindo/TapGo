@@ -143,6 +143,7 @@ class _MembershipRegistrationScreenState
                           readOnly: true,
                           onTap: _pickBirthDate,
                           suffixIcon: IconButton(
+                            tooltip: 'Pilih tanggal lahir',
                             onPressed: _pickBirthDate,
                             icon: const Icon(Icons.date_range_rounded),
                           ),
