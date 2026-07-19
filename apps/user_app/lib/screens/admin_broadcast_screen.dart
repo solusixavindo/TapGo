@@ -61,11 +61,7 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
             width: double.infinity,
             child: FilledButton.icon(
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Broadcast tersimpan sebagai pratinjau.'),
-                  ),
-                );
+                _TapGoSnackbar.info(context, 'Broadcast siap ditinjau.');
               },
               icon: const Icon(Icons.send_rounded),
               label: const Text('Pratinjau Kirim Broadcast'),

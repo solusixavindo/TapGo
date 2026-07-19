@@ -277,11 +277,8 @@ class _MembershipRegistrationScreenState
       return;
     }
     if (_ktpDocument == null || _selfieDocument == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Upload KTP dan foto diri wajib dipilih.'),
-        ),
-      );
+      _TapGoSnackbar.warning(
+          context, 'Upload KTP dan foto diri wajib dipilih.');
       return;
     }
 
@@ -407,23 +404,17 @@ class _MembershipRegistrationScreenState
         }
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Pembayaran belum dapat disiapkan. Silakan ulangi beberapa saat lagi. ${responseData?['message'] ?? error.message}',
-            ),
-          ),
+        _TapGoSnackbar.error(
+          context,
+          'Pembayaran belum dapat disiapkan. Silakan ulangi beberapa saat lagi. ${responseData?['message'] ?? error.message}',
         );
       }
       return fallbackInvoice;
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Pembayaran belum dapat disiapkan. Silakan ulangi beberapa saat lagi.',
-            ),
-          ),
+        _TapGoSnackbar.error(
+          context,
+          'Pembayaran belum dapat disiapkan. Silakan ulangi beberapa saat lagi.',
         );
       }
       return fallbackInvoice;
@@ -607,9 +598,7 @@ class _MembershipRegistrationScreenState
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    _TapGoSnackbar.info(context, message);
   }
 }
 

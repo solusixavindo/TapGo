@@ -854,15 +854,11 @@ class _SearchPulseIcon extends StatelessWidget {
 }
 
 void _showSoon(BuildContext context) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Layanan belum dapat dibuka saat ini')),
-  );
+  _TapGoSnackbar.info(context, 'Layanan belum dapat dibuka saat ini');
 }
 
 void _showInfoSnack(BuildContext context, String message) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(message)),
-  );
+  _TapGoSnackbar.info(context, message);
 }
 
 void _showSearchMenu(BuildContext context) {

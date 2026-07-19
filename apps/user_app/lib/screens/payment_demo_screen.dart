@@ -136,14 +136,11 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
       await _showPaymentStatusDialog(orderId);
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _isPaymentSimulatorEnabled
-                  ? 'Pembayaran belum dapat diproses melalui gateway. Silakan coba kembali.'
-                  : 'Pembayaran belum dapat diproses. Silakan ulangi proses pembayaran.',
-            ),
-          ),
+        _TapGoSnackbar.error(
+          context,
+          _isPaymentSimulatorEnabled
+              ? 'Pembayaran belum dapat diproses melalui gateway. Silakan coba kembali.'
+              : 'Pembayaran belum dapat diproses. Silakan ulangi proses pembayaran.',
         );
       }
       if (!_isPaymentSimulatorEnabled) {
@@ -219,12 +216,9 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Pembayaran belum dapat diproses. Silakan ulangi proses pembayaran.',
-        ),
-      ),
+    _TapGoSnackbar.error(
+      context,
+      'Pembayaran belum dapat diproses. Silakan ulangi proses pembayaran.',
     );
   }
 
@@ -246,13 +240,10 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
               invoiceStatus == 'EXPIRED'
           ? 'Pembayaran gagal/expired. Silakan coba lagi.'
           : 'Pembayaran masih pending. Coba cek lagi setelah callback masuk.';
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
+      _TapGoSnackbar.warning(context, message);
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal cek status pembayaran: $error')),
-        );
+        _TapGoSnackbar.error(context, 'Gagal cek status pembayaran: $error');
       }
     }
     return false;

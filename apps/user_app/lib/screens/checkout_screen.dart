@@ -65,9 +65,7 @@ class CheckoutScreen extends StatelessWidget {
             order: 3,
             child: TextButton.icon(
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Invoice siap diunduh.')),
-                );
+                _TapGoSnackbar.info(context, 'Invoice siap diunduh.');
               },
               icon: const Icon(Icons.download_rounded),
               label: const Text('Download Invoice'),

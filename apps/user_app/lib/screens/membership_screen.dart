@@ -1024,17 +1024,18 @@ class DemoWalletScreen extends ConsumerWidget {
                         return;
                       }
                       Navigator.of(rootContext).pop();
-                      ScaffoldMessenger.of(rootContext).showSnackBar(
-                        const SnackBar(
-                            content: Text('Withdrawal berhasil diajukan.')),
+                      _TapGoSnackbar.success(
+                        rootContext,
+                        'Withdrawal berhasil diajukan.',
                       );
                       ref.invalidate(_productionSnapshotProvider);
                     } catch (error) {
                       if (!rootContext.mounted) {
                         return;
                       }
-                      ScaffoldMessenger.of(rootContext).showSnackBar(
-                        SnackBar(content: Text(_friendlyApiError(error))),
+                      _TapGoSnackbar.error(
+                        rootContext,
+                        _friendlyApiError(error),
                       );
                     }
                   },
@@ -1332,11 +1333,7 @@ class _BankAccountScreenState extends ConsumerState<BankAccountScreen> {
               child: FilledButton.icon(
                 onPressed: _saving ? null : _save,
                 icon: _saving
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const _TapGoLoading(size: 18, strokeWidth: 2)
                     : const Icon(Icons.save_rounded),
                 label:
                     Text(_saving ? 'Menyimpan...' : 'Simpan / Update Rekening'),
@@ -1381,9 +1378,7 @@ class _BankAccountScreenState extends ConsumerState<BankAccountScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Data rekening belum tersedia.')),
-      );
+      _TapGoSnackbar.info(context, 'Data rekening belum tersedia.');
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -1397,9 +1392,7 @@ class _BankAccountScreenState extends ConsumerState<BankAccountScreen> {
     }
     final token = ref.read(_demoSessionProvider).accessToken;
     if (token == null || token.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Silakan login ulang untuk menyimpan.')),
-      );
+      _TapGoSnackbar.warning(context, 'Silakan login ulang untuk menyimpan.');
       return;
     }
     setState(() => _saving = true);
@@ -1414,16 +1407,12 @@ class _BankAccountScreenState extends ConsumerState<BankAccountScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Rekening bank berhasil disimpan.')),
-      );
+      _TapGoSnackbar.success(context, 'Rekening bank berhasil disimpan.');
     } catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal menyimpan rekening: $error')),
-      );
+      _TapGoSnackbar.error(context, 'Gagal menyimpan rekening: $error');
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -1564,14 +1553,13 @@ class _DeleteAccountRequestScreenState
       );
       if (!mounted) return;
       setState(() => _latestRequest = data);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pengajuan hapus akun berhasil dikirim.')),
+      _TapGoSnackbar.success(
+        context,
+        'Pengajuan hapus akun berhasil dikirim.',
       );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal mengirim pengajuan: $error')),
-      );
+      _TapGoSnackbar.error(context, 'Gagal mengirim pengajuan: $error');
     } finally {
       if (mounted) {
         setState(() => _submitting = false);
@@ -1612,11 +1600,7 @@ class _DeleteAccountRequestScreenState
           FilledButton.icon(
             onPressed: _submitting ? null : _submit,
             icon: _submitting
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const _TapGoLoading(size: 18, strokeWidth: 2)
                 : const Icon(Icons.send_rounded),
             label:
                 Text(_submitting ? 'Mengirim...' : 'Ajukan Penghapusan Akun'),
@@ -1663,9 +1647,7 @@ class _ContactUsScreenState extends ConsumerState<ContactUsScreen> {
         _contactController.text.trim().isEmpty ||
         _categoryController.text.trim().isEmpty ||
         _messageController.text.trim().length < 5) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lengkapi form kontak terlebih dahulu.')),
-      );
+      _TapGoSnackbar.warning(context, 'Lengkapi form kontak terlebih dahulu.');
       return;
     }
 
@@ -1679,14 +1661,10 @@ class _ContactUsScreenState extends ConsumerState<ContactUsScreen> {
       );
       if (!mounted) return;
       _messageController.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pesan berhasil dikirim ke TapGo.')),
-      );
+      _TapGoSnackbar.success(context, 'Pesan berhasil dikirim ke TapGo.');
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal mengirim pesan: $error')),
-      );
+      _TapGoSnackbar.error(context, 'Gagal mengirim pesan: $error');
     } finally {
       if (mounted) {
         setState(() => _submitting = false);
@@ -1734,11 +1712,7 @@ class _ContactUsScreenState extends ConsumerState<ContactUsScreen> {
           FilledButton.icon(
             onPressed: _submitting ? null : _submit,
             icon: _submitting
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const _TapGoLoading(size: 18, strokeWidth: 2)
                 : const Icon(Icons.send_rounded),
             label: Text(_submitting ? 'Mengirim...' : 'Kirim Pesan'),
           ),

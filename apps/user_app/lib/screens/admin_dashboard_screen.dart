@@ -578,15 +578,14 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
         );
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Status Founder $founderId diperbarui')),
-      );
+      _TapGoSnackbar.success(context, 'Status Founder $founderId diperbarui');
       ref.invalidate(_adminConsoleSnapshotProvider);
       _reload();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal memperbarui status Founder: $error')),
+      _TapGoSnackbar.error(
+        context,
+        'Gagal memperbarui status Founder: $error',
       );
     } finally {
       if (mounted) {
@@ -1027,9 +1026,7 @@ Future<String?> _statusReasonDialog(
             onPressed: () {
               final reason = controller.text.trim();
               if (requireReason && reason.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Alasan wajib diisi')),
-                );
+                _TapGoSnackbar.warning(context, 'Alasan wajib diisi');
                 return;
               }
               Navigator.of(context).pop(reason);
@@ -1188,15 +1185,12 @@ class _AdminMemberRequestScreenState
     try {
       await call();
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(successMessage)));
+      _TapGoSnackbar.success(context, successMessage);
       _reload();
       ref.invalidate(_adminConsoleSnapshotProvider);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal memproses pengajuan: $error')),
-      );
+      _TapGoSnackbar.error(context, 'Gagal memproses pengajuan: $error');
     } finally {
       if (mounted) {
         setState(() => _processing[id] = false);

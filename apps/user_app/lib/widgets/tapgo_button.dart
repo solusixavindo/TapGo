@@ -93,6 +93,139 @@ class _TapGoFadeSwitcher extends StatelessWidget {
   }
 }
 
+enum _TapGoFeedbackType { success, error, warning, info }
+
+class _TapGoSnackbar {
+  const _TapGoSnackbar._();
+
+  static void success(BuildContext context, String message) {
+    show(context, message, type: _TapGoFeedbackType.success);
+  }
+
+  static void error(BuildContext context, String message) {
+    show(context, message, type: _TapGoFeedbackType.error);
+  }
+
+  static void warning(BuildContext context, String message) {
+    show(context, message, type: _TapGoFeedbackType.warning);
+  }
+
+  static void info(BuildContext context, String message) {
+    show(context, message, type: _TapGoFeedbackType.info);
+  }
+
+  static void show(
+    BuildContext context,
+    String message, {
+    _TapGoFeedbackType type = _TapGoFeedbackType.info,
+  }) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) {
+      return;
+    }
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: _feedbackBackground(type),
+        content: Row(
+          children: [
+            Icon(_feedbackIcon(type), color: Colors.white, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  height: 1.25,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Color _feedbackBackground(_TapGoFeedbackType type) {
+    switch (type) {
+      case _TapGoFeedbackType.success:
+        return const Color(0xFF00A86B);
+      case _TapGoFeedbackType.error:
+        return const Color(0xFFC62828);
+      case _TapGoFeedbackType.warning:
+        return const Color(0xFFB7791F);
+      case _TapGoFeedbackType.info:
+        return _brandBlue;
+    }
+  }
+
+  static IconData _feedbackIcon(_TapGoFeedbackType type) {
+    switch (type) {
+      case _TapGoFeedbackType.success:
+        return Icons.check_circle_rounded;
+      case _TapGoFeedbackType.error:
+        return Icons.error_rounded;
+      case _TapGoFeedbackType.warning:
+        return Icons.info_rounded;
+      case _TapGoFeedbackType.info:
+        return Icons.info_rounded;
+    }
+  }
+}
+
+class _TapGoStateEntrance extends StatelessWidget {
+  const _TapGoStateEntrance({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduced = _TapGoMotion.reduce(context);
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: reduced ? 1 : 0, end: 1),
+      duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
+      curve: _TapGoMotion.standardCurve,
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.scale(
+          scale: reduced ? 1 : 0.98 + (value * 0.02),
+          child: child,
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _TapGoLoading extends StatelessWidget {
+  const _TapGoLoading({
+    this.size = 22,
+    this.strokeWidth = 2.4,
+    this.color = _brandBlue,
+  });
+
+  final double size;
+  final double strokeWidth;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CircularProgressIndicator(
+        strokeWidth: strokeWidth,
+        valueColor: AlwaysStoppedAnimation<Color>(color),
+      ),
+    );
+  }
+}
+
 PageRoute<T> _tapGoPageRoute<T>(WidgetBuilder builder) {
   return PageRouteBuilder<T>(
     pageBuilder: (context, animation, secondaryAnimation) => builder(context),
@@ -530,46 +663,48 @@ class _RetryStatusSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFEAF0F6)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: _brandBlue, size: 26),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Color(0xFF0A2A43),
-                    fontWeight: FontWeight.w900,
+    return _TapGoStateEntrance(
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFEAF0F6)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: _brandBlue, size: 26),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Color(0xFF0A2A43),
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    color: Color(0xFF718096),
-                    fontSize: 12,
-                    height: 1.3,
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: Color(0xFF718096),
+                      fontSize: 12,
+                      height: 1.3,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          TextButton(
-            onPressed: onRetry,
-            child: const Text('Muat Ulang'),
-          ),
-        ],
+            TextButton(
+              onPressed: onRetry,
+              child: const Text('Muat Ulang'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -588,39 +723,41 @@ class _StatusSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: _brandBlue),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Color(0xFF0A2A43),
-                    fontWeight: FontWeight.w900,
+    return _TapGoStateEntrance(
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: _brandBlue),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Color(0xFF0A2A43),
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
-                ),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    color: Color(0xFF718096),
-                    fontSize: 12,
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: Color(0xFF718096),
+                      fontSize: 12,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -105,16 +105,15 @@ class _AdminWithdrawalScreenState extends ConsumerState<AdminWithdrawalScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Withdrawal $status berhasil diproses.')),
+      _TapGoSnackbar.success(
+        context,
+        'Withdrawal $status berhasil diproses.',
       );
     } catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal proses withdrawal: $error')),
-      );
+      _TapGoSnackbar.error(context, 'Gagal proses withdrawal: $error');
     }
   }
 

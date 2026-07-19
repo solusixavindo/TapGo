@@ -160,9 +160,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    _TapGoSnackbar.error(context, message);
   }
 
   void _handleLogoTap() {
@@ -325,14 +323,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   ),
                 ),
                 child: _isSubmitting
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.4,
-                          color: Colors.white,
-                        ),
-                      )
+                    ? const _TapGoLoading(color: Colors.white)
                     : Text(
                         _isRegister ? 'Register & Masuk' : 'Login',
                         style: const TextStyle(
@@ -428,9 +419,7 @@ class _ServerConfigurationDialogState
       _statusMessage = 'Server URL berhasil disimpan';
       _urlController.text = rootUrl;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Server URL berhasil disimpan')),
-    );
+    _TapGoSnackbar.success(context, 'Server URL berhasil disimpan');
   }
 
   Future<void> _resetDefault() async {
@@ -558,11 +547,7 @@ class _ServerConfigurationDialogState
         OutlinedButton(
           onPressed: _isTesting ? null : _testConnection,
           child: _isTesting
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const _TapGoLoading(size: 16, strokeWidth: 2)
               : const Text('Test Connection'),
         ),
         FilledButton(

@@ -674,16 +674,12 @@ void _copyAccountReferralLink(
 ) {
   final referralCode = session.referralCode.trim();
   if (referralCode.isEmpty || referralCode == '-') {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Kode referral belum tersedia')),
-    );
+    _TapGoSnackbar.warning(context, 'Kode referral belum tersedia');
     return;
   }
   final link = 'https://tapgolion.id/daftar?ref=$referralCode';
   Clipboard.setData(ClipboardData(text: link));
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Link referral berhasil disalin')),
-  );
+  _TapGoSnackbar.success(context, 'Link referral berhasil disalin');
 }
 
 class _AccountMenuTile extends StatelessWidget {

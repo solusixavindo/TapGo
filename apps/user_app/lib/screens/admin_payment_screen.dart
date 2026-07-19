@@ -173,9 +173,7 @@ class _AdminPaymentDetailScreenState
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal cek status DOKU: $error')),
-      );
+      _TapGoSnackbar.error(context, 'Gagal cek status DOKU: $error');
     } finally {
       if (mounted) {
         setState(() => _checking = false);
