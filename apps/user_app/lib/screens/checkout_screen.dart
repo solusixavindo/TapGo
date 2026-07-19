@@ -20,46 +20,58 @@ class CheckoutScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _InvoiceCard(invoice: invoice, package: package),
+          _TapGoReveal(
+            order: 0,
+            child: _InvoiceCard(invoice: invoice, package: package),
+          ),
           const SizedBox(height: 14),
-          FilledButton.icon(
-            onPressed: () => _openDemo(
-              context,
-              PaymentMethodScreen(form: form, invoice: invoice),
-            ),
-            icon: const Icon(Icons.payment_rounded),
-            label: const Text('Bayar Sekarang'),
-            style: FilledButton.styleFrom(
-              backgroundColor: _brandBlue,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 15),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+          _TapGoReveal(
+            order: 1,
+            child: FilledButton.icon(
+              onPressed: () => _openDemo(
+                context,
+                PaymentMethodScreen(form: form, invoice: invoice),
+              ),
+              icon: const Icon(Icons.payment_rounded),
+              label: const Text('Bayar Sekarang'),
+              style: FilledButton.styleFrom(
+                backgroundColor: _brandBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
             ),
           ),
           const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed: () => _showWhatsAppPreview(context, invoice),
-            icon: const Icon(Icons.chat_rounded),
-            label: const Text('Kirim Notifikasi WhatsApp'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF00A86B),
-              padding: const EdgeInsets.symmetric(vertical: 15),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+          _TapGoReveal(
+            order: 2,
+            child: OutlinedButton.icon(
+              onPressed: () => _showWhatsAppPreview(context, invoice),
+              icon: const Icon(Icons.chat_rounded),
+              label: const Text('Kirim Notifikasi WhatsApp'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF00A86B),
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
             ),
           ),
           const SizedBox(height: 10),
-          TextButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Invoice siap diunduh.')),
-              );
-            },
-            icon: const Icon(Icons.download_rounded),
-            label: const Text('Download Invoice'),
+          _TapGoReveal(
+            order: 3,
+            child: TextButton.icon(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Invoice siap diunduh.')),
+                );
+              },
+              icon: const Icon(Icons.download_rounded),
+              label: const Text('Download Invoice'),
+            ),
           ),
         ],
       ),

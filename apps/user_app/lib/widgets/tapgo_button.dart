@@ -23,6 +23,76 @@ class _TapGoMotion {
       reduce(context) ? Duration.zero : value;
 }
 
+class _TapGoReveal extends StatefulWidget {
+  const _TapGoReveal({
+    required this.order,
+    required this.child,
+  });
+
+  final int order;
+  final Widget child;
+
+  @override
+  State<_TapGoReveal> createState() => _TapGoRevealState();
+}
+
+class _TapGoRevealState extends State<_TapGoReveal> {
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.delayed(Duration(milliseconds: widget.order * 44), () {
+      if (mounted) {
+        setState(() => _visible = true);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reduced = _TapGoMotion.reduce(context);
+    return AnimatedOpacity(
+      opacity: _visible || reduced ? 1 : 0,
+      duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
+      curve: _TapGoMotion.standardCurve,
+      child: AnimatedSlide(
+        offset: _visible || reduced ? Offset.zero : const Offset(0, 0.1),
+        duration: _TapGoMotion.duration(context, _TapGoMotion.page),
+        curve: _TapGoMotion.standardCurve,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+class _TapGoFadeSwitcher extends StatelessWidget {
+  const _TapGoFadeSwitcher({
+    required this.valueKey,
+    required this.child,
+  });
+
+  final Object valueKey;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
+      switchInCurve: _TapGoMotion.standardCurve,
+      switchOutCurve: _TapGoMotion.exitCurve,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: child,
+      ),
+      child: KeyedSubtree(
+        key: ValueKey(valueKey),
+        child: child,
+      ),
+    );
+  }
+}
+
 PageRoute<T> _tapGoPageRoute<T>(WidgetBuilder builder) {
   return PageRouteBuilder<T>(
     pageBuilder: (context, animation, secondaryAnimation) => builder(context),

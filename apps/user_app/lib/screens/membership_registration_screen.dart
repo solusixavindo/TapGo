@@ -62,144 +62,191 @@ class _MembershipRegistrationScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _CheckoutSummaryCard(package: widget.package),
+            _TapGoReveal(
+              order: 0,
+              child: _CheckoutSummaryCard(package: widget.package),
+            ),
             const SizedBox(height: 14),
-            _InputField(
-              controller: _nameController,
-              icon: Icons.person_rounded,
-              label: 'Nama lengkap',
-              hint: 'Nama sesuai KTP',
-              validator: _requiredValidator,
-            ),
-            const SizedBox(height: 12),
-            _InputField(
-              controller: _phoneController,
-              icon: Icons.phone_rounded,
-              label: 'Nomor HP',
-              hint: '0812xxxx',
-              keyboardType: TextInputType.phone,
-              validator: _phoneValidator,
-            ),
-            const SizedBox(height: 12),
-            _InputField(
-              controller: _emailController,
-              icon: Icons.email_rounded,
-              label: 'Email',
-              hint: 'member@tapgo.id',
-              keyboardType: TextInputType.emailAddress,
-              validator: _requiredValidator,
-            ),
-            const SizedBox(height: 12),
-            _InputField(
-              controller: _addressController,
-              icon: Icons.location_on_rounded,
-              label: 'Alamat lengkap',
-              hint: 'Alamat domisili',
-              validator: _requiredValidator,
-            ),
-            const SizedBox(height: 12),
-            _InputField(
-              controller: _ktpController,
-              icon: Icons.badge_rounded,
-              label: 'Nomor KTP',
-              hint: '16 digit',
-              keyboardType: TextInputType.number,
-              validator: _ktpValidator,
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _InputField(
-                    controller: _birthPlaceController,
-                    icon: Icons.place_rounded,
-                    label: 'Tempat lahir',
-                    hint: 'Jakarta',
+            _TapGoReveal(
+              order: 1,
+              child: Column(
+                children: [
+                  _InputField(
+                    controller: _nameController,
+                    icon: Icons.person_rounded,
+                    label: 'Nama lengkap',
+                    hint: 'Nama sesuai KTP',
                     validator: _requiredValidator,
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _InputField(
-                    controller: _birthDateController,
-                    icon: Icons.calendar_month_rounded,
-                    label: 'Tanggal lahir',
-                    hint: 'DD-MM-YYYY',
+                  const SizedBox(height: 12),
+                  _InputField(
+                    controller: _phoneController,
+                    icon: Icons.phone_rounded,
+                    label: 'Nomor HP',
+                    hint: '0812xxxx',
+                    keyboardType: TextInputType.phone,
+                    validator: _phoneValidator,
+                  ),
+                  const SizedBox(height: 12),
+                  _InputField(
+                    controller: _emailController,
+                    icon: Icons.email_rounded,
+                    label: 'Email',
+                    hint: 'member@tapgo.id',
+                    keyboardType: TextInputType.emailAddress,
                     validator: _requiredValidator,
-                    readOnly: true,
-                    onTap: _pickBirthDate,
-                    suffixIcon: IconButton(
-                      onPressed: _pickBirthDate,
-                      icon: const Icon(Icons.date_range_rounded),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            _TapGoReveal(
+              order: 2,
+              child: Column(
+                children: [
+                  _InputField(
+                    controller: _addressController,
+                    icon: Icons.location_on_rounded,
+                    label: 'Alamat lengkap',
+                    hint: 'Alamat domisili',
+                    validator: _requiredValidator,
+                  ),
+                  const SizedBox(height: 12),
+                  _InputField(
+                    controller: _ktpController,
+                    icon: Icons.badge_rounded,
+                    label: 'Nomor KTP',
+                    hint: '16 digit',
+                    keyboardType: TextInputType.number,
+                    validator: _ktpValidator,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _InputField(
+                          controller: _birthPlaceController,
+                          icon: Icons.place_rounded,
+                          label: 'Tempat lahir',
+                          hint: 'Jakarta',
+                          validator: _requiredValidator,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _InputField(
+                          controller: _birthDateController,
+                          icon: Icons.calendar_month_rounded,
+                          label: 'Tanggal lahir',
+                          hint: 'DD-MM-YYYY',
+                          validator: _requiredValidator,
+                          readOnly: true,
+                          onTap: _pickBirthDate,
+                          suffixIcon: IconButton(
+                            onPressed: _pickBirthDate,
+                            icon: const Icon(Icons.date_range_rounded),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _gender,
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'Laki-laki', child: Text('Laki-laki')),
+                      DropdownMenuItem(
+                          value: 'Perempuan', child: Text('Perempuan')),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _gender = value ?? _gender),
+                    decoration: InputDecoration(
+                      prefixIcon:
+                          const Icon(Icons.wc_rounded, color: _brandBlue),
+                      labelText: 'Jenis kelamin',
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        borderSide: BorderSide.none,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _gender,
-              items: const [
-                DropdownMenuItem(value: 'Laki-laki', child: Text('Laki-laki')),
-                DropdownMenuItem(value: 'Perempuan', child: Text('Perempuan')),
-              ],
-              onChanged: (value) => setState(() => _gender = value ?? _gender),
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.wc_rounded, color: _brandBlue),
-                labelText: 'Jenis kelamin',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(18),
-                  borderSide: BorderSide.none,
-                ),
+                ],
               ),
             ),
             const SizedBox(height: 12),
-            _InputField(
-              controller: _referralController,
-              icon: Icons.qr_code_rounded,
-              label: 'Kode referral optional',
-              hint: 'TAPGO123',
+            _TapGoReveal(
+              order: 3,
+              child: _InputField(
+                controller: _referralController,
+                icon: Icons.qr_code_rounded,
+                label: 'Kode referral optional',
+                hint: 'TAPGO123',
+              ),
             ),
             const SizedBox(height: 14),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: _UploadDocumentField(
-                    label: 'KTP',
-                    emptyButtonLabel: 'Upload KTP',
-                    filledButtonLabel: 'Ganti KTP',
-                    document: _ktpDocument,
-                    onTap: () => _showUploadOptions(_DocumentKind.ktp),
+            _TapGoReveal(
+              order: 4,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _UploadDocumentField(
+                      label: 'KTP',
+                      emptyButtonLabel: 'Upload KTP',
+                      filledButtonLabel: 'Ganti KTP',
+                      document: _ktpDocument,
+                      onTap: () => _showUploadOptions(_DocumentKind.ktp),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _UploadDocumentField(
-                    label: 'Foto Diri',
-                    emptyButtonLabel: 'Upload Foto Diri',
-                    filledButtonLabel: 'Ganti Foto Diri',
-                    document: _selfieDocument,
-                    onTap: () => _showUploadOptions(_DocumentKind.selfie),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _UploadDocumentField(
+                      label: 'Foto Diri',
+                      emptyButtonLabel: 'Upload Foto Diri',
+                      filledButtonLabel: 'Ganti Foto Diri',
+                      document: _selfieDocument,
+                      onTap: () => _showUploadOptions(_DocumentKind.selfie),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             const SizedBox(height: 18),
-            FilledButton.icon(
-              onPressed: _creatingOrder ? null : _continueToCheckout,
-              icon: const Icon(Icons.receipt_long_rounded),
-              label: Text(
-                _creatingOrder ? 'Menyiapkan invoice...' : 'Lanjut ke checkout',
-              ),
-              style: FilledButton.styleFrom(
-                backgroundColor: _brandBlue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 15),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+            _TapGoReveal(
+              order: 5,
+              child: AnimatedOpacity(
+                opacity: _creatingOrder ? 0.82 : 1,
+                duration: _TapGoMotion.duration(context, _TapGoMotion.fast),
+                curve: _TapGoMotion.standardCurve,
+                child: FilledButton.icon(
+                  onPressed: _creatingOrder ? null : _continueToCheckout,
+                  icon: _TapGoFadeSwitcher(
+                    valueKey: _creatingOrder,
+                    child: Icon(
+                      _creatingOrder
+                          ? Icons.hourglass_top_rounded
+                          : Icons.receipt_long_rounded,
+                    ),
+                  ),
+                  label: _TapGoFadeSwitcher(
+                    valueKey: _creatingOrder ? 'creating' : 'checkout',
+                    child: Text(
+                      _creatingOrder
+                          ? 'Menyiapkan invoice...'
+                          : 'Lanjut ke checkout',
+                    ),
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _brandBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
                 ),
               ),
             ),

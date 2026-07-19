@@ -274,8 +274,26 @@ class MarketingPlanScreen extends StatelessWidget {
   }
 }
 
-class MembershipPackagesScreen extends StatelessWidget {
+class MembershipPackagesScreen extends StatefulWidget {
   const MembershipPackagesScreen({super.key});
+
+  @override
+  State<MembershipPackagesScreen> createState() =>
+      _MembershipPackagesScreenState();
+}
+
+class _MembershipPackagesScreenState extends State<MembershipPackagesScreen> {
+  String? _selectedPackageName;
+
+  void _openPackage(_MembershipPackage package) {
+    setState(() => _selectedPackageName = package.name);
+    _openDemo(
+      context,
+      MembershipRegistrationScreen(
+        package: DemoClientCatalog.packageByName(package.name),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -283,9 +301,17 @@ class MembershipPackagesScreen extends StatelessWidget {
       title: 'Membership',
       subtitle: 'Paket bisnis TapGo',
       child: Column(
-        children: _demoMemberships
-            .map((item) => _MembershipPackageCard(package: item))
-            .toList(),
+        children: _demoMemberships.asMap().entries.map((entry) {
+          final item = entry.value;
+          return _TapGoReveal(
+            order: entry.key,
+            child: _MembershipPackageCard(
+              package: item,
+              selected: _selectedPackageName == item.name,
+              onSelected: () => _openPackage(item),
+            ),
+          );
+        }).toList(),
       ),
     );
   }

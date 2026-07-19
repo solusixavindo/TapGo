@@ -35,38 +35,59 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _InfoPanel(
-            color: _brandBlue,
-            title: 'Total pembayaran',
-            value: formatRupiah(widget.invoice.total),
-            subtitle:
-                '${widget.invoice.packageName} • ${widget.invoice.number}',
-            icon: Icons.payment_rounded,
-          ),
-          const SizedBox(height: 16),
-          ..._methods.map(
-            (method) => _PaymentMethodTile(
-              title: method.$1,
-              icon: method.$2,
-              selected: _selectedMethod == method.$1,
-              onTap: () => setState(() => _selectedMethod = method.$1),
+          _TapGoReveal(
+            order: 0,
+            child: _InfoPanel(
+              color: _brandBlue,
+              title: 'Total pembayaran',
+              value: formatRupiah(widget.invoice.total),
+              subtitle:
+                  '${widget.invoice.packageName} • ${widget.invoice.number}',
+              icon: Icons.payment_rounded,
             ),
           ),
           const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: _isPaying ? null : _startPayment,
-            icon: Icon(
-              _isPaying
-                  ? Icons.hourglass_top_rounded
-                  : Icons.check_circle_rounded,
-            ),
-            label: Text(_isPaying ? 'Memproses...' : 'Bayar'),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF00A86B),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 15),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+          ..._methods.toList().asMap().entries.map(
+                (entry) => _TapGoReveal(
+                  order: entry.key + 1,
+                  child: _PaymentMethodTile(
+                    title: entry.value.$1,
+                    icon: entry.value.$2,
+                    selected: _selectedMethod == entry.value.$1,
+                    onTap: () =>
+                        setState(() => _selectedMethod = entry.value.$1),
+                  ),
+                ),
+              ),
+          const SizedBox(height: 16),
+          _TapGoReveal(
+            order: _methods.length + 1,
+            child: AnimatedOpacity(
+              opacity: _isPaying ? 0.82 : 1,
+              duration: _TapGoMotion.duration(context, _TapGoMotion.fast),
+              curve: _TapGoMotion.standardCurve,
+              child: FilledButton.icon(
+                onPressed: _isPaying ? null : _startPayment,
+                icon: _TapGoFadeSwitcher(
+                  valueKey: _isPaying,
+                  child: Icon(
+                    _isPaying
+                        ? Icons.hourglass_top_rounded
+                        : Icons.check_circle_rounded,
+                  ),
+                ),
+                label: _TapGoFadeSwitcher(
+                  valueKey: _isPaying ? 'processing' : 'pay',
+                  child: Text(_isPaying ? 'Memproses...' : 'Bayar'),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF00A86B),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
               ),
             ),
           ),
