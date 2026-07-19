@@ -123,6 +123,35 @@ void main() {
     expect(find.text('Support'), findsOneWidget);
   });
 
+  testWidgets('dashboard remains usable when reduced motion is enabled',
+      (WidgetTester tester) async {
+    tapGoDisablePersistenceForTests = true;
+    tapGoEnablePaymentSimulatorForTests = false;
+    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(disableAnimations: true),
+            child: TapGoDashboard(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('TapGoPay'), findsOneWidget);
+    expect(find.byIcon(Icons.apps_rounded), findsOneWidget);
+    expect(find.text('Membership'), findsWidgets);
+
+    await tester.tap(find.text('Akun'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Membership Saya'), findsOneWidget);
+    expect(find.text('Copy referral link'), findsOneWidget);
+  });
+
   testWidgets('referral tree uses realistic names in widget test mode',
       (WidgetTester tester) async {
     await openDashboard(tester);
