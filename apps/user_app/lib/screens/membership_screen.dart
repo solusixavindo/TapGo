@@ -176,7 +176,10 @@ class _SuperMenuSearchBar extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 320),
+                  duration:
+                      _TapGoMotion.duration(context, _TapGoMotion.standard),
+                  switchInCurve: _TapGoMotion.standardCurve,
+                  switchOutCurve: _TapGoMotion.exitCurve,
                   transitionBuilder: (child, animation) => FadeTransition(
                     opacity: animation,
                     child: SlideTransition(

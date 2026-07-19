@@ -13,11 +13,18 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _referralController = TextEditingController();
+  final _nameFocusNode = FocusNode();
+  final _phoneFocusNode = FocusNode();
+  final _passwordFocusNode = FocusNode();
+  final _referralFocusNode = FocusNode();
   bool _isRegister = false;
   bool _isSubmitting = false;
   int _logoTapCount = 0;
 
   Future<void> _continueToDashboard() async {
+    if (_isSubmitting) {
+      return;
+    }
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
@@ -193,6 +200,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     _phoneController.dispose();
     _passwordController.dispose();
     _referralController.dispose();
+    _nameFocusNode.dispose();
+    _phoneFocusNode.dispose();
+    _passwordFocusNode.dispose();
+    _referralFocusNode.dispose();
     super.dispose();
   }
 
@@ -275,37 +286,58 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     if (_isRegister) ...[
                       _InputField(
                         controller: _nameController,
+                        focusNode: _nameFocusNode,
                         icon: Icons.person_rounded,
                         label: 'Nama lengkap',
                         hint: 'Nama kamu',
                         validator: _nameValidator,
+                        textInputAction: TextInputAction.next,
+                        onFieldSubmitted: (_) => _phoneFocusNode.requestFocus(),
                       ),
                       const SizedBox(height: 12),
                     ],
                     _InputField(
                       controller: _phoneController,
+                      focusNode: _phoneFocusNode,
                       icon: Icons.phone_rounded,
                       label: 'Nomor HP',
                       hint: '+62 812 0000 0000',
                       keyboardType: TextInputType.phone,
                       validator: _phoneValidator,
+                      textInputAction: TextInputAction.next,
+                      onFieldSubmitted: (_) =>
+                          _passwordFocusNode.requestFocus(),
                     ),
                     const SizedBox(height: 12),
                     _InputField(
                       controller: _passwordController,
+                      focusNode: _passwordFocusNode,
                       icon: Icons.lock_rounded,
                       label: 'Password',
                       hint: 'Minimal 8 karakter',
                       obscureText: true,
                       validator: _passwordValidator,
+                      textInputAction: _isRegister
+                          ? TextInputAction.next
+                          : TextInputAction.done,
+                      onFieldSubmitted: (_) {
+                        if (_isRegister) {
+                          _referralFocusNode.requestFocus();
+                        } else {
+                          _continueToDashboard();
+                        }
+                      },
                     ),
                     if (_isRegister) ...[
                       const SizedBox(height: 12),
                       _InputField(
                         controller: _referralController,
+                        focusNode: _referralFocusNode,
                         icon: Icons.badge_rounded,
                         label: 'Kode referral optional',
                         hint: 'TAPGO123',
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) => _continueToDashboard(),
                       ),
                     ],
                   ],
@@ -576,7 +608,8 @@ class _AuthModeButton extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
+          duration: _TapGoMotion.duration(context, _TapGoMotion.quick),
+          curve: _TapGoMotion.standardCurve,
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(vertical: 13),
           decoration: BoxDecoration(
@@ -608,14 +641,20 @@ class _InputField extends StatelessWidget {
     this.suffixIcon,
     this.readOnly = false,
     this.onTap,
+    this.focusNode,
+    this.textInputAction,
+    this.onFieldSubmitted,
   });
 
   final TextEditingController? controller;
+  final FocusNode? focusNode;
   final IconData icon;
   final String label;
   final String hint;
   final bool obscureText;
   final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onFieldSubmitted;
   final String? Function(String?)? validator;
   final Widget? suffixIcon;
   final bool readOnly;
@@ -625,8 +664,11 @@ class _InputField extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextFormField(
       controller: controller,
+      focusNode: focusNode,
       obscureText: obscureText,
       keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      onFieldSubmitted: onFieldSubmitted,
       validator: validator,
       readOnly: readOnly,
       onTap: onTap,

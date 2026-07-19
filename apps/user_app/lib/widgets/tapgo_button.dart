@@ -296,6 +296,7 @@ Future<T?> _showTapGoBottomSheet<T>({
   required WidgetBuilder builder,
   bool isScrollControlled = false,
   bool showDragHandle = false,
+  bool enableDrag = true,
   Color? backgroundColor,
   ShapeBorder? shape,
 }) {
@@ -303,6 +304,8 @@ Future<T?> _showTapGoBottomSheet<T>({
     context: context,
     isScrollControlled: isScrollControlled,
     showDragHandle: showDragHandle,
+    enableDrag: enableDrag,
+    useSafeArea: true,
     backgroundColor: backgroundColor,
     shape: shape,
     sheetAnimationStyle: AnimationStyle(
@@ -465,7 +468,9 @@ class _UploadDocumentField extends StatelessWidget {
           ),
         ),
         AnimatedSwitcher(
-          duration: const Duration(milliseconds: 220),
+          duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
+          switchInCurve: _TapGoMotion.standardCurve,
+          switchOutCurve: _TapGoMotion.exitCurve,
           child: uploaded
               ? _DocumentPreview(label: label, document: document!)
               : const SizedBox.shrink(),
