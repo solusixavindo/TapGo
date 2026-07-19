@@ -15,10 +15,19 @@ String _formatCompactRupiah(int value) {
 }
 
 class _MiniMetric extends StatelessWidget {
-  const _MiniMetric({required this.label, required this.value});
+  const _MiniMetric({
+    required this.label,
+    required this.value,
+    this.animatedValue,
+    this.formatter,
+    this.isLoading = false,
+  });
 
   final String label;
   final String value;
+  final int? animatedValue;
+  final String Function(int value)? formatter;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -48,16 +57,26 @@ class _MiniMetric extends StatelessWidget {
             child: FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
-              child: Text(
-                value,
-                maxLines: 1,
-                softWrap: false,
-                style: const TextStyle(
-                  color: Color(0xFF0A2A43),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
+              child: isLoading
+                  ? const _SkeletonBar(width: 84)
+                  : animatedValue == null || formatter == null
+                      ? _DashboardValueSwitcher(
+                          value: value,
+                          style: const TextStyle(
+                            color: Color(0xFF0A2A43),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        )
+                      : _DashboardAnimatedValue(
+                          value: animatedValue!,
+                          formatter: formatter!,
+                          style: const TextStyle(
+                            color: Color(0xFF0A2A43),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
             ),
           ),
         ],
@@ -855,49 +874,62 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+    final reduced = _TapGoMotion.reduce(context);
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: reduced ? 1 : 0, end: 1),
+      duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
+      curve: _TapGoMotion.standardCurve,
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, (1 - value) * 8),
+          child: child,
+        ),
       ),
-      child: Column(
-        children: [
-          Icon(icon, color: _brandBlue, size: 44),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFF0A2A43),
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Color(0xFF718096)),
-          ),
-          if (actionLabel != null && onAction != null) ...[
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: onAction,
-              style: FilledButton.styleFrom(
-                backgroundColor: _brandBlue,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: _brandBlue, size: 44),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF0A2A43),
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
               ),
-              child: Text(actionLabel!),
             ),
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Color(0xFF718096)),
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: onAction,
+                style: FilledButton.styleFrom(
+                  backgroundColor: _brandBlue,
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: Text(actionLabel!),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

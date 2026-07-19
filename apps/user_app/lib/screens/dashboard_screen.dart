@@ -42,10 +42,13 @@ class _TapGoDashboardState extends State<TapGoDashboard> {
                 child: _pages[_selectedIndex],
               ),
             ),
-            _BottomNav(
-              selectedIndex: _selectedIndex,
-              onTabSelected: _selectTab,
-              onCenterTap: _openSuperMenu,
+            _DashboardEntrance(
+              order: 7,
+              child: _BottomNav(
+                selectedIndex: _selectedIndex,
+                onTabSelected: _selectTab,
+                onCenterTap: _openSuperMenu,
+              ),
             ),
           ],
         ),
@@ -64,6 +67,7 @@ class _HomeTab extends ConsumerStatefulWidget {
 class _HomeTabState extends ConsumerState<_HomeTab> {
   final _scrollController = ScrollController();
   double _scrollOffset = 0;
+  bool _refreshing = false;
 
   @override
   void initState() {
@@ -91,52 +95,74 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
     final session = ref.watch(_demoSessionProvider);
     final parallax = _scrollOffset / 120;
     final promoScale = 1 + (parallax * 0.035);
-    return SingleChildScrollView(
-      controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 176),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _ProductionBindingBanner(state: production),
-          if (production.isLoading) const SizedBox(height: 10),
-          _DashboardEntrance(
-            order: 0,
-            child: Transform.translate(
-              offset: Offset(0, -parallax * 8),
-              child: Transform.scale(
-                scale: 1 - (parallax * 0.025),
-                child: _TopBar(session: session),
+    return RefreshIndicator(
+      color: _brandBlue,
+      onRefresh: () async {
+        setState(() => _refreshing = true);
+        try {
+          final _ = await ref.refresh(_productionSnapshotProvider.future);
+        } finally {
+          if (mounted) {
+            setState(() => _refreshing = false);
+          }
+        }
+      },
+      child: AnimatedOpacity(
+        opacity: _refreshing ? 0.86 : 1,
+        duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
+        curve: _TapGoMotion.standardCurve,
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 176),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ProductionBindingBanner(state: production),
+              if (production.isLoading) const SizedBox(height: 10),
+              _DashboardEntrance(
+                order: 0,
+                child: Transform.translate(
+                  offset: Offset(0, -parallax * 8),
+                  child: Transform.scale(
+                    scale: 1 - (parallax * 0.025),
+                    child: _TopBar(session: session),
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(height: 18),
-          const _DashboardEntrance(order: 1, child: _SearchRow()),
-          const SizedBox(height: 18),
-          _DashboardEntrance(
-            order: 2,
-            child: Transform.translate(
-              offset: Offset(0, parallax * 8),
-              child: Transform.scale(
-                scale: promoScale,
-                child: const _PromoHero(),
+              const SizedBox(height: 18),
+              const _DashboardEntrance(order: 1, child: _SearchRow()),
+              const SizedBox(height: 18),
+              _DashboardEntrance(
+                order: 2,
+                child: Transform.translate(
+                  offset: Offset(0, parallax * 8),
+                  child: Transform.scale(
+                    scale: promoScale,
+                    child: const _PromoHero(),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(height: 14),
+              _DashboardEntrance(
+                order: 3,
+                child: _WalletCard(session: session, state: production),
+              ),
+              const SizedBox(height: 16),
+              _DashboardEntrance(
+                order: 4,
+                child: _MarketingPlanCard(
+                  session: session,
+                  isLoading: production.isLoading,
+                ),
+              ),
+              const SizedBox(height: 22),
+              const _DashboardEntrance(order: 5, child: _ServiceGrid()),
+              const SizedBox(height: 24),
+              const _DashboardEntrance(order: 6, child: _ContentCards()),
+            ],
           ),
-          const SizedBox(height: 14),
-          _DashboardEntrance(
-            order: 3,
-            child: _WalletCard(session: session, state: production),
-          ),
-          const SizedBox(height: 16),
-          _DashboardEntrance(
-            order: 4,
-            child: _MarketingPlanCard(session: session),
-          ),
-          const SizedBox(height: 22),
-          const _DashboardEntrance(order: 5, child: _ServiceGrid()),
-          const SizedBox(height: 24),
-          const _DashboardEntrance(order: 6, child: _ContentCards()),
-        ],
+        ),
       ),
     );
   }
@@ -162,21 +188,22 @@ class _DashboardEntranceState extends State<_DashboardEntrance> {
   @override
   void initState() {
     super.initState();
-    Future<void>.delayed(Duration(milliseconds: 70 * widget.order), () {
+    Future<void>.delayed(Duration(milliseconds: 54 * widget.order), () {
       if (mounted) setState(() => _visible = true);
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final reduced = _TapGoMotion.reduce(context);
     return AnimatedOpacity(
-      opacity: _visible ? 1 : 0,
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
+      opacity: _visible || reduced ? 1 : 0,
+      duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
+      curve: _TapGoMotion.standardCurve,
       child: AnimatedSlide(
-        offset: _visible ? Offset.zero : const Offset(0, 0.08),
-        duration: const Duration(milliseconds: 360),
-        curve: Curves.easeOutCubic,
+        offset: _visible || reduced ? Offset.zero : const Offset(0, 0.055),
+        duration: _TapGoMotion.duration(context, _TapGoMotion.page),
+        curve: _TapGoMotion.standardCurve,
         child: widget.child,
       ),
     );
@@ -190,21 +217,38 @@ class _ProductionBindingBanner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    late final Widget child;
+    late final String stateKey;
     if (state.isLoading) {
-      return const _DashboardSkeletonLoading();
-    }
-
-    if (state.hasError) {
-      return _CompactRetryPill(
+      stateKey = 'loading';
+      child = const _DashboardSkeletonLoading();
+    } else if (state.hasError) {
+      stateKey = 'error';
+      child = _CompactRetryPill(
         icon: Icons.cloud_off_rounded,
         label: 'Data belum tersedia',
         onRetry: () => ref.invalidate(_productionSnapshotProvider),
       );
+    } else {
+      stateKey = 'ready';
+      child = const _InlineStatePill(
+        icon: Icons.cloud_done_rounded,
+        label: 'Data TapGo tersinkron',
+      );
     }
 
-    return const _InlineStatePill(
-      icon: Icons.cloud_done_rounded,
-      label: 'Data TapGo tersinkron',
+    return AnimatedSwitcher(
+      duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
+      switchInCurve: _TapGoMotion.standardCurve,
+      switchOutCurve: _TapGoMotion.exitCurve,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: child,
+      ),
+      child: KeyedSubtree(
+        key: ValueKey(stateKey),
+        child: child,
+      ),
     );
   }
 }
@@ -214,15 +258,53 @@ class _DashboardSkeletonLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.only(bottom: 10),
-      child: Row(
+    return const Column(
+      children: [
+        Padding(
+          padding: EdgeInsets.only(bottom: 10),
+          child: Row(
+            children: [
+              _SkeletonBar(width: 72),
+              SizedBox(width: 8),
+              Expanded(child: _SkeletonBar(width: double.infinity)),
+              SizedBox(width: 8),
+              _SkeletonBar(width: 48),
+            ],
+          ),
+        ),
+        _DashboardSkeletonCard(),
+        SizedBox(height: 10),
+      ],
+    );
+  }
+}
+
+class _DashboardSkeletonCard extends StatelessWidget {
+  const _DashboardSkeletonCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SkeletonBar(width: 72),
-          SizedBox(width: 8),
-          Expanded(child: _SkeletonBar(width: double.infinity)),
-          SizedBox(width: 8),
-          _SkeletonBar(width: 48),
+          _SkeletonBar(width: 112),
+          SizedBox(height: 12),
+          _SkeletonBar(width: 220),
+          SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _SkeletonBar(width: double.infinity)),
+              SizedBox(width: 12),
+              Expanded(child: _SkeletonBar(width: double.infinity)),
+            ],
+          ),
         ],
       ),
     );
@@ -236,9 +318,13 @@ class _SkeletonBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final reduced = _TapGoMotion.reduce(context);
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.45, end: 1),
-      duration: const Duration(milliseconds: 700),
+      duration: _TapGoMotion.duration(
+        context,
+        reduced ? Duration.zero : const Duration(milliseconds: 700),
+      ),
       curve: Curves.easeInOut,
       builder: (context, value, child) => Opacity(opacity: value, child: child),
       child: Container(
@@ -255,6 +341,105 @@ class _SkeletonBar extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _DashboardValueSwitcher extends StatelessWidget {
+  const _DashboardValueSwitcher({
+    required this.value,
+    required this.style,
+  });
+
+  final String value;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
+      switchInCurve: _TapGoMotion.standardCurve,
+      switchOutCurve: _TapGoMotion.exitCurve,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: child,
+      ),
+      child: Text(
+        value,
+        key: ValueKey(value),
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: style,
+      ),
+    );
+  }
+}
+
+class _DashboardAnimatedValue extends StatefulWidget {
+  const _DashboardAnimatedValue({
+    required this.value,
+    required this.formatter,
+    required this.style,
+  });
+
+  final int value;
+  final String Function(int value) formatter;
+  final TextStyle style;
+
+  @override
+  State<_DashboardAnimatedValue> createState() =>
+      _DashboardAnimatedValueState();
+}
+
+class _DashboardAnimatedValueState extends State<_DashboardAnimatedValue> {
+  late int _beginValue;
+
+  @override
+  void initState() {
+    super.initState();
+    _beginValue = widget.value;
+  }
+
+  @override
+  void didUpdateWidget(covariant _DashboardAnimatedValue oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value) {
+      _beginValue = oldWidget.value;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_TapGoMotion.reduce(context)) {
+      return Text(
+        widget.formatter(widget.value),
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: widget.style,
+      );
+    }
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(
+        begin: _beginValue.toDouble(),
+        end: widget.value.toDouble(),
+      ),
+      duration: _TapGoMotion.duration(
+        context,
+        const Duration(milliseconds: 360),
+      ),
+      curve: _TapGoMotion.standardCurve,
+      builder: (context, animatedValue, child) {
+        return Text(
+          widget.formatter(animatedValue.round()),
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
+          style: widget.style,
+        );
+      },
     );
   }
 }
@@ -1183,11 +1368,6 @@ class _WalletCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final hasError = state.hasError;
     final isLoading = state.isLoading;
-    final balanceLabel = hasError
-        ? 'Gagal memuat saldo'
-        : isLoading
-            ? 'Memuat saldo...'
-            : formatRupiah(session.walletBalance);
     final caption = hasError
         ? 'Muat ulang'
         : isLoading
@@ -1286,16 +1466,28 @@ class _WalletCard extends ConsumerWidget {
                         FittedBox(
                           fit: BoxFit.scaleDown,
                           alignment: Alignment.centerLeft,
-                          child: Text(
-                            balanceLabel,
-                            maxLines: 1,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 31,
-                              height: 1,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
+                          child: isLoading
+                              ? const _SkeletonBar(width: 168)
+                              : hasError
+                                  ? const _DashboardValueSwitcher(
+                                      value: 'Gagal memuat saldo',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 31,
+                                        height: 1,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    )
+                                  : _DashboardAnimatedValue(
+                                      value: session.walletBalance,
+                                      formatter: formatRupiah,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 31,
+                                        height: 1,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
                         ),
                         const SizedBox(height: 10),
                         Container(
@@ -1310,13 +1502,12 @@ class _WalletCard extends ConsumerWidget {
                               color: Colors.white.withValues(alpha: 0.12),
                             ),
                           ),
-                          child: Text(
-                            caption,
+                          child: _DashboardValueSwitcher(
+                            value: caption,
                             style: const TextStyle(
-                              color: Color(0xE6FFFFFF),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                            ),
+                                color: Color(0xE6FFFFFF),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800),
                           ),
                         ),
                       ],
@@ -1348,9 +1539,13 @@ class _WalletCard extends ConsumerWidget {
 }
 
 class _MarketingPlanCard extends StatelessWidget {
-  const _MarketingPlanCard({required this.session});
+  const _MarketingPlanCard({
+    required this.session,
+    required this.isLoading,
+  });
 
   final DemoClientSession session;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -1443,6 +1638,9 @@ class _MarketingPlanCard extends StatelessWidget {
                         child: _MiniMetric(
                           label: 'Wallet',
                           value: _formatCompactRupiah(session.walletBalance),
+                          animatedValue: session.walletBalance,
+                          formatter: _formatCompactRupiah,
+                          isLoading: isLoading,
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -1450,6 +1648,9 @@ class _MarketingPlanCard extends StatelessWidget {
                         child: _MiniMetric(
                           label: 'Bonus hari ini',
                           value: _formatCompactRupiah(session.todayBonus),
+                          animatedValue: session.todayBonus,
+                          formatter: _formatCompactRupiah,
+                          isLoading: isLoading,
                         ),
                       ),
                     ],
@@ -1461,6 +1662,9 @@ class _MarketingPlanCard extends StatelessWidget {
                         child: _MiniMetric(
                           label: 'Referral Saya',
                           value: '${session.directSponsor} direct',
+                          animatedValue: session.directSponsor,
+                          formatter: (value) => '$value direct',
+                          isLoading: isLoading,
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -1468,6 +1672,9 @@ class _MarketingPlanCard extends StatelessWidget {
                         child: _MiniMetric(
                           label: 'Downline Saya',
                           value: '${session.downline} user',
+                          animatedValue: session.downline,
+                          formatter: (value) => '$value user',
+                          isLoading: isLoading,
                         ),
                       ),
                     ],
