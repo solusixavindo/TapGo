@@ -1,5 +1,164 @@
 part of '../main.dart';
 
+class TapGoRuntimeActivationResult {
+  const TapGoRuntimeActivationResult({required this.authenticated});
+
+  final bool authenticated;
+}
+
+class TapGoSessionPersistenceResult {
+  const TapGoSessionPersistenceResult({
+    required this.success,
+    required this.failedSteps,
+  });
+
+  final bool success;
+  final List<String> failedSteps;
+}
+
+class TapGoSessionPersistStep {
+  const TapGoSessionPersistStep({
+    required this.name,
+    required this.persist,
+  });
+
+  final String name;
+  final Future<bool> Function(DemoClientSession session) persist;
+}
+
+class TapGoReferralClaimResult {
+  const TapGoReferralClaimResult({
+    required this.success,
+    this.warningMessage,
+  });
+
+  final bool success;
+  final String? warningMessage;
+}
+
+class _InvalidAuthResponseException implements Exception {
+  const _InvalidAuthResponseException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+@visibleForTesting
+TapGoRuntimeActivationResult tapGoActivateAuthenticatedRuntimeSession({
+  required DemoClientSession session,
+  required void Function(DemoClientSession session) setSession,
+  required void Function(bool authenticated) setAuthenticated,
+}) {
+  setSession(session);
+  setAuthenticated(true);
+  return const TapGoRuntimeActivationResult(authenticated: true);
+}
+
+@visibleForTesting
+Future<TapGoSessionPersistenceResult>
+    tapGoPersistAuthenticatedSessionBestEffort({
+  required DemoClientSession session,
+  required List<TapGoSessionPersistStep> steps,
+  Duration stepTimeout = const Duration(seconds: 1),
+}) async {
+  final failedSteps = <String>[];
+  for (final step in steps) {
+    late final Future<bool> persistFuture;
+    try {
+      persistFuture = step.persist(session);
+    } catch (error) {
+      _tapGoDebugLog('[TapGo Auth] local_persistence ${step.name}: $error');
+      failedSteps.add(step.name);
+      continue;
+    }
+    try {
+      final success = await persistFuture.timeout(
+        stepTimeout,
+        onTimeout: () => false,
+      );
+      if (!success) {
+        failedSteps.add(step.name);
+      }
+    } catch (error) {
+      _tapGoDebugLog('[TapGo Auth] local_persistence ${step.name}: $error');
+      failedSteps.add(step.name);
+    }
+  }
+  return TapGoSessionPersistenceResult(
+    success: failedSteps.isEmpty,
+    failedSteps: List.unmodifiable(failedSteps),
+  );
+}
+
+@visibleForTesting
+Future<TapGoReferralClaimResult> tapGoClaimReferralBestEffort({
+  required String referralCode,
+  required Future<Object?> Function(String referralCode) claimReferral,
+}) async {
+  if (referralCode.trim().isEmpty) {
+    return const TapGoReferralClaimResult(success: true);
+  }
+  try {
+    await claimReferral(referralCode);
+    _tapGoDebugLog('[TapGo Auth] referral_claim success.');
+    return const TapGoReferralClaimResult(success: true);
+  } on DioException catch (error) {
+    final data = _authResponseDataMap(error.response?.data);
+    final code = data?['code']?.toString();
+    if (code == 'REFERRAL_ALREADY_CLAIMED') {
+      _tapGoDebugLog('[TapGo Auth] referral already persisted by backend.');
+      return const TapGoReferralClaimResult(success: true);
+    }
+    _tapGoDebugLog('[TapGo Auth] referral_claim skipped: ${error.message}');
+    return const TapGoReferralClaimResult(
+      success: false,
+      warningMessage:
+          'Registrasi berhasil. Kode referral belum dapat diproses saat ini.',
+    );
+  } catch (error) {
+    _tapGoDebugLog('[TapGo Auth] referral_claim skipped: $error');
+    return const TapGoReferralClaimResult(
+      success: false,
+      warningMessage:
+          'Registrasi berhasil. Kode referral belum dapat diproses saat ini.',
+    );
+  }
+}
+
+Map<String, dynamic>? _authResponseDataMap(Object? data) {
+  if (data is Map<String, dynamic>) {
+    return data;
+  }
+  if (data is Map) {
+    return data.cast<String, dynamic>();
+  }
+  if (data is String && data.trim().isNotEmpty) {
+    try {
+      final decoded = jsonDecode(data);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      if (decoded is Map) {
+        return decoded.cast<String, dynamic>();
+      }
+    } catch (_) {
+      return {'message': data};
+    }
+  }
+  return null;
+}
+
+void _validateAuthResult(_TapGoAuthResult authResult) {
+  if ((authResult.accessToken ?? '').isEmpty) {
+    throw const _InvalidAuthResponseException('Missing access token.');
+  }
+  if (authResult.user.id.isEmpty) {
+    throw const _InvalidAuthResponseException('Missing user id.');
+  }
+}
+
 class AuthScreen extends ConsumerStatefulWidget {
   const AuthScreen({super.key});
 
@@ -29,7 +188,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       return;
     }
     setState(() => _isSubmitting = true);
+    final authMode = _isRegister ? 'register' : 'login';
     try {
+      _tapGoDebugLog('[TapGo Auth] auth_request:$authMode');
       final authResult = _isRegister
           ? await _apiClient.register(
               name: _nameController.text.trim(),
@@ -41,20 +202,19 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               phone: _phoneController.text.trim(),
               password: _passwordController.text,
             );
+      _tapGoDebugLog('[TapGo Auth] auth_response_mapping:$authMode');
+      _validateAuthResult(authResult);
       _apiClient.setAccessToken(authResult.accessToken);
       final referralCode = _referralController.text.trim();
       if (_isRegister &&
           referralCode.isNotEmpty &&
           (authResult.accessToken ?? '').isNotEmpty) {
-        try {
-          await _apiClient.claimReferral(referralCode);
-        } on DioException catch (error) {
-          final code =
-              _dioResponseDataMap(error.response?.data)?['code']?.toString();
-          if (code != 'REFERRAL_ALREADY_CLAIMED') {
-            rethrow;
-          }
-          _tapGoDebugLog('[TapGo Auth] referral already persisted by backend.');
+        final referralResult = await tapGoClaimReferralBestEffort(
+          referralCode: referralCode,
+          claimReferral: _apiClient.claimReferral,
+        );
+        if (!referralResult.success && referralResult.warningMessage != null) {
+          _showAuthWarning(referralResult.warningMessage!);
         }
       }
       var session = _sessionFromAuthUser(
@@ -64,27 +224,45 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       );
       if (authResult.user.name == 'Member TapGo' &&
           (authResult.accessToken ?? '').isNotEmpty) {
-        final user = await _apiClient.me();
-        session = _sessionFromAuthUser(
-          user,
-          accessToken: authResult.accessToken,
-          refreshToken: authResult.refreshToken,
-          fallback: session,
-        );
+        try {
+          final user = await _apiClient.me();
+          session = _sessionFromAuthUser(
+            user,
+            accessToken: authResult.accessToken,
+            refreshToken: authResult.refreshToken,
+            fallback: session,
+          );
+        } catch (error) {
+          _tapGoDebugLog('[TapGo Auth] profile refresh skipped: $error');
+        }
       }
-      session = await _persistentStore.restoreMembershipSnapshot(session);
-      _tapGoDebugLog('[TapGo Auth] active user session restored.');
-      await _saveAuthenticatedSession(session);
+      try {
+        session = await _persistentStore
+            .restoreMembershipSnapshot(session)
+            .timeout(const Duration(seconds: 1), onTimeout: () => session);
+      } catch (error) {
+        _tapGoDebugLog('[TapGo Auth] membership snapshot skipped: $error');
+      }
+      _tapGoDebugLog('[TapGo Auth] in_memory_session:$authMode');
+      _activateAuthenticatedSession(session);
     } on DioException catch (error) {
       _tapGoDebugLog('[TapGo Auth] backend auth failed: ${error.message}');
       _tapGoDebugLog(
           '[TapGo Auth] error status: ${error.response?.statusCode}');
       _tapGoDebugLog('[TapGo Auth] error body: <redacted>');
       _showAuthError(_authErrorMessage(error, isRegister: _isRegister));
-    } catch (error) {
-      _tapGoDebugLog('[TapGo Auth] auth failed: $error');
+    } on _InvalidAuthResponseException catch (error) {
+      _tapGoDebugLog('[TapGo Auth] invalid auth response: ${error.message}');
+      _apiClient.setAccessToken(null);
       _showAuthError(
-          'Login berhasil, tetapi session lokal gagal disimpan. Coba ulangi.');
+        'Autentikasi berhasil, tetapi respons sesi tidak valid. Silakan coba lagi.',
+      );
+    } catch (error) {
+      _tapGoDebugLog('[TapGo Auth] unexpected post-auth failure: $error');
+      _apiClient.setAccessToken(null);
+      _showAuthError(
+        'Terjadi kendala saat menyiapkan sesi. Silakan coba lagi.',
+      );
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -92,17 +270,52 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
-  Future<void> _saveAuthenticatedSession(DemoClientSession session) async {
-    ref.read(_demoSessionProvider.notifier).state = session;
-    await _persistentStore.saveSession(session);
-    await _persistentStore.saveMembershipSnapshot(session);
-    await _persistentStore.saveTokens(
-      accessToken: session.accessToken,
-      refreshToken: session.refreshToken,
+  void _activateAuthenticatedSession(DemoClientSession session) {
+    tapGoActivateAuthenticatedRuntimeSession(
+      session: session,
+      setSession: (value) =>
+          ref.read(_demoSessionProvider.notifier).state = value,
+      setAuthenticated: (value) =>
+          ref.read(_isAuthenticatedProvider.notifier).state = value,
     );
-    await _persistentStore.saveRegisteredUser(session);
-    await _persistentStore.saveAuth(true);
-    ref.read(_isAuthenticatedProvider.notifier).state = true;
+    unawaited(_persistAuthenticatedSession(session));
+  }
+
+  Future<void> _persistAuthenticatedSession(DemoClientSession session) async {
+    final result = await tapGoPersistAuthenticatedSessionBestEffort(
+      session: session,
+      steps: [
+        TapGoSessionPersistStep(
+          name: 'saveSession',
+          persist: (value) => _persistentStore.saveSession(value),
+        ),
+        TapGoSessionPersistStep(
+          name: 'saveMembershipSnapshot',
+          persist: (value) => _persistentStore.saveMembershipSnapshot(value),
+        ),
+        TapGoSessionPersistStep(
+          name: 'saveTokens',
+          persist: (value) => _persistentStore.saveTokens(
+            accessToken: value.accessToken,
+            refreshToken: value.refreshToken,
+          ),
+        ),
+        TapGoSessionPersistStep(
+          name: 'saveRegisteredUser',
+          persist: (value) => _persistentStore.saveRegisteredUser(value),
+        ),
+        TapGoSessionPersistStep(
+          name: 'saveAuth',
+          persist: (_) => _persistentStore.saveAuth(true),
+        ),
+      ],
+    );
+    if (!result.success) {
+      _tapGoDebugLog(
+        '[TapGo Auth] local_persistence warning: ${result.failedSteps.join(', ')}',
+      );
+      _showAuthWarning(tapGoLocalSessionPersistenceWarning);
+    }
   }
 
   bool _isNetworkFailure(DioException error) {
@@ -141,26 +354,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   }
 
   Map<String, dynamic>? _dioResponseDataMap(Object? data) {
-    if (data is Map<String, dynamic>) {
-      return data;
-    }
-    if (data is Map) {
-      return data.cast<String, dynamic>();
-    }
-    if (data is String && data.trim().isNotEmpty) {
-      try {
-        final decoded = jsonDecode(data);
-        if (decoded is Map<String, dynamic>) {
-          return decoded;
-        }
-        if (decoded is Map) {
-          return decoded.cast<String, dynamic>();
-        }
-      } catch (_) {
-        return {'message': data};
-      }
-    }
-    return null;
+    return _authResponseDataMap(data);
   }
 
   void _showAuthError(String message) {
@@ -168,6 +362,21 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       return;
     }
     _TapGoSnackbar.error(context, message);
+  }
+
+  void _showAuthWarning(String message) {
+    if (mounted) {
+      _TapGoSnackbar.warning(context, message);
+      return;
+    }
+    final messenger = _tapGoScaffoldMessengerKey.currentState;
+    if (messenger != null) {
+      _TapGoSnackbar.showWithMessenger(
+        messenger,
+        message,
+        type: _TapGoFeedbackType.warning,
+      );
+    }
   }
 
   void _handleLogoTap() {

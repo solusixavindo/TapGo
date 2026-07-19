@@ -123,6 +123,14 @@ class _TapGoSnackbar {
     if (messenger == null) {
       return;
     }
+    showWithMessenger(messenger, message, type: type);
+  }
+
+  static void showWithMessenger(
+    ScaffoldMessengerState messenger,
+    String message, {
+    _TapGoFeedbackType type = _TapGoFeedbackType.info,
+  }) {
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(

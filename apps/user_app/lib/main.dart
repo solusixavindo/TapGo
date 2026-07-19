@@ -60,6 +60,9 @@ const _isTapGoProductionBuild = _tapGoAppMode == 'production';
 const _isTapGoUatBuild = _tapGoAppMode == 'staging';
 const _isTapGoDevelopmentBuild = _tapGoAppMode == 'development';
 bool tapGoEnablePaymentSimulatorForTests = false;
+const tapGoLocalSessionPersistenceWarning =
+    'Anda berhasil masuk, tetapi sesi belum tersimpan di perangkat. '
+    'Anda mungkin perlu login kembali saat aplikasi dibuka ulang.';
 
 bool get _isPaymentSimulatorEnabled =>
     tapGoEnablePaymentSimulatorForTests ||
@@ -76,6 +79,7 @@ final _persistentStore = _TapGoPersistentStore();
 final _serverConfigStore = _TapGoServerConfigStore();
 final _apiClient =
     _TapGoApiClient(baseUrl: _normalizeApiBaseUrl(_tapGoApiBaseUrl));
+final _tapGoScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 const _productionApiRootUrl = 'https://api.tapgolion.id';
 const _productionFinalSyncResetKey =
     'tapgo.production.final_sync_cache_reset.v1';
@@ -202,6 +206,7 @@ class TapGoUserApp extends ConsumerWidget {
 
     return MaterialApp(
       title: 'TapGo',
+      scaffoldMessengerKey: _tapGoScaffoldMessengerKey,
       debugShowCheckedModeBanner: false,
       theme: _tapGoReadableTheme(),
       darkTheme: _tapGoReadableTheme(brightness: Brightness.dark),

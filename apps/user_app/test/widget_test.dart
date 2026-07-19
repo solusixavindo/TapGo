@@ -1,11 +1,26 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 
+import 'package:tapgo_user_app/demo/client_flow_models.dart';
 import 'package:tapgo_user_app/main.dart';
 
 void main() {
+  DemoClientSession authTestSession() {
+    return DemoClientSession.initial().copyWith(
+      userId: 'user-auth-test',
+      userName: 'Member TapGo',
+      phone: '+6281234567890',
+      accessToken: 'access-token-test',
+      refreshToken: 'refresh-token-test',
+      isDemoMode: false,
+    );
+  }
+
   Future<void> openAuth(WidgetTester tester) async {
     tapGoDisablePersistenceForTests = true;
     tapGoEnablePaymentSimulatorForTests = false;
@@ -33,6 +48,130 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  test('login backend succeeds and persistence succeeds', () async {
+    final session = authTestSession();
+    DemoClientSession? runtimeSession;
+    var authenticated = false;
+
+    final activation = tapGoActivateAuthenticatedRuntimeSession(
+      session: session,
+      setSession: (value) => runtimeSession = value,
+      setAuthenticated: (value) => authenticated = value,
+    );
+    final persistence = await tapGoPersistAuthenticatedSessionBestEffort(
+      session: session,
+      steps: [
+        TapGoSessionPersistStep(
+            name: 'saveSession', persist: (_) async => true),
+        TapGoSessionPersistStep(name: 'saveTokens', persist: (_) async => true),
+      ],
+    );
+
+    expect(activation.authenticated, isTrue);
+    expect(authenticated, isTrue);
+    expect(runtimeSession, session);
+    expect(persistence.success, isTrue);
+  });
+
+  test('login backend succeeds and persistence throws', () async {
+    final session = authTestSession();
+    var authenticated = false;
+
+    tapGoActivateAuthenticatedRuntimeSession(
+      session: session,
+      setSession: (_) {},
+      setAuthenticated: (value) => authenticated = value,
+    );
+    final persistence = await tapGoPersistAuthenticatedSessionBestEffort(
+      session: session,
+      steps: [
+        TapGoSessionPersistStep(
+          name: 'saveSession',
+          persist: (_) {
+            throw StateError('storage unavailable');
+          },
+        ),
+      ],
+    );
+
+    expect(authenticated, isTrue);
+    expect(persistence.success, isFalse);
+    expect(persistence.failedSteps, ['saveSession']);
+  });
+
+  test('login backend succeeds and persistence times out', () async {
+    final session = authTestSession();
+    var authenticated = false;
+
+    tapGoActivateAuthenticatedRuntimeSession(
+      session: session,
+      setSession: (_) {},
+      setAuthenticated: (value) => authenticated = value,
+    );
+    final persistence = await tapGoPersistAuthenticatedSessionBestEffort(
+      session: session,
+      stepTimeout: const Duration(milliseconds: 10),
+      steps: [
+        TapGoSessionPersistStep(
+          name: 'saveTokens',
+          persist: (_) => Completer<bool>().future,
+        ),
+      ],
+    );
+
+    expect(authenticated, isTrue);
+    expect(persistence.success, isFalse);
+    expect(persistence.failedSteps, ['saveTokens']);
+  });
+
+  test('register remains authenticated when persistence fails', () async {
+    final session = authTestSession().copyWith(userId: 'registered-user');
+    var authenticated = false;
+
+    tapGoActivateAuthenticatedRuntimeSession(
+      session: session,
+      setSession: (_) {},
+      setAuthenticated: (value) => authenticated = value,
+    );
+    final persistence = await tapGoPersistAuthenticatedSessionBestEffort(
+      session: session,
+      steps: [
+        TapGoSessionPersistStep(
+          name: 'saveRegisteredUser',
+          persist: (_) async => false,
+        ),
+      ],
+    );
+
+    expect(authenticated, isTrue);
+    expect(persistence.success, isFalse);
+    expect(persistence.failedSteps, ['saveRegisteredUser']);
+  });
+
+  test('referral claim failure does not invalidate registration', () async {
+    final result = await tapGoClaimReferralBestEffort(
+      referralCode: 'TAPG123456',
+      claimReferral: (_) async => throw DioException(
+        requestOptions: RequestOptions(path: '/referrals/claim'),
+        message: 'network unavailable',
+      ),
+    );
+
+    expect(result.success, isFalse);
+    expect(result.warningMessage, isNotNull);
+    expect(result.warningMessage, contains('Registrasi berhasil'));
+  });
+
+  testWidgets('startup restore without valid token safely returns login',
+      (WidgetTester tester) async {
+    await openAuth(tester);
+
+    expect(find.text('TapGo Lion'), findsOneWidget);
+    expect(
+        find.text('Masuk untuk lanjut ke dashboard layanan.'), findsOneWidget);
+    expect(find.text('TapGoPay'), findsNothing);
+  });
 
   testWidgets('auth screen does not bypass backend login',
       (WidgetTester tester) async {
