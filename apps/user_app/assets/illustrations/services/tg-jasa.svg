@@ -1,19 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none" role="img" aria-label="TapGo Jasa 3D service icon">
+  <title>Jasa</title>
   <defs>
-    <linearGradient id="blue" x1="22" y1="18" x2="74" y2="76" gradientUnits="userSpaceOnUse"><stop stop-color="#1E76FF"/><stop offset="1" stop-color="#17C8DC"/></linearGradient>
-    <linearGradient id="orange" x1="20" y1="18" x2="76" y2="78" gradientUnits="userSpaceOnUse"><stop stop-color="#FFB45F"/><stop offset="1" stop-color="#F97316"/></linearGradient>
-    <linearGradient id="purple" x1="20" y1="18" x2="76" y2="78" gradientUnits="userSpaceOnUse"><stop stop-color="#AE96FF"/><stop offset="1" stop-color="#7557F6"/></linearGradient>
-    <linearGradient id="gold" x1="24" y1="20" x2="72" y2="74" gradientUnits="userSpaceOnUse"><stop stop-color="#FFD66B"/><stop offset="1" stop-color="#F59E0B"/></linearGradient>
-    <linearGradient id="green" x1="20" y1="18" x2="76" y2="78" gradientUnits="userSpaceOnUse"><stop stop-color="#5DD9A5"/><stop offset="1" stop-color="#17B376"/></linearGradient>
+    <linearGradient id="blue" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#45C5FF"/><stop offset="0.54" stop-color="#1E7BFF"/><stop offset="1" stop-color="#1754D8"/></linearGradient>
+    <linearGradient id="cyan" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#5BE7DE"/><stop offset="1" stop-color="#0FA6B6"/></linearGradient>
+    <linearGradient id="green" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#72E6A4"/><stop offset="1" stop-color="#16A66A"/></linearGradient>
+    <linearGradient id="orange" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#FFD15D"/><stop offset="0.5" stop-color="#FF8A2A"/><stop offset="1" stop-color="#F05A24"/></linearGradient>
+    <linearGradient id="gold" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#FFE58A"/><stop offset="0.56" stop-color="#FFBE25"/><stop offset="1" stop-color="#D88A06"/></linearGradient>
+    <linearGradient id="purple" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#C8B5FF"/><stop offset="1" stop-color="#6D55F2"/></linearGradient>
+    <linearGradient id="red" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#FF9D8D"/><stop offset="1" stop-color="#EC3F54"/></linearGradient>
+    <linearGradient id="slate" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#A8B8CC"/><stop offset="1" stop-color="#27435E"/></linearGradient>
+    <linearGradient id="white" x1="24" y1="14" x2="72" y2="76" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#E9F3FF"/></linearGradient>
+
   </defs>
-  <ellipse cx="48" cy="82" rx="24" ry="5" fill="#061F38" opacity="0.12"/>
-  <g>
-    <rect x="22" y="20" width="52" height="54" rx="18" fill="url(#blue)"/>
-    <path d="M36 58l10-10" stroke="white" stroke-width="7" stroke-linecap="round"/>
-    <path d="M48 39l8-8 8 8-8 8-8-8Z" fill="white" opacity="0.96"/>
-    <path d="M57 47l-5 5 10 10c3 3 8 3 11 0l2-2-15-15-3 2Z" fill="#FFD66B"/>
-    <path d="M30 30h10m-5-5v10" stroke="#BFEFFF" stroke-width="4" stroke-linecap="round"/>
-    <path d="M62 29c5 0 9 4 9 9" stroke="white" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
-    <circle cx="69" cy="63" r="5" fill="white" opacity="0.92"/>
-  </g>
+  <ellipse cx="48" cy="82" rx="27" ry="6" fill="#07213D" opacity="0.14"/>
+
+  <circle cx="50" cy="48" r="25" fill="url(#blue)"/>
+  <path d="M29 65l23-23" stroke="url(#orange)" stroke-width="11" stroke-linecap="round"/>
+  <path d="M52 23c7 0 12 5 12 12 0 3-1 5-2 7l9 9-11 11-9-9c-2 1-4 2-7 2-7 0-12-5-12-12 0-2 1-5 2-7l9 9 8-8-9-9c3-3 6-5 10-5Z" fill="url(#white)"/>
+  <circle cx="29" cy="66" r="9" fill="url(#orange)"/>
+  <path d="M25 66h8" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M45 25c7-3 16 0 21 7" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity="0.28"/>
+
 </svg>

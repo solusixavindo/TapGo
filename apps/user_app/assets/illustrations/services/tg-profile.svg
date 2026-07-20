@@ -1,1 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-label="TapGo Profile micro illustration"><title>Profile</title><defs><linearGradient id="g" x1="12" y1="8" x2="84" y2="88"><stop stop-color="#7E90A8"/><stop offset="1" stop-color="#0B2545"/></linearGradient></defs><ellipse cx="48" cy="82" rx="24" ry="5" fill="#061729" opacity="0.10"/><circle cx="48" cy="32" r="16" fill="url(#g)"/><path d="M22 80c5-17 15-25 26-25s21 8 26 25" fill="url(#g)"/><circle cx="54" cy="29" r="3" fill="#FFFFFF"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none" role="img" aria-label="TapGo Profile 3D service icon">
+  <title>Profile</title>
+  <defs>
+    <linearGradient id="blue" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#45C5FF"/><stop offset="0.54" stop-color="#1E7BFF"/><stop offset="1" stop-color="#1754D8"/></linearGradient>
+    <linearGradient id="cyan" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#5BE7DE"/><stop offset="1" stop-color="#0FA6B6"/></linearGradient>
+    <linearGradient id="green" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#72E6A4"/><stop offset="1" stop-color="#16A66A"/></linearGradient>
+    <linearGradient id="orange" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#FFD15D"/><stop offset="0.5" stop-color="#FF8A2A"/><stop offset="1" stop-color="#F05A24"/></linearGradient>
+    <linearGradient id="gold" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#FFE58A"/><stop offset="0.56" stop-color="#FFBE25"/><stop offset="1" stop-color="#D88A06"/></linearGradient>
+    <linearGradient id="purple" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#C8B5FF"/><stop offset="1" stop-color="#6D55F2"/></linearGradient>
+    <linearGradient id="red" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#FF9D8D"/><stop offset="1" stop-color="#EC3F54"/></linearGradient>
+    <linearGradient id="slate" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#A8B8CC"/><stop offset="1" stop-color="#27435E"/></linearGradient>
+    <linearGradient id="white" x1="24" y1="14" x2="72" y2="76" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#E9F3FF"/></linearGradient>
+
+  </defs>
+  <ellipse cx="48" cy="82" rx="27" ry="6" fill="#07213D" opacity="0.14"/>
+
+  <circle cx="48" cy="32" r="16" fill="url(#slate)"/>
+  <path d="M21 80c5-17 16-25 27-25s22 8 27 25Z" fill="url(#slate)"/>
+  <circle cx="54" cy="29" r="4" fill="#FFFFFF" opacity="0.55"/>
+  <circle cx="66" cy="61" r="10" fill="url(#green)"/>
+  <path d="M61 61l4 4 8-9" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+</svg>

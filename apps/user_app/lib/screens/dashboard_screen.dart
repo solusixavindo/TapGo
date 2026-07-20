@@ -1806,8 +1806,8 @@ class _ServiceGrid extends StatelessWidget {
   const _ServiceGrid();
 
   static const services = [
-    _ServiceItem('TapGo Ride', Icons.two_wheeler_rounded, Color(0xFF0569E8),
-        'Diskon 5000'),
+    _ServiceItem(
+        'TapGo Ride', Icons.two_wheeler_rounded, Color(0xFF0569E8), 'Segera'),
     _ServiceItem(
         'TapGo Car', Icons.local_taxi_rounded, Color(0xFF0B7A75), null),
     _ServiceItem(
@@ -1818,7 +1818,7 @@ class _ServiceGrid extends StatelessWidget {
         'Jasa', Icons.home_repair_service_rounded, Color(0xFFD97706), null),
     _ServiceItem('Pulsa', Icons.phone_iphone_rounded, Color(0xFF1486B8), null),
     _ServiceItem('TapGo Bantu', Icons.volunteer_activism_rounded,
-        Color(0xFF0569E8), 'Baru'),
+        Color(0xFF0569E8), 'Segera'),
     _ServiceItem('Lainnya', Icons.grid_view_rounded, Color(0xFF697386), null),
   ];
 
@@ -2728,115 +2728,91 @@ class _ServiceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = _serviceIconStyle(item.label);
-    return Stack(
-      clipBehavior: Clip.none,
-      alignment: Alignment.topCenter,
-      children: [
-        Column(
+    final isUnavailable = item.badge != null;
+    return Semantics(
+      button: !isUnavailable,
+      enabled: !isUnavailable,
+      label: isUnavailable
+          ? '${item.label}, segera hadir'
+          : 'Buka layanan ${item.label}',
+      child: ExcludeSemantics(
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.topCenter,
           children: [
-            _ServiceAssetIcon(
-              label: item.label,
-              icon: item.icon,
-              style: _ServiceIconStyle(
-                primary: item.color,
-                secondary: style.secondary,
-                background: style.background,
-              ),
-              size: 68,
-            ),
-            const SizedBox(height: 9),
-            SizedBox(
-              width: 82,
-              height: 32,
-              child: Center(
-                child: Text(
-                  item.label,
-                  maxLines: 2,
-                  softWrap: true,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Color(0xFF263241),
-                    fontSize: 11.2,
-                    height: 1.05,
-                    fontWeight: FontWeight.w800,
+            Column(
+              children: [
+                _ServiceAssetIcon(
+                  label: item.label,
+                  icon: item.icon,
+                  style: _ServiceIconStyle(
+                    primary: item.color,
+                    secondary: style.secondary,
+                    background: style.background,
+                  ),
+                  size: 64,
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: 82,
+                  height: 32,
+                  child: Center(
+                    child: Text(
+                      item.label,
+                      maxLines: 2,
+                      softWrap: true,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFF263241),
+                        fontSize: 11.2,
+                        height: 1.05,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
+            if (isUnavailable)
+              const Positioned(
+                top: -4,
+                right: 8,
+                child: _ServiceSoonBadge(),
+              ),
           ],
         ),
-        if (item.badge != null)
-          Positioned(
-            top: -8,
-            child: _FloatingServiceBadge(label: item.badge!),
-          ),
-      ],
+      ),
     );
   }
 }
 
-class _FloatingServiceBadge extends StatefulWidget {
-  const _FloatingServiceBadge({required this.label});
-
-  final String label;
-
-  @override
-  State<_FloatingServiceBadge> createState() => _FloatingServiceBadgeState();
-}
-
-class _FloatingServiceBadgeState extends State<_FloatingServiceBadge>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1900),
-    );
-    _scale = Tween<double>(begin: 1, end: 1.08).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-    if (_dashboardLiveAnimationsEnabled) {
-      _controller.repeat(reverse: true);
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+class _ServiceSoonBadge extends StatelessWidget {
+  const _ServiceSoonBadge();
 
   @override
   Widget build(BuildContext context) {
-    return ScaleTransition(
-      scale: _scale,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFF3B30), Color(0xFFFFB000)],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFF8A00),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white, width: 1.4),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33FF8A00),
+            blurRadius: 8,
+            offset: Offset(0, 3),
           ),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x55FF3B30),
-              blurRadius: 14,
-              offset: Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Text(
-          widget.label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 10,
-            fontWeight: FontWeight.w900,
-          ),
+        ],
+      ),
+      child: const Text(
+        'Segera',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 8.5,
+          height: 1,
+          fontWeight: FontWeight.w900,
         ),
       ),
     );
@@ -2948,63 +2924,33 @@ class _ServiceAssetIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.white.withValues(alpha: 0.98),
-            style.background.withValues(alpha: 0.92),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(size * 0.31),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.85)),
-        boxShadow: [
-          BoxShadow(
-            color: style.primary.withValues(alpha: 0.26),
-            blurRadius: size * 0.24,
-            offset: Offset(0, size * 0.12),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
       child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
         children: [
           Positioned(
-            left: size * 0.14,
-            top: size * 0.10,
-            child: Container(
-              width: size * 0.36,
-              height: size * 0.10,
+            bottom: size * 0.02,
+            child: DecoratedBox(
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.76),
-                borderRadius: BorderRadius.circular(size),
+                boxShadow: [
+                  BoxShadow(
+                    color: style.primary.withValues(alpha: 0.18),
+                    blurRadius: size * 0.22,
+                    spreadRadius: size * 0.02,
+                  ),
+                ],
               ),
+              child: SizedBox(width: size * 0.62, height: size * 0.12),
             ),
           ),
-          Positioned(
-            right: -size * 0.14,
-            bottom: -size * 0.16,
-            child: Container(
-              width: size * 0.52,
-              height: size * 0.52,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: style.primary.withValues(alpha: 0.10),
-              ),
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.all(size * 0.03),
-            child: _TapGoServiceIllustration(
-              label: label,
-              fallbackIcon: icon,
-              fallbackStyle: style,
-              size: size,
-            ),
+          _TapGoServiceIllustration(
+            label: label,
+            fallbackIcon: icon,
+            fallbackStyle: style,
+            size: size,
           ),
         ],
       ),

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
@@ -48,6 +49,56 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('all 3d service icon assets resolve locally',
+      (WidgetTester tester) async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    const serviceIconAssets = [
+      'assets/illustrations/services/tg-home.svg',
+      'assets/illustrations/services/tg-wallet.svg',
+      'assets/illustrations/services/tg-top-up.svg',
+      'assets/illustrations/services/tg-upgrade.svg',
+      'assets/illustrations/services/tg-referral.svg',
+      'assets/illustrations/services/tg-membership.svg',
+      'assets/illustrations/services/tg-reward.svg',
+      'assets/illustrations/services/tg-bonus.svg',
+      'assets/illustrations/services/tg-commission.svg',
+      'assets/illustrations/services/tg-cashback.svg',
+      'assets/illustrations/services/tg-ppob.svg',
+      'assets/illustrations/services/tg-merchant.svg',
+      'assets/illustrations/services/tg-marketplace.svg',
+      'assets/illustrations/services/tg-jasa.svg',
+      'assets/illustrations/services/tg-ojek-motor.svg',
+      'assets/illustrations/services/tg-ojek-mobil.svg',
+      'assets/illustrations/services/tg-activity.svg',
+      'assets/illustrations/services/tg-notification.svg',
+      'assets/illustrations/services/tg-chat.svg',
+      'assets/illustrations/services/tg-profile.svg',
+    ];
+
+    for (final asset in serviceIconAssets) {
+      final svg = await rootBundle.loadString(asset);
+      expect(svg, contains('<svg'));
+      expect(svg, contains('viewBox="0 0 96 96"'));
+      expect(svg, isNot(contains('rect x="0"')));
+    }
+  });
+
+  testWidgets('service grid exposes active and upcoming service semantics',
+      (WidgetTester tester) async {
+    final semantics = tester.ensureSemantics();
+    try {
+      await openDashboard(tester);
+
+      expect(find.text('Segera'), findsNWidgets(2));
+      expect(find.bySemanticsLabel('Buka layanan TapGo Car'), findsOneWidget);
+      expect(find.bySemanticsLabel('TapGo Ride, segera hadir'), findsOneWidget);
+      expect(
+          find.bySemanticsLabel('TapGo Bantu, segera hadir'), findsOneWidget);
+    } finally {
+      semantics.dispose();
+    }
+  });
 
   test('login backend succeeds and persistence succeeds', () async {
     final session = authTestSession();
