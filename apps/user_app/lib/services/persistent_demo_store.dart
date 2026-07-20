@@ -442,6 +442,14 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
   }
 }
 
+@visibleForTesting
+Map<String, dynamic> tapGoSessionToJsonForTests(DemoClientSession session) =>
+    _sessionToJson(session);
+
+@visibleForTesting
+DemoClientSession tapGoSessionFromJsonForTests(Map<String, dynamic> json) =>
+    _sessionFromJson(json);
+
 Map<String, dynamic> _sessionToJson(DemoClientSession session) {
   return {
     'userId': session.userId,

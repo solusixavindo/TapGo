@@ -114,11 +114,13 @@ void main() {
     final session = authTestSession();
     DemoClientSession? runtimeSession;
     var authenticated = false;
+    var dashboardNavigationCount = 0;
 
     final activation = tapGoActivateAuthenticatedRuntimeSession(
       session: session,
       setSession: (value) => runtimeSession = value,
       setAuthenticated: (value) => authenticated = value,
+      afterAuthenticated: () => dashboardNavigationCount++,
     );
     final persistence = await tapGoPersistAuthenticatedSessionBestEffort(
       session: session,
@@ -132,7 +134,70 @@ void main() {
     expect(activation.authenticated, isTrue);
     expect(authenticated, isTrue);
     expect(runtimeSession, session);
+    expect(dashboardNavigationCount, 1);
     expect(persistence.success, isTrue);
+  });
+
+  test('logout followed by relogin refreshes session and reopens dashboard',
+      () async {
+    final firstSession = authTestSession().copyWith(
+      userId: 'first-session',
+      accessToken: 'first-access-token',
+      refreshToken: 'first-refresh-token',
+    );
+    final secondSession = authTestSession().copyWith(
+      userId: 'second-session',
+      accessToken: 'second-access-token',
+      refreshToken: 'second-refresh-token',
+    );
+    DemoClientSession runtimeSession = DemoClientSession.initial();
+    var authenticated = false;
+    var dashboardNavigationCount = 0;
+
+    tapGoActivateAuthenticatedRuntimeSession(
+      session: firstSession,
+      setSession: (value) => runtimeSession = value,
+      setAuthenticated: (value) => authenticated = value,
+      afterAuthenticated: () => dashboardNavigationCount++,
+    );
+    expect(authenticated, isTrue);
+    expect(runtimeSession.userId, 'first-session');
+    expect(dashboardNavigationCount, 1);
+
+    runtimeSession = DemoClientSession.initial();
+    authenticated = false;
+
+    tapGoActivateAuthenticatedRuntimeSession(
+      session: secondSession,
+      setSession: (value) => runtimeSession = value,
+      setAuthenticated: (value) => authenticated = value,
+      afterAuthenticated: () => dashboardNavigationCount++,
+    );
+
+    expect(authenticated, isTrue);
+    expect(runtimeSession.userId, 'second-session');
+    expect(runtimeSession.accessToken, 'second-access-token');
+    expect(dashboardNavigationCount, 2);
+  });
+
+  test('restart restore keeps the latest active login session fields', () {
+    final session = authTestSession().copyWith(
+      userId: 'restart-user',
+      accessToken: 'restart-access-token',
+      refreshToken: 'restart-refresh-token',
+      userName: 'Member Restart',
+      phone: '+628111222333',
+    );
+
+    final restored =
+        tapGoSessionFromJsonForTests(tapGoSessionToJsonForTests(session));
+
+    expect(restored.userId, 'restart-user');
+    expect(restored.accessToken, 'restart-access-token');
+    expect(restored.refreshToken, 'restart-refresh-token');
+    expect(restored.userName, 'Member Restart');
+    expect(restored.phone, '+628111222333');
+    expect(restored.isDemoMode, isFalse);
   });
 
   test('login backend succeeds and persistence throws', () async {

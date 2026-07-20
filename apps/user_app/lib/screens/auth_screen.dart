@@ -50,9 +50,11 @@ TapGoRuntimeActivationResult tapGoActivateAuthenticatedRuntimeSession({
   required DemoClientSession session,
   required void Function(DemoClientSession session) setSession,
   required void Function(bool authenticated) setAuthenticated,
+  VoidCallback? afterAuthenticated,
 }) {
   setSession(session);
   setAuthenticated(true);
+  afterAuthenticated?.call();
   return const TapGoRuntimeActivationResult(authenticated: true);
 }
 
@@ -277,8 +279,21 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           ref.read(_demoSessionProvider.notifier).state = value,
       setAuthenticated: (value) =>
           ref.read(_isAuthenticatedProvider.notifier).state = value,
+      afterAuthenticated: _openAuthenticatedDashboard,
     );
     unawaited(_persistAuthenticatedSession(session));
+  }
+
+  void _openAuthenticatedDashboard() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+        _tapGoPageRoute((_) => _roleDashboardForContext(context)),
+        (_) => false,
+      );
+    });
   }
 
   Future<void> _persistAuthenticatedSession(DemoClientSession session) async {
