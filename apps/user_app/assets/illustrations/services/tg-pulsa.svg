@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none" role="img" aria-label="TapGo Pulsa 3D service icon">
+  <title>Pulsa</title>
+  <defs>
+    <linearGradient id="phone" x1="26" y1="14" x2="72" y2="80" gradientUnits="userSpaceOnUse"><stop stop-color="#45C5FF"/><stop offset="0.55" stop-color="#1E7BFF"/><stop offset="1" stop-color="#1754D8"/></linearGradient>
+    <linearGradient id="screen" x1="31" y1="22" x2="64" y2="66" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#DFF3FF"/></linearGradient>
+    <linearGradient id="bolt" x1="47" y1="25" x2="72" y2="66" gradientUnits="userSpaceOnUse"><stop stop-color="#FFE58A"/><stop offset="0.56" stop-color="#FFBE25"/><stop offset="1" stop-color="#F05A24"/></linearGradient>
+  </defs>
+  <ellipse cx="48" cy="82" rx="26" ry="6" fill="#07213D" opacity="0.14"/>
+  <rect x="29" y="15" width="38" height="62" rx="14" fill="url(#phone)"/>
+  <rect x="34" y="24" width="28" height="39" rx="8" fill="url(#screen)"/>
+  <circle cx="48" cy="69" r="3" fill="#FFFFFF" opacity="0.9"/>
+  <path d="M54 29l-11 20h11l-7 20 20-27H55l9-13Z" fill="url(#bolt)"/>
+  <path d="M36 22c6-5 18-5 25 0" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity="0.28"/>
+</svg>

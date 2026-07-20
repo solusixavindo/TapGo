@@ -65,23 +65,33 @@ void main() {
       'assets/illustrations/services/tg-commission.svg',
       'assets/illustrations/services/tg-cashback.svg',
       'assets/illustrations/services/tg-ppob.svg',
+      'assets/illustrations/services/tg-pulsa.svg',
+      'assets/illustrations/services/tg-bpjs.svg',
+      'assets/illustrations/services/tg-tagihan.svg',
       'assets/illustrations/services/tg-merchant.svg',
       'assets/illustrations/services/tg-marketplace.svg',
       'assets/illustrations/services/tg-jasa.svg',
       'assets/illustrations/services/tg-ojek-motor.svg',
       'assets/illustrations/services/tg-ojek-mobil.svg',
       'assets/illustrations/services/tg-activity.svg',
+      'assets/illustrations/services/tg-kelas-online.svg',
+      'assets/illustrations/services/tg-webinar.svg',
+      'assets/illustrations/services/tg-event.svg',
       'assets/illustrations/services/tg-notification.svg',
       'assets/illustrations/services/tg-chat.svg',
+      'assets/illustrations/services/tg-support.svg',
       'assets/illustrations/services/tg-profile.svg',
     ];
+    final svgBodies = <String>{};
 
     for (final asset in serviceIconAssets) {
       final svg = await rootBundle.loadString(asset);
       expect(svg, contains('<svg'));
       expect(svg, contains('viewBox="0 0 96 96"'));
       expect(svg, isNot(contains('rect x="0"')));
+      svgBodies.add(svg);
     }
+    expect(svgBodies.length, serviceIconAssets.length);
   });
 
   testWidgets('service grid exposes active and upcoming service semantics',

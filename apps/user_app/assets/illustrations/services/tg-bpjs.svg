@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none" role="img" aria-label="TapGo BPJS 3D service icon">
+  <title>BPJS</title>
+  <defs>
+    <linearGradient id="card" x1="18" y1="20" x2="75" y2="76" gradientUnits="userSpaceOnUse"><stop stop-color="#72E6A4"/><stop offset="1" stop-color="#16A66A"/></linearGradient>
+    <linearGradient id="white" x1="28" y1="24" x2="70" y2="68" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#E9F3FF"/></linearGradient>
+    <linearGradient id="red" x1="37" y1="29" x2="64" y2="61" gradientUnits="userSpaceOnUse"><stop stop-color="#FF9D8D"/><stop offset="1" stop-color="#EC3F54"/></linearGradient>
+  </defs>
+  <ellipse cx="48" cy="82" rx="27" ry="6" fill="#07213D" opacity="0.14"/>
+  <rect x="18" y="25" width="60" height="43" rx="16" fill="url(#card)"/>
+  <rect x="25" y="33" width="27" height="27" rx="10" fill="url(#white)"/>
+  <path d="M38.5 38v17M30 46.5h17" stroke="url(#red)" stroke-width="6" stroke-linecap="round"/>
+  <rect x="57" y="36" width="14" height="5" rx="2.5" fill="#FFFFFF" opacity="0.72"/>
+  <rect x="57" y="48" width="11" height="5" rx="2.5" fill="#FFFFFF" opacity="0.5"/>
+  <circle cx="71" cy="28" r="10" fill="#FFE58A"/>
+  <path d="M66 28l4 4 7-9" stroke="#16A66A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
