@@ -939,114 +939,145 @@ class DemoWalletScreen extends ConsumerWidget {
         text: bankAccount['accountHolderName']?.toString() ??
             ref.read(_demoSessionProvider).userName);
     final formKey = GlobalKey<FormState>();
+    final submitGuard = TapGoSingleFlightGuard();
+    var isSubmitting = false;
 
     await _showTapGoBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          8,
-          20,
-          MediaQuery.of(context).viewInsets.bottom + 20,
-        ),
-        child: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Ajukan Withdrawal',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 14),
-              _InputField(
-                controller: amountController,
-                icon: Icons.payments_rounded,
-                label: 'Nominal',
-                hint: 'Minimal Rp50.000',
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  final amount = _intFrom(value);
-                  if (amount < 50000) {
-                    return 'Minimal withdraw Rp50.000';
-                  }
-                  if (amount > session.walletBalance) {
-                    return 'Saldo TapGoPay belum cukup';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 10),
-              _BankDropdownField(
-                controller: bankController,
-                label: 'Bank',
-              ),
-              const SizedBox(height: 10),
-              _InputField(
-                controller: accountController,
-                icon: Icons.numbers_rounded,
-                label: 'Nomor rekening',
-                hint: '1234567890',
-                keyboardType: TextInputType.number,
-                validator: (value) => (value ?? '').trim().length >= 6
-                    ? null
-                    : 'Rekening tidak valid',
-              ),
-              const SizedBox(height: 10),
-              _InputField(
-                controller: holderController,
-                icon: Icons.person_rounded,
-                label: 'Nama rekening',
-                hint: 'Nama pemilik rekening',
-                validator: (value) => (value ?? '').trim().length >= 2
-                    ? null
-                    : 'Nama wajib diisi',
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () async {
-                    if (!(formKey.currentState?.validate() ?? false)) {
-                      return;
-                    }
-                    final rootContext = context;
-                    try {
-                      final session = ref.read(_demoSessionProvider);
-                      _apiClient.setAccessToken(session.accessToken);
-                      await _apiClient.requestWithdrawal(
-                        amount: _intFrom(amountController.text),
-                        bankName: bankController.text.trim(),
-                        bankCode: _bankByNameOrCode(bankController.text)?.code,
-                        accountNumber: accountController.text.trim(),
-                        accountHolderName: holderController.text.trim(),
-                      );
-                      if (!rootContext.mounted) {
-                        return;
-                      }
-                      Navigator.of(rootContext).pop();
-                      _TapGoSnackbar.success(
-                        rootContext,
-                        'Withdrawal berhasil diajukan.',
-                      );
-                      ref.invalidate(_productionSnapshotProvider);
-                    } catch (error) {
-                      if (!rootContext.mounted) {
-                        return;
-                      }
-                      _TapGoSnackbar.error(
-                        rootContext,
-                        _friendlyApiError(error),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.send_rounded),
-                  label: const Text('Kirim Pengajuan'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            8,
+            20,
+            MediaQuery.of(context).viewInsets.bottom + 20,
+          ),
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Ajukan Withdrawal',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                 ),
-              ),
-            ],
+                const SizedBox(height: 14),
+                _InputField(
+                  controller: amountController,
+                  icon: Icons.payments_rounded,
+                  label: 'Nominal',
+                  hint: 'Minimal Rp50.000',
+                  keyboardType: TextInputType.number,
+                  readOnly: isSubmitting,
+                  validator: (value) {
+                    final amount = _intFrom(value);
+                    if (amount < 50000) {
+                      return 'Minimal withdraw Rp50.000';
+                    }
+                    if (amount > session.walletBalance) {
+                      return 'Saldo TapGoPay belum cukup';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 10),
+                AbsorbPointer(
+                  absorbing: isSubmitting,
+                  child: _BankDropdownField(
+                    controller: bankController,
+                    label: 'Bank',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _InputField(
+                  controller: accountController,
+                  icon: Icons.numbers_rounded,
+                  label: 'Nomor rekening',
+                  hint: '1234567890',
+                  keyboardType: TextInputType.number,
+                  readOnly: isSubmitting,
+                  validator: (value) => (value ?? '').trim().length >= 6
+                      ? null
+                      : 'Rekening tidak valid',
+                ),
+                const SizedBox(height: 10),
+                _InputField(
+                  controller: holderController,
+                  icon: Icons.person_rounded,
+                  label: 'Nama rekening',
+                  hint: 'Nama pemilik rekening',
+                  readOnly: isSubmitting,
+                  validator: (value) => (value ?? '').trim().length >= 2
+                      ? null
+                      : 'Nama wajib diisi',
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: isSubmitting
+                        ? null
+                        : () async {
+                            if (!(formKey.currentState?.validate() ?? false)) {
+                              return;
+                            }
+                            setModalState(() => isSubmitting = true);
+                            final rootContext = context;
+                            try {
+                              final success = await submitGuard.run(() async {
+                                final session = ref.read(_demoSessionProvider);
+                                _apiClient.setAccessToken(session.accessToken);
+                                await _apiClient.requestWithdrawal(
+                                  amount: _intFrom(amountController.text),
+                                  bankName: bankController.text.trim(),
+                                  bankCode:
+                                      _bankByNameOrCode(bankController.text)
+                                          ?.code,
+                                  accountNumber: accountController.text.trim(),
+                                  accountHolderName:
+                                      holderController.text.trim(),
+                                );
+                                return true;
+                              });
+                              if (!rootContext.mounted) {
+                                return;
+                              }
+                              if (success == true) {
+                                setModalState(() => isSubmitting = false);
+                                Navigator.of(rootContext).pop();
+                                _TapGoSnackbar.success(
+                                  rootContext,
+                                  'Withdrawal berhasil diajukan.',
+                                );
+                                ref.invalidate(_productionSnapshotProvider);
+                                return;
+                              }
+                            } catch (error) {
+                              if (!rootContext.mounted) {
+                                return;
+                              }
+                              _TapGoSnackbar.error(
+                                rootContext,
+                                _friendlyApiError(error),
+                              );
+                            } finally {
+                              if (rootContext.mounted && isSubmitting) {
+                                setModalState(() => isSubmitting = false);
+                              }
+                            }
+                          },
+                    icon: isSubmitting
+                        ? const _TapGoLoading(size: 18, strokeWidth: 2)
+                        : const Icon(Icons.send_rounded),
+                    label: Text(
+                      isSubmitting ? 'Mengirim...' : 'Kirim Pengajuan',
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1415,7 +1446,10 @@ class _BankAccountScreenState extends ConsumerState<BankAccountScreen> {
       if (!mounted) {
         return;
       }
-      _TapGoSnackbar.error(context, 'Gagal menyimpan rekening: $error');
+      _TapGoSnackbar.error(
+        context,
+        _friendlyApiError(error),
+      );
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -1562,7 +1596,10 @@ class _DeleteAccountRequestScreenState
       );
     } catch (error) {
       if (!mounted) return;
-      _TapGoSnackbar.error(context, 'Gagal mengirim pengajuan: $error');
+      _TapGoSnackbar.error(
+        context,
+        'Pengajuan belum dapat dikirim. Silakan coba lagi.',
+      );
     } finally {
       if (mounted) {
         setState(() => _submitting = false);
@@ -1667,7 +1704,10 @@ class _ContactUsScreenState extends ConsumerState<ContactUsScreen> {
       _TapGoSnackbar.success(context, 'Pesan berhasil dikirim ke TapGo.');
     } catch (error) {
       if (!mounted) return;
-      _TapGoSnackbar.error(context, 'Gagal mengirim pesan: $error');
+      _TapGoSnackbar.error(
+        context,
+        'Pesan belum dapat dikirim. Silakan coba lagi.',
+      );
     } finally {
       if (mounted) {
         setState(() => _submitting = false);

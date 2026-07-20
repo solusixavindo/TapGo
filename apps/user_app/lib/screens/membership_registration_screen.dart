@@ -525,55 +525,49 @@ class _MembershipRegistrationScreenState
         imageQuality: 82,
         maxWidth: 1400,
       );
-      if (!mounted || image == null) {
+      if (!mounted) {
+        return;
+      }
+      if (image == null) {
         _showUploadMessage('Pemilihan foto dibatalkan.');
         return;
       }
-      _setPickedDocument(
-        kind,
-        _PickedDemoDocument(
-          path: image.path,
-          fileName: image.name,
-          statusLabel: source == ImageSource.gallery
-              ? 'Foto berhasil dipilih'
-              : 'Foto berhasil diambil',
-        ),
-      );
-    } on MissingPluginException {
-      _setPickedDocument(
-        kind,
-        _PickedDemoDocument(
-          path: null,
-          fileName: source == ImageSource.gallery
-              ? 'foto-galeri.jpg'
-              : 'foto-kamera.jpg',
-          statusLabel: source == ImageSource.gallery
-              ? 'Foto berhasil dipilih'
-              : 'Foto berhasil diambil',
-        ),
-      );
-    } on PlatformException catch (error) {
-      if (error.code == 'channel-error' || error.code == 'missing_plugin') {
-        _setPickedDocument(
-          kind,
-          _PickedDemoDocument(
-            path: null,
-            fileName: source == ImageSource.gallery
-                ? 'foto-galeri.jpg'
-                : 'foto-kamera.jpg',
-            statusLabel: source == ImageSource.gallery
-                ? 'Foto berhasil dipilih'
-                : 'Foto berhasil diambil',
-          ),
-        );
+      final document = _pickedDocumentFromImage(image, source: source);
+      if (document == null) {
+        _showUploadMessage(tapGoDocumentUploadFailureMessage);
         return;
       }
-      _showUploadMessage(
-        error.message ?? 'Permission ditolak atau media tidak tersedia.',
-      );
-    } catch (_) {
-      _showUploadMessage('Foto belum bisa dipilih. Silakan coba lagi.');
+      _setPickedDocument(kind, document);
+    } on MissingPluginException catch (error) {
+      _tapGoDebugLog('[TapGo Upload] image picker unavailable: $error');
+      _showUploadMessage(tapGoDocumentUploadFailureMessage);
+    } on PlatformException catch (error) {
+      if (error.code == 'channel-error' || error.code == 'missing_plugin') {
+        _tapGoDebugLog('[TapGo Upload] image picker channel unavailable.');
+        _showUploadMessage(tapGoDocumentUploadFailureMessage);
+        return;
+      }
+      _tapGoDebugLog(
+          '[TapGo Upload] image picker platform error: ${error.code}');
+      _showUploadMessage(tapGoDocumentUploadFailureMessage);
+    } catch (error) {
+      _tapGoDebugLog('[TapGo Upload] image picker failed: $error');
+      _showUploadMessage(tapGoDocumentUploadFailureMessage);
     }
+  }
+
+  _PickedDemoDocument? _pickedDocumentFromImage(
+    XFile image, {
+    required ImageSource source,
+  }) {
+    if (!tapGoIsValidPickedDocumentPathForTests(image.path)) {
+      return null;
+    }
+    return _PickedDemoDocument(
+      path: image.path.trim(),
+      fileName: image.name,
+      statusLabel: tapGoUploadSuccessLabelForTests(source),
+    );
   }
 
   void _setPickedDocument(_DocumentKind kind, _PickedDemoDocument document) {
@@ -604,6 +598,21 @@ class _MembershipRegistrationScreenState
 }
 
 enum _DocumentKind { ktp, selfie }
+
+const tapGoDocumentUploadFailureMessage =
+    'Dokumen gagal dipilih atau diunggah. Silakan coba kembali.';
+
+@visibleForTesting
+bool tapGoIsValidPickedDocumentPathForTests(String? path) {
+  return path != null && path.trim().isNotEmpty;
+}
+
+@visibleForTesting
+String tapGoUploadSuccessLabelForTests(ImageSource source) {
+  return source == ImageSource.gallery
+      ? 'Foto berhasil dipilih'
+      : 'Foto berhasil diambil';
+}
 
 class _PickedDemoDocument {
   const _PickedDemoDocument({

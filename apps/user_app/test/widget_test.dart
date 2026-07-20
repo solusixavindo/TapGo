@@ -289,6 +289,67 @@ void main() {
     expect(result.warningMessage, contains('Registrasi berhasil'));
   });
 
+  test('single flight guard prevents duplicate form actions', () async {
+    final guard = TapGoSingleFlightGuard();
+    final completer = Completer<bool>();
+    var runCount = 0;
+
+    final first = guard.run(() async {
+      runCount++;
+      return completer.future;
+    });
+    final second = await guard.run(() async {
+      runCount++;
+      return true;
+    });
+
+    expect(second, isNull);
+    expect(runCount, 1);
+    expect(guard.isRunning, isTrue);
+
+    completer.complete(true);
+    expect(await first, isTrue);
+    expect(guard.isRunning, isFalse);
+
+    await expectLater(
+      guard.run<bool>(() async {
+        runCount++;
+        throw StateError('network unavailable');
+      }),
+      throwsA(isA<StateError>()),
+    );
+    expect(guard.isRunning, isFalse);
+
+    final retry = await guard.run(() async {
+      runCount++;
+      return true;
+    });
+
+    expect(retry, isTrue);
+    expect(runCount, 3);
+  });
+
+  test('document upload only succeeds with a valid picked file path', () {
+    expect(tapGoIsValidPickedDocumentPathForTests(null), isFalse);
+    expect(tapGoIsValidPickedDocumentPathForTests(''), isFalse);
+    expect(tapGoIsValidPickedDocumentPathForTests('   '), isFalse);
+    expect(
+      tapGoIsValidPickedDocumentPathForTests(' /tmp/tapgo-ktp.jpg '),
+      isTrue,
+    );
+    expect(
+      tapGoUploadSuccessLabelForTests(ImageSource.gallery),
+      'Foto berhasil dipilih',
+    );
+    expect(
+      tapGoUploadSuccessLabelForTests(ImageSource.camera),
+      'Foto berhasil diambil',
+    );
+    expect(tapGoDocumentUploadFailureMessage, isNot(contains('Exception')));
+    expect(tapGoDocumentUploadFailureMessage, isNot(contains('/tmp')));
+    expect(tapGoDocumentUploadFailureMessage, isNot(contains('channel-error')));
+  });
+
   testWidgets('startup restore without valid token safely returns login',
       (WidgetTester tester) async {
     await openAuth(tester);

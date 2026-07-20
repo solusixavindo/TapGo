@@ -177,38 +177,58 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
     if (!mounted) {
       return;
     }
+    final statusCheckGuard = TapGoSingleFlightGuard();
     await _showTapGoDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Status Pembayaran'),
-        content: const Text(
-          'Selesaikan pembayaran di halaman DOKU, lalu cek status pembayaran Anda.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              final closedContext = context;
-              final paid = await _pollBackendOrderStatus(orderId);
-              if (!closedContext.mounted) {
-                return;
-              }
-              Navigator.of(closedContext).pop();
-              if (paid) {
-                await _openSuccessFromBackend();
-              }
-            },
-            child: const Text('Cek Status'),
-          ),
-          if (_isPaymentSimulatorEnabled)
-            FilledButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _completePayment();
-              },
-              child: const Text('Konfirmasi Pembayaran'),
+      builder: (context) {
+        var isChecking = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Status Pembayaran'),
+            content: const Text(
+              'Selesaikan pembayaran di halaman DOKU, lalu cek status pembayaran Anda.',
             ),
-        ],
-      ),
+            actions: [
+              TextButton(
+                onPressed: isChecking
+                    ? null
+                    : () async {
+                        setDialogState(() => isChecking = true);
+                        final closedContext = context;
+                        final paid = await statusCheckGuard.run(
+                              () => _pollBackendOrderStatus(orderId),
+                            ) ??
+                            false;
+                        if (!closedContext.mounted) {
+                          return;
+                        }
+                        if (paid) {
+                          Navigator.of(closedContext).pop();
+                          await _openSuccessFromBackend();
+                          return;
+                        }
+                        if (closedContext.mounted) {
+                          setDialogState(() => isChecking = false);
+                        }
+                      },
+                child: isChecking
+                    ? const _TapGoLoading(size: 16, strokeWidth: 2)
+                    : const Text('Cek Status'),
+              ),
+              if (_isPaymentSimulatorEnabled)
+                FilledButton(
+                  onPressed: isChecking
+                      ? null
+                      : () {
+                          Navigator.of(context).pop();
+                          _completePayment();
+                        },
+                  child: const Text('Konfirmasi Pembayaran'),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -243,7 +263,10 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
       _TapGoSnackbar.warning(context, message);
     } catch (error) {
       if (mounted) {
-        _TapGoSnackbar.error(context, 'Gagal cek status pembayaran: $error');
+        _TapGoSnackbar.error(
+          context,
+          'Status pembayaran belum dapat diperiksa. Silakan coba lagi.',
+        );
       }
     }
     return false;
