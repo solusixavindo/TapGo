@@ -54,6 +54,133 @@ class TapGoSingleFlightGuard {
   }
 }
 
+final tapGoPhoneInputFormatters = <TextInputFormatter>[
+  FilteringTextInputFormatter.allow(RegExp(r'[0-9+\s-]')),
+];
+
+final tapGoDigitsOnlyInputFormatters = <TextInputFormatter>[
+  FilteringTextInputFormatter.digitsOnly,
+];
+
+final tapGoNikInputFormatters = <TextInputFormatter>[
+  FilteringTextInputFormatter.digitsOnly,
+  LengthLimitingTextInputFormatter(16),
+];
+
+final tapGoRupiahInputFormatters = <TextInputFormatter>[
+  TapGoRupiahInputFormatter(),
+];
+
+String tapGoDigitsOnly(String? value) {
+  return (value ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+}
+
+String tapGoSanitizePhoneInput(String? value) {
+  final clean = (value ?? '').trim();
+  final hasLeadingPlus = clean.startsWith('+');
+  final digits = tapGoDigitsOnly(clean);
+  return hasLeadingPlus ? '+$digits' : digits;
+}
+
+bool tapGoIsValidIndonesianPhone(String? value) {
+  final phone = tapGoSanitizePhoneInput(value);
+  final digits = tapGoDigitsOnly(phone);
+  if (digits.length < 10) {
+    return false;
+  }
+  if (phone.startsWith('+')) {
+    return phone.startsWith('+628');
+  }
+  return phone.startsWith('08') || phone.startsWith('628');
+}
+
+String? tapGoPhoneValidatorMessage(String? value) {
+  final phone = tapGoSanitizePhoneInput(value);
+  if (phone.isEmpty) {
+    return 'Nomor HP wajib diisi';
+  }
+  return tapGoIsValidIndonesianPhone(phone) ? null : 'Nomor HP tidak valid';
+}
+
+String? tapGoNikValidatorMessage(String? value) {
+  final digits = tapGoDigitsOnly(value);
+  return digits.length == 16 ? null : 'NIK harus terdiri dari 16 digit.';
+}
+
+String? tapGoBankAccountValidatorMessage(String? value) {
+  final digits = tapGoDigitsOnly(value);
+  return digits.length >= 6 ? null : 'Nomor rekening tidak valid';
+}
+
+int tapGoCanonicalRupiahValue(String? value) {
+  final digits = tapGoDigitsOnly(value);
+  if (digits.isEmpty) {
+    return 0;
+  }
+  return int.tryParse(digits) ?? 0;
+}
+
+String tapGoFormatRupiahInput(String? value) {
+  final digitsOnly = tapGoDigitsOnly(value);
+  if (digitsOnly.isEmpty) {
+    return '';
+  }
+  final amount = tapGoCanonicalRupiahValue(value);
+  if (amount == 0) {
+    return '0';
+  }
+  final digits = amount.toString();
+  final buffer = StringBuffer();
+  for (var index = 0; index < digits.length; index++) {
+    final remaining = digits.length - index;
+    buffer.write(digits[index]);
+    if (remaining > 1 && remaining % 3 == 1) {
+      buffer.write('.');
+    }
+  }
+  return buffer.toString();
+}
+
+int tapGoRupiahSelectionOffset(String formatted, int digitsBeforeCursor) {
+  if (digitsBeforeCursor <= 0) {
+    return 0;
+  }
+  var seenDigits = 0;
+  for (var index = 0; index < formatted.length; index++) {
+    if (_isAsciiDigit(formatted.codeUnitAt(index))) {
+      seenDigits++;
+    }
+    if (seenDigits >= digitsBeforeCursor) {
+      return index + 1;
+    }
+  }
+  return formatted.length;
+}
+
+bool _isAsciiDigit(int codeUnit) => codeUnit >= 48 && codeUnit <= 57;
+
+class TapGoRupiahInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final formatted = tapGoFormatRupiahInput(newValue.text);
+    final cursorEnd = newValue.selection.extentOffset.clamp(
+      0,
+      newValue.text.length,
+    );
+    final digitsBeforeCursor =
+        tapGoDigitsOnly(newValue.text.substring(0, cursorEnd)).length;
+    final selectionOffset =
+        tapGoRupiahSelectionOffset(formatted, digitsBeforeCursor);
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: selectionOffset),
+    );
+  }
+}
+
 class _InvalidAuthResponseException implements Exception {
   const _InvalidAuthResponseException(this.message);
 
@@ -211,15 +338,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     final authMode = _isRegister ? 'register' : 'login';
     try {
       _tapGoDebugLog('[TapGo Auth] auth_request:$authMode');
+      final phone = tapGoSanitizePhoneInput(_phoneController.text);
       final authResult = _isRegister
           ? await _apiClient.register(
               name: _nameController.text.trim(),
-              phone: _phoneController.text.trim(),
+              phone: phone,
               password: _passwordController.text,
               referralCode: _referralController.text.trim(),
             )
           : await _apiClient.login(
-              phone: _phoneController.text.trim(),
+              phone: phone,
               password: _passwordController.text,
             );
       _tapGoDebugLog('[TapGo Auth] auth_response_mapping:$authMode');
@@ -545,6 +673,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       label: 'Nomor HP',
                       hint: '+62 812 0000 0000',
                       keyboardType: TextInputType.phone,
+                      inputFormatters: tapGoPhoneInputFormatters,
+                      autofillHints: const [AutofillHints.telephoneNumber],
                       validator: _phoneValidator,
                       textInputAction: TextInputAction.next,
                       onFieldSubmitted: (_) =>
@@ -621,16 +751,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   }
 
   String? _phoneValidator(String? value) {
-    final phone = value?.trim() ?? '';
-    if (phone.isEmpty) {
-      return 'Nomor HP wajib diisi';
-    }
-    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.length < 10 ||
-        !(phone.startsWith('08') || phone.startsWith('+62'))) {
-      return 'Nomor HP tidak valid';
-    }
-    return null;
+    return tapGoPhoneValidatorMessage(value);
   }
 
   String? _passwordValidator(String? value) {
@@ -886,6 +1007,8 @@ class _InputField extends StatelessWidget {
     this.focusNode,
     this.textInputAction,
     this.onFieldSubmitted,
+    this.inputFormatters,
+    this.autofillHints,
   });
 
   final TextEditingController? controller;
@@ -897,6 +1020,8 @@ class _InputField extends StatelessWidget {
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onFieldSubmitted;
+  final List<TextInputFormatter>? inputFormatters;
+  final Iterable<String>? autofillHints;
   final String? Function(String?)? validator;
   final Widget? suffixIcon;
   final bool readOnly;
@@ -911,6 +1036,8 @@ class _InputField extends StatelessWidget {
       keyboardType: keyboardType,
       textInputAction: textInputAction,
       onFieldSubmitted: onFieldSubmitted,
+      inputFormatters: inputFormatters,
+      autofillHints: autofillHints,
       validator: validator,
       readOnly: readOnly,
       onTap: onTap,

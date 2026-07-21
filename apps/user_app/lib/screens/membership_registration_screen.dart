@@ -85,6 +85,8 @@ class _MembershipRegistrationScreenState
                     label: 'Nomor HP',
                     hint: '0812xxxx',
                     keyboardType: TextInputType.phone,
+                    inputFormatters: tapGoPhoneInputFormatters,
+                    autofillHints: const [AutofillHints.telephoneNumber],
                     validator: _phoneValidator,
                   ),
                   const SizedBox(height: 12),
@@ -118,6 +120,7 @@ class _MembershipRegistrationScreenState
                     label: 'Nomor KTP',
                     hint: '16 digit',
                     keyboardType: TextInputType.number,
+                    inputFormatters: tapGoNikInputFormatters,
                     validator: _ktpValidator,
                   ),
                   const SizedBox(height: 12),
@@ -285,10 +288,10 @@ class _MembershipRegistrationScreenState
 
     final form = RegistrationFormModel(
       fullName: _nameController.text.trim(),
-      phone: _phoneController.text.trim(),
+      phone: tapGoSanitizePhoneInput(_phoneController.text),
       email: _emailController.text.trim(),
       address: _addressController.text.trim(),
-      ktpNumber: _ktpController.text.trim(),
+      ktpNumber: tapGoDigitsOnly(_ktpController.text),
       birthPlace: _birthPlaceController.text.trim(),
       birthDate: _birthDateController.text.trim(),
       gender: _gender,
@@ -464,21 +467,11 @@ class _MembershipRegistrationScreenState
   }
 
   String? _phoneValidator(String? value) {
-    final phone = value?.trim() ?? '';
-    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.length < 10 ||
-        !(phone.startsWith('08') || phone.startsWith('+62'))) {
-      return 'Nomor HP tidak valid';
-    }
-    return null;
+    return tapGoPhoneValidatorMessage(value);
   }
 
   String? _ktpValidator(String? value) {
-    final digits = (value ?? '').replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.length < 16) {
-      return 'Nomor KTP minimal 16 digit';
-    }
-    return null;
+    return tapGoNikValidatorMessage(value);
   }
 
   Future<void> _showUploadOptions(_DocumentKind kind) async {

@@ -350,6 +350,88 @@ void main() {
     expect(tapGoDocumentUploadFailureMessage, isNot(contains('channel-error')));
   });
 
+  test('Indonesian phone input accepts supported formats safely', () {
+    expect(tapGoPhoneValidatorMessage('0812 3456-7890'), isNull);
+    expect(tapGoPhoneValidatorMessage('6281234567890'), isNull);
+    expect(tapGoPhoneValidatorMessage('+6281234567890'), isNull);
+    expect(
+      tapGoSanitizePhoneInput('+62 812-3456-7890'),
+      '+6281234567890',
+    );
+    expect(tapGoSanitizePhoneInput('6281234567890'), '6281234567890');
+    expect(tapGoPhoneValidatorMessage('12345'), 'Nomor HP tidak valid');
+    expect(
+      tapGoPhoneValidatorMessage(''),
+      'Nomor HP wajib diisi',
+    );
+  });
+
+  test('NIK input keeps digits only, caps length, and preserves leading zero',
+      () {
+    final formatted = _applyFormatters(
+      tapGoNikInputFormatters,
+      '00A1234567890123456789',
+    );
+
+    expect(formatted, '0012345678901234');
+    expect(formatted.length, 16);
+    expect(tapGoNikValidatorMessage('0012345678901234'), isNull);
+    expect(
+      tapGoNikValidatorMessage('001234567890123'),
+      'NIK harus terdiri dari 16 digit.',
+    );
+  });
+
+  test('bank account input keeps digit string and leading zero intact', () {
+    final formatted = _applyFormatters(
+      tapGoDigitsOnlyInputFormatters,
+      '0012 34-567A',
+    );
+
+    expect(formatted, '001234567');
+    expect(tapGoDigitsOnly(formatted), '001234567');
+    expect(tapGoBankAccountValidatorMessage('001234'), isNull);
+    expect(
+      tapGoBankAccountValidatorMessage('00123'),
+      'Nomor rekening tidak valid',
+    );
+  });
+
+  test('Rupiah formatter separates display from canonical integer value', () {
+    expect(_applyFormatters(tapGoRupiahInputFormatters, '1000'), '1.000');
+    expect(
+      _applyFormatters(tapGoRupiahInputFormatters, '150000'),
+      '150.000',
+    );
+    expect(
+      _applyFormatters(tapGoRupiahInputFormatters, 'Rp150.000'),
+      '150.000',
+    );
+    expect(tapGoCanonicalRupiahValue('150.000'), 150000);
+    expect(tapGoCanonicalRupiahValue(''), 0);
+    expect(tapGoCanonicalRupiahValue('0'), 0);
+    expect(tapGoFormatRupiahInput('150.000'), '150.000');
+    expect(tapGoFormatRupiahInput('0'), '0');
+  });
+
+  test('Rupiah formatter keeps cursor near edited digit position', () {
+    final formatter = TapGoRupiahInputFormatter();
+    final result = formatter.formatEditUpdate(
+      const TextEditingValue(
+        text: '12.345',
+        selection: TextSelection.collapsed(offset: 2),
+      ),
+      const TextEditingValue(
+        text: '120.345',
+        selection: TextSelection.collapsed(offset: 3),
+      ),
+    );
+
+    expect(result.text, '120.345');
+    expect(result.selection.extentOffset, 3);
+    expect(tapGoRupiahSelectionOffset('150.000', 3), 3);
+  });
+
   testWidgets('startup restore without valid token safely returns login',
       (WidgetTester tester) async {
     await openAuth(tester);
@@ -612,6 +694,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Paket aktif: Platinum'), findsOneWidget);
   });
+}
+
+String _applyFormatters(List<TextInputFormatter> formatters, String value) {
+  var oldValue = const TextEditingValue();
+  var newValue = TextEditingValue(
+    text: value,
+    selection: TextSelection.collapsed(offset: value.length),
+  );
+  for (final formatter in formatters) {
+    final result = formatter.formatEditUpdate(oldValue, newValue);
+    oldValue = result;
+    newValue = result;
+  }
+  return newValue.text;
 }
 
 class _FakeImagePickerPlatform extends ImagePickerPlatform {

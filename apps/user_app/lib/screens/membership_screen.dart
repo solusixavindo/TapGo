@@ -929,8 +929,9 @@ class DemoWalletScreen extends ConsumerWidget {
         : session.walletBalance >= 50000
             ? session.walletBalance
             : 50000;
-    final amountController =
-        TextEditingController(text: defaultAmount.toString());
+    final amountController = TextEditingController(
+      text: tapGoFormatRupiahInput(defaultAmount.toString()),
+    );
     final bankController =
         TextEditingController(text: bankAccount['bankName']?.toString() ?? '');
     final accountController = TextEditingController(
@@ -970,9 +971,10 @@ class DemoWalletScreen extends ConsumerWidget {
                   label: 'Nominal',
                   hint: 'Minimal Rp50.000',
                   keyboardType: TextInputType.number,
+                  inputFormatters: tapGoRupiahInputFormatters,
                   readOnly: isSubmitting,
                   validator: (value) {
-                    final amount = _intFrom(value);
+                    final amount = tapGoCanonicalRupiahValue(value);
                     if (amount < 50000) {
                       return 'Minimal withdraw Rp50.000';
                     }
@@ -997,10 +999,9 @@ class DemoWalletScreen extends ConsumerWidget {
                   label: 'Nomor rekening',
                   hint: '1234567890',
                   keyboardType: TextInputType.number,
+                  inputFormatters: tapGoDigitsOnlyInputFormatters,
                   readOnly: isSubmitting,
-                  validator: (value) => (value ?? '').trim().length >= 6
-                      ? null
-                      : 'Rekening tidak valid',
+                  validator: tapGoBankAccountValidatorMessage,
                 ),
                 const SizedBox(height: 10),
                 _InputField(
@@ -1030,12 +1031,16 @@ class DemoWalletScreen extends ConsumerWidget {
                                 final session = ref.read(_demoSessionProvider);
                                 _apiClient.setAccessToken(session.accessToken);
                                 await _apiClient.requestWithdrawal(
-                                  amount: _intFrom(amountController.text),
+                                  amount: tapGoCanonicalRupiahValue(
+                                    amountController.text,
+                                  ),
                                   bankName: bankController.text.trim(),
                                   bankCode:
                                       _bankByNameOrCode(bankController.text)
                                           ?.code,
-                                  accountNumber: accountController.text.trim(),
+                                  accountNumber: tapGoDigitsOnly(
+                                    accountController.text,
+                                  ),
                                   accountHolderName:
                                       holderController.text.trim(),
                                 );
@@ -1348,9 +1353,8 @@ class _BankAccountScreenState extends ConsumerState<BankAccountScreen> {
               label: 'Nomor rekening',
               hint: 'Nomor rekening',
               keyboardType: TextInputType.number,
-              validator: (value) => (value ?? '').trim().length >= 6
-                  ? null
-                  : 'Nomor rekening tidak valid',
+              inputFormatters: tapGoDigitsOnlyInputFormatters,
+              validator: tapGoBankAccountValidatorMessage,
             ),
             const SizedBox(height: 10),
             _InputField(
@@ -1435,7 +1439,7 @@ class _BankAccountScreenState extends ConsumerState<BankAccountScreen> {
       await _apiClient.updateBankAccount(
         bankName: _bankController.text.trim(),
         bankCode: _bankByNameOrCode(_bankController.text)?.code,
-        accountNumber: _accountController.text.trim(),
+        accountNumber: tapGoDigitsOnly(_accountController.text),
         accountHolderName: _holderController.text.trim(),
       );
       if (!mounted) {
