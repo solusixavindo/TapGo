@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:tapgo_user_app/demo/client_flow_models.dart';
 import 'package:tapgo_user_app/main.dart';
@@ -490,19 +491,56 @@ void main() {
     expect(find.text('TapGoPay'), findsNothing);
   });
 
-  testWidgets('dashboard membership remains reachable without marketing plan',
+  testWidgets('dashboard keeps Basic status but hides Basic upgrade option',
       (WidgetTester tester) async {
     await openDashboard(tester);
 
+    expect(find.text('Paket aktif: Basic'), findsOneWidget);
     expect(find.text('Marketing Plan'), findsNothing);
     await tester.ensureVisible(find.text('Membership').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Membership').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('Basic'), findsWidgets);
+    expect(find.text('Basic'), findsNothing);
     expect(find.text('Silver'), findsWidgets);
+    expect(find.text('Gold'), findsWidgets);
     expect(find.text('Platinum'), findsWidgets);
+    expect(find.text('Daftar'), findsNWidgets(3));
+
+    await tester.ensureVisible(find.text('Silver'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Daftar').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Form Membership'), findsOneWidget);
+    expect(find.text('Paket Silver'), findsOneWidget);
+  });
+
+  test('payment provider copy follows gateway with neutral fallback', () {
+    expect(
+      tapGoPaymentStatusInstructionForTests('DOKU'),
+      'Selesaikan pembayaran di halaman DOKU, lalu cek status pembayaran Anda.',
+    );
+    expect(
+      tapGoPaymentStatusInstructionForTests('MIDTRANS'),
+      'Selesaikan pembayaran di halaman Midtrans, lalu cek status pembayaran Anda.',
+    );
+    expect(
+      tapGoPaymentStatusInstructionForTests(null),
+      'Selesaikan pembayaran di halaman pembayaran, lalu cek status pembayaran Anda.',
+    );
+    expect(
+      tapGoPaymentStatusInstructionForTests('unknown'),
+      isNot(contains('DOKU')),
+    );
+    expect(tapGoPaymentUrlDialogTitleForTests('DOKU'), 'Link Pembayaran DOKU');
+    expect(
+      tapGoPaymentUrlDialogTitleForTests('MIDTRANS'),
+      'Link Pembayaran Midtrans',
+    );
+    expect(tapGoPaymentUrlDialogTitleForTests(null), 'Link Pembayaran');
+    expect(tapGoCheckoutLaunchModeForTests(), LaunchMode.externalApplication);
   });
 
   testWidgets('bottom navigation tabs and super menu are clickable',

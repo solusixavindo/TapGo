@@ -250,7 +250,7 @@ class MarketingPlanScreen extends StatelessWidget {
           _DemoMenuTile(
             icon: Icons.workspace_premium_rounded,
             title: 'Membership Package',
-            subtitle: 'Basic, Silver, Gold, Platinum',
+            subtitle: 'Silver, Gold, Platinum',
             onTap: () => _openDemo(context, const MembershipPackagesScreen()),
           ),
           _DemoMenuTile(
@@ -300,21 +300,33 @@ class _MembershipPackagesScreenState extends State<MembershipPackagesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final upgradePackages = _demoMemberships
+        .where((package) => package.name.toLowerCase() != 'basic')
+        .toList(growable: false);
+
     return _DemoScaffold(
       title: 'Membership',
-      subtitle: 'Paket bisnis TapGo',
+      subtitle: 'Pilih paket upgrade TapGo',
       child: Column(
-        children: _demoMemberships.asMap().entries.map((entry) {
-          final item = entry.value;
-          return _TapGoReveal(
-            order: entry.key,
-            child: _MembershipPackageCard(
-              package: item,
-              selected: _selectedPackageName == item.name,
-              onSelected: () => _openPackage(item),
-            ),
-          );
-        }).toList(),
+        children: upgradePackages.isEmpty
+            ? const [
+                _StatusSurface(
+                  icon: Icons.workspace_premium_rounded,
+                  title: 'Paket upgrade belum tersedia',
+                  subtitle: 'Silakan cek kembali beberapa saat lagi.',
+                ),
+              ]
+            : upgradePackages.asMap().entries.map((entry) {
+                final item = entry.value;
+                return _TapGoReveal(
+                  order: entry.key,
+                  child: _MembershipPackageCard(
+                    package: item,
+                    selected: _selectedPackageName == item.name,
+                    onSelected: () => _openPackage(item),
+                  ),
+                );
+              }).toList(),
       ),
     );
   }

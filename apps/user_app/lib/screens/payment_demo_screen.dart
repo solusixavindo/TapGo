@@ -1,5 +1,39 @@
 part of '../main.dart';
 
+String? _tapGoPaymentGatewayDisplayName(String? gateway) {
+  switch (gateway?.trim().toUpperCase()) {
+    case 'DOKU':
+      return 'DOKU';
+    case 'MIDTRANS':
+      return 'Midtrans';
+  }
+  return null;
+}
+
+String _tapGoPaymentUrlDialogTitle(String? gateway) {
+  final provider = _tapGoPaymentGatewayDisplayName(gateway);
+  return provider == null ? 'Link Pembayaran' : 'Link Pembayaran $provider';
+}
+
+String _tapGoPaymentStatusInstruction(String? gateway) {
+  final provider = _tapGoPaymentGatewayDisplayName(gateway);
+  if (provider == null) {
+    return 'Selesaikan pembayaran di halaman pembayaran, lalu cek status pembayaran Anda.';
+  }
+  return 'Selesaikan pembayaran di halaman $provider, lalu cek status pembayaran Anda.';
+}
+
+@visibleForTesting
+String tapGoPaymentStatusInstructionForTests(String? gateway) =>
+    _tapGoPaymentStatusInstruction(gateway);
+
+@visibleForTesting
+String tapGoPaymentUrlDialogTitleForTests(String? gateway) =>
+    _tapGoPaymentUrlDialogTitle(gateway);
+
+@visibleForTesting
+LaunchMode tapGoCheckoutLaunchModeForTests() => LaunchMode.externalApplication;
+
 class PaymentMethodScreen extends ConsumerStatefulWidget {
   const PaymentMethodScreen({
     required this.form,
@@ -122,18 +156,19 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
         return;
       }
       if (intent.redirectUrl.isEmpty) {
-        throw StateError('URL pembayaran DOKU kosong.');
+        throw StateError('URL pembayaran belum tersedia.');
       }
 
+      final gateway = intent.gateway;
       final opened = await launchUrl(
         Uri.parse(intent.redirectUrl),
-        mode: LaunchMode.externalApplication,
+        mode: tapGoCheckoutLaunchModeForTests(),
       );
       if (!opened && mounted) {
-        await _showPaymentUrlDialog(intent.redirectUrl);
+        await _showPaymentUrlDialog(intent.redirectUrl, gateway);
       }
 
-      await _showPaymentStatusDialog(orderId);
+      await _showPaymentStatusDialog(orderId, gateway);
     } catch (error) {
       if (mounted) {
         _TapGoSnackbar.error(
@@ -154,14 +189,15 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
     }
   }
 
-  Future<void> _showPaymentUrlDialog(String redirectUrl) async {
+  Future<void> _showPaymentUrlDialog(
+      String redirectUrl, String? gateway) async {
     if (!mounted) {
       return;
     }
     await _showTapGoDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Link Pembayaran DOKU'),
+        title: Text(_tapGoPaymentUrlDialogTitle(gateway)),
         content: SelectableText(redirectUrl),
         actions: [
           TextButton(
@@ -173,7 +209,7 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
     );
   }
 
-  Future<void> _showPaymentStatusDialog(String orderId) async {
+  Future<void> _showPaymentStatusDialog(String orderId, String? gateway) async {
     if (!mounted) {
       return;
     }
@@ -185,9 +221,7 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) => AlertDialog(
             title: const Text('Status Pembayaran'),
-            content: const Text(
-              'Selesaikan pembayaran di halaman DOKU, lalu cek status pembayaran Anda.',
-            ),
+            content: Text(_tapGoPaymentStatusInstruction(gateway)),
             actions: [
               TextButton(
                 onPressed: isChecking
