@@ -596,6 +596,32 @@ void main() {
     expect(find.text('Super Admin Dashboard'), findsNothing);
   });
 
+  testWidgets('bank account picker opens and selects bank without assertion',
+      (WidgetTester tester) async {
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Akun'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Rekening Bank'));
+    await tester.tap(find.text('Rekening Bank'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Rekening Bank'), findsWidgets);
+    expect(find.text('Nama bank'), findsOneWidget);
+
+    final bankFieldCenter = tester.getCenter(find.text('Pilih bank').last);
+    await tester.tapAt(Offset(120, bankFieldCenter.dy));
+    await tester.pumpAndSettle();
+    expect(find.text('Pilih Bank'), findsOneWidget);
+
+    await tester.tap(find.text('Bank Mandiri'));
+    await tester.pumpAndSettle();
+    await tester.pump();
+
+    expect(find.text('Bank Mandiri'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('account deletion request requires confirmation',
       (WidgetTester tester) async {
     await openDashboard(tester);

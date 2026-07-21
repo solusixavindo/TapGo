@@ -1171,7 +1171,7 @@ class _BankDropdownField extends StatelessWidget {
         return InkWell(
           onTap: () async {
             final selected = await _showBankPicker(context, controller.text);
-            if (selected == null) {
+            if (selected == null || !field.context.mounted) {
               return;
             }
             controller.text = selected.name;
@@ -1213,7 +1213,7 @@ class _BankDropdownField extends StatelessWidget {
     String current,
   ) {
     final searchController = TextEditingController();
-    return _showTapGoBottomSheet<_BankOption>(
+    final picker = _showTapGoBottomSheet<_BankOption>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -1300,7 +1300,12 @@ class _BankDropdownField extends StatelessWidget {
           },
         );
       },
-    ).whenComplete(searchController.dispose);
+    );
+    return picker.whenComplete(() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        searchController.dispose();
+      });
+    });
   }
 }
 
