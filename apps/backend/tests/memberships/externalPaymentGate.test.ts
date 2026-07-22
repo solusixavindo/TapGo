@@ -27,7 +27,7 @@ describe("External membership payment safety gate", () => {
     expect(strictEnvBoolean(false).parse(value)).toBe(expected);
   });
 
-  it.each(["maybe", "enabled", "disabled", "truthy", "falsy"])(
+  it.each(["1", "0", "yes", "no", "on", "off", "maybe", "enabled", "disabled"])(
     "rejects unsupported boolean value %s",
     (value) => {
       expect(strictEnvBoolean(false).safeParse(value).success).toBe(false);
@@ -35,7 +35,7 @@ describe("External membership payment safety gate", () => {
   );
 
   it("defaults external membership payments to disabled unless explicitly enabled", () => {
-    expect(originalExternalPaymentGate).toBe(false);
+    expect(strictEnvBoolean(false).parse(undefined)).toBe(false);
   });
 
   it("rejects external membership pay before constructing or selecting providers", async () => {

@@ -19,6 +19,10 @@ let appServer: Server | undefined;
 let snapServer: Server | undefined;
 let baseUrl = "";
 let signAccessToken: SignAccessToken;
+const originalExternalMembershipPaymentsEnabled =
+  env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
+const originalExternalMembershipPaymentsEnabledEnv =
+  process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
 
 describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
   beforeAll(async () => {
@@ -60,12 +64,14 @@ describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
     process.env.MIDTRANS_IS_PRODUCTION = "false";
     process.env.MIDTRANS_SNAP_URL = `http://127.0.0.1:${snapAddress.port}/snap/v1/transactions`;
     process.env.DOKU_ENABLED = "false";
+    process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = "true";
     Object.assign(env, {
       MIDTRANS_SERVER_KEY: midtransServerKey,
       MIDTRANS_CLIENT_KEY: "SB-Mid-client-test-key",
       MIDTRANS_IS_PRODUCTION: false,
       MIDTRANS_SNAP_URL: `http://127.0.0.1:${snapAddress.port}/snap/v1/transactions`,
       DOKU_ENABLED: false,
+      EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED: true,
     });
 
     const [{ createApp }, tokenService] = await Promise.all([
@@ -100,6 +106,14 @@ describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
       }
       snapServer.close((error) => (error ? reject(error) : resolve()));
     });
+    env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED =
+      originalExternalMembershipPaymentsEnabled;
+    if (originalExternalMembershipPaymentsEnabledEnv === undefined) {
+      delete process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
+    } else {
+      process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED =
+        originalExternalMembershipPaymentsEnabledEnv;
+    }
   });
 
   it("creates a Midtrans Snap transaction for a pending membership order", async () => {

@@ -11,10 +11,10 @@ export const strictEnvBoolean = (defaultValue: boolean) =>
     }
     if (typeof value === "string") {
       const normalized = value.trim().toLowerCase();
-      if (["true", "1", "yes", "on"].includes(normalized)) {
+      if (normalized === "true") {
         return true;
       }
-      if (["false", "0", "no", "off"].includes(normalized)) {
+      if (normalized === "false") {
         return false;
       }
     }
