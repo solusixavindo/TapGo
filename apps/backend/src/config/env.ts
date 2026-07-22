@@ -21,6 +21,29 @@ export const strictEnvBoolean = (defaultValue: boolean) =>
     return value;
   }, z.boolean());
 
+export const strictLiteralTrueBoolean = (defaultValue: boolean) =>
+  z.preprocess((value) => {
+    if (value === undefined || value === null || value === "") {
+      return defaultValue;
+    }
+    if (value === true) {
+      return true;
+    }
+    if (value === false) {
+      return false;
+    }
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed === "true" || trimmed === "TRUE") {
+        return true;
+      }
+      if (trimmed === "false" || trimmed === "FALSE") {
+        return false;
+      }
+    }
+    return value;
+  }, z.boolean());
+
 const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "staging", "test", "production"])
@@ -55,6 +78,15 @@ const envSchema = z.object({
   DOKU_BASE_URL: z.string().url().optional(),
   DOKU_WEBHOOK_SECRET: z.string().optional(),
   DOKU_WEBHOOK_URL: z.string().url().optional(),
+  DIGIFLAZZ_ENABLED: strictLiteralTrueBoolean(false),
+  DIGIFLAZZ_ENVIRONMENT: z
+    .enum(["development", "sandbox", "production"])
+    .default("development"),
+  DIGIFLAZZ_BASE_URL: z.string().url().default("https://api.digiflazz.com"),
+  DIGIFLAZZ_USERNAME: z.string().optional(),
+  DIGIFLAZZ_API_KEY: z.string().optional(),
+  DIGIFLAZZ_WEBHOOK_SECRET: z.string().optional(),
+  PPOB_DATA_ENCRYPTION_KEY: z.string().optional(),
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
   CLOUDINARY_API_KEY: z.string().optional(),
   CLOUDINARY_API_SECRET: z.string().optional(),

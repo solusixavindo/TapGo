@@ -17,7 +17,13 @@ export const logger = pino({
       "req.body.dokuSecretKey",
       "req.body.secretKey",
       "req.headers.signature",
+      "req.headers.x-hub-signature",
+      "req.headers.x-signature",
       "req.headers.client-id",
+      "req.body.username",
+      "req.body.sign",
+      "req.body.apiKey",
+      "req.body.api_key",
       "password",
       "passwordHash",
       "refreshToken",
@@ -27,7 +33,9 @@ export const logger = pino({
       "signature",
       "secretKey",
       "DOKU_SECRET_KEY",
-      "DOKU_API_KEY"
+      "DOKU_API_KEY",
+      "DIGIFLAZZ_API_KEY",
+      "DIGIFLAZZ_WEBHOOK_SECRET"
     ],
     censor: "[REDACTED]"
   },

@@ -17,6 +17,7 @@ import { membershipOrderRouter } from "./modules/memberships/presentation/member
 import { membershipRouter } from "./modules/memberships/presentation/membership.routes.js";
 import { midtransRouter } from "./modules/payments/presentation/midtrans.routes.js";
 import { dokuPaymentRouter, dokuWebhookRouter } from "./modules/payments/presentation/doku.routes.js";
+import { digiflazzWebhookRouter, ppobRouter } from "./modules/ppob/presentation/ppob.routes.js";
 import { profitSharingRouter } from "./modules/profit-sharing/presentation/profit-sharing.routes.js";
 import { referralRouter } from "./modules/referrals/presentation/referral.routes.js";
 import { walletRouter } from "./modules/wallets/presentation/wallet.routes.js";
@@ -66,6 +67,7 @@ export function createApp() {
   app.use("/api/v1/payments", paymentRateLimiter, midtransRouter);
   app.use("/api/v1/payments", paymentRateLimiter, dokuPaymentRouter);
   app.use("/api/v1/webhooks", paymentRateLimiter, dokuWebhookRouter);
+  app.use("/api/v1/webhooks", paymentRateLimiter, digiflazzWebhookRouter);
   // Backward-compatible alias for earlier DOKU sandbox checks. Use /api/v1/* in production docs.
   app.use("/api/payments", paymentRateLimiter, dokuPaymentRouter);
   // Backward-compatible alias only. Canonical production webhook: /api/v1/webhooks/doku.
@@ -73,6 +75,7 @@ export function createApp() {
   app.use("/api/v1/admin/profit-sharing", adminRateLimiter, profitSharingRouter);
   app.use("/api/v1/admin", adminRateLimiter, adminConsoleRouter);
   app.use("/api/v1/referrals", referralRouter);
+  app.use("/api/v1/ppob", ppobRouter);
   app.use("/api/v1/wallet", walletRouter);
 
   app.use(notFoundHandler);
