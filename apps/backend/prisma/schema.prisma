@@ -203,39 +203,6 @@ enum FounderRole {
   FOUNDER_PLATINUM
 }
 
-enum GooglePlayProductType {
-  ONE_TIME_NON_CONSUMABLE
-}
-
-enum GooglePlayPurchaseState {
-  PENDING
-  PURCHASED
-  CANCELLED
-  UNKNOWN
-}
-
-enum GooglePlayAcknowledgementState {
-  PENDING
-  ACKNOWLEDGED
-  NOT_REQUIRED
-}
-
-enum GooglePlayEntitlementStatus {
-  PENDING
-  ACTIVE
-  CANCELLED
-  REVOKED
-  REFUNDED
-  SUPERSEDED
-}
-
-enum GooglePlayNotificationProcessingStatus {
-  RECEIVED
-  PROCESSED
-  FAILED
-  IGNORED
-}
-
 model User {
   id              String        @id @default(uuid()) @db.Uuid
   role            UserRole      @default(USER)
@@ -279,7 +246,6 @@ model User {
   abuseFlags AbuseFlag[] @relation("AbuseFlagUser")
   founderProgramGrants FounderProgramGrant[] @relation("FounderGrantUser")
   founderProgramGrantActions FounderProgramGrant[] @relation("FounderGrantActor")
-  googlePlayPurchases GooglePlayPurchase[]
 
   @@index([role, status])
   @@index([membershipId])
@@ -306,8 +272,6 @@ model Membership {
   userMemberships UserMembership[]
   orders          MembershipOrder[]
   founderProgramGrants FounderProgramGrant[]
-  googlePlayProducts GooglePlayProduct[]
-  googlePlayPurchases GooglePlayPurchase[]
 
   @@index([tier, isActive])
   @@map("memberships")
@@ -469,74 +433,6 @@ model MembershipBenefit {
   @@unique([membershipId, level])
   @@index([level, isActive])
   @@map("membership_benefits")
-}
-
-model GooglePlayProduct {
-  id            String                @id @default(uuid()) @db.Uuid
-  productId     String                @unique @map("product_id") @db.VarChar(120)
-  packageName   String                @map("package_name") @db.VarChar(160)
-  membershipId  String                @map("membership_id") @db.Uuid
-  productType   GooglePlayProductType @default(ONE_TIME_NON_CONSUMABLE) @map("product_type")
-  isActive      Boolean               @default(true) @map("is_active")
-  metadata      Json?
-  createdAt     DateTime              @default(now()) @map("created_at")
-  updatedAt     DateTime              @updatedAt @map("updated_at")
-
-  membership    Membership            @relation(fields: [membershipId], references: [id])
-  purchases     GooglePlayPurchase[]
-
-  @@index([membershipId, isActive])
-  @@index([packageName, isActive])
-  @@map("google_play_products")
-}
-
-model GooglePlayPurchase {
-  id                       String                         @id @default(uuid()) @db.Uuid
-  userId                   String                         @map("user_id") @db.Uuid
-  membershipId             String                         @map("membership_id") @db.Uuid
-  googlePlayProductId      String                         @map("google_play_product_id") @db.Uuid
-  purchaseTokenHash        String                         @unique @map("purchase_token_hash") @db.VarChar(128)
-  encryptedPurchaseToken   String                         @map("encrypted_purchase_token")
-  googleOrderId            String?                        @unique @map("google_order_id") @db.VarChar(160)
-  purchaseState            GooglePlayPurchaseState        @map("purchase_state")
-  acknowledgementState     GooglePlayAcknowledgementState @map("acknowledgement_state")
-  entitlementStatus        GooglePlayEntitlementStatus    @map("entitlement_status")
-  clientRequestId          String                         @map("client_request_id") @db.Uuid
-  verifiedAt               DateTime                       @map("verified_at")
-  acknowledgedAt           DateTime?                      @map("acknowledged_at")
-  revokedAt                DateTime?                      @map("revoked_at")
-  refundedAt               DateTime?                      @map("refunded_at")
-  metadata                 Json?
-  createdAt                DateTime                       @default(now()) @map("created_at")
-  updatedAt                DateTime                       @updatedAt @map("updated_at")
-
-  user                     User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  membership               Membership                     @relation(fields: [membershipId], references: [id])
-  googlePlayProduct        GooglePlayProduct              @relation(fields: [googlePlayProductId], references: [id])
-
-  @@index([userId, entitlementStatus])
-  @@index([googlePlayProductId, purchaseState])
-  @@index([membershipId, entitlementStatus])
-  @@index([verifiedAt])
-  @@map("google_play_purchases")
-}
-
-model GooglePlayNotification {
-  id                String                                 @id @default(uuid()) @db.Uuid
-  messageId         String                                 @unique @map("message_id") @db.VarChar(160)
-  notificationType  String                                 @map("notification_type") @db.VarChar(120)
-  purchaseTokenHash String?                                @map("purchase_token_hash") @db.VarChar(128)
-  productId         String?                                @map("product_id") @db.VarChar(120)
-  processingStatus  GooglePlayNotificationProcessingStatus @default(RECEIVED) @map("processing_status")
-  processedAt       DateTime?                              @map("processed_at")
-  metadata          Json?
-  createdAt         DateTime                               @default(now()) @map("created_at")
-  updatedAt         DateTime                               @updatedAt @map("updated_at")
-
-  @@index([purchaseTokenHash, processingStatus])
-  @@index([productId, processingStatus])
-  @@index([processingStatus, createdAt])
-  @@map("google_play_notifications")
 }
 
 model Referral {
