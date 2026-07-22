@@ -48,6 +48,9 @@ export function setupReferralWalletIntegration() {
 
 export async function cleanDatabase() {
   await prisma.auditLog.deleteMany();
+  await prisma.googlePlayNotification.deleteMany();
+  await prisma.googlePlayPurchase.deleteMany();
+  await prisma.googlePlayProduct.deleteMany();
   await prisma.founderProgramGrant.deleteMany();
   await prisma.membershipDocument.deleteMany();
   await prisma.membershipPayment.deleteMany();
