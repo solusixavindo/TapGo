@@ -95,17 +95,21 @@ void main() {
     expect(svgBodies.length, serviceIconAssets.length);
   });
 
-  testWidgets('service grid exposes active and upcoming service semantics',
+  testWidgets('service grid exposes only Play-safe core services',
       (WidgetTester tester) async {
     final semantics = tester.ensureSemantics();
     try {
       await openDashboard(tester);
 
-      expect(find.text('Segera'), findsNWidgets(2));
-      expect(find.bySemanticsLabel('Buka layanan TapGo Car'), findsOneWidget);
-      expect(find.bySemanticsLabel('TapGo Ride, segera hadir'), findsOneWidget);
-      expect(
-          find.bySemanticsLabel('TapGo Bantu, segera hadir'), findsOneWidget);
+      expect(find.text('Segera'), findsNothing);
+      expect(find.text('Membership Saya'), findsWidgets);
+      expect(find.text('Referral'), findsWidgets);
+      expect(find.text('Support'), findsWidgets);
+      expect(find.text('Profil'), findsWidgets);
+      expect(find.bySemanticsLabel('Buka layanan TapGo Ride'), findsNothing);
+      expect(find.bySemanticsLabel('Buka layanan TapGo Mart'), findsNothing);
+      expect(find.bySemanticsLabel('Buka layanan Membership Saya'),
+          findsOneWidget);
     } finally {
       semantics.dispose();
     }
@@ -491,7 +495,7 @@ void main() {
     expect(find.text('TapGoPay'), findsNothing);
   });
 
-  testWidgets('dashboard keeps Basic status but hides Basic upgrade option',
+  testWidgets('dashboard keeps Basic status and hides paid membership purchase',
       (WidgetTester tester) async {
     await openDashboard(tester);
 
@@ -504,25 +508,22 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('Membership Basic aktif'), findsOneWidget);
     expect(find.text('Basic'), findsNothing);
     expect(find.text('Gratis'), findsNothing);
-    expect(find.text('Silver'), findsWidgets);
-    expect(find.text('Gold'), findsWidgets);
-    expect(find.text('Platinum'), findsWidgets);
+    expect(find.text('Silver'), findsNothing);
+    expect(find.text('Gold'), findsNothing);
+    expect(find.text('Platinum'), findsNothing);
     expect(find.text('Pembelian melalui Google Play segera tersedia.'),
-        findsNWidgets(3));
+        findsNothing);
+    expect(find.textContaining('Rp500.000'), findsNothing);
+    expect(find.textContaining('Rp3.000.000'), findsNothing);
+    expect(find.textContaining('Rp5.500.000'), findsNothing);
     expect(find.text('Daftar'), findsNothing);
-
-    await tester.ensureVisible(find.text('Silver'));
-    await tester.pumpAndSettle();
-    await tester
-        .tap(find.text('Pembelian melalui Google Play segera tersedia.').first);
-    await tester.pumpAndSettle();
 
     expect(find.text('Form Membership'), findsNothing);
     expect(find.text('Paket Silver'), findsNothing);
-    expect(find.text('Pembelian melalui Google Play segera tersedia.'),
-        findsWidgets);
+    expect(find.text('Bayar Sekarang'), findsNothing);
   });
 
   test('distribution mode defaults and fails closed to Play', () {
@@ -584,7 +585,9 @@ void main() {
     expect(find.text('Super Menu'), findsOneWidget);
     expect(find.text('TapGo Ride'), findsOneWidget);
     expect(find.text('PPOB'), findsOneWidget);
-    expect(find.text('Membership'), findsOneWidget);
+    expect(find.text('Membership Saya'), findsOneWidget);
+    expect(find.text('Reward'), findsNothing);
+    expect(find.text('BPJS'), findsNothing);
     expect(find.text('Support'), findsOneWidget);
   });
 
@@ -738,14 +741,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('Platinum'));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(
-        find.text('Pembelian melalui Google Play segera tersedia.').last);
-    await tester
-        .tap(find.text('Pembelian melalui Google Play segera tersedia.').last);
-    await tester.pumpAndSettle();
-
+    expect(find.text('Membership Basic aktif'), findsOneWidget);
+    expect(find.text('Silver'), findsNothing);
+    expect(find.text('Gold'), findsNothing);
+    expect(find.text('Platinum'), findsNothing);
+    expect(find.text('Pembelian melalui Google Play segera tersedia.'),
+        findsNothing);
     expect(find.text('Form Membership'), findsNothing);
     expect(find.text('Menunggu Pembayaran'), findsNothing);
     expect(find.text('Bayar Sekarang'), findsNothing);

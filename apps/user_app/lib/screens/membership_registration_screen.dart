@@ -280,7 +280,7 @@ class _MembershipRegistrationScreenState
     if (tapGoIsPlayDistribution) {
       _TapGoSnackbar.info(
         context,
-        'Pembelian melalui Google Play segera tersedia.',
+        'Akun Anda sudah aktif sebagai Basic.',
       );
       return;
     }

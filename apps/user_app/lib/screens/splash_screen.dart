@@ -101,7 +101,7 @@ class _SplashGateState extends State<SplashGate>
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Ride • Membership • Referral • Wallet',
+                    'Akun • Membership • Referral • Bantuan',
                     style: TextStyle(
                       color: Color(0xDFFFFFFF),
                       fontSize: 14,

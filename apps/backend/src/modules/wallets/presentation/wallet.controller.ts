@@ -1,6 +1,8 @@
 import { Prisma, WithdrawalStatus } from "@prisma/client";
 import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
+import { env } from "../../../config/env.js";
+import { AppError } from "../../../core/errors/AppError.js";
 import { WalletService } from "../application/WalletService.js";
 
 export class WalletController {
@@ -26,6 +28,7 @@ export class WalletController {
   };
 
   updateBankAccount = async (req: Request, res: Response) => {
+    this.assertCashOutEnabledForPlay();
     const result = await this.walletService.updateBankAccount({
       userId: req.auth!.userId,
       bankName: req.body.bankName,
@@ -37,6 +40,7 @@ export class WalletController {
   };
 
   requestWithdrawal = async (req: Request, res: Response) => {
+    this.assertCashOutEnabledForPlay();
     const result = await this.walletService.requestWithdrawal({
       userId: req.auth!.userId,
       amount: new Prisma.Decimal(req.body.amount),
@@ -124,5 +128,15 @@ export class WalletController {
 
   private optionalStatus(status: unknown) {
     return typeof status === "string" ? { status: status as WithdrawalStatus } : {};
+  }
+
+  private assertCashOutEnabledForPlay() {
+    if (!env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED) {
+      throw new AppError(
+        "Fitur pencairan saldo belum tersedia pada rilis Google Play.",
+        StatusCodes.FORBIDDEN,
+        "CASH_OUT_DISABLED_FOR_PLAY",
+      );
+    }
   }
 }

@@ -5,6 +5,9 @@ import { env, strictEnvBoolean } from "../../src/config/env.js";
 import { AppError } from "../../src/core/errors/AppError.js";
 import { errorHandler } from "../../src/core/errors/errorHandler.js";
 import { MembershipOrderController } from "../../src/modules/memberships/presentation/membership-order.controller.js";
+import { MembershipController } from "../../src/modules/memberships/presentation/membership.controller.js";
+import { DokuController } from "../../src/modules/payments/presentation/doku.controller.js";
+import { WalletController } from "../../src/modules/wallets/presentation/wallet.controller.js";
 
 const originalExternalPaymentGate = env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
 const originalDokuEnabled = env.DOKU_ENABLED;
@@ -36,6 +39,155 @@ describe("External membership payment safety gate", () => {
 
   it("defaults external membership payments to disabled unless explicitly enabled", () => {
     expect(strictEnvBoolean(false).parse(undefined)).toBe(false);
+  });
+
+  it("returns only Basic package data when external paid memberships are disabled", async () => {
+    env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = false;
+    const membershipOrderService = {
+      listPackages: vi.fn().mockResolvedValue([
+        { tier: "BASIC", name: "Basic" },
+        { tier: "SILVER", name: "Silver" },
+      ]),
+    };
+    const controller = new MembershipOrderController(
+      membershipOrderService as never,
+    );
+    const response = { json: vi.fn() } as unknown as Response;
+
+    await controller.packages({} as Request, response);
+
+    expect(response.json).toHaveBeenCalledWith({
+      success: true,
+      data: [{ tier: "BASIC", name: "Basic" }],
+    });
+  });
+
+  it("rejects membership order creation before service execution in Play-safe mode", async () => {
+    env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = false;
+    const membershipOrderService = { createOrder: vi.fn() };
+    const controller = new MembershipOrderController(
+      membershipOrderService as never,
+    );
+    const request = {
+      auth: { userId: "user-1", role: "USER" },
+      body: { packageId: "package-1" },
+    } as unknown as Request;
+    const response = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
+
+    await expect(controller.createOrder(request, response)).rejects.toMatchObject({
+      code: "PAID_MEMBERSHIP_DISABLED_FOR_PLAY",
+      statusCode: 403,
+    });
+    expect(membershipOrderService.createOrder).not.toHaveBeenCalled();
+  });
+
+  it("rejects legacy membership upgrade before service execution in Play-safe mode", async () => {
+    env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = false;
+    const membershipService = { upgrade: vi.fn() };
+    const controller = new MembershipController(membershipService as never);
+    const request = {
+      auth: { userId: "user-1", role: "USER" },
+      body: { targetTier: "SILVER" },
+    } as unknown as Request;
+    const response = { json: vi.fn() } as unknown as Response;
+
+    await expect(controller.upgrade(request, response)).rejects.toMatchObject({
+      code: "PAID_MEMBERSHIP_DISABLED_FOR_PLAY",
+      statusCode: 403,
+    });
+    expect(membershipService.upgrade).not.toHaveBeenCalled();
+  });
+
+  it("rejects DOKU create before invoking DOKU service in Play-safe mode", async () => {
+    env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = false;
+    const dokuPaymentService = { createMembershipPayment: vi.fn() };
+    const controller = new DokuController(dokuPaymentService as never);
+    const request = {
+      auth: { userId: "user-1", role: "USER" },
+      body: { orderId: "order-1" },
+    } as unknown as Request;
+    const response = { json: vi.fn() } as unknown as Response;
+
+    await expect(controller.create(request, response)).rejects.toMatchObject({
+      code: "EXTERNAL_MEMBERSHIP_PAYMENTS_DISABLED",
+      statusCode: 403,
+    });
+    expect(dokuPaymentService.createMembershipPayment).not.toHaveBeenCalled();
+  });
+
+  it("rejects bank account mutation and withdrawal before wallet service execution in Play-safe mode", async () => {
+    env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = false;
+    const walletService = {
+      updateBankAccount: vi.fn(),
+      requestWithdrawal: vi.fn(),
+    };
+    const controller = new WalletController(walletService as never);
+    const response = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
+
+    await expect(
+      controller.updateBankAccount(
+        {
+          auth: { userId: "user-1", role: "USER" },
+          body: {
+            bankName: "Bank Mandiri",
+            accountNumber: "00123456",
+            accountHolderName: "Member TapGo",
+          },
+        } as unknown as Request,
+        response,
+      ),
+    ).rejects.toMatchObject({
+      code: "CASH_OUT_DISABLED_FOR_PLAY",
+      statusCode: 403,
+    });
+    await expect(
+      controller.requestWithdrawal(
+        {
+          auth: { userId: "user-1", role: "USER" },
+          body: {
+            amount: 50000,
+            bankName: "Bank Mandiri",
+            accountNumber: "00123456",
+            accountHolderName: "Member TapGo",
+          },
+        } as unknown as Request,
+        response,
+      ),
+    ).rejects.toMatchObject({
+      code: "CASH_OUT_DISABLED_FOR_PLAY",
+      statusCode: 403,
+    });
+    expect(walletService.updateBankAccount).not.toHaveBeenCalled();
+    expect(walletService.requestWithdrawal).not.toHaveBeenCalled();
+  });
+
+  it("preserves direct membership order creation when the gate is explicitly enabled", async () => {
+    env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = true;
+    const createdOrder = { id: "order-1" };
+    const membershipOrderService = {
+      createOrder: vi.fn().mockResolvedValue(createdOrder),
+    };
+    const controller = new MembershipOrderController(
+      membershipOrderService as never,
+    );
+    const request = {
+      auth: { userId: "user-1", role: "USER" },
+      body: { packageId: "package-1", registrationData: { name: "Member" } },
+    } as unknown as Request;
+    const response = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
+
+    await controller.createOrder(request, response);
+
+    expect(membershipOrderService.createOrder).toHaveBeenCalledWith({
+      userId: "user-1",
+      packageId: "package-1",
+      registrationData: { name: "Member" },
+    });
+    expect(response.status).toHaveBeenCalledWith(201);
+    expect(response.json).toHaveBeenCalledWith({
+      success: true,
+      data: createdOrder,
+    });
   });
 
   it("rejects external membership pay before constructing or selecting providers", async () => {

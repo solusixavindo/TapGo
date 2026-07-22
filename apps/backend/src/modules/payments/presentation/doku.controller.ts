@@ -1,10 +1,21 @@
 import { Request, Response } from "express";
+import { StatusCodes } from "http-status-codes";
+import { env } from "../../../config/env.js";
+import { AppError } from "../../../core/errors/AppError.js";
 import { DokuPaymentService } from "../application/DokuPaymentService.js";
 
 export class DokuController {
   constructor(private readonly dokuPaymentService: DokuPaymentService) {}
 
   create = async (req: Request, res: Response) => {
+    if (!env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED) {
+      throw new AppError(
+        "Pembayaran membership eksternal belum tersedia untuk rilis Google Play.",
+        StatusCodes.FORBIDDEN,
+        "EXTERNAL_MEMBERSHIP_PAYMENTS_DISABLED",
+      );
+    }
+
     const result = await this.dokuPaymentService.createMembershipPayment({
       userId: req.auth!.userId,
       role: req.auth!.role,

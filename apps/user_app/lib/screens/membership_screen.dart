@@ -8,7 +8,7 @@ class SuperMenuScreen extends StatefulWidget {
 }
 
 class _SuperMenuScreenState extends State<SuperMenuScreen> {
-  static const _groups = [
+  static const _directGroups = [
     _SuperMenuGroup('Layanan', [
       _SuperMenuItem('TapGo Ride', Icons.two_wheeler_rounded),
       _SuperMenuItem('TapGo Car', Icons.local_taxi_rounded),
@@ -34,14 +34,28 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
     ]),
   ];
 
+  static const _playGroups = [
+    _SuperMenuGroup('Layanan', [
+      _SuperMenuItem('TapGo Ride', Icons.two_wheeler_rounded),
+      _SuperMenuItem('TapGo Car', Icons.local_taxi_rounded),
+      _SuperMenuItem('TapGo Food', Icons.restaurant_menu_rounded),
+      _SuperMenuItem('TapGo Mart', Icons.storefront_rounded),
+    ]),
+    _SuperMenuGroup('Digital', [
+      _SuperMenuItem('Pulsa', Icons.phone_iphone_rounded),
+      _SuperMenuItem('PPOB', Icons.receipt_long_rounded),
+    ]),
+    _SuperMenuGroup('Akun', [
+      _SuperMenuItem('Membership Saya', Icons.workspace_premium_rounded),
+      _SuperMenuItem('Referral', Icons.hub_rounded),
+      _SuperMenuItem('Support', Icons.volunteer_activism_rounded),
+    ]),
+  ];
+
   static const _searchHints = [
     'Cari Membership',
     'Cari Referral',
-    'Cari Reward',
     'Cari PPOB',
-    'Cari BPJS',
-    'Cari Webinar',
-    'Cari Kelas Online',
   ];
 
   int _hintIndex = 0;
@@ -64,6 +78,7 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final groups = tapGoIsPlayDistribution ? _playGroups : _directGroups;
     return _DemoScaffold(
       title: 'Super Menu',
       subtitle: 'Semua layanan TapGo dalam satu akses',
@@ -72,7 +87,7 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
         children: [
           _SuperMenuSearchBar(hint: _searchHints[_hintIndex]),
           const SizedBox(height: 18),
-          ..._groups.map(
+          ...groups.map(
             (group) => Padding(
               padding: const EdgeInsets.only(bottom: 20),
               child: Column(
@@ -116,8 +131,13 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
   }
 
   void _openMenuDetail(BuildContext context, String label) {
-    if (label == 'Membership') {
-      _openDemo(context, const MembershipPackagesScreen());
+    if (label == 'Membership' || label == 'Membership Saya') {
+      _openDemo(
+        context,
+        tapGoIsPlayDistribution
+            ? const MembershipScreen()
+            : const MembershipPackagesScreen(),
+      );
     } else if (label == 'Referral') {
       _openDemo(context, const ReferralDashboardScreen());
     } else if (label == 'Marketing Plan') {
@@ -294,10 +314,7 @@ class _MembershipPackagesScreenState extends State<MembershipPackagesScreen> {
   void _openPackage(_MembershipPackage package) {
     setState(() => _selectedPackageName = package.name);
     if (tapGoIsPlayDistribution) {
-      _TapGoSnackbar.info(
-        context,
-        'Pembelian melalui Google Play segera tersedia.',
-      );
+      _TapGoSnackbar.info(context, 'Akun Anda sudah aktif sebagai Basic.');
       return;
     }
     _openDemo(
@@ -310,6 +327,19 @@ class _MembershipPackagesScreenState extends State<MembershipPackagesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (tapGoIsPlayDistribution) {
+      return const _DemoScaffold(
+        title: 'Membership',
+        subtitle: 'Status membership TapGo',
+        child: _StatusSurface(
+          icon: Icons.workspace_premium_rounded,
+          title: 'Membership Basic aktif',
+          subtitle:
+              'Akun TapGo Anda sudah aktif dengan akses Basic. Upgrade berbayar tidak tersedia pada rilis ini.',
+        ),
+      );
+    }
+
     final upgradePackages = _demoMemberships
         .where((package) => package.name.toLowerCase() != 'basic')
         .toList(growable: false);
@@ -350,7 +380,8 @@ class MembershipScreen extends ConsumerWidget {
     final production = ref.watch(_productionSnapshotProvider);
     final session = ref.watch(_demoSessionProvider);
     final package = DemoClientCatalog.packageByName(session.activePackageName);
-    final hasActivePackage = session.activePackageName != 'Basic' ||
+    final hasActivePackage = tapGoIsPlayDistribution ||
+        session.activePackageName != 'Basic' ||
         session.lastInvoiceNumber != null ||
         session.ppobBalance > 0;
     if (!hasActivePackage) {
@@ -435,24 +466,27 @@ class MembershipScreen extends ConsumerWidget {
             imagePath: session.ktpImagePath,
             emptyLabel: 'Belum ada pratinjau KTP',
           ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: () => _openDemo(
-              context,
-              MembershipInvoiceScreen(session: session, package: package),
-            ),
-            icon: const Icon(Icons.receipt_long_rounded),
-            label: const Text('Lihat Invoice'),
-            style: FilledButton.styleFrom(
-              backgroundColor: _brandBlue,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+          if (!tapGoIsPlayDistribution ||
+              session.lastInvoiceNumber != null) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () => _openDemo(
+                context,
+                MembershipInvoiceScreen(session: session, package: package),
+              ),
+              icon: const Icon(Icons.receipt_long_rounded),
+              label: const Text('Lihat Invoice'),
+              style: FilledButton.styleFrom(
+                backgroundColor: _brandBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
             ),
-          ),
-          if (package.name != 'Platinum') ...[
+          ],
+          if (tapGoIsDirectDistribution && package.name != 'Platinum') ...[
             const SizedBox(height: 10),
             OutlinedButton.icon(
               onPressed: () =>
@@ -1561,9 +1595,9 @@ Kontak support: support@tapgolion.id, WhatsApp +62 838-0025-5588, alamat Jalan K
 const _playTermsContent = '''
 Dengan menggunakan TapGo, pengguna menyetujui ketentuan layanan membership, referral, PPOB, dan layanan digital yang berlaku.
 
-Paket Basic bersifat gratis sebagai status awal member. Paket Silver, Gold, dan Platinum akan tersedia melalui Google Play setelah proses aktivasi pembelian selesai.
+Paket Basic bersifat gratis sebagai status awal member.
 
-Benefit membership ditampilkan sesuai layanan yang tersedia di aplikasi. Aktivasi paket berbayar hanya dilakukan setelah proses pembelian yang valid dan terverifikasi.
+Benefit membership ditampilkan sesuai layanan yang tersedia di aplikasi.
 
 Pengguna dilarang membuat akun palsu, menyalahgunakan referral, melakukan klaim ganda, atau memanipulasi transaksi. TapGo berhak membatasi, menolak, atau menangguhkan akun yang melanggar.
 

@@ -17,10 +17,21 @@ export class MembershipOrderController {
 
   packages = async (_req: Request, res: Response) => {
     const result = await this.membershipOrderService.listPackages();
-    res.json({ success: true, data: result });
+    const packages = env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED
+      ? result
+      : result.filter((item) => item.tier === "BASIC");
+    res.json({ success: true, data: packages });
   };
 
   createOrder = async (req: Request, res: Response) => {
+    if (!env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED) {
+      throw new AppError(
+        "Upgrade membership berbayar tidak tersedia pada rilis Google Play.",
+        StatusCodes.FORBIDDEN,
+        "PAID_MEMBERSHIP_DISABLED_FOR_PLAY",
+      );
+    }
+
     const result = await this.membershipOrderService.createOrder({
       userId: req.auth!.userId,
       packageId: req.body.packageId,

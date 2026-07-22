@@ -653,10 +653,12 @@ class _ProductionStatusTile extends ConsumerWidget {
       );
     }
 
-    return const _StatusSurface(
+    return _StatusSurface(
       icon: Icons.cloud_done_rounded,
       title: 'Data TapGo aktif',
-      subtitle: 'Membership, referral, dan wallet tersinkron.',
+      subtitle: tapGoIsPlayDistribution
+          ? 'Membership dan referral tersinkron.'
+          : 'Membership, referral, dan wallet tersinkron.',
     );
   }
 }

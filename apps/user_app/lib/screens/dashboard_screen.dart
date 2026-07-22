@@ -731,11 +731,10 @@ class _SearchRow extends StatefulWidget {
 class _SearchRowState extends State<_SearchRow> {
   static const _placeholders = [
     'Cari layanan TapGo',
-    'Cari Membership',
+    'Cari Membership Saya',
     'Cari Referral',
-    'Cari Reward',
     'Cari PPOB',
-    'Cari BPJS',
+    'Cari Bantuan',
   ];
 
   int _placeholderIndex = 0;
@@ -866,19 +865,22 @@ void _showInfoSnack(BuildContext context, String message) {
 }
 
 void _showSearchMenu(BuildContext context) {
-  const items = [
-    _ServiceItem(
+  final items = [
+    const _ServiceItem(
         'TapGo Ride', Icons.two_wheeler_rounded, Color(0xFF006AF5), null),
-    _ServiceItem(
+    const _ServiceItem(
         'TapGo Car', Icons.local_taxi_rounded, Color(0xFF006AF5), null),
-    _ServiceItem(
+    const _ServiceItem(
         'TapGo Food', Icons.restaurant_menu_rounded, Color(0xFFFF6B00), null),
-    _ServiceItem(
+    const _ServiceItem(
         'TapGo Mart', Icons.storefront_rounded, Color(0xFF0097A7), null),
-    _ServiceItem(
-        'Membership', Icons.workspace_premium_rounded, Color(0xFFF59E0B), null),
-    _ServiceItem('Referral', Icons.hub_rounded, Color(0xFF006AF5), null),
-    _ServiceItem('Reward', Icons.emoji_events_rounded, Color(0xFFF59E0B), null),
+    const _ServiceItem('Referral', Icons.hub_rounded, Color(0xFF006AF5), null),
+    if (tapGoIsDirectDistribution) ...[
+      const _ServiceItem('Membership', Icons.workspace_premium_rounded,
+          Color(0xFFF59E0B), null),
+      const _ServiceItem(
+          'Reward', Icons.emoji_events_rounded, Color(0xFFF59E0B), null),
+    ],
   ];
 
   _showTapGoBottomSheet<void>(
@@ -1725,10 +1727,18 @@ class _MarketingPlanCard extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: () =>
-                          _openDemo(context, const MembershipPackagesScreen()),
+                      onPressed: () => _openDemo(
+                        context,
+                        tapGoIsPlayDistribution
+                            ? const MembershipScreen()
+                            : const MembershipPackagesScreen(),
+                      ),
                       icon: const Icon(Icons.workspace_premium_rounded),
-                      label: const FittedBox(child: Text('Membership')),
+                      label: FittedBox(
+                        child: Text(tapGoIsPlayDistribution
+                            ? 'Detail Basic'
+                            : 'Membership'),
+                      ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: _brandBlue,
                         backgroundColor: Colors.white.withValues(alpha: 0.72),
@@ -1837,7 +1847,7 @@ List<Color> _packageGradient(String packageName) {
 class _ServiceGrid extends StatelessWidget {
   const _ServiceGrid();
 
-  static const services = [
+  static const _directServices = [
     _ServiceItem(
         'TapGo Ride', Icons.two_wheeler_rounded, Color(0xFF0569E8), 'Segera'),
     _ServiceItem(
@@ -1854,8 +1864,18 @@ class _ServiceGrid extends StatelessWidget {
     _ServiceItem('Lainnya', Icons.grid_view_rounded, Color(0xFF697386), null),
   ];
 
+  static const _playServices = [
+    _ServiceItem('Membership Saya', Icons.workspace_premium_rounded,
+        Color(0xFFF59E0B), null),
+    _ServiceItem('Referral', Icons.hub_rounded, Color(0xFF006AF5), null),
+    _ServiceItem(
+        'Support', Icons.volunteer_activism_rounded, Color(0xFF0569E8), null),
+    _ServiceItem('Profil', Icons.person_rounded, Color(0xFF697386), null),
+  ];
+
   @override
   Widget build(BuildContext context) {
+    final services = tapGoIsPlayDistribution ? _playServices : _directServices;
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -2477,8 +2497,9 @@ class AccountScreen extends ConsumerWidget {
             _AccountMenuTile('Riwayat Komisi', Icons.receipt_long_rounded,
                 () => _openDemo(context, const CommissionHistoryScreen())),
           ],
-          _AccountMenuTile('Reward', Icons.emoji_events_rounded,
-              () => _openDemo(context, const RewardScreen())),
+          if (tapGoIsDirectDistribution)
+            _AccountMenuTile('Reward', Icons.emoji_events_rounded,
+                () => _openDemo(context, const RewardScreen())),
           if (session.isAdmin)
             _AccountMenuTile(
               session.isSuperAdmin
@@ -2561,9 +2582,9 @@ class HelpCenterScreen extends StatelessWidget {
         'Bagikan kode referral Anda agar downline dan bonus tercatat otomatis.'
       ),
       (
-        'Upgrade membership',
+        'Membership',
         tapGoIsPlayDistribution
-            ? 'Paket Silver, Gold, dan Platinum akan tersedia melalui Google Play.'
+            ? 'Akun baru aktif otomatis sebagai Basic setelah registrasi.'
             : 'Pilih paket Silver, Gold, atau Platinum lalu selesaikan invoice.'
       ),
       if (tapGoIsDirectDistribution) ...[

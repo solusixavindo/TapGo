@@ -136,12 +136,10 @@ class _MembershipPackageCard extends StatelessWidget {
               child: FilledButton.icon(
                 onPressed: isPlayDistribution ? null : onSelected,
                 icon: Icon(isPlayDistribution
-                    ? Icons.lock_clock_rounded
+                    ? Icons.verified_user_rounded
                     : Icons.app_registration_rounded),
                 label: Text(
-                  isPlayDistribution
-                      ? 'Pembelian melalui Google Play segera tersedia.'
-                      : 'Daftar',
+                  isPlayDistribution ? 'Aktif sebagai Basic' : 'Daftar',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
