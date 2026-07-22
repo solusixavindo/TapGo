@@ -6,11 +6,13 @@ import { MembershipOrderService } from "../application/MembershipOrderService.js
 import { MidtransPaymentService } from "../../payments/application/MidtransPaymentService.js";
 import { DokuPaymentService } from "../../payments/application/DokuPaymentService.js";
 
+type PaymentServiceFactory<T> = () => T;
+
 export class MembershipOrderController {
   constructor(
     private readonly membershipOrderService: MembershipOrderService,
-    private readonly midtransPaymentService?: MidtransPaymentService,
-    private readonly dokuPaymentService?: DokuPaymentService,
+    private readonly midtransPaymentServiceFactory?: PaymentServiceFactory<MidtransPaymentService>,
+    private readonly dokuPaymentServiceFactory?: PaymentServiceFactory<DokuPaymentService>,
   ) {}
 
   packages = async (_req: Request, res: Response) => {
@@ -71,11 +73,11 @@ export class MembershipOrderController {
     }
 
     if (env.DOKU_ENABLED) {
-      if (!this.dokuPaymentService) {
+      if (!this.dokuPaymentServiceFactory) {
         throw new Error("DOKU payment service is not configured");
       }
 
-      const result = await this.dokuPaymentService.createMembershipPayment({
+      const result = await this.dokuPaymentServiceFactory().createMembershipPayment({
         userId: req.auth!.userId,
         role: req.auth!.role,
         orderId: String(req.params.id),
@@ -85,13 +87,13 @@ export class MembershipOrderController {
       return;
     }
 
-    if (!this.midtransPaymentService) {
+    if (!this.midtransPaymentServiceFactory) {
       throw new Error("Midtrans payment service is not configured");
     }
 
     let result;
     try {
-      result = await this.midtransPaymentService.createMembershipPayment({
+      result = await this.midtransPaymentServiceFactory().createMembershipPayment({
         userId: req.auth!.userId,
         role: req.auth!.role,
         orderId: String(req.params.id),

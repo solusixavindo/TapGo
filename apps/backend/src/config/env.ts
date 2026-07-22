@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { z } from "zod";
 
-const strictEnvBoolean = (defaultValue: boolean) =>
+export const strictEnvBoolean = (defaultValue: boolean) =>
   z.preprocess((value) => {
     if (value === undefined || value === null || value === "") {
       return defaultValue;

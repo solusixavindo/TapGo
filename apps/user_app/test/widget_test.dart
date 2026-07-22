@@ -528,6 +528,7 @@ void main() {
   test('distribution mode defaults and fails closed to Play', () {
     expect(tapGoDistributionModeFromValue(null), TapGoDistributionMode.play);
     expect(tapGoDistributionModeFromValue(''), TapGoDistributionMode.play);
+    expect(tapGoDistributionModeFromValue('play'), TapGoDistributionMode.play);
     expect(tapGoDistributionModeFromValue('unexpected'),
         TapGoDistributionMode.play);
     expect(
