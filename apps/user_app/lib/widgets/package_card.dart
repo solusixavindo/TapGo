@@ -66,6 +66,12 @@ class _MembershipPackageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isPlayDistribution = tapGoIsPlayDistribution;
+    final visibleBenefits = package.benefits
+        .map(_tapGoPlaySafeMembershipBenefit)
+        .where((benefit) => benefit.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
     return AnimatedScale(
       scale: selected && !_TapGoMotion.reduce(context) ? 0.992 : 1,
       duration: _TapGoMotion.duration(context, _TapGoMotion.fast),
@@ -112,26 +118,41 @@ class _MembershipPackageCard extends StatelessWidget {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: package.benefits
+              children: visibleBenefits
                   .map((benefit) => _BenefitChip(label: benefit))
                   .toList(),
             ),
             const SizedBox(height: 14),
-            _PackageRow(label: 'Bonus sponsor', value: package.sponsorBonus),
-            _PackageRow(label: 'Bonus level', value: package.levelBonus),
-            _PackageRow(label: 'Saldo PPOB', value: package.ppobBalance),
+            if (!isPlayDistribution) ...[
+              _PackageRow(label: 'Bonus sponsor', value: package.sponsorBonus),
+              _PackageRow(label: 'Bonus level', value: package.levelBonus),
+              _PackageRow(label: 'Saldo PPOB', value: package.ppobBalance),
+            ],
             _PackageRow(label: 'BPJS', value: package.bpjsBenefit),
             _PackageRow(label: 'Hak usaha', value: package.businessRight),
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: onSelected,
-                icon: const Icon(Icons.app_registration_rounded),
-                label: const Text('Daftar'),
+                onPressed: isPlayDistribution ? null : onSelected,
+                icon: Icon(isPlayDistribution
+                    ? Icons.lock_clock_rounded
+                    : Icons.app_registration_rounded),
+                label: Text(
+                  isPlayDistribution
+                      ? 'Pembelian melalui Google Play segera tersedia.'
+                      : 'Daftar',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
                 style: FilledButton.styleFrom(
                   backgroundColor: package.accent,
                   foregroundColor: Colors.white,
+                  disabledBackgroundColor:
+                      package.accent.withValues(alpha: 0.16),
+                  disabledForegroundColor:
+                      package.accent.withValues(alpha: 0.72),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -144,4 +165,20 @@ class _MembershipPackageCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _tapGoPlaySafeMembershipBenefit(String benefit) {
+  if (!tapGoIsPlayDistribution) {
+    return benefit;
+  }
+  final normalized = benefit.toLowerCase();
+  if (normalized.contains('saldo ppob')) {
+    return 'Benefit layanan digital';
+  }
+  if (normalized.contains('bonus') ||
+      normalized.contains('sponsor') ||
+      normalized.contains('profit')) {
+    return '';
+  }
+  return benefit;
 }

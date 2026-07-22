@@ -62,6 +62,14 @@ export class MembershipOrderController {
   };
 
   pay = async (req: Request, res: Response) => {
+    if (!env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED) {
+      throw new AppError(
+        "Pembayaran membership eksternal belum tersedia untuk rilis Google Play.",
+        StatusCodes.FORBIDDEN,
+        "EXTERNAL_MEMBERSHIP_PAYMENTS_DISABLED",
+      );
+    }
+
     if (env.DOKU_ENABLED) {
       if (!this.dokuPaymentService) {
         throw new Error("DOKU payment service is not configured");

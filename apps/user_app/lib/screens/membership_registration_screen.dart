@@ -277,6 +277,13 @@ class _MembershipRegistrationScreenState
   }
 
   Future<void> _continueToCheckout() async {
+    if (tapGoIsPlayDistribution) {
+      _TapGoSnackbar.info(
+        context,
+        'Pembelian melalui Google Play segera tersedia.',
+      );
+      return;
+    }
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }

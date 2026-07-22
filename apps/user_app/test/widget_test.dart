@@ -497,24 +497,42 @@ void main() {
 
     expect(find.text('Paket aktif: Basic'), findsOneWidget);
     expect(find.text('Marketing Plan'), findsNothing);
-    await tester.ensureVisible(find.text('Membership').first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Membership').first);
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(home: MembershipPackagesScreen()),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Basic'), findsNothing);
+    expect(find.text('Gratis'), findsNothing);
     expect(find.text('Silver'), findsWidgets);
     expect(find.text('Gold'), findsWidgets);
     expect(find.text('Platinum'), findsWidgets);
-    expect(find.text('Daftar'), findsNWidgets(3));
+    expect(find.text('Pembelian melalui Google Play segera tersedia.'),
+        findsNWidgets(3));
+    expect(find.text('Daftar'), findsNothing);
 
     await tester.ensureVisible(find.text('Silver'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Daftar').first);
+    await tester
+        .tap(find.text('Pembelian melalui Google Play segera tersedia.').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('Form Membership'), findsOneWidget);
-    expect(find.text('Paket Silver'), findsOneWidget);
+    expect(find.text('Form Membership'), findsNothing);
+    expect(find.text('Paket Silver'), findsNothing);
+    expect(find.text('Pembelian melalui Google Play segera tersedia.'),
+        findsWidgets);
+  });
+
+  test('distribution mode defaults and fails closed to Play', () {
+    expect(tapGoDistributionModeFromValue(null), TapGoDistributionMode.play);
+    expect(tapGoDistributionModeFromValue(''), TapGoDistributionMode.play);
+    expect(tapGoDistributionModeFromValue('unexpected'),
+        TapGoDistributionMode.play);
+    expect(
+        tapGoDistributionModeFromValue('direct'), TapGoDistributionMode.direct);
+    expect(tapGoIsPlayDistribution, isTrue);
   });
 
   test('payment provider copy follows gateway with neutral fallback', () {
@@ -587,7 +605,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('TapGoPay'), findsOneWidget);
+    expect(find.text('TapGoPay'), findsNothing);
     expect(find.byIcon(Icons.apps_rounded), findsOneWidget);
     expect(find.text('Membership'), findsWidgets);
 
@@ -634,15 +652,32 @@ void main() {
     expect(find.text('Super Admin Dashboard'), findsNothing);
   });
 
-  testWidgets('bank account picker opens and selects bank without assertion',
+  testWidgets('Play account menu hides bank and cash surfaces',
       (WidgetTester tester) async {
     await openDashboard(tester);
 
     await tester.tap(find.text('Akun'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Rekening Bank'));
-    await tester.tap(find.text('Rekening Bank'));
+
+    expect(find.text('Rekening Bank'), findsNothing);
+    expect(find.text('Wallet & Withdraw'), findsNothing);
+    expect(find.text('Riwayat Komisi'), findsNothing);
+    expect(find.text('TapGoPay'), findsNothing);
+  });
+
+  testWidgets('bank account picker still opens directly without assertion',
+      (WidgetTester tester) async {
+    tapGoDisablePersistenceForTests = true;
+    tapGoEnablePaymentSimulatorForTests = false;
+    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(home: BankAccountScreen()),
+      ),
+    );
     await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Rekening Bank'));
 
     expect(find.text('Rekening Bank'), findsWidgets);
     expect(find.text('Nama bank'), findsOneWidget);
@@ -690,73 +725,31 @@ void main() {
     expect(find.text('Pengajuan hapus akun berhasil dikirim.'), findsNothing);
   });
 
-  testWidgets('client membership flow reaches payment success',
+  testWidgets('Play membership flow does not open external checkout',
       (WidgetTester tester) async {
-    await openDashboard(tester, enablePaymentSimulator: true);
-
-    await tester.ensureVisible(find.text('Membership'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Membership').first);
+    tapGoDisablePersistenceForTests = true;
+    tapGoEnablePaymentSimulatorForTests = true;
+    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(home: MembershipPackagesScreen()),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.ensureVisible(find.text('Platinum'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Daftar').last);
-    await tester.tap(find.text('Daftar').last);
+    await tester.ensureVisible(
+        find.text('Pembelian melalui Google Play segera tersedia.').last);
+    await tester
+        .tap(find.text('Pembelian melalui Google Play segera tersedia.').last);
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('Upload KTP'));
-    final registrationFields = find.byType(TextFormField);
-    await tester.enterText(registrationFields.at(0), 'UAT Member Platinum');
-    await tester.enterText(registrationFields.at(1), '081234567891');
-    await tester.enterText(registrationFields.at(2), 'member@tapgo.id');
-    await tester.enterText(
-      registrationFields.at(3),
-      'Jalan UAT TapGo No. 1',
-    );
-    await tester.enterText(registrationFields.at(4), '3174010101900001');
-    await tester.enterText(registrationFields.at(5), 'Jakarta');
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byIcon(Icons.date_range_rounded));
-    await tester.tap(find.byIcon(Icons.date_range_rounded));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('OK'));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Upload KTP'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Upload KTP'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Pilih dari Galeri'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Upload Foto Diri'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Pilih dari Galeri'));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Lanjut ke checkout'));
-    await tester.tap(find.text('Lanjut ke checkout'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Menunggu Pembayaran'), findsOneWidget);
-    expect(find.text('Bayar Sekarang'), findsOneWidget);
-
-    await tester.tap(find.text('Kirim Notifikasi WhatsApp'));
-    await tester.pumpAndSettle();
-    expect(find.text('Pratinjau WhatsApp'), findsOneWidget);
-    await tester.tapAt(const Offset(20, 20));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Bayar Sekarang'));
-    await tester.pumpAndSettle();
-    expect(find.text('Pembayaran'), findsOneWidget);
-    await tester.ensureVisible(find.text('Bayar'));
-    await tester.tap(find.text('Bayar'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Pendaftaran Berhasil'), findsOneWidget);
-    await tester.tap(find.text('Kembali ke dashboard'));
-    await tester.pumpAndSettle();
-    expect(find.text('Paket aktif: Platinum'), findsOneWidget);
+    expect(find.text('Form Membership'), findsNothing);
+    expect(find.text('Menunggu Pembayaran'), findsNothing);
+    expect(find.text('Bayar Sekarang'), findsNothing);
+    expect(find.text('Pembayaran'), findsNothing);
+    expect(find.text('Pendaftaran Berhasil'), findsNothing);
   });
 }
 

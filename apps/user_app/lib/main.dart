@@ -52,6 +52,8 @@ const _brandOrange = Color(0xFFFF8A00);
 const _softBackground = Color(0xFFF4F8FB);
 const _tapGoAppMode =
     String.fromEnvironment('TAPGO_APP_MODE', defaultValue: 'production');
+const _tapGoDistributionValue =
+    String.fromEnvironment('TAPGO_DISTRIBUTION', defaultValue: 'play');
 const _tapGoApiBaseUrl = String.fromEnvironment(
   'TAPGO_API_BASE_URL',
   defaultValue: 'https://api.tapgolion.id/api/v1',
@@ -63,6 +65,23 @@ bool tapGoEnablePaymentSimulatorForTests = false;
 const tapGoLocalSessionPersistenceWarning =
     'Anda berhasil masuk, tetapi sesi belum tersimpan di perangkat. '
     'Anda mungkin perlu login kembali saat aplikasi dibuka ulang.';
+
+enum TapGoDistributionMode { play, direct }
+
+TapGoDistributionMode tapGoDistributionModeFromValue(String? value) {
+  return value?.trim().toLowerCase() == 'direct'
+      ? TapGoDistributionMode.direct
+      : TapGoDistributionMode.play;
+}
+
+final _tapGoDistributionMode =
+    tapGoDistributionModeFromValue(_tapGoDistributionValue);
+
+bool get tapGoIsPlayDistribution =>
+    _tapGoDistributionMode == TapGoDistributionMode.play;
+
+bool get tapGoIsDirectDistribution =>
+    _tapGoDistributionMode == TapGoDistributionMode.direct;
 
 bool get _isPaymentSimulatorEnabled =>
     tapGoEnablePaymentSimulatorForTests ||

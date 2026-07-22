@@ -736,7 +736,6 @@ class _SearchRowState extends State<_SearchRow> {
     'Cari Reward',
     'Cari PPOB',
     'Cari BPJS',
-    'Cari Withdraw',
   ];
 
   int _placeholderIndex = 0;
@@ -1369,16 +1368,26 @@ class _WalletCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final hasError = state.hasError;
     final isLoading = state.isLoading;
+    final isPlayDistribution = tapGoIsPlayDistribution;
     final caption = hasError
         ? 'Muat ulang'
         : isLoading
-            ? 'Menghubungkan wallet'
-            : 'Klik untuk riwayat';
+            ? isPlayDistribution
+                ? 'Memuat membership'
+                : 'Menghubungkan wallet'
+            : isPlayDistribution
+                ? 'Klik untuk detail'
+                : 'Klik untuk riwayat';
     return _TapScale(
       borderRadius: BorderRadius.circular(28),
       onTap: hasError
           ? () => ref.invalidate(_productionSnapshotProvider)
-          : () => _openDemo(context, const DemoWalletScreen()),
+          : () => _openDemo(
+                context,
+                isPlayDistribution
+                    ? const MembershipScreen()
+                    : const DemoWalletScreen(),
+              ),
       child: DecoratedBox(
         decoration: BoxDecoration(
           gradient: const LinearGradient(
@@ -1453,9 +1462,9 @@ class _WalletCard extends ConsumerWidget {
                               ),
                             ),
                             const SizedBox(width: 9),
-                            const Text(
-                              'TapGoPay',
-                              style: TextStyle(
+                            Text(
+                              isPlayDistribution ? 'Membership' : 'TapGoPay',
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 15,
                                 fontWeight: FontWeight.w800,
@@ -1471,7 +1480,7 @@ class _WalletCard extends ConsumerWidget {
                               ? const _SkeletonBar(width: 168)
                               : hasError
                                   ? const _DashboardValueSwitcher(
-                                      value: 'Gagal memuat saldo',
+                                      value: 'Gagal memuat data',
                                       style: TextStyle(
                                         color: Colors.white,
                                         fontSize: 31,
@@ -1479,16 +1488,26 @@ class _WalletCard extends ConsumerWidget {
                                         fontWeight: FontWeight.w900,
                                       ),
                                     )
-                                  : _DashboardAnimatedValue(
-                                      value: session.walletBalance,
-                                      formatter: formatRupiah,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 31,
-                                        height: 1,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
+                                  : isPlayDistribution
+                                      ? _DashboardValueSwitcher(
+                                          value: session.activePackageName,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 31,
+                                            height: 1,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        )
+                                      : _DashboardAnimatedValue(
+                                          value: session.walletBalance,
+                                          formatter: formatRupiah,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 31,
+                                            height: 1,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
                         ),
                         const SizedBox(height: 10),
                         Container(
@@ -1514,21 +1533,23 @@ class _WalletCard extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  _WalletAction(
-                    icon: Icons.add_rounded,
-                    onTap: () => _showInfoSnack(
-                      context,
-                      'Top up belum dapat diproses saat ini',
+                  if (!isPlayDistribution) ...[
+                    _WalletAction(
+                      icon: Icons.add_rounded,
+                      onTap: () => _showInfoSnack(
+                        context,
+                        'Top up belum dapat diproses saat ini',
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  _WalletAction(
-                    icon: Icons.near_me_rounded,
-                    onTap: () => _showInfoSnack(
-                      context,
-                      'Transfer belum dapat diproses saat ini',
+                    const SizedBox(width: 12),
+                    _WalletAction(
+                      icon: Icons.near_me_rounded,
+                      onTap: () => _showInfoSnack(
+                        context,
+                        'Transfer belum dapat diproses saat ini',
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -1637,9 +1658,14 @@ class _MarketingPlanCard extends StatelessWidget {
                     children: [
                       Expanded(
                         child: _MiniMetric(
-                          label: 'Wallet',
-                          value: _formatCompactRupiah(session.walletBalance),
-                          animatedValue: session.walletBalance,
+                          label:
+                              tapGoIsPlayDistribution ? 'Membership' : 'Wallet',
+                          value: tapGoIsPlayDistribution
+                              ? session.activePackageName
+                              : _formatCompactRupiah(session.walletBalance),
+                          animatedValue: tapGoIsPlayDistribution
+                              ? null
+                              : session.walletBalance,
                           formatter: _formatCompactRupiah,
                           isLoading: isLoading,
                         ),
@@ -1647,9 +1673,15 @@ class _MarketingPlanCard extends StatelessWidget {
                       const SizedBox(width: 10),
                       Expanded(
                         child: _MiniMetric(
-                          label: 'Bonus hari ini',
-                          value: _formatCompactRupiah(session.todayBonus),
-                          animatedValue: session.todayBonus,
+                          label: tapGoIsPlayDistribution
+                              ? 'Benefit'
+                              : 'Bonus hari ini',
+                          value: tapGoIsPlayDistribution
+                              ? 'Aktif'
+                              : _formatCompactRupiah(session.todayBonus),
+                          animatedValue: tapGoIsPlayDistribution
+                              ? null
+                              : session.todayBonus,
                           formatter: _formatCompactRupiah,
                           isLoading: isLoading,
                         ),
@@ -1969,22 +2001,26 @@ class _ContentCards extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'PPOB & Benefit',
+                Text(
+                  tapGoIsPlayDistribution
+                      ? 'Layanan Digital'
+                      : 'PPOB & Benefit',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,
                     fontSize: 16,
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Saldo, transaksi, dan reward dalam satu dashboard.',
+                Text(
+                  tapGoIsPlayDistribution
+                      ? 'Akses layanan tersedia melalui membership TapGo.'
+                      : 'Saldo, transaksi, dan reward dalam satu dashboard.',
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Color(0xDDEAF7FF),
                     fontSize: 12,
                     height: 1.3,
@@ -2212,12 +2248,20 @@ class ActivityScreen extends ConsumerStatefulWidget {
 class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   int _tabIndex = 0;
 
-  static const _tabs = ['Semua', 'Bonus', 'Referral', 'Layanan', 'Withdraw'];
+  static const _directTabs = [
+    'Semua',
+    'Bonus',
+    'Referral',
+    'Layanan',
+    'Withdraw'
+  ];
+  static const _playTabs = ['Semua', 'Referral', 'Layanan'];
 
   @override
   Widget build(BuildContext context) {
     final production = ref.watch(_productionSnapshotProvider);
     final session = ref.watch(_demoSessionProvider);
+    final tabs = tapGoIsPlayDistribution ? _playTabs : _directTabs;
     final sourceItems = session.transactions
         .map(
           (transaction) => _ActivityItem(
@@ -2232,8 +2276,16 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
             'Terbaru',
           ),
         )
+        .where(
+          (item) =>
+              !tapGoIsPlayDistribution ||
+              (item.category != 'Bonus' && item.category != 'Withdraw'),
+        )
         .toList(growable: false);
-    final selected = _tabs[_tabIndex];
+    if (_tabIndex >= tabs.length) {
+      _tabIndex = 0;
+    }
+    final selected = tabs[_tabIndex];
     final items = selected == 'Semua'
         ? sourceItems
         : sourceItems.where((item) => item.category == selected).toList();
@@ -2243,20 +2295,22 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionHeader(
+          _SectionHeader(
             title: 'Aktivitas',
-            subtitle: 'Bonus, referral, layanan, dan withdraw',
+            subtitle: tapGoIsPlayDistribution
+                ? 'Referral dan layanan TapGo'
+                : 'Bonus, referral, layanan, dan withdraw',
           ),
           const SizedBox(height: 16),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: List.generate(
-                _tabs.length,
+                tabs.length,
                 (index) => Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: ChoiceChip(
-                    label: Text(_tabs[index]),
+                    label: Text(tabs[index]),
                     selected: _tabIndex == index,
                     selectedColor: _brandBlue,
                     labelStyle: TextStyle(
@@ -2375,15 +2429,19 @@ class AccountScreen extends ConsumerWidget {
             children: [
               Expanded(
                 child: _StatCard(
-                  label: 'Wallet',
-                  value: _formatCompactRupiah(session.walletBalance),
+                  label: tapGoIsPlayDistribution ? 'Membership' : 'Wallet',
+                  value: tapGoIsPlayDistribution
+                      ? session.activePackageName
+                      : _formatCompactRupiah(session.walletBalance),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _StatCard(
-                  label: 'PPOB',
-                  value: _formatCompactRupiah(session.ppobBalance),
+                  label: tapGoIsPlayDistribution ? 'Benefit' : 'PPOB',
+                  value: tapGoIsPlayDistribution
+                      ? 'Aktif'
+                      : _formatCompactRupiah(session.ppobBalance),
                 ),
               ),
             ],
@@ -2411,12 +2469,14 @@ class AccountScreen extends ConsumerWidget {
               () => _openDemo(context, const MembershipScreen())),
           _AccountMenuTile('Jaringan Saya', Icons.account_tree_rounded,
               () => _openDemo(context, const ReferralTreeScreen())),
-          _AccountMenuTile(
-              'Wallet & Withdraw',
-              Icons.account_balance_wallet_rounded,
-              () => _openDemo(context, const DemoWalletScreen())),
-          _AccountMenuTile('Riwayat Komisi', Icons.receipt_long_rounded,
-              () => _openDemo(context, const CommissionHistoryScreen())),
+          if (tapGoIsDirectDistribution) ...[
+            _AccountMenuTile(
+                'Wallet & Withdraw',
+                Icons.account_balance_wallet_rounded,
+                () => _openDemo(context, const DemoWalletScreen())),
+            _AccountMenuTile('Riwayat Komisi', Icons.receipt_long_rounded,
+                () => _openDemo(context, const CommissionHistoryScreen())),
+          ],
           _AccountMenuTile('Reward', Icons.emoji_events_rounded,
               () => _openDemo(context, const RewardScreen())),
           if (session.isAdmin)
@@ -2437,25 +2497,26 @@ class AccountScreen extends ConsumerWidget {
               Icons.verified_user_rounded,
               () =>
                   _openDemo(context, const FeatureDetailScreen(title: 'KYC'))),
-          _AccountMenuTile('Rekening Bank', Icons.account_balance_rounded,
-              () => _openDemo(context, const BankAccountScreen())),
+          if (tapGoIsDirectDistribution)
+            _AccountMenuTile('Rekening Bank', Icons.account_balance_rounded,
+                () => _openDemo(context, const BankAccountScreen())),
           _AccountMenuTile(
               'Kebijakan Privasi',
               Icons.privacy_tip_rounded,
               () => _openDemo(
                   context,
-                  const LegalInfoScreen(
+                  LegalInfoScreen(
                     title: 'Kebijakan Privasi',
-                    content: _privacyPolicyContent,
+                    content: _tapGoPrivacyPolicyContent,
                   ))),
           _AccountMenuTile(
               'Syarat & Ketentuan',
               Icons.gavel_rounded,
               () => _openDemo(
                   context,
-                  const LegalInfoScreen(
+                  LegalInfoScreen(
                     title: 'Syarat & Ketentuan',
-                    content: _termsContent,
+                    content: _tapGoTermsContent,
                   ))),
           _AccountMenuTile('Hapus Akun', Icons.delete_outline_rounded,
               () => _openDemo(context, const DeleteAccountRequestScreen())),
@@ -2490,7 +2551,7 @@ class HelpCenterScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const helpItems = [
+    final helpItems = [
       (
         'Cara daftar',
         'Isi nama, nomor HP, password, lalu gunakan kode referral jika ada.'
@@ -2501,16 +2562,20 @@ class HelpCenterScreen extends StatelessWidget {
       ),
       (
         'Upgrade membership',
-        'Pilih paket Silver, Gold, atau Platinum lalu selesaikan invoice.'
+        tapGoIsPlayDistribution
+            ? 'Paket Silver, Gold, dan Platinum akan tersedia melalui Google Play.'
+            : 'Pilih paket Silver, Gold, atau Platinum lalu selesaikan invoice.'
       ),
-      (
-        'Saldo TapGoPay',
-        'Saldo berasal dari bonus registrasi, sponsor, komisi, dan reward real.'
-      ),
-      (
-        'Ajukan withdraw',
-        'Lengkapi rekening bank lalu ajukan penarikan dari halaman Wallet.'
-      ),
+      if (tapGoIsDirectDistribution) ...[
+        (
+          'Saldo TapGoPay',
+          'Saldo berasal dari bonus registrasi, sponsor, komisi, dan reward real.'
+        ),
+        (
+          'Ajukan withdraw',
+          'Lengkapi rekening bank lalu ajukan penarikan dari halaman Wallet.'
+        ),
+      ],
       (
         'FAQ singkat',
         'Jika data belum tampil, pastikan koneksi internet dan coba muat ulang.'

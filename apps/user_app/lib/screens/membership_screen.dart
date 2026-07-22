@@ -256,15 +256,18 @@ class MarketingPlanScreen extends StatelessWidget {
           _DemoMenuTile(
             icon: Icons.hub_rounded,
             title: 'Referral Dashboard',
-            subtitle: 'Kode referral, level aktif, downline, bonus',
+            subtitle: tapGoIsPlayDistribution
+                ? 'Kode referral, level aktif, dan downline'
+                : 'Kode referral, level aktif, downline, bonus',
             onTap: () => _openDemo(context, const ReferralDashboardScreen()),
           ),
-          _DemoMenuTile(
-            icon: Icons.account_balance_wallet_rounded,
-            title: 'Wallet',
-            subtitle: 'Saldo, PPOB, riwayat bonus, withdraw',
-            onTap: () => _openDemo(context, const DemoWalletScreen()),
-          ),
+          if (tapGoIsDirectDistribution)
+            _DemoMenuTile(
+              icon: Icons.account_balance_wallet_rounded,
+              title: 'Wallet',
+              subtitle: 'Saldo, PPOB, riwayat bonus, withdraw',
+              onTap: () => _openDemo(context, const DemoWalletScreen()),
+            ),
           _DemoMenuTile(
             icon: Icons.account_tree_rounded,
             title: 'Jaringan Referral',
@@ -290,6 +293,13 @@ class _MembershipPackagesScreenState extends State<MembershipPackagesScreen> {
 
   void _openPackage(_MembershipPackage package) {
     setState(() => _selectedPackageName = package.name);
+    if (tapGoIsPlayDistribution) {
+      _TapGoSnackbar.info(
+        context,
+        'Pembelian melalui Google Play segera tersedia.',
+      );
+      return;
+    }
     _openDemo(
       context,
       MembershipRegistrationScreen(
@@ -732,13 +742,19 @@ class ReferralDashboardScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
-                child: _StatCard(label: 'Profit sharing', value: 'Bulanan'),
+              Expanded(
+                child: _StatCard(
+                  label: tapGoIsPlayDistribution
+                      ? 'Status benefit'
+                      : 'Profit sharing',
+                  value: tapGoIsPlayDistribution ? 'Aktif' : 'Bulanan',
+                ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          _BonusBreakdownCard(transactions: session.transactions),
+          if (tapGoIsDirectDistribution)
+            _BonusBreakdownCard(transactions: session.transactions),
         ],
       ),
     );
@@ -799,6 +815,19 @@ class DemoWalletScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (tapGoIsPlayDistribution) {
+      return const _DemoScaffold(
+        title: 'Benefit TapGo',
+        subtitle: 'Ringkasan benefit membership',
+        child: _StatusSurface(
+          icon: Icons.lock_clock_rounded,
+          title: 'Fitur saldo belum tersedia',
+          subtitle:
+              'Pengelolaan saldo akan tersedia setelah review layanan selesai.',
+        ),
+      );
+    }
+
     final production = ref.watch(_productionSnapshotProvider);
     final session = ref.watch(_demoSessionProvider);
     return _DemoScaffold(
@@ -925,6 +954,14 @@ class DemoWalletScreen extends ConsumerWidget {
   }
 
   Future<void> _showWithdrawalForm(BuildContext context, WidgetRef ref) async {
+    if (tapGoIsPlayDistribution) {
+      _TapGoSnackbar.info(
+        context,
+        'Pengelolaan saldo belum tersedia pada rilis Google Play.',
+      );
+      return;
+    }
+
     final session = ref.read(_demoSessionProvider);
     Map<String, dynamic> bankAccount = const <String, dynamic>{};
     if (session.accessToken != null && session.accessToken!.isNotEmpty) {
@@ -1507,6 +1544,38 @@ Pengguna dilarang membuat akun palsu, menyalahgunakan referral, melakukan klaim 
 TapGo dapat memperbarui layanan, benefit, dan ketentuan dengan pemberitahuan yang wajar. PT. TapGo Lion Indonesia tidak bertanggung jawab atas kerugian yang timbul dari penyalahgunaan akun atau informasi yang tidak benar dari pengguna.
 ''';
 
+const _playPrivacyPolicyContent = '''
+PT. TapGo Lion Indonesia mengumpulkan data yang diperlukan untuk menjalankan layanan membership, referral, dan layanan digital TapGo.
+
+Data yang dikumpulkan dapat meliputi nama, nomor HP, alamat, nomor KTP jika digunakan, foto KTP jika digunakan, foto diri jika digunakan, data referral, dan data transaksi membership.
+
+Data digunakan untuk registrasi member, verifikasi akun, pengelolaan membership, referral, invoice, transaksi, serta customer support.
+
+TapGo menerapkan pembatasan akses, autentikasi, dan pencatatan transaksi untuk menjaga keamanan data. Data transaksi penting dapat disimpan sesuai kebutuhan hukum, audit, dan penyelesaian kewajiban layanan.
+
+Pengguna dapat meminta penghapusan atau penonaktifan akun melalui menu Hapus Akun. Permintaan akan ditinjau agar tidak menghapus data transaksi penting yang wajib dipertahankan untuk audit dan kepatuhan.
+
+Kontak support: support@tapgolion.id, WhatsApp +62 838-0025-5588, alamat Jalan Kp. Pasir Gendok No. 11, Desa Bojongleles, Kecamatan Rangkasbitung, Kabupaten Lebak, Banten, Indonesia.
+''';
+
+const _playTermsContent = '''
+Dengan menggunakan TapGo, pengguna menyetujui ketentuan layanan membership, referral, PPOB, dan layanan digital yang berlaku.
+
+Paket Basic bersifat gratis sebagai status awal member. Paket Silver, Gold, dan Platinum akan tersedia melalui Google Play setelah proses aktivasi pembelian selesai.
+
+Benefit membership ditampilkan sesuai layanan yang tersedia di aplikasi. Aktivasi paket berbayar hanya dilakukan setelah proses pembelian yang valid dan terverifikasi.
+
+Pengguna dilarang membuat akun palsu, menyalahgunakan referral, melakukan klaim ganda, atau memanipulasi transaksi. TapGo berhak membatasi, menolak, atau menangguhkan akun yang melanggar.
+
+TapGo dapat memperbarui layanan, benefit, dan ketentuan dengan pemberitahuan yang wajar. PT. TapGo Lion Indonesia tidak bertanggung jawab atas kerugian yang timbul dari penyalahgunaan akun atau informasi yang tidak benar dari pengguna.
+''';
+
+String get _tapGoPrivacyPolicyContent =>
+    tapGoIsPlayDistribution ? _playPrivacyPolicyContent : _privacyPolicyContent;
+
+String get _tapGoTermsContent =>
+    tapGoIsPlayDistribution ? _playTermsContent : _termsContent;
+
 class LegalInfoScreen extends StatelessWidget {
   const LegalInfoScreen(
       {super.key, required this.title, required this.content});
@@ -1793,7 +1862,9 @@ String _friendlyApiError(Object error) {
       final code = responseData['code']?.toString();
       final message = responseData['message']?.toString();
       if (code == 'INSUFFICIENT_BALANCE') {
-        return 'Saldo TapGoPay belum cukup untuk withdraw.';
+        return tapGoIsPlayDistribution
+            ? 'Saldo belum cukup untuk melanjutkan.'
+            : 'Saldo TapGoPay belum cukup untuk withdraw.';
       }
       if (code == 'WITHDRAWAL_MINIMUM_NOT_MET') {
         return 'Minimal withdraw Rp50.000.';

@@ -1,6 +1,26 @@
 import "dotenv/config";
 import { z } from "zod";
 
+const strictEnvBoolean = (defaultValue: boolean) =>
+  z.preprocess((value) => {
+    if (value === undefined || value === null || value === "") {
+      return defaultValue;
+    }
+    if (typeof value === "boolean") {
+      return value;
+    }
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (["true", "1", "yes", "on"].includes(normalized)) {
+        return true;
+      }
+      if (["false", "0", "no", "off"].includes(normalized)) {
+        return false;
+      }
+    }
+    return value;
+  }, z.boolean());
+
 const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "staging", "test", "production"])
@@ -21,6 +41,7 @@ const envSchema = z.object({
   MIDTRANS_IS_PRODUCTION: z.coerce.boolean().default(false),
   MIDTRANS_NOTIFICATION_SECRET: z.string().optional(),
   MIDTRANS_SNAP_URL: z.string().url().optional(),
+  EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED: strictEnvBoolean(false),
   DOKU_CLIENT_ID: z.string().optional(),
   DOKU_SECRET_KEY: z.string().optional(),
   DOKU_API_KEY: z.string().optional(),

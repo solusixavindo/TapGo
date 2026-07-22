@@ -194,8 +194,12 @@ class _ReferralTreeSummary extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: _MiniMetric(
-                  label: 'Estimasi Bonus',
-                  value: formatRupiah(session.todayBonus),
+                  label: tapGoIsPlayDistribution
+                      ? 'Status Referral'
+                      : 'Estimasi Bonus',
+                  value: tapGoIsPlayDistribution
+                      ? 'Aktif'
+                      : formatRupiah(session.todayBonus),
                 ),
               ),
             ],
