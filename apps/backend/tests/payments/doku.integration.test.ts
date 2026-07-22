@@ -22,6 +22,9 @@ const dokuSecretKey = "doku-test-secret";
 let appServer: Server | undefined;
 let baseUrl = "";
 let signAccessToken: SignAccessToken;
+let backendEnv: typeof import("../../src/config/env.js").env;
+let originalExternalPaymentGateEnv: string | undefined;
+let originalDokuEnabledEnv: string | undefined;
 
 describe.skipIf(!runIntegration)("DOKU checkout membership payments", () => {
   beforeAll(async () => {
@@ -42,6 +45,10 @@ describe.skipIf(!runIntegration)("DOKU checkout membership payments", () => {
     process.env.JWT_ACCESS_TTL = process.env.JWT_ACCESS_TTL ?? "15m";
     process.env.JWT_REFRESH_TTL_DAYS =
       process.env.JWT_REFRESH_TTL_DAYS ?? "30";
+    originalExternalPaymentGateEnv =
+      process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
+    originalDokuEnabledEnv = process.env.DOKU_ENABLED;
+    process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = "true";
     process.env.DOKU_ENABLED = "true";
     process.env.DOKU_INTEGRATION_MODE = "checkout";
     process.env.DOKU_CLIENT_ID = dokuClientId;
@@ -49,10 +56,14 @@ describe.skipIf(!runIntegration)("DOKU checkout membership payments", () => {
     process.env.DOKU_ENVIRONMENT = "sandbox";
     process.env.DOKU_BASE_URL = "https://api-sandbox.doku.com";
 
-    const [{ createApp }, tokenService] = await Promise.all([
+    const [{ createApp }, tokenService, envModule] = await Promise.all([
       import("../../src/app.js"),
       import("../../src/core/security/tokenService.js"),
+      import("../../src/config/env.js"),
     ]);
+    backendEnv = envModule.env;
+    backendEnv.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = true;
+    backendEnv.DOKU_ENABLED = true;
     signAccessToken = tokenService.signAccessToken;
 
     appServer = http.createServer(createApp());
@@ -70,6 +81,23 @@ describe.skipIf(!runIntegration)("DOKU checkout membership payments", () => {
   });
 
   afterAll(async () => {
+    if (backendEnv) {
+      backendEnv.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED =
+        originalExternalPaymentGateEnv?.trim().toLowerCase() === "true";
+      backendEnv.DOKU_ENABLED =
+        originalDokuEnabledEnv?.trim().toLowerCase() === "true";
+    }
+    if (originalExternalPaymentGateEnv == null) {
+      delete process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
+    } else {
+      process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED =
+        originalExternalPaymentGateEnv;
+    }
+    if (originalDokuEnabledEnv == null) {
+      delete process.env.DOKU_ENABLED;
+    } else {
+      process.env.DOKU_ENABLED = originalDokuEnabledEnv;
+    }
     await new Promise<void>((resolve, reject) => {
       if (!appServer) {
         resolve();

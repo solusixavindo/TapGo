@@ -355,7 +355,7 @@ export class MembershipOrderService {
       });
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      timeout: 15000
+      timeout: 30000
     });
   }
 

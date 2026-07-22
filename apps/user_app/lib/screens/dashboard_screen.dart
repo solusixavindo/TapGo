@@ -729,11 +729,16 @@ class _SearchRow extends StatefulWidget {
 }
 
 class _SearchRowState extends State<_SearchRow> {
-  static const _placeholders = [
+  static const _directPlaceholders = [
     'Cari layanan TapGo',
     'Cari Membership Saya',
     'Cari Referral',
     'Cari PPOB',
+    'Cari Bantuan',
+  ];
+  static const _playPlaceholders = [
+    'Cari akun TapGo',
+    'Cari Membership Saya',
     'Cari Bantuan',
   ];
 
@@ -745,8 +750,10 @@ class _SearchRowState extends State<_SearchRow> {
     super.initState();
     _placeholderTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!mounted) return;
+      final placeholders =
+          tapGoIsPlayDistribution ? _playPlaceholders : _directPlaceholders;
       setState(() {
-        _placeholderIndex = (_placeholderIndex + 1) % _placeholders.length;
+        _placeholderIndex = (_placeholderIndex + 1) % placeholders.length;
       });
     });
   }
@@ -759,6 +766,11 @@ class _SearchRowState extends State<_SearchRow> {
 
   @override
   Widget build(BuildContext context) {
+    final placeholders =
+        tapGoIsPlayDistribution ? _playPlaceholders : _directPlaceholders;
+    if (_placeholderIndex >= placeholders.length) {
+      _placeholderIndex = 0;
+    }
     return Material(
       color: Colors.white.withValues(alpha: 0.82),
       borderRadius: BorderRadius.circular(26),
@@ -801,8 +813,8 @@ class _SearchRowState extends State<_SearchRow> {
                     ),
                   ),
                   child: Text(
-                    _placeholders[_placeholderIndex],
-                    key: ValueKey(_placeholders[_placeholderIndex]),
+                    placeholders[_placeholderIndex],
+                    key: ValueKey(placeholders[_placeholderIndex]),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -865,23 +877,29 @@ void _showInfoSnack(BuildContext context, String message) {
 }
 
 void _showSearchMenu(BuildContext context) {
-  final items = [
-    const _ServiceItem(
-        'TapGo Ride', Icons.two_wheeler_rounded, Color(0xFF006AF5), null),
-    const _ServiceItem(
-        'TapGo Car', Icons.local_taxi_rounded, Color(0xFF006AF5), null),
-    const _ServiceItem(
-        'TapGo Food', Icons.restaurant_menu_rounded, Color(0xFFFF6B00), null),
-    const _ServiceItem(
-        'TapGo Mart', Icons.storefront_rounded, Color(0xFF0097A7), null),
-    const _ServiceItem('Referral', Icons.hub_rounded, Color(0xFF006AF5), null),
-    if (tapGoIsDirectDistribution) ...[
-      const _ServiceItem('Membership', Icons.workspace_premium_rounded,
-          Color(0xFFF59E0B), null),
-      const _ServiceItem(
-          'Reward', Icons.emoji_events_rounded, Color(0xFFF59E0B), null),
-    ],
-  ];
+  final items = tapGoIsPlayDistribution
+      ? const [
+          _ServiceItem('Membership Saya', Icons.workspace_premium_rounded,
+              Color(0xFFF59E0B), null),
+          _ServiceItem('Support', Icons.volunteer_activism_rounded,
+              Color(0xFF0569E8), null),
+          _ServiceItem('Profil', Icons.person_rounded, Color(0xFF697386), null),
+        ]
+      : const [
+          _ServiceItem(
+              'TapGo Ride', Icons.two_wheeler_rounded, Color(0xFF006AF5), null),
+          _ServiceItem(
+              'TapGo Car', Icons.local_taxi_rounded, Color(0xFF006AF5), null),
+          _ServiceItem('TapGo Food', Icons.restaurant_menu_rounded,
+              Color(0xFFFF6B00), null),
+          _ServiceItem(
+              'TapGo Mart', Icons.storefront_rounded, Color(0xFF0097A7), null),
+          _ServiceItem('Referral', Icons.hub_rounded, Color(0xFF006AF5), null),
+          _ServiceItem('Membership', Icons.workspace_premium_rounded,
+              Color(0xFFF59E0B), null),
+          _ServiceItem(
+              'Reward', Icons.emoji_events_rounded, Color(0xFFF59E0B), null),
+        ];
 
   _showTapGoBottomSheet<void>(
     context: context,
@@ -923,6 +941,16 @@ void _showSearchMenu(BuildContext context) {
                     borderRadius: BorderRadius.circular(18),
                     onTap: () {
                       Navigator.of(context).pop();
+                      if (tapGoIsPlayDistribution) {
+                        if (item.label == 'Membership Saya') {
+                          _openDemo(context, const MembershipScreen());
+                        } else if (item.label == 'Support') {
+                          _openDemo(context, const ContactUsScreen());
+                        } else if (item.label == 'Profil') {
+                          _openDemo(context, const AccountScreen());
+                        }
+                        return;
+                      }
                       _showInfoSnack(
                         context,
                         '${item.label} belum dapat dibuka saat ini',
@@ -1642,7 +1670,9 @@ class _MarketingPlanCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              'Kode ${session.referralCode} | Level aktif ${session.activeLevel}',
+                              tapGoIsPlayDistribution
+                                  ? 'Status akun Basic aktif'
+                                  : 'Kode ${session.referralCode} | Level aktif ${session.activeLevel}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -1690,39 +1720,41 @@ class _MarketingPlanCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _MiniMetric(
-                          label: 'Referral Saya',
-                          value: '${session.directSponsor} direct',
-                          animatedValue: session.directSponsor,
-                          formatter: (value) => '$value direct',
-                          isLoading: isLoading,
+                  if (tapGoIsDirectDistribution) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _MiniMetric(
+                            label: 'Referral Saya',
+                            value: '${session.directSponsor} direct',
+                            animatedValue: session.directSponsor,
+                            formatter: (value) => '$value direct',
+                            isLoading: isLoading,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _MiniMetric(
-                          label: 'Downline Saya',
-                          value: '${session.downline} user',
-                          animatedValue: session.downline,
-                          formatter: (value) => '$value user',
-                          isLoading: isLoading,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _MiniMetric(
+                            label: 'Downline Saya',
+                            value: '${session.downline} user',
+                            animatedValue: session.downline,
+                            formatter: (value) => '$value user',
+                            isLoading: isLoading,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Referral Saya adalah jumlah orang yang memakai kode referral Anda.',
-                    style: TextStyle(
-                      color: mutedColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                      ],
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Referral Saya adalah jumlah orang yang memakai kode referral Anda.',
+                      style: TextStyle(
+                        color: mutedColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   SizedBox(
                     width: double.infinity,
@@ -1867,7 +1899,6 @@ class _ServiceGrid extends StatelessWidget {
   static const _playServices = [
     _ServiceItem('Membership Saya', Icons.workspace_premium_rounded,
         Color(0xFFF59E0B), null),
-    _ServiceItem('Referral', Icons.hub_rounded, Color(0xFF006AF5), null),
     _ServiceItem(
         'Support', Icons.volunteer_activism_rounded, Color(0xFF0569E8), null),
     _ServiceItem('Profil', Icons.person_rounded, Color(0xFF697386), null),
@@ -1951,6 +1982,9 @@ class _ContentCards extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (tapGoIsPlayDistribution) {
+      return const SizedBox.shrink();
+    }
     return Row(
       children: [
         Expanded(
@@ -2275,7 +2309,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     'Layanan',
     'Withdraw'
   ];
-  static const _playTabs = ['Semua', 'Referral', 'Layanan'];
+  static const _playTabs = ['Semua', 'Layanan'];
 
   @override
   Widget build(BuildContext context) {
@@ -2299,7 +2333,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         .where(
           (item) =>
               !tapGoIsPlayDistribution ||
-              (item.category != 'Bonus' && item.category != 'Withdraw'),
+              (item.category != 'Bonus' &&
+                  item.category != 'Withdraw' &&
+                  item.category != 'Referral'),
         )
         .toList(growable: false);
     if (_tabIndex >= tabs.length) {
@@ -2318,7 +2354,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
           _SectionHeader(
             title: 'Aktivitas',
             subtitle: tapGoIsPlayDistribution
-                ? 'Referral dan layanan TapGo'
+                ? 'Aktivitas layanan TapGo'
                 : 'Bonus, referral, layanan, dan withdraw',
           ),
           const SizedBox(height: 16),
@@ -2466,29 +2502,32 @@ class AccountScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _StatCard(
-                  label: 'Sponsor',
-                  value: '${session.directSponsor}',
+          if (tapGoIsDirectDistribution) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _StatCard(
+                    label: 'Sponsor',
+                    value: '${session.directSponsor}',
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatCard(
-                  label: 'Level aktif',
-                  value: '${session.activeLevel}',
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _StatCard(
+                    label: 'Level aktif',
+                    value: '${session.activeLevel}',
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
           const SizedBox(height: 16),
           _AccountMenuTile('Membership Saya', Icons.workspace_premium_rounded,
               () => _openDemo(context, const MembershipScreen())),
-          _AccountMenuTile('Jaringan Saya', Icons.account_tree_rounded,
-              () => _openDemo(context, const ReferralTreeScreen())),
+          if (tapGoIsDirectDistribution)
+            _AccountMenuTile('Jaringan Saya', Icons.account_tree_rounded,
+                () => _openDemo(context, const ReferralTreeScreen())),
           if (tapGoIsDirectDistribution) ...[
             _AccountMenuTile(
                 'Wallet & Withdraw',
@@ -2513,11 +2552,12 @@ class AccountScreen extends ConsumerWidget {
                     : const AdminDashboardScreen(),
               ),
             ),
-          _AccountMenuTile(
-              'KYC',
-              Icons.verified_user_rounded,
-              () =>
-                  _openDemo(context, const FeatureDetailScreen(title: 'KYC'))),
+          if (tapGoIsDirectDistribution)
+            _AccountMenuTile(
+                'KYC',
+                Icons.verified_user_rounded,
+                () => _openDemo(
+                    context, const FeatureDetailScreen(title: 'KYC'))),
           if (tapGoIsDirectDistribution)
             _AccountMenuTile('Rekening Bank', Icons.account_balance_rounded,
                 () => _openDemo(context, const BankAccountScreen())),
@@ -2575,11 +2615,9 @@ class HelpCenterScreen extends StatelessWidget {
     final helpItems = [
       (
         'Cara daftar',
-        'Isi nama, nomor HP, password, lalu gunakan kode referral jika ada.'
-      ),
-      (
-        'Kode referral',
-        'Bagikan kode referral Anda agar downline dan bonus tercatat otomatis.'
+        tapGoIsPlayDistribution
+            ? 'Isi nama, nomor HP, dan password untuk membuat akun Basic.'
+            : 'Isi nama, nomor HP, password, lalu gunakan kode referral jika ada.'
       ),
       (
         'Membership',
@@ -2588,6 +2626,10 @@ class HelpCenterScreen extends StatelessWidget {
             : 'Pilih paket Silver, Gold, atau Platinum lalu selesaikan invoice.'
       ),
       if (tapGoIsDirectDistribution) ...[
+        (
+          'Kode referral',
+          'Bagikan kode referral Anda agar downline dan bonus tercatat otomatis.'
+        ),
         (
           'Saldo TapGoPay',
           'Saldo berasal dari bonus registrasi, sponsor, komisi, dan reward real.'

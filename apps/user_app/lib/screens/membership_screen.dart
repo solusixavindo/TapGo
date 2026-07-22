@@ -35,19 +35,8 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
   ];
 
   static const _playGroups = [
-    _SuperMenuGroup('Layanan', [
-      _SuperMenuItem('TapGo Ride', Icons.two_wheeler_rounded),
-      _SuperMenuItem('TapGo Car', Icons.local_taxi_rounded),
-      _SuperMenuItem('TapGo Food', Icons.restaurant_menu_rounded),
-      _SuperMenuItem('TapGo Mart', Icons.storefront_rounded),
-    ]),
-    _SuperMenuGroup('Digital', [
-      _SuperMenuItem('Pulsa', Icons.phone_iphone_rounded),
-      _SuperMenuItem('PPOB', Icons.receipt_long_rounded),
-    ]),
     _SuperMenuGroup('Akun', [
       _SuperMenuItem('Membership Saya', Icons.workspace_premium_rounded),
-      _SuperMenuItem('Referral', Icons.hub_rounded),
       _SuperMenuItem('Support', Icons.volunteer_activism_rounded),
     ]),
   ];
@@ -78,15 +67,17 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final groups = tapGoIsPlayDistribution ? _playGroups : _directGroups;
+    final groups = _superMenuGroupsForDistribution(_tapGoDistributionMode);
     return _DemoScaffold(
       title: 'Super Menu',
       subtitle: 'Semua layanan TapGo dalam satu akses',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SuperMenuSearchBar(hint: _searchHints[_hintIndex]),
-          const SizedBox(height: 18),
+          if (tapGoIsDirectDistribution) ...[
+            _SuperMenuSearchBar(hint: _searchHints[_hintIndex]),
+            const SizedBox(height: 18),
+          ],
           ...groups.map(
             (group) => Padding(
               padding: const EdgeInsets.only(bottom: 20),
@@ -131,24 +122,46 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
   }
 
   void _openMenuDetail(BuildContext context, String label) {
-    if (label == 'Membership' || label == 'Membership Saya') {
-      _openDemo(
-        context,
-        tapGoIsPlayDistribution
-            ? const MembershipScreen()
-            : const MembershipPackagesScreen(),
-      );
-    } else if (label == 'Referral') {
-      _openDemo(context, const ReferralDashboardScreen());
-    } else if (label == 'Marketing Plan') {
-      _openDemo(context, const MarketingPlanScreen());
-    } else if (label == 'Reward') {
-      _openDemo(context, const RewardScreen());
-    } else {
-      _openDemo(context, FeatureDetailScreen(title: label));
+    final destination = _superMenuDestinationForLabel(label);
+    if (destination != null) {
+      _openDemo(context, destination);
     }
   }
 }
+
+List<_SuperMenuGroup> _superMenuGroupsForDistribution(
+  TapGoDistributionMode mode,
+) =>
+    mode == TapGoDistributionMode.play
+        ? _SuperMenuScreenState._playGroups
+        : _SuperMenuScreenState._directGroups;
+
+List<String> tapGoSuperMenuLabelsForDistributionForTests(
+  TapGoDistributionMode mode,
+) =>
+    _superMenuGroupsForDistribution(mode)
+        .expand((group) => group.items.map((item) => item.label))
+        .toList(growable: false);
+
+Widget? _superMenuDestinationForLabel(String label) {
+  if (tapGoIsPlayDistribution) {
+    return switch (label) {
+      'Membership' || 'Membership Saya' => const MembershipScreen(),
+      'Support' => const ContactUsScreen(),
+      _ => null,
+    };
+  }
+  return switch (label) {
+    'Membership' || 'Membership Saya' => const MembershipPackagesScreen(),
+    'Referral' => const ReferralDashboardScreen(),
+    'Marketing Plan' => const MarketingPlanScreen(),
+    'Reward' => const RewardScreen(),
+    _ => FeatureDetailScreen(title: label),
+  };
+}
+
+Widget? tapGoSuperMenuDestinationForLabelForTests(String label) =>
+    _superMenuDestinationForLabel(label);
 
 class _SuperMenuSearchBar extends StatelessWidget {
   const _SuperMenuSearchBar({required this.hint});
@@ -260,6 +273,9 @@ class MarketingPlanScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (tapGoIsPlayDistribution) {
+      return const MembershipScreen();
+    }
     return _DemoScaffold(
       title: 'Marketing Plan',
       subtitle: 'PT. TapGo Lion Indonesia',
@@ -731,6 +747,9 @@ class ReferralDashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (tapGoIsPlayDistribution) {
+      return const MembershipScreen();
+    }
     final production = ref.watch(_productionSnapshotProvider);
     final session = ref.watch(_demoSessionProvider);
     return _DemoScaffold(
@@ -850,16 +869,7 @@ class DemoWalletScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (tapGoIsPlayDistribution) {
-      return const _DemoScaffold(
-        title: 'Benefit TapGo',
-        subtitle: 'Ringkasan benefit membership',
-        child: _StatusSurface(
-          icon: Icons.lock_clock_rounded,
-          title: 'Fitur saldo belum tersedia',
-          subtitle:
-              'Pengelolaan saldo akan tersedia setelah review layanan selesai.',
-        ),
-      );
+      return const MembershipScreen();
     }
 
     final production = ref.watch(_productionSnapshotProvider);
@@ -1579,11 +1589,11 @@ TapGo dapat memperbarui layanan, benefit, dan ketentuan dengan pemberitahuan yan
 ''';
 
 const _playPrivacyPolicyContent = '''
-PT. TapGo Lion Indonesia mengumpulkan data yang diperlukan untuk menjalankan layanan membership, referral, dan layanan digital TapGo.
+PT. TapGo Lion Indonesia mengumpulkan data yang diperlukan untuk menjalankan akun Basic dan layanan digital TapGo.
 
-Data yang dikumpulkan dapat meliputi nama, nomor HP, alamat, nomor KTP jika digunakan, foto KTP jika digunakan, foto diri jika digunakan, data referral, dan data transaksi membership.
+Data yang dikumpulkan dapat meliputi nama, nomor HP, alamat, nomor KTP jika digunakan, foto KTP jika digunakan, foto diri jika digunakan, serta riwayat permintaan layanan akun.
 
-Data digunakan untuk registrasi member, verifikasi akun, pengelolaan membership, referral, invoice, transaksi, serta customer support.
+Data digunakan untuk registrasi, verifikasi akun, pengelolaan status Basic, keamanan akun, serta customer support.
 
 TapGo menerapkan pembatasan akses, autentikasi, dan pencatatan transaksi untuk menjaga keamanan data. Data transaksi penting dapat disimpan sesuai kebutuhan hukum, audit, dan penyelesaian kewajiban layanan.
 
@@ -1593,13 +1603,13 @@ Kontak support: support@tapgolion.id, WhatsApp +62 838-0025-5588, alamat Jalan K
 ''';
 
 const _playTermsContent = '''
-Dengan menggunakan TapGo, pengguna menyetujui ketentuan layanan membership, referral, PPOB, dan layanan digital yang berlaku.
+Dengan menggunakan TapGo, pengguna menyetujui ketentuan layanan akun Basic dan layanan digital yang berlaku.
 
 Paket Basic bersifat gratis sebagai status awal member.
 
-Benefit membership ditampilkan sesuai layanan yang tersedia di aplikasi.
+Benefit akun ditampilkan sesuai layanan yang tersedia di aplikasi.
 
-Pengguna dilarang membuat akun palsu, menyalahgunakan referral, melakukan klaim ganda, atau memanipulasi transaksi. TapGo berhak membatasi, menolak, atau menangguhkan akun yang melanggar.
+Pengguna dilarang membuat akun palsu, melakukan klaim ganda, atau memanipulasi data layanan. TapGo berhak membatasi, menolak, atau menangguhkan akun yang melanggar.
 
 TapGo dapat memperbarui layanan, benefit, dan ketentuan dengan pemberitahuan yang wajar. PT. TapGo Lion Indonesia tidak bertanggung jawab atas kerugian yang timbul dari penyalahgunaan akun atau informasi yang tidak benar dari pengguna.
 ''';

@@ -657,7 +657,7 @@ class _ProductionStatusTile extends ConsumerWidget {
       icon: Icons.cloud_done_rounded,
       title: 'Data TapGo aktif',
       subtitle: tapGoIsPlayDistribution
-          ? 'Membership dan referral tersinkron.'
+          ? 'Akun Basic tersinkron.'
           : 'Membership, referral, dan wallet tersinkron.',
     );
   }

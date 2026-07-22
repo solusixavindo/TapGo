@@ -103,16 +103,42 @@ void main() {
 
       expect(find.text('Segera'), findsNothing);
       expect(find.text('Membership Saya'), findsWidgets);
-      expect(find.text('Referral'), findsWidgets);
+      expect(find.text('Referral'), findsNothing);
       expect(find.text('Support'), findsWidgets);
       expect(find.text('Profil'), findsWidgets);
       expect(find.bySemanticsLabel('Buka layanan TapGo Ride'), findsNothing);
       expect(find.bySemanticsLabel('Buka layanan TapGo Mart'), findsNothing);
+      expect(find.bySemanticsLabel('Buka layanan PPOB'), findsNothing);
       expect(find.bySemanticsLabel('Buka layanan Membership Saya'),
           findsOneWidget);
     } finally {
       semantics.dispose();
     }
+  });
+
+  test('Play service boundaries hide placeholder and referral destinations',
+      () {
+    final playLabels =
+        tapGoSuperMenuLabelsForDistributionForTests(TapGoDistributionMode.play);
+    final directLabels = tapGoSuperMenuLabelsForDistributionForTests(
+        TapGoDistributionMode.direct);
+
+    expect(playLabels, contains('Membership Saya'));
+    expect(playLabels, contains('Support'));
+    expect(playLabels, isNot(contains('Referral')));
+    expect(playLabels, isNot(contains('TapGo Ride')));
+    expect(playLabels, isNot(contains('TapGo Car')));
+    expect(playLabels, isNot(contains('TapGo Food')));
+    expect(playLabels, isNot(contains('TapGo Mart')));
+    expect(playLabels, isNot(contains('Pulsa')));
+    expect(playLabels, isNot(contains('PPOB')));
+
+    expect(directLabels, contains('Referral'));
+    expect(directLabels, contains('TapGo Ride'));
+    expect(directLabels, contains('PPOB'));
+
+    expect(tapGoSuperMenuDestinationForLabelForTests('PPOB'), isNull);
+    expect(tapGoSuperMenuDestinationForLabelForTests('Referral'), isNull);
   });
 
   test('login backend succeeds and persistence succeeds', () async {
@@ -578,13 +604,15 @@ void main() {
     await tester.tap(find.text('Akun'));
     await tester.pumpAndSettle();
     expect(find.text('Membership Saya'), findsOneWidget);
-    expect(find.text('Salin link referral'), findsOneWidget);
+    expect(find.text('Salin link referral'), findsNothing);
+    expect(find.text('Jaringan Saya'), findsNothing);
 
     await tester.tap(find.byIcon(Icons.apps_rounded));
     await tester.pumpAndSettle();
     expect(find.text('Super Menu'), findsOneWidget);
-    expect(find.text('TapGo Ride'), findsOneWidget);
-    expect(find.text('PPOB'), findsOneWidget);
+    expect(find.text('TapGo Ride'), findsNothing);
+    expect(find.text('PPOB'), findsNothing);
+    expect(find.text('Referral'), findsNothing);
     expect(find.text('Membership Saya'), findsOneWidget);
     expect(find.text('Reward'), findsNothing);
     expect(find.text('BPJS'), findsNothing);
@@ -617,31 +645,19 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Membership Saya'), findsOneWidget);
-    expect(find.text('Salin link referral'), findsOneWidget);
+    expect(find.text('Salin link referral'), findsNothing);
   });
 
-  testWidgets('referral tree uses realistic names in widget test mode',
+  testWidgets('Play mode blocks referral tree from account navigation',
       (WidgetTester tester) async {
     await openDashboard(tester);
 
     await tester.tap(find.text('Akun'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Jaringan Saya'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Jaringan Saya'));
-    await tester.pumpAndSettle();
 
-    expect(find.text('Solusi Digital'), findsOneWidget);
-    expect(find.text('Budi Santoso'), findsOneWidget);
-    expect(find.text('Andi Budi'), findsOneWidget);
-
-    await tester.tap(find.text('Budi Santoso'));
-    await tester.pumpAndSettle();
-    expect(find.text('Andi Budi'), findsNothing);
-
-    await tester.tap(find.text('Budi Santoso'));
-    await tester.pumpAndSettle();
-    expect(find.text('Andi Budi'), findsOneWidget);
+    expect(find.text('Jaringan Saya'), findsNothing);
+    expect(find.text('Jaringan Referral'), findsNothing);
+    expect(find.text('Kode Referral'), findsNothing);
   });
 
   testWidgets('user account does not expose admin dashboard',

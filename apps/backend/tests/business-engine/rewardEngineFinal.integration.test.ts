@@ -34,7 +34,6 @@ describe.skipIf(!runIntegration)("Final reward engine thresholds", () => {
       const sponsor = await registerAndActivate(`REWARD${threshold}`, "SILVER");
       await addDirectActiveSilverReferrals(sponsor.id, threshold - 1, `R${threshold}`);
       await triggerDirectSilver(sponsor);
-      await triggerDirectSilver(sponsor);
 
       const reward = await prisma.rewardTransaction.findUniqueOrThrow({
         where: {

@@ -609,22 +609,25 @@ class _AccountHero extends StatelessWidget {
           ],
           const SizedBox(height: 6),
           Text(
-            'Paket aktif: ${session.activePackageName} • Kode ${session.referralCode}',
+            tapGoIsPlayDistribution
+                ? 'Paket aktif: ${session.activePackageName}'
+                : 'Paket aktif: ${session.activePackageName} • Kode ${session.referralCode}',
             textAlign: TextAlign.center,
             style: const TextStyle(color: Color(0xFF718096)),
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _copyAccountReferralLink(context, session),
-                  icon: const Icon(Icons.copy_rounded),
-                  label: const Text('Salin link referral'),
+          if (tapGoIsDirectDistribution) const SizedBox(height: 12),
+          if (tapGoIsDirectDistribution)
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _copyAccountReferralLink(context, session),
+                    icon: const Icon(Icons.copy_rounded),
+                    label: const Text('Salin link referral'),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );

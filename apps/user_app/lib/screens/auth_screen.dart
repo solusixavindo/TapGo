@@ -344,7 +344,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               name: _nameController.text.trim(),
               phone: phone,
               password: _passwordController.text,
-              referralCode: _referralController.text.trim(),
+              referralCode: tapGoIsDirectDistribution
+                  ? _referralController.text.trim()
+                  : null,
             )
           : await _apiClient.login(
               phone: phone,
@@ -353,7 +355,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       _tapGoDebugLog('[TapGo Auth] auth_response_mapping:$authMode');
       _validateAuthResult(authResult);
       _apiClient.setAccessToken(authResult.accessToken);
-      final referralCode = _referralController.text.trim();
+      final referralCode =
+          tapGoIsDirectDistribution ? _referralController.text.trim() : '';
       if (_isRegister &&
           referralCode.isNotEmpty &&
           (authResult.accessToken ?? '').isNotEmpty) {
@@ -690,17 +693,19 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       obscureText: true,
                       validator: _passwordValidator,
                       textInputAction: _isRegister
-                          ? TextInputAction.next
+                          ? (tapGoIsDirectDistribution
+                              ? TextInputAction.next
+                              : TextInputAction.done)
                           : TextInputAction.done,
                       onFieldSubmitted: (_) {
-                        if (_isRegister) {
+                        if (_isRegister && tapGoIsDirectDistribution) {
                           _referralFocusNode.requestFocus();
                         } else {
                           _continueToDashboard();
                         }
                       },
                     ),
-                    if (_isRegister) ...[
+                    if (_isRegister && tapGoIsDirectDistribution) ...[
                       const SizedBox(height: 12),
                       _InputField(
                         controller: _referralController,

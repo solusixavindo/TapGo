@@ -207,6 +207,21 @@ class _TapGoApiClient {
   }
 
   Future<_TapGoProductionSnapshot> productionSnapshot() async {
+    if (tapGoIsPlayDistribution) {
+      final membership = await _productionSnapshotPart(
+        'membership',
+        () => get('/membership/me'),
+      );
+      return _TapGoProductionSnapshot.fromMaps(
+        membership: membership,
+        wallet: const {},
+        transactions: const {'items': []},
+        referralSummary: const {},
+        referralTree: const {},
+        commissions: const {'items': []},
+      );
+    }
+
     final responses = await Future.wait([
       _productionSnapshotPart('membership', () => get('/membership/me')),
       _productionSnapshotPart('wallet', _walletForSnapshot, requiredPart: true),
