@@ -13,12 +13,14 @@ import { adminConsoleRouter } from "./modules/admin-console/presentation/admin-c
 import { contactRouter } from "./modules/contact/presentation/contact.routes.js";
 import { invoiceRouter } from "./modules/invoices/presentation/invoice.routes.js";
 import { legalRouter } from "./modules/legal/presentation/legal.routes.js";
+import { memberIdentityRouter } from "./modules/member-identity/presentation/member-identity.routes.js";
 import { membershipOrderRouter } from "./modules/memberships/presentation/membership-order.routes.js";
 import { membershipRouter } from "./modules/memberships/presentation/membership.routes.js";
 import { midtransRouter } from "./modules/payments/presentation/midtrans.routes.js";
 import { dokuPaymentRouter, dokuWebhookRouter } from "./modules/payments/presentation/doku.routes.js";
 import { profitSharingRouter } from "./modules/profit-sharing/presentation/profit-sharing.routes.js";
 import { referralRouter } from "./modules/referrals/presentation/referral.routes.js";
+import { adminSupportRouter, supportRouter } from "./modules/support/presentation/support.routes.js";
 import { walletRouter } from "./modules/wallets/presentation/wallet.routes.js";
 
 function healthPayload() {
@@ -61,6 +63,7 @@ export function createApp() {
   app.use("/api/v1/account", accountRouter);
   app.use("/api/v1/contact", contactRouter);
   app.use("/api/v1/invoices", invoiceRouter);
+  app.use("/api/v1/member-identity", memberIdentityRouter);
   app.use("/api/v1/membership", membershipOrderRouter);
   app.use("/api/v1/memberships", membershipRouter);
   app.use("/api/v1/payments", paymentRateLimiter, midtransRouter);
@@ -71,8 +74,10 @@ export function createApp() {
   // Backward-compatible alias only. Canonical production webhook: /api/v1/webhooks/doku.
   app.use("/api/webhooks", paymentRateLimiter, dokuWebhookRouter);
   app.use("/api/v1/admin/profit-sharing", adminRateLimiter, profitSharingRouter);
+  app.use("/api/v1/admin/support", adminRateLimiter, adminSupportRouter);
   app.use("/api/v1/admin", adminRateLimiter, adminConsoleRouter);
   app.use("/api/v1/referrals", referralRouter);
+  app.use("/api/v1/support", supportRouter);
   app.use("/api/v1/wallet", walletRouter);
 
   app.use(notFoundHandler);

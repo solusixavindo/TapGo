@@ -27,6 +27,7 @@ class _TapGoServiceIllustration extends StatelessWidget {
     'Referral Saya': '$_basePath/tg-referral.svg',
     'Membership': '$_basePath/tg-membership.svg',
     'Membership Saya': '$_basePath/tg-membership.svg',
+    'Kartu Anggota': '$_basePath/tg-membership.svg',
     'Marketing Plan': '$_basePath/tg-membership.svg',
     'Reward': '$_basePath/tg-reward.svg',
     'Bonus': '$_basePath/tg-bonus.svg',
@@ -47,6 +48,7 @@ class _TapGoServiceIllustration extends StatelessWidget {
     'Toko & Jasa': '$_basePath/tg-jasa.svg',
     'TapGo Bantu': '$_basePath/tg-jasa.svg',
     'Support': '$_basePath/tg-support.svg',
+    'Bantuan': '$_basePath/tg-support.svg',
     'Lainnya': '$_basePath/tg-activity.svg',
     'Kelas Online': '$_basePath/tg-kelas-online.svg',
     'Webinar': '$_basePath/tg-webinar.svg',
@@ -61,7 +63,9 @@ class _TapGoServiceIllustration extends StatelessWidget {
     'Notifikasi': '$_basePath/tg-notification.svg',
     'Chat': '$_basePath/tg-chat.svg',
     'Profile': '$_basePath/tg-profile.svg',
+    'Profil': '$_basePath/tg-profile.svg',
     'Akun': '$_basePath/tg-profile.svg',
+    'Hapus Akun': '$_basePath/tg-profile.svg',
   };
 
   static String? assetFor(String label) => _assets[label];

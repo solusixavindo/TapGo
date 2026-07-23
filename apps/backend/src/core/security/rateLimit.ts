@@ -59,3 +59,15 @@ export const paymentRateLimiter = rateLimit({
     message: "Too many payment requests. Please try again later."
   }
 });
+
+export const supportRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 12,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    code: "SUPPORT_RATE_LIMITED",
+    message: "Terlalu banyak permintaan bantuan. Silakan coba lagi nanti."
+  }
+});

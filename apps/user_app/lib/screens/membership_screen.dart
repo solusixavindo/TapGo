@@ -36,8 +36,10 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
 
   static const _playGroups = [
     _SuperMenuGroup('Akun', [
-      _SuperMenuItem('Membership Saya', Icons.workspace_premium_rounded),
-      _SuperMenuItem('Support', Icons.volunteer_activism_rounded),
+      _SuperMenuItem('Kartu Anggota', Icons.badge_rounded),
+      _SuperMenuItem('Profil', Icons.person_rounded),
+      _SuperMenuItem('Bantuan', Icons.volunteer_activism_rounded),
+      _SuperMenuItem('Hapus Akun', Icons.delete_outline_rounded),
     ]),
   ];
 
@@ -146,8 +148,10 @@ List<String> tapGoSuperMenuLabelsForDistributionForTests(
 Widget? _superMenuDestinationForLabel(String label) {
   if (tapGoIsPlayDistribution) {
     return switch (label) {
-      'Membership' || 'Membership Saya' => const MembershipScreen(),
-      'Support' => const ContactUsScreen(),
+      'Kartu Anggota' => const BasicMemberCardScreen(),
+      'Profil' => const AccountScreen(),
+      'Bantuan' => const ContactUsScreen(),
+      'Hapus Akun' => const DeleteAccountRequestScreen(),
       _ => null,
     };
   }
@@ -344,16 +348,7 @@ class _MembershipPackagesScreenState extends State<MembershipPackagesScreen> {
   @override
   Widget build(BuildContext context) {
     if (tapGoIsPlayDistribution) {
-      return const _DemoScaffold(
-        title: 'Membership',
-        subtitle: 'Status membership TapGo',
-        child: _StatusSurface(
-          icon: Icons.workspace_premium_rounded,
-          title: 'Membership Basic aktif',
-          subtitle:
-              'Akun TapGo Anda sudah aktif dengan akses Basic. Upgrade berbayar tidak tersedia pada rilis ini.',
-        ),
-      );
+      return const BasicMemberCardScreen();
     }
 
     final upgradePackages = _demoMemberships
@@ -393,6 +388,10 @@ class MembershipScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (tapGoIsPlayDistribution) {
+      return const BasicMemberCardScreen();
+    }
+
     final production = ref.watch(_productionSnapshotProvider);
     final session = ref.watch(_demoSessionProvider);
     final package = DemoClientCatalog.packageByName(session.activePackageName);
@@ -1793,54 +1792,55 @@ class ContactUsScreen extends ConsumerStatefulWidget {
 }
 
 class _ContactUsScreenState extends ConsumerState<ContactUsScreen> {
-  late final TextEditingController _nameController;
-  late final TextEditingController _contactController;
-  final _categoryController = TextEditingController(text: 'Support');
+  final _subjectController = TextEditingController();
   final _messageController = TextEditingController();
   bool _submitting = false;
+  late Future<List<Map<String, dynamic>>> _ticketFuture;
 
   @override
   void initState() {
     super.initState();
-    final session = ref.read(_demoSessionProvider);
-    _nameController = TextEditingController(text: session.userName);
-    _contactController = TextEditingController(text: session.phone);
+    _ticketFuture = _loadTickets();
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _contactController.dispose();
-    _categoryController.dispose();
+    _subjectController.dispose();
     _messageController.dispose();
     super.dispose();
   }
 
+  Future<List<Map<String, dynamic>>> _loadTickets() async {
+    if (tapGoDisablePersistenceForTests) {
+      return const [];
+    }
+    return _apiClient.supportTickets();
+  }
+
   Future<void> _submit() async {
-    if (_nameController.text.trim().isEmpty ||
-        _contactController.text.trim().isEmpty ||
-        _categoryController.text.trim().isEmpty ||
-        _messageController.text.trim().length < 5) {
-      _TapGoSnackbar.warning(context, 'Lengkapi form kontak terlebih dahulu.');
+    if (_subjectController.text.trim().length < 3 ||
+        _messageController.text.trim().length < 10) {
+      _TapGoSnackbar.warning(context, 'Lengkapi judul dan pesan bantuan.');
       return;
     }
 
     setState(() => _submitting = true);
     try {
-      await _apiClient.submitContactMessage(
-        name: _nameController.text,
-        contact: _contactController.text,
-        category: _categoryController.text,
+      await _apiClient.createSupportTicket(
+        category: 'OTHER',
+        subject: _subjectController.text,
         message: _messageController.text,
       );
       if (!mounted) return;
+      _subjectController.clear();
       _messageController.clear();
-      _TapGoSnackbar.success(context, 'Pesan berhasil dikirim ke TapGo.');
+      setState(() => _ticketFuture = _loadTickets());
+      _TapGoSnackbar.success(context, 'Tiket bantuan berhasil dibuat.');
     } catch (error) {
       if (!mounted) return;
       _TapGoSnackbar.error(
         context,
-        'Pesan belum dapat dikirim. Silakan coba lagi.',
+        'Tiket bantuan belum dapat dibuat. Silakan coba lagi.',
       );
     } finally {
       if (mounted) {
@@ -1852,8 +1852,8 @@ class _ContactUsScreenState extends ConsumerState<ContactUsScreen> {
   @override
   Widget build(BuildContext context) {
     return _DemoScaffold(
-      title: 'Hubungi Kami',
-      subtitle: 'PT. TapGo Lion Indonesia',
+      title: 'Bantuan TapGo',
+      subtitle: 'Pusat bantuan member',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1861,29 +1861,20 @@ class _ContactUsScreenState extends ConsumerState<ContactUsScreen> {
             icon: Icons.support_agent_rounded,
             title: 'Support TapGo',
             subtitle:
-                'Email: support@tapgolion.id\nWhatsApp: +62 838-0025-5588\nAlamat: Jalan Kp. Pasir Gendok No. 11, Desa Bojongleles, Kecamatan Rangkasbitung, Kabupaten Lebak, Banten, Indonesia',
+                'Buat tiket bantuan untuk pertanyaan akun, membership Basic, atau kendala aplikasi.',
           ),
           const SizedBox(height: 14),
           TextField(
-            controller: _nameController,
-            decoration: const InputDecoration(labelText: 'Nama'),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _contactController,
-            decoration: const InputDecoration(labelText: 'Nomor HP / Email'),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _categoryController,
-            decoration: const InputDecoration(labelText: 'Kategori'),
+            controller: _subjectController,
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(labelText: 'Judul bantuan'),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _messageController,
             minLines: 4,
             maxLines: 6,
-            decoration: const InputDecoration(labelText: 'Pesan'),
+            decoration: const InputDecoration(labelText: 'Pesan bantuan'),
           ),
           const SizedBox(height: 14),
           FilledButton.icon(
@@ -1893,10 +1884,76 @@ class _ContactUsScreenState extends ConsumerState<ContactUsScreen> {
                 : const Icon(Icons.send_rounded),
             label: Text(_submitting ? 'Mengirim...' : 'Kirim Pesan'),
           ),
+          const SizedBox(height: 20),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: _ticketFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Center(child: _TapGoLoading(size: 24));
+              }
+              if (snapshot.hasError) {
+                return const _StatusSurface(
+                  icon: Icons.wifi_off_rounded,
+                  title: 'Riwayat bantuan belum dapat dimuat',
+                  subtitle:
+                      'Tiket baru tetap dapat dikirim saat koneksi tersedia.',
+                );
+              }
+              final tickets = snapshot.data ?? const [];
+              if (tickets.isEmpty) {
+                return const _StatusSurface(
+                  icon: Icons.mark_chat_unread_outlined,
+                  title: 'Belum ada tiket bantuan',
+                  subtitle: 'Tiket yang Anda kirim akan muncul di halaman ini.',
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _SectionHeader(
+                    title: 'Riwayat Bantuan',
+                    subtitle: 'Status tiket yang pernah Anda kirim',
+                  ),
+                  const SizedBox(height: 10),
+                  ...tickets.map(_SupportTicketCard.new),
+                ],
+              );
+            },
+          ),
         ],
       ),
     );
   }
+}
+
+class _SupportTicketCard extends StatelessWidget {
+  const _SupportTicketCard(this.ticket);
+
+  final Map<String, dynamic> ticket;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = ticket['status']?.toString() ?? 'OPEN';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: _InfoCard(
+        icon: Icons.confirmation_number_rounded,
+        title: ticket['subject']?.toString() ?? 'Tiket bantuan',
+        subtitle:
+            '${ticket['reference'] ?? '-'} • ${_supportStatusLabel(status)}',
+      ),
+    );
+  }
+}
+
+String _supportStatusLabel(String status) {
+  return switch (status.toUpperCase()) {
+    'OPEN' => 'Terbuka',
+    'IN_PROGRESS' => 'Diproses',
+    'RESOLVED' => 'Selesai',
+    'CLOSED' => 'Ditutup',
+    _ => 'Terbuka',
+  };
 }
 
 String _friendlyApiError(Object error) {

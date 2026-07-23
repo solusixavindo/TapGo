@@ -738,7 +738,7 @@ class _SearchRowState extends State<_SearchRow> {
   ];
   static const _playPlaceholders = [
     'Cari akun TapGo',
-    'Cari Membership Saya',
+    'Cari Kartu Anggota',
     'Cari Bantuan',
   ];
 
@@ -879,11 +879,13 @@ void _showInfoSnack(BuildContext context, String message) {
 void _showSearchMenu(BuildContext context) {
   final items = tapGoIsPlayDistribution
       ? const [
-          _ServiceItem('Membership Saya', Icons.workspace_premium_rounded,
-              Color(0xFFF59E0B), null),
-          _ServiceItem('Support', Icons.volunteer_activism_rounded,
-              Color(0xFF0569E8), null),
+          _ServiceItem(
+              'Kartu Anggota', Icons.badge_rounded, Color(0xFFF59E0B), null),
           _ServiceItem('Profil', Icons.person_rounded, Color(0xFF697386), null),
+          _ServiceItem('Bantuan', Icons.volunteer_activism_rounded,
+              Color(0xFF0569E8), null),
+          _ServiceItem('Hapus Akun', Icons.delete_outline_rounded,
+              Color(0xFFD97706), null),
         ]
       : const [
           _ServiceItem(
@@ -942,12 +944,15 @@ void _showSearchMenu(BuildContext context) {
                     onTap: () {
                       Navigator.of(context).pop();
                       if (tapGoIsPlayDistribution) {
-                        if (item.label == 'Membership Saya') {
-                          _openDemo(context, const MembershipScreen());
-                        } else if (item.label == 'Support') {
-                          _openDemo(context, const ContactUsScreen());
+                        if (item.label == 'Kartu Anggota') {
+                          _openDemo(context, const BasicMemberCardScreen());
                         } else if (item.label == 'Profil') {
                           _openDemo(context, const AccountScreen());
+                        } else if (item.label == 'Bantuan') {
+                          _openDemo(context, const ContactUsScreen());
+                        } else if (item.label == 'Hapus Akun') {
+                          _openDemo(
+                              context, const DeleteAccountRequestScreen());
                         }
                         return;
                       }
@@ -1762,7 +1767,7 @@ class _MarketingPlanCard extends StatelessWidget {
                       onPressed: () => _openDemo(
                         context,
                         tapGoIsPlayDistribution
-                            ? const MembershipScreen()
+                            ? const BasicMemberCardScreen()
                             : const MembershipPackagesScreen(),
                       ),
                       icon: const Icon(Icons.workspace_premium_rounded),
@@ -1897,11 +1902,12 @@ class _ServiceGrid extends StatelessWidget {
   ];
 
   static const _playServices = [
-    _ServiceItem('Membership Saya', Icons.workspace_premium_rounded,
-        Color(0xFFF59E0B), null),
-    _ServiceItem(
-        'Support', Icons.volunteer_activism_rounded, Color(0xFF0569E8), null),
+    _ServiceItem('Kartu Anggota', Icons.badge_rounded, Color(0xFFF59E0B), null),
     _ServiceItem('Profil', Icons.person_rounded, Color(0xFF697386), null),
+    _ServiceItem(
+        'Bantuan', Icons.volunteer_activism_rounded, Color(0xFF0569E8), null),
+    _ServiceItem(
+        'Hapus Akun', Icons.delete_outline_rounded, Color(0xFFD97706), null),
   ];
 
   @override
@@ -2316,28 +2322,30 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     final production = ref.watch(_productionSnapshotProvider);
     final session = ref.watch(_demoSessionProvider);
     final tabs = tapGoIsPlayDistribution ? _playTabs : _directTabs;
-    final sourceItems = session.transactions
-        .map(
-          (transaction) => _ActivityItem(
-            _activityCategoryFromTitle(transaction.title),
-            _activityIconFromTitle(transaction.title),
-            transaction.title,
-            transaction.description,
-            transaction.amount == 0
-                ? null
-                : '${transaction.amount > 0 ? '+' : '-'}${formatRupiah(transaction.amount.abs())}',
-            transaction.status,
-            'Terbaru',
-          ),
-        )
-        .where(
-          (item) =>
-              !tapGoIsPlayDistribution ||
-              (item.category != 'Bonus' &&
-                  item.category != 'Withdraw' &&
-                  item.category != 'Referral'),
-        )
-        .toList(growable: false);
+    final sourceItems = tapGoIsPlayDistribution
+        ? const <_ActivityItem>[]
+        : session.transactions
+            .map(
+              (transaction) => _ActivityItem(
+                _activityCategoryFromTitle(transaction.title),
+                _activityIconFromTitle(transaction.title),
+                transaction.title,
+                transaction.description,
+                transaction.amount == 0
+                    ? null
+                    : '${transaction.amount > 0 ? '+' : '-'}${formatRupiah(transaction.amount.abs())}',
+                transaction.status,
+                'Terbaru',
+              ),
+            )
+            .where(
+              (item) =>
+                  !tapGoIsPlayDistribution ||
+                  (item.category != 'Bonus' &&
+                      item.category != 'Withdraw' &&
+                      item.category != 'Referral'),
+            )
+            .toList(growable: false);
     if (_tabIndex >= tabs.length) {
       _tabIndex = 0;
     }
@@ -2523,8 +2531,8 @@ class AccountScreen extends ConsumerWidget {
             ),
           ],
           const SizedBox(height: 16),
-          _AccountMenuTile('Membership Saya', Icons.workspace_premium_rounded,
-              () => _openDemo(context, const MembershipScreen())),
+          _AccountMenuTile('Kartu Anggota', Icons.badge_rounded,
+              () => _openDemo(context, const BasicMemberCardScreen())),
           if (tapGoIsDirectDistribution)
             _AccountMenuTile('Jaringan Saya', Icons.account_tree_rounded,
                 () => _openDemo(context, const ReferralTreeScreen())),
@@ -2585,8 +2593,9 @@ class AccountScreen extends ConsumerWidget {
               () => _openDemo(context, const ContactUsScreen())),
           _AccountMenuTile('Bantuan', Icons.help_outline_rounded,
               () => _openDemo(context, const HelpCenterScreen())),
-          _AccountMenuTile('Pengaturan', Icons.settings_rounded,
-              () => _openDemo(context, const SettingsScreen())),
+          if (tapGoIsDirectDistribution)
+            _AccountMenuTile('Pengaturan', Icons.settings_rounded,
+                () => _openDemo(context, const SettingsScreen())),
           _AccountMenuTile(
             'Logout',
             Icons.logout_rounded,
@@ -2680,6 +2689,233 @@ class HelpCenterScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+class BasicMemberCardScreen extends ConsumerWidget {
+  const BasicMemberCardScreen({super.key});
+
+  Future<_BasicMemberCardData> _load(DemoClientSession session) async {
+    if (tapGoDisablePersistenceForTests) {
+      return _BasicMemberCardData(
+        displayName: session.userName,
+        memberId: 'TGM-TESTCARD',
+        status: 'ACTIVE',
+        joinedAt: DateTime(2026, 7, 14),
+      );
+    }
+    final data = await _apiClient.memberIdentity();
+    return _BasicMemberCardData.fromMap(data);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final session = ref.watch(_demoSessionProvider);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Kartu Anggota')),
+      body: FutureBuilder<_BasicMemberCardData>(
+        future: _load(session),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: _TapGoLoading());
+          }
+          if (snapshot.hasError || !snapshot.hasData) {
+            return ListView(
+              padding: const EdgeInsets.all(20),
+              children: const [
+                _StatusSurface(
+                  icon: Icons.badge_rounded,
+                  title: 'Kartu anggota belum dapat dimuat',
+                  subtitle:
+                      'Pastikan koneksi internet aktif, lalu coba buka kembali halaman ini.',
+                ),
+              ],
+            );
+          }
+          final card = snapshot.data!;
+          return ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(22),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF06284A), Color(0xFF0B5FC7)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(26),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _brandBlue.withValues(alpha: 0.22),
+                      blurRadius: 22,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 54,
+                          height: 54,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.16),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.28),
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.verified_user_rounded,
+                            color: Color(0xFFFFC857),
+                            size: 30,
+                          ),
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 7,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFC857),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: const Text(
+                            'Basic',
+                            style: TextStyle(
+                              color: Color(0xFF06284A),
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 28),
+                    const Text(
+                      'TapGo Member Card',
+                      style: TextStyle(
+                        color: Color(0xDDEAF7FF),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      card.displayName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    _MemberCardLine(label: 'Member ID', value: card.memberId),
+                    const SizedBox(height: 12),
+                    _MemberCardLine(
+                      label: 'Status',
+                      value: card.status == 'ACTIVE' ? 'Aktif' : 'Tidak aktif',
+                    ),
+                    const SizedBox(height: 12),
+                    _MemberCardLine(
+                      label: 'Bergabung',
+                      value: _formatMemberDate(card.joinedAt),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              const _StatusSurface(
+                icon: Icons.info_outline_rounded,
+                title: 'Informasi aman',
+                subtitle:
+                    'Kartu ini hanya menampilkan nama, Member ID, status Basic, dan tanggal bergabung.',
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _BasicMemberCardData {
+  const _BasicMemberCardData({
+    required this.displayName,
+    required this.memberId,
+    required this.status,
+    required this.joinedAt,
+  });
+
+  final String displayName;
+  final String memberId;
+  final String status;
+  final DateTime joinedAt;
+
+  factory _BasicMemberCardData.fromMap(Map<String, dynamic> map) {
+    return _BasicMemberCardData(
+      displayName: map['displayName']?.toString() ?? 'Member TapGo',
+      memberId: map['memberId']?.toString() ?? '',
+      status: map['status']?.toString() ?? 'ACTIVE',
+      joinedAt: DateTime.tryParse(map['joinedAt']?.toString() ?? '') ??
+          DateTime.now(),
+    );
+  }
+}
+
+class _MemberCardLine extends StatelessWidget {
+  const _MemberCardLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xBFEAF7FF),
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+String _formatMemberDate(DateTime value) {
+  const months = [
+    'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember',
+  ];
+  return '${value.day} ${months[value.month - 1]} ${value.year}';
 }
 
 class SettingsScreen extends ConsumerWidget {

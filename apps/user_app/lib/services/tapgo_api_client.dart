@@ -380,6 +380,27 @@ class _TapGoApiClient {
     });
   }
 
+  Future<Map<String, dynamic>> memberIdentity() {
+    return get('/member-identity/me');
+  }
+
+  Future<List<Map<String, dynamic>>> supportTickets() async {
+    final data = await get('/support/tickets');
+    return _items(data);
+  }
+
+  Future<Map<String, dynamic>> createSupportTicket({
+    required String category,
+    required String subject,
+    required String message,
+  }) {
+    return post('/support/tickets', body: {
+      'category': category,
+      'subject': subject,
+      'message': message,
+    });
+  }
+
   Future<List<Map<String, dynamic>>> adminProfitSharingPeriods() async {
     final data = await get('/admin/profit-sharing/periods');
     return _items(data);
@@ -1175,6 +1196,9 @@ class _TapGoEndpointCatalog {
   static const withdrawalHistory = 'GET /api/v1/wallet/withdrawals';
   static const accountDeleteRequest = 'POST /api/v1/account/delete-request';
   static const contactMessage = 'POST /api/v1/contact';
+  static const memberIdentity = 'GET /api/v1/member-identity/me';
+  static const supportTickets = 'GET /api/v1/support/tickets';
+  static const supportTicketCreate = 'POST /api/v1/support/tickets';
   static const adminMemberRequests = 'GET /api/v1/admin/member-requests';
   static const adminBonusReport = 'GET /api/v1/admin/reports/bonus';
   static const adminPpobReport = 'GET /api/v1/admin/reports/ppob';

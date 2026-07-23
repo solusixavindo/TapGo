@@ -102,15 +102,15 @@ void main() {
       await openDashboard(tester);
 
       expect(find.text('Segera'), findsNothing);
-      expect(find.text('Membership Saya'), findsWidgets);
+      expect(find.text('Kartu Anggota'), findsWidgets);
       expect(find.text('Referral'), findsNothing);
-      expect(find.text('Support'), findsWidgets);
+      expect(find.text('Bantuan'), findsWidgets);
       expect(find.text('Profil'), findsWidgets);
       expect(find.bySemanticsLabel('Buka layanan TapGo Ride'), findsNothing);
       expect(find.bySemanticsLabel('Buka layanan TapGo Mart'), findsNothing);
       expect(find.bySemanticsLabel('Buka layanan PPOB'), findsNothing);
-      expect(find.bySemanticsLabel('Buka layanan Membership Saya'),
-          findsOneWidget);
+      expect(
+          find.bySemanticsLabel('Buka layanan Kartu Anggota'), findsOneWidget);
     } finally {
       semantics.dispose();
     }
@@ -123,8 +123,8 @@ void main() {
     final directLabels = tapGoSuperMenuLabelsForDistributionForTests(
         TapGoDistributionMode.direct);
 
-    expect(playLabels, contains('Membership Saya'));
-    expect(playLabels, contains('Support'));
+    expect(playLabels, contains('Kartu Anggota'));
+    expect(playLabels, contains('Bantuan'));
     expect(playLabels, isNot(contains('Referral')));
     expect(playLabels, isNot(contains('TapGo Ride')));
     expect(playLabels, isNot(contains('TapGo Car')));
@@ -534,14 +534,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Membership Basic aktif'), findsOneWidget);
-    expect(find.text('Basic'), findsNothing);
+    expect(find.text('Kartu Anggota'), findsOneWidget);
+    expect(find.text('TapGo Member Card'), findsOneWidget);
+    expect(find.text('Basic'), findsOneWidget);
     expect(find.text('Gratis'), findsNothing);
     expect(find.text('Silver'), findsNothing);
     expect(find.text('Gold'), findsNothing);
     expect(find.text('Platinum'), findsNothing);
-    expect(find.text('Pembelian melalui Google Play segera tersedia.'),
-        findsNothing);
     expect(find.textContaining('Rp500.000'), findsNothing);
     expect(find.textContaining('Rp3.000.000'), findsNothing);
     expect(find.textContaining('Rp5.500.000'), findsNothing);
@@ -603,7 +602,7 @@ void main() {
 
     await tester.tap(find.text('Akun'));
     await tester.pumpAndSettle();
-    expect(find.text('Membership Saya'), findsOneWidget);
+    expect(find.text('Kartu Anggota'), findsOneWidget);
     expect(find.text('Salin link referral'), findsNothing);
     expect(find.text('Jaringan Saya'), findsNothing);
 
@@ -613,10 +612,10 @@ void main() {
     expect(find.text('TapGo Ride'), findsNothing);
     expect(find.text('PPOB'), findsNothing);
     expect(find.text('Referral'), findsNothing);
-    expect(find.text('Membership Saya'), findsOneWidget);
+    expect(find.text('Kartu Anggota'), findsOneWidget);
     expect(find.text('Reward'), findsNothing);
     expect(find.text('BPJS'), findsNothing);
-    expect(find.text('Support'), findsOneWidget);
+    expect(find.text('Bantuan'), findsOneWidget);
   });
 
   testWidgets('dashboard remains usable when reduced motion is enabled',
@@ -644,7 +643,7 @@ void main() {
     await tester.tap(find.text('Akun'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Membership Saya'), findsOneWidget);
+    expect(find.text('Kartu Anggota'), findsOneWidget);
     expect(find.text('Salin link referral'), findsNothing);
   });
 
@@ -757,17 +756,53 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Membership Basic aktif'), findsOneWidget);
+    expect(find.text('TapGo Member Card'), findsOneWidget);
     expect(find.text('Silver'), findsNothing);
     expect(find.text('Gold'), findsNothing);
     expect(find.text('Platinum'), findsNothing);
-    expect(find.text('Pembelian melalui Google Play segera tersedia.'),
-        findsNothing);
     expect(find.text('Form Membership'), findsNothing);
     expect(find.text('Menunggu Pembayaran'), findsNothing);
     expect(find.text('Bayar Sekarang'), findsNothing);
     expect(find.text('Pembayaran'), findsNothing);
     expect(find.text('Pendaftaran Berhasil'), findsNothing);
+  });
+
+  testWidgets('Basic member card exposes only safe identity fields',
+      (WidgetTester tester) async {
+    tapGoDisablePersistenceForTests = true;
+    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(home: BasicMemberCardScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('TapGo Member Card'), findsOneWidget);
+    expect(find.text('TGM-TESTCARD'), findsOneWidget);
+    expect(find.text('Aktif'), findsOneWidget);
+    expect(find.text('NIK'), findsNothing);
+    expect(find.text('Nomor HP'), findsNothing);
+    expect(find.text('Rekening'), findsNothing);
+    expect(find.text('Wallet'), findsNothing);
+    expect(find.text('Saldo'), findsNothing);
+  });
+
+  testWidgets('support page opens with authenticated ticket empty state',
+      (WidgetTester tester) async {
+    tapGoDisablePersistenceForTests = true;
+    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(home: ContactUsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bantuan TapGo'), findsOneWidget);
+    expect(find.text('Judul bantuan'), findsOneWidget);
+    expect(find.text('Pesan bantuan'), findsOneWidget);
+    expect(find.text('Belum ada tiket bantuan'), findsOneWidget);
   });
 }
 
