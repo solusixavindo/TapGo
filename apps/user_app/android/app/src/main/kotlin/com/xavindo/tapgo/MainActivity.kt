@@ -1,4 +1,4 @@
-package id.tapgolion.tapgo
+package com.xavindo.tapgo
 
 import io.flutter.embedding.android.FlutterActivity
 

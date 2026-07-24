@@ -14,7 +14,7 @@ if (hasReleaseSigning) {
 }
 
 android {
-    namespace = "id.tapgolion.tapgo"
+    namespace = "com.xavindo.tapgo"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -24,7 +24,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "id.tapgolion.tapgo"
+        applicationId = "com.xavindo.tapgo"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = flutter.versionCode
