@@ -49,6 +49,7 @@ class _TapGoServiceIllustration extends StatelessWidget {
     'TapGo Bantu': '$_basePath/tg-jasa.svg',
     'Support': '$_basePath/tg-support.svg',
     'Bantuan': '$_basePath/tg-support.svg',
+    'Tiket Bantuan': '$_basePath/tg-support.svg',
     'Lainnya': '$_basePath/tg-activity.svg',
     'Kelas Online': '$_basePath/tg-kelas-online.svg',
     'Webinar': '$_basePath/tg-webinar.svg',
@@ -90,3 +91,6 @@ class _TapGoServiceIllustration extends StatelessWidget {
     );
   }
 }
+
+String? tapGoServiceIllustrationAssetForTests(String label) =>
+    _TapGoServiceIllustration.assetFor(label);

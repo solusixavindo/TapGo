@@ -71,6 +71,7 @@ Future<Map<String, dynamic>> Function({
   required String subject,
   required String message,
 })? tapGoCreateSupportTicketForTests;
+Future<Map<String, dynamic>> Function()? tapGoMemberIdentityLoaderForTests;
 const tapGoLocalSessionPersistenceWarning =
     'Anda berhasil masuk, tetapi sesi belum tersimpan di perangkat. '
     'Anda mungkin perlu login kembali saat aplikasi dibuka ulang.';

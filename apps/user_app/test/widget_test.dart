@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,6 +28,7 @@ void main() {
     tapGoSupportTicketsLoaderForTests = null;
     tapGoSupportTicketDetailLoaderForTests = null;
     tapGoCreateSupportTicketForTests = null;
+    tapGoMemberIdentityLoaderForTests = null;
   });
 
   Future<void> openAuth(WidgetTester tester) async {
@@ -120,6 +122,14 @@ void main() {
     } finally {
       semantics.dispose();
     }
+  });
+
+  testWidgets('release-visible debug paint flags stay disabled',
+      (WidgetTester tester) async {
+    expect(debugPaintBaselinesEnabled, isFalse);
+    expect(debugPaintSizeEnabled, isFalse);
+    expect(debugPaintPointersEnabled, isFalse);
+    expect(debugRepaintRainbowEnabled, isFalse);
   });
 
   test('Play service boundaries hide placeholder and referral destinations',
@@ -542,7 +552,7 @@ void main() {
 
     expect(find.text('Kartu Anggota'), findsOneWidget);
     expect(find.text('TapGo Member Card'), findsOneWidget);
-    expect(find.text('Basic'), findsOneWidget);
+    expect(find.text('Basic'), findsWidgets);
     expect(find.text('Gratis'), findsNothing);
     expect(find.text('Silver'), findsNothing);
     expect(find.text('Gold'), findsNothing);
@@ -849,6 +859,88 @@ void main() {
     expect(find.text('Rekening'), findsNothing);
     expect(find.text('Wallet'), findsNothing);
     expect(find.text('Saldo'), findsNothing);
+  });
+
+  testWidgets('Basic member card is responsive and keeps public fields visible',
+      (WidgetTester tester) async {
+    tapGoDisablePersistenceForTests = true;
+    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
+    tapGoMemberIdentityLoaderForTests = () async => {
+          'displayName':
+              'Ahmad Zulhi Putra TapGo Dengan Nama Anggota Sangat Panjang',
+          'memberId': 'TGM-20260714-0001',
+          'status': 'ACTIVE',
+          'joinedAt': '2026-07-14T00:00:00.000Z',
+        };
+
+    Future<void> pumpCard(Size size, double textScale) async {
+      tester.view
+        ..physicalSize = size
+        ..devicePixelRatio = 1;
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: MediaQuery(
+              data: MediaQueryData(
+                size: size,
+                textScaler: TextScaler.linear(textScale),
+              ),
+              child: const BasicMemberCardScreen(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    for (final scenario in [
+      (size: const Size(360, 800), textScale: 1.0),
+      (size: const Size(360, 800), textScale: 1.3),
+      (size: const Size(412, 915), textScale: 1.0),
+      (size: const Size(412, 915), textScale: 1.3),
+    ]) {
+      await pumpCard(scenario.size, scenario.textScale);
+
+      expect(find.text('TapGo Member Card'), findsOneWidget);
+      expect(find.text('Basic'), findsWidgets);
+      expect(find.text('Aktif'), findsOneWidget);
+      expect(find.text('TGM-20260714-0001'), findsOneWidget);
+      expect(find.textContaining('Ahmad Zulhi'), findsOneWidget);
+      expect(find.textContaining('00000000-0000'), findsNothing);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('Basic Portal navigation icons keep consistent frameless layout',
+      (WidgetTester tester) async {
+    await openDashboard(tester);
+
+    final labels = [
+      'Kartu Anggota',
+      'Profil',
+      'Tiket Bantuan',
+      'Hapus Akun',
+    ];
+    final labelRects = <Rect>[];
+    for (final label in labels) {
+      final text = find.text(label);
+      expect(text, findsWidgets);
+      labelRects.add(tester.getRect(text.first));
+    }
+
+    for (final rect in labelRects) {
+      expect(rect.width, lessThanOrEqualTo(82));
+      expect(rect.height, lessThanOrEqualTo(32));
+    }
+    expect(
+      tapGoServiceIllustrationAssetForTests('Tiket Bantuan'),
+      'assets/illustrations/services/tg-support.svg',
+    );
   });
 
   testWidgets('support page opens with authenticated ticket empty state',

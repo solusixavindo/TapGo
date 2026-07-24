@@ -2721,6 +2721,10 @@ class BasicMemberCardScreen extends ConsumerWidget {
   const BasicMemberCardScreen({super.key});
 
   Future<_BasicMemberCardData> _load(DemoClientSession session) async {
+    final loader = tapGoMemberIdentityLoaderForTests;
+    if (loader != null) {
+      return _BasicMemberCardData.fromMap(await loader());
+    }
     if (tapGoDisablePersistenceForTests) {
       return _BasicMemberCardData(
         displayName: session.userName,
@@ -2737,6 +2741,7 @@ class BasicMemberCardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(_demoSessionProvider);
     return Scaffold(
+      backgroundColor: _softBackground,
       appBar: AppBar(title: const Text('Kartu Anggota')),
       body: FutureBuilder<_BasicMemberCardData>(
         future: _load(session),
@@ -2758,23 +2763,24 @@ class BasicMemberCardScreen extends ConsumerWidget {
             );
           }
           final card = snapshot.data!;
+          final isActive = card.status.toUpperCase() == 'ACTIVE';
           return ListView(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
             children: [
               Container(
-                padding: const EdgeInsets.all(22),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFF06284A), Color(0xFF0B5FC7)],
+                    colors: [Color(0xFF063057), Color(0xFF0569E8)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(26),
+                  borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
-                      color: _brandBlue.withValues(alpha: 0.22),
-                      blurRadius: 22,
-                      offset: const Offset(0, 12),
+                      color: _brandBlue.withValues(alpha: 0.18),
+                      blurRadius: 18,
+                      offset: const Offset(0, 10),
                     ),
                   ],
                 ),
@@ -2784,11 +2790,11 @@ class BasicMemberCardScreen extends ConsumerWidget {
                     Row(
                       children: [
                         Container(
-                          width: 54,
-                          height: 54,
+                          width: 46,
+                          height: 46,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.16),
-                            borderRadius: BorderRadius.circular(18),
+                            borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                               color: Colors.white.withValues(alpha: 0.28),
                             ),
@@ -2796,30 +2802,19 @@ class BasicMemberCardScreen extends ConsumerWidget {
                           child: const Icon(
                             Icons.verified_user_rounded,
                             color: Color(0xFFFFC857),
-                            size: 30,
+                            size: 26,
                           ),
                         ),
                         const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 7,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFC857),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: const Text(
-                            'Basic',
-                            style: TextStyle(
-                              color: Color(0xFF06284A),
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
+                        const _MemberStatusChip(label: 'Basic'),
+                        const SizedBox(width: 8),
+                        _MemberStatusChip(
+                          label: isActive ? 'Aktif' : 'Tidak aktif',
+                          subtle: true,
                         ),
                       ],
                     ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 20),
                     const Text(
                       'TapGo Member Card',
                       style: TextStyle(
@@ -2828,28 +2823,56 @@ class BasicMemberCardScreen extends ConsumerWidget {
                         fontSize: 13,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text(
                       card.displayName,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 24,
+                        fontSize: 22,
+                        height: 1.12,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const SizedBox(height: 22),
-                    _MemberCardLine(label: 'Member ID', value: card.memberId),
-                    const SizedBox(height: 12),
-                    _MemberCardLine(
-                      label: 'Status',
-                      value: card.status == 'ACTIVE' ? 'Aktif' : 'Tidak aktif',
-                    ),
-                    const SizedBox(height: 12),
-                    _MemberCardLine(
-                      label: 'Bergabung',
-                      value: _formatMemberDate(card.joinedAt),
+                    const SizedBox(height: 18),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.16),
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          _MemberCardLine(
+                            label: 'Member ID',
+                            value: card.memberId,
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Expanded(
+                                child: _MemberCardLine(
+                                  label: 'Paket',
+                                  value: 'Basic',
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _MemberCardLine(
+                                  label: 'Bergabung',
+                                  value: _formatMemberDate(card.joinedAt),
+                                  alignEnd: true,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -2894,34 +2917,78 @@ class _BasicMemberCardData {
 }
 
 class _MemberCardLine extends StatelessWidget {
-  const _MemberCardLine({required this.label, required this.value});
+  const _MemberCardLine({
+    required this.label,
+    required this.value,
+    this.alignEnd = false,
+  });
 
   final String label;
   final String value;
+  final bool alignEnd;
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment:
+          alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
         Text(
           label,
+          textAlign: alignEnd ? TextAlign.right : TextAlign.left,
           style: const TextStyle(
             color: Color(0xBFEAF7FF),
-            fontSize: 12,
+            fontSize: 11.5,
             fontWeight: FontWeight.w800,
           ),
         ),
         const SizedBox(height: 3),
         Text(
           value,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: alignEnd ? TextAlign.right : TextAlign.left,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 16,
+            fontSize: 15,
+            height: 1.16,
             fontWeight: FontWeight.w900,
           ),
         ),
       ],
+    );
+  }
+}
+
+class _MemberStatusChip extends StatelessWidget {
+  const _MemberStatusChip({required this.label, this.subtle = false});
+
+  final String label;
+  final bool subtle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: subtle
+            ? Colors.white.withValues(alpha: 0.14)
+            : const Color(0xFFFFC857),
+        borderRadius: BorderRadius.circular(999),
+        border: subtle
+            ? Border.all(color: Colors.white.withValues(alpha: 0.22))
+            : null,
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: subtle ? Colors.white : const Color(0xFF06284A),
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
     );
   }
 }
@@ -3008,7 +3075,7 @@ class SettingsScreen extends ConsumerWidget {
           const _SettingsTile(
             icon: Icons.verified_rounded,
             title: 'Versi aplikasi',
-            subtitle: '1.0.5+7',
+            subtitle: '1.0.6+8',
           ),
           _SettingsTile(
             icon: Icons.logout_rounded,
