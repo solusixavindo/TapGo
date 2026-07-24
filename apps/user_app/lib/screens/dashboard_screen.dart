@@ -882,7 +882,7 @@ void _showSearchMenu(BuildContext context) {
           _ServiceItem(
               'Kartu Anggota', Icons.badge_rounded, Color(0xFFF59E0B), null),
           _ServiceItem('Profil', Icons.person_rounded, Color(0xFF697386), null),
-          _ServiceItem('Bantuan', Icons.volunteer_activism_rounded,
+          _ServiceItem('Tiket Bantuan', Icons.volunteer_activism_rounded,
               Color(0xFF0569E8), null),
           _ServiceItem('Hapus Akun', Icons.delete_outline_rounded,
               Color(0xFFD97706), null),
@@ -948,7 +948,7 @@ void _showSearchMenu(BuildContext context) {
                           _openDemo(context, const BasicMemberCardScreen());
                         } else if (item.label == 'Profil') {
                           _openDemo(context, const AccountScreen());
-                        } else if (item.label == 'Bantuan') {
+                        } else if (item.label == 'Tiket Bantuan') {
                           _openDemo(context, const ContactUsScreen());
                         } else if (item.label == 'Hapus Akun') {
                           _openDemo(
@@ -1904,8 +1904,8 @@ class _ServiceGrid extends StatelessWidget {
   static const _playServices = [
     _ServiceItem('Kartu Anggota', Icons.badge_rounded, Color(0xFFF59E0B), null),
     _ServiceItem('Profil', Icons.person_rounded, Color(0xFF697386), null),
-    _ServiceItem(
-        'Bantuan', Icons.volunteer_activism_rounded, Color(0xFF0569E8), null),
+    _ServiceItem('Tiket Bantuan', Icons.volunteer_activism_rounded,
+        Color(0xFF0569E8), null),
     _ServiceItem(
         'Hapus Akun', Icons.delete_outline_rounded, Color(0xFFD97706), null),
   ];
@@ -1923,12 +1923,38 @@ class _ServiceGrid extends StatelessWidget {
         crossAxisSpacing: 12,
         childAspectRatio: 0.66,
       ),
-      itemBuilder: (context, index) => _FloatingServiceTile(
-        index: index,
-        child: _ServiceTile(item: services[index]),
-      ),
+      itemBuilder: (context, index) {
+        final item = services[index];
+        return _FloatingServiceTile(
+          index: index,
+          child: _ServiceTile(
+            item: item,
+            onTap: _tapGoServiceActionFor(context, item),
+          ),
+        );
+      },
     );
   }
+}
+
+VoidCallback? _tapGoServiceActionFor(BuildContext context, _ServiceItem item) {
+  if (item.badge != null) {
+    return null;
+  }
+  if (tapGoIsPlayDistribution) {
+    return switch (item.label) {
+      'Kartu Anggota' => () =>
+          _openDemo(context, const BasicMemberCardScreen()),
+      'Profil' => () => _openDemo(context, const AccountScreen()),
+      'Tiket Bantuan' => () => _openDemo(context, const ContactUsScreen()),
+      'Hapus Akun' => () => _openDemo(
+            context,
+            const DeleteAccountRequestScreen(),
+          ),
+      _ => null,
+    };
+  }
+  return () => _showSoon(context);
 }
 
 class _FloatingServiceTile extends StatefulWidget {
@@ -2982,7 +3008,7 @@ class SettingsScreen extends ConsumerWidget {
           const _SettingsTile(
             icon: Icons.verified_rounded,
             title: 'Versi aplikasi',
-            subtitle: '1.0.3',
+            subtitle: '1.0.5+7',
           ),
           _SettingsTile(
             icon: Icons.logout_rounded,
@@ -3085,67 +3111,76 @@ class _SettingsTile extends StatelessWidget {
 }
 
 class _ServiceTile extends StatelessWidget {
-  const _ServiceTile({required this.item});
+  const _ServiceTile({required this.item, this.onTap});
 
   final _ServiceItem item;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final style = _serviceIconStyle(item.label);
     final isUnavailable = item.badge != null;
+    final isActionable = onTap != null && !isUnavailable;
+    final content = Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.topCenter,
+      children: [
+        Column(
+          children: [
+            _ServiceAssetIcon(
+              label: item.label,
+              icon: item.icon,
+              style: _ServiceIconStyle(
+                primary: item.color,
+                secondary: style.secondary,
+                background: style.background,
+              ),
+              size: 64,
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: 82,
+              height: 32,
+              child: Center(
+                child: Text(
+                  item.label,
+                  maxLines: 2,
+                  softWrap: true,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xFF263241),
+                    fontSize: 11.2,
+                    height: 1.05,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (isUnavailable)
+          const Positioned(
+            top: -4,
+            right: 8,
+            child: _ServiceSoonBadge(),
+          ),
+      ],
+    );
     return Semantics(
-      button: !isUnavailable,
-      enabled: !isUnavailable,
+      button: isActionable,
+      enabled: isActionable,
       label: isUnavailable
           ? '${item.label}, segera hadir'
           : 'Buka layanan ${item.label}',
       child: ExcludeSemantics(
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.topCenter,
-          children: [
-            Column(
-              children: [
-                _ServiceAssetIcon(
-                  label: item.label,
-                  icon: item.icon,
-                  style: _ServiceIconStyle(
-                    primary: item.color,
-                    secondary: style.secondary,
-                    background: style.background,
-                  ),
-                  size: 64,
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: 82,
-                  height: 32,
-                  child: Center(
-                    child: Text(
-                      item.label,
-                      maxLines: 2,
-                      softWrap: true,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Color(0xFF263241),
-                        fontSize: 11.2,
-                        height: 1.05,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (isUnavailable)
-              const Positioned(
-                top: -4,
-                right: 8,
-                child: _ServiceSoonBadge(),
-              ),
-          ],
-        ),
+        child: isActionable
+            ? InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: onTap,
+                child: content,
+              )
+            : content,
       ),
     );
   }

@@ -62,6 +62,15 @@ const _isTapGoProductionBuild = _tapGoAppMode == 'production';
 const _isTapGoUatBuild = _tapGoAppMode == 'staging';
 const _isTapGoDevelopmentBuild = _tapGoAppMode == 'development';
 bool tapGoEnablePaymentSimulatorForTests = false;
+Future<List<Map<String, dynamic>>> Function()?
+    tapGoSupportTicketsLoaderForTests;
+Future<Map<String, dynamic>> Function(String ticketId)?
+    tapGoSupportTicketDetailLoaderForTests;
+Future<Map<String, dynamic>> Function({
+  required String category,
+  required String subject,
+  required String message,
+})? tapGoCreateSupportTicketForTests;
 const tapGoLocalSessionPersistenceWarning =
     'Anda berhasil masuk, tetapi sesi belum tersimpan di perangkat. '
     'Anda mungkin perlu login kembali saat aplikasi dibuka ulang.';

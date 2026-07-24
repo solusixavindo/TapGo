@@ -38,7 +38,7 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
     _SuperMenuGroup('Akun', [
       _SuperMenuItem('Kartu Anggota', Icons.badge_rounded),
       _SuperMenuItem('Profil', Icons.person_rounded),
-      _SuperMenuItem('Bantuan', Icons.volunteer_activism_rounded),
+      _SuperMenuItem('Tiket Bantuan', Icons.volunteer_activism_rounded),
       _SuperMenuItem('Hapus Akun', Icons.delete_outline_rounded),
     ]),
   ];
@@ -150,7 +150,7 @@ Widget? _superMenuDestinationForLabel(String label) {
     return switch (label) {
       'Kartu Anggota' => const BasicMemberCardScreen(),
       'Profil' => const AccountScreen(),
-      'Bantuan' => const ContactUsScreen(),
+      'Tiket Bantuan' => const ContactUsScreen(),
       'Hapus Akun' => const DeleteAccountRequestScreen(),
       _ => null,
     };
@@ -1811,6 +1811,10 @@ class _ContactUsScreenState extends ConsumerState<ContactUsScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _loadTickets() async {
+    final loader = tapGoSupportTicketsLoaderForTests;
+    if (loader != null) {
+      return loader();
+    }
     if (tapGoDisablePersistenceForTests) {
       return const [];
     }
@@ -1826,11 +1830,18 @@ class _ContactUsScreenState extends ConsumerState<ContactUsScreen> {
 
     setState(() => _submitting = true);
     try {
-      await _apiClient.createSupportTicket(
-        category: 'OTHER',
-        subject: _subjectController.text,
-        message: _messageController.text,
-      );
+      final createTicket = tapGoCreateSupportTicketForTests;
+      await (createTicket != null
+          ? createTicket(
+              category: 'OTHER',
+              subject: _subjectController.text,
+              message: _messageController.text,
+            )
+          : _apiClient.createSupportTicket(
+              category: 'OTHER',
+              subject: _subjectController.text,
+              message: _messageController.text,
+            ));
       if (!mounted) return;
       _subjectController.clear();
       _messageController.clear();
@@ -1934,13 +1945,114 @@ class _SupportTicketCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = ticket['status']?.toString() ?? 'OPEN';
+    final id = ticket['id']?.toString();
+    final content = _InfoCard(
+      icon: Icons.confirmation_number_rounded,
+      title: ticket['subject']?.toString() ?? 'Tiket bantuan',
+      subtitle:
+          '${ticket['reference'] ?? '-'} • ${_supportStatusLabel(status)}',
+    );
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: _InfoCard(
-        icon: Icons.confirmation_number_rounded,
-        title: ticket['subject']?.toString() ?? 'Tiket bantuan',
-        subtitle:
-            '${ticket['reference'] ?? '-'} • ${_supportStatusLabel(status)}',
+      child: id == null || id.isEmpty
+          ? content
+          : InkWell(
+              borderRadius: BorderRadius.circular(22),
+              onTap: () => _openDemo(
+                context,
+                SupportTicketDetailScreen(ticket: ticket),
+              ),
+              child: content,
+            ),
+    );
+  }
+}
+
+class SupportTicketDetailScreen extends StatelessWidget {
+  const SupportTicketDetailScreen({required this.ticket, super.key});
+
+  final Map<String, dynamic> ticket;
+
+  Future<Map<String, dynamic>> _load() async {
+    final id = ticket['id']?.toString();
+    if (id == null || id.isEmpty) {
+      return ticket;
+    }
+    final loader = tapGoSupportTicketDetailLoaderForTests;
+    if (loader != null) {
+      return loader(id);
+    }
+    if (tapGoDisablePersistenceForTests) {
+      return ticket;
+    }
+    return _apiClient.supportTicketDetail(id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _DemoScaffold(
+      title: 'Detail Tiket',
+      subtitle: 'Status dan pesan bantuan',
+      child: FutureBuilder<Map<String, dynamic>>(
+        future: _load(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: _TapGoLoading(size: 24));
+          }
+          if (snapshot.hasError) {
+            return const _StatusSurface(
+              icon: Icons.wifi_off_rounded,
+              title: 'Detail tiket belum dapat dimuat',
+              subtitle: 'Pastikan koneksi internet aktif, lalu coba lagi.',
+            );
+          }
+          final data = snapshot.data ?? ticket;
+          final status = data['status']?.toString() ?? 'OPEN';
+          final messages = (data['messages'] is List)
+              ? (data['messages'] as List)
+                  .whereType<Map>()
+                  .map((item) => item.cast<String, dynamic>())
+                  .toList()
+              : <Map<String, dynamic>>[];
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _StatusSurface(
+                icon: Icons.confirmation_number_rounded,
+                title: data['subject']?.toString() ?? 'Tiket bantuan',
+                subtitle:
+                    '${data['reference'] ?? '-'} • ${_supportStatusLabel(status)}',
+              ),
+              const SizedBox(height: 14),
+              const _SectionHeader(
+                title: 'Pesan',
+                subtitle: 'Riwayat komunikasi terkait tiket ini',
+              ),
+              const SizedBox(height: 10),
+              if (messages.isEmpty)
+                const _StatusSurface(
+                  icon: Icons.mark_chat_read_outlined,
+                  title: 'Belum ada pesan tambahan',
+                  subtitle: 'Balasan admin akan tampil di halaman ini.',
+                )
+              else
+                ...messages.map(
+                  (message) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _InfoCard(
+                      icon: message['authorRole']?.toString() == 'USER'
+                          ? Icons.person_rounded
+                          : Icons.support_agent_rounded,
+                      title: message['authorRole']?.toString() == 'USER'
+                          ? 'Anda'
+                          : 'Admin TapGo',
+                      subtitle: message['body']?.toString() ?? '-',
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }

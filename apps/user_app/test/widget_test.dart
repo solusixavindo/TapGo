@@ -23,6 +23,12 @@ void main() {
     );
   }
 
+  setUp(() {
+    tapGoSupportTicketsLoaderForTests = null;
+    tapGoSupportTicketDetailLoaderForTests = null;
+    tapGoCreateSupportTicketForTests = null;
+  });
+
   Future<void> openAuth(WidgetTester tester) async {
     tapGoDisablePersistenceForTests = true;
     tapGoEnablePaymentSimulatorForTests = false;
@@ -104,7 +110,7 @@ void main() {
       expect(find.text('Segera'), findsNothing);
       expect(find.text('Kartu Anggota'), findsWidgets);
       expect(find.text('Referral'), findsNothing);
-      expect(find.text('Bantuan'), findsWidgets);
+      expect(find.text('Tiket Bantuan'), findsWidgets);
       expect(find.text('Profil'), findsWidgets);
       expect(find.bySemanticsLabel('Buka layanan TapGo Ride'), findsNothing);
       expect(find.bySemanticsLabel('Buka layanan TapGo Mart'), findsNothing);
@@ -124,7 +130,7 @@ void main() {
         TapGoDistributionMode.direct);
 
     expect(playLabels, contains('Kartu Anggota'));
-    expect(playLabels, contains('Bantuan'));
+    expect(playLabels, contains('Tiket Bantuan'));
     expect(playLabels, isNot(contains('Referral')));
     expect(playLabels, isNot(contains('TapGo Ride')));
     expect(playLabels, isNot(contains('TapGo Car')));
@@ -615,7 +621,64 @@ void main() {
     expect(find.text('Kartu Anggota'), findsOneWidget);
     expect(find.text('Reward'), findsNothing);
     expect(find.text('BPJS'), findsNothing);
-    expect(find.text('Bantuan'), findsOneWidget);
+    expect(find.text('Tiket Bantuan'), findsOneWidget);
+  });
+
+  testWidgets('Play dashboard action tiles navigate without pointer blockers',
+      (WidgetTester tester) async {
+    await openDashboard(tester);
+
+    final memberCardTile = find.bySemanticsLabel('Buka layanan Kartu Anggota');
+    await tester.ensureVisible(memberCardTile);
+    await tester.tap(memberCardTile);
+    await tester.pumpAndSettle();
+    expect(find.text('TapGo Member Card'), findsOneWidget);
+    Navigator.of(tester.element(find.text('TapGo Member Card'))).pop();
+    await tester.pumpAndSettle();
+
+    final profileTile = find.bySemanticsLabel('Buka layanan Profil');
+    await tester.ensureVisible(profileTile);
+    await tester.tap(profileTile);
+    await tester.pumpAndSettle();
+    expect(find.text('Kartu Anggota'), findsWidgets);
+    expect(find.text('Kebijakan Privasi'), findsOneWidget);
+    Navigator.of(tester.element(find.text('Kebijakan Privasi'))).pop();
+    await tester.pumpAndSettle();
+
+    final supportTile = find.bySemanticsLabel('Buka layanan Tiket Bantuan');
+    await tester.ensureVisible(supportTile);
+    await tester.tap(supportTile);
+    await tester.pumpAndSettle();
+    expect(find.text('Bantuan TapGo'), findsOneWidget);
+    Navigator.of(tester.element(find.text('Bantuan TapGo'))).pop();
+    await tester.pumpAndSettle();
+
+    final deleteTile = find.bySemanticsLabel('Buka layanan Hapus Akun');
+    await tester.ensureVisible(deleteTile);
+    await tester.tap(deleteTile);
+    await tester.pumpAndSettle();
+    expect(find.text('Ajukan Penghapusan Akun'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Play account legal and deletion actions remain reachable',
+      (WidgetTester tester) async {
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Akun'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Kebijakan Privasi'));
+    await tester.tap(find.text('Kebijakan Privasi'));
+    await tester.pumpAndSettle();
+    expect(find.text('Kebijakan Privasi'), findsWidgets);
+    expect(find.textContaining('TapGo'), findsWidgets);
+    Navigator.of(tester.element(find.text('Kebijakan Privasi').first)).pop();
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Hapus Akun'));
+    await tester.tap(find.text('Hapus Akun'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ajukan Penghapusan Akun'), findsOneWidget);
   });
 
   testWidgets('dashboard remains usable when reduced motion is enabled',
@@ -803,6 +866,136 @@ void main() {
     expect(find.text('Judul bantuan'), findsOneWidget);
     expect(find.text('Pesan bantuan'), findsOneWidget);
     expect(find.text('Belum ada tiket bantuan'), findsOneWidget);
+  });
+
+  testWidgets('support ticket can be created, listed, and opened',
+      (WidgetTester tester) async {
+    tapGoDisablePersistenceForTests = false;
+    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
+    final tickets = <Map<String, dynamic>>[];
+    tapGoSupportTicketsLoaderForTests = () async => tickets;
+    tapGoCreateSupportTicketForTests = ({
+      required String category,
+      required String subject,
+      required String message,
+    }) async {
+      final ticket = {
+        'id': 'ticket-1',
+        'reference': 'SUP-0001',
+        'category': category,
+        'subject': subject.trim(),
+        'status': 'OPEN',
+        'messages': [
+          {
+            'id': 'message-1',
+            'authorRole': 'USER',
+            'body': message.trim(),
+          },
+        ],
+      };
+      tickets.add(ticket);
+      return ticket;
+    };
+    tapGoSupportTicketDetailLoaderForTests = (ticketId) async =>
+        tickets.singleWhere((ticket) => ticket['id'] == ticketId);
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(home: ContactUsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).at(0), 'Bantuan akun');
+    await tester.enterText(
+      find.byType(TextField).at(1),
+      'Saya membutuhkan bantuan untuk akun Basic.',
+    );
+    await tester.tap(find.text('Kirim Pesan'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bantuan akun'), findsOneWidget);
+    expect(find.textContaining('SUP-0001'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Bantuan akun'));
+    await tester.tap(find.text('Bantuan akun'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Detail Tiket'), findsOneWidget);
+    expect(find.textContaining('Terbuka'), findsOneWidget);
+    expect(find.text('Anda'), findsOneWidget);
+    expect(find.text('Saya membutuhkan bantuan untuk akun Basic.'),
+        findsOneWidget);
+    expect(find.textContaining('Exception'), findsNothing);
+  });
+
+  testWidgets('support errors use friendly copy and avoid raw exceptions',
+      (WidgetTester tester) async {
+    tapGoDisablePersistenceForTests = false;
+    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
+    tapGoSupportTicketsLoaderForTests = () async => const [];
+    tapGoCreateSupportTicketForTests = ({
+      required String category,
+      required String subject,
+      required String message,
+    }) async {
+      throw DioException(
+        requestOptions: RequestOptions(path: '/support/tickets'),
+        message: 'SocketException: Connection failed',
+      );
+    };
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(home: ContactUsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).at(0), 'Bantuan akun');
+    await tester.enterText(
+      find.byType(TextField).at(1),
+      'Saya membutuhkan bantuan untuk akun Basic.',
+    );
+    await tester.tap(find.text('Kirim Pesan'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tiket bantuan belum dapat dibuat. Silakan coba lagi.'),
+        findsOneWidget);
+    expect(find.textContaining('SocketException'), findsNothing);
+  });
+
+  testWidgets('support form stays usable on narrow screens with keyboard',
+      (WidgetTester tester) async {
+    tapGoDisablePersistenceForTests = true;
+    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(
+              size: Size(320, 640),
+              viewInsets: EdgeInsets.only(bottom: 280),
+            ),
+            child: ContactUsScreen(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).at(0), 'Bantuan akun');
+    await tester.enterText(
+      find.byType(TextField).at(1),
+      'Saya membutuhkan bantuan untuk akun Basic.',
+    );
+    await tester.ensureVisible(find.text('Kirim Pesan'));
+
+    expect(find.text('Kirim Pesan'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
 

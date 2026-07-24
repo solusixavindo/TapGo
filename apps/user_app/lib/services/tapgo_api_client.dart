@@ -389,6 +389,10 @@ class _TapGoApiClient {
     return _items(data);
   }
 
+  Future<Map<String, dynamic>> supportTicketDetail(String ticketId) {
+    return get('/support/tickets/$ticketId');
+  }
+
   Future<Map<String, dynamic>> createSupportTicket({
     required String category,
     required String subject,
