@@ -2145,6 +2145,9 @@ class _BottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final centerGap = screenWidth < 380 ? 60.0 : 74.0;
+
     return Stack(
       children: [
         Positioned(
@@ -2180,7 +2183,7 @@ class _BottomNav extends StatelessWidget {
                   active: selectedIndex == 1,
                   onTap: () => onTabSelected(1),
                 ),
-                const SizedBox(width: 74),
+                SizedBox(width: centerGap),
                 _NavItem(
                   icon: Icons.chat_bubble_outline_rounded,
                   label: 'Chat',
@@ -2515,27 +2518,26 @@ class AccountScreen extends ConsumerWidget {
         children: [
           _AccountHero(session: session),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _StatCard(
-                  label: tapGoIsPlayDistribution ? 'Membership' : 'Wallet',
-                  value: tapGoIsPlayDistribution
-                      ? session.activePackageName
-                      : _formatCompactRupiah(session.walletBalance),
+          if (tapGoIsPlayDistribution)
+            _PlayProfileMembershipSummary(session: session)
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: _StatCard(
+                    label: 'Wallet',
+                    value: _formatCompactRupiah(session.walletBalance),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatCard(
-                  label: tapGoIsPlayDistribution ? 'Benefit' : 'PPOB',
-                  value: tapGoIsPlayDistribution
-                      ? 'Aktif'
-                      : _formatCompactRupiah(session.ppobBalance),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _StatCard(
+                    label: 'PPOB',
+                    value: _formatCompactRupiah(session.ppobBalance),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           if (tapGoIsDirectDistribution) ...[
             const SizedBox(height: 12),
             Row(
@@ -2717,6 +2719,68 @@ class HelpCenterScreen extends StatelessWidget {
   }
 }
 
+class _PlayProfileMembershipSummary extends StatelessWidget {
+  const _PlayProfileMembershipSummary({required this.session});
+
+  final DemoClientSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE5EDF6)),
+      ),
+      child: Row(
+        children: [
+          const PremiumBasicPortalIcon(
+            label: 'Kartu Anggota',
+            fallbackIcon: Icons.badge_rounded,
+            size: 58,
+            padding: 3,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Membership Basic',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Color(0xFF0A2A43),
+                    fontSize: 16,
+                    height: 1.12,
+                    fontWeight: FontWeight.w900,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  'Status akun ${session.activePackageName} sudah aktif.',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 12.5,
+                    height: 1.28,
+                    fontWeight: FontWeight.w700,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class BasicMemberCardScreen extends ConsumerWidget {
   const BasicMemberCardScreen({super.key});
 
@@ -2768,19 +2832,16 @@ class BasicMemberCardScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
             children: [
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF063057), Color(0xFF0569E8)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
+                  border: Border.all(color: const Color(0xFFE5EDF6)),
+                  boxShadow: const [
                     BoxShadow(
-                      color: _brandBlue.withValues(alpha: 0.18),
-                      blurRadius: 18,
-                      offset: const Offset(0, 10),
+                      color: Color(0x140569E8),
+                      blurRadius: 20,
+                      offset: Offset(0, 10),
                     ),
                   ],
                 ),
@@ -2789,61 +2850,57 @@ class BasicMemberCardScreen extends ConsumerWidget {
                   children: [
                     Row(
                       children: [
-                        Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.16),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.28),
-                            ),
-                          ),
-                          child: const Icon(
-                            Icons.verified_user_rounded,
-                            color: Color(0xFFFFC857),
-                            size: 26,
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.asset(
+                            'assets/images/tapgo_logo.jpeg',
+                            width: 36,
+                            height: 36,
+                            fit: BoxFit.cover,
                           ),
                         ),
-                        const Spacer(),
-                        const _MemberStatusChip(label: 'Basic'),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text(
+                            'TapGo Member Card',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Color(0xFF0A2A43),
+                              fontSize: 14,
+                              height: 1.1,
+                              fontWeight: FontWeight.w900,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                        ),
                         _MemberStatusChip(
                           label: isActive ? 'Aktif' : 'Tidak aktif',
-                          subtle: true,
                         ),
                       ],
                     ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'TapGo Member Card',
-                      style: TextStyle(
-                        color: Color(0xDDEAF7FF),
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 18),
                     Text(
                       card.displayName,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: Color(0xFF0A2A43),
                         fontSize: 22,
                         height: 1.12,
                         fontWeight: FontWeight.w900,
+                        decoration: TextDecoration.none,
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 12),
+                    const _MemberStatusChip(label: 'Basic', subtle: true),
+                    const SizedBox(height: 16),
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.12),
+                        color: const Color(0xFFF4F8FB),
                         borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.16),
-                        ),
+                        border: Border.all(color: const Color(0xFFE5EDF6)),
                       ),
                       child: Column(
                         children: [
@@ -2937,9 +2994,10 @@ class _MemberCardLine extends StatelessWidget {
           label,
           textAlign: alignEnd ? TextAlign.right : TextAlign.left,
           style: const TextStyle(
-            color: Color(0xBFEAF7FF),
+            color: Color(0xFF64748B),
             fontSize: 11.5,
             fontWeight: FontWeight.w800,
+            decoration: TextDecoration.none,
           ),
         ),
         const SizedBox(height: 3),
@@ -2949,10 +3007,11 @@ class _MemberCardLine extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           textAlign: alignEnd ? TextAlign.right : TextAlign.left,
           style: const TextStyle(
-            color: Colors.white,
+            color: Color(0xFF0A2A43),
             fontSize: 15,
             height: 1.16,
             fontWeight: FontWeight.w900,
+            decoration: TextDecoration.none,
           ),
         ),
       ],
@@ -2971,22 +3030,19 @@ class _MemberStatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: subtle
-            ? Colors.white.withValues(alpha: 0.14)
-            : const Color(0xFFFFC857),
+        color: subtle ? const Color(0xFFFFF3D1) : const Color(0xFFFFC857),
         borderRadius: BorderRadius.circular(999),
-        border: subtle
-            ? Border.all(color: Colors.white.withValues(alpha: 0.22))
-            : null,
+        border: subtle ? Border.all(color: const Color(0xFFFFD166)) : null,
       ),
       child: Text(
         label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: subtle ? Colors.white : const Color(0xFF06284A),
+        style: const TextStyle(
+          color: Color(0xFF06284A),
           fontSize: 12,
           fontWeight: FontWeight.w900,
+          decoration: TextDecoration.none,
         ),
       ),
     );
@@ -3075,7 +3131,7 @@ class SettingsScreen extends ConsumerWidget {
           const _SettingsTile(
             icon: Icons.verified_rounded,
             title: 'Versi aplikasi',
-            subtitle: '1.0.7+9',
+            subtitle: '1.0.8+10',
           ),
           _SettingsTile(
             icon: Icons.logout_rounded,

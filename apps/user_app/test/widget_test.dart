@@ -112,6 +112,11 @@ void main() {
       'Profil': 'assets/icons/basic_portal/profile.png',
       'Tiket Bantuan': 'assets/icons/basic_portal/support_ticket.png',
       'Hapus Akun': 'assets/icons/basic_portal/delete_account.png',
+      'Kebijakan Privasi': 'assets/icons/basic_portal/privacy_policy.png',
+      'Syarat & Ketentuan': 'assets/icons/basic_portal/terms_conditions.png',
+      'Hubungi Kami': 'assets/icons/basic_portal/contact_us.png',
+      'Bantuan': 'assets/icons/basic_portal/help.png',
+      'Logout': 'assets/icons/basic_portal/logout.png',
     };
 
     for (final entry in expected.entries) {
@@ -127,6 +132,9 @@ void main() {
     }
 
     expect(tapGoServiceIllustrationAssetForTests('Tiket Bantuan'), isNull);
+    for (final label in expected.keys) {
+      expect(tapGoServiceIllustrationAssetForTests(label), isNull);
+    }
   });
 
   testWidgets('premium Basic Portal icon falls back safely',
@@ -694,6 +702,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Kartu Anggota'), findsWidgets);
     expect(find.text('Kebijakan Privasi'), findsOneWidget);
+    expect(find.text('Membership'), findsNothing);
+    expect(find.text('Benefit'), findsNothing);
+    expect(find.textContaining('Paket aktif'), findsNothing);
     Navigator.of(tester.element(find.text('Kebijakan Privasi'))).pop();
     await tester.pumpAndSettle();
 
@@ -731,6 +742,60 @@ void main() {
     await tester.tap(find.text('Hapus Akun'));
     await tester.pumpAndSettle();
     expect(find.text('Ajukan Penghapusan Akun'), findsOneWidget);
+  });
+
+  testWidgets('Play account menu routes use complete premium icon family',
+      (WidgetTester tester) async {
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Akun'));
+    await tester.pumpAndSettle();
+
+    const labels = {
+      'Kartu Anggota': 'assets/icons/basic_portal/member_card.png',
+      'Kebijakan Privasi': 'assets/icons/basic_portal/privacy_policy.png',
+      'Syarat & Ketentuan': 'assets/icons/basic_portal/terms_conditions.png',
+      'Hapus Akun': 'assets/icons/basic_portal/delete_account.png',
+      'Hubungi Kami': 'assets/icons/basic_portal/contact_us.png',
+      'Bantuan': 'assets/icons/basic_portal/help.png',
+      'Logout': 'assets/icons/basic_portal/logout.png',
+    };
+
+    for (final entry in labels.entries) {
+      await tester.ensureVisible(find.text(entry.key));
+      expect(find.text(entry.key), findsOneWidget);
+      expect(tapGoPremiumBasicPortalIconAssetForTests(entry.key), entry.value);
+      expect(tapGoServiceIllustrationAssetForTests(entry.key), isNull);
+    }
+
+    expect(find.byType(PremiumBasicPortalIcon), findsAtLeastNWidgets(9));
+
+    await tester.ensureVisible(find.text('Syarat & Ketentuan'));
+    await tester.tap(find.text('Syarat & Ketentuan'));
+    await tester.pumpAndSettle();
+    expect(find.text('Syarat & Ketentuan'), findsWidgets);
+    Navigator.of(tester.element(find.text('Syarat & Ketentuan').first)).pop();
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Hubungi Kami'));
+    await tester.tap(find.text('Hubungi Kami'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bantuan TapGo'), findsOneWidget);
+    Navigator.of(tester.element(find.text('Bantuan TapGo'))).pop();
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Bantuan'));
+    await tester.tap(find.text('Bantuan'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pusat Bantuan TapGo'), findsOneWidget);
+    Navigator.of(tester.element(find.text('Pusat Bantuan TapGo'))).pop();
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Logout'));
+    await tester.tap(find.text('Logout'));
+    await tester.pumpAndSettle();
+    expect(find.text('Apakah Anda yakin ingin keluar dari akun ini?'),
+        findsOneWidget);
   });
 
   testWidgets('dashboard remains usable when reduced motion is enabled',
@@ -954,6 +1019,15 @@ void main() {
       expect(find.text('TGM-20260714-0001'), findsOneWidget);
       expect(find.textContaining('Ahmad Zulhi'), findsOneWidget);
       expect(find.textContaining('00000000-0000'), findsNothing);
+      for (final text in [
+        'TapGo Member Card',
+        'Basic',
+        'Aktif',
+        'TGM-20260714-0001',
+      ]) {
+        final widget = tester.widget<Text>(find.text(text).first);
+        expect(widget.style?.decoration, TextDecoration.none);
+      }
       expect(tester.takeException(), isNull);
     }
   });
@@ -985,6 +1059,36 @@ void main() {
     );
     expect(tapGoServiceIllustrationAssetForTests('Tiket Bantuan'), isNull);
     expect(find.byType(PremiumBasicPortalIcon), findsNWidgets(4));
+  });
+
+  testWidgets('Play Profile is compact and free of yellow text decoration',
+      (WidgetTester tester) async {
+    tester.view
+      ..physicalSize = const Size(360, 800)
+      ..devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await openDashboard(tester);
+    await tester.ensureVisible(find.bySemanticsLabel('Buka layanan Profil'));
+    await tester.tap(find.bySemanticsLabel('Buka layanan Profil'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Membership'), findsNothing);
+    expect(find.text('Benefit'), findsNothing);
+    expect(find.textContaining('Paket aktif'), findsNothing);
+    expect(find.text('Membership Basic'), findsOneWidget);
+    expect(
+        find.textContaining('Status akun Basic sudah aktif.'), findsOneWidget);
+    expect(find.text('Kebijakan Privasi'), findsOneWidget);
+
+    for (final text in ['Membership Basic', 'Basic', 'Aktif']) {
+      final widget = tester.widget<Text>(find.text(text).first);
+      expect(widget.style?.decoration, TextDecoration.none);
+    }
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('support page opens with authenticated ticket empty state',

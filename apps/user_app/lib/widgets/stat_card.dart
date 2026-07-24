@@ -147,6 +147,38 @@ class _InfoPanel extends StatelessWidget {
   }
 }
 
+class _PlayStatusPill extends StatelessWidget {
+  const _PlayStatusPill({required this.label, this.emphasized = false});
+
+  final String label;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: emphasized ? const Color(0xFFFFF3D1) : const Color(0xFFEAF5FF),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: emphasized ? const Color(0xFFFFD166) : const Color(0xFFBFE0FF),
+        ),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: emphasized ? const Color(0xFF7A5200) : _brandBlue,
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+          decoration: TextDecoration.none,
+        ),
+      ),
+    );
+  }
+}
+
 class _StatCard extends StatelessWidget {
   const _StatCard({required this.label, required this.value});
 
@@ -569,6 +601,64 @@ class _AccountHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (tapGoIsPlayDistribution) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0xFFE5EDF6)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x100569E8),
+              blurRadius: 18,
+              offset: Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            const PremiumBasicPortalIcon(
+              label: 'Profil',
+              fallbackIcon: Icons.person_rounded,
+              size: 64,
+              padding: 3,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    session.userName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF0A2A43),
+                      fontSize: 19,
+                      height: 1.12,
+                      fontWeight: FontWeight.w900,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _PlayStatusPill(label: 'Basic', emphasized: true),
+                      _PlayStatusPill(label: 'Aktif'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
