@@ -807,15 +807,22 @@ class _DemoMenuTile extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEAF7FF),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(icon, color: _brandBlue),
-                ),
+                PremiumBasicPortalIcon.assetFor(title) != null
+                    ? PremiumBasicPortalIcon(
+                        label: title,
+                        fallbackIcon: icon,
+                        size: 48,
+                        padding: 2,
+                      )
+                    : Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEAF7FF),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(icon, color: _brandBlue),
+                      ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(

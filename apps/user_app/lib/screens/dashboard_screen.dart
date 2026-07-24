@@ -3075,7 +3075,7 @@ class SettingsScreen extends ConsumerWidget {
           const _SettingsTile(
             icon: Icons.verified_rounded,
             title: 'Versi aplikasi',
-            subtitle: '1.0.6+8',
+            subtitle: '1.0.7+9',
           ),
           _SettingsTile(
             icon: Icons.logout_rounded,
@@ -3393,33 +3393,40 @@ class _ServiceAssetIcon extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.center,
-        children: [
-          Positioned(
-            bottom: size * 0.02,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                boxShadow: [
-                  BoxShadow(
-                    color: style.primary.withValues(alpha: 0.18),
-                    blurRadius: size * 0.22,
-                    spreadRadius: size * 0.02,
+      child: PremiumBasicPortalIcon.assetFor(label) != null
+          ? PremiumBasicPortalIcon(
+              label: label,
+              fallbackIcon: icon,
+              size: size,
+              padding: size * 0.06,
+            )
+          : Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                Positioned(
+                  bottom: size * 0.02,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      boxShadow: [
+                        BoxShadow(
+                          color: style.primary.withValues(alpha: 0.18),
+                          blurRadius: size * 0.22,
+                          spreadRadius: size * 0.02,
+                        ),
+                      ],
+                    ),
+                    child: SizedBox(width: size * 0.62, height: size * 0.12),
                   ),
-                ],
-              ),
-              child: SizedBox(width: size * 0.62, height: size * 0.12),
+                ),
+                _TapGoServiceIllustration(
+                  label: label,
+                  fallbackIcon: icon,
+                  fallbackStyle: style,
+                  size: size,
+                ),
+              ],
             ),
-          ),
-          _TapGoServiceIllustration(
-            label: label,
-            fallbackIcon: icon,
-            fallbackStyle: style,
-            size: size,
-          ),
-        ],
-      ),
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -101,6 +102,47 @@ void main() {
       svgBodies.add(svg);
     }
     expect(svgBodies.length, serviceIconAssets.length);
+  });
+
+  testWidgets('premium Basic Portal PNG assets resolve locally',
+      (WidgetTester tester) async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    const expected = {
+      'Kartu Anggota': 'assets/icons/basic_portal/member_card.png',
+      'Profil': 'assets/icons/basic_portal/profile.png',
+      'Tiket Bantuan': 'assets/icons/basic_portal/support_ticket.png',
+      'Hapus Akun': 'assets/icons/basic_portal/delete_account.png',
+    };
+
+    for (final entry in expected.entries) {
+      expect(tapGoPremiumBasicPortalIconAssetForTests(entry.key), entry.value);
+      final bytes = await rootBundle.load(entry.value);
+      expect(bytes.getUint8(0), 0x89);
+      expect(String.fromCharCodes(bytes.buffer.asUint8List(1, 3)), 'PNG');
+      expect(String.fromCharCodes(bytes.buffer.asUint8List(12, 4)), 'IHDR');
+      expect(bytes.getUint32(16, Endian.big), 1024);
+      expect(bytes.getUint32(20, Endian.big), 1024);
+      expect(bytes.getUint8(24), 8);
+      expect(bytes.getUint8(25), 6);
+    }
+
+    expect(tapGoServiceIllustrationAssetForTests('Tiket Bantuan'), isNull);
+  });
+
+  testWidgets('premium Basic Portal icon falls back safely',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: PremiumBasicPortalIcon(
+          label: 'Tidak Ada',
+          fallbackIcon: Icons.help_outline_rounded,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byIcon(Icons.help_outline_rounded), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('service grid exposes only Play-safe core services',
@@ -938,9 +980,11 @@ void main() {
       expect(rect.height, lessThanOrEqualTo(32));
     }
     expect(
-      tapGoServiceIllustrationAssetForTests('Tiket Bantuan'),
-      'assets/illustrations/services/tg-support.svg',
+      tapGoPremiumBasicPortalIconAssetForTests('Tiket Bantuan'),
+      'assets/icons/basic_portal/support_ticket.png',
     );
+    expect(tapGoServiceIllustrationAssetForTests('Tiket Bantuan'), isNull);
+    expect(find.byType(PremiumBasicPortalIcon), findsNWidgets(4));
   });
 
   testWidgets('support page opens with authenticated ticket empty state',

@@ -49,7 +49,6 @@ class _TapGoServiceIllustration extends StatelessWidget {
     'TapGo Bantu': '$_basePath/tg-jasa.svg',
     'Support': '$_basePath/tg-support.svg',
     'Bantuan': '$_basePath/tg-support.svg',
-    'Tiket Bantuan': '$_basePath/tg-support.svg',
     'Lainnya': '$_basePath/tg-activity.svg',
     'Kelas Online': '$_basePath/tg-kelas-online.svg',
     'Webinar': '$_basePath/tg-webinar.svg',
@@ -94,3 +93,71 @@ class _TapGoServiceIllustration extends StatelessWidget {
 
 String? tapGoServiceIllustrationAssetForTests(String label) =>
     _TapGoServiceIllustration.assetFor(label);
+
+class PremiumBasicPortalIcon extends StatelessWidget {
+  const PremiumBasicPortalIcon({
+    required this.label,
+    required this.fallbackIcon,
+    this.size = 64,
+    this.padding = 4,
+    super.key,
+  });
+
+  final String label;
+  final IconData fallbackIcon;
+  final double size;
+  final double padding;
+
+  static const _basePath = 'assets/icons/basic_portal';
+
+  static const _assets = <String, String>{
+    'Kartu Anggota': '$_basePath/member_card.png',
+    'Profil': '$_basePath/profile.png',
+    'Tiket Bantuan': '$_basePath/support_ticket.png',
+    'Hapus Akun': '$_basePath/delete_account.png',
+  };
+
+  static String? assetFor(String label) => _assets[label];
+
+  @override
+  Widget build(BuildContext context) {
+    final asset = assetFor(label);
+    return SizedBox.square(
+      dimension: size,
+      child: Padding(
+        padding: EdgeInsets.all(padding),
+        child: ExcludeSemantics(
+          child: asset == null
+              ? _PremiumBasicPortalIconFallback(icon: fallbackIcon)
+              : Image.asset(
+                  asset,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.high,
+                  errorBuilder: (context, error, stackTrace) =>
+                      _PremiumBasicPortalIconFallback(icon: fallbackIcon),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PremiumBasicPortalIconFallback extends StatelessWidget {
+  const _PremiumBasicPortalIconFallback({required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Icon(
+        icon,
+        color: _brandBlue,
+        size: 28,
+      ),
+    );
+  }
+}
+
+String? tapGoPremiumBasicPortalIconAssetForTests(String label) =>
+    PremiumBasicPortalIcon.assetFor(label);

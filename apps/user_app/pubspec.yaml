@@ -1,7 +1,7 @@
 name: tapgo_user_app
 description: TapGo customer super app.
 publish_to: "none"
-version: 1.0.6+8
+version: 1.0.7+9
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -27,6 +27,7 @@ flutter:
     - assets/images/promo_food_10k.png
     - assets/images/promo_food_pizza.jpg
     - assets/images/banners/
+    - assets/icons/basic_portal/
     - assets/illustrations/services/
 
 dev_dependencies:
