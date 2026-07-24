@@ -120,7 +120,7 @@ void main() {
     };
 
     for (final entry in expected.entries) {
-      expect(tapGoPremiumBasicPortalIconAssetForTests(entry.key), entry.value);
+      expect(tapGoPremiumIconAssetForTests(entry.key), entry.value);
       final bytes = await rootBundle.load(entry.value);
       expect(bytes.getUint8(0), 0x89);
       expect(String.fromCharCodes(bytes.buffer.asUint8List(1, 3)), 'PNG');
@@ -141,7 +141,7 @@ void main() {
       (WidgetTester tester) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: PremiumBasicPortalIcon(
+        home: PremiumTapGoIcon(
           label: 'Tidak Ada',
           fallbackIcon: Icons.help_outline_rounded,
         ),
@@ -764,11 +764,11 @@ void main() {
     for (final entry in labels.entries) {
       await tester.ensureVisible(find.text(entry.key));
       expect(find.text(entry.key), findsOneWidget);
-      expect(tapGoPremiumBasicPortalIconAssetForTests(entry.key), entry.value);
+      expect(tapGoPremiumIconAssetForTests(entry.key), entry.value);
       expect(tapGoServiceIllustrationAssetForTests(entry.key), isNull);
     }
 
-    expect(find.byType(PremiumBasicPortalIcon), findsAtLeastNWidgets(9));
+    expect(find.byType(PremiumTapGoIcon), findsAtLeastNWidgets(9));
 
     await tester.ensureVisible(find.text('Syarat & Ketentuan'));
     await tester.tap(find.text('Syarat & Ketentuan'));
@@ -1054,11 +1054,11 @@ void main() {
       expect(rect.height, lessThanOrEqualTo(32));
     }
     expect(
-      tapGoPremiumBasicPortalIconAssetForTests('Tiket Bantuan'),
+      tapGoPremiumIconAssetForTests('Tiket Bantuan'),
       'assets/icons/basic_portal/support_ticket.png',
     );
     expect(tapGoServiceIllustrationAssetForTests('Tiket Bantuan'), isNull);
-    expect(find.byType(PremiumBasicPortalIcon), findsNWidgets(4));
+    expect(find.byType(PremiumTapGoIcon), findsNWidgets(4));
   });
 
   testWidgets('Play Profile is compact and free of yellow text decoration',

@@ -2736,7 +2736,7 @@ class _PlayProfileMembershipSummary extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const PremiumBasicPortalIcon(
+          const PremiumTapGoIcon(
             label: 'Kartu Anggota',
             fallbackIcon: Icons.badge_rounded,
             size: 58,
@@ -3449,8 +3449,8 @@ class _ServiceAssetIcon extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: PremiumBasicPortalIcon.assetFor(label) != null
-          ? PremiumBasicPortalIcon(
+      child: PremiumTapGoIcon.assetFor(label) != null
+          ? PremiumTapGoIcon(
               label: label,
               fallbackIcon: icon,
               size: size,

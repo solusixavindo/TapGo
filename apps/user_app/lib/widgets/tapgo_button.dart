@@ -807,8 +807,8 @@ class _DemoMenuTile extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                PremiumBasicPortalIcon.assetFor(title) != null
-                    ? PremiumBasicPortalIcon(
+                PremiumTapGoIcon.assetFor(title) != null
+                    ? PremiumTapGoIcon(
                         label: title,
                         fallbackIcon: icon,
                         size: 48,

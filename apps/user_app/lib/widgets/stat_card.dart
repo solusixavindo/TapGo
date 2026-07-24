@@ -619,7 +619,7 @@ class _AccountHero extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const PremiumBasicPortalIcon(
+            const PremiumTapGoIcon(
               label: 'Profil',
               fallbackIcon: Icons.person_rounded,
               size: 64,

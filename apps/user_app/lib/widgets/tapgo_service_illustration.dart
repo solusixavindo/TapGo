@@ -90,8 +90,37 @@ class _TapGoServiceIllustration extends StatelessWidget {
 String? tapGoServiceIllustrationAssetForTests(String label) =>
     _TapGoServiceIllustration.assetFor(label);
 
-class PremiumBasicPortalIcon extends StatelessWidget {
-  const PremiumBasicPortalIcon({
+enum PremiumTapGoIconAction {
+  memberCard,
+  profile,
+  supportTicket,
+  deleteAccount,
+  privacyPolicy,
+  termsConditions,
+  contactUs,
+  help,
+  logout,
+}
+
+extension PremiumTapGoIconActionAsset on PremiumTapGoIconAction {
+  static const _basePath = 'assets/icons/basic_portal';
+
+  String get assetPath => switch (this) {
+        PremiumTapGoIconAction.memberCard => '$_basePath/member_card.png',
+        PremiumTapGoIconAction.profile => '$_basePath/profile.png',
+        PremiumTapGoIconAction.supportTicket => '$_basePath/support_ticket.png',
+        PremiumTapGoIconAction.deleteAccount => '$_basePath/delete_account.png',
+        PremiumTapGoIconAction.privacyPolicy => '$_basePath/privacy_policy.png',
+        PremiumTapGoIconAction.termsConditions =>
+          '$_basePath/terms_conditions.png',
+        PremiumTapGoIconAction.contactUs => '$_basePath/contact_us.png',
+        PremiumTapGoIconAction.help => '$_basePath/help.png',
+        PremiumTapGoIconAction.logout => '$_basePath/logout.png',
+      };
+}
+
+class PremiumTapGoIcon extends StatelessWidget {
+  const PremiumTapGoIcon({
     required this.label,
     required this.fallbackIcon,
     this.size = 64,
@@ -104,22 +133,23 @@ class PremiumBasicPortalIcon extends StatelessWidget {
   final double size;
   final double padding;
 
-  static const _basePath = 'assets/icons/basic_portal';
-
-  static const _assets = <String, String>{
-    'Kartu Anggota': '$_basePath/member_card.png',
-    'Profil': '$_basePath/profile.png',
-    'Tiket Bantuan': '$_basePath/support_ticket.png',
-    'Hapus Akun': '$_basePath/delete_account.png',
-    'Kebijakan Privasi': '$_basePath/privacy_policy.png',
-    'Syarat & Ketentuan': '$_basePath/terms_conditions.png',
-    'Hubungi Kami': '$_basePath/contact_us.png',
-    'Bantuan': '$_basePath/help.png',
-    'Logout': '$_basePath/logout.png',
-    'Keluar': '$_basePath/logout.png',
+  static const _actionByLabel = <String, PremiumTapGoIconAction>{
+    'Kartu Anggota': PremiumTapGoIconAction.memberCard,
+    'Profil': PremiumTapGoIconAction.profile,
+    'Tiket Bantuan': PremiumTapGoIconAction.supportTicket,
+    'Hapus Akun': PremiumTapGoIconAction.deleteAccount,
+    'Kebijakan Privasi': PremiumTapGoIconAction.privacyPolicy,
+    'Syarat & Ketentuan': PremiumTapGoIconAction.termsConditions,
+    'Hubungi Kami': PremiumTapGoIconAction.contactUs,
+    'Bantuan': PremiumTapGoIconAction.help,
+    'Logout': PremiumTapGoIconAction.logout,
+    'Keluar': PremiumTapGoIconAction.logout,
   };
 
-  static String? assetFor(String label) => _assets[label];
+  static PremiumTapGoIconAction? actionFor(String label) =>
+      _actionByLabel[label];
+
+  static String? assetFor(String label) => actionFor(label)?.assetPath;
 
   @override
   Widget build(BuildContext context) {
@@ -130,13 +160,13 @@ class PremiumBasicPortalIcon extends StatelessWidget {
         padding: EdgeInsets.all(padding),
         child: ExcludeSemantics(
           child: asset == null
-              ? _PremiumBasicPortalIconFallback(icon: fallbackIcon)
+              ? _PremiumTapGoIconFallback(icon: fallbackIcon)
               : Image.asset(
                   asset,
                   fit: BoxFit.contain,
                   filterQuality: FilterQuality.high,
                   errorBuilder: (context, error, stackTrace) =>
-                      _PremiumBasicPortalIconFallback(icon: fallbackIcon),
+                      _PremiumTapGoIconFallback(icon: fallbackIcon),
                 ),
         ),
       ),
@@ -144,8 +174,8 @@ class PremiumBasicPortalIcon extends StatelessWidget {
   }
 }
 
-class _PremiumBasicPortalIconFallback extends StatelessWidget {
-  const _PremiumBasicPortalIconFallback({required this.icon});
+class _PremiumTapGoIconFallback extends StatelessWidget {
+  const _PremiumTapGoIconFallback({required this.icon});
 
   final IconData icon;
 
@@ -161,5 +191,5 @@ class _PremiumBasicPortalIconFallback extends StatelessWidget {
   }
 }
 
-String? tapGoPremiumBasicPortalIconAssetForTests(String label) =>
-    PremiumBasicPortalIcon.assetFor(label);
+String? tapGoPremiumIconAssetForTests(String label) =>
+    PremiumTapGoIcon.assetFor(label);
