@@ -603,17 +603,26 @@ class _AccountHero extends StatelessWidget {
   Widget build(BuildContext context) {
     if (tapGoIsPlayDistribution) {
       return Container(
+        key: const ValueKey('play_profile_header'),
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF061A2E),
+              Color(0xFF0B3A6E),
+              Color(0xFF0569E8),
+            ],
+          ),
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: const Color(0xFFE5EDF6)),
+          border: Border.all(color: const Color(0x3322D3EE)),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x100569E8),
-              blurRadius: 18,
-              offset: Offset(0, 8),
+              color: Color(0x330569E8),
+              blurRadius: 24,
+              offset: Offset(0, 12),
             ),
           ],
         ),
@@ -635,7 +644,7 @@ class _AccountHero extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: Color(0xFF0A2A43),
+                      color: Colors.white,
                       fontSize: 19,
                       height: 1.12,
                       fontWeight: FontWeight.w900,

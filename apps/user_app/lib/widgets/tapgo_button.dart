@@ -730,6 +730,7 @@ class _StatusSurface extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
+    super.key,
   });
 
   final IconData icon;

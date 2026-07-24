@@ -657,6 +657,7 @@ void main() {
   testWidgets('bottom navigation tabs and super menu are clickable',
       (WidgetTester tester) async {
     await openDashboard(tester);
+    expect(find.text('2'), findsNothing);
 
     await tester.tap(find.text('Aktivitas'));
     await tester.pumpAndSettle();
@@ -665,6 +666,7 @@ void main() {
     await tester.tap(find.text('Chat'));
     await tester.pumpAndSettle();
     expect(find.text('Belum ada pesan'), findsOneWidget);
+    expect(find.text('2'), findsNothing);
 
     await tester.tap(find.text('Akun'));
     await tester.pumpAndSettle();
@@ -961,6 +963,27 @@ void main() {
     expect(find.text('TapGo Member Card'), findsOneWidget);
     expect(find.text('TGM-TESTCARD'), findsOneWidget);
     expect(find.text('Aktif'), findsOneWidget);
+    final cardSurface = tester.widget<Container>(
+      find.byKey(const ValueKey('basic_member_card_surface')),
+    );
+    final cardDecoration = cardSurface.decoration! as BoxDecoration;
+    expect(cardDecoration.color, isNull);
+    expect(cardDecoration.gradient, isA<LinearGradient>());
+    expect(
+      (cardDecoration.gradient! as LinearGradient).colors,
+      contains(const Color(0xFF061A2E)),
+    );
+    final infoPanel = tester.widget<Container>(
+      find
+          .ancestor(
+            of: find.text('Informasi aman'),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    final infoDecoration = infoPanel.decoration! as BoxDecoration;
+    expect(infoDecoration.color, Colors.white);
+    expect(infoDecoration.gradient, isNull);
     expect(find.text('NIK'), findsNothing);
     expect(find.text('Nomor HP'), findsNothing);
     expect(find.text('Rekening'), findsNothing);
@@ -1083,6 +1106,16 @@ void main() {
     expect(
         find.textContaining('Status akun Basic sudah aktif.'), findsOneWidget);
     expect(find.text('Kebijakan Privasi'), findsOneWidget);
+    final header = tester.widget<Container>(
+      find.byKey(const ValueKey('play_profile_header')),
+    );
+    final headerDecoration = header.decoration! as BoxDecoration;
+    expect(headerDecoration.color, isNull);
+    expect(headerDecoration.gradient, isA<LinearGradient>());
+    expect(
+      (headerDecoration.gradient! as LinearGradient).colors,
+      contains(const Color(0xFF061A2E)),
+    );
 
     for (final text in ['Membership Basic', 'Basic', 'Aktif']) {
       final widget = tester.widget<Text>(find.text(text).first);

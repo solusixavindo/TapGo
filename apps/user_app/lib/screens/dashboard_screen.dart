@@ -630,7 +630,6 @@ class _TopBar extends ConsumerWidget {
           _HeaderIconButton(
             icon: Icons.notifications_none_rounded,
             tooltip: 'Notifikasi',
-            badge: '2',
             onTap: () => _showInfoSnack(
               context,
               'Notifikasi belum dapat dibuka saat ini',
@@ -653,13 +652,11 @@ class _HeaderIconButton extends StatelessWidget {
     required this.icon,
     required this.tooltip,
     required this.onTap,
-    this.badge,
   });
 
   final IconData icon;
   final String tooltip;
   final VoidCallback onTap;
-  final String? badge;
 
   @override
   Widget build(BuildContext context) {
@@ -671,27 +668,15 @@ class _HeaderIconButton extends StatelessWidget {
         child: _TapScale(
           onTap: onTap,
           borderRadius: BorderRadius.circular(999),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  shape: BoxShape.circle,
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.20)),
-                ),
-                child: Icon(icon, color: Colors.white, size: 23),
-              ),
-              if (badge != null)
-                Positioned(
-                  right: -2,
-                  top: -3,
-                  child: _PulseBadge(label: badge!),
-                ),
-            ],
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.16),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
+            ),
+            child: Icon(icon, color: Colors.white, size: 23),
           ),
         ),
       ),
@@ -2187,7 +2172,6 @@ class _BottomNav extends StatelessWidget {
                 _NavItem(
                   icon: Icons.chat_bubble_outline_rounded,
                   label: 'Chat',
-                  badge: '2',
                   active: selectedIndex == 2,
                   onTap: () => onTabSelected(2),
                 ),
@@ -2245,14 +2229,12 @@ class _NavItem extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.active = false,
-    this.badge,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
   final bool active;
-  final String? badge;
 
   @override
   Widget build(BuildContext context) {
@@ -2281,18 +2263,7 @@ class _NavItem extends StatelessWidget {
                 scale: active ? 1.10 : 1,
                 duration: const Duration(milliseconds: 220),
                 curve: Curves.easeOutCubic,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Icon(icon, color: color, size: 26),
-                    if (badge != null)
-                      Positioned(
-                        right: -8,
-                        top: -8,
-                        child: _PulseBadge(label: badge!),
-                      ),
-                  ],
-                ),
+                child: Icon(icon, color: color, size: 26),
               ),
             ),
             const SizedBox(height: 5),
@@ -2832,16 +2803,25 @@ class BasicMemberCardScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
             children: [
               Container(
+                key: const ValueKey('basic_member_card_surface'),
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF061A2E),
+                      Color(0xFF0B315F),
+                      Color(0xFF0569E8),
+                    ],
+                  ),
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: const Color(0xFFE5EDF6)),
+                  border: Border.all(color: const Color(0x3322D3EE)),
                   boxShadow: const [
                     BoxShadow(
-                      color: Color(0x140569E8),
-                      blurRadius: 20,
-                      offset: Offset(0, 10),
+                      color: Color(0x330569E8),
+                      blurRadius: 24,
+                      offset: Offset(0, 14),
                     ),
                   ],
                 ),
@@ -2866,7 +2846,7 @@ class BasicMemberCardScreen extends ConsumerWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: Color(0xFF0A2A43),
+                              color: Colors.white,
                               fontSize: 14,
                               height: 1.1,
                               fontWeight: FontWeight.w900,
@@ -2885,7 +2865,7 @@ class BasicMemberCardScreen extends ConsumerWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Color(0xFF0A2A43),
+                        color: Colors.white,
                         fontSize: 22,
                         height: 1.12,
                         fontWeight: FontWeight.w900,
@@ -2936,6 +2916,7 @@ class BasicMemberCardScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               const _StatusSurface(
+                key: ValueKey('member_card_safe_info_panel'),
                 icon: Icons.info_outline_rounded,
                 title: 'Informasi aman',
                 subtitle:
@@ -3131,7 +3112,7 @@ class SettingsScreen extends ConsumerWidget {
           const _SettingsTile(
             icon: Icons.verified_rounded,
             title: 'Versi aplikasi',
-            subtitle: '1.0.8+10',
+            subtitle: '1.0.9+11',
           ),
           _SettingsTile(
             icon: Icons.logout_rounded,
@@ -3361,51 +3342,6 @@ class _WalletAction extends StatelessWidget {
         ),
         child: Icon(icon, color: Colors.white, size: 31),
       ),
-    );
-  }
-}
-
-class _Badge extends StatelessWidget {
-  const _Badge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 18,
-      height: 18,
-      alignment: Alignment.center,
-      decoration: const BoxDecoration(
-        color: Color(0xFFFF3434),
-        shape: BoxShape.circle,
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 10,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-    );
-  }
-}
-
-class _PulseBadge extends StatelessWidget {
-  const _PulseBadge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.95, end: 1.05),
-      duration: const Duration(milliseconds: 650),
-      curve: Curves.easeOutBack,
-      builder: (context, scale, child) =>
-          Transform.scale(scale: scale, child: child),
-      child: _Badge(label: label),
     );
   }
 }
