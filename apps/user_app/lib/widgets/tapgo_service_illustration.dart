@@ -99,6 +99,7 @@ enum PremiumTapGoIconAction {
   termsConditions,
   contactUs,
   help,
+  themeSettings,
   logout,
 }
 
@@ -115,6 +116,7 @@ extension PremiumTapGoIconActionAsset on PremiumTapGoIconAction {
           '$_basePath/terms_conditions.png',
         PremiumTapGoIconAction.contactUs => '$_basePath/contact_us.png',
         PremiumTapGoIconAction.help => '$_basePath/help.png',
+        PremiumTapGoIconAction.themeSettings => '$_basePath/help.png',
         PremiumTapGoIconAction.logout => '$_basePath/logout.png',
       };
 }
@@ -142,6 +144,7 @@ class PremiumTapGoIcon extends StatelessWidget {
     'Syarat & Ketentuan': PremiumTapGoIconAction.termsConditions,
     'Hubungi Kami': PremiumTapGoIconAction.contactUs,
     'Bantuan': PremiumTapGoIconAction.help,
+    'Tampilan': PremiumTapGoIconAction.themeSettings,
     'Logout': PremiumTapGoIconAction.logout,
     'Keluar': PremiumTapGoIconAction.logout,
   };

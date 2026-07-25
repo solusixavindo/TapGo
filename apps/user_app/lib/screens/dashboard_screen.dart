@@ -457,12 +457,14 @@ class _CompactRetryPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: colorScheme.outlineVariant),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -473,8 +475,8 @@ class _CompactRetryPill extends StatelessWidget {
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(
-                    color: Color(0xFF718096),
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
                     fontWeight: FontWeight.w800,
                     fontSize: 12,
                   ),
@@ -508,12 +510,14 @@ class _InlineStatePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: colorScheme.outlineVariant),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -524,8 +528,8 @@ class _InlineStatePill extends StatelessWidget {
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(
-                    color: Color(0xFF718096),
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
                   ),
@@ -753,11 +757,12 @@ class _SearchRowState extends State<_SearchRow> {
   Widget build(BuildContext context) {
     final placeholders =
         tapGoIsPlayDistribution ? _playPlaceholders : _directPlaceholders;
+    final colorScheme = Theme.of(context).colorScheme;
     if (_placeholderIndex >= placeholders.length) {
       _placeholderIndex = 0;
     }
     return Material(
-      color: Colors.white.withValues(alpha: 0.82),
+      color: colorScheme.surface,
       borderRadius: BorderRadius.circular(26),
       child: InkWell(
         onTap: () => _showSearchMenu(context),
@@ -767,13 +772,7 @@ class _SearchRowState extends State<_SearchRow> {
           padding: const EdgeInsets.only(left: 18, right: 6),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(26),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.86)),
-            gradient: LinearGradient(
-              colors: [
-                Colors.white.withValues(alpha: 0.96),
-                const Color(0xFFF4F9FF).withValues(alpha: 0.88),
-              ],
-            ),
+            border: Border.all(color: colorScheme.outlineVariant),
             boxShadow: [
               BoxShadow(
                 color: _brandBlue.withValues(alpha: 0.10),
@@ -802,8 +801,8 @@ class _SearchRowState extends State<_SearchRow> {
                     key: ValueKey(placeholders[_placeholderIndex]),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF7A8699),
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
                       fontSize: 15,
                     ),
                   ),
@@ -932,7 +931,7 @@ void _showSearchMenu(BuildContext context) {
                         if (item.label == 'Kartu Anggota') {
                           _openDemo(context, const BasicMemberCardScreen());
                         } else if (item.label == 'Profil') {
-                          _openDemo(context, const AccountScreen());
+                          _openDemo(context, const ProfileDetailsScreen());
                         } else if (item.label == 'Tiket Bantuan') {
                           _openDemo(context, const ContactUsScreen());
                         } else if (item.label == 'Hapus Akun') {
@@ -1930,7 +1929,7 @@ VoidCallback? _tapGoServiceActionFor(BuildContext context, _ServiceItem item) {
     return switch (item.label) {
       'Kartu Anggota' => () =>
           _openDemo(context, const BasicMemberCardScreen()),
-      'Profil' => () => _openDemo(context, const AccountScreen()),
+      'Profil' => () => _openDemo(context, const ProfileDetailsScreen()),
       'Tiket Bantuan' => () => _openDemo(context, const ContactUsScreen()),
       'Hapus Akun' => () => _openDemo(
             context,
@@ -2132,6 +2131,7 @@ class _BottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final centerGap = screenWidth < 380 ? 60.0 : 74.0;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Stack(
       children: [
@@ -2143,13 +2143,14 @@ class _BottomNav extends StatelessWidget {
             height: 82,
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: colorScheme.surface,
               borderRadius: BorderRadius.circular(28),
-              boxShadow: const [
+              border: Border.all(color: colorScheme.outlineVariant),
+              boxShadow: [
                 BoxShadow(
-                  color: Color(0x22000000),
+                  color: Colors.black.withValues(alpha: 0.14),
                   blurRadius: 22,
-                  offset: Offset(0, 10),
+                  offset: const Offset(0, 10),
                 ),
               ],
             ),
@@ -2200,7 +2201,7 @@ class _BottomNav extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: _brandBlue,
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 6),
+                  border: Border.all(color: colorScheme.surface, width: 6),
                   boxShadow: [
                     BoxShadow(
                       color: _brandBlue.withValues(alpha: 0.32),
@@ -2238,7 +2239,8 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? _brandBlue : const Color(0xFF4B5563);
+    final colorScheme = Theme.of(context).colorScheme;
+    final color = active ? _brandBlue : colorScheme.onSurfaceVariant;
 
     return _TapGoPressable(
       onTap: onTap,
@@ -2532,6 +2534,16 @@ class AccountScreen extends ConsumerWidget {
           const SizedBox(height: 16),
           _AccountMenuTile('Kartu Anggota', Icons.badge_rounded,
               () => _openDemo(context, const BasicMemberCardScreen())),
+          _AccountMenuTile('Profil', Icons.person_rounded,
+              () => _openDemo(context, const ProfileDetailsScreen())),
+          _AccountMenuTile(
+            'Tampilan',
+            Icons.palette_rounded,
+            () => _openDemo(context, const ThemeSettingsScreen()),
+            subtitle: 'Atur tema aplikasi',
+          ),
+          _AccountMenuTile('Tiket Bantuan', Icons.volunteer_activism_rounded,
+              () => _openDemo(context, const ContactUsScreen())),
           if (tapGoIsDirectDistribution)
             _AccountMenuTile('Jaringan Saya', Icons.account_tree_rounded,
                 () => _openDemo(context, const ReferralTreeScreen())),
@@ -2604,6 +2616,301 @@ class AccountScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+class ThemeSettingsScreen extends ConsumerWidget {
+  const ThemeSettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(tapGoThemePreferenceProvider);
+    return _DemoScaffold(
+      title: 'Tampilan',
+      subtitle: 'Atur tema aplikasi',
+      child: Column(
+        children: [
+          for (final preference in TapGoThemePreference.values)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _ThemeOptionTile(
+                preference: preference,
+                selected: selected == preference,
+                onSelected: () => ref
+                    .read(tapGoThemePreferenceProvider.notifier)
+                    .setPreference(preference),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ThemeOptionTile extends StatelessWidget {
+  const _ThemeOptionTile({
+    required this.preference,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final TapGoThemePreference preference;
+  final bool selected;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return _TapGoPressable(
+      onTap: onSelected,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        key: ValueKey('theme_option_${preference.storageValue}'),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? _brandBlue : colorScheme.outlineVariant,
+            width: selected ? 1.4 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              selected
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              color: selected ? _brandBlue : colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                preference.label,
+                style: TextStyle(
+                  color: colorScheme.onSurface,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  decoration: TextDecoration.none,
+                ),
+              ),
+            ),
+            if (selected)
+              const Icon(Icons.check_circle_rounded, color: _brandBlue),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class ProfileDetailsScreen extends ConsumerWidget {
+  const ProfileDetailsScreen({super.key});
+
+  Future<_BasicMemberCardData> _load(DemoClientSession session) async {
+    final loader = tapGoMemberIdentityLoaderForTests;
+    if (loader != null) {
+      return _BasicMemberCardData.fromMap(await loader());
+    }
+    if (tapGoDisablePersistenceForTests) {
+      return _BasicMemberCardData(
+        displayName: session.userName,
+        phone: session.phone,
+        memberId: 'TGM-TESTCARD',
+        status: 'ACTIVE',
+        joinedAt: DateTime(2026, 7, 14),
+      );
+    }
+    final data = await _apiClient.memberIdentity();
+    return _BasicMemberCardData.fromMap(data);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final session = ref.watch(_demoSessionProvider);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Profil')),
+      body: FutureBuilder<_BasicMemberCardData>(
+        future: _load(session),
+        builder: (context, snapshot) {
+          final fallback = _BasicMemberCardData(
+            displayName:
+                session.userName.isEmpty ? 'Member TapGo' : session.userName,
+            phone: session.phone,
+            memberId: '-',
+            status: 'ACTIVE',
+            joinedAt: DateTime.tryParse(session.membershipJoinedAt ?? '') ??
+                DateTime.now(),
+          );
+          final profile = snapshot.data ?? fallback;
+          final isLoading = snapshot.connectionState != ConnectionState.done;
+          final hasError = snapshot.hasError;
+          final statusLabel = profile.status.toUpperCase() == 'ACTIVE'
+              ? 'Aktif'
+              : 'Tidak aktif';
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+            children: [
+              _AccountHero(
+                session: session.copyWith(
+                  userName: profile.displayName,
+                  activePackageName: 'Basic',
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (isLoading)
+                const _StatusSurface(
+                  icon: Icons.sync_rounded,
+                  title: 'Memuat profil',
+                  subtitle: 'Data profil sedang disiapkan.',
+                )
+              else if (hasError)
+                const _StatusSurface(
+                  icon: Icons.info_outline_rounded,
+                  title: 'Sebagian data belum tersedia',
+                  subtitle:
+                      'Profil tetap dapat digunakan dengan data akun yang aman.',
+                ),
+              if (isLoading || hasError) const SizedBox(height: 12),
+              const _SectionLabel('Identitas'),
+              const SizedBox(height: 10),
+              _ProfileInfoPanel(
+                children: [
+                  _ProfileDetailRow(
+                    label: 'Nama lengkap',
+                    value: profile.displayName,
+                  ),
+                  _ProfileDetailRow(
+                    label: 'Nomor HP',
+                    value: _maskProfilePhone(
+                      profile.phone.isEmpty ? session.phone : profile.phone,
+                    ),
+                  ),
+                  _ProfileDetailRow(
+                    label: 'Public Member ID',
+                    value: profile.memberId.isEmpty ? '-' : profile.memberId,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const _SectionLabel('Keanggotaan'),
+              const SizedBox(height: 10),
+              _ProfileInfoPanel(
+                children: [
+                  const _ProfileDetailRow(label: 'Paket', value: 'Basic'),
+                  _ProfileDetailRow(label: 'Status', value: statusLabel),
+                  _ProfileDetailRow(
+                    label: 'Tanggal bergabung',
+                    value: _formatMemberDate(profile.joinedAt),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: TextStyle(
+        color: _tapGoTextPrimary(context),
+        fontSize: 14,
+        fontWeight: FontWeight.w900,
+        decoration: TextDecoration.none,
+      ),
+    );
+  }
+}
+
+class _ProfileInfoPanel extends StatelessWidget {
+  const _ProfileInfoPanel({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      key: const ValueKey('profile_details_info_panel'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Column(children: children),
+    );
+  }
+}
+
+class _ProfileDetailRow extends StatelessWidget {
+  const _ProfileDetailRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 5,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
+                fontSize: 12,
+                height: 1.2,
+                fontWeight: FontWeight.w800,
+                decoration: TextDecoration.none,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 6,
+            child: Text(
+              value.isEmpty ? '-' : value,
+              textAlign: TextAlign.right,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: colorScheme.onSurface,
+                fontSize: 13.5,
+                height: 1.2,
+                fontWeight: FontWeight.w900,
+                decoration: TextDecoration.none,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _maskProfilePhone(String phone) {
+  final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.isEmpty) return '-';
+  final local = digits.startsWith('62') ? '0${digits.substring(2)}' : digits;
+  if (local.length <= 6) return local;
+  final prefix = local.substring(0, local.length >= 4 ? 4 : local.length);
+  final suffix = local.substring(local.length - 4);
+  return '$prefix••••$suffix';
 }
 
 class HelpCenterScreen extends StatelessWidget {
@@ -2697,13 +3004,14 @@ class _PlayProfileMembershipSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE5EDF6)),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Row(
         children: [
@@ -2718,12 +3026,12 @@ class _PlayProfileMembershipSummary extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Membership Basic',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: Color(0xFF0A2A43),
+                    color: colorScheme.onSurface,
                     fontSize: 16,
                     height: 1.12,
                     fontWeight: FontWeight.w900,
@@ -2735,8 +3043,8 @@ class _PlayProfileMembershipSummary extends StatelessWidget {
                   'Status akun ${session.activePackageName} sudah aktif.',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF64748B),
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
                     fontSize: 12.5,
                     height: 1.28,
                     fontWeight: FontWeight.w700,
@@ -2763,6 +3071,7 @@ class BasicMemberCardScreen extends ConsumerWidget {
     if (tapGoDisablePersistenceForTests) {
       return _BasicMemberCardData(
         displayName: session.userName,
+        phone: session.phone,
         memberId: 'TGM-TESTCARD',
         status: 'ACTIVE',
         joinedAt: DateTime(2026, 7, 14),
@@ -2776,7 +3085,6 @@ class BasicMemberCardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(_demoSessionProvider);
     return Scaffold(
-      backgroundColor: _softBackground,
       appBar: AppBar(title: const Text('Kartu Anggota')),
       body: FutureBuilder<_BasicMemberCardData>(
         future: _load(session),
@@ -2933,12 +3241,14 @@ class BasicMemberCardScreen extends ConsumerWidget {
 class _BasicMemberCardData {
   const _BasicMemberCardData({
     required this.displayName,
+    required this.phone,
     required this.memberId,
     required this.status,
     required this.joinedAt,
   });
 
   final String displayName;
+  final String phone;
   final String memberId;
   final String status;
   final DateTime joinedAt;
@@ -2946,6 +3256,7 @@ class _BasicMemberCardData {
   factory _BasicMemberCardData.fromMap(Map<String, dynamic> map) {
     return _BasicMemberCardData(
       displayName: map['displayName']?.toString() ?? 'Member TapGo',
+      phone: map['phone']?.toString() ?? '',
       memberId: map['memberId']?.toString() ?? '',
       status: map['status']?.toString() ?? 'ACTIVE',
       joinedAt: DateTime.tryParse(map['joinedAt']?.toString() ?? '') ??

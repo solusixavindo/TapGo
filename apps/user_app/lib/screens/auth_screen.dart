@@ -582,6 +582,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -605,11 +606,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 ),
               ),
               const SizedBox(height: 22),
-              const Text(
+              Text(
                 'TapGo Lion',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Color(0xFF0A2A43),
+                  color: colorScheme.onSurface,
                   fontSize: 30,
                   fontWeight: FontWeight.w900,
                 ),
@@ -620,13 +621,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     ? 'Daftar dan mulai pesan layanan TapGo.'
                     : 'Masuk untuk lanjut ke dashboard layanan.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade700, fontSize: 15),
+                style: TextStyle(
+                  color: colorScheme.onSurfaceVariant,
+                  fontSize: 15,
+                ),
               ),
               const SizedBox(height: 28),
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: colorScheme.surface,
                   borderRadius: BorderRadius.circular(18),
                   boxShadow: const [
                     BoxShadow(
@@ -972,6 +976,7 @@ class _AuthModeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
@@ -987,7 +992,7 @@ class _AuthModeButton extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color: selected ? Colors.white : const Color(0xFF536273),
+              color: selected ? Colors.white : colorScheme.onSurfaceVariant,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -1034,6 +1039,7 @@ class _InputField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return TextFormField(
       controller: controller,
       focusNode: focusNode,
@@ -1046,8 +1052,8 @@ class _InputField extends StatelessWidget {
       validator: validator,
       readOnly: readOnly,
       onTap: onTap,
-      style: const TextStyle(
-        color: Color(0xFF172033),
+      style: TextStyle(
+        color: colorScheme.onSurface,
         fontWeight: FontWeight.w700,
       ),
       cursorColor: _brandBlue,
@@ -1056,10 +1062,10 @@ class _InputField extends StatelessWidget {
         suffixIcon: suffixIcon,
         labelText: label,
         hintText: hint,
-        labelStyle: const TextStyle(color: Color(0xFF536273)),
-        hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+        labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+        hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
         filled: true,
-        fillColor: Colors.white,
+        fillColor: colorScheme.surface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide.none,

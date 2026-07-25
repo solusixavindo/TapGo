@@ -149,7 +149,7 @@ Widget? _superMenuDestinationForLabel(String label) {
   if (tapGoIsPlayDistribution) {
     return switch (label) {
       'Kartu Anggota' => const BasicMemberCardScreen(),
-      'Profil' => const AccountScreen(),
+      'Profil' => const ProfileDetailsScreen(),
       'Tiket Bantuan' => const ContactUsScreen(),
       'Hapus Akun' => const DeleteAccountRequestScreen(),
       _ => null,
@@ -1628,6 +1628,7 @@ class LegalInfoScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return _DemoScaffold(
       title: title,
       subtitle: 'PT. TapGo Lion Indonesia',
@@ -1635,14 +1636,14 @@ class LegalInfoScreen extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: colorScheme.surface,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFFEAF0F6)),
+          border: Border.all(color: colorScheme.outlineVariant),
         ),
         child: Text(
           content,
-          style: const TextStyle(
-            color: Color(0xFF334155),
+          style: TextStyle(
+            color: colorScheme.onSurface,
             height: 1.55,
             fontWeight: FontWeight.w600,
           ),
@@ -2104,28 +2105,29 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFEAF0F6)),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Row(
         children: [
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
-                color: Color(0xFF64748B),
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w700,
               ),
             ),
           ),
           Text(
             value,
-            style: const TextStyle(
-              color: Color(0xFF0A2A43),
+            style: TextStyle(
+              color: colorScheme.onSurface,
               fontWeight: FontWeight.w900,
             ),
           ),

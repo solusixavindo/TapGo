@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:tapgo_user_app/demo/client_flow_models.dart';
@@ -205,6 +206,8 @@ void main() {
 
     expect(tapGoSuperMenuDestinationForLabelForTests('PPOB'), isNull);
     expect(tapGoSuperMenuDestinationForLabelForTests('Referral'), isNull);
+    expect(tapGoSuperMenuDestinationForLabelForTests('Profil'),
+        isA<ProfileDetailsScreen>());
   });
 
   test('login backend succeeds and persistence succeeds', () async {
@@ -702,12 +705,14 @@ void main() {
     await tester.ensureVisible(profileTile);
     await tester.tap(profileTile);
     await tester.pumpAndSettle();
-    expect(find.text('Kartu Anggota'), findsWidgets);
-    expect(find.text('Kebijakan Privasi'), findsOneWidget);
+    expect(find.text('Identitas'), findsOneWidget);
+    expect(find.text('Keanggotaan'), findsOneWidget);
+    expect(find.text('Public Member ID'), findsOneWidget);
+    expect(find.text('Kebijakan Privasi'), findsNothing);
     expect(find.text('Membership'), findsNothing);
     expect(find.text('Benefit'), findsNothing);
     expect(find.textContaining('Paket aktif'), findsNothing);
-    Navigator.of(tester.element(find.text('Kebijakan Privasi'))).pop();
+    Navigator.of(tester.element(find.text('Identitas'))).pop();
     await tester.pumpAndSettle();
 
     final supportTile = find.bySemanticsLabel('Buka layanan Tiket Bantuan');
@@ -755,6 +760,9 @@ void main() {
 
     const labels = {
       'Kartu Anggota': 'assets/icons/basic_portal/member_card.png',
+      'Profil': 'assets/icons/basic_portal/profile.png',
+      'Tampilan': 'assets/icons/basic_portal/help.png',
+      'Tiket Bantuan': 'assets/icons/basic_portal/support_ticket.png',
       'Kebijakan Privasi': 'assets/icons/basic_portal/privacy_policy.png',
       'Syarat & Ketentuan': 'assets/icons/basic_portal/terms_conditions.png',
       'Hapus Akun': 'assets/icons/basic_portal/delete_account.png',
@@ -798,6 +806,112 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Apakah Anda yakin ingin keluar dari akun ini?'),
         findsOneWidget);
+  });
+
+  testWidgets('Theme settings default to system and change immediately',
+      (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(
+      ProviderScope(
+        child: Consumer(
+          builder: (context, ref, child) {
+            final preference = ref.watch(tapGoThemePreferenceProvider);
+            return MaterialApp(
+              theme: ThemeData.light(),
+              darkTheme: ThemeData.dark(),
+              themeMode: preference.themeMode,
+              home: const ThemeSettingsScreen(),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    var app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.themeMode, ThemeMode.system);
+
+    expect(find.text('Ikuti sistem'), findsOneWidget);
+    expect(find.text('Tema terang'), findsOneWidget);
+    expect(find.text('Tema gelap'), findsOneWidget);
+    await tester.tap(find.text('Tema gelap'));
+    await tester.pumpAndSettle();
+    app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.themeMode, ThemeMode.dark);
+
+    await tester.tap(find.text('Tema terang'));
+    await tester.pumpAndSettle();
+    app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.themeMode, ThemeMode.light);
+  });
+
+  testWidgets('Theme selection persists across app rebuild and auth state',
+      (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(home: ThemeSettingsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tema gelap'));
+    await tester.pumpAndSettle();
+
+    var authenticated = true;
+    await tester.pumpWidget(
+      ProviderScope(
+        child: Consumer(
+          builder: (context, ref, child) {
+            final preference = ref.watch(tapGoThemePreferenceProvider);
+            return MaterialApp(
+              theme: ThemeData.light(),
+              darkTheme: ThemeData.dark(),
+              themeMode: preference.themeMode,
+              home: Text(authenticated ? 'Dashboard' : 'Login'),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    var app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.themeMode, ThemeMode.dark);
+
+    authenticated = false;
+    await tester.pumpWidget(
+      ProviderScope(
+        child: Consumer(
+          builder: (context, ref, child) {
+            final preference = ref.watch(tapGoThemePreferenceProvider);
+            return MaterialApp(
+              theme: ThemeData.light(),
+              darkTheme: ThemeData.dark(),
+              themeMode: preference.themeMode,
+              home: Text(authenticated ? 'Dashboard' : 'Login'),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.themeMode, ThemeMode.dark);
+  });
+
+  testWidgets('Tampilan menu opens theme settings screen',
+      (WidgetTester tester) async {
+    await openDashboard(tester);
+    await tester.tap(find.text('Akun'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Tampilan'));
+    expect(find.text('Atur tema aplikasi'), findsOneWidget);
+    await tester.tap(find.text('Tampilan'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ikuti sistem'), findsOneWidget);
+    expect(find.text('Tema terang'), findsOneWidget);
+    expect(find.text('Tema gelap'), findsOneWidget);
   });
 
   testWidgets('dashboard remains usable when reduced motion is enabled',
@@ -982,7 +1096,8 @@ void main() {
           .first,
     );
     final infoDecoration = infoPanel.decoration! as BoxDecoration;
-    expect(infoDecoration.color, Colors.white);
+    expect(infoDecoration.color, isNotNull);
+    expect(infoDecoration.color, isNot(const Color(0xFF061A2E)));
     expect(infoDecoration.gradient, isNull);
     expect(find.text('NIK'), findsNothing);
     expect(find.text('Nomor HP'), findsNothing);
@@ -1084,11 +1199,23 @@ void main() {
     expect(find.byType(PremiumTapGoIcon), findsNWidgets(4));
   });
 
-  testWidgets('Play Profile is compact and free of yellow text decoration',
+  testWidgets('Play Profile opens dedicated details without account hub menu',
       (WidgetTester tester) async {
     tester.view
       ..physicalSize = const Size(360, 800)
       ..devicePixelRatio = 1;
+    tapGoMemberIdentityLoaderForTests = () async => {
+          'displayName': 'Sandika TapGo',
+          'phone': '+6285812348373',
+          'memberId': 'TGM-6J5W8HS3XX',
+          'status': 'ACTIVE',
+          'joinedAt': '2026-07-24T00:00:00.000Z',
+          'id': '00000000-0000-0000-0000-000000000000',
+          'nik': '3200000000000000',
+          'password': 'secret',
+          'accessToken': 'token',
+          'deviceFingerprint': 'device',
+        };
     addTearDown(() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
@@ -1102,10 +1229,31 @@ void main() {
     expect(find.text('Membership'), findsNothing);
     expect(find.text('Benefit'), findsNothing);
     expect(find.textContaining('Paket aktif'), findsNothing);
-    expect(find.text('Membership Basic'), findsOneWidget);
-    expect(
-        find.textContaining('Status akun Basic sudah aktif.'), findsOneWidget);
-    expect(find.text('Kebijakan Privasi'), findsOneWidget);
+    expect(find.text('Identitas'), findsOneWidget);
+    expect(find.text('Keanggotaan'), findsOneWidget);
+    expect(find.text('Nama lengkap'), findsOneWidget);
+    expect(find.text('Sandika TapGo'), findsWidgets);
+    expect(find.text('Nomor HP'), findsOneWidget);
+    expect(find.text('0858••••8373'), findsOneWidget);
+    expect(find.text('Public Member ID'), findsOneWidget);
+    expect(find.text('TGM-6J5W8HS3XX'), findsOneWidget);
+    expect(find.text('Paket'), findsOneWidget);
+    expect(find.text('Basic'), findsWidgets);
+    expect(find.text('Status'), findsOneWidget);
+    expect(find.text('Aktif'), findsWidgets);
+    expect(find.text('Tanggal bergabung'), findsOneWidget);
+    expect(find.text('24 Juli 2026'), findsOneWidget);
+    expect(find.text('Kartu Anggota'), findsNothing);
+    expect(find.text('Tiket Bantuan'), findsNothing);
+    expect(find.text('Kebijakan Privasi'), findsNothing);
+    expect(find.text('Syarat & Ketentuan'), findsNothing);
+    expect(find.text('Logout'), findsNothing);
+    expect(find.textContaining('00000000-0000'), findsNothing);
+    expect(find.text('NIK'), findsNothing);
+    expect(find.textContaining('320000'), findsNothing);
+    expect(find.text('secret'), findsNothing);
+    expect(find.text('token'), findsNothing);
+    expect(find.text('device'), findsNothing);
     final header = tester.widget<Container>(
       find.byKey(const ValueKey('play_profile_header')),
     );
@@ -1117,10 +1265,43 @@ void main() {
       contains(const Color(0xFF061A2E)),
     );
 
-    for (final text in ['Membership Basic', 'Basic', 'Aktif']) {
+    for (final text in ['Sandika TapGo', 'Basic', 'Aktif']) {
       final widget = tester.widget<Text>(find.text(text).first);
       expect(widget.style?.decoration, TextDecoration.none);
     }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Account hub remains a navigation menu after Profile split',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(home: AccountScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    for (final label in [
+      'Kartu Anggota',
+      'Profil',
+      'Tiket Bantuan',
+      'Kebijakan Privasi',
+      'Syarat & Ketentuan',
+      'Hubungi Kami',
+      'Bantuan',
+      'Logout',
+      'Hapus Akun',
+    ]) {
+      await tester.scrollUntilVisible(
+        find.text(label),
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text(label), findsWidgets);
+    }
+    expect(find.text('Identitas'), findsNothing);
+    expect(find.text('Keanggotaan'), findsNothing);
+    expect(find.text('2'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

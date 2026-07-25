@@ -579,6 +579,7 @@ class _DemoScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -601,16 +602,16 @@ class _DemoScaffold extends StatelessWidget {
                       children: [
                         Text(
                           title,
-                          style: const TextStyle(
-                            color: Color(0xFF0A2A43),
+                          style: TextStyle(
+                            color: colorScheme.onSurface,
                             fontSize: 24,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
                         Text(
                           subtitle,
-                          style: const TextStyle(
-                            color: Color(0xFF718096),
+                          style: TextStyle(
+                            color: colorScheme.onSurfaceVariant,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -678,14 +679,15 @@ class _RetryStatusSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return _TapGoStateEntrance(
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFEAF0F6)),
+          border: Border.all(color: colorScheme.outlineVariant),
         ),
         child: Row(
           children: [
@@ -697,16 +699,16 @@ class _RetryStatusSurface extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
-                      color: Color(0xFF0A2A43),
+                    style: TextStyle(
+                      color: colorScheme.onSurface,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      color: Color(0xFF718096),
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
                       fontSize: 12,
                       height: 1.3,
                     ),
@@ -739,13 +741,15 @@ class _StatusSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return _TapGoStateEntrance(
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: colorScheme.surface,
           borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: colorScheme.outlineVariant),
         ),
         child: Row(
           children: [
@@ -757,15 +761,15 @@ class _StatusSurface extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
-                      color: Color(0xFF0A2A43),
+                    style: TextStyle(
+                      color: colorScheme.onSurface,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      color: Color(0xFF718096),
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
                       fontSize: 12,
                     ),
                   ),
@@ -794,6 +798,7 @@ class _DemoMenuTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: _TapGoPressable(
@@ -801,8 +806,9 @@ class _DemoMenuTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: colorScheme.surface,
             borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: colorScheme.outlineVariant),
           ),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -831,8 +837,8 @@ class _DemoMenuTile extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
-                          color: Color(0xFF0A2A43),
+                        style: TextStyle(
+                          color: colorScheme.onSurface,
                           fontWeight: FontWeight.w900,
                           fontSize: 16,
                         ),
@@ -840,8 +846,8 @@ class _DemoMenuTile extends StatelessWidget {
                       const SizedBox(height: 3),
                       Text(
                         subtitle,
-                        style: const TextStyle(
-                          color: Color(0xFF718096),
+                        style: TextStyle(
+                          color: colorScheme.onSurfaceVariant,
                           fontSize: 12,
                         ),
                       ),

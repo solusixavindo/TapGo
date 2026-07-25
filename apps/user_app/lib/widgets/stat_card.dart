@@ -785,18 +785,19 @@ void _copyAccountReferralLink(
 }
 
 class _AccountMenuTile extends StatelessWidget {
-  const _AccountMenuTile(this.title, this.icon, this.onTap);
+  const _AccountMenuTile(this.title, this.icon, this.onTap, {this.subtitle});
 
   final String title;
   final IconData icon;
   final VoidCallback onTap;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
     return _DemoMenuTile(
       icon: icon,
       title: title,
-      subtitle: 'Lihat detail $title',
+      subtitle: subtitle ?? 'Lihat detail $title',
       onTap: onTap,
     );
   }

@@ -98,6 +98,67 @@ bool get _isPaymentSimulatorEnabled =>
     _isTapGoDevelopmentBuild ||
     _isTapGoUatBuild;
 
+enum TapGoThemePreference {
+  system,
+  light,
+  dark;
+
+  String get storageValue => name;
+
+  String get label => switch (this) {
+        TapGoThemePreference.system => 'Ikuti sistem',
+        TapGoThemePreference.light => 'Tema terang',
+        TapGoThemePreference.dark => 'Tema gelap',
+      };
+
+  ThemeMode get themeMode => switch (this) {
+        TapGoThemePreference.system => ThemeMode.system,
+        TapGoThemePreference.light => ThemeMode.light,
+        TapGoThemePreference.dark => ThemeMode.dark,
+      };
+
+  static TapGoThemePreference fromStorageValue(String? value) {
+    return switch (value?.trim().toLowerCase()) {
+      'light' => TapGoThemePreference.light,
+      'dark' => TapGoThemePreference.dark,
+      _ => TapGoThemePreference.system,
+    };
+  }
+}
+
+final tapGoThemePreferenceProvider =
+    StateNotifierProvider<_TapGoThemeController, TapGoThemePreference>(
+  (ref) => _TapGoThemeController()..load(),
+);
+
+class _TapGoThemeController extends StateNotifier<TapGoThemePreference> {
+  _TapGoThemeController() : super(TapGoThemePreference.system);
+
+  static const _storageKey = 'tapgo.theme.preference.v1';
+
+  Future<void> load() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      state = TapGoThemePreference.fromStorageValue(
+        preferences.getString(_storageKey),
+      );
+    } catch (error) {
+      _tapGoDebugLog('[TapGo Theme] load skipped: $error');
+      state = TapGoThemePreference.system;
+    }
+  }
+
+  Future<void> setPreference(TapGoThemePreference preference) async {
+    state = preference;
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setString(_storageKey, preference.storageValue);
+    } catch (error) {
+      _tapGoDebugLog('[TapGo Theme] save skipped: $error');
+    }
+  }
+}
+
 void _tapGoDebugLog(String message) {
   if (_isTapGoDevelopmentBuild) {
     debugPrint(message);
@@ -235,6 +296,7 @@ class TapGoUserApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isAuthenticated = ref.watch(_isAuthenticatedProvider);
+    final themePreference = ref.watch(tapGoThemePreferenceProvider);
 
     return MaterialApp(
       title: 'TapGo',
@@ -242,7 +304,7 @@ class TapGoUserApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: _tapGoReadableTheme(),
       darkTheme: _tapGoReadableTheme(brightness: Brightness.dark),
-      themeMode: ThemeMode.system,
+      themeMode: themePreference.themeMode,
       home: _SessionBootstrap(
         child:
             isAuthenticated ? const _RoleDashboardGate() : const SplashGate(),
@@ -253,10 +315,6 @@ class TapGoUserApp extends ConsumerWidget {
 
 ThemeData _tapGoReadableTheme({Brightness brightness = Brightness.light}) {
   final isDark = brightness == Brightness.dark;
-  final scheme = ColorScheme.fromSeed(
-    seedColor: _brandBlue,
-    brightness: brightness,
-  );
   final scaffoldBackground = isDark ? const Color(0xFF071525) : _softBackground;
   final surfaceColor = isDark ? const Color(0xFF0B1F35) : Colors.white;
   final inputFillColor = isDark ? const Color(0xFF102A44) : Colors.white;
@@ -266,6 +324,15 @@ ThemeData _tapGoReadableTheme({Brightness brightness = Brightness.light}) {
       isDark ? const Color(0xFFEAF7FF) : const Color(0xFF172033);
   final inputHintColor =
       isDark ? const Color(0xFFA9B8C9) : const Color(0xFF94A3B8);
+  final scheme = ColorScheme.fromSeed(
+    seedColor: _brandBlue,
+    brightness: brightness,
+  ).copyWith(
+    surface: surfaceColor,
+    onSurface: inputTextColor,
+    onSurfaceVariant: inputHintColor,
+    outlineVariant: inputBorderColor,
+  );
 
   return ThemeData(
     colorScheme: scheme,
@@ -329,6 +396,9 @@ ThemeData _tapGoReadableTheme({Brightness brightness = Brightness.light}) {
     fontFamily: 'Roboto',
   );
 }
+
+Color _tapGoTextPrimary(BuildContext context) =>
+    Theme.of(context).colorScheme.onSurface;
 
 class _RoleDashboardGate extends ConsumerWidget {
   const _RoleDashboardGate();
