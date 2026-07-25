@@ -1,7 +1,7 @@
 name: tapgo_user_app
 description: TapGo customer super app.
 publish_to: "none"
-version: 1.0.9+11
+version: 1.0.11+13
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
