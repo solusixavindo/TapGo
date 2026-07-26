@@ -10,6 +10,14 @@ import {
   SessionRecord
 } from "../domain/AuthRepository.js";
 
+// P1-4: advisory-lock key konstan untuk klaim kuota benefit Basic PPOB.
+// createUser berjalan pada isolationLevel Serializable; tanpa serialisasi
+// eksplisit, banyak registrasi yang meng-UPDATE baris kuota yang sama akan
+// saling meng-abort dengan serialization failure. Advisory lock (lock DB
+// tingkat sesi/transaksi) mengantre klaim sehingga tetap atomik, tidak
+// over-grant, dan registrasi tidak gagal karena race.
+const BASIC_PPOB_QUOTA_LOCK_KEY = 552025001;
+
 export class PrismaAuthRepository implements AuthRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -29,13 +37,28 @@ export class PrismaAuthRepository implements AuthRepository {
   }
 
   createUser(input: CreateUserInput) {
-    return this.prisma.$transaction(async (tx) => {
+    return this.runWithSerializationRetry(() => this.prisma.$transaction(async (tx) => {
       const basic = await tx.membership.findUnique({ where: { tier: "BASIC" } });
-      const registeredUsers = await tx.user.count({ where: { role: UserRole.USER } });
-      const registrationBonus =
-        input.role === UserRole.USER && registeredUsers < 1000
-          ? new Prisma.Decimal(5000)
-          : new Prisma.Decimal(0);
+      // P1-4: klaim slot benefit Basic PPOB Rp5.000 secara atomik. Conditional
+      // UPDATE ... RETURNING mengambil row lock pada baris kuota sehingga dua
+      // registrasi yang berlomba di batas ke-1.000 tidak dapat double-claim dan
+      // total penerima tidak akan melebihi limit. Hanya role USER yang memakai slot.
+      let registrationBonus = new Prisma.Decimal(0);
+      if (input.role === UserRole.USER) {
+        // Serialize klaim kuota agar aman di bawah Serializable isolation:
+        // advisory lock mengantre (bukan meng-abort) sehingga tidak ada race
+        // yang membuat penerima melebihi limit dan registrasi tidak gagal.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BASIC_PPOB_QUOTA_LOCK_KEY})`;
+        const claimed = await tx.$queryRaw<Array<{ granted: number }>>`
+          UPDATE "registration_quota"
+          SET "granted" = "granted" + 1, "updated_at" = CURRENT_TIMESTAMP
+          WHERE "key" = 'BASIC_PPOB_FIRST_1000' AND "granted" < "limit"
+          RETURNING "granted"
+        `;
+        if (claimed.length > 0) {
+          registrationBonus = new Prisma.Decimal(5000);
+        }
+      }
 	      const sponsorReferralCode = input.sponsorReferralCode?.trim().toUpperCase();
       const sponsor = sponsorReferralCode
         ? await tx.user.findUnique({ where: { referralCode: sponsorReferralCode } })
@@ -135,8 +158,51 @@ export class PrismaAuthRepository implements AuthRepository {
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       timeout: 15000
-    });
-	  }
+    }));
+  }
+
+  // P1-4: registrasi berjalan pada Serializable isolation. Ketika banyak
+  // registrasi berlomba (mis. pada baris kuota benefit yang sama), PostgreSQL
+  // membatalkan transaksi yang bertabrakan dengan serialization failure
+  // (Prisma code P2034). Retry dengan backoff kecil membuat registrasi tetap
+  // berhasil tanpa over-grant dan tanpa in-memory lock.
+  private async runWithSerializationRetry<T>(
+    operation: () => Promise<T>,
+    maxAttempts = 8
+  ): Promise<T> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        return await operation();
+      } catch (error) {
+        if (this.isSerializationFailure(error) && attempt < maxAttempts) {
+          lastError = error;
+          await new Promise((resolve) => setTimeout(resolve, 10 * attempt));
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw lastError;
+  }
+
+  private isSerializationFailure(error: unknown): boolean {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+      return false;
+    }
+    // P2034/P2037: write conflict / deadlock pada transaksi Prisma.
+    if (error.code === "P2034" || error.code === "P2037") {
+      return true;
+    }
+    // P2010: raw query gagal. Klaim kuota memakai $queryRaw, sehingga
+    // serialization failure PostgreSQL (SQLSTATE 40001) dan deadlock (40P01)
+    // muncul terbungkus di sini pada error.meta.code.
+    if (error.code === "P2010") {
+      const pgCode = (error.meta as { code?: string } | undefined)?.code;
+      return pgCode === "40001" || pgCode === "40P01";
+    }
+    return false;
+  }
 
 	  private async recordRegistrationEvent(
 	    tx: Prisma.TransactionClient,

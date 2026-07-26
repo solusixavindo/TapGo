@@ -9,8 +9,19 @@ import { PrismaAuthRepository } from "../../src/modules/auth/infrastructure/Pris
 export const testDatabaseUrl = process.env.TAPGO_TEST_DATABASE_URL;
 export const runIntegration = Boolean(testDatabaseUrl);
 
+// Perbesar connection pool khusus test agar concurrency test (P1-4) deterministik
+// lintas lingkungan: saat banyak registrasi berlomba pada satu row lock kuota,
+// koneksi tertahan selama transaksi menunggu lock, sehingga pool default bisa
+// habis dan transaksi berikutnya gagal maxWait. Ini konfigurasi test-infra saja.
+function withTestConnectionPool(url: string): string {
+  if (url.includes("connection_limit=")) {
+    return url;
+  }
+  return `${url}${url.includes("?") ? "&" : "?"}connection_limit=30`;
+}
+
 export const prisma = new PrismaClient({
-  ...(testDatabaseUrl ? { datasources: { db: { url: testDatabaseUrl } } } : {})
+  ...(testDatabaseUrl ? { datasources: { db: { url: withTestConnectionPool(testDatabaseUrl) } } } : {})
 });
 
 export const referralRepository = new PrismaReferralRepository(prisma);
@@ -39,6 +50,7 @@ export function setupReferralWalletIntegration() {
 
     await cleanDatabase();
     await seedMemberships();
+    await resetRegistrationQuota();
   });
 
   afterAll(async () => {
@@ -159,6 +171,24 @@ export async function createUser(referralCode: string, tier: MembershipTier = "B
       referralCode,
       membershipId: membership.id
     }
+  });
+}
+
+// P1-4: pastikan baris kuota registrasi selalu ada dan granted=0 di awal tiap
+// test (semua user dihapus oleh cleanDatabase, jadi granted harus ikut reset).
+export async function resetRegistrationQuota(limit = 1000): Promise<void> {
+  await prisma.registrationQuota.upsert({
+    where: { key: "BASIC_PPOB_FIRST_1000" },
+    update: { granted: 0, limit },
+    create: { key: "BASIC_PPOB_FIRST_1000", limit, granted: 0 }
+  });
+}
+
+// P1-4: helper untuk mensimulasikan kuota yang sudah terpakai sebagian/penuh.
+export async function setRegistrationQuotaGranted(granted: number): Promise<void> {
+  await prisma.registrationQuota.update({
+    where: { key: "BASIC_PPOB_FIRST_1000" },
+    data: { granted }
   });
 }
 

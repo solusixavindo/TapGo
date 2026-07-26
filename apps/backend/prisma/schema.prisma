@@ -1054,3 +1054,16 @@ model AuditLog {
   @@index([entityType, entityId])
   @@map("audit_logs")
 }
+
+// P1-4: counter atomik untuk benefit registrasi berkuota (mis. Basic PPOB
+// Rp5.000 untuk 1.000 user pertama). Slot diklaim via conditional UPDATE
+// (row lock) sehingga aman dari race. CHECK constraint di-manage pada migration.
+model RegistrationQuota {
+  key       String   @id
+  limit     Int
+  granted   Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@map("registration_quota")
+}
