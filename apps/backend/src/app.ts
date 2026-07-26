@@ -35,6 +35,14 @@ function healthPayload() {
 export function createApp() {
   const app = express();
 
+  // P1-3: produksi berada di belakang TEPAT SATU reverse proxy (Nginx) yang
+  // menetapkan X-Forwarded-For. trust proxy = 1 membuat Express memakai satu hop
+  // paling kanan, sehingga req.ip = IP klien asli yang di-set Nginx dan header
+  // X-Forwarded-For yang dipalsukan klien tidak dapat memalsukan IP untuk
+  // rate limiting. JANGAN memakai `true` (mempercayai seluruh rantai) tanpa
+  // alasan, karena itu membuat spoofing mungkin.
+  app.set("trust proxy", 1);
+
   app.use(helmet());
   app.use(cors({ origin: corsOrigins, credentials: true }));
   app.use(compression());
