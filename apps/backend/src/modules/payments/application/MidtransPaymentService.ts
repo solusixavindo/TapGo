@@ -192,6 +192,10 @@ export class MidtransPaymentService {
     const status = this.resolveNotificationStatus(payload);
 
     if (status.kind === "SUCCESS") {
+      // P1-2: fail-closed jika nominal callback tidak sama persis dengan nominal
+      // order authoritative dari backend. Mencegah aktivasi/bonus/wallet akibat
+      // callback ber-signature valid namun nominal berbeda (under/over-payment).
+      this.assertAuthoritativeAmount(invoice.amount, payload);
       try {
         const result = await this.membershipOrderService.markPaymentSuccess({
           userId: invoice.userId,
@@ -215,6 +219,24 @@ export class MidtransPaymentService {
             idempotent: true,
             orderId: invoice.orderId,
           };
+        }
+
+        // P1-2: callback duplikat yang berjalan konkuren dapat kalah pada
+        // Serializable isolation (write conflict/deadlock). Jika invoice sudah
+        // lunas oleh callback pemenang, perlakukan sebagai idempotent agar tidak
+        // menghasilkan 5xx yang memicu retry berulang. Side effect tetap sekali.
+        if (this.isSerializationConflict(error)) {
+          const settled = await this.prisma.invoice.findUnique({
+            where: { id: invoice.id },
+            select: { status: true },
+          });
+          if (settled && settled.status !== "PENDING") {
+            return {
+              status: settled.status,
+              idempotent: true,
+              orderId: invoice.orderId,
+            };
+          }
         }
 
         throw error;
@@ -292,6 +314,50 @@ export class MidtransPaymentService {
     }
 
     return body;
+  }
+
+  // P1-2: deteksi serialization failure / deadlock PostgreSQL yang dibungkus
+  // Prisma, baik pada operasi biasa (P2034/P2037) maupun raw query (P2010 dengan
+  // SQLSTATE 40001/40P01).
+  private isSerializationConflict(error: unknown): boolean {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+      return false;
+    }
+    if (error.code === "P2034" || error.code === "P2037") {
+      return true;
+    }
+    if (error.code === "P2010") {
+      const pgCode = (error.meta as { code?: string } | undefined)?.code;
+      return pgCode === "40001" || pgCode === "40P01";
+    }
+    return false;
+  }
+
+  // P1-2: nominal order hanya boleh berasal dari backend (invoice.amount),
+  // bukan dari nilai callback. gross_amount yang hilang/malformed atau tidak
+  // sama persis ditolak (fail-closed) sebelum aktivasi apa pun.
+  private assertAuthoritativeAmount(
+    authoritativeAmount: Prisma.Decimal,
+    payload: MidtransNotificationPayload,
+  ) {
+    let provided: Prisma.Decimal;
+    try {
+      provided = new Prisma.Decimal(payload.gross_amount ?? "");
+    } catch {
+      throw new AppError(
+        "Midtrans gross_amount is missing or malformed",
+        StatusCodes.BAD_REQUEST,
+        "MIDTRANS_AMOUNT_INVALID",
+      );
+    }
+
+    if (!provided.isFinite() || !provided.equals(new Prisma.Decimal(authoritativeAmount))) {
+      throw new AppError(
+        "Midtrans gross_amount does not match the authoritative order amount",
+        StatusCodes.BAD_REQUEST,
+        "MIDTRANS_AMOUNT_MISMATCH",
+      );
+    }
   }
 
   private verifySignature(payload: MidtransNotificationPayload) {

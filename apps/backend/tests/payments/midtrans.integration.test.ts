@@ -202,6 +202,109 @@ describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
     expect(response.status).toBeGreaterThanOrEqual(400);
     expect(response.status).toBeLessThan(500);
   });
+
+  // P1-2: verifikasi gross_amount terhadap nominal order authoritative.
+  it("accepts a settlement whose gross_amount matches the order amount", async () => {
+    const user = await createApiUser("MIDAMT01");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postSettlement(order.invoiceNumber, "500000.00");
+
+    expect(response.status).toBe(200);
+    await expectPaidOrder(order.id, user.id, "SILVER");
+  });
+
+  it("rejects a settlement with a lower gross_amount without activating", async () => {
+    const user = await createApiUser("MIDAMT02");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postSettlement(order.invoiceNumber, "400000.00");
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+    await expectUnpaidNoSideEffects(order.id, user.id);
+  });
+
+  it("rejects a settlement with a higher gross_amount without activating", async () => {
+    const user = await createApiUser("MIDAMT03");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postSettlement(order.invoiceNumber, "600000.00");
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+    await expectUnpaidNoSideEffects(order.id, user.id);
+  });
+
+  it("rejects a settlement with a malformed gross_amount", async () => {
+    const user = await createApiUser("MIDAMT04");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postSettlement(order.invoiceNumber, "not-a-number");
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+    await expectUnpaidNoSideEffects(order.id, user.id);
+  });
+
+  it("processes duplicate valid callbacks idempotently", async () => {
+    const user = await createApiUser("MIDAMT05");
+    const order = await createOrderFor(user, "SILVER");
+
+    const first = await postSettlement(order.invoiceNumber, "500000.00");
+    const second = await postSettlement(order.invoiceNumber, "500000.00");
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    await expectPaidOrder(order.id, user.id, "SILVER");
+    await expectWalletTransactionCount(user.id, "PPOB_BENEFIT", 1);
+  });
+
+  it("activates only once under concurrent duplicate callbacks", async () => {
+    const user = await createApiUser("MIDAMT06");
+    const order = await createOrderFor(user, "SILVER");
+
+    const [a, b] = await Promise.all([
+      postSettlement(order.invoiceNumber, "500000.00"),
+      postSettlement(order.invoiceNumber, "500000.00")
+    ]);
+
+    expect([a.status, b.status].every((s) => s === 200)).toBe(true);
+    await expectPaidOrder(order.id, user.id, "SILVER");
+    await expectWalletTransactionCount(user.id, "PPOB_BENEFIT", 1);
+  });
+
+  it("does not activate or credit on a pending callback", async () => {
+    const user = await createApiUser("MIDAMT07");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postNotification({
+      order_id: order.invoiceNumber,
+      transaction_status: "pending",
+      transaction_id: `tx-${order.invoiceNumber}`,
+      status_code: "201",
+      gross_amount: "500000.00"
+    });
+
+    expect(response.status).toBe(200);
+    await expectUnpaidNoSideEffects(order.id, user.id);
+  });
+
+  it("does not activate or credit on a deny callback", async () => {
+    const user = await createApiUser("MIDAMT08");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postNotification({
+      order_id: order.invoiceNumber,
+      transaction_status: "deny",
+      transaction_id: `tx-${order.invoiceNumber}`,
+      status_code: "202",
+      gross_amount: "500000.00"
+    });
+
+    expect(response.status).toBe(200);
+    await expectUnpaidNoSideEffects(order.id, user.id);
+  });
 });
 
 async function api(path: string, options: {
@@ -322,4 +425,28 @@ async function expectWalletTransactionCount(userId: string, type: "PPOB_BENEFIT"
     where: { walletId: wallet.id, type }
   });
   expect(transactions).toHaveLength(count);
+}
+
+async function expectUnpaidNoSideEffects(orderId: string, userId: string) {
+  const order = await prisma.membershipOrder.findUniqueOrThrow({
+    where: { id: orderId },
+    include: { invoice: true, userMembership: true }
+  });
+  expect(order.status).not.toBe("PAID");
+  expect(order.userMembership).toBeNull();
+
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    include: { membership: true }
+  });
+  expect(user.membership?.tier).toBe("BASIC");
+
+  const wallet = await prisma.wallet.findUnique({ where: { userId } });
+  if (wallet) {
+    expect(wallet.ppobBalance.toFixed(2)).toBe("0.00");
+    const ppobTransactions = await prisma.walletTransaction.count({
+      where: { walletId: wallet.id, type: "PPOB_BENEFIT" }
+    });
+    expect(ppobTransactions).toBe(0);
+  }
 }
