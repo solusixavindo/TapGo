@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import {
   MembershipOrderStatus,
   PaymentStatus,
@@ -400,7 +400,16 @@ export class MidtransPaymentService {
       )
       .digest("hex");
 
-    if (expected !== payload.signature_key) {
+    // P2: bandingkan signature dengan constant-time compare untuk menghindari
+    // timing side-channel. timingSafeEqual mensyaratkan panjang buffer sama,
+    // jadi panjang divalidasi lebih dulu (perbedaan panjang = pasti invalid).
+    const expectedBuffer = Buffer.from(expected, "utf8");
+    const providedBuffer = Buffer.from(payload.signature_key, "utf8");
+
+    if (
+      expectedBuffer.length !== providedBuffer.length ||
+      !timingSafeEqual(expectedBuffer, providedBuffer)
+    ) {
       throw new AppError(
         "Midtrans signature is invalid",
         StatusCodes.UNAUTHORIZED,
