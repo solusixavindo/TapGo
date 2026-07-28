@@ -270,6 +270,13 @@ model User {
   founderProgramGrants       FounderProgramGrant[]       @relation("FounderGrantUser")
   founderProgramGrantActions FounderProgramGrant[]       @relation("FounderGrantActor")
 
+  // Release 2 — domain Ride (additive, terpisah dari model Ride legacy).
+  rideDriverProfile   RideDriverProfile?
+  rideQuotes          RideQuote[]
+  ridePassengerOrders RideOrder[]             @relation("RideOrderPassenger")
+  rideEventsActed     RideEvent[]             @relation("RideEventActor")
+  rideIdempotencyKeys RideIdempotencyRecord[]
+
   @@index([role, status])
   @@index([membershipId])
   @@map("users")
@@ -1066,4 +1073,318 @@ model RegistrationQuota {
   updatedAt DateTime @default(now()) @map("updated_at")
 
   @@map("registration_quota")
+}
+
+// ===========================================================================
+// RELEASE 2 — RIDE DOMAIN (Stage 5.2)
+//
+// Seluruh model di bawah bersifat ADDITIVE dan memakai prefix `Ride` agar
+// tidak bertabrakan dengan model legacy (`Ride`, `Driver`, `Payment`, dst.
+// dari 0001_init) yang tetap dipertahankan sebagai compatibility boundary
+// read-only dan TIDAK ditulis oleh domain baru ini.
+//
+// Aturan uang: seluruh nominal tarif memakai Int = integer rupiah penuh
+// (bukan Decimal/float), sesuai keputusan Stage 5.2.
+//
+// Privasi: nomor plat TIDAK disimpan plaintext (hash + versi ter-mask).
+// Koordinat presisi disimpan hanya untuk keperluan operasional dan tidak
+// boleh ditulis ke log (lihat docs/backend/ride-domain.md).
+// ===========================================================================
+
+enum RideServiceType {
+  MOTORCYCLE
+  CAR
+}
+
+enum RideDriverStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+enum RideDriverAvailability {
+  OFFLINE
+  ONLINE
+  BUSY
+}
+
+enum RideVehicleVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum RideOrderStatus {
+  CREATED
+  SEARCHING_DRIVER
+  DRIVER_ASSIGNED
+  DRIVER_TO_PICKUP
+  DRIVER_ARRIVED
+  IN_TRIP
+  COMPLETED
+  CANCELLED_BY_PASSENGER
+  CANCELLED_BY_DRIVER
+  CANCELLED_BY_SYSTEM
+  NO_DRIVER
+  EXPIRED
+  // Dicadangkan oleh kontrak Stage 5.2. TIDAK dipakai pada tahap ini karena
+  // pembayaran digital fail-closed; status pembayaran hidup pada
+  // RideOrder.paymentState (domain terpisah).
+  PAYMENT_FAILED
+}
+
+enum RidePaymentMethod {
+  CASH
+  DIGITAL
+}
+
+/// State pembayaran ride — domain TERPISAH dari RideOrderStatus.
+enum RidePaymentState {
+  /// Pembayaran digital belum dikonfigurasi (fail-closed pada Stage 5.2).
+  NOT_CONFIGURED
+  /// Tunai diharapkan, belum ada rekonsiliasi.
+  CASH_EXPECTED
+  /// Driver melapor tunai diterima — BUKAN saldo digital.
+  CASH_REPORTED
+  FAILED
+}
+
+enum RideEventType {
+  QUOTE_CREATED
+  ORDER_CREATED
+  MATCHING_STARTED
+  DRIVER_ASSIGNED
+  DRIVER_REJECTED_OFFER
+  STATUS_CHANGED
+  CANCELLED
+  NO_DRIVER
+  EXPIRED
+  CASH_REPORTED
+  LOCATION_REJECTED
+}
+
+enum RideActorRole {
+  PASSENGER
+  DRIVER
+  SYSTEM
+  ADMIN
+}
+
+enum RideCancellationReason {
+  WAIT_TOO_LONG
+  DRIVER_NOT_MOVING
+  CHANGE_OF_PLAN
+  WRONG_PICKUP
+  FOUND_OTHER_TRANSPORT
+  PASSENGER_UNREACHABLE
+  VEHICLE_PROBLEM
+  SYSTEM_TIMEOUT
+  OTHER
+}
+
+model RideDriverProfile {
+  id            String                 @id @default(uuid()) @db.Uuid
+  userId        String                 @unique @map("user_id") @db.Uuid
+  status        RideDriverStatus       @default(PENDING)
+  availability  RideDriverAvailability @default(OFFLINE)
+  ratingAverage Decimal                @default(5.0) @map("rating_average") @db.Decimal(3, 2)
+  ratingCount   Int                    @default(0) @map("rating_count")
+  lastSeenAt    DateTime?              @map("last_seen_at")
+  createdAt     DateTime               @default(now()) @map("created_at")
+  updatedAt     DateTime               @updatedAt @map("updated_at")
+
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicles  RideVehicle[]
+  orders    RideOrder[]          @relation("RideOrderDriver")
+  locations RideDriverLocation[]
+
+  @@index([status, availability])
+  @@map("ride_driver_profiles")
+}
+
+model RideVehicle {
+  id                 String                        @id @default(uuid()) @db.Uuid
+  driverProfileId    String                        @map("driver_profile_id") @db.Uuid
+  type               RideServiceType
+  /// SHA-256 nomor plat — plaintext TIDAK disimpan.
+  plateNumberHash    String                        @map("plate_number_hash") @db.VarChar(64)
+  /// Versi ter-mask untuk tampilan, mis. "A 1234 ***".
+  plateNumberMasked  String                        @map("plate_number_masked") @db.VarChar(32)
+  brand              String?                       @db.VarChar(60)
+  model              String?                       @db.VarChar(60)
+  color              String?                       @db.VarChar(30)
+  verificationStatus RideVehicleVerificationStatus @default(PENDING) @map("verification_status")
+  isActive           Boolean                       @default(false) @map("is_active")
+  createdAt          DateTime                      @default(now()) @map("created_at")
+  updatedAt          DateTime                      @updatedAt @map("updated_at")
+
+  driverProfile RideDriverProfile @relation(fields: [driverProfileId], references: [id], onDelete: Cascade)
+  orders        RideOrder[]       @relation("RideOrderVehicle")
+
+  @@unique([driverProfileId, plateNumberHash])
+  @@index([driverProfileId, isActive])
+  @@index([type, verificationStatus])
+  @@map("ride_vehicles")
+}
+
+model RideQuote {
+  id          String          @id @default(uuid()) @db.Uuid
+  userId      String          @map("user_id") @db.Uuid
+  serviceType RideServiceType @map("service_type")
+
+  pickupLat      Decimal @map("pickup_lat") @db.Decimal(10, 7)
+  pickupLng      Decimal @map("pickup_lng") @db.Decimal(10, 7)
+  pickupAddress  String  @map("pickup_address") @db.VarChar(255)
+  dropoffLat     Decimal @map("dropoff_lat") @db.Decimal(10, 7)
+  dropoffLng     Decimal @map("dropoff_lng") @db.Decimal(10, 7)
+  dropoffAddress String  @map("dropoff_address") @db.VarChar(255)
+
+  distanceMeters  Int @map("distance_meters")
+  durationSeconds Int @map("duration_seconds")
+  etaSeconds      Int @map("eta_seconds")
+
+  // Komponen tarif — integer rupiah penuh.
+  baseFare     Int @map("base_fare")
+  distanceFare Int @map("distance_fare")
+  serviceFee   Int @map("service_fee")
+  subtotalFare Int @map("subtotal_fare")
+  totalFare    Int @map("total_fare")
+
+  fareRuleVersion String   @map("fare_rule_version") @db.VarChar(60)
+  roundingRule    String   @map("rounding_rule") @db.VarChar(60)
+  distanceSource  String   @map("distance_source") @db.VarChar(60)
+  quoteVersion    Int      @default(1) @map("quote_version")
+  expiresAt       DateTime @map("expires_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order RideOrder?
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("ride_quotes")
+}
+
+model RideOrder {
+  id              String          @id @default(uuid()) @db.Uuid
+  /// Referensi publik yang dipakai di API/UI (bukan UUID internal).
+  publicReference String          @unique @map("public_reference") @db.VarChar(24)
+  passengerId     String          @map("passenger_id") @db.Uuid
+  driverProfileId String?         @map("driver_profile_id") @db.Uuid
+  vehicleId       String?         @map("vehicle_id") @db.Uuid
+  /// Satu quote hanya boleh menghasilkan satu order (anti reuse).
+  quoteId         String          @unique @map("quote_id") @db.Uuid
+  serviceType     RideServiceType @map("service_type")
+  status          RideOrderStatus @default(CREATED)
+
+  // Snapshot lokasi (immutable setelah order dibuat).
+  pickupLat      Decimal @map("pickup_lat") @db.Decimal(10, 7)
+  pickupLng      Decimal @map("pickup_lng") @db.Decimal(10, 7)
+  pickupAddress  String  @map("pickup_address") @db.VarChar(255)
+  dropoffLat     Decimal @map("dropoff_lat") @db.Decimal(10, 7)
+  dropoffLng     Decimal @map("dropoff_lng") @db.Decimal(10, 7)
+  dropoffAddress String  @map("dropoff_address") @db.VarChar(255)
+
+  // Snapshot tarif authoritative (integer rupiah) — dikunci dari quote.
+  distanceMeters  Int    @map("distance_meters")
+  durationSeconds Int    @map("duration_seconds")
+  baseFare        Int    @map("base_fare")
+  distanceFare    Int    @map("distance_fare")
+  serviceFee      Int    @map("service_fee")
+  subtotalFare    Int    @map("subtotal_fare")
+  totalFare       Int    @map("total_fare")
+  fareRuleVersion String @map("fare_rule_version") @db.VarChar(60)
+
+  paymentMethod RidePaymentMethod @default(CASH) @map("payment_method")
+  paymentState  RidePaymentState  @default(CASH_EXPECTED) @map("payment_state")
+
+  // Metadata pembatalan.
+  cancelledByUserId  String?                 @map("cancelled_by_user_id") @db.Uuid
+  cancelledByRole    RideActorRole?          @map("cancelled_by_role")
+  cancellationReason RideCancellationReason? @map("cancellation_reason")
+  cancellationNote   String?                 @map("cancellation_note") @db.VarChar(500)
+  cancellationFee    Int?                    @map("cancellation_fee")
+  cancellationPolicy String?                 @map("cancellation_policy") @db.VarChar(60)
+  cancelledAt        DateTime?               @map("cancelled_at")
+
+  assignedAt  DateTime? @map("assigned_at")
+  arrivedAt   DateTime? @map("arrived_at")
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  passenger     User                 @relation("RideOrderPassenger", fields: [passengerId], references: [id], onDelete: Cascade)
+  driverProfile RideDriverProfile?   @relation("RideOrderDriver", fields: [driverProfileId], references: [id])
+  vehicle       RideVehicle?         @relation("RideOrderVehicle", fields: [vehicleId], references: [id])
+  quote         RideQuote            @relation(fields: [quoteId], references: [id])
+  events        RideEvent[]
+  locations     RideDriverLocation[]
+
+  @@index([passengerId, createdAt])
+  @@index([driverProfileId, createdAt])
+  @@index([status, serviceType])
+  @@map("ride_orders")
+}
+
+/// Catatan audit immutable untuk setiap transisi material.
+model RideEvent {
+  id             String           @id @default(uuid()) @db.Uuid
+  rideOrderId    String           @map("ride_order_id") @db.Uuid
+  type           RideEventType
+  actorUserId    String?          @map("actor_user_id") @db.Uuid
+  actorRole      RideActorRole    @map("actor_role")
+  previousStatus RideOrderStatus? @map("previous_status")
+  newStatus      RideOrderStatus? @map("new_status")
+  /// Metadata yang sudah disanitasi (tanpa koordinat presisi / PII).
+  metadata       Json?
+  /// Identitas idempotensi event (mis. "<orderId>:<type>:<status>").
+  eventKey       String           @unique @map("event_key") @db.VarChar(160)
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  rideOrder RideOrder @relation(fields: [rideOrderId], references: [id], onDelete: Cascade)
+  actor     User?     @relation("RideEventActor", fields: [actorUserId], references: [id])
+
+  @@index([rideOrderId, createdAt])
+  @@index([type, createdAt])
+  @@map("ride_events")
+}
+
+model RideDriverLocation {
+  id              String   @id @default(uuid()) @db.Uuid
+  driverProfileId String   @map("driver_profile_id") @db.Uuid
+  rideOrderId     String?  @map("ride_order_id") @db.Uuid
+  lat             Decimal  @db.Decimal(10, 7)
+  lng             Decimal  @db.Decimal(10, 7)
+  accuracyMeters  Int      @map("accuracy_meters")
+  /// Nomor urut monotonik per driver untuk menolak update mundur.
+  sequence        Int      @default(0)
+  capturedAt      DateTime @map("captured_at")
+  receivedAt      DateTime @default(now()) @map("received_at")
+
+  driverProfile RideDriverProfile @relation(fields: [driverProfileId], references: [id], onDelete: Cascade)
+  rideOrder     RideOrder?        @relation(fields: [rideOrderId], references: [id], onDelete: SetNull)
+
+  @@index([driverProfileId, capturedAt])
+  @@index([rideOrderId, capturedAt])
+  @@map("ride_driver_locations")
+}
+
+/// Idempotency untuk operasi mutasi ride (quote/order/accept/complete).
+model RideIdempotencyRecord {
+  id             String   @id @default(uuid()) @db.Uuid
+  scope          String   @db.VarChar(60)
+  idempotencyKey String   @map("idempotency_key") @db.VarChar(120)
+  userId         String   @map("user_id") @db.Uuid
+  requestHash    String   @map("request_hash") @db.VarChar(64)
+  resourceId     String?  @map("resource_id") @db.VarChar(64)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([scope, userId, idempotencyKey])
+  @@index([createdAt])
+  @@map("ride_idempotency_records")
 }
