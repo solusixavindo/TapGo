@@ -42,6 +42,9 @@ const envSchema = z.object({
   MIDTRANS_NOTIFICATION_SECRET: z.string().optional(),
   MIDTRANS_SNAP_URL: z.string().url().optional(),
   EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED: strictEnvBoolean(false),
+  // Release 1 tidak memakai realtime/chat. Fail-closed: Socket.IO hanya
+  // di-attach bila diaktifkan eksplisit ("true"). Nilai lain -> false.
+  REALTIME_ENABLED: strictEnvBoolean(false),
   DOKU_CLIENT_ID: z.string().optional(),
   DOKU_SECRET_KEY: z.string().optional(),
   DOKU_API_KEY: z.string().optional(),

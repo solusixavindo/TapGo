@@ -30,6 +30,27 @@ Ringkasan: production deps 9 (7 high), seluruh deps 17 (2 critical, 10 high).
 > permukaan eksploitasi `ws` untuk Release 1 minimal. Tetap wajib ditangani
 > sebelum mengaktifkan realtime pada Release 2.
 
+### Status mitigasi (Release 2 hardening)
+
+Socket.IO kini di belakang gate fail-closed `REALTIME_ENABLED` (default `false`,
+lihat [src/realtime/socket.ts](../../apps/backend/src/realtime/socket.ts)). Saat
+nonaktif, listener **tidak di-attach** sehingga endpoint `/socket.io/` tidak
+merespons dan permukaan `ws`/`engine.io` **tidak terekspos** di runtime Release
+1 (terverifikasi di `tests/realtime/realtimeGate.test.ts`).
+
+**Keputusan upgrade:** upgrade `ws`/`socket.io` **tidak** dilakukan pada task
+ini untuk menghindari perubahan `package-lock.json` dan regresi realtime yang
+belum matang. Karena gate sudah menghilangkan exposure Release 1, urgensi runtime
+turun. Upgrade dijadwalkan bersamaan dengan aktivasi realtime Release 2, dengan
+langkah:
+
+1. `npm update ws engine.io engine.io-client socket.io-adapter` (semua
+   `fixAvailable: true`, non-major) lalu `npm install` untuk memperbarui lock.
+2. Jalankan seluruh disposable-DB suite + `tests/realtime/realtimeGate.test.ts`
+   dengan `REALTIME_ENABLED=true`.
+3. Smoke test handshake/emit/receive di belakang Nginx (`Upgrade`/`Connection`).
+4. Verifikasi tidak ada perubahan API `socket.io` v4 (patch/minor saja).
+
 ## Frontend monorepo (BUKAN jalur backend API Release 1)
 
 | Package | Severity | Sumber | Catatan |
