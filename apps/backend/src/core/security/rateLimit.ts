@@ -60,6 +60,32 @@ export const paymentRateLimiter = rateLimit({
   }
 });
 
+/** Pembuatan quote/order ride — aksi bernilai, dibatasi lebih ketat. */
+export const rideWriteRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    code: "RIDE_RATE_LIMITED",
+    message: "Terlalu banyak permintaan perjalanan. Silakan coba lagi nanti."
+  }
+});
+
+/** Update lokasi driver — frekuensi tinggi tetapi tetap dibatasi. */
+export const rideLocationRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    code: "RIDE_LOCATION_RATE_LIMITED",
+    message: "Terlalu banyak pembaruan lokasi. Silakan coba lagi nanti."
+  }
+});
+
 export const supportRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 12,

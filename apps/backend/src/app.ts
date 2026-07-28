@@ -20,6 +20,7 @@ import { midtransRouter } from "./modules/payments/presentation/midtrans.routes.
 import { dokuPaymentRouter, dokuWebhookRouter } from "./modules/payments/presentation/doku.routes.js";
 import { profitSharingRouter } from "./modules/profit-sharing/presentation/profit-sharing.routes.js";
 import { referralRouter } from "./modules/referrals/presentation/referral.routes.js";
+import { driverRideRouter, rideRouter } from "./modules/rides/presentation/ride.routes.js";
 import { adminSupportRouter, supportRouter } from "./modules/support/presentation/support.routes.js";
 import { walletRouter } from "./modules/wallets/presentation/wallet.routes.js";
 
@@ -85,6 +86,9 @@ export function createApp() {
   app.use("/api/v1/admin/support", adminRateLimiter, adminSupportRouter);
   app.use("/api/v1/admin", adminRateLimiter, adminConsoleRouter);
   app.use("/api/v1/referrals", referralRouter);
+  // Release 2 — domain Ride. Tidak diekspos ke aplikasi Play Release 1.
+  app.use("/api/v1/rides", rideRouter);
+  app.use("/api/v1/driver", driverRideRouter);
   app.use("/api/v1/support", supportRouter);
   app.use("/api/v1/wallet", walletRouter);
 
