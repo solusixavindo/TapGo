@@ -20,10 +20,16 @@ type MidtransNotificationPayload = {
   fraud_status?: string;
   status_code?: string;
   gross_amount?: string;
+  currency?: string;
   signature_key?: string;
   payment_type?: string;
   transaction_time?: string;
 };
+
+// Kontrak Midtrans: gross_amount adalah string desimal biasa (mis. "500000.00").
+// Hanya digit dengan opsional 1-2 desimal yang diterima — menolak scientific
+// notation, hexadecimal, underscore, comma, whitespace, NaN/Infinity, dan tanda.
+const STRICT_DECIMAL_AMOUNT = /^\d+(\.\d{1,2})?$/;
 
 type MidtransSnapResponse = {
   token?: string;
@@ -340,18 +346,40 @@ export class MidtransPaymentService {
     authoritativeAmount: Prisma.Decimal,
     payload: MidtransNotificationPayload,
   ) {
-    let provided: Prisma.Decimal;
-    try {
-      provided = new Prisma.Decimal(payload.gross_amount ?? "");
-    } catch {
+    // Currency, bila disediakan callback, wajib literal IDR.
+    if (payload.currency !== undefined && payload.currency !== "IDR") {
       throw new AppError(
-        "Midtrans gross_amount is missing or malformed",
+        "Midtrans currency must be IDR",
+        StatusCodes.BAD_REQUEST,
+        "MIDTRANS_CURRENCY_INVALID",
+      );
+    }
+
+    // Validasi format string yang ketat sebelum parsing numerik, menolak
+    // representasi non-standar (5e5, 0x.., 500_000, "500000,00", whitespace,
+    // NaN/Infinity, tanda minus) yang bisa lolos parser Decimal yang permisif.
+    const raw = payload.gross_amount;
+    if (typeof raw !== "string" || !STRICT_DECIMAL_AMOUNT.test(raw)) {
+      throw new AppError(
+        "Midtrans gross_amount format is invalid",
         StatusCodes.BAD_REQUEST,
         "MIDTRANS_AMOUNT_INVALID",
       );
     }
 
-    if (!provided.isFinite() || !provided.equals(new Prisma.Decimal(authoritativeAmount))) {
+    const provided = new Prisma.Decimal(raw);
+
+    // Nominal harus positif (bukan nol/negatif).
+    if (!provided.isFinite() || provided.lte(0)) {
+      throw new AppError(
+        "Midtrans gross_amount must be a positive value",
+        StatusCodes.BAD_REQUEST,
+        "MIDTRANS_AMOUNT_INVALID",
+      );
+    }
+
+    // Harus sama persis dengan nominal order authoritative dari backend.
+    if (!provided.equals(new Prisma.Decimal(authoritativeAmount))) {
       throw new AppError(
         "Midtrans gross_amount does not match the authoritative order amount",
         StatusCodes.BAD_REQUEST,

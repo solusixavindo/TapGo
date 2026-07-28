@@ -305,6 +305,65 @@ describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
     expect(response.status).toBe(200);
     await expectUnpaidNoSideEffects(order.id, user.id);
   });
+
+  // B. Strict gross_amount format — tolak seluruh representasi non-standar
+  // meski ber-signature valid.
+  it.each([
+    ["scientific notation", "5e5"],
+    ["hexadecimal", "0x7A120"],
+    ["underscore", "500_000"],
+    ["comma separator", "500000,00"],
+    ["leading/trailing whitespace", " 500000 "],
+    ["NaN", "NaN"],
+    ["Infinity", "Infinity"],
+    ["three decimals", "500000.000"],
+    ["negative", "-500000"],
+    ["zero", "0.00"]
+  ])("rejects %s gross_amount without activating", async (_label, amount) => {
+    const user = await createApiUser("FMT");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postSettlement(order.invoiceNumber, amount);
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+    await expectUnpaidNoSideEffects(order.id, user.id);
+  });
+
+  it("rejects a non-IDR currency without activating", async () => {
+    const user = await createApiUser("CUR1");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postNotificationRaw({
+      order_id: order.invoiceNumber,
+      transaction_status: "settlement",
+      transaction_id: `tx-${order.invoiceNumber}`,
+      status_code: "200",
+      gross_amount: "500000.00",
+      currency: "USD"
+    });
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+    await expectUnpaidNoSideEffects(order.id, user.id);
+  });
+
+  it("accepts an explicit IDR currency with a matching amount", async () => {
+    const user = await createApiUser("CUR2");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postNotificationRaw({
+      order_id: order.invoiceNumber,
+      transaction_status: "settlement",
+      transaction_id: `tx-${order.invoiceNumber}`,
+      status_code: "200",
+      gross_amount: "500000.00",
+      currency: "IDR"
+    });
+
+    expect(response.status).toBe(200);
+    await expectPaidOrder(order.id, user.id, "SILVER");
+  });
 });
 
 async function api(path: string, options: {
@@ -373,6 +432,24 @@ async function postNotification(payload: {
     method: "POST",
     body: {
       ...payload,
+      signature_key: midtransSignature(payload.order_id, payload.status_code, payload.gross_amount)
+    }
+  });
+}
+
+async function postNotificationRaw(payload: {
+  order_id: string;
+  transaction_status: string;
+  transaction_id: string;
+  status_code: string;
+  gross_amount: string;
+  currency?: string;
+}) {
+  return api("/api/v1/payments/midtrans/notification", {
+    method: "POST",
+    body: {
+      ...payload,
+      // Signature Midtrans tidak mencakup currency.
       signature_key: midtransSignature(payload.order_id, payload.status_code, payload.gross_amount)
     }
   });
