@@ -61,3 +61,47 @@ Test `tests/security/trustProxy.test.ts`:
 - Direct request → `req.ip` = IP socket.
 - XFF dari proxy tepercaya → `req.ip` = IP klien.
 - XFF yang dipalsukan klien → diabaikan (memakai hop terkanan).
+
+## Checklist pembuktian topologi (READ ONLY, sebelum production)
+
+> Nilai `trust proxy = 1` mengasumsikan **tepat satu** hop tepercaya (Nginx).
+> JANGAN mengubah nilai ini sebelum topologi terbukti melalui checklist berikut.
+> Task hardening tidak menebak/mengakses production.
+
+1. **Jumlah proxy hop.** Petakan jalur request production dari internet ke
+   Express. Hitung setiap proxy yang menetapkan/menambah `X-Forwarded-For`
+   (CDN, load balancer, Nginx). Nilai `trust proxy` harus = jumlah hop tepercaya.
+2. **CDN/Cloudflare di depan Nginx?** Jika ada Cloudflare/CDN sebelum Nginx,
+   maka hop tepercaya ≥ 2 → `trust proxy = 1` **kurang** (klien bisa memalsukan
+   satu lapis). Lihat konfigurasi CDN di bawah.
+3. **Konfigurasi Nginx `X-Forwarded-For`.** Pastikan Nginx memakai
+   `$proxy_add_x_forwarded_for` (menambah IP koneksi nyata di kanan) dan TIDAK
+   meneruskan XFF klien mentah.
+4. **IP yang terlihat Express.** Verifikasi sementara dengan endpoint diagnostik
+   read-only (mis. echo `req.ip`) dari koneksi nyata; pastikan `req.ip` = IP
+   klien asli, bukan IP proxy/loopback dan bukan XFF yang dipalsukan.
+
+Jika salah satu poin belum terbukti, klasifikasikan konfigurasi sebagai
+**BLOCKED**, bukan siap-produksi.
+
+## Konfigurasi: CDN/Cloudflare + Nginx (dua hop)
+
+Bila edge memakai Cloudflare di depan Nginx, ada **dua** proxy tepercaya:
+
+```nginx
+# Nginx: percayai hanya IP Cloudflare, dan turunkan IP klien dari CF-Connecting-IP
+# (atau gunakan modul real_ip dengan set_real_ip_from ke rentang IP Cloudflare).
+set_real_ip_from 0.0.0.0/0;          # ganti dengan rentang IP Cloudflare resmi
+real_ip_header CF-Connecting-IP;      # atau X-Forwarded-For sesuai kebijakan
+```
+
+Pada Express, sesuaikan menjadi jumlah hop yang benar:
+
+```ts
+// Dua hop tepercaya (Cloudflare + Nginx):
+app.set("trust proxy", 2);
+```
+
+Jangan memakai `trust proxy = true` (mempercayai seluruh rantai) — itu membuat
+klien dapat memalsukan IP. Pilih angka yang mencerminkan jumlah proxy yang
+benar-benar Anda kendalikan.
