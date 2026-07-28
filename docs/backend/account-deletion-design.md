@@ -62,6 +62,31 @@ Prinsip: **delete** hanya untuk data akses/kredensial; **anonymize** untuk PII
 yang tertaut ke record yang harus dipertahankan; **retain** untuk record
 finansial/audit/legal dan struktur jaringan.
 
+## Prosedur eksekusi COMPLETED (DESAIN — belum diimplementasikan)
+
+Keputusan owner: account deletion **tidak boleh** menghapus catatan
+transaksi/keuangan/audit secara langsung. Currency transaksi = IDR. Maka saat
+sebuah request diproses hingga `COMPLETED`, urutan yang dirancang:
+
+1. **Revoke akses:** cabut semua session & refresh token milik user (hapus baris
+   session / set `revokedAt`), sehingga sesi aktif langsung tidak berlaku.
+2. **Nonaktifkan login:** set `users.status = DELETED` agar `AuthService` menolak
+   login (sudah ada guard `ACCOUNT_INACTIVE`).
+3. **Anonymize PII yang tidak wajib disimpan:** redaksi `fullName`, `phone`,
+   `email`, dan isi personal support ticket menjadi nilai ter-anonim; putus
+   kaitan ke `memberIdentity` tanpa menghapus kodenya.
+4. **PERTAHANKAN (retain):** invoice, membership order, payment, wallet & ledger,
+   commission/bonus/reward, referral & genealogy, audit log, registration event,
+   abuse flag, dan catatan legal/contact — untuk kewajiban keuangan, audit,
+   anti-fraud, dan hukum.
+
+State kandidat: `PENDING` → `PROCESSING` → `COMPLETED`, atau `REJECTED` /
+`CANCELLED`. Enum saat ini (`PENDING/APPROVED/REJECTED/COMPLETED`) perlu tambahan
+`PROCESSING` dan `CANCELLED` via **additive migration** (belum dibuat).
+
+Tahap ini tetap **design/documentation only** — tidak ada destructive deletion
+yang diimplementasikan.
+
 ## Blocker yang harus diputuskan owner sebelum implementasi eksekusi
 
 1. Periode retensi record finansial (invoice, payment, wallet ledger) sesuai
