@@ -9,6 +9,8 @@ import {
   testDatabaseUrl,
 } from "../helpers/referralWalletHarness.js";
 import {
+  adminRateLimiter,
+  apiRateLimiter,
   rideLocationRateLimiter,
   rideWriteRateLimiter,
 } from "../../src/core/security/rateLimit.js";
@@ -16,6 +18,8 @@ import {
 /** Reset kuota rate limit antar test agar tiap test berdiri sendiri. */
 function resetRateLimits() {
   for (const key of ["127.0.0.1", "::1", "::ffff:127.0.0.1"]) {
+    adminRateLimiter.resetKey(key);
+    apiRateLimiter.resetKey(key);
     rideWriteRateLimiter.resetKey(key);
     rideLocationRateLimiter.resetKey(key);
   }
@@ -535,6 +539,349 @@ describe.skipIf(!runIntegration)("Stage 5.2 — Ride backend foundation", () => 
     expect(order.paymentMethod).toBe("CASH");
     // Tunai hanya dilaporkan; tidak ada saldo digital yang tercipta.
     expect(order.paymentState).toBe("CASH_REPORTED");
+  });
+
+  // --- Admin / Moderasi ----------------------------------------------------
+
+  it("endpoint admin ride hanya dapat diakses ADMIN/SUPER_ADMIN", async () => {
+    const passenger = await createUser("USER");
+    const driver = await createDriver("MOTORCYCLE");
+    const admin = await createUser("ADMIN");
+    const superAdmin = await createUser("SUPER_ADMIN");
+
+    const unauthenticated = await api("/api/v1/admin/rides");
+    const regularUser = await api("/api/v1/admin/rides", {
+      token: tokenFor(passenger),
+    });
+    const driverUser = await api("/api/v1/admin/rides", {
+      token: tokenFor(driver.user),
+    });
+    const adminUser = await api("/api/v1/admin/rides", {
+      token: tokenFor(admin),
+    });
+    const superAdminUser = await api("/api/v1/admin/rides", {
+      token: tokenFor(superAdmin),
+    });
+
+    expect(unauthenticated.status).toBe(401);
+    expect(regularUser.status).toBe(403);
+    expect(driverUser.status).toBe(403);
+    expect(adminUser.status).toBe(200);
+    expect(superAdminUser.status).toBe(200);
+  });
+
+  it("admin dapat melihat ringkasan ride dengan data kontak termasking", async () => {
+    const admin = await createUser("ADMIN");
+    const passenger = await createUser("USER");
+    const quote = await createQuote(passenger);
+    const created = await createOrder(passenger, quote.quoteId);
+    expect(created.status).toBe(201);
+
+    const res = await api("/api/v1/admin/rides", {
+      token: tokenFor(admin),
+    });
+    expect(res.status).toBe(200);
+    const serialized = JSON.stringify(await res.json());
+    expect(serialized).toContain("phoneMasked");
+    expect(serialized).toContain("••••");
+    expect(serialized).not.toContain(passenger.phone);
+    expect(serialized).not.toContain(passenger.id);
+    expect(serialized).not.toContain("pickupLat");
+    expect(serialized).not.toContain("pickupLng");
+    expect(serialized).not.toContain("dropoffLat");
+    expect(serialized).not.toContain("dropoffLng");
+    expect(serialized).not.toContain("plateNumberHash");
+    expect(serialized.toLowerCase()).not.toContain("token");
+    expect(serialized.toLowerCase()).not.toContain("password");
+  });
+
+  it("admin dapat mengoreksi ride aktif ke terminal tanpa mengubah Business Engine", async () => {
+    const admin = await createUser("ADMIN");
+    const before = await businessEngineSnapshot();
+    const { reference, driver } = await assignedRide();
+
+    const res = await api(`/api/v1/admin/rides/${reference}/status`, {
+      method: "PATCH",
+      token: tokenFor(admin),
+      body: {
+        status: "CANCELLED_BY_SYSTEM",
+        reason: "moderasi perjalanan uji",
+        note: "dibatalkan oleh admin test",
+      },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { status: string; isFinal: boolean } };
+    expect(body.data.status).toBe("CANCELLED_BY_SYSTEM");
+    expect(body.data.isFinal).toBe(true);
+
+    const order = await prisma.rideOrder.findUniqueOrThrow({
+      where: { publicReference: reference },
+      include: { events: true },
+    });
+    expect(order.cancelledByRole).toBe("ADMIN");
+    expect(order.cancellationFee).toBe(0);
+    expect(order.events.some((event) => event.actorRole === "ADMIN")).toBe(true);
+
+    const profile = await prisma.rideDriverProfile.findUniqueOrThrow({
+      where: { id: driver.profile.id },
+    });
+    expect(profile.availability).toBe("ONLINE");
+    expect(await businessEngineSnapshot()).toEqual(before);
+  });
+
+  it("koreksi admin duplikat idempoten dan hanya membuat satu RideEvent admin", async () => {
+    const admin = await createUser("ADMIN");
+    const { reference } = await assignedRide();
+
+    const payload = {
+      status: "CANCELLED_BY_SYSTEM",
+      reason: "duplikasi permintaan moderasi",
+    };
+    const first = await api(`/api/v1/admin/rides/${reference}/status`, {
+      method: "PATCH",
+      token: tokenFor(admin),
+      body: payload,
+    });
+    const second = await api(`/api/v1/admin/rides/${reference}/status`, {
+      method: "PATCH",
+      token: tokenFor(admin),
+      body: payload,
+    });
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    const order = await prisma.rideOrder.findUniqueOrThrow({
+      where: { publicReference: reference },
+      include: { events: true },
+    });
+    expect(order.status).toBe("CANCELLED_BY_SYSTEM");
+    expect(
+      order.events.filter(
+        (event) =>
+          event.actorRole === "ADMIN" &&
+          event.newStatus === "CANCELLED_BY_SYSTEM",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("koreksi admin konkuren tidak menciptakan hasil konflik ganda", async () => {
+    const admin = await createUser("ADMIN");
+    const { reference } = await assignedRide();
+
+    const results = await Promise.all(
+      Array.from({ length: 2 }, () =>
+        api(`/api/v1/admin/rides/${reference}/status`, {
+          method: "PATCH",
+          token: tokenFor(admin),
+          body: {
+            status: "CANCELLED_BY_SYSTEM",
+            reason: "koreksi paralel uji",
+          },
+        }),
+      ),
+    );
+
+    expect(results.map((result) => result.status)).toEqual([200, 200]);
+    const order = await prisma.rideOrder.findUniqueOrThrow({
+      where: { publicReference: reference },
+      include: { events: true },
+    });
+    expect(order.status).toBe("CANCELLED_BY_SYSTEM");
+    expect(
+      order.events.filter(
+        (event) =>
+          event.actorRole === "ADMIN" &&
+          event.newStatus === "CANCELLED_BY_SYSTEM",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("admin tidak dapat membuka kembali atau mengoreksi ride terminal", async () => {
+    const admin = await createUser("ADMIN");
+    const { reference } = await completedRide();
+
+    const res = await api(`/api/v1/admin/rides/${reference}/status`, {
+      method: "PATCH",
+      token: tokenFor(admin),
+      body: {
+        status: "CANCELLED_BY_SYSTEM",
+        reason: "permintaan koreksi terminal",
+      },
+    });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { code?: string }).code).toBe("RIDE_ALREADY_FINAL");
+  });
+
+  it("admin correction menolak status non-allowlist dan reason kosong dengan error aman", async () => {
+    const admin = await createUser("ADMIN");
+    const { reference } = await assignedRide();
+
+    const invalidStatus = await api(`/api/v1/admin/rides/${reference}/status`, {
+      method: "PATCH",
+      token: tokenFor(admin),
+      body: {
+        status: "COMPLETED",
+        reason: "tidak boleh melewati state machine",
+      },
+    });
+    const missingReason = await api(`/api/v1/admin/rides/${reference}/status`, {
+      method: "PATCH",
+      token: tokenFor(admin),
+      body: { status: "CANCELLED_BY_SYSTEM", reason: "" },
+    });
+
+    expect(invalidStatus.status).toBe(400);
+    expect(missingReason.status).toBe(400);
+    const combined = `${await invalidStatus.text()} ${await missingReason.text()}`.toLowerCase();
+    expect(combined).not.toContain("prisma");
+    expect(combined).not.toContain("at rideservice");
+  });
+
+  it("admin detail unknown ride/driver/vehicle mengembalikan 404 aman", async () => {
+    const admin = await createUser("ADMIN");
+    const missingRide = await api("/api/v1/admin/rides/RID-AAAAAAAAAA", {
+      token: tokenFor(admin),
+    });
+    const missingDriver = await api(`/api/v1/admin/rides/drivers/${randomUUID()}`, {
+      token: tokenFor(admin),
+    });
+    const missingVehicle = await api(`/api/v1/admin/rides/vehicles/${randomUUID()}`, {
+      token: tokenFor(admin),
+    });
+
+    expect(missingRide.status).toBe(404);
+    expect(missingDriver.status).toBe(404);
+    expect(missingVehicle.status).toBe(404);
+    const text = `${await missingRide.text()} ${await missingDriver.text()} ${await missingVehicle.text()}`;
+    expect(text.toLowerCase()).not.toContain("prisma");
+    expect(text.toLowerCase()).not.toContain("stack");
+  });
+
+  it("list admin ride mendukung filter, limit bounded, dan urutan terbaru", async () => {
+    const admin = await createUser("ADMIN");
+    const passengerA = await createUser("USER");
+    const passengerB = await createUser("USER");
+    await createOrder(passengerA, (await createQuote(passengerA)).quoteId);
+    await createOrder(passengerB, (await createQuote(passengerB, "CAR")).quoteId);
+
+    const res = await api("/api/v1/admin/rides?serviceType=CAR&status=SEARCHING_DRIVER&limit=1", {
+      token: tokenFor(admin),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: Array<{ serviceType: string; status: string }> };
+    expect(body.data).toHaveLength(1);
+    const [order] = body.data;
+    expect(order).toBeDefined();
+    expect(order!.serviceType).toBe("CAR");
+    expect(order!.status).toBe("SEARCHING_DRIVER");
+
+    const invalidLimit = await api("/api/v1/admin/rides?limit=101", {
+      token: tokenFor(admin),
+    });
+    expect(invalidLimit.status).toBe(400);
+  });
+
+  it("admin dapat suspend driver dan driver tersebut tidak dapat online", async () => {
+    const admin = await createUser("ADMIN");
+    const driver = await createDriver("MOTORCYCLE");
+    await setOnline(driver);
+
+    const res = await api(`/api/v1/admin/rides/drivers/${driver.profile.id}/status`, {
+      method: "PATCH",
+      token: tokenFor(admin),
+      body: { status: "SUSPENDED", reason: "dokumen belum valid" },
+    });
+    expect(res.status).toBe(200);
+    const data = ((await res.json()) as { data: { status: string; availability: string } }).data;
+    expect(data.status).toBe("SUSPENDED");
+    expect(data.availability).toBe("OFFLINE");
+
+    const online = await setOnline(driver);
+    expect(online.status).toBe(403);
+    expect(((await online.json()) as { code?: string }).code).toBe("RIDE_DRIVER_NOT_ACTIVE");
+  });
+
+  it("admin dapat reactivate driver suspended tetapi rejected bersifat terminal", async () => {
+    const admin = await createUser("ADMIN");
+    const suspended = await createDriver("MOTORCYCLE", { status: "SUSPENDED" });
+    const rejected = await createDriver("MOTORCYCLE", { status: "REJECTED" });
+
+    const reactivate = await api(`/api/v1/admin/rides/drivers/${suspended.profile.id}/status`, {
+      method: "PATCH",
+      token: tokenFor(admin),
+      body: { status: "ACTIVE", reason: "dokumen sudah valid" },
+    });
+    expect(reactivate.status).toBe(200);
+    expect(((await reactivate.json()) as { data: { status: string } }).data.status).toBe("ACTIVE");
+
+    const invalid = await api(`/api/v1/admin/rides/drivers/${rejected.profile.id}/status`, {
+      method: "PATCH",
+      token: tokenFor(admin),
+      body: { status: "ACTIVE", reason: "uji transisi invalid" },
+    });
+    expect(invalid.status).toBe(409);
+    expect(((await invalid.json()) as { code?: string }).code).toBe(
+      "RIDE_DRIVER_STATUS_TRANSITION_INVALID",
+    );
+  });
+
+  it("admin dapat menolak kendaraan sehingga driver tidak menerima offer baru", async () => {
+    const admin = await createUser("ADMIN");
+    const passenger = await createUser("USER");
+    const driver = await createDriver("MOTORCYCLE");
+    const vehicle = await prisma.rideVehicle.findFirstOrThrow({
+      where: { driverProfileId: driver.profile.id },
+    });
+
+    const moderation = await api(`/api/v1/admin/rides/vehicles/${vehicle.id}/verification`, {
+      method: "PATCH",
+      token: tokenFor(admin),
+      body: {
+        verificationStatus: "REJECTED",
+        isActive: false,
+        reason: "kendaraan tidak lolos verifikasi",
+      },
+    });
+    expect(moderation.status).toBe(200);
+    const updated = (await moderation.json()) as {
+      data: { verificationStatus: string; isActive: boolean };
+    };
+    expect(updated.data.verificationStatus).toBe("REJECTED");
+    expect(updated.data.isActive).toBe(false);
+
+    await setOnline(driver);
+    const quote = await createQuote(passenger);
+    await createOrder(passenger, quote.quoteId);
+    const offers = await api("/api/v1/driver/rides/offers", {
+      token: tokenFor(driver.user),
+    });
+    expect(((await offers.json()) as { data: unknown[] }).data).toHaveLength(0);
+  });
+
+  it("kendaraan rejected tidak dapat langsung verified tanpa review ulang pending", async () => {
+    const admin = await createUser("ADMIN");
+    const driver = await createDriver("MOTORCYCLE");
+    const vehicle = await prisma.rideVehicle.findFirstOrThrow({
+      where: { driverProfileId: driver.profile.id },
+    });
+    await prisma.rideVehicle.update({
+      where: { id: vehicle.id },
+      data: { verificationStatus: "REJECTED", isActive: false },
+    });
+
+    const invalid = await api(`/api/v1/admin/rides/vehicles/${vehicle.id}/verification`, {
+      method: "PATCH",
+      token: tokenFor(admin),
+      body: {
+        verificationStatus: "VERIFIED",
+        isActive: true,
+        reason: "uji transisi invalid",
+      },
+    });
+    expect(invalid.status).toBe(409);
+    expect(((await invalid.json()) as { code?: string }).code).toBe(
+      "RIDE_VEHICLE_STATUS_TRANSITION_INVALID",
+    );
   });
 
   it("rate limit aktif pada endpoint tulis ride", async () => {

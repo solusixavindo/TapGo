@@ -1,3 +1,4 @@
+import { RideDriverStatus, RideOrderStatus, RideServiceType } from "@prisma/client";
 import { Router } from "express";
 import { prisma } from "../../../config/prisma.js";
 import { asyncHandler } from "../../../core/http/asyncHandler.js";
@@ -11,6 +12,13 @@ import { RideService } from "../application/RideService.js";
 import { LocalDistanceAdapter } from "../infrastructure/LocalDistanceAdapter.js";
 import { PrismaMatchingAdapter } from "../infrastructure/PrismaMatchingAdapter.js";
 import {
+  adminCorrectRideStatusSchema,
+  adminDriverProfileSchema,
+  adminDriverStatusSchema,
+  adminListDriversSchema,
+  adminListRidesSchema,
+  adminVehicleSchema,
+  adminVehicleVerificationSchema,
   cancelRideSchema,
   createOrderSchema,
   createQuoteSchema,
@@ -22,6 +30,7 @@ import {
 
 export const rideRouter = Router();
 export const driverRideRouter = Router();
+export const adminRideRouter = Router();
 
 const rideService = new RideService(
   prisma,
@@ -260,6 +269,136 @@ driverRideRouter.post(
       capturedAt: req.body.capturedAt,
       ...(req.body.sequence !== undefined ? { sequence: req.body.sequence } : {}),
     });
+    res.json({ success: true, data });
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Admin / Moderasi — /api/v1/admin/rides
+// ---------------------------------------------------------------------------
+
+adminRideRouter.use(requireAuth, requireRoles("ADMIN", "SUPER_ADMIN"));
+
+adminRideRouter.get(
+  "/",
+  validateRequest(adminListRidesSchema),
+  asyncHandler(async (req, res) => {
+    const filters: {
+      status?: RideOrderStatus;
+      serviceType?: RideServiceType;
+      limit?: number;
+    } = {
+      ...(req.query.status ? { status: req.query.status as RideOrderStatus } : {}),
+      ...(req.query.serviceType ? { serviceType: req.query.serviceType as RideServiceType } : {}),
+      ...(req.query.limit ? { limit: Number(req.query.limit) } : {}),
+    };
+    const data = await rideService.listAdminOrders({
+      ...filters,
+    });
+    res.json({ success: true, data });
+  }),
+);
+
+adminRideRouter.get(
+  "/drivers",
+  validateRequest(adminListDriversSchema),
+  asyncHandler(async (req, res) => {
+    const data = await rideService.listAdminDrivers({
+      ...(req.query.status ? { status: req.query.status as RideDriverStatus } : {}),
+      ...(req.query.limit ? { limit: Number(req.query.limit) } : {}),
+    });
+    res.json({ success: true, data });
+  }),
+);
+
+adminRideRouter.get(
+  "/:reference",
+  validateRequest(rideReferenceSchema),
+  asyncHandler(async (req, res) => {
+    const data = await rideService.getAdminOrder(referenceParam(req.params.reference));
+    res.json({ success: true, data });
+  }),
+);
+
+adminRideRouter.patch(
+  "/:reference/status",
+  validateRequest(adminCorrectRideStatusSchema),
+  asyncHandler(async (req, res) => {
+    const data = await rideService.correctStatusByAdmin({
+      adminUserId: req.auth!.userId,
+      publicReference: referenceParam(req.params.reference),
+      status: req.body.status,
+      reason: req.body.reason,
+      ...(req.body.note !== undefined ? { note: req.body.note } : {}),
+    });
+    res.json({ success: true, data });
+  }),
+);
+
+adminRideRouter.patch(
+  "/drivers/:driverProfileId/status",
+  validateRequest(adminDriverStatusSchema),
+  asyncHandler(async (req, res) => {
+    const data = await rideService.updateDriverStatusByAdmin({
+      adminUserId: req.auth!.userId,
+      driverProfileId: String(req.params.driverProfileId),
+      status: req.body.status,
+      reason: req.body.reason,
+    });
+    res.json({ success: true, data });
+  }),
+);
+
+adminRideRouter.patch(
+  "/vehicles/:vehicleId/verification",
+  validateRequest(adminVehicleVerificationSchema),
+  asyncHandler(async (req, res) => {
+    const data = await rideService.updateVehicleVerificationByAdmin({
+      adminUserId: req.auth!.userId,
+      vehicleId: String(req.params.vehicleId),
+      verificationStatus: req.body.verificationStatus,
+      ...(req.body.isActive !== undefined ? { isActive: req.body.isActive } : {}),
+      reason: req.body.reason,
+    });
+    res.json({ success: true, data });
+  }),
+);
+
+adminRideRouter.get(
+  "/drivers/:driverProfileId",
+  validateRequest(adminDriverProfileSchema),
+  asyncHandler(async (req, res) => {
+    const data = (await rideService.listAdminDrivers({})).find(
+      (driver) => driver.profileId === String(req.params.driverProfileId),
+    );
+    if (!data) {
+      res.status(404).json({
+        success: false,
+        code: "RIDE_DRIVER_PROFILE_NOT_FOUND",
+        message: "Profil driver tidak ditemukan",
+      });
+      return;
+    }
+    res.json({ success: true, data });
+  }),
+);
+
+adminRideRouter.get(
+  "/vehicles/:vehicleId",
+  validateRequest(adminVehicleSchema),
+  asyncHandler(async (req, res) => {
+    const vehicleId = String(req.params.vehicleId);
+    const data = (await rideService.listAdminDrivers({}))
+      .flatMap((driver) => driver.vehicles)
+      .find((vehicle) => vehicle.id === vehicleId);
+    if (!data) {
+      res.status(404).json({
+        success: false,
+        code: "RIDE_VEHICLE_NOT_FOUND",
+        message: "Kendaraan tidak ditemukan",
+      });
+      return;
+    }
     res.json({ success: true, data });
   }),
 );

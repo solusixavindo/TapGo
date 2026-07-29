@@ -1,7 +1,8 @@
-# Ride Domain — Stage 5.2 (Backend Foundation)
+# Ride Domain — Stage 5.3 (Backend Foundation + Admin Moderation)
 
 Dokumen ini menjelaskan fondasi backend ojek online TapGo Release 2:
-state machine, batas domain, keamanan, dan rekomendasi retensi data.
+state machine, batas domain, keamanan, moderasi admin awal, dan rekomendasi
+retensi data.
 
 > Status: **fondasi**. Belum ada provider Maps/routing/realtime/payment nyata,
 > belum ada payout/settlement driver, dan fitur ini **tidak** diekspos ke
@@ -144,14 +145,26 @@ Wajib sejak awal: minimisasi data, RBAC, dan **redaksi koordinat/PII dari log**.
 Koordinat tidak pernah dimasukkan ke pesan error, respons lokasi, atau metadata
 `RideEvent`.
 
-## 8. Kebutuhan admin/moderasi minimum (belum diimplementasikan)
+## 8. Admin/moderasi minimum
 
-Untuk operasional produksi kelak diperlukan: verifikasi driver & kendaraan
-(KYC), suspend/reactivate driver, tinjauan pembatalan & dispute, penanganan
-insiden keselamatan, koreksi status ride oleh admin dengan audit, serta laporan
-rekonsiliasi tunai. Semuanya harus role-gated dan menulis `RideEvent`/`AuditLog`.
+Stage 5.3 menambahkan endpoint admin dasar di `/api/v1/admin/rides`, dengan
+akses hanya `ADMIN`/`SUPER_ADMIN`:
 
-## 9. Yang sengaja BELUM ada pada Stage 5.2
+- melihat daftar/detail ride dengan kontak termasking;
+- koreksi status ride aktif ke status terminal operasional
+  (`CANCELLED_BY_SYSTEM`, `NO_DRIVER`, `EXPIRED`, `PAYMENT_FAILED`);
+- suspend/reactivate/reject driver profile;
+- verifikasi/reject/deactivate kendaraan;
+- audit moderasi melalui `RideEvent` saat ada ride terkait;
+- koreksi admin tidak memanggil payment provider, tidak membuat wallet, dan
+  tidak mengubah Business Engine.
+
+Yang masih harus diselesaikan sebelum produksi penuh: verifikasi KYC lengkap,
+tinjauan pembatalan & dispute, penanganan insiden keselamatan, laporan
+rekonsiliasi tunai, workflow review multi-level, serta UI admin ride. Semua
+lanjutan itu tetap harus role-gated dan menulis audit trail.
+
+## 9. Yang sengaja BELUM ada pada Stage 5.3
 
 Realtime/socket ride (tetap di balik `REALTIME_ENABLED=false`), provider Maps/
 routing/geocoding nyata, push notification, pembayaran digital, payout &
