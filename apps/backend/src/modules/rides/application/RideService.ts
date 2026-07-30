@@ -1585,8 +1585,10 @@ export class RideService {
     }>;
   }) {
     return {
+      // Moderasi memakai profileId sebagai identitas domain. userId internal
+      // sengaja TIDAK diekspos (minimisasi data); tidak ada kontrak klien yang
+      // membutuhkannya.
       profileId: driver.id,
-      userId: driver.user.id,
       name: driver.user.fullName,
       phoneMasked: maskPhone(driver.user.phone),
       status: driver.status,
