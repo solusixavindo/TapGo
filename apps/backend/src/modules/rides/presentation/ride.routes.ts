@@ -368,17 +368,9 @@ adminRideRouter.get(
   "/drivers/:driverProfileId",
   validateRequest(adminDriverProfileSchema),
   asyncHandler(async (req, res) => {
-    const data = (await rideService.listAdminDrivers({})).find(
-      (driver) => driver.profileId === String(req.params.driverProfileId),
+    const data = await rideService.getAdminDriver(
+      String(req.params.driverProfileId),
     );
-    if (!data) {
-      res.status(404).json({
-        success: false,
-        code: "RIDE_DRIVER_PROFILE_NOT_FOUND",
-        message: "Profil driver tidak ditemukan",
-      });
-      return;
-    }
     res.json({ success: true, data });
   }),
 );
@@ -387,18 +379,7 @@ adminRideRouter.get(
   "/vehicles/:vehicleId",
   validateRequest(adminVehicleSchema),
   asyncHandler(async (req, res) => {
-    const vehicleId = String(req.params.vehicleId);
-    const data = (await rideService.listAdminDrivers({}))
-      .flatMap((driver) => driver.vehicles)
-      .find((vehicle) => vehicle.id === vehicleId);
-    if (!data) {
-      res.status(404).json({
-        success: false,
-        code: "RIDE_VEHICLE_NOT_FOUND",
-        message: "Kendaraan tidak ditemukan",
-      });
-      return;
-    }
+    const data = await rideService.getAdminVehicle(String(req.params.vehicleId));
     res.json({ success: true, data });
   }),
 );

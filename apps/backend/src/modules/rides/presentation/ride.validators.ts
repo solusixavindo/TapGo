@@ -22,11 +22,16 @@ const rideOrderStatus = z.enum([
   "EXPIRED",
   "PAYMENT_FAILED",
 ]);
+/**
+ * Allowlist koreksi manual admin.
+ *
+ * `PAYMENT_FAILED` sengaja TIDAK disertakan: kegagalan pembayaran adalah urusan
+ * domain pembayaran (`RideOrder.paymentState`), terpisah dari status ride.
+ */
 const adminTerminalRideStatus = z.enum([
   "CANCELLED_BY_SYSTEM",
   "NO_DRIVER",
   "EXPIRED",
-  "PAYMENT_FAILED",
 ]);
 const driverStatus = z.enum(["PENDING", "ACTIVE", "SUSPENDED", "REJECTED"]);
 const vehicleVerificationStatus = z.enum(["PENDING", "VERIFIED", "REJECTED"]);

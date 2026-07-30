@@ -130,6 +130,64 @@ export function isActiveStatus(status: RideOrderStatus): boolean {
   return !isTerminalStatus(status);
 }
 
+/**
+ * Status di mana seorang driver benar-benar sedang terikat pada perjalanan.
+ * Dipakai untuk mencegah moderasi admin membuat ride menjadi "yatim".
+ */
+export const RIDE_DRIVER_ENGAGED_STATUSES: readonly RideOrderStatus[] = [
+  "DRIVER_ASSIGNED",
+  "DRIVER_TO_PICKUP",
+  "DRIVER_ARRIVED",
+  "IN_TRIP",
+] as const;
+
+/**
+ * Allowlist koreksi manual oleh admin.
+ *
+ * Admin TIDAK boleh memproduksi perjalanan "sukses" atau status operasional
+ * (COMPLETED / IN_TRIP / DRIVER_ARRIVED / DRIVER_ASSIGNED / DRIVER_TO_PICKUP).
+ * Admin juga tidak boleh memakai status pembatalan penumpang/driver sehingga
+ * tindakan admin tidak pernah salah atribusi.
+ *
+ * `PAYMENT_FAILED` sengaja TIDAK tersedia di sini: kegagalan pembayaran adalah
+ * urusan domain pembayaran (`RideOrder.paymentState`), bukan koreksi status ride.
+ */
+export type AdminCorrectableStatus = Extract<
+  RideOrderStatus,
+  "CANCELLED_BY_SYSTEM" | "NO_DRIVER" | "EXPIRED"
+>;
+
+/**
+ * Status asal yang sah untuk setiap target koreksi admin.
+ *
+ * - `CANCELLED_BY_SYSTEM`: seluruh status aktif (mis. insiden keselamatan).
+ * - `NO_DRIVER` / `EXPIRED`: hanya sebelum ada driver yang ditugaskan, karena
+ *   secara semantik tidak mungkin "tidak ada driver"/"kedaluwarsa" ketika
+ *   driver sudah menjemput atau perjalanan sudah berjalan.
+ */
+export const ADMIN_CORRECTION_SOURCES: Record<
+  AdminCorrectableStatus,
+  readonly RideOrderStatus[]
+> = {
+  CANCELLED_BY_SYSTEM: [
+    "CREATED",
+    "SEARCHING_DRIVER",
+    "DRIVER_ASSIGNED",
+    "DRIVER_TO_PICKUP",
+    "DRIVER_ARRIVED",
+    "IN_TRIP",
+  ],
+  NO_DRIVER: ["CREATED", "SEARCHING_DRIVER"],
+  EXPIRED: ["CREATED", "SEARCHING_DRIVER"],
+};
+
+export function canAdminCorrect(
+  from: RideOrderStatus,
+  to: AdminCorrectableStatus,
+): boolean {
+  return ADMIN_CORRECTION_SOURCES[to].includes(from);
+}
+
 /** Status di mana pembatalan oleh penumpang dikenakan biaya. */
 export function passengerCancellationHasFee(status: RideOrderStatus): boolean {
   return (

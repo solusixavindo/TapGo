@@ -25,9 +25,12 @@ import {
   LOCATION_MAX_ACCURACY_METERS,
 } from "../domain/ridePorts.js";
 import {
+  AdminCorrectableStatus,
   assertTransition,
+  canAdminCorrect,
   isTerminalStatus,
   passengerCancellationHasFee,
+  RIDE_DRIVER_ENGAGED_STATUSES,
 } from "../domain/rideStateMachine.js";
 
 const CANCELLATION_POLICY_VERSION = "RIDE_CANCEL_POLICY_V1";
@@ -839,10 +842,7 @@ export class RideService {
   async correctStatusByAdmin(input: {
     adminUserId: string;
     publicReference: string;
-    status: Extract<
-      RideOrderStatus,
-      "CANCELLED_BY_SYSTEM" | "NO_DRIVER" | "EXPIRED" | "PAYMENT_FAILED"
-    >;
+    status: AdminCorrectableStatus;
     reason: string;
     note?: string;
   }) {
@@ -867,11 +867,19 @@ export class RideService {
           "RIDE_ALREADY_FINAL",
         );
       }
+      // Koreksi harus sah secara semantik: NO_DRIVER/EXPIRED tidak mungkin
+      // terjadi bila driver sudah ditugaskan atau perjalanan sudah berjalan.
+      if (!canAdminCorrect(order.status, input.status)) {
+        throw new AppError(
+          "Koreksi status tidak sesuai dengan kondisi perjalanan",
+          StatusCodes.CONFLICT,
+          "RIDE_ADMIN_CORRECTION_NOT_APPLICABLE",
+        );
+      }
 
       const now = new Date();
       const data: Prisma.RideOrderUpdateManyMutationInput = {
           status: input.status,
-          ...(input.status === "PAYMENT_FAILED" ? { paymentState: "FAILED" } : {}),
           ...(input.status === "CANCELLED_BY_SYSTEM"
             ? {
                 cancelledByUserId: input.adminUserId,
@@ -957,28 +965,212 @@ export class RideService {
     status: RideDriverStatus;
     reason: string;
   }) {
-    const profile = await this.prisma.rideDriverProfile.findUnique({
-      where: { id: input.driverProfileId },
-      include: { user: { select: { id: true, fullName: true, phone: true } }, vehicles: true },
-    });
-    if (!profile) {
-      throw new AppError(
-        "Profil driver tidak ditemukan",
-        StatusCodes.NOT_FOUND,
-        "RIDE_DRIVER_PROFILE_NOT_FOUND",
-      );
-    }
-    assertDriverModerationTransition(profile.status, input.status);
-    if (profile.status === input.status) {
-      return this.toAdminDriverView(profile);
-    }
+    // Satu transaksi: guard + conditional update + audit. Bila audit gagal,
+    // perubahan status ikut di-rollback.
+    return this.prisma.$transaction(async (tx) => {
+      const profile = await tx.rideDriverProfile.findUnique({
+        where: { id: input.driverProfileId },
+        include: {
+          user: { select: { id: true, fullName: true, phone: true } },
+          vehicles: {
+            select: {
+              id: true,
+              type: true,
+              plateNumberMasked: true,
+              verificationStatus: true,
+              isActive: true,
+            },
+          },
+        },
+      });
+      if (!profile) {
+        throw new AppError(
+          "Profil driver tidak ditemukan",
+          StatusCodes.NOT_FOUND,
+          "RIDE_DRIVER_PROFILE_NOT_FOUND",
+        );
+      }
+      assertDriverModerationTransition(profile.status, input.status);
+      if (profile.status === input.status) {
+        return this.toAdminDriverView(profile);
+      }
 
-    const updated = await this.prisma.rideDriverProfile.update({
-      where: { id: profile.id },
-      data: {
-        status: input.status,
-        availability: input.status === "ACTIVE" ? profile.availability : "OFFLINE",
-      },
+      // Jangan membuat ride menjadi yatim: driver yang sedang terikat
+      // perjalanan tidak boleh langsung dinonaktifkan.
+      if (input.status !== "ACTIVE") {
+        const engaged = await tx.rideOrder.findFirst({
+          where: {
+            driverProfileId: profile.id,
+            status: { in: [...RIDE_DRIVER_ENGAGED_STATUSES] },
+          },
+          select: { id: true },
+        });
+        if (engaged) {
+          throw new AppError(
+            "Driver masih memiliki perjalanan aktif",
+            StatusCodes.CONFLICT,
+            "RIDE_DRIVER_HAS_ACTIVE_RIDE",
+          );
+        }
+      }
+
+      // Conditional update: hanya satu aksi konkuren yang boleh menang.
+      const applied = await tx.rideDriverProfile.updateMany({
+        where: { id: profile.id, status: profile.status },
+        data: {
+          status: input.status,
+          availability: input.status === "ACTIVE" ? profile.availability : "OFFLINE",
+        },
+      });
+      if (applied.count !== 1) {
+        throw new AppError(
+          "Status driver berubah, silakan muat ulang",
+          StatusCodes.CONFLICT,
+          "RIDE_DRIVER_STATUS_CONFLICT",
+        );
+      }
+
+      await this.writeModerationAudit(tx, {
+        adminUserId: input.adminUserId,
+        action: "RIDE_DRIVER_STATUS_CHANGED",
+        entityType: "RIDE_DRIVER_PROFILE",
+        entityId: profile.id,
+        previousStatus: profile.status,
+        newStatus: input.status,
+        reason: input.reason,
+      });
+
+      const updated = await tx.rideDriverProfile.findUniqueOrThrow({
+        where: { id: profile.id },
+        include: {
+          user: { select: { id: true, fullName: true, phone: true } },
+          vehicles: {
+            select: {
+              id: true,
+              type: true,
+              plateNumberMasked: true,
+              verificationStatus: true,
+              isActive: true,
+            },
+          },
+        },
+      });
+      return this.toAdminDriverView(updated);
+    });
+  }
+
+  async updateVehicleVerificationByAdmin(input: {
+    adminUserId: string;
+    vehicleId: string;
+    verificationStatus: RideVehicleVerificationStatus;
+    isActive?: boolean;
+    reason: string;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const vehicle = await tx.rideVehicle.findUnique({
+        where: { id: input.vehicleId },
+        select: {
+          id: true,
+          type: true,
+          plateNumberMasked: true,
+          verificationStatus: true,
+          isActive: true,
+          driverProfileId: true,
+        },
+      });
+      if (!vehicle) {
+        throw new AppError(
+          "Kendaraan tidak ditemukan",
+          StatusCodes.NOT_FOUND,
+          "RIDE_VEHICLE_NOT_FOUND",
+        );
+      }
+      assertVehicleModerationTransition(
+        vehicle.verificationStatus,
+        input.verificationStatus,
+      );
+      if (
+        vehicle.verificationStatus === input.verificationStatus &&
+        (input.isActive === undefined || vehicle.isActive === input.isActive)
+      ) {
+        return vehicle;
+      }
+
+      // Kendaraan yang sedang dipakai perjalanan aktif tidak boleh dicabut
+      // kelayakannya, agar perjalanan berjalan tidak rusak.
+      const losesEligibility =
+        input.verificationStatus !== "VERIFIED" || input.isActive === false;
+      if (losesEligibility) {
+        const engaged = await tx.rideOrder.findFirst({
+          where: {
+            vehicleId: vehicle.id,
+            status: { in: [...RIDE_DRIVER_ENGAGED_STATUSES] },
+          },
+          select: { id: true },
+        });
+        if (engaged) {
+          throw new AppError(
+            "Kendaraan masih dipakai perjalanan aktif",
+            StatusCodes.CONFLICT,
+            "RIDE_VEHICLE_HAS_ACTIVE_RIDE",
+          );
+        }
+      }
+
+      // Conditional update berdasarkan kondisi yang diharapkan.
+      const applied = await tx.rideVehicle.updateMany({
+        where: {
+          id: vehicle.id,
+          verificationStatus: vehicle.verificationStatus,
+          isActive: vehicle.isActive,
+        },
+        data: {
+          verificationStatus: input.verificationStatus,
+          ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+        },
+      });
+      if (applied.count !== 1) {
+        throw new AppError(
+          "Status kendaraan berubah, silakan muat ulang",
+          StatusCodes.CONFLICT,
+          "RIDE_VEHICLE_STATUS_CONFLICT",
+        );
+      }
+
+      const updated = await tx.rideVehicle.findUniqueOrThrow({
+        where: { id: vehicle.id },
+        select: {
+          id: true,
+          type: true,
+          plateNumberMasked: true,
+          verificationStatus: true,
+          isActive: true,
+          driverProfileId: true,
+        },
+      });
+
+      await this.writeModerationAudit(tx, {
+        adminUserId: input.adminUserId,
+        action: "RIDE_VEHICLE_VERIFICATION_CHANGED",
+        entityType: "RIDE_VEHICLE",
+        entityId: vehicle.id,
+        previousStatus: vehicle.verificationStatus,
+        newStatus: input.verificationStatus,
+        reason: input.reason,
+        metadata: {
+          driverProfileId: vehicle.driverProfileId,
+          isActive: updated.isActive,
+        },
+      });
+
+      return updated;
+    });
+  }
+
+  /** Detail satu profil driver (query langsung, tidak bergantung limit daftar). */
+  async getAdminDriver(driverProfileId: string) {
+    const driver = await this.prisma.rideDriverProfile.findUnique({
+      where: { id: driverProfileId },
       include: {
         user: { select: { id: true, fullName: true, phone: true } },
         vehicles: {
@@ -992,66 +1184,20 @@ export class RideService {
         },
       },
     });
-
-    await this.writeDriverAdminEvent({
-      adminUserId: input.adminUserId,
-      driverProfileId: profile.id,
-      previousStatus: profile.status,
-      newStatus: input.status,
-      reason: input.reason,
-    });
-
-    return this.toAdminDriverView(updated);
-  }
-
-  async updateVehicleVerificationByAdmin(input: {
-    adminUserId: string;
-    vehicleId: string;
-    verificationStatus: RideVehicleVerificationStatus;
-    isActive?: boolean;
-    reason: string;
-  }) {
-    const vehicle = await this.prisma.rideVehicle.findUnique({
-      where: { id: input.vehicleId },
-      include: {
-        driverProfile: {
-          include: {
-            user: { select: { id: true, fullName: true, phone: true } },
-          },
-        },
-      },
-    });
-    if (!vehicle) {
+    if (!driver) {
       throw new AppError(
-        "Kendaraan tidak ditemukan",
+        "Profil driver tidak ditemukan",
         StatusCodes.NOT_FOUND,
-        "RIDE_VEHICLE_NOT_FOUND",
+        "RIDE_DRIVER_PROFILE_NOT_FOUND",
       );
     }
-    assertVehicleModerationTransition(
-      vehicle.verificationStatus,
-      input.verificationStatus,
-    );
-    if (
-      vehicle.verificationStatus === input.verificationStatus &&
-      (input.isActive === undefined || vehicle.isActive === input.isActive)
-    ) {
-      return {
-        id: vehicle.id,
-        type: vehicle.type,
-        plateNumberMasked: vehicle.plateNumberMasked,
-        verificationStatus: vehicle.verificationStatus,
-        isActive: vehicle.isActive,
-        driverProfileId: vehicle.driverProfileId,
-      };
-    }
+    return this.toAdminDriverView(driver);
+  }
 
-    const updated = await this.prisma.rideVehicle.update({
-      where: { id: input.vehicleId },
-      data: {
-        verificationStatus: input.verificationStatus,
-        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
-      },
+  /** Detail satu kendaraan (query langsung, tanpa memindai daftar driver). */
+  async getAdminVehicle(vehicleId: string) {
+    const vehicle = await this.prisma.rideVehicle.findUnique({
+      where: { id: vehicleId },
       select: {
         id: true,
         type: true,
@@ -1061,17 +1207,14 @@ export class RideService {
         driverProfileId: true,
       },
     });
-
-    await this.writeDriverAdminEvent({
-      adminUserId: input.adminUserId,
-      driverProfileId: vehicle.driverProfileId,
-      previousStatus: vehicle.verificationStatus,
-      newStatus: input.verificationStatus,
-      reason: input.reason,
-      metadata: { vehicleId: vehicle.id, isActive: updated.isActive },
-    });
-
-    return updated;
+    if (!vehicle) {
+      throw new AppError(
+        "Kendaraan tidak ditemukan",
+        StatusCodes.NOT_FOUND,
+        "RIDE_VEHICLE_NOT_FOUND",
+      );
+    }
+    return vehicle;
   }
 
   // -------------------------------------------------------------------------
@@ -1159,34 +1302,43 @@ export class RideService {
     }
   }
 
-  private async writeDriverAdminEvent(input: {
-    adminUserId: string;
-    driverProfileId: string;
-    previousStatus: string;
-    newStatus: string;
-    reason: string;
-    metadata?: Record<string, unknown>;
-  }) {
-    const order = await this.prisma.rideOrder.findFirst({
-      where: { driverProfileId: input.driverProfileId },
-      orderBy: { createdAt: "desc" },
-      select: { id: true },
-    });
-    if (!order) return;
-
-    await this.writeEvent(this.prisma, {
-      rideOrderId: order.id,
-      type: "STATUS_CHANGED",
-      actorUserId: input.adminUserId,
-      actorRole: "ADMIN",
-      metadata: {
-        moderation: true,
-        previousStatus: input.previousStatus,
-        newStatus: input.newStatus,
-        reason: input.reason,
-        ...input.metadata,
+  /**
+   * Audit moderasi driver/kendaraan.
+   *
+   * Ditulis ke `AuditLog` global karena moderasi driver/kendaraan BUKAN
+   * peristiwa milik satu ride tertentu. Dengan begitu setiap tindakan selalu
+   * tercatat (termasuk untuk driver yang belum pernah punya ride) dan tindakan
+   * berulang tidak saling menimpa. Metadata hanya berisi nilai status dan
+   * alasan yang sudah dibatasi panjangnya — tanpa koordinat, nomor telepon,
+   * atau hash internal.
+   */
+  private async writeModerationAudit(
+    tx: Prisma.TransactionClient | PrismaClient,
+    input: {
+      adminUserId: string;
+      action: string;
+      entityType: string;
+      entityId: string;
+      previousStatus: string;
+      newStatus: string;
+      reason: string;
+      metadata?: Record<string, unknown>;
+    },
+  ) {
+    await tx.auditLog.create({
+      data: {
+        actorId: input.adminUserId,
+        action: input.action,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        metadata: {
+          moderation: true,
+          previousStatus: input.previousStatus,
+          newStatus: input.newStatus,
+          reason: input.reason,
+          ...input.metadata,
+        } as Prisma.InputJsonValue,
       },
-      eventKeySuffix: `admin-moderation:${input.driverProfileId}:${input.newStatus}`,
     });
   }
 
