@@ -151,13 +151,75 @@ Stage 5.3 menambahkan endpoint admin dasar di `/api/v1/admin/rides`, dengan
 akses hanya `ADMIN`/`SUPER_ADMIN`:
 
 - melihat daftar/detail ride dengan kontak termasking;
-- koreksi status ride aktif ke status terminal operasional
-  (`CANCELLED_BY_SYSTEM`, `NO_DRIVER`, `EXPIRED`, `PAYMENT_FAILED`);
+- koreksi status ride aktif ke status terminal operasional (allowlist di bawah);
 - suspend/reactivate/reject driver profile;
 - verifikasi/reject/deactivate kendaraan;
-- audit moderasi melalui `RideEvent` saat ada ride terkait;
+- audit moderasi driver/kendaraan ke `AuditLog`, koreksi ride ke `RideEvent`;
 - koreksi admin tidak memanggil payment provider, tidak membuat wallet, dan
   tidak mengubah Business Engine.
+
+### 8.1 Allowlist koreksi status ride oleh admin
+
+Admin **tidak pernah** dapat memproduksi perjalanan "sukses" atau status
+operasional (`COMPLETED`, `IN_TRIP`, `DRIVER_ARRIVED`, `DRIVER_ASSIGNED`,
+`DRIVER_TO_PICKUP`), dan tidak memakai status pembatalan penumpang/driver
+sehingga tindakan admin tidak pernah salah atribusi.
+
+| Target | Status asal yang sah | Catatan |
+|---|---|---|
+| `CANCELLED_BY_SYSTEM` | `CREATED`, `SEARCHING_DRIVER`, `DRIVER_ASSIGNED`, `DRIVER_TO_PICKUP`, `DRIVER_ARRIVED`, `IN_TRIP` | mis. insiden keselamatan; `cancelledByRole = ADMIN` |
+| `NO_DRIVER` | `CREATED`, `SEARCHING_DRIVER` | tidak mungkin bila driver sudah ditugaskan |
+| `EXPIRED` | `CREATED`, `SEARCHING_DRIVER` | idem |
+
+`PAYMENT_FAILED` **tidak tersedia** bagi admin. Kegagalan pembayaran adalah
+urusan domain pembayaran (`RideOrder.paymentState`) dan tidak boleh diubah
+melalui endpoint status ride. Target di luar allowlist ditolak validator;
+kombinasi asal→target yang tidak sah ditolak dengan
+`RIDE_ADMIN_CORRECTION_NOT_APPLICABLE`. Ride terminal tetap tidak dapat dibuka
+kembali (`RIDE_ALREADY_FINAL`).
+
+### 8.2 Matriks transisi moderasi driver
+
+| Dari | Ke yang diizinkan |
+|---|---|
+| `PENDING` | `ACTIVE`, `SUSPENDED`, `REJECTED` |
+| `ACTIVE` | `SUSPENDED`, `REJECTED` |
+| `SUSPENDED` | `ACTIVE`, `REJECTED` |
+| `REJECTED` | — (terminal) |
+
+Tambahan invariant: driver yang sedang terikat perjalanan
+(`DRIVER_ASSIGNED`/`DRIVER_TO_PICKUP`/`DRIVER_ARRIVED`/`IN_TRIP`) **tidak dapat**
+di-suspend/reject (`RIDE_DRIVER_HAS_ACTIVE_RIDE`) agar ride tidak menjadi yatim.
+Status non-`ACTIVE` memaksa `availability = OFFLINE`, sehingga driver
+suspended/rejected tidak dapat online maupun menerima order. Transisi ke status
+yang sama bersifat idempoten (tanpa audit ganda).
+
+### 8.3 Matriks transisi verifikasi kendaraan
+
+| Dari | Ke yang diizinkan |
+|---|---|
+| `PENDING` | `VERIFIED`, `REJECTED` |
+| `VERIFIED` | `PENDING`, `REJECTED` |
+| `REJECTED` | `PENDING` (wajib review ulang sebelum `VERIFIED`) |
+
+Tambahan invariant: kendaraan yang sedang dipakai perjalanan aktif tidak dapat
+dicabut kelayakannya (`RIDE_VEHICLE_HAS_ACTIVE_RIDE`). Moderasi tidak dapat
+mengubah tipe kendaraan maupun memindahkan kepemilikan (field tersebut tidak
+pernah ditulis). Hanya kendaraan `VERIFIED` + `isActive` yang dipakai matching.
+
+### 8.4 Atomicity, konkurensi, dan audit
+
+- Setiap koreksi/moderasi berjalan dalam **satu transaksi database** bersama
+  penulisan auditnya; bila audit gagal, perubahan status ikut di-rollback.
+- Update memakai **conditional update** terhadap kondisi yang diharapkan;
+  pemenang balapan hanya satu, yang kalah menerima `RIDE_*_STATUS_CONFLICT`.
+- Audit moderasi driver/kendaraan ditulis ke `AuditLog` (bukan `RideEvent`)
+  karena bukan peristiwa milik satu ride. Dengan demikian moderasi driver yang
+  belum pernah punya ride tetap terekam, dan tindakan berulang tidak saling
+  menimpa. Setiap catatan memuat aktor admin, action, target, status sebelum &
+  sesudah, alasan tersanitasi (maks 120 karakter), dan timestamp.
+- Percobaan yang ditolak tidak menulis audit dan tidak mengubah state.
+- Metadata audit tidak memuat koordinat, nomor telepon, maupun hash internal.
 
 Yang masih harus diselesaikan sebelum produksi penuh: verifikasi KYC lengkap,
 tinjauan pembatalan & dispute, penanganan insiden keselamatan, laporan
