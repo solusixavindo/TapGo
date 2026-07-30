@@ -1,6 +1,8 @@
-import { Prisma, User } from "@prisma/client";
+import { Prisma, PrismaClient, User } from "@prisma/client";
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { AppError } from "../../src/core/errors/AppError.js";
+import { PrismaAuthRepository } from "../../src/modules/auth/infrastructure/PrismaAuthRepository.js";
 import {
   decimalString,
   prisma,
@@ -163,5 +165,75 @@ describe.skipIf(!runIntegration)("P1-4 Basic first-1000 registration quota concu
       select: { walletId: true }
     });
     expect(new Set(bonusRows.map((b) => b.walletId)).size).toBe(5);
+  });
+
+  it("eksekusi berulang dalam satu proses tidak membocorkan state kuota", async () => {
+    // Dua gelombang identik. Gelombang kedua harus menghasilkan angka yang
+    // sama persis, membuktikan tidak ada sisa state dari gelombang pertama.
+    for (const wave of [1, 2]) {
+      await prisma.walletTransaction.deleteMany();
+      await prisma.wallet.deleteMany();
+      await prisma.user.deleteMany();
+      await setRegistrationQuotaGranted(995);
+
+      const results = await Promise.allSettled(
+        Array.from({ length: 20 }, (_, i) =>
+          registerBasicUser(`WAVE${wave}${String(i).padStart(6, "0")}`)
+        )
+      );
+      const report = describeRejections(results);
+      expect(report, `gelombang ${wave} gagal: ${report}`).toBe("none");
+
+      const users = fulfilledUsers(results);
+      expect(users).toHaveLength(20);
+
+      const wallets = await Promise.all(
+        users.map((u) => prisma.wallet.findUniqueOrThrow({ where: { userId: u.id } }))
+      );
+      expect(wallets.filter((w) => decimalString(w.ppobBalance) === "5000.00")).toHaveLength(5);
+
+      const quota = await prisma.registrationQuota.findUniqueOrThrow({ where: { key: QUOTA_KEY } });
+      expect(quota.granted).toBe(1000);
+      expect(quota.granted).toBeLessThanOrEqual(quota.limit);
+    }
+  });
+
+  it("retry exhaustion mengembalikan AppError terkendali, bukan error Prisma mentah", async () => {
+    // Simulasikan kegagalan serialisasi yang tidak pernah pulih agar seluruh
+    // attempt habis. Kontraknya: klien menerima AppError 503 dengan kode stabil,
+    // BUKAN PrismaClientKnownRequestError.
+    const serializationFailure = new Prisma.PrismaClientKnownRequestError(
+      "Transaction failed due to a write conflict or a deadlock. Please retry your transaction",
+      { code: "P2034", clientVersion: "5.22.0" }
+    );
+    let attempts = 0;
+    const alwaysConflicting = {
+      $transaction: async () => {
+        attempts += 1;
+        throw serializationFailure;
+      }
+    } as unknown as PrismaClient;
+
+    const repo = new PrismaAuthRepository(alwaysConflicting);
+    const failure = await repo
+      .createUser({
+        fullName: "Exhaustion Probe",
+        phone: "+628999000111",
+        passwordHash: "hashed-password",
+        role: "USER",
+        referralCode: "EXHAUST0001"
+      })
+      .then(() => undefined)
+      .catch((e: unknown) => e);
+
+    expect(failure).toBeInstanceOf(AppError);
+    expect(failure).not.toBeInstanceOf(Prisma.PrismaClientKnownRequestError);
+    const appError = failure as AppError;
+    expect(appError.statusCode).toBe(503);
+    expect(appError.code).toBe("REGISTRATION_TEMPORARILY_UNAVAILABLE");
+    // Pesan tidak boleh membocorkan detail internal database.
+    expect(appError.message).not.toMatch(/prisma|transaction|conflict|deadlock/i);
+    // Retry benar-benar bounded (tidak tak-hingga).
+    expect(attempts).toBe(8);
   });
 });

@@ -11,11 +11,11 @@ import {
 } from "../domain/AuthRepository.js";
 
 // P1-4: advisory-lock key konstan untuk klaim kuota benefit Basic PPOB.
-// createUser berjalan pada isolationLevel Serializable; tanpa serialisasi
-// eksplisit, banyak registrasi yang meng-UPDATE baris kuota yang sama akan
-// saling meng-abort dengan serialization failure. Advisory lock (lock DB
-// tingkat sesi/transaksi) mengantre klaim sehingga tetap atomik, tidak
-// over-grant, dan registrasi tidak gagal karena race.
+// Banyak registrasi yang meng-UPDATE baris kuota yang sama harus diantre, bukan
+// dibiarkan saling menabrak. Advisory lock (lock DB tingkat transaksi)
+// mengantre klaim sehingga tetap atomik, tidak over-grant, dan registrasi tidak
+// gagal karena race — tanpa memerlukan Serializable isolation (lihat catatan
+// pada opsi $transaction di createUser).
 const BASIC_PPOB_QUOTA_LOCK_KEY = 552025001;
 
 export class PrismaAuthRepository implements AuthRepository {
@@ -45,9 +45,8 @@ export class PrismaAuthRepository implements AuthRepository {
       // total penerima tidak akan melebihi limit. Hanya role USER yang memakai slot.
       let registrationBonus = new Prisma.Decimal(0);
       if (input.role === UserRole.USER) {
-        // Serialize klaim kuota agar aman di bawah Serializable isolation:
-        // advisory lock mengantre (bukan meng-abort) sehingga tidak ada race
-        // yang membuat penerima melebihi limit dan registrasi tidak gagal.
+        // Advisory lock mengantre (bukan meng-abort) klaim kuota, sehingga
+        // hanya satu registrasi menyentuh baris kuota pada satu waktu.
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BASIC_PPOB_QUOTA_LOCK_KEY})`;
         const claimed = await tx.$queryRaw<Array<{ granted: number }>>`
           UPDATE "registration_quota"
@@ -156,16 +155,35 @@ export class PrismaAuthRepository implements AuthRepository {
 
 	      return user;
     }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      // Isolation: Read Committed (default PostgreSQL).
+      //
+      // Serializable SENGAJA tidak dipakai di sini. Invarian kuota first-1000
+      // dijamin sepenuhnya oleh dua mekanisme di atas, bukan oleh isolation
+      // level: (1) pg_advisory_xact_lock menyerialkan klaim, dan (2) conditional
+      // UPDATE ... WHERE "granted" < "limit" RETURNING bersifat atomik — row
+      // lock ditahan sampai COMMIT dan predikat dievaluasi ulang terhadap versi
+      // baris terbaru, sehingga over-grant tidak mungkin terjadi. Seluruh
+      // penambahan counter, pembuatan wallet, dan kredit bonus berada dalam satu
+      // transaksi, jadi rollback membatalkan semuanya.
+      //
+      // Sebaliknya, Serializable memunculkan SQLSTATE 40001 ("could not
+      // serialize access due to read/write dependencies", Prisma P2034) sebagai
+      // false positive pada registrasi konkuren — konflik SSI pada INSERT ke
+      // users/wallets/registration_events, bukan pada baris kuota. Di bawah 20
+      // registrasi bersamaan, retry bisa habis dan registrasi yang sah gagal.
       timeout: 15000
     }));
   }
 
-  // P1-4: registrasi berjalan pada Serializable isolation. Ketika banyak
-  // registrasi berlomba (mis. pada baris kuota benefit yang sama), PostgreSQL
-  // membatalkan transaksi yang bertabrakan dengan serialization failure
-  // (Prisma code P2034). Retry dengan backoff kecil membuat registrasi tetap
-  // berhasil tanpa over-grant dan tanpa in-memory lock.
+  // P1-4: jaring pengaman untuk kegagalan transient DB yang SUDAH dipastikan
+  // aman di-retry (lihat isSerializationFailure). Transaksi yang dibatalkan
+  // PostgreSQL selalu di-rollback penuh — penambahan counter kuota, pembuatan
+  // user/wallet, dan kredit bonus batal bersama — sehingga menjalankan ulang
+  // seluruh operasi tidak dapat menghasilkan double credit atau over-grant.
+  //
+  // Backoff memakai jitter acak: tanpa jitter, seluruh registrasi yang
+  // bertabrakan akan retry pada tick yang sama (thundering herd) dan terus
+  // bertabrakan sampai attempt habis.
   private async runWithSerializationRetry<T>(
     operation: () => Promise<T>,
     maxAttempts = 8
@@ -175,10 +193,22 @@ export class PrismaAuthRepository implements AuthRepository {
       try {
         return await operation();
       } catch (error) {
-        if (this.isSerializationFailure(error) && attempt < maxAttempts) {
+        if (this.isSerializationFailure(error)) {
           lastError = error;
-          await new Promise((resolve) => setTimeout(resolve, 10 * attempt));
-          continue;
+          if (attempt < maxAttempts) {
+            const base = 10 * attempt;
+            const delay = base + Math.floor(Math.random() * base);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            continue;
+          }
+          // Attempt habis: kembalikan error aplikasi terkendali, bukan error
+          // Prisma mentah, agar klien menerima 503 + kode stabil dan tidak
+          // pernah melihat detail internal database.
+          throw new AppError(
+            "Sistem sedang sibuk. Silakan coba lagi sesaat lagi.",
+            StatusCodes.SERVICE_UNAVAILABLE,
+            "REGISTRATION_TEMPORARILY_UNAVAILABLE"
+          );
         }
         throw error;
       }
