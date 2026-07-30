@@ -1,6 +1,8 @@
 import { RideDriverStatus, RideOrderStatus, RideServiceType } from "@prisma/client";
-import { Router } from "express";
+import { NextFunction, Request, Response, Router } from "express";
+import { StatusCodes } from "http-status-codes";
 import { prisma } from "../../../config/prisma.js";
+import { AppError } from "../../../core/errors/AppError.js";
 import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
 import { requireAuth, requireRoles } from "../../../core/security/authContext.js";
@@ -41,6 +43,33 @@ const rideService = new RideService(
 /** Ambil parameter referensi sebagai string tunggal (sudah divalidasi Zod). */
 function referenceParam(value: unknown): string {
   return Array.isArray(value) ? String(value[0]) : String(value);
+}
+
+/** Bentuk referensi publik ride: RID- + 10 karakter alfabet aman. */
+const RIDE_REFERENCE_PATTERN = /^RID-[A-Z2-9]{10}$/;
+
+/**
+ * Penjaga bentuk referensi pada route `/:reference`.
+ *
+ * Bila segmen tidak berbentuk referensi ride, route ini dilewati sepenuhnya
+ * (`next("route")`) sehingga permintaan berakhir pada catch-all 404 milik router
+ * ini — bukan dijawab sebagai error validasi. Dengan begitu path yang tidak
+ * dikenal di bawah
+ * /api/v1/admin/rides/** selalu menghasilkan 404 terkontrol dan tidak
+ * membocorkan bahwa segmen apa pun ditafsirkan sebagai referensi ride.
+ */
+function rideReferenceShapeGuard(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+) {
+  const value = referenceParam(req.params.reference);
+  if (!RIDE_REFERENCE_PATTERN.test(value)) {
+    // Lewati route ini sepenuhnya -> lanjut ke route lain / catch-all 404.
+    next("route");
+    return;
+  }
+  next();
 }
 
 /** Header idempotency opsional untuk operasi mutasi bernilai. */
@@ -313,6 +342,7 @@ adminRideRouter.get(
 
 adminRideRouter.get(
   "/:reference",
+  rideReferenceShapeGuard,
   validateRequest(rideReferenceSchema),
   asyncHandler(async (req, res) => {
     const data = await rideService.getAdminOrder(referenceParam(req.params.reference));
@@ -383,3 +413,21 @@ adminRideRouter.get(
     res.json({ success: true, data });
   }),
 );
+
+/**
+ * Batas router admin ride.
+ *
+ * Path apa pun di bawah /api/v1/admin/rides/** yang tidak cocok dengan
+ * delapan route sah di atas dijawab 404 terkontrol di sini. Ini juga mencegah
+ * permintaan merembes ke modul admin lain (mis. adminConsoleRouter) bila urutan
+ * mount pada app.ts berubah di masa depan.
+ */
+adminRideRouter.use((req: Request, _res: Response, next: NextFunction) => {
+  next(
+    new AppError(
+      "Endpoint admin ride tidak ditemukan",
+      StatusCodes.NOT_FOUND,
+      "RIDE_ADMIN_ROUTE_NOT_FOUND",
+    ),
+  );
+});
