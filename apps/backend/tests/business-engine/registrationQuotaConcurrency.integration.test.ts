@@ -1,4 +1,5 @@
-import { User } from "@prisma/client";
+import { Prisma, User } from "@prisma/client";
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   decimalString,
@@ -15,6 +16,65 @@ function fulfilledUsers(results: PromiseSettledResult<User>[]): User[] {
   return results
     .filter((r): r is PromiseFulfilledResult<User> => r.status === "fulfilled")
     .map((r) => r.value);
+}
+
+/**
+ * Diagnostik kegagalan konkurensi.
+ *
+ * Promise.allSettled sebelumnya menelan seluruh alasan penolakan sehingga
+ * kegagalan hanya terlihat sebagai "expected 20, got 19". Helper ini
+ * mengekstrak identitas error secara AMAN: hanya nama class, Prisma error
+ * code, dan meta.code/meta.modelName. Pesan asli, parameter SQL, nomor
+ * telepon, dan PII lain TIDAK pernah ditulis ke output.
+ */
+function describeRejections(results: PromiseSettledResult<User>[]): string {
+  const rejected = results.filter(
+    (r): r is PromiseRejectedResult => r.status === "rejected"
+  );
+  if (rejected.length === 0) {
+    return "none";
+  }
+
+  const details = rejected.map((r, index) => {
+    const error = r.reason as unknown;
+    const parts: string[] = [`#${index}`];
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      parts.push("PrismaClientKnownRequestError", `code=${error.code}`);
+      const meta = error.meta as { code?: string; modelName?: string } | undefined;
+      if (meta?.code) parts.push(`meta.code=${meta.code}`);
+      if (meta?.modelName) parts.push(`meta.modelName=${meta.modelName}`);
+    } else if (error instanceof Error) {
+      parts.push(error.constructor.name, `name=${error.name}`);
+      // Hanya kelas pesan yang sudah diketahui aman (tanpa nilai/PII).
+      const known = [
+        "Unable to start a transaction",
+        "Transaction already closed",
+        "Transaction not found",
+        "Timed out fetching a new connection",
+        "write conflict or a deadlock",
+        "could not serialize access"
+      ].find((needle) => error.message.includes(needle));
+      parts.push(`class=${known ?? "UNCLASSIFIED"}`);
+      if (!known) {
+        // Fingerprint stabil agar kemunculan berikutnya dapat dikorelasikan
+        // tanpa memancarkan isi pesan (yang bisa memuat nilai/PII).
+        parts.push(
+          `msgLen=${error.message.length}`,
+          `msgSha=${createHash("sha256").update(error.message).digest("hex").slice(0, 12)}`
+        );
+      }
+      // attempt number bila operasi mengeksposnya
+      const attempt = (error as { attempt?: number }).attempt;
+      if (typeof attempt === "number") parts.push(`attempt=${attempt}`);
+    } else {
+      parts.push(`nonError=${typeof error}`);
+    }
+
+    return parts.join(" ");
+  });
+
+  return `${rejected.length} rejected -> ${details.join(" | ")}`;
 }
 
 describe.skipIf(!runIntegration)("P1-4 Basic first-1000 registration quota concurrency", () => {
@@ -64,15 +124,32 @@ describe.skipIf(!runIntegration)("P1-4 Basic first-1000 registration quota concu
     const results = await Promise.allSettled(
       Array.from({ length: 20 }, (_, i) => registerBasicUser(`RACEM${String(i).padStart(6, "0")}`))
     );
+
+    // Tidak boleh ada satu pun promise yang ditolak. Bila ada, identitas error
+    // dilaporkan (class + Prisma code + meta.code) tanpa PII.
+    const rejectionReport = describeRejections(results);
+    expect(rejectionReport, `registrasi gagal: ${rejectionReport}`).toBe("none");
+
     const users = fulfilledUsers(results);
     expect(users).toHaveLength(20);
+
+    // Setiap registrasi sukses membuat tepat satu user (tidak ada duplikat/hilang).
+    expect(new Set(users.map((u) => u.id)).size).toBe(20);
+    expect(await prisma.user.count()).toBe(20);
 
     const wallets = await Promise.all(
       users.map((u) => prisma.wallet.findUniqueOrThrow({ where: { userId: u.id } }))
     );
+    // Satu wallet per user — tidak ada wallet ganda.
+    expect(await prisma.wallet.count()).toBe(20);
+
     const grantedCount = wallets.filter((w) => decimalString(w.ppobBalance) === "5000.00").length;
     // Hanya 5 slot tersisa -> tepat 5 penerima, sisanya Rp0.
     expect(grantedCount).toBe(5);
+    // Tidak ada nilai PPOB di luar {0, 5000} (mis. 10000 = double credit).
+    expect(
+      [...new Set(wallets.map((w) => decimalString(w.ppobBalance)))].sort()
+    ).toEqual(["0.00", "5000.00"]);
 
     const quota = await prisma.registrationQuota.findUniqueOrThrow({ where: { key: QUOTA_KEY } });
     expect(quota.granted).toBe(1000);
@@ -80,5 +157,11 @@ describe.skipIf(!runIntegration)("P1-4 Basic first-1000 registration quota concu
 
     const bonusCount = await prisma.walletTransaction.count({ where: { type: "REGISTRATION_BONUS" } });
     expect(bonusCount).toBe(5);
+    // Tidak ada dua REGISTRATION_BONUS untuk wallet yang sama.
+    const bonusRows = await prisma.walletTransaction.findMany({
+      where: { type: "REGISTRATION_BONUS" },
+      select: { walletId: true }
+    });
+    expect(new Set(bonusRows.map((b) => b.walletId)).size).toBe(5);
   });
 });
