@@ -30,9 +30,13 @@ export class AuthService {
 	    referralCode?: string;
 	    deviceId?: string;
 	    deviceFingerprint?: string;
-	    role?: UserRole;
 	    context: AuthClientContext;
 	  }) {
+	    // Batas keamanan: role akun bersifat otoritatif dan ditetapkan SERVER.
+	    // Registrasi publik selalu membuat USER. DRIVER/ADMIN/SUPER_ADMIN tidak
+	    // dapat diperoleh lewat endpoint ini; validator menolak field "role"
+	    // dengan 400 sehingga tidak ada jalur diam-diam.
+	    const authoritativeRole: UserRole = UserRole.USER;
     const existing = await this.authRepository.findUserByPhone(input.phone);
     if (existing) {
       throw new AppError("Nomor HP sudah terdaftar", StatusCodes.CONFLICT, "PHONE_ALREADY_REGISTERED");
@@ -55,7 +59,7 @@ export class AuthService {
           ...(input.email !== undefined ? { email: input.email } : {}),
           phone: input.phone,
           passwordHash,
-          role: input.role ?? UserRole.USER,
+          role: authoritativeRole,
 	          referralCode: await this.generateUniqueReferralCode(input.fullName),
 	          ...(input.referralCode !== undefined && input.referralCode.trim() !== ""
 	            ? { sponsorReferralCode: input.referralCode.trim().toUpperCase() }
@@ -91,7 +95,7 @@ export class AuthService {
       );
     }
 
-    return this.issueTokenPair(userId, input.role ?? UserRole.USER, input.context);
+    return this.issueTokenPair(userId, authoritativeRole, input.context);
   }
 
   async login(input: { phone: string; password: string; context: AuthClientContext }) {

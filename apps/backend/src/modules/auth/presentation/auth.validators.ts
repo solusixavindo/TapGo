@@ -26,7 +26,16 @@ const registerBodySchema = z
 	    referralCode: z.string().min(4).max(24).optional(),
 	    deviceId: z.string().min(8).max(200).optional(),
 	    deviceFingerprint: z.string().min(8).max(200).optional(),
-	    role: z.enum(["USER", "DRIVER"]).optional()
+	    // Registrasi publik TIDAK boleh memilih role. Server selalu menetapkan
+	    // USER. z.never() membuat permintaan yang MEMUAT "role" gagal tertutup
+	    // dengan 400 (bukan diam-diam diabaikan), sementara perilaku field tak
+	    // dikenal lain tidak berubah — klien Release 1 tidak mengirim "role".
+	    role: z
+	      .never({
+	        invalid_type_error:
+	          "Role tidak dapat ditentukan oleh klien. Registrasi publik selalu membuat akun USER."
+	      })
+	      .optional()
 	  })
   .superRefine((value, context) => {
     if (!value.fullName && !value.name) {
