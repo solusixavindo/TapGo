@@ -687,12 +687,75 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
     expect(walletTx.amount.toFixed(2)).toBe(seeded.walletTransactionAmount);
     expect(walletTx.type).toBe(seeded.walletTransactionType);
   });
+
+  // --- D10: cleanup harus aman pada database yang dipakai ulang -------------
+
+  it("D10 cleanTables idempoten meski ada baris RESTRICT (referral/withdrawal)", async () => {
+    // Seed tepat baris yang FK-nya RESTRICT ke users. Sebelum perbaikan,
+    // user.deleteMany() gagal dengan SQLSTATE 23001 pada
+    // referrals_sponsor_id_fkey sehingga beforeEach melempar dan seluruh test
+    // di file ini gagal serentak pada database yang dipakai ulang.
+    const sponsor = await createUser("USER");
+    const invitee = await createUser("USER");
+    await prisma.referral.create({
+      data: { sponsorId: sponsor.id, userId: invitee.id }
+    });
+    await prisma.referralLevel.create({
+      data: { ancestorId: sponsor.id, descendantId: invitee.id, level: 1 }
+    });
+    const wallet = await prisma.wallet.create({
+      data: { userId: sponsor.id, balance: new Prisma.Decimal("50000.00"), currency: "IDR" }
+    });
+    await prisma.withdrawal.create({
+      data: {
+        userId: sponsor.id,
+        walletId: wallet.id,
+        amount: new Prisma.Decimal("25000.00"),
+        status: "PENDING",
+        bankAccount: { bank: "UJI", masked: "****1234" }
+      }
+    });
+
+    // Baseline non-nol: blocker benar-benar ada.
+    expect(await prisma.referral.count()).toBeGreaterThan(0);
+    expect(await prisma.withdrawal.count()).toBeGreaterThan(0);
+    expect(await prisma.user.count()).toBeGreaterThan(0);
+
+    // Panggilan pertama harus berhasil (bukan 23001).
+    await expect(cleanTables()).resolves.toBeUndefined();
+    expect(await prisma.user.count()).toBe(0);
+    expect(await prisma.referral.count()).toBe(0);
+    expect(await prisma.referralLevel.count()).toBe(0);
+    expect(await prisma.withdrawal.count()).toBe(0);
+
+    // Idempoten: pemanggilan berulang pada database yang sama tetap aman.
+    await expect(cleanTables()).resolves.toBeUndefined();
+    await expect(cleanTables()).resolves.toBeUndefined();
+    expect(await prisma.user.count()).toBe(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
 // Helper
 // ---------------------------------------------------------------------------
 
+/**
+ * Membersihkan tabel agar file ini dapat dijalankan berulang pada database
+ * test yang SAMA (reusable disposable DB), bukan hanya pada database baru.
+ *
+ * Urutan mengikuti arah foreign key: child dihapus sebelum parent. Yang
+ * menentukan urutan adalah FK dengan delete_rule RESTRICT, karena hanya itu
+ * yang memblokir DELETE (CASCADE/SET NULL tidak memblokir):
+ *   - referrals.sponsor_id    -> users        RESTRICT
+ *   - commissions.beneficiary_id -> users     RESTRICT
+ *   - withdrawals.user_id     -> users        RESTRICT
+ *   - ride_orders.quote_id    -> ride_quotes  RESTRICT
+ * (reviews.reviewer_id dan rides.customer_id juga RESTRICT ke users, tetapi
+ * tabel reviews/rides legacy tidak pernah diisi oleh test mana pun, sehingga
+ * tidak dihapus di sini agar cleanup tetap minimal.)
+ *
+ * Tidak menonaktifkan FK constraint dan tidak memakai TRUNCATE ... CASCADE.
+ */
 async function cleanTables() {
   await prisma.auditLog.deleteMany();
   await prisma.profitSharingDistribution.deleteMany();
@@ -710,6 +773,13 @@ async function cleanTables() {
   await prisma.rideDriverProfile.deleteMany();
   await prisma.rideIdempotencyRecord.deleteMany();
   await prisma.walletTransaction.deleteMany();
+  // Blocker RESTRICT ke users: harus dihapus sebelum user.deleteMany().
+  // Tanpa ini, database yang dipakai ulang (mis. suite dijalankan dua kali
+  // tanpa recreate) menghasilkan SQLSTATE 23001 pada beforeEach sehingga
+  // SELURUH test di file ini gagal serentak.
+  await prisma.withdrawal.deleteMany();
+  await prisma.referralLevel.deleteMany();
+  await prisma.referral.deleteMany();
   await prisma.wallet.deleteMany();
   await prisma.user.deleteMany();
 }
