@@ -1,4 +1,4 @@
-import { UserRole } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
 import http, { Server } from "node:http";
 import { AddressInfo } from "node:net";
 import { createHash } from "node:crypto";
@@ -86,12 +86,6 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
     // Driver target dibuat PALING AWAL agar berada di luar 50 teratas
     // (daftar admin diurutkan createdAt desc dengan limit default 50).
     const target = await createDriver("MOTORCYCLE");
-    await prisma.rideDriverProfile.createMany({
-      data: Array.from({ length: 60 }, () => ({
-        userId: undefined as unknown as string,
-      })).map(() => ({ userId: "" })) as never,
-      skipDuplicates: true,
-    }).catch(() => undefined);
     // Buat 60 driver lain sesudahnya (createdAt lebih baru).
     for (let i = 0; i < 60; i += 1) {
       await createDriver("MOTORCYCLE");
@@ -593,6 +587,106 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
     const after = await financialSnapshot();
     expect(after).toEqual(before);
   });
+
+  // --- D9: bukti isolasi finansial dengan data existing NON-ZERO ----------
+
+  it("D9 data finansial existing tetap identik nilai demi nilai setelah seluruh moderasi", async () => {
+    // Seed data finansial nyata (bukan baseline nol) agar terbukti bahwa
+    // moderasi tidak hanya "tidak menambah baris", tetapi juga TIDAK MENGUBAH
+    // nilai baris yang sudah ada.
+    const seeded = await seedExistingFinancialData();
+    const before = await detailedFinancialSnapshot();
+
+    // Pastikan baseline benar-benar tidak nol.
+    expect(before.counts.wallets).toBeGreaterThan(0);
+    expect(before.counts.walletTransactions).toBeGreaterThan(0);
+    expect(before.counts.commissions).toBeGreaterThan(0);
+    expect(before.counts.rewards).toBeGreaterThan(0);
+    expect(before.counts.profitSharingDistributions).toBeGreaterThan(0);
+    expect(before.counts.invoices).toBeGreaterThan(0);
+    expect(before.counts.membershipPayments).toBeGreaterThan(0);
+    expect(before.sums.walletBalance).not.toBe("0.00");
+
+    // Jalankan KETIGA jenis moderasi: koreksi ride, moderasi driver, moderasi kendaraan.
+    const { reference, driver } = await inTripRide();
+    const admin = await createUser("ADMIN");
+    const vehicle = await prisma.rideVehicle.findFirstOrThrow({
+      where: { driverProfileId: driver.profile.id },
+    });
+
+    const correction = await api(`/api/v1/admin/rides/${reference}/status`, {
+      method: "PATCH",
+      token: tokenFor(admin),
+      body: { status: "CANCELLED_BY_SYSTEM", reason: "insiden keselamatan" },
+    });
+    expect(correction.status).toBe(200);
+
+    const driverMod = await api(
+      `/api/v1/admin/rides/drivers/${driver.profile.id}/status`,
+      {
+        method: "PATCH",
+        token: tokenFor(admin),
+        body: { status: "SUSPENDED", reason: "investigasi lanjutan" },
+      },
+    );
+    expect(driverMod.status).toBe(200);
+
+    const vehicleMod = await api(
+      `/api/v1/admin/rides/vehicles/${vehicle.id}/verification`,
+      {
+        method: "PATCH",
+        token: tokenFor(admin),
+        body: { verificationStatus: "REJECTED", isActive: false, reason: "audit unit" },
+      },
+    );
+    expect(vehicleMod.status).toBe(200);
+
+    // Bukti utama: seluruh snapshot terperinci identik.
+    const after = await detailedFinancialSnapshot();
+    expect(after).toEqual(before);
+
+    // Bukti tambahan: nilai baris spesifik yang di-seed tidak berubah.
+    const wallet = await prisma.wallet.findUniqueOrThrow({
+      where: { userId: seeded.userId },
+    });
+    expect(wallet.balance.toFixed(2)).toBe(seeded.walletBalance);
+    expect(wallet.cashBalance.toFixed(2)).toBe(seeded.walletCashBalance);
+    expect(wallet.ppobBalance.toFixed(2)).toBe(seeded.walletPpobBalance);
+
+    const commission = await prisma.commission.findUniqueOrThrow({
+      where: { id: seeded.commissionId },
+    });
+    expect(commission.amount.toFixed(2)).toBe(seeded.commissionAmount);
+    expect(commission.status).toBe(seeded.commissionStatus);
+
+    const reward = await prisma.rewardTransaction.findUniqueOrThrow({
+      where: { id: seeded.rewardId },
+    });
+    expect(reward.amount.toFixed(2)).toBe(seeded.rewardAmount);
+    expect(reward.status).toBe(seeded.rewardStatus);
+
+    const distribution = await prisma.profitSharingDistribution.findUniqueOrThrow({
+      where: { id: seeded.distributionId },
+    });
+    expect(distribution.amount.toFixed(2)).toBe(seeded.distributionAmount);
+
+    const invoice = await prisma.invoice.findUniqueOrThrow({
+      where: { id: seeded.invoiceId },
+    });
+    expect(invoice.amount.toFixed(2)).toBe(seeded.invoiceAmount);
+    expect(invoice.status).toBe(seeded.invoiceStatus);
+
+    const membershipPayment = await prisma.membershipPayment.findUniqueOrThrow({
+      where: { id: seeded.membershipPaymentId },
+    });
+    expect(membershipPayment.amount.toFixed(2)).toBe(seeded.membershipPaymentAmount);
+
+    const walletTx = await prisma.walletTransaction.findUniqueOrThrow({
+      where: { id: seeded.walletTransactionId },
+    });
+    expect(walletTx.amount.toFixed(2)).toBe(seeded.walletTransactionAmount);
+    expect(walletTx.type).toBe(seeded.walletTransactionType);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -601,6 +695,13 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
 
 async function cleanTables() {
   await prisma.auditLog.deleteMany();
+  await prisma.profitSharingDistribution.deleteMany();
+  await prisma.profitSharingPeriod.deleteMany();
+  await prisma.commission.deleteMany();
+  await prisma.rewardTransaction.deleteMany();
+  await prisma.membershipPayment.deleteMany();
+  await prisma.invoice.deleteMany();
+  await prisma.membershipOrder.deleteMany();
   await prisma.rideEvent.deleteMany();
   await prisma.rideDriverLocation.deleteMany();
   await prisma.rideOrder.deleteMany();
@@ -700,6 +801,236 @@ async function inTripRide() {
     expect(res.status).toBe(200);
   }
   return { passenger, driver, reference };
+}
+
+/**
+ * Seed data finansial existing yang NON-ZERO: wallet bersaldo, wallet
+ * transaction, commission, reward, profit-sharing distribution, serta
+ * invoice + membership payment. Dipakai untuk membuktikan moderasi ride tidak
+ * mengubah nilai yang sudah ada (bukan hanya tidak menambah baris).
+ */
+async function seedExistingFinancialData() {
+  const owner = await createUser("USER");
+  const basic = await prisma.membership.findFirstOrThrow({ where: { tier: "BASIC" } });
+
+  const wallet = await prisma.wallet.create({
+    data: {
+      userId: owner.id,
+      balance: new Prisma.Decimal("125000.00"),
+      cashBalance: new Prisma.Decimal("75000.00"),
+      ppobBalance: new Prisma.Decimal("50000.00"),
+      currency: "IDR",
+    },
+  });
+
+  const walletTx = await prisma.walletTransaction.create({
+    data: {
+      walletId: wallet.id,
+      type: "SPONSOR_BONUS",
+      amount: new Prisma.Decimal("40000.00"),
+      referenceType: "SEED_EXISTING",
+      referenceId: "seed-existing-1",
+    },
+  });
+
+  const commission = await prisma.commission.create({
+    data: {
+      beneficiaryId: owner.id,
+      sourceUserId: owner.id,
+      type: "SPONSOR_BONUS",
+      status: "POSTED",
+      level: 1,
+      amount: new Prisma.Decimal("40000.00"),
+      triggerType: "SEED_EXISTING",
+      triggerId: "seed-existing-commission",
+    },
+  });
+
+  const reward = await prisma.rewardTransaction.create({
+    data: {
+      userId: owner.id,
+      threshold: 10,
+      directSilverCount: 10,
+      amount: new Prisma.Decimal("500000.00"),
+      status: "PENDING",
+      referenceType: "REWARD_MILESTONE",
+      referenceId: "seed-existing-reward",
+    },
+  });
+
+  const period = await prisma.profitSharingPeriod.create({
+    data: {
+      periodMonth: 6,
+      periodYear: 2026,
+      netProfitAmount: new Prisma.Decimal("10000000.00"),
+      totalPoolAmount: new Prisma.Decimal("6000000.00"),
+      status: "DISTRIBUTED",
+    },
+  });
+  const distribution = await prisma.profitSharingDistribution.create({
+    data: {
+      periodId: period.id,
+      userId: owner.id,
+      amount: new Prisma.Decimal("1800000.00"),
+      status: "POSTED",
+    },
+  });
+
+  const order = await prisma.membershipOrder.create({
+    data: {
+      userId: owner.id,
+      membershipId: basic.id,
+      status: "PAID",
+      totalAmount: new Prisma.Decimal("500000.00"),
+      packageSnapshot: { tier: "SILVER", price: "500000.00" },
+    },
+  });
+  const invoice = await prisma.invoice.create({
+    data: {
+      orderId: order.id,
+      userId: owner.id,
+      number: `INV-SEED-${Date.now()}`,
+      status: "PAID",
+      amount: new Prisma.Decimal("500000.00"),
+      dueAt: new Date(Date.now() + 86_400_000),
+    },
+  });
+  const membershipPayment = await prisma.membershipPayment.create({
+    data: {
+      orderId: order.id,
+      invoiceId: invoice.id,
+      userId: owner.id,
+      amount: new Prisma.Decimal("500000.00"),
+      status: "PAID",
+      method: "SEED_EXISTING",
+    },
+  });
+
+  return {
+    userId: owner.id,
+    walletBalance: wallet.balance.toFixed(2),
+    walletCashBalance: wallet.cashBalance.toFixed(2),
+    walletPpobBalance: wallet.ppobBalance.toFixed(2),
+    walletTransactionId: walletTx.id,
+    walletTransactionAmount: walletTx.amount.toFixed(2),
+    walletTransactionType: walletTx.type,
+    commissionId: commission.id,
+    commissionAmount: commission.amount.toFixed(2),
+    commissionStatus: commission.status,
+    rewardId: reward.id,
+    rewardAmount: reward.amount.toFixed(2),
+    rewardStatus: reward.status,
+    distributionId: distribution.id,
+    distributionAmount: distribution.amount.toFixed(2),
+    invoiceId: invoice.id,
+    invoiceAmount: invoice.amount.toFixed(2),
+    invoiceStatus: invoice.status,
+    membershipPaymentId: membershipPayment.id,
+    membershipPaymentAmount: membershipPayment.amount.toFixed(2),
+  };
+}
+
+/** Snapshot lengkap: jumlah baris, agregat nilai, dan sidik jari per baris. */
+async function detailedFinancialSnapshot() {
+  const [
+    wallets,
+    walletTransactions,
+    commissions,
+    rewards,
+    profitSharingDistributions,
+    profitSharingPeriods,
+    invoices,
+    membershipPayments,
+    membershipOrders,
+    payments,
+    userMemberships,
+    referrals,
+  ] = await Promise.all([
+    prisma.wallet.count(),
+    prisma.walletTransaction.count(),
+    prisma.commission.count(),
+    prisma.rewardTransaction.count(),
+    prisma.profitSharingDistribution.count(),
+    prisma.profitSharingPeriod.count(),
+    prisma.invoice.count(),
+    prisma.membershipPayment.count(),
+    prisma.membershipOrder.count(),
+    prisma.payment.count(),
+    prisma.userMembership.count(),
+    prisma.referral.count(),
+  ]);
+
+  const walletAgg = await prisma.wallet.aggregate({
+    _sum: { balance: true, cashBalance: true, ppobBalance: true },
+  });
+  const txAgg = await prisma.walletTransaction.aggregate({ _sum: { amount: true } });
+  const commissionAgg = await prisma.commission.aggregate({ _sum: { amount: true } });
+  const rewardAgg = await prisma.rewardTransaction.aggregate({ _sum: { amount: true } });
+  const distAgg = await prisma.profitSharingDistribution.aggregate({ _sum: { amount: true } });
+  const invoiceAgg = await prisma.invoice.aggregate({ _sum: { amount: true } });
+  const mpAgg = await prisma.membershipPayment.aggregate({ _sum: { amount: true } });
+
+  const dec = (v: Prisma.Decimal | null) => new Prisma.Decimal(v ?? 0).toFixed(2);
+
+  // Sidik jari per baris agar mutasi nilai (bukan hanya jumlah baris) terdeteksi.
+  const walletRows = (
+    await prisma.wallet.findMany({ orderBy: { id: "asc" } })
+  ).map((w) => `${w.id}:${w.balance.toFixed(2)}:${w.cashBalance.toFixed(2)}:${w.ppobBalance.toFixed(2)}`);
+  const txRows = (
+    await prisma.walletTransaction.findMany({ orderBy: { id: "asc" } })
+  ).map((t) => `${t.id}:${t.type}:${t.amount.toFixed(2)}`);
+  const commissionRows = (
+    await prisma.commission.findMany({ orderBy: { id: "asc" } })
+  ).map((c) => `${c.id}:${c.type}:${c.status}:${c.amount.toFixed(2)}`);
+  const rewardRows = (
+    await prisma.rewardTransaction.findMany({ orderBy: { id: "asc" } })
+  ).map((r) => `${r.id}:${r.status}:${r.amount.toFixed(2)}`);
+  const distRows = (
+    await prisma.profitSharingDistribution.findMany({ orderBy: { id: "asc" } })
+  ).map((d) => `${d.id}:${d.status}:${d.amount.toFixed(2)}`);
+  const invoiceRows = (
+    await prisma.invoice.findMany({ orderBy: { id: "asc" } })
+  ).map((i) => `${i.id}:${i.status}:${i.amount.toFixed(2)}`);
+  const mpRows = (
+    await prisma.membershipPayment.findMany({ orderBy: { id: "asc" } })
+  ).map((m) => `${m.id}:${m.status}:${m.amount.toFixed(2)}`);
+
+  return {
+    counts: {
+      wallets,
+      walletTransactions,
+      commissions,
+      rewards,
+      profitSharingDistributions,
+      profitSharingPeriods,
+      invoices,
+      membershipPayments,
+      membershipOrders,
+      payments,
+      userMemberships,
+      referrals,
+    },
+    sums: {
+      walletBalance: dec(walletAgg._sum.balance),
+      walletCashBalance: dec(walletAgg._sum.cashBalance),
+      walletPpobBalance: dec(walletAgg._sum.ppobBalance),
+      walletTransactionAmount: dec(txAgg._sum.amount),
+      commissionAmount: dec(commissionAgg._sum.amount),
+      rewardAmount: dec(rewardAgg._sum.amount),
+      distributionAmount: dec(distAgg._sum.amount),
+      invoiceAmount: dec(invoiceAgg._sum.amount),
+      membershipPaymentAmount: dec(mpAgg._sum.amount),
+    },
+    rows: {
+      walletRows,
+      txRows,
+      commissionRows,
+      rewardRows,
+      distRows,
+      invoiceRows,
+      mpRows,
+    },
+  };
 }
 
 async function financialSnapshot() {
