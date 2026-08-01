@@ -11,6 +11,7 @@ import {
   rideWriteRateLimiter,
 } from "../../../core/security/rateLimit.js";
 import { RideService } from "../application/RideService.js";
+import { createRequireDriverCapability } from "./driverCapability.js";
 import { LocalDistanceAdapter } from "../infrastructure/LocalDistanceAdapter.js";
 import { PrismaMatchingAdapter } from "../infrastructure/PrismaMatchingAdapter.js";
 import {
@@ -165,7 +166,11 @@ rideRouter.post(
 // Driver — /api/v1/driver
 // ---------------------------------------------------------------------------
 
-driverRideRouter.use(requireAuth, requireRoles("DRIVER", "ADMIN", "SUPER_ADMIN"));
+// Kewenangan driver TIDAK berasal dari klaim role pada token, melainkan dari
+// state database terkini (User.status + RideDriverProfile.status). Dengan ini
+// suspend/reject berlaku SEKETIKA walau access token lama masih valid, dan
+// ADMIN/SUPER_ADMIN tidak mendapat bypass ke route operasional driver.
+driverRideRouter.use(requireAuth, createRequireDriverCapability(prisma));
 
 driverRideRouter.post(
   "/availability",

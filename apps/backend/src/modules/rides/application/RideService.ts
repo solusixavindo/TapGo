@@ -393,7 +393,11 @@ export class RideService {
   /** Tawaran yang layak untuk driver (hanya order yang masih mencari driver). */
   async listOffersForDriver(userId: string, limit = 10) {
     const profile = await this.requireDriverProfile(userId);
-    if (profile.status !== "ACTIVE" || profile.availability !== "ONLINE") {
+    // Kapabilitas (User.status + profile.status) sudah ditegakkan
+    // requireDriverProfile dan melempar 403 bila tidak terpenuhi. Yang tersisa
+    // di sini murni soal ketersediaan: driver ACTIVE yang sedang OFFLINE/BUSY
+    // tidak menerima tawaran, dan itu bukan kondisi error.
+    if (profile.availability !== "ONLINE") {
       return [];
     }
 
@@ -1231,15 +1235,39 @@ export class RideService {
     }
   }
 
+  /**
+   * Defense-in-depth kapabilitas driver pada application layer.
+   *
+   * Seluruh operasi driver (availability, offers, accept, reject, advance,
+   * cancel, location) melewati method ini, sehingga pemeriksaan di sini
+   * berlaku walau guard HTTP dilewati, dipanggil dari jalur lain, atau salah
+   * dipasang di masa depan. Sumber kebenarannya adalah DATABASE, bukan klaim
+   * role pada token — suspend/reject karena itu berlaku seketika.
+   */
   private async requireDriverProfile(userId: string) {
     const profile = await this.prisma.rideDriverProfile.findUnique({
       where: { userId },
+      include: { user: { select: { status: true } } },
     });
     if (!profile) {
       throw new AppError(
         "Profil driver tidak ditemukan",
         StatusCodes.FORBIDDEN,
         "RIDE_DRIVER_PROFILE_REQUIRED",
+      );
+    }
+    if (profile.user.status !== "ACTIVE") {
+      throw new AppError(
+        "Akun Anda tidak aktif",
+        StatusCodes.FORBIDDEN,
+        "RIDE_DRIVER_ACCOUNT_INACTIVE",
+      );
+    }
+    if (profile.status !== "ACTIVE") {
+      throw new AppError(
+        "Akun driver belum aktif",
+        StatusCodes.FORBIDDEN,
+        "RIDE_DRIVER_NOT_ACTIVE",
       );
     }
     return profile;

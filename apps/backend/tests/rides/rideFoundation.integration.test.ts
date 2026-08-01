@@ -223,7 +223,7 @@ describe.skipIf(!runIntegration)("Stage 5.2 — Ride backend foundation", () => 
     expect(((await offers.json()) as { data: unknown[] }).data).toHaveLength(0);
   });
 
-  it("driver suspended/offline tidak menerima tawaran", async () => {
+  it("driver suspended ditolak dan driver offline tidak menerima tawaran", async () => {
     const passenger = await createUser("USER");
     const suspended = await createDriver("MOTORCYCLE", { status: "SUSPENDED" });
     const offline = await createDriver("MOTORCYCLE");
@@ -231,13 +231,23 @@ describe.skipIf(!runIntegration)("Stage 5.2 — Ride backend foundation", () => 
     const quote = await createQuote(passenger);
     await createOrder(passenger, quote.quoteId);
 
+    // Stage 5.11: kapabilitas driver otoritatif dari database. Driver yang
+    // di-suspend TIDAK lagi menerima 200 dengan daftar kosong, melainkan
+    // ditolak 403 — seluruh operasi driver gagal seketika.
     const suspendedOffers = await api("/api/v1/driver/rides/offers", {
       token: tokenFor(suspended.user),
     });
+    expect(suspendedOffers.status).toBe(403);
+    expect(((await suspendedOffers.json()) as { code?: string }).code).toBe(
+      "RIDE_DRIVER_NOT_ACTIVE",
+    );
+
+    // Driver ACTIVE yang sedang OFFLINE tetap 200 dengan daftar kosong:
+    // ketersediaan bukan kondisi error.
     const offlineOffers = await api("/api/v1/driver/rides/offers", {
       token: tokenFor(offline.user),
     });
-    expect(((await suspendedOffers.json()) as { data: unknown[] }).data).toHaveLength(0);
+    expect(offlineOffers.status).toBe(200);
     expect(((await offlineOffers.json()) as { data: unknown[] }).data).toHaveLength(0);
   });
 
