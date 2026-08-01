@@ -19,15 +19,17 @@
 
 Dokumen ini memecah Batch 1–4 menjadi rencana yang dapat langsung dieksekusi dalam commit kecil, terukur, dan dapat di-rollback, tanpa menyisakan keputusan arsitektur yang diambil diam-diam saat implementasi.
 
-Tiga kesimpulan yang mengubah rencana awal:
+Empat kesimpulan yang mengubah rencana awal:
 
-1. **Urutan Batch harus dibalik sebagian.** Batch 4 (HMAC service) **wajib** mendahului Batch 1 dan 3, karena `RideDriverApplication.licenseBlindIndex` (D-22) dan `RideVehicle.plateBlindIndex` tidak dapat ditulis sebelum layanan blind index dan kontrak env-nya ada. Menulis schema lebih dulu akan memaksa keputusan format kolom tanpa implementasi yang memvalidasinya. **Urutan yang direkomendasikan: 4 → 1 → 2 → 3.**
+1. **Urutan Batch harus dibalik sebagian.** Batch 4 (HMAC service) tetap menjadi prasyarat untuk kolom blind index, tetapi statusnya **CONDITIONAL GO**: domain `nik` dan `plate` dapat disiapkan setelah golden vector disetujui, sedangkan domain `sim` dan `stnk` harus fail-closed sampai canonical grammar masing-masing disetujui. **Urutan yang direkomendasikan: 4 → 1 → 2 → 3.**
 
-2. **`RideVehicle` yang ada perlu direstrukturisasi, bukan hanya ditambahi.** Model sekarang mencampur identitas kendaraan dengan kepemilikan (`driverProfileId` melekat pada `RideVehicle`), dan memakai `plateNumberHash` SHA-256 **unsalted**. Karena tabel terbukti tidak pernah diisi kode produksi (nol `create`), restrukturisasi dapat dilakukan secara additive tanpa backfill — tetapi bukti tabel kosong **wajib diverifikasi ulang** saat implementasi, bukan diasumsikan dari dokumen ini.
+2. **`RideVehicle` adalah identitas fisik kendaraan yang stabil.** Perubahan nomor polisi **tidak** membuat `RideVehicle` baru. Kepemilikan temporal dipindah ke `RideVehicleOwnership`, sedangkan lifecycle nomor polisi dipindah ke proposal `RideVehiclePlateAssignment`. Vehicle replacement berarti `RideVehicle` berbeda; plate replacement/mutation pada kendaraan fisik yang sama berarti `RideVehicle` sama + plate assignment baru.
 
-3. **Batch 3 menyentuh keputusan yang masih PENDING.** Verifikasi dokumen kendaraan pada transfer (D-18) bergantung pada model dokumen yang diblokir. Rencana menandai bagian ini **BLOCKED — OWNER DECISION REQUIRED** dan mengusulkan Batch 3 berhenti pada transfer tanpa verifikasi dokumen.
+3. **`RideOrder` perlu histori kendaraan yang tidak menulis ulang data lama.** `vehicleId` existing tetap menunjuk identitas fisik `RideVehicle`. Proposal tambahan hanya nullable FK `vehicleOwnershipId` dan `vehiclePlateAssignmentId`, ditulis untuk ride baru setelah foundation dan compatibility test lulus. Tidak ada forced backfill dan tidak ada raw plate snapshot selama D-04 belum disetujui.
 
-**Rekomendasi akhir: GO untuk perencanaan eksekusi Checkpoint 5.14A dan 5.14B; CONDITIONAL GO untuk 5.14C; NO-GO penuh untuk bagian Batch 3 yang bergantung dokumen.** Rincian di §32.
+4. **SIM canonicalization belum memiliki aturan authoritative di repository.** Repository hanya menunjukkan legacy `Driver.licenseNumber @unique` plaintext tanpa grammar validasi yang dapat dijadikan dasar. Karena itu: **SIM CANONICALIZATION — BLOCKED PENDING AUTHORITATIVE FORMAT RULE**. D-22 tetap approved sebagai aturan bisnis, tetapi domain `sim` pada HMAC service harus fail-closed sampai Owner/Legal menyetujui grammar resmi.
+
+**Rekomendasi akhir: CONDITIONAL GO untuk 5.14A, GO untuk 5.14B setelah DB evidence eksekusi, CONDITIONAL GO untuk 5.14C dan 5.14D schema/foundation saja; NO-GO untuk endpoint/upload/scanner/mobile onboarding/production activation.** Rincian di §32.
 
 ---
 
@@ -96,6 +98,7 @@ Tidak ada nilai default yang diasumsikan. Titik sentuh Batch 1–4 dengan keputu
 | Cooldown resubmit setelah `REJECTED` | **D-20** | **Tidak diterapkan.** Resubmit diizinkan tanpa cooldown. Ini dinyatakan eksplisit, bukan default diam-diam. Penambahan cooldown adalah perubahan terpisah |
 | Retensi/penghapusan aplikasi & audit | **D-11…D-16** | Di luar Batch 1–4. Tidak ada job retensi dirancang |
 | Penghapusan model legacy | **D-23** | Hanya komentar `///` deprecated; **tanpa** penghapusan |
+| Authoritative SIM format rule | Owner/Legal | **SIM CANONICALIZATION — BLOCKED PENDING AUTHORITATIVE FORMAT RULE.** Domain `sim` pada HMAC service fail-closed sampai grammar resmi disetujui; invalid/ambiguous input ditolak sebelum HMAC |
 | Selfie/liveness, MIME, ukuran, scanner | **D-08/D-09/D-10** | Di luar Batch 1–4 |
 | Legal | **L-1…L-6** | Tetap terbuka |
 
@@ -163,7 +166,7 @@ model RideDriverApplication {
 }
 ```
 
-**Rationale nullability:** field SIM nullable karena `DRAFT` boleh belum lengkap; wajib diisi saat transisi ke `SUBMITTED` (divalidasi aplikasi + CHECK constraint). `submittedAt`/`approvedAt`/`rejectedAt`/`withdrawnAt` nullable karena hanya terisi pada status terkait. `decisionReasonCode` memakai **kode**, bukan teks bebas, untuk mencegah PII masuk audit.
+**Rationale nullability:** field SIM nullable karena `DRAFT` boleh belum lengkap. Kewajiban SIM saat transisi ke `SUBMITTED` hanya boleh diaktifkan setelah authoritative SIM grammar disetujui; sebelum itu domain `sim` fail-closed dan endpoint submit yang membutuhkan SIM harus berhenti dengan `IDENTIFIER_CANONICALIZATION_UNAVAILABLE`/`IDENTIFIER_DOMAIN_NOT_ACTIVE`, bukan membuat HMAC permisif. `submittedAt`/`approvedAt`/`rejectedAt`/`withdrawnAt` nullable karena hanya terisi pada status terkait. `decisionReasonCode` memakai **kode**, bukan teks bebas, untuk mencegah PII masuk audit.
 
 ### 6.3 Constraint & index SQL
 
@@ -175,6 +178,8 @@ CREATE UNIQUE INDEX "ride_driver_applications_one_open_per_user_key"
   WHERE "status" IN ('DRAFT','SUBMITTED','UNDER_REVIEW');
 
 -- Satu SIM hanya untuk satu identitas driver (D-22), dievaluasi per key version.
+-- Constraint ini hanya efektif setelah authoritative SIM grammar disetujui dan
+-- domain sim aktif; sebelum itu submit yang membutuhkan SIM fail-closed.
 CREATE UNIQUE INDEX "ride_driver_applications_license_blind_index_key"
   ON "ride_driver_applications" ("license_blind_index", "license_key_version")
   WHERE "license_blind_index" IS NOT NULL
@@ -188,7 +193,9 @@ ALTER TABLE "ride_driver_applications"
     AND ("status" = 'WITHDRAWN' AND "withdrawn_at" IS NOT NULL OR "status" <> 'WITHDRAWN')
   );
 
--- SUBMITTED ke atas wajib membawa identitas SIM lengkap.
+-- SUBMITTED ke atas wajib membawa identitas SIM lengkap hanya setelah
+-- authoritative SIM grammar disetujui. Bila grammar belum approved, service
+-- harus fail-closed sebelum INSERT/UPDATE SUBMITTED.
 ALTER TABLE "ride_driver_applications"
   ADD CONSTRAINT "ride_driver_applications_license_required_check" CHECK (
     "status" = 'DRAFT'
@@ -197,7 +204,7 @@ ALTER TABLE "ride_driver_applications"
   );
 ```
 
-**Catatan penting pada unique SIM:** index menyertakan `license_key_version`. Konsekuensinya, selama rotasi kunci, satu SIM yang tersimpan dengan v1 **tidak** otomatis bentrok dengan v2 pada level database — deduplication lintas versi ditegakkan di **application layer** lewat dual lookup (Batch 4). Ini disengaja dan konsisten dengan Owner Decision 15 (blind index lama tidak dapat dikonversi). **Test wajib** membuktikan dual lookup menangkap duplikat lintas versi.
+**Catatan penting pada unique SIM:** D-22 tetap approved, tetapi activation domain `sim` adalah **CONDITIONAL GO** sampai canonical grammar tervalidasi. Index menyertakan `license_key_version`; selama rotasi kunci, satu SIM yang tersimpan dengan v1 **tidak** otomatis bentrok dengan v2 pada level database — deduplication lintas versi ditegakkan di **application layer** lewat dual lookup (Batch 4). Ini disengaja dan konsisten dengan Owner Decision 15 (blind index lama tidak dapat dikonversi). **Test wajib** membuktikan dual lookup menangkap duplikat lintas versi setelah domain `sim` aktif.
 
 ### 6.4 Transaction boundary, error code, migrasi
 
@@ -331,25 +338,25 @@ RETURNING id;
 ### 8.1 Jawaban atas 20 pertanyaan wajib
 
 1. **`RideVehicle` merepresentasikan apa?** **Kendaraan fisik (identitas)**, bukan plate assignment. Kepemilikan dipindah ke `RideVehicleOwnership`.
-2. **Perubahan plate?** Plat baru = **kendaraan identitas baru**; kendaraan lama `RETIRED`; ownership baru dibuat dengan `endReason='PLATE_CHANGE'` pada yang lama. Alternatif "mengubah plat di tempat" ditolak karena akan menulis ulang histori (`RideOrder` lama akan tampak memakai plat baru).
-3. **Plate blind index disimpan?** `plateBlindIndex VarChar(64)` (hex HMAC-SHA256).
-4. **`keyVersion`?** `plateKeyVersion Int`.
-5. **`canonicalizationVersion`?** `plateCanonVersion Int` — preseden `fareRuleVersion` (E-04).
-6. **Satu active ownership per vehicle?** Partial unique pada `vehicle_id WHERE status='ACTIVE'`.
-7. **Satu active plate assignment?** Karena `plateBlindIndex` unik pada level identitas kendaraan, dan satu kendaraan hanya punya satu ownership `ACTIVE`, maka satu plat hanya punya satu pemilik aktif. **Tidak** memakai unique global permanen pada plat tanpa lifecycle.
-8. **Transfer atomik?** Satu `$transaction`: tutup ownership lama → buat ownership baru → audit. Partial unique menjamin kegagalan (bukan dua pemilik) bila ada transfer paralel.
-9. **Ownership lama ditutup?** `status='TRANSFERRED'`, `endedAt=now()`, `endReason`.
-10. **Histori tidak dapat ditulis ulang?** Baris ownership bersifat append-only secara kebijakan; hanya kolom penutup yang boleh diisi sekali. CHECK constraint melarang `endedAt` kosong pada status non-`ACTIVE`.
-11. **Retirement?** `status='RETIRED'`, `isActive=false`.
-12. **Replacement?** Retire lama + ownership baru pada kendaraan lain.
-13. **Suspended vehicle vs suspended driver?** `ownership.status='SUSPENDED'` **tidak** menyentuh `RideDriverProfile.status` maupun `User.status` → kapabilitas penumpang dan driver tidak terpengaruh (Owner Decision 7).
-14. **`RideOrder` lama tetap benar?** `RideOrder.vehicleId` menunjuk **identitas** `RideVehicle` yang tidak pernah dipindah/dihapus (E-03).
-15. **Snapshot atribut kendaraan pada `RideOrder`?** **Direkomendasikan ya** — `vehiclePlateMasked` dan `vehicleTypeSnapshot` pada `RideOrder`, karena atribut identitas (warna/merek) dapat berubah dan tampilan riwayat harus stabil. **Namun ini menambah kolom pada tabel existing** → diusulkan sebagai migrasi additive nullable terpisah, dan **ditandai sebagai keputusan yang perlu persetujuan** karena menyentuh model di luar Batch 3 murni.
-16. **Transfer conflict?** Conditional update + partial unique → yang kalah mendapat `RIDE_VEHICLE_TRANSFER_CONFLICT` (409).
-17. **Otorisasi transfer?** Scope `vehicle.transfer.review`; role saja tidak cukup.
-18. **Raw plate dicegah masuk log?** Plat mentah tidak pernah melewati logger; `logger.redact.paths` diperluas (E-19); hanya `plateMasked` yang boleh muncul.
-19. **`plateNumberHash` unsalted existing?** Karena tabel terbukti tidak pernah diisi produksi, kolom lama **dibiarkan** (deprecated) dan kolom blind index baru ditambahkan. **Tidak** ada backfill.
-20. **Mengapa backfill belum boleh?** Karena HMAC memerlukan **canonical raw plate** yang tidak tersedia dari SHA-256 lama — konsisten dengan Owner Decision 15. Bila kelak ada baris nyata, migrasi hanya lazy saat plat diberikan kembali lewat alur sah.
+2. **Perubahan plate?** **Tetap `RideVehicle` yang sama** dan membuat `RideVehiclePlateAssignment` baru. Assignment lama ditutup dengan `validTo` sebelum assignment baru aktif. Ini menjaga identitas fisik kendaraan dan tidak menulis ulang histori trip.
+3. **Vehicle replacement?** Kendaraan fisik berbeda = `RideVehicle` berbeda. Ownership lama dapat ditutup `endReason='VEHICLE_REPLACEMENT'`; kendaraan baru memiliki identity row dan ownership baru.
+4. **Plate replacement/mutation pada kendaraan sama?** `RideVehicle` sama; `RideVehiclePlateAssignment` lama `RETIRED`/`SUPERSEDED`, assignment baru `ACTIVE` setelah review dan uniqueness check.
+5. **Plate blind index disimpan di mana?** Pada `RideVehiclePlateAssignment.plateIndex VarChar(64)`, bukan langsung pada `RideVehicle`.
+6. **`keyVersion`?** `plateIndexKeyVersion Int`.
+7. **`canonicalizationVersion`?** `canonicalizationVersion Int` — preseden `fareRuleVersion` (E-04).
+8. **Satu active ownership per vehicle?** Partial unique pada `ride_vehicle_ownerships.vehicle_id WHERE status='ACTIVE'`.
+9. **Satu active plate assignment per vehicle?** Partial unique pada `ride_vehicle_plate_assignments.vehicle_id WHERE status='ACTIVE'`.
+10. **Satu active canonical plate untuk satu vehicle saja?** Backend menghitung lookup indexes untuk seluruh active key versions, mencari konflik pada semua active assignment, lalu mengaktifkan assignment secara atomik. Database hanya dapat menjamin current-key active uniqueness; global cross-version uniqueness dijaga application layer + transaksi + test konkurensi (§16, §22).
+11. **Retired plate dapat dipakai kembali?** Ya, hanya lewat reviewed workflow. Reuse sah membuat assignment baru dan tetap mempertahankan assignment lama sebagai histori.
+12. **Tidak ada permanent ownership antara plate dan driver?** Benar. Relasi temporal dipisah: `RideVehicleOwnership` menghubungkan kendaraan ↔ driver; `RideVehiclePlateAssignment` menghubungkan kendaraan ↔ plate.
+13. **Transfer atomik?** Satu `$transaction`: tutup ownership lama → buat ownership baru → audit. Partial unique menjamin kegagalan (bukan dua pemilik) bila ada transfer paralel. Plate assignment tidak otomatis berubah saat ownership transfer kecuali workflow review plate juga menyetujuinya.
+14. **Ownership lama ditutup?** `status='TRANSFERRED'`, `endedAt=now()`, `endReason`.
+15. **Histori tidak dapat ditulis ulang?** Baris ownership dan plate assignment bersifat append-only secara kebijakan; hanya kolom penutup yang boleh diisi sekali. CHECK constraint melarang `endedAt`/`validTo` kosong pada status terminal.
+16. **Suspended vehicle vs suspended driver?** `ownership.status='SUSPENDED'` **tidak** menyentuh `RideDriverProfile.status` maupun `User.status` → kapabilitas penumpang dan driver tidak terpengaruh (Owner Decision 7).
+17. **`RideOrder` lama tetap benar?** `RideOrder.vehicleId` tetap menunjuk identitas fisik `RideVehicle` (E-03). Proposal nullable FK `vehicleOwnershipId` dan `vehiclePlateAssignmentId` hanya diisi untuk ride baru setelah foundation + compatibility tests lulus.
+18. **Snapshot atribut kendaraan pada `RideOrder`?** **Tidak pada Batch 1–4.** Raw plate snapshot tetap **BLOCKED** oleh D-04/legal decision. Dokumen ini mengganti B-6 menjadi proposal historical FK references, bukan raw snapshot.
+19. **Raw plate dicegah masuk log?** Plat mentah tidak pernah melewati logger; `logger.redact.paths` diperluas (E-19); raw plate dan blind index dilarang di log/audit/error. Hanya `plateMasked` atau public-safe label yang boleh muncul bila disetujui.
+20. **`plateNumberHash` unsalted existing?** Kolom lama **dibiarkan** dan ditandai deprecated. Tidak ada backfill karena HMAC memerlukan canonical raw plate yang tidak tersedia dari SHA-256 lama — konsisten dengan Owner Decision 15. Bila kelak ada baris nyata, migrasi hanya lazy saat plat diberikan kembali lewat alur sah.
 
 ### 8.2 Proposed schema
 
@@ -376,6 +383,30 @@ model RideVehicleOwnership {
   @@map("ride_vehicle_ownerships")
 }
 
+model RideVehiclePlateAssignment {
+  id                       String                           @id @default(uuid()) @db.Uuid
+  vehicleId                String                           @map("vehicle_id") @db.Uuid
+  plateIndex               String                           @map("plate_index") @db.VarChar(64)
+  plateIndexKeyVersion     Int                              @map("plate_index_key_version")
+  canonicalizationVersion  Int                              @map("canonicalization_version")
+  status                   RideVehiclePlateAssignmentStatus @default(PENDING_REVIEW)
+  validFrom                DateTime?                        @map("valid_from")
+  validTo                  DateTime?                        @map("valid_to")
+  changeReason             String?                          @map("change_reason") @db.VarChar(60)
+  createdBy                String?                          @map("created_by") @db.Uuid
+  reviewedBy               String?                          @map("reviewed_by") @db.Uuid
+  reviewedAt               DateTime?                        @map("reviewed_at")
+  version                  Int                              @default(0)
+  createdAt                DateTime                         @default(now()) @map("created_at")
+  updatedAt                DateTime                         @updatedAt @map("updated_at")
+
+  vehicle                  RideVehicle                      @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+
+  @@index([vehicleId, status])
+  @@index([plateIndex, plateIndexKeyVersion, status])
+  @@map("ride_vehicle_plate_assignments")
+}
+
 model RideVehicleTransfer {
   id                String                      @id @default(uuid()) @db.Uuid
   vehicleId         String                      @map("vehicle_id") @db.Uuid
@@ -394,7 +425,9 @@ model RideVehicleTransfer {
 }
 ```
 
-Kolom tambahan pada `RideVehicle` (additive, nullable): `plateBlindIndex`, `plateKeyVersion`, `plateCanonVersion`, `plateIndexMigrationState`. Kolom lama `plateNumberHash` dan `driverProfileId` **dibiarkan** dan ditandai deprecated agar migrasi tetap additive.
+Kolom lama `RideVehicle.plateNumberHash` dan `RideVehicle.driverProfileId` **dibiarkan** dan ditandai deprecated agar migrasi tetap additive. Plate blind index baru berada di `RideVehiclePlateAssignment`, bukan di `RideVehicle`.
+
+Proposal additive pada `RideOrder` (nullable, tidak aktif menulis sampai compatibility test lulus): `vehicleOwnershipId String? @map("vehicle_ownership_id") @db.Uuid`, `vehiclePlateAssignmentId String? @map("vehicle_plate_assignment_id") @db.Uuid`. `vehicleId` existing tetap dipertahankan.
 
 `onDelete: Restrict` dipilih agar histori kepemilikan tidak dapat hilang diam-diam.
 
@@ -405,9 +438,15 @@ Kolom tambahan pada `RideVehicle` (additive, nullable): `plateBlindIndex`, `plat
 CREATE UNIQUE INDEX "ride_vehicle_ownerships_one_active_per_vehicle_key"
   ON "ride_vehicle_ownerships" ("vehicle_id") WHERE "status" = 'ACTIVE';
 
-CREATE UNIQUE INDEX "ride_vehicles_plate_blind_index_key"
-  ON "ride_vehicles" ("plate_blind_index", "plate_key_version")
-  WHERE "plate_blind_index" IS NOT NULL;
+CREATE UNIQUE INDEX "ride_vehicle_plate_assignments_one_active_per_vehicle_key"
+  ON "ride_vehicle_plate_assignments" ("vehicle_id") WHERE "status" = 'ACTIVE';
+
+-- Current-key uniqueness guard only. Cross-version uniqueness is enforced by
+-- application dual lookup + transaction + retry (§16).
+CREATE UNIQUE INDEX "ride_vehicle_plate_assignments_current_key_active_key"
+  ON "ride_vehicle_plate_assignments" ("plate_index")
+  WHERE "status" = 'ACTIVE'
+    AND "plate_index_key_version" = :current_key_version;
 
 ALTER TABLE "ride_vehicle_ownerships"
   ADD CONSTRAINT "ride_vehicle_ownerships_ended_at_check"
@@ -416,11 +455,25 @@ ALTER TABLE "ride_vehicle_ownerships"
 ALTER TABLE "ride_vehicle_ownerships"
   ADD CONSTRAINT "ride_vehicle_ownerships_active_requires_verified_check"
   CHECK ("is_active" = false OR "verification_status" = 'VERIFIED');
+
+ALTER TABLE "ride_vehicle_plate_assignments"
+  ADD CONSTRAINT "ride_vehicle_plate_assignments_valid_range_check"
+  CHECK (
+    ("status" = 'ACTIVE' AND "valid_from" IS NOT NULL AND "valid_to" IS NULL)
+    OR ("status" <> 'ACTIVE' AND ("valid_to" IS NOT NULL OR "status" = 'PENDING_REVIEW'))
+  );
 ```
 
 ### 8.4 Dampak pada konsumen existing
 
 `PrismaMatchingAdapter.findCandidates` (E-13) memfilter `vehicles.some({ isActive, verificationStatus })` melalui relasi `RideVehicle.driverProfileId`. Setelah kepemilikan pindah ke `RideVehicleOwnership`, query ini **wajib diperbarui** untuk memfilter lewat ownership `ACTIVE`. **Ini perubahan pada kode yang sudah diuji** dan menjadi risiko utama Batch 3 — test `rideFoundation` yang ada harus tetap hijau.
+
+`RideOrder` historical references:
+
+- `vehicleId` existing tetap nullable dan menunjuk `RideVehicle` dengan behavior existing `ON DELETE SET NULL`.
+- `vehicleOwnershipId` dan `vehiclePlateAssignmentId` diusulkan nullable. Untuk histori kuat, FK final sebaiknya `ON DELETE RESTRICT` setelah tabel foundation aktif. Pada migration awal nullable, existing rows tetap `NULL` dan tidak dipaksa backfill.
+- Aktivasi write path bertahap: buat schema → fresh migrate/test → update service untuk ride baru menulis refs → compatibility test existing rows → baru aktifkan guard. Rollback kode dapat berhenti menulis refs tanpa merusak rows lama; forward-fix DB hanya diperlukan bila constraint salah.
+- Raw plate snapshot tidak disimpan. Bila D-04/legal kelak menyetujui snapshot, itu harus menjadi keputusan dan migration terpisah.
 
 **BLOCKED — OWNER DECISION REQUIRED:** langkah "memverifikasi dokumen kendaraan baru" pada D-18 tidak dapat diimplementasikan tanpa model dokumen (D-07/D-09/D-10). Batch 3 berhenti pada transfer + audit; kendaraan hasil transfer tetap `PENDING`/`isActive=false`.
 
@@ -435,11 +488,22 @@ ALTER TABLE "ride_vehicle_ownerships"
 | Domain | Canonicalization | Catatan |
 |---|---|---|
 | `nik` | digits-only; **wajib tepat 16 digit**; leading zero dipertahankan; **jangan** di-parse sebagai number | Digunakan hanya bila D-07 mewajibkan — **BLOCKED** untuk Batch 1 |
-| `sim` | trim; uppercase; hapus whitespace. **Tidak** menghapus tanda hubung atau karakter lain tanpa bukti bahwa karakter itu tidak membedakan identifier | Konservatif dengan sengaja — normalisasi berlebihan dapat menggabungkan dua SIM berbeda |
+| `sim` | **SIM CANONICALIZATION — BLOCKED PENDING AUTHORITATIVE FORMAT RULE** | Repository hanya menunjukkan legacy `Driver.licenseNumber @unique` plaintext tanpa grammar validasi. Domain `sim` fail-closed sampai Owner/Legal menyetujui grammar resmi |
 | `plate` | uppercase; normalisasi whitespace; hapus separator (`-`, spasi ganda) → `B 1234 ABC` = `B1234ABC` | Identitas terpisah dari kepemilikan |
 | `stnk` | **future only** — didaftarkan di enum domain tetapi **dilarang dipakai** sampai keputusan dokumen/legal | Fail-closed bila dipanggil |
 
 `canonicalizationVersion` disimpan per baris agar perubahan aturan normalisasi di masa depan tidak diam-diam mengubah makna index lama.
+
+Pipeline canonicalization wajib dipisahkan:
+
+1. Unicode normalization (`NFKC`) untuk mencegah bentuk karakter ekuivalen menghasilkan HMAC berbeda.
+2. `trim`.
+3. Case normalization bila domain mengizinkan.
+4. Syntax validation domain.
+5. Canonicalization domain.
+6. HMAC generation.
+
+Invalid/ambiguous input ditolak **sebelum** HMAC. Untuk `sim`, seluruh input ditolak dengan `IDENTIFIER_CANONICALIZATION_UNAVAILABLE` atau `IDENTIFIER_DOMAIN_NOT_ACTIVE` sampai grammar resmi disetujui; jangan menetapkan separator dipertahankan atau dihapus tanpa bukti authoritative.
 
 ### 9.2 Proposed interface
 
@@ -488,18 +552,36 @@ Sesuai Owner Decision 15: blind index lama **tidak dapat** dikonversi tanpa raw 
 
 ### 9.5 Synthetic test vectors
 
-Hanya nilai sintetis; **dilarang** memakai NIK/SIM/STNK/plat milik orang nyata.
+Hanya nilai sintetis; **dilarang** memakai NIK/SIM/STNK/plat milik orang nyata. Kunci berikut sengaja publik dan hanya untuk golden test:
 
-| Domain | Input sintetis | Canonical harapan |
-|---|---|---|
-| `nik` | `0000 0000 0000 0001` | `0000000000000001` (leading zero utuh) |
-| `nik` | `123` | **tolak** — bukan 16 digit |
-| `sim` | ` test-sim-0001 ` | `TEST-SIM-0001` (tanda hubung dipertahankan) |
-| `plate` | `z 0001 zz` | `Z0001ZZ` |
-| `plate` | `Z-0001-ZZ` | `Z0001ZZ` (sama dengan di atas) |
-| `stnk` | apa pun | **tolak** — domain future, fail-closed |
+`PUBLIC SYNTHETIC TEST KEY — NEVER USE IN PRODUCTION`
 
-Nilai HMAC harapan **tidak** dicantumkan di dokumen maupun di test yang ter-commit; test memverifikasi **properti** (determinisme, domain separation, version separation), bukan konstanta yang bergantung secret.
+Material test key lengkap:
+
+- v1: `PUBLIC SYNTHETIC TEST KEY — NEVER USE IN PRODUCTION — TAPGO IDENTIFIER V1`
+- v2: `PUBLIC SYNTHETIC TEST KEY — NEVER USE IN PRODUCTION — TAPGO IDENTIFIER V2`
+
+Kontrak HMAC:
+
+- Algorithm: `HMAC-SHA256`
+- Encoding output: lowercase hex
+- Message format: `tapgo.identifier.v1|domain=<domain>|canonicalizationVersion=<version>|value=<canonical>`
+- Digest dihitung dengan Node `crypto.createHmac` dan diverifikasi ulang memakai WebCrypto `subtle.sign`; seluruh hasil match.
+
+| Case | Domain | Key version | Canonicalization version | Synthetic input | Canonical value | Exact HMAC message | Expected lowercase hex HMAC-SHA256 |
+|---|---|---:|---:|---|---|---|---|
+| NIK synthetic | `nik` | 1 | 1 | `0000 0000 0000 0001` | `0000000000000001` | `tapgo.identifier.v1\|domain=nik\|canonicalizationVersion=1\|value=0000000000000001` | `c6166b7cac7e8aa1e14924a0b833b9615dcff53b2b406d6e063d79b2fbc523c5` |
+| PLATE synthetic | `plate` | 1 | 1 | `z 0001 zz` | `Z0001ZZ` | `tapgo.identifier.v1\|domain=plate\|canonicalizationVersion=1\|value=Z0001ZZ` | `51ee2bd000f74ce137fe5b4eef762dbb950be6d108d094747b0b1ab2cb16a8c6` |
+| Same value, `nik` domain | `nik` | 1 | 1 | `0000 0000 0000 0001` | `0000000000000001` | `tapgo.identifier.v1\|domain=nik\|canonicalizationVersion=1\|value=0000000000000001` | `c6166b7cac7e8aa1e14924a0b833b9615dcff53b2b406d6e063d79b2fbc523c5` |
+| Same value, `plate` domain | `plate` | 1 | 1 | `0000 0000 0000 0001` | `0000000000000001` | `tapgo.identifier.v1\|domain=plate\|canonicalizationVersion=1\|value=0000000000000001` | `3800dfb6289fe78534778ba262e2e7384b5d07c1934c11aeca8efeeb33a78291` |
+| Same plate, different key version | `plate` | 2 | 1 | `Z-0001-ZZ` | `Z0001ZZ` | `tapgo.identifier.v1\|domain=plate\|canonicalizationVersion=1\|value=Z0001ZZ` | `a6ad7195add4197db8e77b65e3e0ef1ebff91edc026c5bd5ebf0bd09fa23cdc5` |
+| Normalization-equivalent plate A | `plate` | 1 | 1 | `z 0001 zz` | `Z0001ZZ` | `tapgo.identifier.v1\|domain=plate\|canonicalizationVersion=1\|value=Z0001ZZ` | `51ee2bd000f74ce137fe5b4eef762dbb950be6d108d094747b0b1ab2cb16a8c6` |
+| Normalization-equivalent plate B | `plate` | 1 | 1 | `Z-0001-ZZ` | `Z0001ZZ` | `tapgo.identifier.v1\|domain=plate\|canonicalizationVersion=1\|value=Z0001ZZ` | `51ee2bd000f74ce137fe5b4eef762dbb950be6d108d094747b0b1ab2cb16a8c6` |
+| Normalization-invalid input | `plate` | — | — | `Z-@@` | **rejected before HMAC** | — | — |
+| SIM pending grammar | `sim` | — | — | any | **rejected before HMAC** | — | — |
+| STNK future domain | `stnk` | — | — | any | **rejected before HMAC** | — | — |
+
+Golden vector ini boleh berada di dokumentasi/test fixture karena memakai kunci sintetis publik, bukan production secret. Production key, raw identifier nyata, connection string, token, dan credential tetap dilarang masuk source, log, audit, atau dokumen.
 
 ---
 
@@ -511,10 +593,11 @@ Nilai HMAC harapan **tidak** dicantumkan di dokumen maupun di test yang ter-comm
 |---|---|---|---|
 | `RideDriverApplication` | 1 (+kolom lease di 2) | baru | §6.2 dan §7.1 |
 | `RideVehicleOwnership` | 3 | baru | §8.2 |
+| `RideVehiclePlateAssignment` | 3 | baru | temporal lifecycle nomor polisi; satu active assignment per `RideVehicle`; histori plate dipertahankan | §8.2 |
 | `RideVehicleTransfer` | 3 | baru | §8.2 |
-| `RideVehicle` | 3 | **diubah additive** — kolom `plateBlindIndex`, `plateKeyVersion`, `plateCanonVersion`, `plateIndexMigrationState` (semua nullable); `plateNumberHash` dan `driverProfileId` ditandai deprecated tetapi **tetap ada** | §8.2 |
+| `RideVehicle` | 3 | **diubah additive minimal** — `plateNumberHash` dan `driverProfileId` ditandai deprecated tetapi **tetap ada**; tidak ada kolom blind index plate baru di model ini | §8.2 |
 | `RideDriverProfile` | 1 | **tidak diubah**; hanya menerima relasi balik opsional | E-01 |
-| `RideOrder` | — | **tidak diubah** pada Batch 1–4; usulan snapshot kendaraan (§8.1 no. 15) memerlukan persetujuan terpisah | E-03 |
+| `RideOrder` | 3 / activation later | additive nullable `vehicleOwnershipId`, `vehiclePlateAssignmentId` proposal; `vehicleId` existing tetap; write path baru aktif hanya setelah foundation + compatibility tests | E-03, §8.4 |
 
 **Tidak ada model dokumen pada Batch 1–4.** Tidak ada kolom `url`, `storageKey`, atau `bytea` di mana pun.
 
@@ -529,6 +612,7 @@ Nilai HMAC harapan **tidak** dicantumkan di dokumen maupun di test yang ter-comm
 enum RideDriverApplicationStatus  { DRAFT SUBMITTED UNDER_REVIEW APPROVED REJECTED WITHDRAWN }
 enum RideIdentifierMigrationState { CURRENT LEGACY_PENDING_REVERIFICATION LEGACY_UNRECOVERABLE }
 enum RideVehicleOwnershipStatus   { ACTIVE RETIRED TRANSFERRED SUSPENDED }
+enum RideVehiclePlateAssignmentStatus { PENDING_REVIEW ACTIVE RETIRED SUPERSEDED REJECTED }
 enum RideVehicleTransferStatus    { PENDING APPROVED REJECTED CANCELLED }
 ```
 
@@ -549,7 +633,9 @@ Seluruhnya enum **baru**, sehingga menghindari risiko `ALTER TYPE … ADD VALUE`
 | `(userId, cycleNumber)` | unique | urutan cycle deterministik | §6.2 |
 | `(status, createdAt)`, `(status, claimExpiresAt)` | index | antrean review & sweep lease | §6.2, §7.1 |
 | `ride_vehicle_ownerships_one_active_per_vehicle_key` | partial unique | satu ownership aktif per kendaraan | §8.3 |
-| `ride_vehicles_plate_blind_index_key` | partial unique | identitas plat unik per key version | §8.3 |
+| `ride_vehicle_plate_assignments_one_active_per_vehicle_key` | partial unique | satu active plate assignment per kendaraan | §8.3 |
+| `ride_vehicle_plate_assignments_current_key_active_key` | partial unique | current-key active plate uniqueness guard | §8.3 |
+| `ride_vehicle_plate_assignments_valid_range_check` | CHECK | active assignment punya `validFrom`, terminal punya `validTo` | §8.3 |
 | `ride_vehicle_ownerships_ended_at_check` | CHECK | histori tidak dapat ditulis ulang | §8.3 |
 | `ride_vehicle_ownerships_active_requires_verified_check` | CHECK | `isActive` hanya bila `VERIFIED` | §8.3 |
 
@@ -565,7 +651,7 @@ Definisi interface ada di §9.2. Kontrak pendukung:
 
 | Elemen | Bentuk |
 |---|---|
-| Domain | `"nik" \| "sim" \| "plate" \| "stnk"` — `stnk` fail-closed sampai keputusan dokumen |
+| Domain | `"nik" \| "sim" \| "plate" \| "stnk"` — `sim` fail-closed sampai authoritative grammar; `stnk` fail-closed sampai keputusan dokumen |
 | Nilai index | hex HMAC-SHA256, panjang tetap 64 karakter → kolom `VarChar(64)` |
 | Metadata wajib per baris | `keyVersion Int`, `canonVersion Int`, `indexMigrationState` |
 | Perbandingan | `timingSafeEqual` untuk `verifyIndex` |
@@ -617,16 +703,21 @@ Lihat §7.4 untuk review lease. Ringkasan lintas batch:
 - **Idempotensi:** `RideIdempotencyRecord` (E-05) dengan scope baru `driver_application_submit`, `vehicle_transfer_request`.
 - **Atomisitas approval:** update aplikasi + upsert profil + audit dalam satu transaksi; gagal salah satu → rollback semua.
 - **Retry:** hanya untuk error transient yang sudah terbukti (`P2034`/`40001`), tanpa memperluas kelas error.
+- **Cross-version plate uniqueness:** setiap create/change/transfer plate menghitung lookup indexes untuk seluruh active key versions. Konflik dicari terhadap semua active assignment sebelum activation. Bila workflow sah memberikan identifier yang cocok dengan old-key record, lazy migration ke current key dilakukan dalam transaksi yang sama.
+- **Plate activation atomicity:** tutup assignment lama (`validTo=now()`, status terminal) → buat/aktifkan assignment baru → audit. Aktivasi harus menjadi single-winner; request paralel mendapat `RIDE_VEHICLE_PLATE_ASSIGNMENT_CONFLICT`.
+- **Concurrency control untuk plate:** gunakan current canonical blind index sebagai bahan hash untuk advisory lock, bukan raw plate dan bukan blind index literal di log. Evaluasi kombinasi `SELECT pg_advisory_xact_lock(hashtext(...))`, partial unique current-key, transaction retry, dan fail-closed/manual review bila old key unavailable atau legacy unrecoverable.
+- **No raw/index leakage:** raw identifier, lookup index, blind index, dan advisory lock material tidak boleh muncul di log/audit/error.
 
 ---
 
 ## 17. Audit Event Catalogue
 
-`entityType`: `RideDriverApplication`, `RideVehicleOwnership`, `RideVehicleTransfer`. `metadata` **dilarang** memuat raw identifier, blind index, atau teks bebas berisi PII — hanya `reasonCode`, status lama→baru, dan id.
+`entityType`: `RideDriverApplication`, `RideVehicleOwnership`, `RideVehiclePlateAssignment`, `RideVehicleTransfer`. `metadata` **dilarang** memuat raw identifier, blind index, atau teks bebas berisi PII — hanya `reasonCode`, status lama→baru, dan id.
 
 `driver_application.created` · `.updated` · `.submitted` · `.withdrawn` · `.claimed` · `.renewed` · `.released` · `.claim_expired` · `.reassigned` · `.approved` · `.rejected`
 `ride_driver_profile.created` · `.activated_from_application`
 `ride_vehicle.registered` · `ride_vehicle_ownership.started` · `.retired` · `.transferred` · `.suspended`
+`ride_vehicle_plate_assignment.created` · `.activated` · `.retired` · `.migrated` · `.conflict` · `.manual_review_required`
 `ride_vehicle_transfer.requested` · `.approved` · `.rejected` · `.conflict`
 `identifier.legacy_key_lookup` · `identifier.unknown_key_version` · `identifier.migrated` · `identifier.collision_detected`
 
@@ -648,11 +739,15 @@ Lihat §7.4 untuk review lease. Ringkasan lintas batch:
 | `RIDE_DRIVER_APPLICATION_DECISION_FINAL` | 409 | sudah terminal |
 | `RIDE_SCOPE_REQUIRED` | 403 | scope eksplisit tidak dimiliki |
 | `RIDE_DRIVER_PROFILE_ALREADY_EXISTS` | 409 | profil sudah ada saat approval non-idempotent |
-| `RIDE_VEHICLE_PLATE_TAKEN` | 409 | plat sudah punya ownership aktif |
+| `RIDE_VEHICLE_PLATE_TAKEN` | 409 | canonical plate sudah punya active plate assignment pada kendaraan lain |
+| `RIDE_VEHICLE_PLATE_ASSIGNMENT_CONFLICT` | 409 | aktivasi plate assignment paralel/kalah uniqueness |
 | `RIDE_VEHICLE_OWNERSHIP_NOT_ACTIVE` | 409 | ownership tidak aktif |
 | `RIDE_VEHICLE_TRANSFER_CONFLICT` | 409 | transfer paralel |
 | `RIDE_IDENTIFIER_ALREADY_REGISTERED` | 409 | blind index bentrok (SIM, D-22) |
 | `RIDE_IDENTIFIER_FORMAT_INVALID` | 400 | canonicalization gagal |
+| `DRIVER_SIM_FORMAT_INVALID` | 400 | SIM tidak memenuhi grammar resmi setelah grammar disetujui |
+| `IDENTIFIER_CANONICALIZATION_UNAVAILABLE` | 409 | domain belum punya canonical grammar approved |
+| `IDENTIFIER_DOMAIN_NOT_ACTIVE` | 409 | domain HMAC sengaja fail-closed |
 | `RIDE_IDENTIFIER_KEY_UNAVAILABLE` | 503 | kunci hilang → fail-closed |
 
 Kode Stage 5.11 (`RIDE_DRIVER_PROFILE_REQUIRED`, `RIDE_DRIVER_NOT_ACTIVE`, `RIDE_DRIVER_ACCOUNT_INACTIVE`) **tidak berubah**.
@@ -665,7 +760,10 @@ Kode Stage 5.11 (`RIDE_DRIVER_PROFILE_REQUIRED`, `RIDE_DRIVER_NOT_ACTIVE`, `RIDE
 |---|---|---|
 | `RideDriverApplication.licenseBlindIndex` + `licenseKeyVersion` + `licenseCanonVersion` (Batch 1) | **Batch 4** | Kolom tidak dapat diisi tanpa layanan index; menulis schema lebih dulu memaksa keputusan format tanpa implementasi yang memvalidasi |
 | Unique SIM lintas versi (D-22) | **Batch 4** | Deduplication lintas versi ditegakkan lewat dual lookup di application layer, bukan oleh index tunggal |
-| `RideVehicle.plateBlindIndex` + versi (Batch 3) | **Batch 4** | Idem |
+| `RideVehiclePlateAssignment.plateIndex` + versi (Batch 3) | **Batch 4** | Idem; plate index tidak lagi berada di `RideVehicle` |
+| Cross-version active plate uniqueness | **Batch 4 + Batch 3** | Batch 4 menyediakan lookup indexes semua active key versions; Batch 3 menerapkan transaksi aktivasi assignment |
+| `RideOrder.vehicleOwnershipId` + `vehiclePlateAssignmentId` | **Batch 3 foundation + compatibility tests** | FK nullable additive; write path ride baru aktif hanya setelah tests membuktikan histori existing aman |
+| SIM HMAC domain | **Owner/Legal SIM grammar** | D-22 approved, tetapi canonicalization belum authoritative sehingga domain `sim` fail-closed |
 | Update `PrismaMatchingAdapter` (Batch 3) | Batch 3 schema | E-13 — konsumen existing wajib ikut berubah |
 | Guard `requireScopes` (Batch 2) | Model penyimpanan scope | **BLOCKED** — belum ada di repo (G-12) |
 | Approval membuat profil (Batch 1) | `RideDriverProfile` existing | E-01 — `userId @unique` memungkinkan upsert aman |
@@ -682,7 +780,7 @@ Kode Stage 5.11 (`RIDE_DRIVER_PROFILE_REQUIRED`, `RIDE_DRIVER_NOT_ACTIVE`, `RIDE
 
 | Urutan | Batch | Alasan |
 |---|---|---|
-| 1 | **Batch 4 — HMAC service** | Tidak bergantung schema; menyediakan kontrak kolom (`blindIndex` panjang 64 hex, `keyVersion`, `canonVersion`) yang dibutuhkan Batch 1 dan 3. Dapat diuji penuh secara unit tanpa database |
+| 1 | **Batch 4 — HMAC service** | Tidak bergantung schema; menyediakan kontrak kolom (`blindIndex` panjang 64 hex, `keyVersion`, `canonVersion`) yang dibutuhkan Batch 1 dan 3. `nik`/`plate` dapat diuji penuh secara unit; `sim` dan `stnk` tetap fail-closed |
 | 2 | **Batch 1 — Schema aplikasi** | Memakai kontrak Batch 4; menyediakan entitas yang dibutuhkan Batch 2 |
 | 3 | **Batch 2 — Review lease** | Menambah kolom pada tabel Batch 1; logika paling padat konkurensi |
 | 4 | **Batch 3 — Vehicle ownership** | Paling berisiko karena mengubah konsumen existing (`PrismaMatchingAdapter`); dikerjakan terakhir agar kegagalannya tidak memblokir jalur onboarding |
@@ -702,9 +800,10 @@ Kode Stage 5.11 (`RIDE_DRIVER_PROFILE_REQUIRED`, `RIDE_DRIVER_NOT_ACTIVE`, `RIDE
 | `src/modules/rides/domain/driverApplicationStateMachine.ts` | 1 | `assertApplicationTransition` | — | unit | Unit matriks transisi |
 | `src/modules/rides/application/DriverApplicationService.ts` | 1,2 | Service aplikasi + lease | Konkurensi | integration | Integration |
 | `src/modules/rides/application/VehicleOwnershipService.ts` | 3 | Ownership + transfer | Konkurensi | integration | Integration |
+| `src/modules/rides/application/VehicleIdentityService.ts` | 3 | Plate assignment lifecycle + cross-version uniqueness | Konkurensi lintas key version | integration | Integration |
 | `prisma/migrations/2026…_driver_application_foundation/migration.sql` | 1 | Tabel + partial unique + CHECK | SQL manual | disposable DB | Migration test |
 | `prisma/migrations/2026…_driver_review_lease/migration.sql` | 2 | Kolom lease | additive | disposable DB | — |
-| `prisma/migrations/2026…_vehicle_ownership_foundation/migration.sql` | 3 | Ownership/transfer + kolom plat | additive | disposable DB | — |
+| `prisma/migrations/2026…_vehicle_ownership_foundation/migration.sql` | 3 | Ownership/transfer + plate assignment + nullable RideOrder historical refs | additive | disposable DB | — |
 | `tests/rides/driverApplication*.integration.test.ts` | 1,2 | — | — | — | §22 |
 | `tests/rides/vehicleOwnership.integration.test.ts` | 3 | — | — | — | §22 |
 | `tests/security/identifierIndex.test.ts` | 4 | — | — | — | §22 |
@@ -716,7 +815,7 @@ Kode Stage 5.11 (`RIDE_DRIVER_PROFILE_REQUIRED`, `RIDE_DRIVER_NOT_ACTIVE`, `RIDE
 | `prisma/schema.prisma` | 1,2,3 | Model/enum/kolom additive + komentar deprecated legacy | Drift bila partial index tidak sinkron |
 | `src/config/env.ts` | 4 | Nama env kunci + validasi + startup check | Boot gagal bila kunci belum diset — **disengaja** |
 | `src/core/logger/logger.ts` | 4 | Tambah `redact.paths` identifier | Rendah |
-| `src/modules/rides/infrastructure/PrismaMatchingAdapter.ts` | 3 | Filter lewat ownership | **Tinggi** — test `rideFoundation` harus tetap hijau |
+| `src/modules/rides/infrastructure/PrismaMatchingAdapter.ts` | 3 | Filter lewat ownership dan active plate assignment bila dibutuhkan | **Tinggi** — test `rideFoundation` harus tetap hijau |
 | `src/modules/rides/presentation/ride.routes.ts` | 2,3 | Komposisi service baru (tanpa endpoint baru) | Rendah |
 
 ### Tidak boleh disentuh
@@ -750,15 +849,23 @@ Kode Stage 5.11 (`RIDE_DRIVER_PROFILE_REQUIRED`, `RIDE_DRIVER_NOT_ACTIVE`, `RIDE
 | T2.8 | Duplicate final decision | concurrency | 2 approve paralel | satu menang | `…DECISION_FINAL` | — |
 | T2.9 | Database time authority | integration/DB | ubah jam proses Node | perilaku lease tidak berubah | — | — |
 | **Batch 3** |
-| T3.1 | One active ownership | integration/DB | 2 ownership `ACTIVE` | insert kedua gagal | `RIDE_VEHICLE_PLATE_TAKEN` | — |
+| T3.1 | One active ownership | integration/DB | 2 ownership `ACTIVE` | insert kedua gagal | `RIDE_VEHICLE_OWNERSHIP_NOT_ACTIVE`/constraint | — |
 | T3.2 | Transfer atomik | integration | transfer approve | lama `TRANSFERRED`, baru `ACTIVE`, 1 audit | — | — |
 | T3.3 | Transfer race | concurrency | 2 transfer paralel | satu menang | `…TRANSFER_CONFLICT` | — |
-| T3.4 | Retired vehicle | integration | retire | `isActive=false`, tidak dapat order | — | — |
-| T3.5 | Replaced vehicle | integration | plat baru | kendaraan lama utuh | — | — |
-| T3.6 | Historical `RideOrder` | integration | order lama + transfer | `vehicleId` tetap menunjuk kendaraan saat trip | — | — |
-| T3.7 | Suspended vehicle ≠ suspended driver | integration | ownership `SUSPENDED` | passenger & driver capability tidak berubah | — | ✅ |
-| T3.8 | Nol reuse legacy hash | static/unit | grep | `plateNumberHash` tidak dipakai jalur baru | — | — |
-| T3.9 | Matching tetap benar | integration | `rideFoundation` | 39 test tetap hijau | — | — |
+| T3.4 | One active plate assignment per vehicle | integration/DB | 2 assignment `ACTIVE` | insert/activation kedua gagal | `…PLATE_ASSIGNMENT_CONFLICT` | — |
+| T3.5 | Same plate, same key version | concurrency | 2 kendaraan, key sama | hanya satu active assignment | `…PLATE_TAKEN` | — |
+| T3.6 | Same plate, different active key versions | concurrency | v1 row + v2 request | konflik ditemukan via dual lookup | `…PLATE_TAKEN` | ✅ |
+| T3.7 | Concurrent plate change | concurrency | 2 request ganti plate kendaraan sama | satu assignment aktif, satu konflik | `…PLATE_ASSIGNMENT_CONFLICT` | ✅ |
+| T3.8 | Retired plate reactivation | integration | retired assignment + reviewed reuse | reuse sah membuat assignment baru, histori lama utuh | — | — |
+| T3.9 | Lazy migration race | concurrency | old-key record + 2 migration request | satu migrasi, satu retry/read current | — | ✅ |
+| T3.10 | Old key unavailable | integration | active old-key record, key missing | fail-closed/manual review | `RIDE_IDENTIFIER_KEY_UNAVAILABLE` | ✅ |
+| T3.11 | Legacy unrecoverable | integration | old hash tanpa canonical raw | tidak backfill; manual review | `IDENTIFIER_CANONICALIZATION_UNAVAILABLE` | ✅ |
+| T3.12 | Vehicle replacement | integration | kendaraan fisik baru | `RideVehicle` baru, ownership baru, histori lama utuh | — | — |
+| T3.13 | Plate replacement same vehicle | integration | plate baru kendaraan sama | `RideVehicle` sama, assignment baru active | — | — |
+| T3.14 | Historical `RideOrder` FK refs | integration | order lama + transfer + plate change | old row `vehicleId` tetap; new row menulis ownership/plate refs setelah activation | — | — |
+| T3.15 | Suspended vehicle ≠ suspended driver | integration | ownership `SUSPENDED` | passenger & driver capability tidak berubah | — | ✅ |
+| T3.16 | Nol reuse legacy hash | static/unit | grep | `plateNumberHash` tidak dipakai jalur baru | — | — |
+| T3.17 | Matching tetap benar | integration | `rideFoundation` | 39 test tetap hijau | — | — |
 | **Batch 4** |
 | T4.1 | Deterministik domain/key sama | unit | vektor sintetis | index identik | — | — |
 | T4.2 | Domain separation | unit | nilai sama, domain beda | index berbeda | — | — |
@@ -773,6 +880,8 @@ Kode Stage 5.11 (`RIDE_DRIVER_PROFILE_REQUIRED`, `RIDE_DRIVER_NOT_ACTIVE`, `RIDE
 | T4.11 | Old-key audit event | integration | fallback | `identifier.legacy_key_lookup` terbit | — | — |
 | T4.12 | Nol raw/index di log & error | integration | log capture | nol kemunculan | — | ✅ |
 | T4.13 | `stnk` fail-closed | unit | panggil domain `stnk` | ditolak | — | — |
+| T4.14 | `sim` domain inactive | unit | panggil domain `sim` sebelum grammar | ditolak sebelum HMAC | `IDENTIFIER_DOMAIN_NOT_ACTIVE` | ✅ |
+| T4.15 | Golden vector exact digest | unit | synthetic public key | digest cocok tabel §9.5 | — | ✅ |
 | **Keamanan lintas batch** |
 | TS.1 | Nol upload dokumen | static | grep | nol endpoint/model dokumen | — | ✅ |
 | TS.2 | Nol PII nyata di fixture | static | grep | hanya sintetis | — | ✅ |
@@ -787,16 +896,18 @@ Kode Stage 5.11 (`RIDE_DRIVER_PROFILE_REQUIRED`, `RIDE_DRIVER_NOT_ACTIVE`, `RIDE
 
 1. **Urutan:** Batch 4 tidak butuh migrasi. Lalu `driver_application_foundation` → `driver_review_lease` → `vehicle_ownership_foundation`.
 2. **Additive-first:** hanya `CREATE TABLE`, `CREATE TYPE`, `ADD COLUMN` nullable, `CREATE INDEX`. **Nol** `DROP`/`ALTER COLUMN` pada tabel lama.
-3. **Nullable-before-required:** seluruh kolom baru pada tabel existing (`RideVehicle`) nullable; tidak ada `NOT NULL` retro.
+3. **Nullable-before-required:** seluruh kolom baru pada tabel existing (`RideOrder`) nullable; tidak ada `NOT NULL` retro. `RideOrder.vehicleOwnershipId` dan `vehiclePlateAssignmentId` boleh `NULL` untuk existing rows.
 4. **Risiko enum rollout:** menambah **nilai** ke enum PostgreSQL yang sudah ada tidak dapat berjalan di dalam transaksi pada beberapa versi. Rencana ini hanya membuat enum **baru**, sehingga risiko tersebut dihindari. Bila kelak perlu menambah nilai, wajib migrasi terpisah.
 5. **Partial unique & CHECK:** raw SQL; `prisma migrate diff` harus diperiksa agar tidak menghasilkan drift.
 6. **Transaction safety:** Prisma menjalankan tiap migrasi dalam satu transaksi; `CREATE INDEX` non-concurrent mengunci tabel — dapat diterima karena tabel baru/kosong.
-7. **Lock impact & timeout:** minimal pada tabel baru. Untuk `ADD COLUMN` pada `ride_vehicles`, PostgreSQL 11+ tidak menulis ulang tabel untuk kolom nullable tanpa default → aman.
+7. **Lock impact & timeout:** minimal pada tabel baru. Untuk `ADD COLUMN` nullable tanpa default pada `ride_orders`, PostgreSQL 11+ tidak menulis ulang tabel → aman.
 8. **Bukti tabel kosong:** dokumen ini mencatat **nol jalur pembuatan** `RideVehicle` di kode. **Itu bukan bukti tabel produksi kosong.** Saat implementasi **wajib** menjalankan `SELECT count(*)` pada environment target dan mencatat hasilnya. Jangan menganggap rollback aman hanya karena kode tidak pernah menulis.
 9. **Legacy isolation:** hanya komentar `///`; nol perubahan struktur.
-10. **Rollback limitation:** Prisma tidak punya down-migration. Rollback nyata = **forward-fix migration** yang men-`DROP` objek baru, dan hanya sah bila `count = 0` terverifikasi.
-11. **Validasi:** PostgreSQL disposable; `prisma migrate deploy` dari database kosong; `prisma migrate status`; drift check; full suite.
-12. **Production rollout belum diizinkan.**
+10. **Raw plate snapshot:** tidak ada kolom raw/masked snapshot plate pada `RideOrder` di Batch 1–4. D-04/legal approval wajib sebelum menyimpan raw/encrypted/snapshot identifier.
+11. **FK behavior:** `RideOrder.vehicleId` existing tetap mengikuti behavior existing. FK baru `vehicleOwnershipId`/`vehiclePlateAssignmentId` diusulkan `ON DELETE RESTRICT` untuk histori baru, tetapi tetap nullable untuk kompatibilitas rows lama.
+12. **Rollback limitation:** Prisma tidak punya down-migration. Rollback nyata = **forward-fix migration** yang men-`DROP` objek baru, dan hanya sah bila `count = 0` terverifikasi.
+13. **Validasi:** PostgreSQL disposable; `prisma migrate deploy` dari database kosong; `prisma migrate status`; drift check; full suite.
+14. **Production rollout belum diizinkan.**
 
 ---
 
@@ -807,7 +918,7 @@ Kode Stage 5.11 (`RIDE_DRIVER_PROFILE_REQUIRED`, `RIDE_DRIVER_NOT_ACTIVE`, `RIDE
 | 4 | Revert commit; nol dampak DB | Perbaiki service; index lama tetap valid selama key registry tidak berubah |
 | 1 | Revert commit; tabel baru tidak dipakai | Migrasi `DROP TABLE` bila `count=0` terverifikasi |
 | 2 | Revert commit; kolom nullable tetap ada tanpa efek | Migrasi `DROP COLUMN` bila kosong |
-| 3 | **Paling berisiko** — `PrismaMatchingAdapter` berubah | Revert kode adapter lebih dulu, baru pertimbangkan DROP objek |
+| 3 | **Paling berisiko** — `PrismaMatchingAdapter` dan vehicle identity foundation berubah | Revert kode adapter/write path lebih dulu, baru pertimbangkan DROP objek baru bila kosong terverifikasi |
 
 Aturan: **jangan pernah** `prisma migrate resolve --rolled-back` pada environment yang sudah menerapkan migrasi; selalu forward-fix.
 
@@ -835,10 +946,10 @@ Batch 1–4 **tidak menyentuh** `payments`, `memberships`, `referrals`, `wallets
 
 | Checkpoint | Objective | Allowed files | Forbidden | Acceptance | Validation | Commit subject | STOP condition |
 |---|---|---|---|---|---|---|---|
-| **5.14A** HMAC service | Blind index service + key registry + startup fail-closed | `src/core/security/identifierIndex.ts`, `identifierKeyRegistry.ts`, `src/config/env.ts`, `logger.ts`, `tests/security/identifierIndex.test.ts` | schema, migration, endpoint | T4.1–T4.8, T4.12, T4.13 hijau | `tsc`, lint, build, targeted, full suite | `feat(security): add versioned identifier blind index service` | Bila canonicalization SIM tidak dapat ditetapkan tanpa bukti → STOP |
+| **5.14A** HMAC service | Blind index service + key registry + startup fail-closed | `src/core/security/identifierIndex.ts`, `identifierKeyRegistry.ts`, `src/config/env.ts`, `logger.ts`, `tests/security/identifierIndex.test.ts` | schema, migration, endpoint | T4.1–T4.8, T4.12–T4.15 hijau; `sim`/`stnk` fail-closed | `tsc`, lint, build, targeted, full suite | `feat(security): add versioned identifier blind index service` | Bila golden vector tidak disetujui, NIK/PLATE canonicalization berubah, atau SIM domain tidak fail-closed → STOP |
 | **5.14B** Schema aplikasi | `RideDriverApplication` + enum + partial unique + CHECK + state machine + service dasar | `prisma/schema.prisma`, migrasi baru, `domain/driverApplicationStateMachine.ts`, `application/DriverApplicationService.ts`, test | endpoint, dokumen, lease | T1.1–T1.9 hijau; migrate deploy bersih | + `prisma validate/generate`, fresh `migrate deploy`, `migrate status`, drift check | `feat(ride): add driver application foundation` | Bila `count(*)` tabel target tidak dapat diverifikasi → STOP |
 | **5.14C** Review lease | Kolom lease + transaksi claim/renew/release/reassign/decision + audit | kolom pada model Batch 1, migrasi, service, test | endpoint, akses dokumen, guard scope bila model scope belum disetujui | T2.1–T2.9 hijau | idem | `feat(ride): add driver application review lease` | **CONDITIONAL** — bila model penyimpanan scope belum disetujui, guard scope ditunda dan dicatat |
-| **5.14D** Vehicle ownership | Ownership/transfer + kolom plat + update matching adapter | schema, migrasi, `VehicleOwnershipService.ts`, `PrismaMatchingAdapter.ts`, test | model dokumen kendaraan, verifikasi dokumen | T3.1–T3.9 hijau; `rideFoundation` 39 test tetap hijau | idem | `feat(ride): add temporal vehicle ownership` | Bila verifikasi dokumen dianggap wajib oleh Owner → STOP |
+| **5.14D** Vehicle ownership | Ownership/transfer + plate assignment foundation + nullable RideOrder refs + update matching adapter | schema, migrasi, `VehicleOwnershipService.ts`, `VehicleIdentityService.ts`, `PrismaMatchingAdapter.ts`, test | model dokumen kendaraan, verifikasi dokumen, transfer endpoint, plate change endpoint, production write path, driver UI | T3.1–T3.17 hijau; `rideFoundation` 39 test tetap hijau | idem | `feat(ride): add temporal vehicle identity foundation` | Bila cross-version uniqueness tidak dapat dijamin fail-closed/manual review → STOP |
 
 Setiap checkpoint: **full backend suite wajib hijau, 0 skipped**, dijalankan pada PostgreSQL disposable, diakhiri **Owner Review gate** sebelum checkpoint berikutnya.
 
@@ -848,10 +959,12 @@ Setiap checkpoint: **full backend suite wajib hijau, 0 skipped**, dijalankan pad
 
 1. Owner menyetujui dokumen Stage 5.13 ini.
 2. Owner mengonfirmasi **urutan 4 → 1 → 2 → 3**.
-3. Owner memutuskan apakah guard scope (model `AdminScopeGrant`) masuk 5.14C atau ditunda.
-4. Owner mengonfirmasi bahwa snapshot atribut kendaraan pada `RideOrder` (§8.1 no. 15) boleh ditambahkan, atau ditunda.
-5. Owner mengonfirmasi D-20 tetap tanpa cooldown untuk sementara.
-6. Baseline branch `agent/tapgo-release2-driver` tidak berubah.
+3. Owner menyetujui golden HMAC vectors sintetis §9.5 dan canonicalization `nik`/`plate`.
+4. Owner/Legal menyediakan authoritative SIM-format rule bila domain `sim` ingin diaktifkan; jika tidak, `sim` tetap fail-closed.
+5. Owner memutuskan apakah guard scope (model `AdminScopeGrant`) masuk 5.14C atau ditunda.
+6. Owner mengonfirmasi nullable historical FK refs pada `RideOrder` (`vehicleOwnershipId`, `vehiclePlateAssignmentId`) sebagai pengganti raw plate snapshot.
+7. Owner mengonfirmasi D-20 tetap tanpa cooldown untuk sementara.
+8. Baseline branch `agent/tapgo-release2-driver` tidak berubah.
 
 ---
 
@@ -864,12 +977,15 @@ Setiap checkpoint: **full backend suite wajib hijau, 0 skipped**, dijalankan pad
 | B-3 | Penyimpanan raw NIK/SIM (D-04) | **BLOCKED** | Hanya blind index + masked |
 | B-4 | Kelengkapan dokumen sebagai syarat `SUBMITTED` (D-07) | **BLOCKED** | Validasi non-dokumen saja |
 | B-5 | Cooldown resubmit (D-20) | PENDING | **Tidak diterapkan**, dinyatakan eksplisit |
-| B-6 | Snapshot kendaraan pada `RideOrder` | Perlu persetujuan | Menyentuh tabel di luar Batch 3 murni |
+| B-6 | Historical vehicle refs pada `RideOrder` | Keputusan arsitektur disetujui di dokumen; implementasi tetap additive nullable | `vehicleId` existing dipertahankan; tambah `vehicleOwnershipId` + `vehiclePlateAssignmentId`; raw plate snapshot tetap BLOCKED D-04/legal |
+| B-7 | SIM canonicalization authoritative grammar | **BLOCKED — OWNER/LEGAL DECISION REQUIRED** | Domain `sim` pada HMAC fail-closed sampai grammar resmi disetujui |
+| B-8 | STNK canonicalization/document identifier | **BLOCKED** | Domain `stnk` fail-closed |
 | R-1 | `PrismaMatchingAdapter` berubah | Risiko tinggi | `rideFoundation` 39 test wajib tetap hijau |
 | R-2 | Bukti tabel kosong hanya dari kode | Risiko | `SELECT count(*)` wajib saat implementasi |
 | R-3 | Unique SIM per `keyVersion` | Risiko desain | Dedup lintas versi lewat dual lookup; test wajib |
-| R-4 | Prisma tidak mendukung partial unique | Risiko drift | Raw SQL + drift check tiap migrasi |
-| R-5 | `now()` tidak dapat diekspresikan Prisma builder | Risiko implementasi | `$executeRaw` di dalam `$transaction` — dicatat, bukan diputuskan saat coding |
+| R-4 | Cross-version active plate uniqueness | Risiko desain | Dual lookup semua active key versions + lazy migration transaction + current-key partial unique + advisory lock; fail-closed/manual review bila tidak aman |
+| R-5 | Prisma tidak mendukung partial unique | Risiko drift | Raw SQL + drift check tiap migrasi |
+| R-6 | `now()` tidak dapat diekspresikan Prisma builder | Risiko implementasi | `$executeRaw` di dalam `$transaction` — dicatat, bukan diputuskan saat coding |
 
 ---
 
@@ -901,11 +1017,11 @@ docs/release-2/STAGE_5_12_DRIVER_ONBOARDING_ARCHITECTURE.md
 
 | Checkpoint | Rekomendasi | Alasan |
 |---|---|---|
-| **5.14A** HMAC service | **GO** | Nol prasyarat terbuka; dapat diuji penuh secara unit; menjadi fondasi Batch 1 & 3 |
-| **5.14B** Schema aplikasi | **GO** | Seluruh keputusan pemblokir sudah APPROVED; D-20 dinyatakan eksplisit tidak diterapkan; bukti `count(*)` wajib saat eksekusi |
+| **5.14A** HMAC service | **CONDITIONAL GO** | Golden vectors sintetis, NIK, dan PLATE dapat menjadi fondasi; `sim` dan `stnk` harus disabled/fail-closed sampai grammar/dokumen disetujui |
+| **5.14B** Schema aplikasi | **GO setelah execution-time DB evidence verified** | D-20 dinyatakan eksplisit tidak diterapkan; bukti `count(*)` dan fresh migrate deploy wajib saat eksekusi |
 | **5.14C** Review lease | **CONDITIONAL GO** | Logika dan transaksi dapat dikerjakan; **guard scope ditunda** sampai B-2 diputuskan |
-| **5.14D** Vehicle ownership | **CONDITIONAL GO** | Ownership + transfer dapat dikerjakan; **verifikasi dokumen kendaraan tetap NO-GO** (B-1); risiko `PrismaMatchingAdapter` harus diterima secara sadar |
-| Endpoint HTTP, dokumen, S3/KMS, scanner, UI driver | **NO-GO** | Tetap diblokir |
+| **5.14D** Vehicle ownership | **CONDITIONAL GO untuk schema/foundation saja** | RideVehicle stable physical identity + ownership + plate assignment dapat dirancang; document verification, transfer endpoint, plate change endpoint, production write path, dan driver UI tetap NO-GO |
+| Endpoint HTTP, upload dokumen, AWS/S3/KMS, scanner, mobile onboarding, production activation | **NO-GO** | Tetap diblokir |
 
 **Stage 5.13 belum disetujui. Stage 5.14 belum dimulai.**
 
