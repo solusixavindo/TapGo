@@ -7,9 +7,17 @@
 | | |
 |---|---|
 | Branch | `agent/tapgo-release2-driver` |
-| Baseline | `ea5b5a5d2740342460604bd9d32960398cd5bca5` |
+| Baseline implementasi | `ea5b5a5d2740342460604bd9d32960398cd5bca5` |
+| Commit arsitektur | `e0f533633c1e8c959dfd704d26ab9d10f0ed2be8` |
 | Stage | 5.12 — design & decision package |
-| Status | menunggu Owner Review |
+| Status | **CONDITIONAL APPROVAL** — Owner Decision tercatat 2026-08-01 |
+
+### Riwayat revisi
+
+| Tanggal | Perubahan |
+|---|---|
+| 2026-08-01 | Dokumen awal (`e0f5336`) — seluruh 24 keputusan berstatus PENDING |
+| **2026-08-01** | **Owner Decision tercatat.** D-01, D-02, D-03, D-05, D-06, D-17, D-18, D-18b, D-19, D-21, D-22 → **APPROVED**. Rekomendasi storage diubah ke AWS S3 `ap-southeast-3` + SSE-KMS customer-managed key. Desain rotasi HMAC dikoreksi (lihat §8.5). Batch 1–4 dinyatakan **GO FOR IMPLEMENTATION PLANNING**. |
 
 ---
 
@@ -23,11 +31,14 @@ Dokumen ini mengusulkan arsitektur onboarding end-to-end yang aman, dengan lima 
 2. **Review claim berbasis lease** dengan `claimExpiresAt`, conditional update, dan reassignment aman — mencegah dua admin mereview aplikasi yang sama sekaligus mencegah aplikasi terkunci permanen.
 3. **Vehicle ownership temporal** (`RideVehicleOwnership`) dengan partial unique index untuk "satu active ownership per plate", sehingga plat dapat berpindah secara sah tanpa kehilangan histori dan tanpa merusak `RideOrder` lama.
 4. **Blind index HMAC-SHA256 berkunci** dengan domain separation dan key versioning untuk NIK/SIM/STNK/plat — memisahkan tegas antara *lookup*, *encryption*, *masking*, dan *redaction*.
-5. **Private object storage** untuk dokumen. Rekomendasi: **Cloudflare R2** (runner-up: **AWS S3 ap-southeast-3 Jakarta**) — dengan catatan bahwa pilihan final bergantung pada keputusan data residency yang **belum** dapat dibuktikan dari repository.
+5. **Private object storage** untuk dokumen. **Keputusan Owner 2026-08-01: AWS S3 private bucket, region `ap-southeast-3` (Jakarta), SSE-KMS dengan customer-managed key khusus KYC.** Cloudflare R2 **tidak** dipilih untuk dokumen KYC produksi.
 
 **Temuan paling penting:** `CLOUDINARY_*` sudah dideklarasikan di `env.ts` tetapi **tidak dipakai kode mana pun**. Cloudinary adalah media CDN yang public-by-default dan **tidak layak** untuk dokumen KYC. Deklarasi ini harus tidak dipakai untuk onboarding dan sebaiknya dibersihkan pada stage terpisah.
 
-**Rekomendasi Go/No-Go: GO untuk Batch 1–4 Stage 5.13** (schema foundation, review lease, vehicle ownership, HMAC service) — keempatnya tidak menyentuh dokumen. **NO-GO untuk Batch 5 ke atas** sampai Owner menjawab decision register (khususnya D-01 s.d. D-06).
+**Status Go/No-Go setelah Owner Decision 2026-08-01:**
+
+- **Batch 1–4 — GO FOR IMPLEMENTATION PLANNING.** Seluruh prasyarat keputusan untuk schema foundation, review lease, vehicle ownership, dan identifier HMAC service sudah APPROVED (D-05, D-06, D-17, D-18, D-19, D-21, D-22). Keempatnya tidak menyentuh dokumen sama sekali. Catatan: D-20 (cooldown resubmit) masih PENDING tetapi tidak memblokir — bila belum diputuskan saat implementasi, resubmit dibiarkan tanpa cooldown dan ditambahkan kemudian sebagai aturan terpisah.
+- **Batch 5 ke atas — NO-GO.** Meskipun D-01 s.d. D-03 sudah APPROVED, **document upload tetap BLOCKED** sampai D-04, D-07, D-08, D-09, D-10, D-11 s.d. D-16, serta L-1 dan L-2 selesai.
 
 ---
 
@@ -170,6 +181,20 @@ Diterima sebagai batasan yang mengikat seluruh desain di bawah:
 11. `UNDER_REVIEW` memakai `claimedBy`/`claimedAt`/`claimExpiresAt` + safe release + reassignment + audit.
 12. Upload/penyimpanan dokumen nyata **BLOCKED** sampai tujuh keputusan storage disetujui.
 13. Cache pada driver capability tidak diizinkan tanpa Architecture Decision baru.
+
+**Ditambahkan 2026-08-01** (lihat register §26.1 untuk rationale dan consequences lengkap):
+
+14. Storage dokumen KYC produksi: **AWS S3 private bucket, region `ap-southeast-3` (Jakarta), SSE-KMS dengan customer-managed key khusus KYC.** Cloudflare R2 tidak dipilih.
+15. HMAC key khusus backend di production secret manager, terpisah dari JWT/payment/storage/KMS/database, mendukung versioning.
+16. Rotasi HMAC 12 bulan + rotasi segera saat insiden; maksimal dua versi aktif; **tidak ada silent fallback tanpa audit**; kunci lama tidak dihapus sebelum bukti migrasi lengkap.
+17. Reviewer lease default **15 menit** dengan renewal atomik; keputusan hanya sah bila claim masih dimiliki dan belum expired.
+18. Vehicle transfer wajib admin review dengan explicit scope, transaksi atomik, dan audit lengkap.
+19. Otorisasi reviewer memakai **explicit scopes**, bukan role. `ADMIN`/`SUPER_ADMIN` tidak otomatis memperoleh akses isi dokumen KYC.
+20. Reaktivasi driver hanya melalui manual review ber-scope, **tanpa mengubah `User.role`**.
+21. `WITHDRAWN` adalah status terminal; resubmission membuat cycle baru; histori dipertahankan.
+22. Satu nomor SIM hanya untuk satu identitas driver; konflik **tidak diselesaikan otomatis**; SIM tidak dapat ditransfer.
+
+**Catatan penting:** persetujuan butir 14 **tidak** membatalkan butir 12. Upload dokumen tetap BLOCKED.
 
 ---
 
@@ -404,15 +429,54 @@ Normalisasi **wajib** deterministik dan diuji, karena input yang sama dengan spa
 `IDENTIFIER_INDEX_KEY_CURRENT_VERSION`, `IDENTIFIER_INDEX_KEY_V1`, `IDENTIFIER_INDEX_KEY_V2`, …
 Validasi mengikuti pola yang ada: `z.string().min(32)`. **Tidak boleh** ada nilai default di source, dan tidak boleh masuk source control.
 
-### 8.5 Rotasi
+### 8.5 Rotasi — DIKOREKSI 2026-08-01 (D-06 APPROVED)
 
-1. Tambah `IDENTIFIER_INDEX_KEY_V2`; `CURRENT_VERSION=2`.
-2. Nilai **baru** ditulis dengan v2.
-3. **Lookup selama rotasi:** cari `blindIndex(v2)`; bila tidak ketemu **dan** ada baris dengan `keyVersion=1`, cari `blindIndex(v1)`. Karena raw value ada pada request (bukan di DB), kedua index dapat dihitung saat itu juga — **tidak perlu** menyimpan raw value untuk rotasi.
-4. Backfill bertahap: hitung ulang index untuk baris v1 hanya saat raw value tersedia lagi (mis. saat dokumen diverifikasi ulang), atau terima dual-lookup permanen.
-5. Uniqueness selama rotasi: unique index pada `(blindIndex)` tetap berlaku per nilai; deduplication lintas versi ditangani oleh dual-lookup di atas.
+> **Prinsip yang mengikat, jangan sampai salah paham:**
+> **Blind index lama TIDAK dapat dikonversi menjadi blind index baru.**
+> HMAC adalah fungsi satu arah. Tanpa **canonical raw identifier**, mustahil menghitung `HMAC(key_v2, …)` dari `HMAC(key_v1, …)`. Tidak ada "re-key" di sisi database, tidak ada backfill massal, dan tidak ada migrasi otomatis. Setiap desain yang mengasumsikan sebaliknya salah secara kriptografis.
 
-**Collision:** HMAC-SHA256 256-bit — probabilitas tabrakan dapat diabaikan. Tabrakan yang terdeteksi (unique violation dengan raw value berbeda) diperlakukan sebagai **security incident**, bukan error biasa.
+Revisi ini menggantikan rumusan sebelumnya yang dapat memberi kesan backfill dapat dilakukan tanpa nilai mentah.
+
+**Kebijakan yang disetujui (D-06):** rotasi terjadwal setiap **12 bulan**; rotasi segera saat insiden atau dugaan kompromi; kunci ber-versi; **maksimal dua versi aktif** selama transition window; setiap blind index menyimpan `keyVersion`; **tidak ada silent fallback tanpa audit**; kunci lama **tidak boleh dihapus** sebelum seluruh record terkait dimigrasikan, diverifikasi ulang, atau dinyatakan tidak dapat digunakan.
+
+#### 8.5.1 Prosedur rotasi
+
+1. Tambahkan `IDENTIFIER_INDEX_KEY_V2` melalui secret manager. Tandai v2 sebagai **write key**; v1 tetap sebagai **lookup-only key**.
+2. Seluruh nilai **baru** ditulis dengan v2 dan menyimpan `keyVersion = 2`.
+3. **Dual lookup hanya sah ketika identifier diberikan kembali oleh alur yang sah.** Backend menerima canonical raw identifier dari request, lalu menghitung index untuk **kedua** versi aktif dan mencari keduanya. Nilai mentah **tidak** diambil dari database — database tidak pernah menyimpannya (kecuali D-04 kelak menyetujui encryption).
+4. **Migrasi bersifat lazy dan oportunistik.** Sebuah record hanya dapat berpindah ke v2 ketika identifier-nya tersedia lagi secara sah, yaitu pada salah satu peristiwa berikut:
+   - user melakukan **verified resubmission**;
+   - dokumen **diverifikasi ulang** oleh reviewer berwenang;
+   - **authorized workflow** memperoleh identifier secara sah (mis. koreksi data ter-audit).
+5. Setelah identifier diterima **dan** diverifikasi, dalam satu transaksi:
+   - hitung index dengan **kunci lama** untuk menemukan record lama;
+   - hitung index dengan **kunci baru**;
+   - simpan index baru beserta `keyVersion` baru;
+   - **jangan** menyimpan raw identifier kecuali D-04 kelak menyetujuinya;
+   - **jangan** mencatat raw identifier maupun nilai blind index ke log.
+6. **Record yang belum dapat dimigrasikan** (identifier tidak pernah muncul lagi) ditangani dengan: mempertahankan kunci lama secara **terbatas dan tercatat**, menandai `indexMigrationState`, meminta re-verification melalui workflow yang sah, dan **tidak** menghapus kunci lama secara prematur.
+7. **Retirement kunci lama** hanya dilakukan setelah **migration evidence lengkap**: seluruh record sudah bermigrasi, atau secara eksplisit dinyatakan tidak dapat digunakan (mis. aplikasi terminal yang sudah melewati masa retensi) dengan persetujuan tercatat.
+
+#### 8.5.2 State migrasi per record
+
+`indexMigrationState ∈ { CURRENT, LEGACY_PENDING_REVERIFICATION, LEGACY_UNRECOVERABLE }`
+
+- `CURRENT` — index memakai write key aktif.
+- `LEGACY_PENDING_REVERIFICATION` — masih memakai kunci lama; menunggu peristiwa sah pada §8.5.1 butir 4.
+- `LEGACY_UNRECOVERABLE` — identifier tidak akan muncul kembali (mis. aplikasi `REJECTED` yang sudah melewati retensi). Record ini **tidak** boleh menjadi alasan menahan kunci lama selamanya; ia dinyatakan tidak dapat digunakan untuk deduplication dan dicatat.
+
+#### 8.5.3 Risiko rotasi, mitigasi, dan acceptance criteria
+
+| # | Risiko | Dampak | Mitigasi | Acceptance criteria |
+|---|---|---|---|---|
+| R-1 | **Indefinite legacy-key retention** — kunci lama tertahan selamanya karena selalu ada sisa record | Permukaan serangan kunci tidak pernah mengecil; melanggar semangat rotasi | Batas waktu transition window yang tercatat; record yang melewati batas dinyatakan `LEGACY_UNRECOVERABLE` lewat keputusan ter-audit, bukan dibiarkan menggantung | Ada laporan berkala jumlah record per `indexMigrationState`; tidak ada kunci lama yang aktif melewati window tanpa keputusan tertulis |
+| R-2 | **Unverifiable legacy record** — record lama tidak dapat diverifikasi karena identifier tidak tersedia | Deduplication untuk record itu tidak dapat dijamin | Tandai `LEGACY_UNRECOVERABLE`; wajib re-verification bila identitas tersebut dipakai lagi | Setiap record `LEGACY_UNRECOVERABLE` memiliki alasan dan aktor yang tercatat |
+| R-3 | **Lost deduplication coverage** — selama window, pencarian hanya memakai satu versi sehingga duplikat lolos | Satu SIM/NIK bisa terdaftar dua kali | **Dual lookup wajib** selama window; sistem menolak menulis bila salah satu kunci aktif tidak tersedia (fail-closed, bukan diam-diam melewati) | Test membuktikan: identifier yang tersimpan dengan v1 tetap terdeteksi saat diajukan ulang setelah `CURRENT_VERSION=2` |
+| R-4 | **Duplicate identity during incomplete rotation** | Dua identitas driver untuk satu SIM (melanggar D-22) | Unique constraint tetap berlaku per index; konflik lintas versi **tidak diselesaikan otomatis** → eskalasi admin review (D-22) | Test membuktikan konflik lintas versi memunculkan `IDENTIFIER_ALREADY_REGISTERED` dan audit, bukan pembuatan diam-diam |
+| R-5 | **Accidental secret retirement** — kunci lama dihapus sebelum migrasi selesai | Record lama menjadi permanen tak dapat dicari; deduplication rusak permanen dan **tidak dapat dipulihkan** | Retirement memerlukan bukti migrasi lengkap + persetujuan tercatat; pemeriksaan startup gagal-tertutup bila ada record `LEGACY_PENDING_REVERIFICATION` sementara kunci versinya tidak tersedia | Startup check terbukti menolak boot pada kondisi tersebut; tidak ada jalur penghapusan kunci otomatis |
+| R-6 | **Silent fallback** — sistem diam-diam memakai kunci lama tanpa jejak | Rotasi tidak dapat diaudit | Setiap lookup yang berhasil lewat kunci lama menerbitkan audit event `identifier.legacy_key_lookup` (hanya jenis identifier + keyVersion, **tanpa** nilai) | Audit event muncul pada setiap fallback; tidak ada jalur fallback tanpa event |
+
+**Collision:** HMAC-SHA256 256-bit — probabilitas tabrakan dapat diabaikan. Tabrakan yang terdeteksi (unique violation dengan raw value berbeda) diperlakukan sebagai **security incident**, bukan error biasa, dan tidak boleh diselesaikan otomatis.
 
 ### 8.6 Larangan
 
@@ -448,37 +512,61 @@ Memakai **nilai sintetis yang jelas palsu** (mis. NIK `0000000000000001`, plat `
 | Kompatibilitas backend saat ini | `@aws-sdk/client-s3` | SDK terpisah | **`@aws-sdk/client-s3` (S3-compatible)** | SDK/HTTP |
 | Kesiapan produksi untuk KYC | **Tinggi** | **Tinggi** | Sedang–Tinggi (tanpa CMK & Object Lock) | Sedang |
 
-### 9.1 Rekomendasi
+### 9.1 Keputusan Owner — APPROVED 2026-08-01
 
-**Rekomendasi utama: Cloudflare R2**, dengan syarat data residency Indonesia **tidak** diwajibkan.
-Alasan: private by default, S3-compatible sehingga satu SDK melayani R2 maupun S3 (mengurangi lock-in dan memudahkan migrasi), egress nol yang membuat biaya reviewer mengunduh dokumen dapat diprediksi, dan kompleksitas operasional paling rendah untuk tim sekecil ini.
+> **DIPUTUSKAN: AWS S3 private bucket, region `ap-southeast-3` (Jakarta), SSE-KMS dengan customer-managed key.**
+> **Cloudflare R2 TIDAK dipilih untuk dokumen KYC produksi.**
 
-**Runner-up: AWS S3 region `ap-southeast-3` (Jakarta)**, dan ini menjadi **rekomendasi utama bila** data residency Indonesia diwajibkan atau bila Object Lock/legal hold serta customer-managed key (KMS) menjadi syarat kepatuhan. S3 unggul jelas pada KMS, Object Lock, dan audit logging — tiga hal yang paling relevan untuk KYC.
+Rekomendasi awal saya (R2) **digantikan** oleh keputusan ini. Saya mencatat bahwa keputusan Owner lebih kuat dari sisi kepatuhan: R2 tidak menyediakan customer-managed key maupun Object Lock, dan keduanya adalah kontrol yang paling relevan untuk dokumen KYC. Trade-off yang diterima adalah biaya egress dan kompleksitas IAM yang lebih tinggi.
 
-**Tidak direkomendasikan:** Cloudinary (sudah ada di `env.ts` tetapi public-by-default, dirancang untuk media publik), dan Supabase Storage (kontrol retensi/audit belum setara).
+**Rationale (D-01, D-02, D-03):**
 
-### 9.2 Risiko & prasyarat
+| Aspek | Konsekuensi keputusan |
+|---|---|
+| Data residency | Dokumen KYC produksi disimpan di Jakarta — menutup risiko L-1 tanpa menunggu kesimpulan legal, karena menyimpan di dalam negeri adalah posisi paling konservatif |
+| Customer-managed KMS key | Kunci dapat dicabut/dirotasi independen dari provider; penghapusan kunci menjadi kontrol penghapusan tambahan |
+| Object Lock tersedia | Legal hold dapat ditegakkan di lapisan storage, bukan hanya aplikasi |
+| Audit logging | CloudTrail + S3 server access log memberi jejak akses objek yang dapat diaudit |
+| Kompatibilitas | `@aws-sdk/client-s3` — SDK yang sama juga akan bekerja bila kelak berpindah ke storage S3-compatible lain |
+
+**Ketentuan mengikat yang menyertai D-03:**
+
+- **Dedicated KMS key khusus dokumen KYC.** Kunci ini **tidak boleh** dipakai untuk payment, JWT, database, atau layanan lain.
+- Least-privilege key policy; penggunaan kunci diaudit.
+- **S3 Block Public Access aktif otomatis** pada bucket dan account level.
+- Bucket **privat**; **tidak ada permanent public URL** dalam kondisi apa pun.
+
+**Tidak dipakai:** Cloudflare R2 (untuk KYC produksi), Cloudinary (public-by-default, sudah ada di `env.ts` tetapi tidak dipakai kode — lihat G-9), Supabase Storage.
+
+### 9.2 Risiko & prasyarat atas keputusan yang diambil
 
 | Item | Catatan |
 |---|---|
-| Risiko R2 | Tanpa CMK dan tanpa Object Lock → legal hold harus ditegakkan di lapisan aplikasi; audit logging lebih lemah |
-| Risiko S3 | Kompleksitas IAM; biaya egress saat reviewer sering mengunduh |
-| Prasyarat keduanya | Bucket privat, versioning aktif, lifecycle rule, kredensial least-privilege terpisah per environment |
-| Dampak operasional | Perlu dependency baru (`@aws-sdk/client-s3`), rotasi kredensial, dan runbook incident |
+| Risiko IAM | Kompleksitas kebijakan IAM/KMS lebih tinggi → salah konfigurasi adalah risiko utama (T-10). Wajib IaC dan pemeriksaan startup fail-closed |
+| Risiko biaya | Egress berbayar; reviewer yang sering mengunduh menaikkan biaya. Mitigasi: TTL presigned pendek dan tanpa CDN, sehingga volume unduhan terkendali dan terukur |
+| Risiko kunci | Penghapusan/disable KMS key membuat objek **tidak dapat didekripsi permanen**. Wajib prosedur perlindungan kunci dan larangan penghapusan tanpa persetujuan tercatat |
+| Prasyarat | Bucket privat + Block Public Access, versioning aktif, lifecycle rule, kredensial least-privilege **terpisah per environment** (`dev`/`staging`/`production`), KMS key khusus KYC |
+| Dampak operasional | Dependency baru `@aws-sdk/client-s3`; rotasi kredensial; runbook incident; pemantauan biaya egress |
 
-**LEGAL REVIEW REQUIRED:** apakah dokumen KYC pengemudi wajib disimpan di wilayah Indonesia, dan regulasi mana yang mengikat (perlindungan data pribadi, ketentuan sektor transportasi, kewajiban penyelenggara sistem elektronik). Hal ini **tidak dapat dibuktikan dari repository** dan tidak boleh saya simpulkan sendiri.
+**Catatan penting:** keputusan D-01 s.d. D-03 **tidak** membuka blokir upload dokumen. Batch 6 tetap NO-GO sampai D-04, D-07 s.d. D-10, D-11 s.d. D-16, serta L-1 dan L-2 selesai.
+
+**LEGAL REVIEW REQUIRED (L-1) tetap berlaku:** keputusan menyimpan di Jakarta adalah posisi konservatif yang menutup risiko, tetapi **tidak menggantikan** kajian legal tentang regulasi mana yang mengikat (perlindungan data pribadi, ketentuan sektor transportasi, kewajiban penyelenggara sistem elektronik). Hal ini tidak dapat dibuktikan dari repository dan tidak saya simpulkan sendiri.
 
 ---
 
 ## 10. Recommended Storage Architecture
 
-**PROPOSAL ONLY — NOT IMPLEMENTED.**
+**PROPOSAL ONLY — NOT IMPLEMENTED.** Arsitektur di bawah mengikuti keputusan D-01/D-02/D-03 (APPROVED 2026-08-01).
 
-- Bucket **privat**, tanpa akses publik, tanpa URL permanen.
+- **AWS S3 private bucket, region `ap-southeast-3` (Jakarta).**
+- **SSE-KMS dengan customer-managed key khusus dokumen KYC** — kunci tidak dipakai untuk payment, JWT, database, atau layanan lain; least-privilege key policy; penggunaan kunci diaudit.
+- **S3 Block Public Access aktif** pada bucket dan account level; bucket privat; **tidak ada permanent public URL**.
 - Satu bucket per environment (`dev` / `staging` / `production`) dengan kredensial berbeda; **tidak** berbagi bucket.
 - **Object key tidak boleh mengandung** NIK, nama, nomor HP, email, plat, atau identifier mentah:
   `drivers/{applicationUuid}/{documentUuid}` — keduanya UUID acak, tidak dapat ditebak, tidak berkorelasi dengan identitas.
-- Enkripsi at rest (SSE/KMS sesuai D-03), TLS in transit.
+- Enkripsi at rest via SSE-KMS, TLS in transit.
+- Versioning aktif; lifecycle rule mengikuti keputusan retensi (D-11 s.d. D-14, masih PENDING).
+- Pemeriksaan startup **fail-closed**: backend menolak boot bila bucket terdeteksi publik atau KMS key tidak tersedia.
 - Upload lewat **presigned PUT** berumur pendek; unduh lewat **presigned GET** berumur sangat pendek.
 - Metadata objek diminimalkan: **tidak** menyimpan nama asli file, tidak menyimpan identitas.
 - Bytes dokumen **tidak pernah** masuk database; database hanya menyimpan `storageKey`, `checksum`, `contentType`, `sizeBytes`, `status`.
@@ -716,22 +804,24 @@ Memakai `AuditLog` yang ada. `metadata` **dilarang** memuat raw identifier, isi 
 
 ## 20. Stage 5.13 Implementation Batches
 
-**Jangan memulai batch mana pun.**
+**Stage 5.13 belum dimulai.** Tabel di bawah adalah rencana; status GO hanya berarti *boleh masuk tahap perencanaan implementasi*, bukan izin menulis kode.
 
-| # | Batch | Scope | Dependency | Modul terdampak | Migration | Test | Rollback | Security gate | Owner prerequisite | Tetap BLOCKED |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | Schema foundation | Enum + `RideDriverApplication` | — | `prisma/`, `modules/rides` | Additive | Non-destructive scan | Berhenti pakai tabel | Nol destructive | D-21, D-22 | Dokumen |
-| 2 | Review claim/lease | Claim/release/decision + audit | 1 | `modules/rides` | — | Konkurensi 2 admin, lease expiry | Revert | Nol double-approve | D-17, D-19 | — |
-| 3 | Vehicle ownership | `RideVehicle*` + partial unique | 1 | `modules/rides`, `prisma/` | Additive | Transfer race, satu active | Revert | Nol dua pemilik aktif | D-18 | — |
-| 4 | Identifier HMAC service | Normalisasi + blind index + versioning | — | `core/security` baru | — | Determinisme, domain separation, rotasi | Revert | Nol raw/HMAC di log | D-05, D-06 | — |
-| 5 | Document **metadata only** | Status dokumen tanpa bytes | 1 | `modules/rides` | Additive | State machine | Revert | Nol bytes di DB | D-07, D-08, D-09 | Upload nyata |
-| 6 | Private storage integration | SDK, presigned, verifikasi | 5 | infra + `modules/rides` | — | Integration dengan mock | Feature flag | Bucket privat fail-closed | **D-01..D-04** | Sampai D-01..D-04 |
-| 7 | Malware scanning | Scan + quarantine | 6 | infra | — | File uji EICAR | Feature flag | Nol akses sebelum clean | D-10 | Sampai D-10 |
-| 8 | Admin review API | Scope + endpoint + akses dokumen | 2,5,7 | `modules/rides`, `core/security` | — | RBAC/scope matrix | Revert | Nol akses tanpa scope | D-18b | Akses dokumen |
-| 9 | Driver mobile onboarding | UI aplikasi `com.xavindo.tapgo.driver` | 1–8 | `apps/driver_app` | — | Widget + live visual gate | Revert | Nol secret di klien | Rename package | Upload UI |
-| 10 | Migration/backfill legacy | Deprecate + mapping | 1,3,4 | `prisma/`, script | Komentar saja | Data-quality | Tidak ada penghapusan | Nol plaintext baru | D-23 | Penghapusan |
-| 11 | Security verification | Pentest internal, review log/retensi | 1–10 | seluruh | — | Threat model regression | — | Seluruh T-01..T-20 | D-11..D-16 | — |
-| 12 | Production rollout | Feature flag bertahap | 11 | infra | Deploy | Smoke | Matikan flag | Runbook incident | Semua | — |
+| # | Batch | Status setelah 2026-08-01 | Scope | Dependency | Modul terdampak | Migration | Test | Rollback | Security gate | Owner prerequisite | Tetap BLOCKED |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | Schema foundation | **GO FOR IMPLEMENTATION PLANNING** | Enum + `RideDriverApplication` | — | `prisma/`, `modules/rides` | Additive | Non-destructive scan | Berhenti pakai tabel | Nol destructive | D-21 ✅, D-22 ✅ | Dokumen |
+| 2 | Review claim/lease | **GO FOR IMPLEMENTATION PLANNING** | Claim/renew/release/decision + audit | 1 | `modules/rides` | — | Konkurensi 2 admin, lease expiry, renewal atomik | Revert | Nol double-approve | D-17 ✅, D-19 ✅ | — |
+| 3 | Vehicle ownership | **GO FOR IMPLEMENTATION PLANNING** | `RideVehicle*` + partial unique + transfer | 1 | `modules/rides`, `prisma/` | Additive | Transfer race, satu active ownership | Revert | Nol dua pemilik aktif | D-18 ✅ | Verifikasi dokumen kendaraan |
+| 4 | Identifier HMAC service | **GO FOR IMPLEMENTATION PLANNING** | Normalisasi + blind index + versioning + dual lookup | — | `core/security` baru | — | Determinisme, domain separation, rotasi, R-1..R-6 | Revert | Nol raw/HMAC di log | D-05 ✅, D-06 ✅ | — |
+| 5 | Document **metadata only** | **NO-GO** | Status dokumen tanpa bytes | 1 | `modules/rides` | Additive | State machine | Revert | Nol bytes di DB | D-07, D-08, D-09 | Upload nyata |
+| 6 | Private storage integration | **NO-GO** | AWS SDK, presigned, verifikasi | 5 | infra + `modules/rides` | — | Integration dengan mock | Feature flag | Bucket privat + KMS fail-closed | D-01 ✅, D-02 ✅, D-03 ✅, **D-04 PENDING** | Sampai D-04, D-07..D-16, L-1, L-2 |
+| 7 | Malware scanning | **NO-GO** | Scan + quarantine | 6 | infra | — | File uji EICAR | Feature flag | Nol akses sebelum clean | D-10 | Sampai D-10 |
+| 8 | Admin review API | **NO-GO** | Scope + endpoint + akses dokumen | 2,5,7 | `modules/rides`, `core/security` | — | RBAC/scope matrix | Revert | Nol akses tanpa scope | D-18b ✅ (scope), sisanya dokumen | Akses isi dokumen |
+| 9 | Driver mobile onboarding | **NO-GO** | UI `com.xavindo.tapgo.driver` | 1–8 | `apps/driver_app` | — | Widget + live visual gate | Revert | Nol secret di klien | Rename package | Upload UI |
+| 10 | Migration/backfill legacy | **NO-GO** | Deprecate + mapping | 1,3,4 | `prisma/`, script | Komentar saja | Data-quality | Tidak ada penghapusan | Nol plaintext baru | D-23 | Penghapusan |
+| 11 | Security verification | **NO-GO** | Pentest internal, review log/retensi | 1–10 | seluruh | — | Threat model regression + R-1..R-6 | — | Seluruh T-01..T-20 | D-11..D-16 | — |
+| 12 | Production rollout | **NO-GO** | Feature flag bertahap | 11 | infra | Deploy | Smoke | Matikan flag | Runbook incident | Semua | — |
+
+**Catatan Batch 8:** D-18b sudah APPROVED sehingga *desain scope* dapat direncanakan bersama Batch 2, tetapi *akses isi dokumen* tetap NO-GO karena bergantung pada Batch 5–7.
 
 ---
 
@@ -746,6 +836,9 @@ Memakai `AuditLog` yang ada. `metadata` **dilarang** memuat raw identifier, isi 
 | Ketergantungan legal belum jelas | Region/retensi tidak dapat difinalkan | LEGAL REVIEW REQUIRED |
 | Beban query capability (Stage 5.11) | Satu join per operasi driver | Diterima Owner Decision 3; cache dilarang (Decision 13) |
 | Isi `drivers` production UNKNOWN | Migrasi bisa lebih rumit | Langkah data-quality & duplicate resolution wajib |
+| **Rotasi HMAC hanya dapat lazy** (§8.5) | Kunci lama tertahan; deduplication tidak lengkap selama window | Dual lookup wajib + `indexMigrationState` + retirement hanya dengan bukti migrasi. Rincian risiko R-1 s.d. R-6 dan acceptance criteria ada di §8.5.3 |
+| **Penghapusan KMS key tidak dapat dipulihkan** (D-03) | Objek tidak dapat didekripsi permanen | Prosedur perlindungan kunci; larangan penghapusan tanpa persetujuan tercatat; pemantauan key policy |
+| Biaya egress S3 (D-01/D-02) | Biaya naik seiring frekuensi unduhan reviewer | TTL presigned pendek, tanpa CDN, pemantauan biaya |
 
 ---
 
@@ -768,17 +861,40 @@ Saya sengaja tidak membuat klaim legal definitif apa pun di dokumen ini.
 
 Ringkasan naratif; register lengkap ada di §26.
 
-Blocking Batch 6 ke atas: **D-01** (provider), **D-02** (region), **D-03** (KMS), **D-04** (enkripsi raw identifier).
-Blocking Batch 1–4: **D-05**, **D-06** (kunci HMAC), **D-17** (durasi lease), **D-18** (aturan transfer), **D-19** (reactivate), **D-21**, **D-22**.
-Blocking Batch 11: **D-11** s.d. **D-16** (retensi, deletion SLA, backup, legal hold).
+**APPROVED 2026-08-01 (11 keputusan):** D-01 provider · D-02 region · D-03 KMS · D-05 HMAC key custody · D-06 rotasi HMAC · D-17 lease review · D-18 transfer kendaraan · D-18b reviewer scopes · D-19 reaktivasi · D-21 status `WITHDRAWN` · D-22 keunikan SIM.
+
+**MASIH PENDING (13 keputusan):** D-04 enkripsi raw identifier · D-07 daftar dokumen per tahap · D-08 selfie/liveness · D-09 ukuran maksimum & MIME allowlist · D-10 malware scanner · D-11 s.d. D-15 retensi & backup & audit log · D-16 otoritas legal hold · D-20 cooldown resubmit · D-23 timing migrasi legacy.
+
+**Blocking per batch setelah revisi:**
+
+| Batch | Prasyarat | Status |
+|---|---|---|
+| 1–4 | D-05, D-06, D-17, D-18, D-19, D-21, D-22 | **seluruhnya APPROVED → GO** |
+| 5 | D-07, D-08, D-09 | PENDING |
+| 6 | D-04 (D-01/02/03 sudah APPROVED) | PENDING |
+| 7 | D-10 | PENDING |
+| 8 | Batch 5–7 (D-18b sudah APPROVED) | PENDING |
+| 10 | D-23 | PENDING |
+| 11 | D-11 s.d. D-16 | PENDING |
+| Semua batch dokumen | L-1, L-2 | LEGAL REVIEW REQUIRED |
 
 ---
 
 ## 24. Go/No-Go Recommendation
 
-**GO — Batch 1, 2, 3, 4** setelah Owner menjawab D-05, D-06, D-17, D-18, D-19, D-21, D-22. Keempat batch ini tidak menyentuh dokumen sama sekali, seluruhnya additive, dan menutup gap paling berbahaya (G-1 s.d. G-6) termasuk mengganti SHA-256 unsalted pada plat.
+**Diperbarui 2026-08-01 setelah Owner Decision.**
 
-**NO-GO — Batch 5 ke atas** sampai D-01 s.d. D-04 dan D-07 s.d. D-10 dijawab, serta L-1 dan L-2 selesai ditinjau.
+### GO FOR IMPLEMENTATION PLANNING — Batch 1, 2, 3, 4
+
+Seluruh prasyarat keputusan sudah APPROVED. Keempat batch tidak menyentuh dokumen sama sekali, seluruhnya additive, dan menutup gap paling berbahaya (G-1 s.d. G-6) — termasuk mengganti SHA-256 unsalted pada plat dengan blind index HMAC ber-versi.
+
+Catatan: **D-20 (cooldown resubmit) masih PENDING tetapi tidak memblokir Batch 1.** Bila belum diputuskan saat perencanaan, resubmit dijalankan tanpa cooldown dan aturan pembatas ditambahkan kemudian sebagai perubahan terpisah — bukan diasumsikan diam-diam.
+
+**"GO" di sini berarti boleh menyusun rencana implementasi terperinci, bukan izin menulis kode.** Stage 5.13 hanya dimulai atas instruksi Owner yang eksplisit.
+
+### NO-GO — Batch 5 dan seterusnya
+
+Tetap diblokir sampai D-04, D-07 s.d. D-10, D-11 s.d. D-16, serta L-1 dan L-2 selesai. **Persetujuan D-01 s.d. D-03 tidak membuka blokir upload dokumen** — provider, region, dan KMS hanyalah satu dari tujuh syarat yang ditetapkan Owner Decision 12.
 
 **Alasan pemisahan:** onboarding tanpa dokumen tetap bernilai (aplikasi, review ter-lease, kepemilikan kendaraan, identifier aman) dan dapat diuji penuh, sementara dokumen adalah bagian dengan risiko hukum dan keamanan tertinggi yang tidak boleh dimulai atas asumsi.
 
@@ -816,32 +932,43 @@ docs/ (daftar isi)
 
 ## 26. Owner Decision Register
 
+**Ringkasan: 11 APPROVED (2026-08-01) · 13 PENDING.**
+
+### 26.1 Keputusan APPROVED — 2026-08-01
+
+| ID | Question | Keputusan | Rationale | Consequences | Blocking stage | Status |
+|---|---|---|---|---|---|---|
+| D-01 | Private object-storage provider? | **AWS S3 private bucket.** Cloudflare R2 tidak dipilih untuk KYC produksi | R2 tidak menyediakan customer-managed key maupun Object Lock — dua kontrol paling relevan untuk KYC | Menerima biaya egress dan kompleksitas IAM lebih tinggi; butuh `@aws-sdk/client-s3` | Batch 6 | **APPROVED** |
+| D-02 | Storage region? | **`ap-southeast-3` (Jakarta).** Seluruh dokumen KYC produksi di region ini kecuali ada ADR baru | Posisi paling konservatif terhadap data residency; menutup risiko L-1 tanpa menunggu kesimpulan legal | Latensi lintas region untuk komponen di luar ID; perubahan region memerlukan ADR baru | Batch 6 | **APPROVED** |
+| D-03 | KMS / customer-managed key? | **SSE-KMS dengan customer-managed key khusus KYC.** Dedicated key; tidak dipakai payment/JWT/database/layanan lain; least-privilege policy; key usage diaudit; Block Public Access otomatis; bucket privat; tanpa permanent public URL | Pemisahan kunci membatasi radius kompromi; pencabutan kunci menjadi kontrol penghapusan tambahan | Biaya KMS + ops rotasi; **penghapusan/disable kunci membuat objek tidak dapat didekripsi permanen** → butuh prosedur perlindungan kunci | Batch 6 | **APPROVED** |
+| D-05 | HMAC key custody? | **Khusus backend; production secret manager.** Tidak di source code, database, mobile app, atau repository. Terpisah dari JWT, payment, storage, KMS, dan kredensial database. Hanya tersedia bagi backend runtime yang memerlukan deduplication. Nama env var tetap proposal sampai implementation review, tetapi wajib mendukung versioning (`IDENTIFIER_INDEX_KEY_V1`, `IDENTIFIER_INDEX_KEY_V2`) | Kompromi satu kunci tidak meruntuhkan domain lain | Perlu integrasi secret manager dan runbook rotasi | Batch 4 | **APPROVED** |
+| D-06 | Rotasi kunci HMAC? | **12 bulan terjadwal + rotasi segera saat insiden.** Kunci ber-versi; maksimal dua versi aktif; setiap blind index menyimpan `keyVersion`; tidak ada silent fallback tanpa audit; kunci lama tidak dihapus sebelum record dimigrasikan, diverifikasi ulang, atau dinyatakan tidak dapat digunakan | Membatasi dampak kebocoran tanpa merusak deduplication | **Migrasi hanya lazy** — lihat koreksi §8.5; menimbulkan risiko R-1 s.d. R-6 yang wajib dimitigasi | Batch 4 | **APPROVED** |
+| D-17 | Durasi reviewer claim? | **15 menit default**, dapat diperpanjang reviewer aktif; renewal atomik; keputusan hanya sah bila claim masih dimiliki actor dan belum expired; lease expired dapat diambil reviewer lain lewat atomic claim; reviewer lama tidak boleh memutuskan setelah lease berpindah; seluruh claim/renewal/release/expiry/reassignment/approve/reject diaudit | Menyeimbangkan pencegahan review ganda dengan risiko antrean macet | Reviewer harus memperpanjang untuk kasus panjang; butuh endpoint renewal | Batch 2 | **APPROVED** |
+| D-18 | Aturan transfer kendaraan? | **Wajib admin review dengan explicit scope**; verifikasi dokumen kendaraan baru; transaksi atomik; tutup ownership lama sebelum aktifkan yang baru; pertahankan history; tolak dua active ownership untuk kendaraan/plate sama; catat actor, reason, timestamp, source & target ownership | Mencegah substitusi kendaraan (T-19) | Beban admin bertambah; verifikasi dokumen kendaraan bergantung pada batch dokumen | Batch 3 | **APPROVED** |
+| D-18b | Reviewer scopes? | **Explicit scopes, bukan role.** Minimal: `driver.review.claim`, `driver.review.read`, `driver.review.decide`, `driver.review.reassign`, `vehicle.transfer.review`, `kyc.document.read`, `kyc.document.audit`. Nama final dapat disesuaikan dengan arsitektur authorization existing, **semantics tidak boleh dilemahkan**. ADMIN/SUPER_ADMIN tidak otomatis memperoleh akses isi dokumen KYC | Least privilege; memisahkan kewenangan review dari akses isi dokumen | Memperkenalkan konsep scope yang belum ada (G-12); butuh model penyimpanan & pemberian scope | Batch 8 | **APPROVED** |
+| D-19 | Reaktivasi driver? | **Hanya melalui manual review** setelah alasan suspension diselesaikan, dokumen wajib masih valid, tidak ada unresolved security/fraud restriction, reviewer memiliki explicit scope, dan keputusan + reason tercatat di audit trail. **Tidak boleh mengubah `User.role`** | Mencegah pemulihan diam-diam | Reaktivasi tidak dapat otomatis; bergantung validitas dokumen (batch dokumen) | Batch 2 | **APPROVED** |
+| D-21 | Status `WITHDRAWN`? | **Ya — terminal status** untuk application cycle yang ditarik user. Hanya applicant sah yang dapat menarik application yang masih eligible; withdrawal idempotent; application lama tidak diaktifkan kembali; resubmission membuat cycle baru; histori dan audit trail dipertahankan | Jejak audit lebih jujur daripada menghapus `DRAFT` | Menambah satu status terminal pada enum aplikasi | Batch 1 | **APPROVED** |
+| D-22 | Keunikan SIM? | **Satu nomor SIM hanya boleh terhubung dengan satu identitas driver.** Deduplication memakai versioned deterministic keyed HMAC blind index; leading zero dan format canonical konsisten; **konflik tidak diselesaikan otomatis** → wajib admin review + audit trail; nomor SIM **tidak dapat ditransfer** seperti kendaraan; raw SIM tidak boleh dicetak ke log atau disimpan tanpa kebutuhan dan encryption yang disetujui | Mencegah satu SIM dipakai banyak akun | Perlu alur resolusi konflik manual; normalisasi canonical wajib diuji ketat | Batch 1 | **APPROVED** |
+
+### 26.2 Keputusan masih PENDING
+
 | ID | Question | Recommended | Alternatives | Security impact | Cost/ops impact | Blocking stage | Status |
 |---|---|---|---|---|---|---|---|
-| D-01 | Private object-storage provider? | **Cloudflare R2** (bila residency ID tidak wajib) | AWS S3 Jakarta; GCS Jakarta; Supabase | S3 unggul KMS/Object Lock/audit | R2 egress $0, ops lebih rendah | Batch 6 | PENDING |
-| D-02 | Storage region? | `ap-southeast-3` (Jakarta) bila S3 | R2 global; SG | Residency & yurisdiksi | Latensi | Batch 6 | PENDING |
-| D-03 | KMS / customer-managed key? | **Ya**, bila memilih S3/GCS | SSE managed | CMK memperkuat pemisahan kunci | Biaya KMS + ops rotasi | Batch 6 | PENDING |
-| D-04 | Raw identifier perlu dapat dibaca kembali? | **Tidak** — blind index + masking saja | Envelope encryption | Menyimpan raw menambah risiko besar | Perlu utilitas enkripsi baru | Batch 4/6 | PENDING |
-| D-05 | HMAC key custody? | Secret manager terpisah dari secret payment | Env host; KMS | Kompromi satu kunci tidak meruntuhkan lain | Ops rotasi | Batch 4 | PENDING |
-| D-06 | Periode rotasi kunci HMAC? | 12 bulan + rotasi darurat | 6 bulan; tanpa rotasi | Membatasi dampak kebocoran | Dual-lookup selama rotasi | Batch 4 | PENDING |
+| D-04 | Raw identifier perlu dapat dibaca kembali? | **Tidak** — blind index + masking saja | Envelope encryption | Menyimpan raw menambah risiko besar | Perlu utilitas enkripsi baru (belum ada, G-10) | Batch 4/6 | PENDING |
 | D-07 | Dokumen wajib per tahap onboarding? | SIM + STNK saat submit; sisanya menyusul | Semua di depan | Lebih sedikit data = lebih aman | UX | Batch 5 | PENDING |
 | D-08 | Selfie/liveness wajib? | Ya untuk anti-impersonation | Tidak | Menurunkan driver palsu | Biaya vendor | Batch 5 | PENDING |
 | D-09 | Ukuran file maksimum & MIME allowlist? | 8 MB; `image/jpeg`, `image/png`, `application/pdf` | 5/10 MB; + HEIC | Membatasi malicious upload | Storage | Batch 5 | PENDING |
-| D-10 | Malware scanner? | ClamAV terkelola atau GuardDuty Malware Protection | Vendor pihak ketiga | Wajib sebelum akses reviewer | Biaya + latensi | Batch 7 | PENDING |
+| D-10 | Malware scanner? | ClamAV terkelola atau GuardDuty Malware Protection for S3 | Vendor pihak ketiga | Wajib sebelum akses reviewer | Biaya + latensi | Batch 7 | PENDING |
 | D-11 | Retensi aplikasi rejected? | 90 hari | 30/180 hari | Data minimization | Storage | Batch 11 | PENDING |
 | D-12 | Retensi driver approved? | Selama hubungan + periode legal | Tetap | Kepatuhan | Storage | Batch 11 | PENDING |
 | D-13 | Deletion SLA? | 30 hari sejak pemicu | 7/90 hari | Kepercayaan pengguna | Ops | Batch 11 | PENDING |
 | D-14 | Retensi backup? | Selaras retensi dokumen, maks 35 hari | Lebih lama | Backup menahan data terhapus | Biaya | Batch 11 | PENDING |
 | D-15 | Retensi audit log? | 24 bulan | 12 bulan | Investigasi | Storage | Batch 11 | PENDING |
 | D-16 | Otoritas legal hold? | Security/compliance, dua orang | Super admin tunggal | Mencegah penyalahgunaan | Proses | Batch 11 | PENDING |
-| D-17 | Durasi reviewer claim? | **15 menit**, dapat diperpanjang | 5/30/60 menit | Terlalu lama = antrean macet | UX reviewer | Batch 2 | PENDING |
-| D-18 | Aturan approval transfer kendaraan? | Selalu review admin | Otomatis bila kedua driver aktif | Mencegah substitusi | Beban admin | Batch 3 | PENDING |
-| D-18b | Daftar scope reviewer & pemberinya? | `application:read/review`, `document:read`, `vehicle:review`, `legal:hold` | Role tunggal | Least privilege | Ops IAM | Batch 8 | PENDING |
-| D-19 | Kebijakan reaktivasi driver? | Senior reviewer + alasan wajib | Reviewer biasa | Mencegah pemulihan diam-diam | Proses | Batch 2 | PENDING |
-| D-20 | Cooldown resubmit setelah rejected? | 7 hari, maks 3 kali | Tanpa batas | Mengurangi spam | UX | Batch 1 | PENDING |
-| D-21 | Perlukah status `WITHDRAWN`? | Ya | Cukup hapus `DRAFT` | Jejak audit lebih jujur | — | Batch 1 | PENDING |
-| D-22 | `licenseBlindIndex` unik global? | Ya | Per-periode | Mencegah satu SIM banyak akun | Perlu resolusi duplikat | Batch 1 | PENDING |
+| D-20 | Cooldown resubmit setelah rejected? | 7 hari, maks 3 kali | Tanpa batas | Mengurangi spam | UX | Batch 1 (tidak memblokir) | PENDING |
 | D-23 | Kapan menghapus model legacy? | Stage terpisah setelah bukti migrasi | Sekarang | Penghapusan dini berisiko | — | Batch 10 | PENDING |
+
+**Seluruh item LEGAL REVIEW REQUIRED (L-1 s.d. L-6) tetap terbuka.**
 
 ---
 
