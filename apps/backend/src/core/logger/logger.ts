@@ -27,7 +27,20 @@ export const logger = pino({
       "signature",
       "secretKey",
       "DOKU_SECRET_KEY",
-      "DOKU_API_KEY"
+      "DOKU_API_KEY",
+      // Identifier sensitif dan material blind index. Service identifierIndex
+      // sendiri tidak pernah mencatat nilai apa pun; path ini adalah lapisan
+      // pengaman kedua bila nilai terbawa lewat request body atau objek lain.
+      "nik",
+      "req.body.nik",
+      "licenseNumber",
+      "req.body.licenseNumber",
+      "plateNumber",
+      "req.body.plateNumber",
+      "blindIndex",
+      "identifierKey",
+      "IDENTIFIER_INDEX_KEY_V1",
+      "IDENTIFIER_INDEX_KEY_V2"
     ],
     censor: "[REDACTED]"
   },

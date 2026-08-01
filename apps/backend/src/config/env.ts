@@ -63,6 +63,13 @@ const envSchema = z.object({
   CLOUDINARY_API_SECRET: z.string().optional(),
   FIREBASE_PROJECT_ID: z.string().optional(),
   GOOGLE_MAPS_API_KEY: z.string().optional(),
+  // Identifier blind index (HMAC-SHA256). Backend-only, terpisah dari secret
+  // JWT/payment/storage. Sengaja optional pada schema: kegagalan bersifat
+  // fail-closed saat registry dibangun (lihat identifierKeyRegistry.ts), bukan
+  // saat proses boot untuk kebutuhan lain. Maksimal dua versi aktif (D-06).
+  IDENTIFIER_INDEX_KEY_CURRENT_VERSION: z.coerce.number().int().positive().optional(),
+  IDENTIFIER_INDEX_KEY_V1: z.string().min(32).optional(),
+  IDENTIFIER_INDEX_KEY_V2: z.string().min(32).optional(),
 });
 
 const rawEnv = {
