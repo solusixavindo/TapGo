@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TapGo Release 2 Driver — Executive Visual Review (Stage 5.11–5.13)</title>
+<style>
+:root{
+  --bg:#0f1117; --surface:#171a23; --surface2:#1e222d; --line:#2a2f3d;
+  --tx:#e6e9f0; --tx2:#a5adbf; --tx3:#727b90;
+  --imp:#22c55e; --tested:#14b8a6; --doc:#3b82f6; --prop:#f59e0b;
+  --blocked:#ef4444; --notimp:#6b7280; --runtime:#a855f7; --untouched:#64748b;
+  --accent:#38bdf8;
+}
+@media (prefers-color-scheme: light){
+  :root{ --bg:#f6f7fa; --surface:#ffffff; --surface2:#f0f2f7; --line:#d9dee8;
+         --tx:#12151c; --tx2:#4a5262; --tx3:#6b7280; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.6;font-size:15px;-webkit-text-size-adjust:100%}
+header{background:linear-gradient(135deg,#1e293b,#0f172a);color:#f1f5f9;padding:28px 20px;border-bottom:3px solid var(--accent)}
+@media (prefers-color-scheme: light){header{background:linear-gradient(135deg,#1e293b,#334155)}}
+header h1{margin:0 0 6px;font-size:1.5rem;letter-spacing:-.02em}
+header .sub{color:#94a3b8;font-size:.9rem}
+.wrap{max-width:1180px;margin:0 auto;padding:0 16px}
+nav{position:sticky;top:0;z-index:50;background:var(--surface);border-bottom:1px solid var(--line);
+  overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;padding:8px 0}
+nav a{display:inline-block;color:var(--tx2);text-decoration:none;padding:6px 11px;margin:2px;
+  border-radius:6px;font-size:.8rem;border:1px solid transparent}
+nav a:hover,nav a:focus{background:var(--surface2);color:var(--tx);border-color:var(--line)}
+section{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:20px;margin:20px 0;scroll-margin-top:64px}
+section>h2{margin:0 0 4px;font-size:1.15rem;letter-spacing:-.01em;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+section>h2 .num{color:var(--accent);font-variant-numeric:tabular-nums;font-size:.85rem;
+  background:var(--surface2);padding:2px 8px;border-radius:6px;border:1px solid var(--line)}
+section>p.lead{color:var(--tx2);margin:.3rem 0 1rem;font-size:.92rem}
+h3{font-size:.98rem;margin:1.4rem 0 .5rem;color:var(--tx)}
+.badge{display:inline-block;font-size:.68rem;font-weight:700;letter-spacing:.04em;
+  padding:3px 8px;border-radius:999px;white-space:nowrap;border:1px solid transparent;text-transform:uppercase}
+.b-imp{background:rgba(34,197,94,.15);color:var(--imp);border-color:rgba(34,197,94,.4)}
+.b-tested{background:rgba(20,184,166,.15);color:var(--tested);border-color:rgba(20,184,166,.4)}
+.b-doc{background:rgba(59,130,246,.15);color:var(--doc);border-color:rgba(59,130,246,.4)}
+.b-prop{background:rgba(245,158,11,.15);color:var(--prop);border-color:rgba(245,158,11,.4)}
+.b-blocked{background:rgba(239,68,68,.15);color:var(--blocked);border-color:rgba(239,68,68,.4)}
+.b-notimp{background:rgba(107,114,128,.18);color:var(--notimp);border-color:rgba(107,114,128,.45)}
+.b-runtime{background:rgba(168,85,247,.15);color:var(--runtime);border-color:rgba(168,85,247,.4)}
+.b-untouched{background:rgba(100,116,139,.15);color:var(--untouched);border-color:rgba(100,116,139,.4)}
+.tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:.6rem 0;
+  border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:520px;font-size:.85rem}
+th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--surface2);font-weight:600;color:var(--tx2);font-size:.76rem;
+  text-transform:uppercase;letter-spacing:.04em;position:sticky;top:0}
+tr:last-child td{border-bottom:none}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.82em;
+  background:var(--surface2);padding:1px 5px;border-radius:4px;border:1px solid var(--line);
+  word-break:break-all}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.card{background:var(--surface2);border:1px solid var(--line);border-radius:9px;padding:14px}
+.card .k{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--tx3)}
+.card .v{font-size:1.3rem;font-weight:700;margin-top:3px;letter-spacing:-.02em}
+.card .n{font-size:.78rem;color:var(--tx2);margin-top:3px}
+.two{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.panel{border:1px solid var(--line);border-radius:9px;padding:14px;background:var(--surface2)}
+.panel.before{border-left:3px solid var(--blocked)}
+.panel.after{border-left:3px solid var(--imp)}
+.panel h4{margin:0 0 8px;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;color:var(--tx2)}
+ul{margin:.4rem 0;padding-left:1.15rem}
+li{margin:.22rem 0}
+.svgbox{overflow-x:auto;-webkit-overflow-scrolling:touch;background:var(--surface2);
+  border:1px solid var(--line);border-radius:9px;padding:12px;margin:.6rem 0}
+svg{display:block;max-width:100%;height:auto}
+.note{border-left:3px solid var(--accent);background:var(--surface2);padding:11px 14px;
+  border-radius:0 8px 8px 0;margin:.8rem 0;font-size:.87rem;color:var(--tx2)}
+.note.warn{border-left-color:var(--prop)}
+.note.stop{border-left-color:var(--blocked)}
+.legend{display:flex;flex-wrap:wrap;gap:7px;margin:.5rem 0 0}
+.yes{color:var(--imp);font-weight:700}
+.no{color:var(--blocked);font-weight:700}
+.na{color:var(--tx3)}
+.filterbar{display:flex;flex-wrap:wrap;gap:6px;margin:.5rem 0 1rem}
+.filterbar button{background:var(--surface2);color:var(--tx2);border:1px solid var(--line);
+  border-radius:999px;padding:5px 12px;font-size:.78rem;cursor:pointer;font-family:inherit}
+.filterbar button[aria-pressed="true"]{background:var(--accent);color:#06202c;border-color:var(--accent);font-weight:700}
+footer{color:var(--tx3);font-size:.8rem;padding:24px 0 40px;text-align:center}
+@media (max-width:560px){
+  header h1{font-size:1.18rem} section{padding:15px} body{font-size:14px}
+  .card .v{font-size:1.12rem}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>TapGo Release 2 Driver — Executive Visual Review</h1>
+    <div class="sub">Stage 5.11 → 5.13 &nbsp;·&nbsp; branch <span class="mono">agent/tapgo-release2-driver</span> &nbsp;·&nbsp; disusun 2026-08-01</div>
+  </div>
+</header>
+
+<nav aria-label="Navigasi bagian"><div class="wrap">
+  <a href="#s1">1 Ringkasan</a><a href="#s2">2 Timeline</a><a href="#s3">3 Implemented vs Planned</a>
+  <a href="#s4">4 Before/After</a><a href="#s5">5 Authorization Matrix</a><a href="#s6">6 Driver Routes</a>
+  <a href="#s7">7 State Machine</a><a href="#s8">8 Review Lease</a><a href="#s9">9 Vehicle Identity</a>
+  <a href="#s10">10 Identifier Flow</a><a href="#s11">11 Golden Vectors</a><a href="#s12">12 Storage</a>
+  <a href="#s13">13 GO/NO-GO</a><a href="#s14">14 Test Evidence</a><a href="#s15">15 Files Changed</a>
+  <a href="#s16">16 Protected Areas</a><a href="#s17">17 Yang Terlihat</a><a href="#s18">18 Next Stage</a>
+</div></nav>
+
+<div class="wrap">
+
+<!-- ============ 1 ============ -->
+<section id="s1">
+  <h2><span class="num">01</span> Executive Summary</h2>
+  <p class="lead">Ringkasan status Release 2 Driver pada saat dokumen ini dibuat.</p>
+
+  <div class="grid">
+    <div class="card"><div class="k">Release 1</div><div class="v">ea9fb6c</div>
+      <div class="n"><span class="badge b-untouched">Untouched</span> beku, tidak disentuh</div></div>
+    <div class="card"><div class="k">Branch Release 2 Driver</div><div class="v" style="font-size:.95rem">agent/tapgo-release2-driver</div>
+      <div class="n">branch resmi</div></div>
+    <div class="card"><div class="k">Current HEAD</div><div class="v">4979f99</div>
+      <div class="n">feat(ride): add identifier blind index service</div></div>
+    <div class="card"><div class="k">Stage aktif</div><div class="v">5.13V</div>
+      <div class="n">visual evidence pack (documentation-only)</div></div>
+    <div class="card"><div class="k">Stage selesai</div><div class="v">5</div>
+      <div class="n">5.11 · 5.12 · 5.12 revisi · 5.13 · 5.13 revisi</div></div>
+    <div class="card"><div class="k">Commit implementasi</div><div class="v">2</div>
+      <div class="n">ea5b5a5 dan 4979f99; 4 commit lain dokumentasi</div></div>
+  </div>
+
+  <h3>Implemented versus proposal</h3>
+  <div class="two">
+    <div class="panel after">
+      <h4>Sudah berjalan di backend</h4>
+      <ul>
+        <li>Driver capability otoritatif dari database <span class="badge b-imp">Implemented</span></li>
+        <li>Identifier blind index HMAC-SHA256 <span class="badge b-imp">Implemented</span></li>
+      </ul>
+    </div>
+    <div class="panel before">
+      <h4>Masih desain, belum ada kodenya</h4>
+      <ul>
+        <li>Onboarding schema, review lease, vehicle ownership <span class="badge b-prop">Proposal only</span></li>
+        <li>Dokumen KYC, AWS S3/KMS, endpoint, UI driver <span class="badge b-blocked">Blocked</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Blocker utama</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Blocker</th><th>Dampak</th><th>Status</th></tr>
+    <tr><td>Keputusan dokumen KYC (D-04, D-07 s.d. D-10)</td><td>Upload dokumen dan seluruh batch turunannya</td><td><span class="badge b-blocked">Blocked</span></td></tr>
+    <tr><td>Model penyimpanan authorization scope</td><td>Guard scope pada review lease</td><td><span class="badge b-blocked">Blocked</span></td></tr>
+    <tr><td>Grammar resmi nomor SIM</td><td>Domain <code>sim</code> pada HMAC service</td><td><span class="badge b-blocked">Blocked</span></td></tr>
+    <tr><td>Retensi, deletion, legal hold (D-11 s.d. D-16)</td><td>Security verification dan rollout</td><td><span class="badge b-blocked">Blocked</span></td></tr>
+    <tr><td>Kontrak env identifier key (boot-level vs registry-level)</td><td>Aktivasi HMAC service</td><td><span class="badge b-blocked">Menunggu konfirmasi Owner</span></td></tr>
+  </table></div>
+
+  <h3>Next authorized stage</h3>
+  <p>Belum ada. Stage 5.14A sudah <strong>dikerjakan dan ter-commit</strong> (<code>4979f99</code>) tetapi <strong>belum di-approve</strong>. Stage 5.14B dan seterusnya belum diotorisasi.</p>
+</section>
+
+<!-- ============ 2 ============ -->
+<section id="s2">
+  <h2><span class="num">02</span> Release Timeline</h2>
+  <p class="lead">Seluruh data pada tabel ini berasal dari <code>git log</code>, <code>git show</code>, dan <code>git diff-tree</code> — bukan dari ingatan.</p>
+
+  <div class="tablewrap"><table>
+    <tr><th>Stage</th><th>Commit</th><th>Subject</th><th>Jenis</th><th>File</th><th>Validation</th><th>Approval</th></tr>
+    <tr>
+      <td><strong>5.11</strong><br>Driver capability</td>
+      <td><code>ea5b5a5</code></td>
+      <td>fix(ride): enforce database driver capability</td>
+      <td><span class="badge b-imp">Implemented</span></td>
+      <td>5 file<br>+505 / −4</td>
+      <td>302 test hijau<br><span class="badge b-tested">Tested</span></td>
+      <td><span class="badge b-imp">Approved &amp; closed</span></td>
+    </tr>
+    <tr>
+      <td><strong>5.12</strong><br>Arsitektur onboarding</td>
+      <td><code>e0f5336</code></td>
+      <td>docs(ride): define driver onboarding security architecture</td>
+      <td><span class="badge b-doc">Documented</span></td>
+      <td>1 file<br>+848</td>
+      <td>secret/PII scan bersih</td>
+      <td><span class="badge b-imp">Approved &amp; closed</span></td>
+    </tr>
+    <tr>
+      <td><strong>5.12 revisi</strong><br>Owner decisions</td>
+      <td><code>48cdb9f</code></td>
+      <td>docs(ride): record driver onboarding owner decisions</td>
+      <td><span class="badge b-doc">Documented</span></td>
+      <td>1 file<br>+187 / −60</td>
+      <td>11 keputusan menjadi APPROVED</td>
+      <td><span class="badge b-imp">Approved &amp; closed</span></td>
+    </tr>
+    <tr>
+      <td><strong>5.13</strong><br>Rencana implementasi</td>
+      <td><code>3d96c56</code></td>
+      <td>docs(ride): plan driver onboarding implementation batches</td>
+      <td><span class="badge b-doc">Documented</span></td>
+      <td>1 file<br>+914</td>
+      <td>32 section, seluruh snippet berlabel proposal</td>
+      <td><span class="badge b-imp">Approved &amp; closed</span></td>
+    </tr>
+    <tr>
+      <td><strong>5.13 revisi</strong><br>Identity &amp; HMAC</td>
+      <td><code>4178fba</code></td>
+      <td>docs(ride): correct onboarding identity and hmac plan</td>
+      <td><span class="badge b-doc">Documented</span></td>
+      <td>1 file<br>+194 / −78</td>
+      <td>golden vector sintetis diverifikasi</td>
+      <td><span class="badge b-imp">Approved &amp; closed</span></td>
+    </tr>
+    <tr style="background:rgba(56,189,248,.06)">
+      <td><strong>5.14A</strong><br>HMAC service</td>
+      <td><code>4979f99</code></td>
+      <td>feat(ride): add identifier blind index service</td>
+      <td><span class="badge b-imp">Implemented</span></td>
+      <td>6 file<br>+1173 / −1</td>
+      <td>355 test hijau<br><span class="badge b-tested">Tested</span></td>
+      <td><span class="badge b-prop">Implemented — awaiting Owner review</span></td>
+    </tr>
+  </table></div>
+
+  <div class="note">Baris terakhir berada di luar cakupan Stage 5.11–5.13 yang diminta, tetapi ditampilkan karena commit tersebut <strong>nyata ada</strong> di branch ini. Menyembunyikannya akan membuat dashboard tidak jujur terhadap isi repository.</div>
+</section>
+
+<!-- ============ 3 ============ -->
+<section id="s3">
+  <h2><span class="num">03</span> Implemented versus Planned</h2>
+  <p class="lead">Pemisahan tegas antara yang sudah menjadi kode dan yang baru berupa rencana.</p>
+
+  <div class="filterbar" role="group" aria-label="Filter status">
+    <button type="button" data-f="all" aria-pressed="true">Semua</button>
+    <button type="button" data-f="impl" aria-pressed="false">Implemented</button>
+    <button type="button" data-f="plan" aria-pressed="false">Planned / Blocked</button>
+  </div>
+
+  <div class="tablewrap"><table id="ivp">
+    <tr><th>Kapabilitas</th><th>Status</th><th>Bukti</th></tr>
+    <tr data-g="impl"><td><code>requireDriverCapability</code> middleware</td><td><span class="badge b-imp">Implemented</span></td><td><code>driverCapability.ts</code> · <code>ea5b5a5</code></td></tr>
+    <tr data-g="impl"><td>Akses driver otoritatif dari database</td><td><span class="badge b-imp">Implemented</span></td><td>13 test kapabilitas</td></tr>
+    <tr data-g="impl"><td>Nol bypass ADMIN / SUPER_ADMIN</td><td><span class="badge b-imp">Implemented</span></td><td>2 test khusus role</td></tr>
+    <tr data-g="impl"><td>Defense-in-depth pada application layer</td><td><span class="badge b-imp">Implemented</span></td><td><code>requireDriverProfile</code> di <code>RideService</code></td></tr>
+    <tr data-g="impl"><td>Suspension / rejection berlaku seketika</td><td><span class="badge b-imp">Implemented</span></td><td>test token lama tetap ditolak</td></tr>
+    <tr data-g="impl"><td>Isolasi kapabilitas penumpang</td><td><span class="badge b-imp">Implemented</span></td><td>test quote &amp; list tetap 200</td></tr>
+    <tr data-g="impl"><td>Test Stage 5.11</td><td><span class="badge b-tested">Tested</span></td><td>13/13 hijau</td></tr>
+    <tr data-g="impl"><td>Identifier blind index service</td><td><span class="badge b-imp">Implemented</span></td><td><code>4979f99</code> · 53 test</td></tr>
+    <tr data-g="plan"><td>Driver onboarding schema</td><td><span class="badge b-notimp">Not implemented</span></td><td>rencana §6 dokumen 5.13</td></tr>
+    <tr data-g="plan"><td>Review claim / lease</td><td><span class="badge b-notimp">Not implemented</span></td><td>rencana §7 dokumen 5.13</td></tr>
+    <tr data-g="plan"><td>Vehicle ownership temporal</td><td><span class="badge b-notimp">Not implemented</span></td><td>rencana §8 dokumen 5.13</td></tr>
+    <tr data-g="plan"><td>Plate assignment temporal</td><td><span class="badge b-notimp">Not implemented</span></td><td>rencana §8 dokumen 5.13</td></tr>
+    <tr data-g="plan"><td>Document storage (metadata &amp; bytes)</td><td><span class="badge b-blocked">Blocked</span></td><td>D-04, D-07 s.d. D-10</td></tr>
+    <tr data-g="plan"><td>AWS S3 / KMS integration</td><td><span class="badge b-blocked">Blocked</span></td><td>arsitektur disetujui, belum dibangun</td></tr>
+    <tr data-g="plan"><td>Driver onboarding endpoints</td><td><span class="badge b-notimp">Not implemented</span></td><td>stage terpisah</td></tr>
+    <tr data-g="plan"><td>Driver mobile UI</td><td><span class="badge b-notimp">Not implemented</span></td><td><code>apps/driver_app</code> masih template 1 file</td></tr>
+  </table></div>
+</section>
+
+<!-- ============ 4 ============ -->
+<section id="s4">
+  <h2><span class="num">04</span> Before / After Authorization Flow <span class="badge b-imp">Implemented</span></h2>
+  <p class="lead">Perubahan inti Stage 5.11: sumber kewenangan berpindah dari klaim token ke state database.</p>
+
+  <div class="svgbox">
+  <svg viewBox="0 0 860 300" role="img" aria-label="Diagram alur otorisasi sebelum dan sesudah Stage 5.11">
+    <defs>
+      <marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#94a3b8"/></marker>
+      <marker id="arg" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#22c55e"/></marker>
+      <marker id="arr" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#ef4444"/></marker>
+    </defs>
+    <text x="10" y="20" fill="#ef4444" font-size="13" font-weight="700">BEFORE — kewenangan dari klaim JWT</text>
+    <rect x="10" y="34" width="150" height="42" rx="7" fill="#1e222d" stroke="#ef4444"/>
+    <text x="85" y="52" fill="#e6e9f0" font-size="11" text-anchor="middle">JWT role claim</text>
+    <text x="85" y="67" fill="#a5adbf" font-size="9.5" text-anchor="middle">tidak baca database</text>
+    <line x1="162" y1="55" x2="212" y2="55" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#ar)"/>
+    <rect x="215" y="34" width="205" height="42" rx="7" fill="#1e222d" stroke="#ef4444"/>
+    <text x="317" y="52" fill="#e6e9f0" font-size="11" text-anchor="middle">DRIVER / ADMIN / SUPER_ADMIN</text>
+    <text x="317" y="67" fill="#a5adbf" font-size="9.5" text-anchor="middle">requireRoles(...)</text>
+    <line x1="422" y1="55" x2="472" y2="55" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#ar)"/>
+    <rect x="475" y="34" width="170" height="42" rx="7" fill="#1e222d" stroke="#ef4444"/>
+    <text x="560" y="59" fill="#e6e9f0" font-size="11" text-anchor="middle">driver operational routes</text>
+    <text x="660" y="52" fill="#ef4444" font-size="10">✕ admin lolos tanpa profil</text>
+    <text x="660" y="67" fill="#ef4444" font-size="10">✕ suspended lolos ≤15 menit</text>
+
+    <line x1="10" y1="100" x2="850" y2="100" stroke="#2a2f3d" stroke-width="1"/>
+
+    <text x="10" y="128" fill="#22c55e" font-size="13" font-weight="700">AFTER — kewenangan dari database</text>
+    <rect x="10" y="142" width="150" height="42" rx="7" fill="#1e222d" stroke="#22c55e"/>
+    <text x="85" y="167" fill="#e6e9f0" font-size="11" text-anchor="middle">Authenticated User</text>
+    <line x1="162" y1="163" x2="200" y2="163" stroke="#22c55e" stroke-width="1.6" marker-end="url(#arg)"/>
+    <rect x="203" y="142" width="168" height="42" rx="7" fill="#1e222d" stroke="#22c55e"/>
+    <text x="287" y="160" fill="#e6e9f0" font-size="11" text-anchor="middle">User.status = ACTIVE</text>
+    <text x="287" y="175" fill="#a5adbf" font-size="9.5" text-anchor="middle">dibaca dari database</text>
+    <line x1="373" y1="163" x2="411" y2="163" stroke="#22c55e" stroke-width="1.6" marker-end="url(#arg)"/>
+    <rect x="414" y="142" width="205" height="42" rx="7" fill="#1e222d" stroke="#22c55e"/>
+    <text x="516" y="160" fill="#e6e9f0" font-size="11" text-anchor="middle">RideDriverProfile.status = ACTIVE</text>
+    <text x="516" y="175" fill="#a5adbf" font-size="9.5" text-anchor="middle">dibaca setiap request, tanpa cache</text>
+    <line x1="621" y1="163" x2="659" y2="163" stroke="#22c55e" stroke-width="1.6" marker-end="url(#arg)"/>
+    <rect x="662" y="142" width="188" height="42" rx="7" fill="#1e222d" stroke="#22c55e"/>
+    <text x="756" y="167" fill="#e6e9f0" font-size="11" text-anchor="middle">driver operational routes</text>
+
+    <rect x="203" y="212" width="416" height="34" rx="7" fill="rgba(239,68,68,.08)" stroke="#ef4444" stroke-dasharray="4 3"/>
+    <text x="411" y="233" fill="#ef4444" font-size="11" text-anchor="middle">ADMIN / SUPER_ADMIN tanpa active driver profile → 403 ditolak</text>
+    <line x1="411" y1="188" x2="411" y2="208" stroke="#ef4444" stroke-width="1.5" marker-end="url(#arr)"/>
+    <text x="10" y="275" fill="#a5adbf" font-size="10.5">Role akun tidak lagi menjadi sumber kewenangan. Registrasi publik selalu membuat USER; satu akun dapat menjadi penumpang sekaligus driver.</text>
+  </svg>
+  </div>
+</section>
+
+<!-- ============ 5 ============ -->
+<section id="s5">
+  <h2><span class="num">05</span> Authorization Matrix <span class="badge b-tested">Re-verified</span></h2>
+  <p class="lead">Perilaku nyata sistem saat ini, dibuktikan 13 integration test.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Aktor</th><th>Passenger routes</th><th>Driver routes</th><th>Admin routes</th><th>Error code driver</th></tr>
+    <tr><td>USER tanpa driver profile</td><td class="yes">✔ diizinkan</td><td class="no">✘ ditolak</td><td class="no">✘ ditolak</td><td><code>RIDE_DRIVER_PROFILE_REQUIRED</code></td></tr>
+    <tr><td>Driver <strong>PENDING</strong></td><td class="yes">✔ diizinkan</td><td class="no">✘ ditolak</td><td class="no">✘ ditolak</td><td><code>RIDE_DRIVER_NOT_ACTIVE</code></td></tr>
+    <tr><td>Driver <strong>SUSPENDED</strong></td><td class="yes">✔ diizinkan</td><td class="no">✘ ditolak</td><td class="no">✘ ditolak</td><td><code>RIDE_DRIVER_NOT_ACTIVE</code></td></tr>
+    <tr><td>Driver <strong>REJECTED</strong></td><td class="yes">✔ diizinkan</td><td class="no">✘ ditolak</td><td class="no">✘ ditolak</td><td><code>RIDE_DRIVER_NOT_ACTIVE</code></td></tr>
+    <tr style="background:rgba(34,197,94,.07)"><td>Driver <strong>ACTIVE</strong> + User ACTIVE</td><td class="yes">✔ diizinkan</td><td class="yes">✔ diizinkan</td><td class="no">✘ ditolak</td><td class="na">—</td></tr>
+    <tr><td>ADMIN tanpa driver profile</td><td class="yes">✔ diizinkan</td><td class="no">✘ ditolak</td><td class="yes">✔ diizinkan</td><td><code>RIDE_DRIVER_PROFILE_REQUIRED</code></td></tr>
+    <tr><td>SUPER_ADMIN tanpa driver profile</td><td class="yes">✔ diizinkan</td><td class="no">✘ ditolak</td><td class="yes">✔ diizinkan</td><td><code>RIDE_DRIVER_PROFILE_REQUIRED</code></td></tr>
+    <tr><td>User non-ACTIVE (profil ACTIVE)</td><td class="na">— tidak berlaku</td><td class="no">✘ ditolak</td><td class="no">✘ ditolak</td><td><code>RIDE_DRIVER_ACCOUNT_INACTIVE</code></td></tr>
+  </table></div>
+  <div class="note">Suspend driver <strong>tidak</strong> mencabut sesi penumpang. Akun yang sama tetap dapat memesan perjalanan sebagai penumpang — dibuktikan test tersendiri.</div>
+</section>
+
+<!-- ============ 6 ============ -->
+<section id="s6">
+  <h2><span class="num">06</span> Driver Operational Routes <span class="badge b-imp">Implemented</span></h2>
+  <p class="lead">Sepuluh route yang dilindungi. Setiap skenario penolakan diuji terhadap <strong>kesepuluhnya</strong>, bukan hanya satu.</p>
+  <div class="tablewrap"><table>
+    <tr><th>#</th><th>Route</th><th>Middleware guard</th><th>Defense application layer</th><th>Expected failure</th><th>Test</th></tr>
+    <tr><td>1</td><td><code>POST /driver/availability</code></td><td rowspan="10" style="vertical-align:middle;background:rgba(34,197,94,.06)"><code>requireAuth</code><br>+<br><code>requireDriverCapability</code><br><br><span class="badge b-imp">Implemented</span></td><td><code>requireDriverProfile</code></td><td>403</td><td class="yes">✔</td></tr>
+    <tr><td>2</td><td><code>GET /driver/rides/offers</code></td><td><code>requireDriverProfile</code></td><td>403</td><td class="yes">✔</td></tr>
+    <tr><td>3</td><td><code>POST /driver/rides/:ref/accept</code></td><td><code>requireDriverProfile</code></td><td>403</td><td class="yes">✔</td></tr>
+    <tr><td>4</td><td><code>POST /driver/rides/:ref/reject</code></td><td><code>requireDriverProfile</code></td><td>403</td><td class="yes">✔</td></tr>
+    <tr><td>5</td><td><code>POST /driver/rides/:ref/pickup</code></td><td><code>requireDriverProfile</code></td><td>403</td><td class="yes">✔</td></tr>
+    <tr><td>6</td><td><code>POST /driver/rides/:ref/arrived</code></td><td><code>requireDriverProfile</code></td><td>403</td><td class="yes">✔</td></tr>
+    <tr><td>7</td><td><code>POST /driver/rides/:ref/start</code></td><td><code>requireDriverProfile</code></td><td>403</td><td class="yes">✔</td></tr>
+    <tr><td>8</td><td><code>POST /driver/rides/:ref/complete</code></td><td><code>requireDriverProfile</code></td><td>403</td><td class="yes">✔</td></tr>
+    <tr><td>9</td><td><code>POST /driver/rides/:ref/cancel</code></td><td><code>requireDriverProfile</code></td><td>403</td><td class="yes">✔</td></tr>
+    <tr><td>10</td><td><code>POST /driver/location</code></td><td><code>requireDriverProfile</code></td><td>403</td><td class="yes">✔</td></tr>
+  </table></div>
+  <div class="note">Sebelum Stage 5.11, dua jalur (<code>advanceByDriver</code> dan <code>cancelByDriver</code>) <strong>tidak</strong> memeriksa status profil sama sekali; keamanannya hanya bergantung pada aturan moderasi yang melarang suspend saat driver terikat ride. Ketergantungan rapuh itu kini tertutup secara struktural.</div>
+</section>
+
+<!-- ============ 7 ============ -->
+<section id="s7">
+  <h2><span class="num">07</span> Driver Onboarding State Machine <span class="badge b-prop">Proposal only — not implemented</span></h2>
+  <p class="lead">Belum ada tabel, kolom, maupun kode. Diagram ini adalah rancangan dari dokumen Stage 5.13 §6.</p>
+  <div class="svgbox">
+  <svg viewBox="0 0 840 250" role="img" aria-label="Diagram state machine onboarding driver">
+    <defs><marker id="a2" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#f59e0b"/></marker></defs>
+    <rect x="14" y="60" width="104" height="40" rx="7" fill="#1e222d" stroke="#f59e0b"/>
+    <text x="66" y="85" fill="#e6e9f0" font-size="12" text-anchor="middle">DRAFT</text>
+    <line x1="120" y1="80" x2="164" y2="80" stroke="#f59e0b" stroke-width="1.6" marker-end="url(#a2)"/>
+    <text x="142" y="72" fill="#a5adbf" font-size="9" text-anchor="middle">submit</text>
+    <rect x="167" y="60" width="118" height="40" rx="7" fill="#1e222d" stroke="#f59e0b"/>
+    <text x="226" y="85" fill="#e6e9f0" font-size="12" text-anchor="middle">SUBMITTED</text>
+    <line x1="287" y1="80" x2="331" y2="80" stroke="#f59e0b" stroke-width="1.6" marker-end="url(#a2)"/>
+    <text x="309" y="72" fill="#a5adbf" font-size="9" text-anchor="middle">claim</text>
+    <rect x="334" y="60" width="136" height="40" rx="7" fill="#1e222d" stroke="#f59e0b"/>
+    <text x="402" y="85" fill="#e6e9f0" font-size="12" text-anchor="middle">UNDER_REVIEW</text>
+    <line x1="472" y1="72" x2="530" y2="46" stroke="#f59e0b" stroke-width="1.6" marker-end="url(#a2)"/>
+    <text x="500" y="45" fill="#a5adbf" font-size="9">approve</text>
+    <rect x="533" y="24" width="112" height="38" rx="7" fill="rgba(34,197,94,.1)" stroke="#22c55e"/>
+    <text x="589" y="48" fill="#e6e9f0" font-size="12" text-anchor="middle">APPROVED</text>
+    <line x1="472" y1="90" x2="530" y2="116" stroke="#f59e0b" stroke-width="1.6" marker-end="url(#a2)"/>
+    <text x="500" y="118" fill="#a5adbf" font-size="9">reject</text>
+    <rect x="533" y="98" width="112" height="38" rx="7" fill="rgba(239,68,68,.1)" stroke="#ef4444"/>
+    <text x="589" y="122" fill="#e6e9f0" font-size="12" text-anchor="middle">REJECTED</text>
+    <path d="M402,102 Q402,150 226,150 Q120,150 120,102" fill="none" stroke="#f59e0b" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#a2)"/>
+    <text x="270" y="164" fill="#a5adbf" font-size="9" text-anchor="middle">release / lease expired → kembali SUBMITTED</text>
+    <rect x="14" y="182" width="118" height="38" rx="7" fill="rgba(100,116,139,.12)" stroke="#64748b"/>
+    <text x="73" y="206" fill="#e6e9f0" font-size="12" text-anchor="middle">WITHDRAWN</text>
+    <text x="140" y="200" fill="#a5adbf" font-size="9.5">terminal — hanya applicant, sebelum UNDER_REVIEW</text>
+    <text x="140" y="214" fill="#a5adbf" font-size="9.5">resubmission membuat cycle baru, histori dipertahankan</text>
+    <rect x="533" y="160" width="290" height="60" rx="7" fill="rgba(239,68,68,.06)" stroke="#ef4444" stroke-dasharray="4 3"/>
+    <text x="678" y="182" fill="#ef4444" font-size="11" text-anchor="middle" font-weight="700">SUSPENDED bukan application state</text>
+    <text x="678" y="199" fill="#a5adbf" font-size="9.5" text-anchor="middle">status itu milik RideDriverProfile —</text>
+    <text x="678" y="212" fill="#a5adbf" font-size="9.5" text-anchor="middle">menaruhnya di dua tempat = dua sumber kebenaran</text>
+  </svg>
+  </div>
+</section>
+
+<!-- ============ 8 ============ -->
+<section id="s8">
+  <h2><span class="num">08</span> Review Claim / Lease 15 Menit <span class="badge b-prop">Proposal only — not implemented</span></h2>
+  <p class="lead">Mencegah dua admin mereview aplikasi yang sama, sekaligus mencegah aplikasi terkunci permanen.</p>
+  <div class="svgbox">
+  <svg viewBox="0 0 840 210" role="img" aria-label="Diagram siklus lease review">
+    <defs><marker id="a3" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#38bdf8"/></marker></defs>
+    <rect x="14" y="40" width="96" height="40" rx="7" fill="#1e222d" stroke="#38bdf8"/>
+    <text x="62" y="65" fill="#e6e9f0" font-size="11" text-anchor="middle">claim</text>
+    <line x1="112" y1="60" x2="150" y2="60" stroke="#38bdf8" stroke-width="1.6" marker-end="url(#a3)"/>
+    <rect x="153" y="40" width="128" height="40" rx="7" fill="rgba(56,189,248,.1)" stroke="#38bdf8"/>
+    <text x="217" y="58" fill="#e6e9f0" font-size="11" text-anchor="middle">active review</text>
+    <text x="217" y="72" fill="#a5adbf" font-size="9">claimExpiresAt = now()+15m</text>
+    <path d="M217,38 Q217,12 150,12 Q100,12 100,36" fill="none" stroke="#38bdf8" stroke-width="1.4" marker-end="url(#a3)"/>
+    <text x="158" y="9" fill="#a5adbf" font-size="9" text-anchor="middle">renew (atomik, oleh pemilik claim)</text>
+    <line x1="283" y1="52" x2="330" y2="40" stroke="#38bdf8" stroke-width="1.6" marker-end="url(#a3)"/>
+    <rect x="333" y="22" width="104" height="34" rx="7" fill="rgba(34,197,94,.1)" stroke="#22c55e"/>
+    <text x="385" y="43" fill="#e6e9f0" font-size="11" text-anchor="middle">approve</text>
+    <line x1="283" y1="68" x2="330" y2="80" stroke="#38bdf8" stroke-width="1.6" marker-end="url(#a3)"/>
+    <rect x="333" y="64" width="104" height="34" rx="7" fill="rgba(239,68,68,.1)" stroke="#ef4444"/>
+    <text x="385" y="85" fill="#e6e9f0" font-size="11" text-anchor="middle">reject</text>
+    <line x1="217" y1="82" x2="217" y2="112" stroke="#38bdf8" stroke-width="1.4" marker-end="url(#a3)"/>
+    <rect x="128" y="116" width="178" height="34" rx="7" fill="#1e222d" stroke="#38bdf8" stroke-dasharray="4 3"/>
+    <text x="217" y="137" fill="#e6e9f0" font-size="10.5" text-anchor="middle">release / expire → SUBMITTED</text>
+    <rect x="470" y="22" width="356" height="76" rx="7" fill="rgba(239,68,68,.06)" stroke="#ef4444"/>
+    <text x="648" y="42" fill="#ef4444" font-size="11" font-weight="700" text-anchor="middle">Stale reviewer protection</text>
+    <text x="648" y="60" fill="#a5adbf" font-size="9.5" text-anchor="middle">keputusan hanya sah bila claimed_by = actor</text>
+    <text x="648" y="74" fill="#a5adbf" font-size="9.5" text-anchor="middle">DAN claim_expires_at ≥ now()</text>
+    <text x="648" y="90" fill="#a5adbf" font-size="9.5" text-anchor="middle">reviewer lama yang lease-nya habis → 409, bukan keputusan diam-diam</text>
+    <rect x="470" y="112" width="356" height="72" rx="7" fill="var(--surface)" stroke="#2a2f3d"/>
+    <text x="648" y="132" fill="#e6e9f0" font-size="10.5" font-weight="700" text-anchor="middle">Waktu = now() dari PostgreSQL</text>
+    <text x="648" y="149" fill="#a5adbf" font-size="9.5" text-anchor="middle">bukan waktu klien, bukan waktu proses Node —</text>
+    <text x="648" y="163" fill="#a5adbf" font-size="9.5" text-anchor="middle">menghilangkan clock skew antar instance backend</text>
+    <text x="648" y="177" fill="#a5adbf" font-size="9.5" text-anchor="middle">lease expiry dievaluasi lazily, tanpa scheduler</text>
+    <text x="14" y="172" fill="#a5adbf" font-size="9.5">reassignment: hanya dengan scope</text>
+    <text x="14" y="186" fill="#a5adbf" font-size="9.5">driver.review.reassign, selalu ter-audit</text>
+  </svg>
+  </div>
+</section>
+
+<!-- ============ 9 ============ -->
+<section id="s9">
+  <h2><span class="num">09</span> Vehicle Identity Model <span class="badge b-prop">Proposal only — not implemented</span></h2>
+  <p class="lead">Koreksi Owner pada revisi Stage 5.13: identitas kendaraan harus stabil; plat dan kepemilikan bersifat temporal dan terpisah.</p>
+  <div class="svgbox">
+  <svg viewBox="0 0 840 260" role="img" aria-label="Diagram model identitas kendaraan">
+    <rect x="14" y="30" width="180" height="66" rx="8" fill="rgba(56,189,248,.1)" stroke="#38bdf8"/>
+    <text x="104" y="52" fill="#e6e9f0" font-size="12" text-anchor="middle" font-weight="700">RideVehicle</text>
+    <text x="104" y="69" fill="#a5adbf" font-size="9.5" text-anchor="middle">identitas fisik kendaraan</text>
+    <text x="104" y="83" fill="#22c55e" font-size="9.5" text-anchor="middle">STABIL — tidak pernah diganti</text>
+
+    <rect x="240" y="14" width="212" height="60" rx="8" fill="#1e222d" stroke="#f59e0b"/>
+    <text x="346" y="34" fill="#e6e9f0" font-size="11.5" text-anchor="middle" font-weight="700">RideVehicleOwnership</text>
+    <text x="346" y="50" fill="#a5adbf" font-size="9.5" text-anchor="middle">hubungan temporal kendaraan ↔ driver</text>
+    <text x="346" y="64" fill="#a5adbf" font-size="9.5" text-anchor="middle">satu ACTIVE per kendaraan</text>
+
+    <rect x="240" y="86" width="212" height="60" rx="8" fill="#1e222d" stroke="#f59e0b"/>
+    <text x="346" y="106" fill="#e6e9f0" font-size="11.5" text-anchor="middle" font-weight="700">RideVehiclePlateAssignment</text>
+    <text x="346" y="122" fill="#a5adbf" font-size="9.5" text-anchor="middle">hubungan temporal kendaraan ↔ plat</text>
+    <text x="346" y="136" fill="#a5adbf" font-size="9.5" text-anchor="middle">validFrom / validTo, satu aktif</text>
+
+    <line x1="196" y1="52" x2="238" y2="44" stroke="#94a3b8" stroke-width="1.4"/>
+    <line x1="196" y1="74" x2="238" y2="112" stroke="#94a3b8" stroke-width="1.4"/>
+
+    <rect x="498" y="50" width="180" height="66" rx="8" fill="#1e222d" stroke="#64748b"/>
+    <text x="588" y="72" fill="#e6e9f0" font-size="12" text-anchor="middle" font-weight="700">RideOrder</text>
+    <text x="588" y="89" fill="#a5adbf" font-size="9.5" text-anchor="middle">perjalanan historis</text>
+    <text x="588" y="103" fill="#a5adbf" font-size="9.5" text-anchor="middle">menunjuk identitas, ownership, plate</text>
+    <line x1="454" y1="44" x2="496" y2="66" stroke="#94a3b8" stroke-width="1.4"/>
+    <line x1="454" y1="116" x2="496" y2="94" stroke="#94a3b8" stroke-width="1.4"/>
+
+    <rect x="14" y="164" width="392" height="80" rx="8" fill="rgba(34,197,94,.06)" stroke="#22c55e"/>
+    <text x="210" y="184" fill="#22c55e" font-size="11" font-weight="700" text-anchor="middle">Plate replacement (ganti nomor polisi)</text>
+    <text x="210" y="202" fill="#a5adbf" font-size="9.5" text-anchor="middle">RideVehicle TETAP SAMA</text>
+    <text x="210" y="216" fill="#a5adbf" font-size="9.5" text-anchor="middle">plate assignment lama ditutup dengan validTo,</text>
+    <text x="210" y="230" fill="#a5adbf" font-size="9.5" text-anchor="middle">assignment baru diaktifkan — histori trip utuh</text>
+
+    <rect x="422" y="164" width="404" height="80" rx="8" fill="rgba(245,158,11,.06)" stroke="#f59e0b"/>
+    <text x="624" y="184" fill="#f59e0b" font-size="11" font-weight="700" text-anchor="middle">Vehicle replacement (ganti kendaraan)</text>
+    <text x="624" y="202" fill="#a5adbf" font-size="9.5" text-anchor="middle">RideVehicle BERBEDA</text>
+    <text x="624" y="216" fill="#a5adbf" font-size="9.5" text-anchor="middle">kendaraan lama RETIRED, ownership ditutup;</text>
+    <text x="624" y="230" fill="#a5adbf" font-size="9.5" text-anchor="middle">transfer wajib admin review ber-scope dan atomik</text>
+  </svg>
+  </div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="s10">
+  <h2><span class="num">10</span> Identifier Security Flow <span class="badge b-imp">Implemented</span> <span class="badge b-prop">belum dipakai jalur mana pun</span></h2>
+  <p class="lead">Service sudah ada di <code>4979f99</code>, tetapi belum terhubung ke endpoint atau tabel mana pun.</p>
+  <div class="svgbox">
+  <svg viewBox="0 0 840 230" role="img" aria-label="Diagram alur keamanan identifier">
+    <defs><marker id="a4" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#38bdf8"/></marker></defs>
+    <rect x="8" y="42" width="112" height="46" rx="7" fill="#1e222d" stroke="#64748b"/>
+    <text x="64" y="62" fill="#e6e9f0" font-size="10" text-anchor="middle">raw identifier</text>
+    <text x="64" y="76" fill="#a5adbf" font-size="8.5" text-anchor="middle">dari request sah</text>
+    <line x1="122" y1="65" x2="146" y2="65" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#a4)"/>
+    <rect x="149" y="42" width="98" height="46" rx="7" fill="#1e222d" stroke="#38bdf8"/>
+    <text x="198" y="62" fill="#e6e9f0" font-size="10" text-anchor="middle">validation</text>
+    <text x="198" y="76" fill="#a5adbf" font-size="8.5" text-anchor="middle">NFKC · trim · syntax</text>
+    <line x1="249" y1="65" x2="273" y2="65" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#a4)"/>
+    <rect x="276" y="42" width="106" height="46" rx="7" fill="#1e222d" stroke="#38bdf8"/>
+    <text x="329" y="62" fill="#e6e9f0" font-size="10" text-anchor="middle">canonicalization</text>
+    <text x="329" y="76" fill="#a5adbf" font-size="8.5" text-anchor="middle">+ canonVersion</text>
+    <line x1="384" y1="65" x2="408" y2="65" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#a4)"/>
+    <rect x="411" y="42" width="104" height="46" rx="7" fill="#1e222d" stroke="#38bdf8"/>
+    <text x="463" y="62" fill="#e6e9f0" font-size="10" text-anchor="middle">domain separation</text>
+    <text x="463" y="76" fill="#a5adbf" font-size="8.5" text-anchor="middle">nik / plate</text>
+    <line x1="517" y1="65" x2="541" y2="65" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#a4)"/>
+    <rect x="544" y="42" width="112" height="46" rx="7" fill="rgba(56,189,248,.12)" stroke="#38bdf8"/>
+    <text x="600" y="62" fill="#e6e9f0" font-size="10" text-anchor="middle">HMAC-SHA256</text>
+    <text x="600" y="76" fill="#a5adbf" font-size="8.5" text-anchor="middle">keyed + versioned</text>
+    <line x1="658" y1="65" x2="682" y2="65" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#a4)"/>
+    <rect x="685" y="42" width="98" height="46" rx="7" fill="rgba(34,197,94,.1)" stroke="#22c55e"/>
+    <text x="734" y="62" fill="#e6e9f0" font-size="10" text-anchor="middle">blind index</text>
+    <text x="734" y="76" fill="#a5adbf" font-size="8.5" text-anchor="middle">64 hex lowercase</text>
+
+    <rect x="8" y="112" width="380" height="104" rx="8" fill="rgba(239,68,68,.05)" stroke="#ef4444"/>
+    <text x="198" y="132" fill="#ef4444" font-size="11" font-weight="700" text-anchor="middle">Yang TIDAK pernah terjadi</text>
+    <text x="20" y="152" fill="#a5adbf" font-size="9.5">✕ raw identifier tidak disimpan di database</text>
+    <text x="20" y="168" fill="#a5adbf" font-size="9.5">✕ blind index tidak dicetak ke log / audit / error</text>
+    <text x="20" y="184" fill="#a5adbf" font-size="9.5">✕ secret tidak berada di source, database, atau mobile app</text>
+    <text x="20" y="200" fill="#a5adbf" font-size="9.5">✕ blind index lama tidak dapat dikonversi tanpa raw canonical</text>
+
+    <rect x="404" y="112" width="379" height="104" rx="8" fill="rgba(34,197,94,.05)" stroke="#22c55e"/>
+    <text x="593" y="132" fill="#22c55e" font-size="11" font-weight="700" text-anchor="middle">Status domain</text>
+    <text x="416" y="152" fill="#a5adbf" font-size="9.5">✔ NIK — aktif, wajib tepat 16 digit, leading zero utuh</text>
+    <text x="416" y="168" fill="#a5adbf" font-size="9.5">✔ PLATE — aktif, uppercase, separator dinormalkan</text>
+    <text x="416" y="184" fill="#ef4444" font-size="9.5">✕ SIM — fail-closed, grammar resmi belum ada</text>
+    <text x="416" y="200" fill="#ef4444" font-size="9.5">✕ STNK — fail-closed, domain masa depan</text>
+  </svg>
+  </div>
+</section>
+
+<!-- ============ 11 ============ -->
+<section id="s11">
+  <h2><span class="num">11</span> Golden Vector Evidence <span class="badge b-tested">Re-verified</span></h2>
+  <p class="lead">Seluruh nilai bersifat <strong>sintetis</strong>. Kunci test sengaja publik dan diberi label <em>PUBLIC SYNTHETIC TEST KEY — NEVER USE IN PRODUCTION</em>. Nol production secret, nol PII.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Domain</th><th>canonVersion</th><th>keyVersion</th><th>Canonical sintetis</th><th>Expected digest (masked)</th><th>Verifikasi</th></tr>
+    <tr><td><code>nik</code></td><td>1</td><td>1</td><td><code>0000000000000001</code></td><td><code>c6166b7cac7e…fbc523c5</code></td><td>3 metode</td></tr>
+    <tr><td><code>plate</code></td><td>1</td><td>1</td><td><code>Z0001ZZ</code></td><td><code>51ee2bd000f7…cb16a8c6</code></td><td>3 metode</td></tr>
+    <tr><td><code>plate</code></td><td>1</td><td>1</td><td><code>0000000000000001</code></td><td><code>3800dfb6289f…33a78291</code></td><td>2 metode</td></tr>
+    <tr><td><code>plate</code></td><td>1</td><td>2</td><td><code>Z0001ZZ</code></td><td><code>a6ad7195add4…fa23cdc5</code></td><td>3 metode</td></tr>
+  </table></div>
+  <div class="note">Digest ditampilkan ter-mask untuk keterbacaan. Nilai penuh berada di dokumen otoritatif <code>STAGE_5_13_DRIVER_ONBOARDING_IMPLEMENTATION_PLAN.md</code> §9.5, dan ditulis sebagai <strong>literal</strong> di dalam test sehingga drift pada algorithm, domain, key version, atau canonicalization langsung terdeteksi.</div>
+  <p><strong>Metode verifikasi independen:</strong> <code>node crypto.createHmac</code> · <code>WebCrypto subtle.sign</code> · <code>openssl dgst -sha256 -hmac</code> — seluruhnya menghasilkan digest identik, dijalankan <em>sebelum</em> implementasi ditulis.</p>
+</section>
+
+<!-- ============ 12 ============ -->
+<section id="s12">
+  <h2><span class="num">12</span> Storage Security Decision <span class="badge b-doc">Approved architecture</span> <span class="badge b-notimp">Not implemented</span></h2>
+  <p class="lead">Keputusan Owner 2026-08-01. Belum ada satu baris kode, resource, maupun bucket yang dibuat.</p>
+  <div class="grid">
+    <div class="card"><div class="k">Provider</div><div class="v" style="font-size:1rem">AWS S3</div><div class="n">Cloudflare R2 tidak dipilih untuk KYC produksi</div></div>
+    <div class="card"><div class="k">Region</div><div class="v" style="font-size:1rem">ap-southeast-3</div><div class="n">Jakarta; perubahan butuh ADR baru</div></div>
+    <div class="card"><div class="k">Bucket</div><div class="v" style="font-size:1rem">Private</div><div class="n">Block Public Access aktif, nol URL publik permanen</div></div>
+    <div class="card"><div class="k">Enkripsi</div><div class="v" style="font-size:1rem">SSE-KMS</div><div class="n">customer-managed key khusus KYC</div></div>
+    <div class="card"><div class="k">Akses baca</div><div class="v" style="font-size:1rem">Signed URL</div><div class="n">TTL sangat pendek, setiap akses ter-audit</div></div>
+    <div class="card"><div class="k">Object key</div><div class="v" style="font-size:1rem">UUID acak</div><div class="n">nol NIK, nama, telepon, email, atau plat</div></div>
+  </div>
+  <div class="note warn">Persetujuan provider, region, dan KMS <strong>tidak</strong> membuka blokir upload dokumen. Masih menunggu D-04, D-07 s.d. D-10, D-11 s.d. D-16, serta kajian legal L-1 dan L-2.</div>
+</section>
+
+<!-- ============ 13 ============ -->
+<section id="s13">
+  <h2><span class="num">13</span> GO / NO-GO Matrix</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Item</th><th>Status</th><th>Prasyarat / catatan</th></tr>
+    <tr><td>Stage 5.14A — HMAC foundation</td><td><span class="badge b-imp">Implemented</span> <span class="badge b-prop">awaiting review</span></td><td>sudah ter-commit di <code>4979f99</code>; menunggu Owner Review dan konfirmasi kontrak env</td></tr>
+    <tr><td>Stage 5.14B — application schema</td><td><span class="badge b-doc">GO</span></td><td>setelah bukti <code>count(*)</code> diverifikasi saat eksekusi</td></tr>
+    <tr><td>Stage 5.14C — review lease</td><td><span class="badge b-prop">Conditional GO</span></td><td>guard scope ditunda sampai model penyimpanan scope diputuskan</td></tr>
+    <tr><td>Stage 5.14D — vehicle ownership</td><td><span class="badge b-prop">Conditional GO</span></td><td>schema/foundation saja; verifikasi dokumen kendaraan tetap NO-GO</td></tr>
+    <tr><td>Endpoint implementation</td><td><span class="badge b-blocked">NO-GO</span></td><td>stage terpisah setelah foundation</td></tr>
+    <tr><td>Document upload</td><td><span class="badge b-blocked">Blocked</span></td><td>D-04, D-07 s.d. D-10, L-1, L-2</td></tr>
+    <tr><td>AWS integration</td><td><span class="badge b-blocked">Blocked</span></td><td>arsitektur disetujui, aktivasi menunggu keputusan dokumen</td></tr>
+    <tr><td>Mobile driver UI</td><td><span class="badge b-blocked">NO-GO</span></td><td>butuh live visual approval gate tersendiri</td></tr>
+    <tr><td>Production activation</td><td><span class="badge b-blocked">NO-GO</span></td><td>seluruh blocker harus selesai lebih dulu</td></tr>
+  </table></div>
+</section>
+
+<!-- ============ 14 ============ -->
+<section id="s14">
+  <h2><span class="num">14</span> Test Evidence</h2>
+  <p class="lead">Dibedakan tegas antara yang dijalankan ulang pada task ini dan yang berasal dari laporan sebelumnya.</p>
+  <div class="grid">
+    <div class="card"><div class="k">Driver capability</div><div class="v">13 / 13</div><div class="n"><span class="badge b-tested">Re-verified</span></div></div>
+    <div class="card"><div class="k">Rides suite</div><div class="v">76 / 76</div><div class="n"><span class="badge b-tested">Re-verified</span></div></div>
+    <div class="card"><div class="k">Full backend suite</div><div class="v">355 / 355</div><div class="n">31 file · 0 skipped · <span class="badge b-tested">Re-verified</span></div></div>
+    <div class="card"><div class="k">Respons 5xx</div><div class="v">1</div><div class="n">test yang <em>sengaja</em> memicu error internal</div></div>
+  </div>
+  <div class="tablewrap"><table>
+    <tr><th>Bukti</th><th>Hasil</th><th>Label</th></tr>
+    <tr><td>Targeted driver capability test</td><td>13/13 hijau</td><td><span class="badge b-tested">Re-verified</span></td></tr>
+    <tr><td>Existing rides suite</td><td>3 file / 76 test hijau</td><td><span class="badge b-tested">Re-verified</span></td></tr>
+    <tr><td>Full backend suite</td><td>31 file / 355 test hijau, 0 skipped</td><td><span class="badge b-tested">Re-verified</span></td></tr>
+    <tr><td>Isolasi finansial</td><td>snapshot wallet/commission/reward/withdrawal identik setelah 50 request ditolak</td><td><span class="badge b-tested">Re-verified</span></td></tr>
+    <tr><td>Nol provider / network call</td><td>import hanya <code>node:crypto</code>, <code>http-status-codes</code>, dan modul internal</td><td><span class="badge b-tested">Re-verified</span></td></tr>
+    <tr><td>Disposable PostgreSQL cleanup</td><td>database di-DROP, cluster dihentikan, port kosong, scratchpad bersih</td><td><span class="badge b-tested">Re-verified</span></td></tr>
+    <tr><td>Golden vector Stage 5.13</td><td>cocok pada 3 metode independen</td><td><span class="badge b-tested">Re-verified</span></td></tr>
+    <tr><td>Angka 302 test pada laporan Stage 5.11</td><td>historis, sebelum 53 test HMAC ditambahkan</td><td><span class="badge b-doc">Reported evidence — not re-run</span></td></tr>
+  </table></div>
+  <div class="note stop"><strong>Batas kejujuran:</strong> seluruh angka di atas berasal dari unit dan integration test backend pada PostgreSQL disposable. <strong>Tidak satu pun merupakan bukti runtime Android.</strong> Belum ada APK, belum ada layar, belum ada perangkat yang diuji.</div>
+</section>
+
+<!-- ============ 15 ============ -->
+<section id="s15">
+  <h2><span class="num">15</span> Files Changed <span class="badge b-tested">Git evidence</span></h2>
+  <p class="lead">Diambil dari <code>git diff-tree --name-status</code> per commit, bukan dari ingatan.</p>
+  <div class="tablewrap"><table>
+    <tr><th>File</th><th>Stage</th><th>Type</th><th>Sifat</th><th>Tujuan</th><th>Commit</th></tr>
+    <tr><td><code>src/modules/rides/presentation/driverCapability.ts</code></td><td>5.11</td><td>Added</td><td><span class="badge b-imp">Implemented</span></td><td>guard kapabilitas dari database</td><td><code>ea5b5a5</code></td></tr>
+    <tr><td><code>src/modules/rides/presentation/ride.routes.ts</code></td><td>5.11</td><td>Modified</td><td><span class="badge b-imp">Implemented</span></td><td>ganti <code>requireRoles</code> dengan capability guard</td><td><code>ea5b5a5</code></td></tr>
+    <tr><td><code>src/modules/rides/application/RideService.ts</code></td><td>5.11</td><td>Modified</td><td><span class="badge b-imp">Implemented</span></td><td>defense-in-depth <code>requireDriverProfile</code></td><td><code>ea5b5a5</code></td></tr>
+    <tr><td><code>tests/rides/driverCapability.integration.test.ts</code></td><td>5.11</td><td>Added</td><td><span class="badge b-tested">Tested</span></td><td>13 test kapabilitas</td><td><code>ea5b5a5</code></td></tr>
+    <tr><td><code>tests/rides/rideFoundation.integration.test.ts</code></td><td>5.11</td><td>Modified</td><td><span class="badge b-tested">Tested</span></td><td>kontrak lebih ketat untuk driver suspended</td><td><code>ea5b5a5</code></td></tr>
+    <tr><td><code>docs/release-2/STAGE_5_12_…ARCHITECTURE.md</code></td><td>5.12</td><td>Added</td><td><span class="badge b-doc">Documented</span></td><td>arsitektur &amp; threat model</td><td><code>e0f5336</code></td></tr>
+    <tr><td><code>docs/release-2/STAGE_5_12_…ARCHITECTURE.md</code></td><td>5.12 rev</td><td>Modified</td><td><span class="badge b-doc">Documented</span></td><td>11 Owner decision menjadi APPROVED</td><td><code>48cdb9f</code></td></tr>
+    <tr><td><code>docs/release-2/STAGE_5_13_…PLAN.md</code></td><td>5.13</td><td>Added</td><td><span class="badge b-doc">Documented</span></td><td>rencana Batch 1–4</td><td><code>3d96c56</code></td></tr>
+    <tr><td><code>docs/release-2/STAGE_5_13_…PLAN.md</code></td><td>5.13 rev</td><td>Modified</td><td><span class="badge b-doc">Documented</span></td><td>vehicle identity, SIM, golden vectors</td><td><code>4178fba</code></td></tr>
+    <tr style="background:rgba(56,189,248,.06)"><td><code>src/core/security/identifierIndex.ts</code></td><td>5.14A</td><td>Added</td><td><span class="badge b-imp">Implemented</span></td><td>canonicalization + blind index</td><td><code>4979f99</code></td></tr>
+    <tr style="background:rgba(56,189,248,.06)"><td><code>src/core/security/identifierKeyRegistry.ts</code></td><td>5.14A</td><td>Added</td><td><span class="badge b-imp">Implemented</span></td><td>key registry fail-closed</td><td><code>4979f99</code></td></tr>
+    <tr style="background:rgba(56,189,248,.06)"><td><code>src/config/env.ts</code></td><td>5.14A</td><td>Modified</td><td><span class="badge b-imp">Implemented</span></td><td>nama env kunci (optional)</td><td><code>4979f99</code></td></tr>
+    <tr style="background:rgba(56,189,248,.06)"><td><code>src/core/logger/logger.ts</code></td><td>5.14A</td><td>Modified</td><td><span class="badge b-imp">Implemented</span></td><td>redact path identifier</td><td><code>4979f99</code></td></tr>
+    <tr style="background:rgba(56,189,248,.06)"><td><code>.env.example</code></td><td>5.14A</td><td>Modified</td><td><span class="badge b-doc">Documented</span></td><td>nama + placeholder aman</td><td><code>4979f99</code></td></tr>
+    <tr style="background:rgba(56,189,248,.06)"><td><code>tests/security/identifierIndex.test.ts</code></td><td>5.14A</td><td>Added</td><td><span class="badge b-tested">Tested</span></td><td>53 test</td><td><code>4979f99</code></td></tr>
+  </table></div>
+  <p style="font-size:.85rem;color:var(--tx2)">Total sejak baseline branch <code>802d882</code>: <strong>13 file</strong> — 8 source/test dan 5 dokumentasi (dua di antaranya dimodifikasi dua kali).</p>
+</section>
+
+<!-- ============ 16 ============ -->
+<section id="s16">
+  <h2><span class="num">16</span> Protected Areas <span class="badge b-untouched">Untouched</span></h2>
+  <p class="lead">Diverifikasi dengan perbandingan <em>tree hash</em>, bukan sekadar daftar file.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Area</th><th>Referensi</th><th>Status</th><th>Bukti</th></tr>
+    <tr><td>Release 1</td><td><code>ea9fb6c</code></td><td><span class="badge b-untouched">Untouched</span></td><td><code>agent/tapgo-phase6-ux</code> tidak bergeser</td></tr>
+    <tr><td>Integration branch</td><td><code>802d882</code></td><td><span class="badge b-untouched">Untouched</span></td><td>tidak dipindahkan</td></tr>
+    <tr><td>main</td><td><code>13584ef</code></td><td><span class="badge b-untouched">Untouched</span></td><td>tidak disentuh</td></tr>
+    <tr><td>payments</td><td>modul</td><td><span class="badge b-untouched">Untouched</span></td><td>tree identik dengan <code>802d882</code></td></tr>
+    <tr><td>memberships</td><td>modul</td><td><span class="badge b-untouched">Untouched</span></td><td>tree identik</td></tr>
+    <tr><td>wallets</td><td>modul</td><td><span class="badge b-untouched">Untouched</span></td><td>tree identik</td></tr>
+    <tr><td>referrals</td><td>modul</td><td><span class="badge b-untouched">Untouched</span></td><td>tree identik</td></tr>
+    <tr><td>reward &amp; profit-sharing</td><td>modul</td><td><span class="badge b-untouched">Untouched</span></td><td>tree identik</td></tr>
+    <tr><td>PPOB &amp; Business Engine</td><td>modul</td><td><span class="badge b-untouched">Untouched</span></td><td>tree identik</td></tr>
+    <tr><td>Prisma schema &amp; migrations</td><td><code>apps/backend/prisma</code></td><td><span class="badge b-untouched">Untouched</span></td><td>tree identik dengan <code>802d882</code></td></tr>
+    <tr><td>Aplikasi mobile</td><td><code>user_app</code>, <code>driver_app</code></td><td><span class="badge b-untouched">Untouched</span></td><td>tree identik</td></tr>
+    <tr><td>Production</td><td>—</td><td><span class="badge b-untouched">Untouched</span></td><td>nol akses; seluruh test pada PostgreSQL disposable</td></tr>
+    <tr><td>21 owner assets</td><td>untracked</td><td><span class="badge b-untouched">Untouched</span></td><td>jumlah dan isi tidak berubah</td></tr>
+  </table></div>
+  <div class="note warn"><strong>Nuansa yang harus jujur disampaikan:</strong> bila dibandingkan terhadap Release 1 <code>ea9fb6c</code> (bukan terhadap baseline branch), modul <code>payments</code> memang berbeda. Perbedaan itu berasal dari <strong>P1 hardening Midtrans</strong> pada commit <code>f7c1c64</code>, <code>7f28ed6</code>, dan <code>a86fb9b</code> yang terjadi jauh sebelum Stage 5.11 — <strong>bukan</strong> dari pekerjaan Stage 5.11–5.14A. Terhadap baseline branch <code>802d882</code>, seluruh modul finansial identik.</div>
+</section>
+
+<!-- ============ 17 ============ -->
+<section id="s17">
+  <h2><span class="num">17</span> Apa yang Dapat Owner Lihat Sekarang <span class="badge b-runtime">Runtime verification required</span></h2>
+  <div class="two">
+    <div class="panel before">
+      <h4>Belum dapat dilihat</h4>
+      <ul>
+        <li>Perubahan UI Android — <strong>nol</strong></li>
+        <li>Layar driver onboarding — belum ada</li>
+        <li>APK / AAB — belum dibangun</li>
+        <li><code>apps/driver_app</code> masih template satu file dengan package <code>com.example.tapgo_driver_app</code></li>
+      </ul>
+    </div>
+    <div class="panel after">
+      <h4>Dapat dilihat sekarang</h4>
+      <ul>
+        <li>Perilaku otorisasi backend (Stage 5.11) melalui matrix dan hasil test</li>
+        <li>Arsitektur dan keputusan (Stage 5.12–5.13) melalui diagram dan dokumen</li>
+        <li>Service blind index (Stage 5.14A) melalui 53 test dan golden vector</li>
+        <li>Bukti file, commit, dan area terlindungi melalui evidence Git</li>
+      </ul>
+    </div>
+  </div>
+  <div class="note stop">Stage 5.11 adalah perubahan <strong>backend authorization</strong>; efeknya berupa penolakan akses yang benar, bukan tampilan baru. Stage 5.12–5.13 sepenuhnya <strong>architecture dan planning</strong>. Karena itu bukti visual pada tahap ini berupa diagram, matrix, dan hasil test — bukan screenshot aplikasi. Screenshot runtime baru relevan ketika UI driver dibangun.</div>
+</section>
+
+<!-- ============ 18 ============ -->
+<section id="s18">
+  <h2><span class="num">18</span> Next Stage Preview</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Aspek</th><th>Stage 5.14A (sudah ter-commit, menunggu review)</th></tr>
+    <tr><td>Yang diimplementasikan</td><td>Identifier blind index service, key registry fail-closed, canonicalization NIK dan PLATE, dual lookup, lazy-migration planning</td></tr>
+    <tr><td>Yang dapat diuji</td><td>53 unit test tanpa database: golden vector, domain separation, version separation, key registry, redaction, nol fungsi decrypt</td></tr>
+    <tr><td>Yang belum terlihat di Android</td><td><strong>Semuanya.</strong> Service ini backend-only dan belum terhubung ke endpoint, tabel, maupun UI</td></tr>
+    <tr><td>Demo visual wajib setelahnya</td><td>Sesuai <code>VISUAL_EVIDENCE_STANDARD.md</code>: architecture flow, mapping service, error-code mapping, dan test dashboard. Screenshot Android <em>tidak</em> berlaku karena tidak ada permukaan UI</td></tr>
+    <tr><td>Blocker terbuka</td><td>Konfirmasi kontrak env (fail-closed level registry versus level boot); grammar resmi SIM</td></tr>
+  </table></div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Dokumen ini <strong>bukan</strong> pernyataan approval. Disusun sesuai <code>VISUAL_EVIDENCE_STANDARD.md</code>.<br>
+    Self-contained · nol koneksi internet · nol data sensitif · nol PII.
+  </div>
+</footer>
+
+</div>
+
+<script>
+(function(){
+  var buttons = document.querySelectorAll('.filterbar button');
+  var rows = document.querySelectorAll('#ivp tr[data-g]');
+  buttons.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var f = btn.getAttribute('data-f');
+      buttons.forEach(function(b){ b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'); });
+      rows.forEach(function(r){
+        r.style.display = (f === 'all' || r.getAttribute('data-g') === f) ? '' : 'none';
+      });
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
