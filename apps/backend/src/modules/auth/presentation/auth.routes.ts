@@ -8,7 +8,8 @@ import {
   recoveryAccountRateLimiter,
   recoveryIpRateLimiter,
   recoveryVerifyRateLimiter,
-  registerPhoneRateLimiter
+  registerPhoneRateLimiter,
+  verificationRateLimiter
 } from "../../../core/security/rateLimit.js";
 import { AccountRecoveryService } from "../application/AccountRecoveryService.js";
 import { AuthService } from "../application/AuthService.js";
@@ -20,7 +21,9 @@ import { loginSchema, otpRequestSchema, refreshSchema, registerSchema } from "./
 import {
   recoveryRequestSchema,
   recoveryResetSchema,
-  recoveryVerifySchema
+  recoveryVerifySchema,
+  verificationConfirmSchema,
+  verificationRequestSchema
 } from "./recovery.validators.js";
 
 const repository = new PrismaAuthRepository(prisma);
@@ -76,4 +79,25 @@ authRouter.post(
   recoveryIpRateLimiter,
   validateRequest(recoveryResetSchema),
   asyncHandler(recoveryController.resetPassword)
+);
+
+// --- Verifikasi kontak (wajib login) ----------------------------------------
+authRouter.get(
+  "/verification/status",
+  requireAuth,
+  asyncHandler(recoveryController.verificationStatus)
+);
+authRouter.post(
+  "/verification/request",
+  requireAuth,
+  verificationRateLimiter,
+  validateRequest(verificationRequestSchema),
+  asyncHandler(recoveryController.requestVerification)
+);
+authRouter.post(
+  "/verification/confirm",
+  requireAuth,
+  verificationRateLimiter,
+  validateRequest(verificationConfirmSchema),
+  asyncHandler(recoveryController.confirmVerification)
 );

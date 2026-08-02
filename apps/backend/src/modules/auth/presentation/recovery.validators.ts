@@ -62,3 +62,22 @@ export const recoveryResetSchema = z.preprocess(
     })
   })
 );
+
+export const verificationRequestSchema = z.preprocess(
+  wrapBody,
+  z.object({
+    body: z.object({
+      channel: z.enum(["PHONE", "EMAIL"])
+    })
+  })
+);
+
+export const verificationConfirmSchema = z.preprocess(
+  wrapBody,
+  z.object({
+    body: z.object({
+      channel: z.enum(["PHONE", "EMAIL"]),
+      code: otpCodeSchema
+    })
+  })
+);

@@ -1,7 +1,7 @@
 import http, { Server } from "node:http";
 import { AddressInfo } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { prisma, runIntegration } from "../helpers/referralWalletHarness.js";
+import { cleanDatabase, prisma, runIntegration } from "../helpers/referralWalletHarness.js";
 import { RecordingOtpProvider } from "../../src/modules/auth/infrastructure/RecordingOtpProvider.js";
 import {
   resetOtpDeliveryProvider,
@@ -112,9 +112,11 @@ describeIntegration("Production hotfix — account recovery", () => {
 
   beforeEach(async () => {
     provider.reset();
-    await prisma.authChallenge.deleteMany();
-    await prisma.session.deleteMany();
-    await prisma.user.deleteMany();
+    // cleanDatabase() dipakai, bukan user.deleteMany() langsung: beberapa
+    // tabel finansial (withdrawals, referrals) memakai FK RESTRICT ke users,
+    // sehingga penghapusan harus mengikuti urutan lengkap milik harness.
+    // Session dan AuthChallenge ikut terhapus lewat cascade.
+    await cleanDatabase();
     await resetRateLimits();
   });
 

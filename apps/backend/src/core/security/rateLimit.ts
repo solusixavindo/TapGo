@@ -96,6 +96,16 @@ export const recoveryVerifyRateLimiter = rateLimit({
   message: recoveryRateLimitMessage
 });
 
+/** Batas permintaan OTP verifikasi untuk pengguna yang sudah login. */
+export const verificationRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 6,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `verification-user:${req.auth?.userId ?? req.ip ?? "unknown"}`,
+  message: recoveryRateLimitMessage
+});
+
 export const apiRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 120,

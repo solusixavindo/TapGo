@@ -271,6 +271,103 @@ export class AccountRecoveryService {
   }
 
   // -------------------------------------------------------------------
+  // P3 — verifikasi kontak (terautentikasi)
+  // -------------------------------------------------------------------
+
+  /**
+   * Meminta OTP verifikasi untuk pengguna yang sudah login.
+   *
+   * Berbeda dari alur pemulihan, di sini identitas pemanggil sudah pasti,
+   * sehingga destination yang disamarkan boleh dikembalikan tanpa risiko
+   * enumeration.
+   */
+  async requestContactVerification(input: {
+    userId: string;
+    channel: AuthChallengeChannel;
+  }) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: input.userId } });
+
+    const destination = input.channel === "PHONE" ? user.phone : user.email;
+    if (!destination) {
+      throw new AppError(
+        "Email belum diisi pada akun ini.",
+        StatusCodes.BAD_REQUEST,
+        AUTH_CONTACT_NOT_VERIFIED
+      );
+    }
+
+    await this.issueChallenge({
+      user,
+      purpose: input.channel === "PHONE" ? "PHONE_VERIFICATION" : "EMAIL_VERIFICATION",
+      channel: input.channel,
+      destination
+    });
+
+    return {
+      maskedDestination:
+        input.channel === "PHONE" ? maskPhone(destination) : maskEmail(destination),
+      expiresInSeconds: Math.floor(OTP_TTL_MS / 1000),
+      resendCooldownSeconds: Math.floor(OTP_RESEND_COOLDOWN_MS / 1000)
+    };
+  }
+
+  /** Mengonfirmasi OTP verifikasi dan menandai kanal sebagai terbukti. */
+  async confirmContactVerification(input: {
+    userId: string;
+    channel: AuthChallengeChannel;
+    code: string;
+  }) {
+    const purpose: AuthChallengePurpose =
+      input.channel === "PHONE" ? "PHONE_VERIFICATION" : "EMAIL_VERIFICATION";
+
+    const challenge = await this.consumeAttempt({
+      userId: input.userId,
+      purpose,
+      code: input.code
+    });
+
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.authChallenge.update({
+        where: { id: challenge.id },
+        data: { verifiedAt: now, consumedAt: now }
+      }),
+      this.prisma.user.update({
+        where: { id: input.userId },
+        data:
+          input.channel === "PHONE" ? { phoneVerifiedAt: now } : { emailVerifiedAt: now }
+      })
+    ]);
+
+    return { channel: input.channel, verifiedAt: now };
+  }
+
+  /** Status verifikasi untuk verification gate di aplikasi. */
+  async verificationStatus(userId: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { phone: true, email: true, phoneVerifiedAt: true, emailVerifiedAt: true }
+    });
+
+    return {
+      phone: {
+        masked: maskPhone(user.phone),
+        verified: user.phoneVerifiedAt !== null,
+        verifiedAt: user.phoneVerifiedAt
+      },
+      email: user.email
+        ? {
+            masked: maskEmail(user.email),
+            verified: user.emailVerifiedAt !== null,
+            verifiedAt: user.emailVerifiedAt
+          }
+        : null,
+      // Nomor telepon adalah primary identifier dan wajib terbukti.
+      requiresVerification: user.phoneVerifiedAt === null
+    };
+  }
+
+  // -------------------------------------------------------------------
   // Internal
   // -------------------------------------------------------------------
 

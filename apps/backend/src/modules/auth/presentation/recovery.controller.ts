@@ -54,4 +54,27 @@ export class RecoveryController {
     });
   };
 
+  requestVerification = async (req: Request, res: Response) => {
+    const result = await this.service.requestContactVerification({
+      userId: req.auth!.userId,
+      channel: req.body.channel
+    });
+
+    res.status(StatusCodes.ACCEPTED).json({ success: true, data: result });
+  };
+
+  confirmVerification = async (req: Request, res: Response) => {
+    const result = await this.service.confirmContactVerification({
+      userId: req.auth!.userId,
+      channel: req.body.channel,
+      code: req.body.code
+    });
+
+    res.json({ success: true, data: result });
+  };
+
+  verificationStatus = async (req: Request, res: Response) => {
+    const result = await this.service.verificationStatus(req.auth!.userId);
+    res.json({ success: true, data: result });
+  };
 }
