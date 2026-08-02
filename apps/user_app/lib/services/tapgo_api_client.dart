@@ -156,6 +156,79 @@ class _TapGoApiClient {
     }
   }
 
+  // --- Pemulihan password ---------------------------------------------------
+  // Tidak ada satu pun method di bawah yang menulis identifier, OTP, reset
+  // token, atau password ke log. Backend selalu menjawab permintaan pemulihan
+  // dengan pesan generik yang sama, sehingga aplikasi tidak pernah mengetahui
+  // apakah sebuah akun terdaftar.
+
+  Future<String> requestPasswordRecovery(String identifier) async {
+    final data = await post(
+      'auth/recovery/request',
+      body: {'identifier': _normalizeRecoveryIdentifier(identifier)},
+    );
+    return (data['message'] as String?) ??
+        'Jika akun ditemukan, instruksi pemulihan telah dikirim.';
+  }
+
+  /// Mengembalikan reset token sekali pakai beserta tujuan tersamarkan.
+  Future<Map<String, String>> verifyPasswordRecovery({
+    required String identifier,
+    required String code,
+  }) async {
+    final data = await post(
+      'auth/recovery/verify',
+      body: {
+        'identifier': _normalizeRecoveryIdentifier(identifier),
+        'code': code,
+      },
+    );
+    return {
+      'resetToken': (data['resetToken'] as String?) ?? '',
+      'maskedDestination': (data['maskedDestination'] as String?) ?? '',
+    };
+  }
+
+  Future<void> resetPassword({
+    required String resetToken,
+    required String newPassword,
+  }) async {
+    await post(
+      'auth/recovery/reset',
+      body: {'resetToken': resetToken, 'newPassword': newPassword},
+    );
+  }
+
+  // --- Verifikasi kontak ------------------------------------------------------
+
+  Future<Map<String, dynamic>> verificationStatus() {
+    return get('auth/verification/status');
+  }
+
+  Future<Map<String, dynamic>> requestContactVerification(String channel) {
+    return post('auth/verification/request', body: {'channel': channel});
+  }
+
+  Future<Map<String, dynamic>> confirmContactVerification({
+    required String channel,
+    required String code,
+  }) {
+    return post(
+      'auth/verification/confirm',
+      body: {'channel': channel, 'code': code},
+    );
+  }
+
+  /// Email dibiarkan apa adanya (hanya di-trim/lowercase); nomor telepon
+  /// dinormalisasi memakai aturan yang sama dengan login.
+  String _normalizeRecoveryIdentifier(String value) {
+    final trimmed = value.trim();
+    if (trimmed.contains('@')) {
+      return trimmed.toLowerCase();
+    }
+    return _normalizePhone(trimmed);
+  }
+
   Future<_TapGoHealthCheckResult> testConnection(
       {String? baseUrlOverride}) async {
     final normalized = _normalizeApiBaseUrl(baseUrlOverride ?? baseUrl);

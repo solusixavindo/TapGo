@@ -434,7 +434,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   }
 
   void _openAuthenticatedDashboard() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        return;
+      }
+      await _runVerificationGateIfNeeded();
       if (!mounted) {
         return;
       }
@@ -443,6 +447,31 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         (_) => false,
       );
     });
+  }
+
+  /// Menampilkan gate verifikasi bila nomor telepon akun belum terbukti.
+  ///
+  /// Akun legacy dari pengujian sebelumnya masuk ke sini karena migration
+  /// sengaja tidak melakukan backfill status verifikasi.
+  ///
+  /// Kegagalan pemeriksaan status TIDAK memblokir masuk ke dashboard:
+  /// backend tetap menjadi penjaga sebenarnya untuk setiap aksi, dan
+  /// mengunci pengguna di luar aplikasi karena satu permintaan status yang
+  /// gagal akan lebih merugikan daripada melewatkan gate satu kali.
+  Future<void> _runVerificationGateIfNeeded() async {
+    try {
+      final status = await _apiClient.verificationStatus();
+      if (!mounted || status['requiresVerification'] != true) {
+        return;
+      }
+      await Navigator.of(context).push(
+        MaterialPageRoute<bool>(
+          builder: (_) => VerificationGateScreen(initialStatus: status),
+        ),
+      );
+    } catch (_) {
+      // Sengaja diabaikan: lihat doc-comment di atas.
+    }
   }
 
   Future<void> _persistAuthenticatedSession(DemoClientSession session) async {
@@ -745,9 +774,29 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                         ),
                       ),
               ),
+              // Hanya muncul pada mode Login. Dinonaktifkan selama submit
+              // berjalan agar tidak ada navigasi di tengah permintaan.
+              if (!_isRegister) ...[
+                const SizedBox(height: 4),
+                TextButton(
+                  onPressed: _isSubmitting ? null : _openPasswordRecovery,
+                  child: const Text(
+                    'Lupa Password?',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _openPasswordRecovery() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const PasswordRecoveryScreen(),
       ),
     );
   }
