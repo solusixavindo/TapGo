@@ -294,6 +294,9 @@ async function cleanTables() {
   await prisma.rideVehicle.deleteMany();
   await prisma.rideDriverProfile.deleteMany();
   await prisma.rideIdempotencyRecord.deleteMany();
+  // RideDriverApplication memakai ON DELETE RESTRICT: tanpa baris ini
+  // user.deleteMany() di bawah akan gagal dengan SQLSTATE 23001.
+  await prisma.rideDriverApplication.deleteMany();
   await prisma.commission.deleteMany();
   await prisma.rewardTransaction.deleteMany();
   await prisma.walletTransaction.deleteMany();

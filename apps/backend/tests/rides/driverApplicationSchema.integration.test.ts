@@ -1,5 +1,5 @@
 import { Prisma, RideDriverApplicationStatus, UserRole } from "@prisma/client";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma, runIntegration } from "../helpers/referralWalletHarness.js";
 
 /**
@@ -95,17 +95,29 @@ function safeDbError(error: unknown): { kind: string; detail: string } {
     // sekitar nama constraint ter-escape oleh formatting Rust (\"nama\"),
     // karena itu backslash-nya opsional pada pola berikut.
     const isCheckViolation = /code: "23514"/.test(error.message);
-    const match = /violates check constraint \\?"([a-z0-9_]+)\\?"/i.exec(error.message);
-    if (isCheckViolation || match) {
-      return { kind: "CHECK_VIOLATION", detail: match?.[1] ?? "unknown_check" };
+    const checkMatch = /violates check constraint \\?"([a-z0-9_]+)\\?"/i.exec(error.message);
+    if (isCheckViolation || checkMatch) {
+      return { kind: "CHECK_VIOLATION", detail: checkMatch?.[1] ?? "unknown_check" };
+    }
+
+    // SQLSTATE 23001 = restrict_violation. PostgreSQL memakai kode ini hanya
+    // untuk RESTRICT sejati, yang diperiksa SEGERA; NO ACTION yang diperiksa
+    // di akhir statement akan memunculkan 23503 sebagai gantinya. Membedakan
+    // keduanya penting: Owner meminta penolakan, bukan penundaan.
+    const isRestrictViolation = /code: "23001"/.test(error.message);
+    const fkMatch = /violates RESTRICT setting of foreign key constraint \\?"([a-z0-9_]+)\\?"/i.exec(
+      error.message
+    );
+    if (isRestrictViolation || fkMatch) {
+      return { kind: "FK_RESTRICT_VIOLATION", detail: fkMatch?.[1] ?? "unknown_fk" };
     }
     return { kind: "UNKNOWN_DB_ERROR", detail: "" };
   }
   return { kind: "UNEXPECTED", detail: error instanceof Error ? error.name : "unknown" };
 }
 
-/** Menangkap error insert tanpa membocorkan pesan mentah. */
-async function expectInsertToFail(
+/** Menangkap penolakan database tanpa membocorkan pesan mentah. */
+async function expectDatabaseRejection(
   operation: () => Promise<unknown>
 ): Promise<{ kind: string; detail: string }> {
   try {
@@ -113,7 +125,7 @@ async function expectInsertToFail(
   } catch (error) {
     return safeDbError(error);
   }
-  throw new Error("insert seharusnya ditolak database, tetapi berhasil");
+  throw new Error("operasi seharusnya ditolak database, tetapi berhasil");
 }
 
 describeIntegration("Stage 5.14B — RideDriverApplication schema foundation", () => {
@@ -121,14 +133,40 @@ describeIntegration("Stage 5.14B — RideDriverApplication schema foundation", (
     await prisma.$connect();
   });
 
+  // File ini menyisakan baris setelah test terakhir bila tidak dibersihkan,
+  // dan karena FK-nya RESTRICT, sisa itu akan menggagalkan cleanup file test
+  // berikutnya. Bersihkan di kedua ujung.
+  afterAll(async () => {
+    await cleanOwnTables();
+  });
+
   beforeEach(async () => {
+    await cleanOwnTables();
+  });
+
+  // Daftar ini mengikuti cleanTables() milik test rides lain, yang sudah
+  // terbukti cukup pada suite penuh. Membersihkan tabel Ride saja tidak
+  // memadai: referrals dan withdrawals juga memakai FK RESTRICT ke users,
+  // sehingga user.deleteMany() akan ditolak bila keduanya belum dibersihkan.
+  async function cleanOwnTables() {
+    await prisma.auditLog.deleteMany();
+    await prisma.rideEvent.deleteMany();
+    await prisma.rideDriverLocation.deleteMany();
     await prisma.rideOrder.deleteMany();
     await prisma.rideQuote.deleteMany();
-    await prisma.rideDriverApplication.deleteMany();
     await prisma.rideVehicle.deleteMany();
     await prisma.rideDriverProfile.deleteMany();
+    await prisma.rideIdempotencyRecord.deleteMany();
+    await prisma.rideDriverApplication.deleteMany();
+    await prisma.commission.deleteMany();
+    await prisma.rewardTransaction.deleteMany();
+    await prisma.walletTransaction.deleteMany();
+    await prisma.withdrawal.deleteMany();
+    await prisma.referralLevel.deleteMany();
+    await prisma.referral.deleteMany();
+    await prisma.wallet.deleteMany();
     await prisma.user.deleteMany();
-  });
+  }
 
   // ---------------------------------------------------------------------
   // Test 1–5 — penegakan satu open application per user
@@ -151,7 +189,7 @@ describeIntegration("Stage 5.14B — RideDriverApplication schema foundation", (
     const user = await createUser();
     await createApplication(user.id, 1, "DRAFT");
 
-    const failure = await expectInsertToFail(() => createApplication(user.id, 2, "DRAFT"));
+    const failure = await expectDatabaseRejection(() => createApplication(user.id, 2, "DRAFT"));
 
     expect(failure.kind).toBe("P2002");
     expect(await prisma.rideDriverApplication.count({ where: { userId: user.id } })).toBe(1);
@@ -161,7 +199,7 @@ describeIntegration("Stage 5.14B — RideDriverApplication schema foundation", (
     const user = await createUser();
     await createApplication(user.id, 1, "DRAFT");
 
-    const failure = await expectInsertToFail(() => createApplication(user.id, 2, "SUBMITTED"));
+    const failure = await expectDatabaseRejection(() => createApplication(user.id, 2, "SUBMITTED"));
 
     expect(failure.kind).toBe("P2002");
     const open = await prisma.rideDriverApplication.count({
@@ -174,7 +212,7 @@ describeIntegration("Stage 5.14B — RideDriverApplication schema foundation", (
     const user = await createUser();
     await createApplication(user.id, 1, "SUBMITTED");
 
-    const failure = await expectInsertToFail(() => createApplication(user.id, 2, "UNDER_REVIEW"));
+    const failure = await expectDatabaseRejection(() => createApplication(user.id, 2, "UNDER_REVIEW"));
 
     expect(failure.kind).toBe("P2002");
     const open = await prisma.rideDriverApplication.count({
@@ -258,7 +296,7 @@ describeIntegration("Stage 5.14B — RideDriverApplication schema foundation", (
     const user = await createUser();
     await createApplication(user.id, 1, "REJECTED");
 
-    const failure = await expectInsertToFail(() => createApplication(user.id, 1, "WITHDRAWN"));
+    const failure = await expectDatabaseRejection(() => createApplication(user.id, 1, "WITHDRAWN"));
 
     expect(failure.kind).toBe("P2002");
     expect(failure.detail).toContain("cycle_number");
@@ -268,7 +306,7 @@ describeIntegration("Stage 5.14B — RideDriverApplication schema foundation", (
   it("11. cycleNumber nol ditolak CHECK constraint", async () => {
     const user = await createUser();
 
-    const failure = await expectInsertToFail(() => createApplication(user.id, 0, "DRAFT"));
+    const failure = await expectDatabaseRejection(() => createApplication(user.id, 0, "DRAFT"));
 
     expect(failure.kind).toBe("CHECK_VIOLATION");
     expect(failure.detail).toBe("ride_driver_applications_cycle_number_check");
@@ -278,7 +316,7 @@ describeIntegration("Stage 5.14B — RideDriverApplication schema foundation", (
   it("12. cycleNumber negatif ditolak CHECK constraint", async () => {
     const user = await createUser();
 
-    const failure = await expectInsertToFail(() => createApplication(user.id, -1, "DRAFT"));
+    const failure = await expectDatabaseRejection(() => createApplication(user.id, -1, "DRAFT"));
 
     expect(failure.kind).toBe("CHECK_VIOLATION");
     expect(failure.detail).toBe("ride_driver_applications_cycle_number_check");
@@ -387,7 +425,7 @@ describeIntegration("Stage 5.14B — RideDriverApplication schema foundation", (
   // Test 16 — relasi ke User
   // ---------------------------------------------------------------------
 
-  it("16. relasi ke User bekerja dua arah dan cascade saat user dihapus", async () => {
+  it("16. relasi ke User bekerja dua arah", async () => {
     const user = await createUser();
     await createApplication(user.id, 1, "DRAFT");
 
@@ -403,8 +441,9 @@ describeIntegration("Stage 5.14B — RideDriverApplication schema foundation", (
     });
     expect(withApplications?.rideDriverApplications).toHaveLength(1);
 
-    await prisma.user.delete({ where: { id: user.id } });
-    expect(await prisma.rideDriverApplication.count({ where: { userId: user.id } })).toBe(0);
+    // Perilaku penghapusan diuji terpisah pada test 22–27: FK memakai
+    // ON DELETE RESTRICT, sehingga user ini TIDAK dapat di-hard-delete
+    // selama application-nya masih ada.
   });
 
   // ---------------------------------------------------------------------
@@ -564,5 +603,140 @@ describeIntegration("Stage 5.14B — RideDriverApplication schema foundation", (
     const after = await snapshot();
 
     expect(after).toEqual(before);
+  });
+
+  // ---------------------------------------------------------------------
+  // Test 22–27 — Owner Review: histori bertahan melewati penghapusan User
+  //
+  // FK memakai ON DELETE RESTRICT, bukan CASCADE. Penghapusan akun tidak
+  // boleh menghapus histori pengajuan driver; keputusan retention dan legal
+  // hold harus fail-closed.
+  // ---------------------------------------------------------------------
+
+  it("22. FK ke User memakai ON DELETE RESTRICT di PostgreSQL", async () => {
+    const rows = await prisma.$queryRaw<Array<{ confdeltype: string; confupdtype: string }>>`
+      SELECT confdeltype, confupdtype FROM pg_constraint
+      WHERE conname = 'ride_driver_applications_user_id_fkey'
+        AND conrelid = 'ride_driver_applications'::regclass
+    `;
+
+    expect(rows).toHaveLength(1);
+    // pg_constraint.confdeltype: 'r' = RESTRICT, 'a' = NO ACTION, 'c' = CASCADE.
+    // Owner menolak CASCADE secara eksplisit, jadi 'c' harus mustahil.
+    expect(rows[0]?.confdeltype).toBe("r");
+    expect(rows[0]?.confdeltype).not.toBe("c");
+    // ON UPDATE tetap CASCADE seperti semula: id User tidak pernah berubah,
+    // dan Owner hanya menolak aksi DELETE.
+    expect(rows[0]?.confupdtype).toBe("c");
+  });
+
+  it("23. User tanpa application tetap mengikuti perilaku existing", async () => {
+    const user = await createUser();
+    expect(await prisma.rideDriverApplication.count({ where: { userId: user.id } })).toBe(0);
+
+    // Tidak ada application, tidak ada yang menahan: penghapusan tetap
+    // berhasil persis seperti sebelum Stage 5.14B ada.
+    await prisma.user.delete({ where: { id: user.id } });
+
+    expect(await prisma.user.findUnique({ where: { id: user.id } })).toBeNull();
+  });
+
+  it("24. User dengan application tidak dapat di-hard-delete", async () => {
+    const user = await createUser();
+    await createApplication(user.id, 1, "DRAFT");
+
+    const failure = await expectDatabaseRejection(() =>
+      prisma.user.delete({ where: { id: user.id } })
+    );
+
+    // SQLSTATE 23001 dari FK milik tabel ini — penolakan datang dari
+    // database, bukan dari validasi aplikasi (belum ada service apa pun).
+    expect(failure.kind).toBe("FK_RESTRICT_VIOLATION");
+    expect(failure.detail).toBe("ride_driver_applications_user_id_fkey");
+    expect(await prisma.user.findUnique({ where: { id: user.id } })).not.toBeNull();
+  });
+
+  it("25. application tetap utuh setelah penghapusan ditolak", async () => {
+    const user = await createUser();
+    // Histori terminal — justru jenis record yang paling wajib bertahan.
+    const application = await createApplication(user.id, 1, "REJECTED");
+    const before = await prisma.rideDriverApplication.findUniqueOrThrow({
+      where: { id: application.id },
+    });
+
+    await expectDatabaseRejection(() => prisma.user.delete({ where: { id: user.id } }));
+
+    const after = await prisma.rideDriverApplication.findUniqueOrThrow({
+      where: { id: application.id },
+    });
+    expect(after).toEqual(before);
+    expect(after.status).toBe("REJECTED");
+    expect(after.rejectedAt).not.toBeNull();
+    expect(await prisma.rideDriverApplication.count({ where: { userId: user.id } })).toBe(1);
+  });
+
+  it("26. penghapusan yang ditolak tidak mengubah User.role maupun status", async () => {
+    const user = await createUser("USER");
+    await createApplication(user.id, 1, "APPROVED");
+
+    await expectDatabaseRejection(() => prisma.user.delete({ where: { id: user.id } }));
+
+    const reloaded = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(reloaded.role).toBe("USER");
+    expect(reloaded.status).toBe("ACTIVE");
+    expect(reloaded).toEqual(user);
+  });
+
+  it("27. penghapusan yang ditolak tidak mengubah kapabilitas penumpang maupun state finansial", async () => {
+    const user = await createUser();
+    const quote = await prisma.rideQuote.create({
+      data: {
+        userId: user.id,
+        serviceType: "MOTORCYCLE",
+        pickupLat: new Prisma.Decimal("-6.2000000"),
+        pickupLng: new Prisma.Decimal("106.8166660"),
+        pickupAddress: "Titik jemput uji",
+        dropoffLat: new Prisma.Decimal("-6.2100000"),
+        dropoffLng: new Prisma.Decimal("106.8266660"),
+        dropoffAddress: "Titik tujuan uji",
+        distanceMeters: 1500,
+        durationSeconds: 600,
+        etaSeconds: 300,
+        baseFare: 5000,
+        distanceFare: 6000,
+        serviceFee: 1000,
+        subtotalFare: 12000,
+        totalFare: 12000,
+        fareRuleVersion: "test-fare-v1",
+        roundingRule: "test-round-v1",
+        distanceSource: "test-source",
+        expiresAt: new Date(Date.now() + 600_000),
+      },
+    });
+    await createApplication(user.id, 1, "DRAFT");
+
+    const financialSnapshot = async () => ({
+      wallets: await prisma.wallet.count(),
+      walletTransactions: await prisma.walletTransaction.count(),
+      commissions: await prisma.commission.count(),
+      withdrawals: await prisma.withdrawal.count(),
+      invoices: await prisma.invoice.count(),
+      membershipPayments: await prisma.membershipPayment.count(),
+      userMemberships: await prisma.userMembership.count(),
+      rewardTransactions: await prisma.rewardTransaction.count(),
+      profitSharingDistributions: await prisma.profitSharingDistribution.count(),
+    });
+
+    const financialBefore = await financialSnapshot();
+    const quoteBefore = await prisma.rideQuote.findUniqueOrThrow({ where: { id: quote.id } });
+
+    await expectDatabaseRejection(() => prisma.user.delete({ where: { id: user.id } }));
+
+    // Penghapusan ditolak seutuhnya: tidak ada penghapusan parsial pada
+    // data penumpang, dan nol mutasi finansial.
+    expect(await prisma.rideQuote.findUniqueOrThrow({ where: { id: quote.id } })).toEqual(
+      quoteBefore
+    );
+    expect(await financialSnapshot()).toEqual(financialBefore);
   });
 });

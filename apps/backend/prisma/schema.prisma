@@ -1235,7 +1235,14 @@ model RideDriverApplication {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// onDelete: Restrict (PostgreSQL ON DELETE RESTRICT) — DISENGAJA, jangan
+  /// diubah menjadi Cascade. Histori pengajuan driver harus bertahan melewati
+  /// penghapusan akun: keputusan retention dan legal hold bersifat fail-closed,
+  /// dan record tidak boleh hilang diam-diam. Konsekuensinya hard-delete User
+  /// yang memiliki application akan DITOLAK database. Itu perilaku yang
+  /// diinginkan; penghapusan akun di TapGo berupa AccountDeletionRequest,
+  /// bukan hard delete.
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@unique([userId, cycleNumber])
   @@index([status, createdAt])

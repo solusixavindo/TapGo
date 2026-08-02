@@ -78,6 +78,12 @@ export async function cleanDatabase() {
   await prisma.referralLevel.deleteMany();
   await prisma.referral.deleteMany();
   await prisma.wallet.deleteMany();
+  // RideDriverApplication memakai ON DELETE RESTRICT, bukan CASCADE: histori
+  // pengajuan driver sengaja bertahan melewati penghapusan User. Karena itu
+  // baris ini harus dibersihkan lebih dulu, kalau tidak deleteMany() di bawah
+  // akan ditolak database. Relasi Ride lain (quote, order) tetap cascade dan
+  // tidak perlu disebut di sini.
+  await prisma.rideDriverApplication.deleteMany();
   await prisma.user.deleteMany();
   await prisma.membershipBenefit.deleteMany();
   await prisma.membership.deleteMany();
