@@ -271,11 +271,12 @@ model User {
   founderProgramGrantActions FounderProgramGrant[]       @relation("FounderGrantActor")
 
   // Release 2 — domain Ride (additive, terpisah dari model Ride legacy).
-  rideDriverProfile   RideDriverProfile?
-  rideQuotes          RideQuote[]
-  ridePassengerOrders RideOrder[]             @relation("RideOrderPassenger")
-  rideEventsActed     RideEvent[]             @relation("RideEventActor")
-  rideIdempotencyKeys RideIdempotencyRecord[]
+  rideDriverProfile      RideDriverProfile?
+  rideQuotes             RideQuote[]
+  ridePassengerOrders    RideOrder[]             @relation("RideOrderPassenger")
+  rideEventsActed        RideEvent[]             @relation("RideEventActor")
+  rideIdempotencyKeys    RideIdempotencyRecord[]
+  rideDriverApplications RideDriverApplication[]
 
   @@index([role, status])
   @@index([membershipId])
@@ -1181,6 +1182,64 @@ enum RideCancellationReason {
   VEHICLE_PROBLEM
   SYSTEM_TIMEOUT
   OTHER
+}
+
+/// Siklus pengajuan driver (Stage 5.14B). Terpisah dari RideDriverStatus:
+/// SUSPENDED BUKAN status aplikasi — itu milik RideDriverProfile.
+/// Open states: DRAFT, SUBMITTED, UNDER_REVIEW.
+/// Terminal states: APPROVED, REJECTED, WITHDRAWN.
+enum RideDriverApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+/// Satu siklus pengajuan driver. Histori dipertahankan: resubmission membuat
+/// baris baru, bukan mengubah baris lama.
+///
+/// Objek database berikut dibuat lewat raw SQL pada migration karena Prisma
+/// tidak dapat merepresentasikannya secara deklaratif — JANGAN dihapus saat
+/// mengedit model ini:
+///   - ride_driver_applications_one_open_per_user_key  (partial unique index:
+///     satu open application per user, WHERE status IN DRAFT/SUBMITTED/UNDER_REVIEW)
+///   - ride_driver_applications_cycle_number_check
+///   - ride_driver_applications_version_check
+///   - ride_driver_applications_approved_at_check
+///   - ride_driver_applications_rejected_at_check
+///   - ride_driver_applications_withdrawn_at_check
+///   - ride_driver_applications_terminal_exclusive_check
+///
+/// Stage 5.14B adalah schema foundation saja: belum ada service, endpoint,
+/// maupun penegakan transisi status. Validasi transisi menjadi tanggung jawab
+/// application service pada stage berikutnya.
+model RideDriverApplication {
+  id          String                      @id @default(uuid()) @db.Uuid
+  userId      String                      @map("user_id") @db.Uuid
+  /// Nomor siklus monotonik per user, dimulai dari 1.
+  cycleNumber Int                         @map("cycle_number")
+  status      RideDriverApplicationStatus @default(DRAFT)
+  /// Optimistic lock untuk service Stage 5.14C.
+  version     Int                         @default(0)
+
+  submittedAt        DateTime? @map("submitted_at")
+  approvedAt         DateTime? @map("approved_at")
+  rejectedAt         DateTime? @map("rejected_at")
+  withdrawnAt        DateTime? @map("withdrawn_at")
+  /// Kode alasan keputusan yang dibatasi panjangnya — BUKAN teks bebas dan
+  /// BUKAN pesan exception. Kosakata kode ditegakkan application service.
+  decisionReasonCode String?   @map("decision_reason_code") @db.VarChar(60)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cycleNumber])
+  @@index([status, createdAt])
+  @@map("ride_driver_applications")
 }
 
 model RideDriverProfile {
