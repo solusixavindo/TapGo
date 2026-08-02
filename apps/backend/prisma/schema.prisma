@@ -236,8 +236,22 @@ model User {
   bankAccount  Json?         @map("bank_account")
   referralCode String        @unique @map("referral_code") @db.VarChar(24)
   lastLoginAt  DateTime?     @map("last_login_at")
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  /// Kepemilikan nomor telepon terbukti lewat OTP. NULL berarti belum
+  /// terbukti — termasuk untuk akun legacy, yang SENGAJA tidak di-backfill.
+  phoneVerifiedAt   DateTime? @map("phone_verified_at")
+  /// Kepemilikan email terbukti lewat OTP. Email bersifat opsional; bila
+  /// diisi tetapi NULL di sini, email tidak boleh dipakai sebagai recovery
+  /// channel. Mengubah email mengosongkan kolom ini kembali.
+  emailVerifiedAt   DateTime? @map("email_verified_at")
+  /// Epoch pencabutan sesi. Access token yang diterbitkan sebelum waktu ini
+  /// ditolak requireAuth. Diperlukan karena access token berumur 15 menit dan
+  /// sebelumnya tidak pernah diperiksa ke database, sehingga reset password
+  /// tidak benar-benar mencabut akses berjalan.
+  sessionsRevokedAt DateTime? @map("sessions_revoked_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   membership                 Membership?                 @relation(fields: [membershipId], references: [id])
   driver                     Driver?
@@ -269,6 +283,7 @@ model User {
   abuseFlags                 AbuseFlag[]                 @relation("AbuseFlagUser")
   founderProgramGrants       FounderProgramGrant[]       @relation("FounderGrantUser")
   founderProgramGrantActions FounderProgramGrant[]       @relation("FounderGrantActor")
+  authChallenges             AuthChallenge[]
 
   // Release 2 — domain Ride (additive, terpisah dari model Ride legacy).
   rideDriverProfile      RideDriverProfile?
@@ -281,6 +296,70 @@ model User {
   @@index([role, status])
   @@index([membershipId])
   @@map("users")
+}
+
+enum AuthChallengePurpose {
+  PASSWORD_RECOVERY
+  PHONE_VERIFICATION
+  EMAIL_VERIFICATION
+}
+
+enum AuthChallengeChannel {
+  PHONE
+  EMAIL
+}
+
+/// Satu tantangan OTP aktif per (user, purpose).
+///
+/// Berbeda dari OtpChallenge legacy yang masih ada di schema ini:
+///   - terikat ke User, bukan ke string nomor telepon lepas;
+///   - kode disimpan sebagai keyed HMAC dengan secret backend khusus, bukan
+///     hash tanpa kunci — OTP hanya 10^6 kemungkinan sehingga hash tanpa
+///     kunci dapat di-brute-force offline dari salinan database;
+///   - destination ikut di-digest, jadi tabel ini tidak menyimpan PII;
+///   - punya batas percobaan, cooldown kirim ulang, dan konsumsi atomik.
+///
+/// Objek yang dibuat lewat raw SQL pada migration dan tidak boleh hilang:
+///   - auth_challenges_one_active_per_purpose_key (partial unique index,
+///     WHERE consumed_at IS NULL)
+///   - auth_challenges_attempts_check
+///   - auth_challenges_max_attempts_check
+///   - auth_challenges_resend_count_check
+model AuthChallenge {
+  id      String               @id @default(uuid()) @db.Uuid
+  userId  String               @map("user_id") @db.Uuid
+  purpose AuthChallengePurpose
+  channel AuthChallengeChannel
+
+  /// HMAC tujuan pengiriman. Nomor/email mentah TIDAK disimpan di sini.
+  destinationDigest String @map("destination_digest")
+  /// HMAC kode OTP. Kode mentah tidak pernah disimpan.
+  codeDigest        String @map("code_digest")
+  /// Versi kunci HMAC yang dipakai, agar rotasi secret dimungkinkan.
+  keyVersion        Int    @default(1) @map("key_version")
+
+  attempts    Int @default(0)
+  maxAttempts Int @default(5) @map("max_attempts")
+  resendCount Int @default(0) @map("resend_count")
+
+  /// Diisi setelah OTP terbukti benar. Reset token hanya diterbitkan untuk
+  /// purpose PASSWORD_RECOVERY.
+  verifiedAt       DateTime? @map("verified_at")
+  resetTokenDigest String?   @map("reset_token_digest")
+  resetExpiresAt   DateTime? @map("reset_expires_at")
+
+  lastSentAt DateTime  @default(now()) @map("last_sent_at")
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, consumedAt])
+  @@index([expiresAt])
+  @@map("auth_challenges")
 }
 
 model Membership {

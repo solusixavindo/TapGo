@@ -35,6 +35,12 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(32),
   JWT_ACCESS_TTL: z.string().default("15m"),
   JWT_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  // Secret khusus digest OTP/recovery. SENGAJA terpisah dari JWT, payment,
+  // database, dan KMS: kebocoran satu domain tidak boleh melemahkan yang lain.
+  // Optional di sini agar boot tidak gagal pada environment yang belum memakai
+  // recovery; penegakannya fail-closed pada titik pemakaian, lihat
+  // core/security/otpDigest.ts.
+  AUTH_RECOVERY_HMAC_SECRET: z.string().min(32).optional(),
   CORS_ORIGINS: z.string().default("http://localhost:3000"),
   MIDTRANS_SERVER_KEY: z.string().optional(),
   MIDTRANS_CLIENT_KEY: z.string().optional(),

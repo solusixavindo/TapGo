@@ -41,6 +41,29 @@ export const logger = pino({
       "identifierKey",
       "IDENTIFIER_INDEX_KEY_V1",
       "IDENTIFIER_INDEX_KEY_V2"
+      ,
+      // Material recovery akun. Service recovery sendiri tidak pernah
+      // mencatat nilai apa pun; path ini adalah lapisan pengaman kedua bila
+      // nilai terbawa lewat request body atau objek yang di-log.
+      "code",
+      "req.body.code",
+      "otp",
+      "req.body.otp",
+      "otpCode",
+      "resetToken",
+      "req.body.resetToken",
+      "newPassword",
+      "req.body.newPassword",
+      "confirmPassword",
+      "req.body.confirmPassword",
+      "identifier",
+      "req.body.identifier",
+      "destination",
+      "phone",
+      "req.body.phone",
+      "email",
+      "req.body.email",
+      "AUTH_RECOVERY_HMAC_SECRET"
     ],
     censor: "[REDACTED]"
   },

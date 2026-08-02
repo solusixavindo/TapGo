@@ -17,6 +17,16 @@ export type AccessTokenPayload = {
   sessionId: string;
 };
 
+/**
+ * Payload sebagaimana dikembalikan verifikasi. `iat` diisi jsonwebtoken saat
+ * penandatanganan (detik sejak epoch) dan dipakai requireAuth untuk menolak
+ * token yang diterbitkan sebelum sesi dicabut.
+ */
+export type VerifiedAccessTokenPayload = AccessTokenPayload & {
+  iat?: number;
+  exp?: number;
+};
+
 type JwtExpiresIn = NonNullable<SignOptions["expiresIn"]>;
 
 function sign(payload: AccessTokenPayload, secret: string, options: SignOptions) {
@@ -48,12 +58,12 @@ export function signRefreshToken(payload: AccessTokenPayload) {
  * pernah tersamarkan menjadi 401. Pesan yang dikembalikan tidak memuat isi
  * token, detail verifikasi, maupun pesan asli dari library.
  */
-function verifyToken(token: string, secret: string): AccessTokenPayload {
+function verifyToken(token: string, secret: string): VerifiedAccessTokenPayload {
   try {
     return jwt.verify(token, secret, {
       issuer: "tapgo-api",
       audience: "tapgo-apps"
-    }) as AccessTokenPayload;
+    }) as VerifiedAccessTokenPayload;
   } catch (error) {
     // TokenExpiredError & NotBeforeError adalah turunan JsonWebTokenError,
     // sehingga pemeriksaan yang lebih spesifik harus lebih dulu.
