@@ -1139,12 +1139,12 @@ void main() {
       tapGoDisablePersistenceForTests = true;
       ImagePickerPlatform.instance = _FakeImagePickerPlatform();
       tapGoMemberIdentityLoaderForTests = () async => {
-        'displayName':
-            'Ahmad Zulhi Putra TapGo Dengan Nama Anggota Sangat Panjang',
-        'memberId': 'TGM-20260714-0001',
-        'status': 'ACTIVE',
-        'joinedAt': '2026-07-14T00:00:00.000Z',
-      };
+            'displayName':
+                'Ahmad Zulhi Putra TapGo Dengan Nama Anggota Sangat Panjang',
+            'memberId': 'TGM-20260714-0001',
+            'status': 'ACTIVE',
+            'joinedAt': '2026-07-14T00:00:00.000Z',
+          };
 
       Future<void> pumpCard(Size size, double textScale) async {
         tester.view
@@ -1232,17 +1232,17 @@ void main() {
       ..physicalSize = const Size(360, 800)
       ..devicePixelRatio = 1;
     tapGoMemberIdentityLoaderForTests = () async => {
-      'displayName': 'Sandika TapGo',
-      'phone': '+6285812348373',
-      'memberId': 'TGM-6J5W8HS3XX',
-      'status': 'ACTIVE',
-      'joinedAt': '2026-07-24T00:00:00.000Z',
-      'id': '00000000-0000-0000-0000-000000000000',
-      'nik': '3200000000000000',
-      'password': 'secret',
-      'accessToken': 'token',
-      'deviceFingerprint': 'device',
-    };
+          'displayName': 'Sandika TapGo',
+          'phone': '+6285812348373',
+          'memberId': 'TGM-6J5W8HS3XX',
+          'status': 'ACTIVE',
+          'joinedAt': '2026-07-24T00:00:00.000Z',
+          'id': '00000000-0000-0000-0000-000000000000',
+          'nik': '3200000000000000',
+          'password': 'secret',
+          'accessToken': 'token',
+          'deviceFingerprint': 'device',
+        };
     addTearDown(() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
@@ -1354,25 +1354,24 @@ void main() {
     ImagePickerPlatform.instance = _FakeImagePickerPlatform();
     final tickets = <Map<String, dynamic>>[];
     tapGoSupportTicketsLoaderForTests = () async => tickets;
-    tapGoCreateSupportTicketForTests =
-        ({
-          required String category,
-          required String subject,
-          required String message,
-        }) async {
-          final ticket = {
-            'id': 'ticket-1',
-            'reference': 'SUP-0001',
-            'category': category,
-            'subject': subject.trim(),
-            'status': 'OPEN',
-            'messages': [
-              {'id': 'message-1', 'authorRole': 'USER', 'body': message.trim()},
-            ],
-          };
-          tickets.add(ticket);
-          return ticket;
-        };
+    tapGoCreateSupportTicketForTests = ({
+      required String category,
+      required String subject,
+      required String message,
+    }) async {
+      final ticket = {
+        'id': 'ticket-1',
+        'reference': 'SUP-0001',
+        'category': category,
+        'subject': subject.trim(),
+        'status': 'OPEN',
+        'messages': [
+          {'id': 'message-1', 'authorRole': 'USER', 'body': message.trim()},
+        ],
+      };
+      tickets.add(ticket);
+      return ticket;
+    };
     tapGoSupportTicketDetailLoaderForTests = (ticketId) async =>
         tickets.singleWhere((ticket) => ticket['id'] == ticketId);
 
@@ -1414,17 +1413,16 @@ void main() {
     tapGoDisablePersistenceForTests = false;
     ImagePickerPlatform.instance = _FakeImagePickerPlatform();
     tapGoSupportTicketsLoaderForTests = () async => const [];
-    tapGoCreateSupportTicketForTests =
-        ({
-          required String category,
-          required String subject,
-          required String message,
-        }) async {
-          throw DioException(
-            requestOptions: RequestOptions(path: '/support/tickets'),
-            message: 'SocketException: Connection failed',
-          );
-        };
+    tapGoCreateSupportTicketForTests = ({
+      required String category,
+      required String subject,
+      required String message,
+    }) async {
+      throw DioException(
+        requestOptions: RequestOptions(path: '/support/tickets'),
+        message: 'SocketException: Connection failed',
+      );
+    };
 
     await tester.pumpWidget(
       const ProviderScope(child: MaterialApp(home: ContactUsScreen())),

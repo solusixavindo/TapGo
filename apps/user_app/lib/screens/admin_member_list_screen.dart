@@ -22,16 +22,14 @@ class _AdminMemberListScreenState extends ConsumerState<AdminMemberListScreen> {
   @override
   Widget build(BuildContext context) {
     final adminSnapshot = ref.watch(_adminConsoleSnapshotProvider);
-    final apiMembers =
-        adminSnapshot.valueOrNull?.members
+    final apiMembers = adminSnapshot.valueOrNull?.members
             .map(DemoAdminMember.fromApi)
             .toList(growable: false) ??
         const <DemoAdminMember>[];
     return _DemoScaffold(
       title: 'Member Management',
-      subtitle: adminSnapshot.hasValue
-          ? 'Data member TapGo'
-          : 'Data member TapGo',
+      subtitle:
+          adminSnapshot.hasValue ? 'Data member TapGo' : 'Data member TapGo',
       child: FutureBuilder<List<DemoAdminMember>>(
         future: _registeredUsersFuture,
         builder: (context, snapshot) {

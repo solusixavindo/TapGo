@@ -60,23 +60,23 @@ class _MiniMetric extends StatelessWidget {
               child: isLoading
                   ? const _SkeletonBar(width: 84)
                   : animatedValue == null || formatter == null
-                  ? _DashboardValueSwitcher(
-                      value: value,
-                      style: const TextStyle(
-                        color: Color(0xFF0A2A43),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    )
-                  : _DashboardAnimatedValue(
-                      value: animatedValue!,
-                      formatter: formatter!,
-                      style: const TextStyle(
-                        color: Color(0xFF0A2A43),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
+                      ? _DashboardValueSwitcher(
+                          value: value,
+                          style: const TextStyle(
+                            color: Color(0xFF0A2A43),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        )
+                      : _DashboardAnimatedValue(
+                          value: animatedValue!,
+                          formatter: formatter!,
+                          style: const TextStyle(
+                            color: Color(0xFF0A2A43),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
             ),
           ),
         ],
@@ -373,8 +373,8 @@ class RewardScreen extends ConsumerWidget {
         .transactions
         .where(
           (item) => '${item.title} ${item.description}'.toLowerCase().contains(
-            'reward',
-          ),
+                'reward',
+              ),
         )
         .toList(growable: false);
     return _DemoScaffold(
@@ -838,8 +838,7 @@ class _DemoDocumentPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasImage =
-        imagePath != null &&
+    final hasImage = imagePath != null &&
         imagePath!.isNotEmpty &&
         File(imagePath!).existsSync();
     return Container(

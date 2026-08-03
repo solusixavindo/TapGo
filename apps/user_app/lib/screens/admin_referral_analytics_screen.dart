@@ -6,8 +6,7 @@ class AdminReferralAnalyticsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final adminSnapshot = ref.watch(_adminConsoleSnapshotProvider);
-    final topSponsors =
-        adminSnapshot.valueOrNull?.members
+    final topSponsors = adminSnapshot.valueOrNull?.members
             .map(DemoAdminMember.fromApi)
             .toList(growable: false) ??
         (_isTapGoDevelopmentBuild
@@ -76,9 +75,7 @@ class AdminReferralAnalyticsScreen extends ConsumerWidget {
                   'Data jaringan akan muncul setelah user memakai sponsor.',
             )
           else
-            ...topSponsors
-                .take(12)
-                .map(
+            ...topSponsors.take(12).map(
                   (member) => _WalletLedgerItem(
                     title: member.name,
                     amount: '${member.totalDownline} downline',

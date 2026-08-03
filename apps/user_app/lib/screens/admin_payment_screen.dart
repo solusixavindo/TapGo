@@ -6,8 +6,7 @@ class AdminPaymentScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final adminSnapshot = ref.watch(_adminConsoleSnapshotProvider);
-    final invoices =
-        adminSnapshot.valueOrNull?.invoices
+    final invoices = adminSnapshot.valueOrNull?.invoices
             .map(DemoAdminInvoice.fromApi)
             .toList(growable: false) ??
         (_isTapGoDevelopmentBuild
@@ -94,8 +93,7 @@ class _AdminPaymentDetailScreenState
   @override
   Widget build(BuildContext context) {
     final invoice = widget.invoice;
-    final canCheckDoku =
-        invoice.method.toUpperCase() == 'DOKU' &&
+    final canCheckDoku = invoice.method.toUpperCase() == 'DOKU' &&
         invoice.referenceId != null &&
         invoice.referenceId!.isNotEmpty;
 

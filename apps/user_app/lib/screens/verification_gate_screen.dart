@@ -235,9 +235,8 @@ class _VerificationGateScreenState
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton(
-            onPressed: (_resendSeconds > 0 || _isSubmitting)
-                ? null
-                : _requestCode,
+            onPressed:
+                (_resendSeconds > 0 || _isSubmitting) ? null : _requestCode,
             child: Text(
               _resendSeconds > 0
                   ? 'Kirim ulang kode dalam $_resendSeconds detik'

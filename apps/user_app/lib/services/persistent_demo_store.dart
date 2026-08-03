@@ -2,9 +2,9 @@ part of '../main.dart';
 
 class _TapGoPersistentStore {
   _TapGoPersistentStore()
-    : _storage = const FlutterSecureStorage(
-        aOptions: AndroidOptions(encryptedSharedPreferences: true),
-      );
+      : _storage = const FlutterSecureStorage(
+          aOptions: AndroidOptions(encryptedSharedPreferences: true),
+        );
 
   static const _sessionKey = 'tapgo.demo.session.v1';
   static const _authKey = 'tapgo.demo.authenticated.v1';
@@ -332,17 +332,17 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
     DemoClientSession? restoredSession;
     try {
       final storedAuth = await _persistentStore.restoreAuth().timeout(
-        const Duration(seconds: 2),
-        onTimeout: () => false,
-      );
+            const Duration(seconds: 2),
+            onTimeout: () => false,
+          );
       final session = await _persistentStore.restoreSession().timeout(
-        const Duration(seconds: 2),
-        onTimeout: () => null,
-      );
+            const Duration(seconds: 2),
+            onTimeout: () => null,
+          );
       final tokens = await _persistentStore.restoreTokens().timeout(
-        const Duration(seconds: 2),
-        onTimeout: () => (accessToken: null, refreshToken: null),
-      );
+            const Duration(seconds: 2),
+            onTimeout: () => (accessToken: null, refreshToken: null),
+          );
       if (!mounted) {
         return;
       }
@@ -353,9 +353,9 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
         auth = false;
         restoredSession = null;
         await _persistentStore.clearSession().timeout(
-          const Duration(seconds: 2),
-          onTimeout: () {},
-        );
+              const Duration(seconds: 2),
+              onTimeout: () {},
+            );
       }
       if (tokens.accessToken != null && tokens.accessToken!.isNotEmpty) {
         _apiClient.setAccessToken(tokens.accessToken);
@@ -404,9 +404,9 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
         } catch (error) {
           _tapGoDebugLog('[TapGo Auth] auth/me restore failed: $error');
           await _persistentStore.clearSession().timeout(
-            const Duration(seconds: 2),
-            onTimeout: () {},
-          );
+                const Duration(seconds: 2),
+                onTimeout: () {},
+              );
           _apiClient.setAccessToken(null);
           auth = false;
           restoredSession = null;
@@ -432,9 +432,9 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
       }
       try {
         await _persistentStore.clearSession().timeout(
-          const Duration(seconds: 2),
-          onTimeout: () {},
-        );
+              const Duration(seconds: 2),
+              onTimeout: () {},
+            );
       } catch (_) {}
     } finally {
       if (mounted) {
@@ -546,8 +546,7 @@ Map<String, dynamic> _adminMemberToJson(DemoAdminMember member) {
 
 DemoAdminMember _adminMemberFromJson(Map<String, dynamic> json) {
   return DemoAdminMember(
-    id:
-        json['id']?.toString() ??
+    id: json['id']?.toString() ??
         'LOCAL-${DateTime.now().millisecondsSinceEpoch}',
     name: json['name']?.toString() ?? 'Member TapGo',
     phone: json['phone']?.toString() ?? '-',

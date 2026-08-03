@@ -31,8 +31,7 @@ class DemoAdminMember {
 
   factory DemoAdminMember.fromSession(DemoClientSession session) {
     return DemoAdminMember(
-      id:
-          session.userId ??
+      id: session.userId ??
           'LOCAL-${session.phone.replaceAll(RegExp(r'[^0-9]'), '')}',
       name: session.userName,
       phone: session.phone,
@@ -53,15 +52,13 @@ class DemoAdminMember {
 
   factory DemoAdminMember.fromApi(Map<String, dynamic> data) {
     final membership = (data['membership'] as Map?)?.cast<String, dynamic>();
-    final activeMembership = (data['activeMembership'] as Map?)
-        ?.cast<String, dynamic>();
-    final activePackage = (activeMembership?['membership'] as Map?)
-        ?.cast<String, dynamic>();
+    final activeMembership =
+        (data['activeMembership'] as Map?)?.cast<String, dynamic>();
+    final activePackage =
+        (activeMembership?['membership'] as Map?)?.cast<String, dynamic>();
     final sponsor = (data['sponsor'] as Map?)?.cast<String, dynamic>();
-    final invoice =
-        ((activeMembership?['order'] as Map?)
-                ?.cast<String, dynamic>())?['invoice']
-            as Map?;
+    final invoice = ((activeMembership?['order'] as Map?)
+        ?.cast<String, dynamic>())?['invoice'] as Map?;
     return DemoAdminMember(
       id: data['id']?.toString() ?? 'API-MEMBER',
       name: (data['fullName'] ?? data['name'] ?? 'Member TapGo').toString(),
@@ -129,8 +126,7 @@ class DemoAdminInvoice {
         ? (payments.first as Map).cast<String, dynamic>()
         : const <String, dynamic>{};
     return DemoAdminInvoice(
-      number:
-          data['number']?.toString() ??
+      number: data['number']?.toString() ??
           payment['invoiceId']?.toString() ??
           'INV-API',
       memberName: user['fullName']?.toString() ?? 'Member TapGo',
@@ -139,8 +135,7 @@ class DemoAdminInvoice {
       status: _paymentStatusLabel(
         data['status']?.toString() ?? payment['status']?.toString(),
       ),
-      method:
-          payment['provider']?.toString() ??
+      method: payment['provider']?.toString() ??
           payment['method']?.toString() ??
           data['provider']?.toString() ??
           'Backend',
@@ -177,8 +172,7 @@ class DemoAdminWithdrawal {
     final bankAccount = (data['bankAccount'] as Map?)?.cast<String, dynamic>();
     return DemoAdminWithdrawal(
       id: data['id']?.toString() ?? 'WD-API',
-      memberName:
-          user['fullName']?.toString() ??
+      memberName: user['fullName']?.toString() ??
           data['userName']?.toString() ??
           'Member TapGo',
       amount: _intFrom(data['amount']),

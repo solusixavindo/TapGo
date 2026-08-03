@@ -202,7 +202,7 @@ TapGoRuntimeActivationResult tapGoActivateAuthenticatedRuntimeSession({
 
 @visibleForTesting
 Future<TapGoSessionPersistenceResult>
-tapGoPersistAuthenticatedSessionBestEffort({
+    tapGoPersistAuthenticatedSessionBestEffort({
   required DemoClientSession session,
   required List<TapGoSessionPersistStep> steps,
   Duration stepTimeout = const Duration(seconds: 1),
@@ -352,9 +352,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       _tapGoDebugLog('[TapGo Auth] auth_response_mapping:$authMode');
       _validateAuthResult(authResult);
       _apiClient.setAccessToken(authResult.accessToken);
-      final referralCode = tapGoIsDirectDistribution
-          ? _referralController.text.trim()
-          : '';
+      final referralCode =
+          tapGoIsDirectDistribution ? _referralController.text.trim() : '';
       if (_isRegister &&
           referralCode.isNotEmpty &&
           (authResult.accessToken ?? '').isNotEmpty) {
@@ -725,8 +724,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       validator: _passwordValidator,
                       textInputAction: _isRegister
                           ? (tapGoIsDirectDistribution
-                                ? TextInputAction.next
-                                : TextInputAction.done)
+                              ? TextInputAction.next
+                              : TextInputAction.done)
                           : TextInputAction.done,
                       onFieldSubmitted: (_) {
                         if (_isRegister && tapGoIsDirectDistribution) {

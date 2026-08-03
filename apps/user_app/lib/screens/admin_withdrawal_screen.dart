@@ -25,16 +25,15 @@ class _AdminWithdrawalScreenState extends ConsumerState<AdminWithdrawalScreen> {
   @override
   Widget build(BuildContext context) {
     final adminSnapshot = ref.watch(_adminConsoleSnapshotProvider);
-    final apiWithdrawals =
-        adminSnapshot.valueOrNull?.withdrawals
+    final apiWithdrawals = adminSnapshot.valueOrNull?.withdrawals
             .map(DemoAdminWithdrawal.fromApi)
             .toList(growable: false) ??
         const <DemoAdminWithdrawal>[];
     final withdrawals = adminSnapshot.hasValue
         ? apiWithdrawals
         : (_isTapGoDevelopmentBuild
-              ? _demoAdminWithdrawals
-              : const <DemoAdminWithdrawal>[]);
+            ? _demoAdminWithdrawals
+            : const <DemoAdminWithdrawal>[]);
     final canMarkPaid = ref.watch(_demoSessionProvider).isSuperAdmin;
     return _DemoScaffold(
       title: 'Withdrawal',

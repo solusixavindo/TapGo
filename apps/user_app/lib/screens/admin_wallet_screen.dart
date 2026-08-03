@@ -6,8 +6,7 @@ class AdminWalletScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final adminSnapshot = ref.watch(_adminConsoleSnapshotProvider);
-    final topWallets =
-        adminSnapshot.valueOrNull?.wallets
+    final topWallets = adminSnapshot.valueOrNull?.wallets
             .map(DemoAdminMember.fromWalletApi)
             .toList(growable: false) ??
         (_isTapGoDevelopmentBuild
@@ -48,9 +47,7 @@ class AdminWalletScreen extends ConsumerWidget {
               subtitle: 'Wallet akan muncul setelah user memiliki transaksi.',
             )
           else
-            ...topWallets
-                .take(16)
-                .map(
+            ...topWallets.take(16).map(
                   (member) => InkWell(
                     onTap: () => _openDemo(
                       context,

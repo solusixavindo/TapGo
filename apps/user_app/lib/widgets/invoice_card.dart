@@ -8,9 +8,8 @@ class _InvoiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusText = invoice.status == PaymentStatus.paid
-        ? 'Lunas'
-        : 'Menunggu Pembayaran';
+    final statusText =
+        invoice.status == PaymentStatus.paid ? 'Lunas' : 'Menunggu Pembayaran';
 
     return AnimatedContainer(
       duration: _TapGoMotion.duration(context, _TapGoMotion.standard),

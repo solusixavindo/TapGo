@@ -15,8 +15,7 @@ class _ReferralTreeNodeWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isVisibleByFilter =
-        selectedFilter.level == null ||
+    final isVisibleByFilter = selectedFilter.level == null ||
         node.level == 0 ||
         node.level <= selectedFilter.level!;
 

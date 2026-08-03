@@ -97,11 +97,11 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
                     itemCount: group.items.length,
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 4,
-                          mainAxisSpacing: 14,
-                          crossAxisSpacing: 8,
-                          childAspectRatio: 0.62,
-                        ),
+                      crossAxisCount: 4,
+                      mainAxisSpacing: 14,
+                      crossAxisSpacing: 8,
+                      childAspectRatio: 0.62,
+                    ),
                     itemBuilder: (context, index) {
                       final item = group.items[index];
                       return _SuperMenuTile(
@@ -129,15 +129,17 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
 
 List<_SuperMenuGroup> _superMenuGroupsForDistribution(
   TapGoDistributionMode mode,
-) => mode == TapGoDistributionMode.play
-    ? _SuperMenuScreenState._playGroups
-    : _SuperMenuScreenState._directGroups;
+) =>
+    mode == TapGoDistributionMode.play
+        ? _SuperMenuScreenState._playGroups
+        : _SuperMenuScreenState._directGroups;
 
 List<String> tapGoSuperMenuLabelsForDistributionForTests(
   TapGoDistributionMode mode,
-) => _superMenuGroupsForDistribution(mode)
-    .expand((group) => group.items.map((item) => item.label))
-    .toList(growable: false);
+) =>
+    _superMenuGroupsForDistribution(mode)
+        .expand((group) => group.items.map((item) => item.label))
+        .toList(growable: false);
 
 Widget? _superMenuDestinationForLabel(String label) {
   if (tapGoIsPlayDistribution) {
@@ -391,8 +393,7 @@ class MembershipScreen extends ConsumerWidget {
     final production = ref.watch(_productionSnapshotProvider);
     final session = ref.watch(_demoSessionProvider);
     final package = DemoClientCatalog.packageByName(session.activePackageName);
-    final hasActivePackage =
-        tapGoIsPlayDistribution ||
+    final hasActivePackage = tapGoIsPlayDistribution ||
         session.activePackageName != 'Basic' ||
         session.lastInvoiceNumber != null ||
         session.ppobBalance > 0;
@@ -424,8 +425,8 @@ class MembershipScreen extends ConsumerWidget {
             value: session.isFounderChairman
                 ? 'Founder Chairman'
                 : session.isFounderPlatinum
-                ? 'Founder Platinum'
-                : package.name,
+                    ? 'Founder Platinum'
+                    : package.name,
             subtitle: 'Status: Aktif / Lunas',
             icon: Icons.workspace_premium_rounded,
           ),
@@ -539,8 +540,7 @@ class MembershipInvoiceScreen extends ConsumerWidget {
       title: 'Invoice Membership',
       subtitle: invoiceNumber ?? 'Invoice belum tersedia',
       child: FutureBuilder<Map<String, dynamic>>(
-        future:
-            invoiceNumber == null ||
+        future: invoiceNumber == null ||
                 invoiceNumber.isEmpty ||
                 token == null ||
                 token.isEmpty
@@ -632,8 +632,7 @@ class _InvoiceDetailPanel extends StatelessWidget {
           ),
           _PackageRow(
             label: 'Tanggal transaksi',
-            value:
-                _dateLabel(invoice['createdAt']) ??
+            value: _dateLabel(invoice['createdAt']) ??
                 session.membershipJoinedAt ??
                 'Belum tersedia',
           ),
@@ -643,8 +642,7 @@ class _InvoiceDetailPanel extends StatelessWidget {
           ),
           _PackageRow(
             label: 'Nomor invoice/order ID',
-            value:
-                invoice['number']?.toString() ??
+            value: invoice['number']?.toString() ??
                 session.lastInvoiceNumber ??
                 'Belum tersedia',
           ),
@@ -753,9 +751,8 @@ class ReferralDashboardScreen extends ConsumerWidget {
     final session = ref.watch(_demoSessionProvider);
     return _DemoScaffold(
       title: 'Referral Dashboard',
-      subtitle: production.hasValue
-          ? 'Data referral TapGo'
-          : 'Referral member TapGo',
+      subtitle:
+          production.hasValue ? 'Data referral TapGo' : 'Referral member TapGo',
       child: Column(
         children: [
           _ProductionStatusTile(state: production),
@@ -820,8 +817,7 @@ class CommissionHistoryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final production = ref.watch(_productionSnapshotProvider);
-    final commissions =
-        production.valueOrNull?.commissionTransactions ??
+    final commissions = production.valueOrNull?.commissionTransactions ??
         const <WalletTransactionModel>[];
     return _DemoScaffold(
       title: 'Riwayat Komisi',
@@ -1022,8 +1018,8 @@ class DemoWalletScreen extends ConsumerWidget {
     final defaultAmount = session.walletBalance >= 100000
         ? 100000
         : session.walletBalance >= 50000
-        ? session.walletBalance
-        : 50000;
+            ? session.walletBalance
+            : 50000;
     final amountController = TextEditingController(
       text: tapGoFormatRupiahInput(defaultAmount.toString()),
     );
@@ -1034,8 +1030,7 @@ class DemoWalletScreen extends ConsumerWidget {
       text: bankAccount['accountNumber']?.toString() ?? '',
     );
     final holderController = TextEditingController(
-      text:
-          bankAccount['accountHolderName']?.toString() ??
+      text: bankAccount['accountHolderName']?.toString() ??
           ref.read(_demoSessionProvider).userName,
     );
     final formKey = GlobalKey<FormState>();
@@ -1140,8 +1135,8 @@ class DemoWalletScreen extends ConsumerWidget {
                                   accountNumber: tapGoDigitsOnly(
                                     accountController.text,
                                   ),
-                                  accountHolderName: holderController.text
-                                      .trim(),
+                                  accountHolderName:
+                                      holderController.text.trim(),
                                 );
                                 return true;
                               });
@@ -1503,17 +1498,14 @@ class _BankAccountScreenState extends ConsumerState<BankAccountScreen> {
       if (!mounted) {
         return;
       }
-      final savedBank =
-          account['bankCode']?.toString() ??
+      final savedBank = account['bankCode']?.toString() ??
           account['bankName']?.toString() ??
           '';
-      _bankController.text =
-          _bankByNameOrCode(savedBank)?.name ??
+      _bankController.text = _bankByNameOrCode(savedBank)?.name ??
           account['bankName']?.toString() ??
           '';
       _accountController.text = account['accountNumber']?.toString() ?? '';
-      _holderController.text =
-          account['accountHolderName']?.toString() ??
+      _holderController.text = account['accountHolderName']?.toString() ??
           ref.read(_demoSessionProvider).userName;
     } catch (_) {
       if (!mounted) {
@@ -2013,9 +2005,9 @@ class SupportTicketDetailScreen extends StatelessWidget {
           final status = data['status']?.toString() ?? 'OPEN';
           final messages = (data['messages'] is List)
               ? (data['messages'] as List)
-                    .whereType<Map>()
-                    .map((item) => item.cast<String, dynamic>())
-                    .toList()
+                  .whereType<Map>()
+                  .map((item) => item.cast<String, dynamic>())
+                  .toList()
               : <Map<String, dynamic>>[];
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

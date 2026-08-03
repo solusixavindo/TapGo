@@ -461,8 +461,11 @@ class AdminBusinessOverviewScreen extends ConsumerWidget {
               color: _brandBlue,
               title: 'Total Omzet',
               value: _summaryMoney(summary, ['totalRevenue']),
-              subtitle:
-                  'Komisi ${_summaryMoney(summary, ['totalCommission'])} • Wallet ${_summaryMoney(summary, ['totalWalletBalance'])}',
+              subtitle: 'Komisi ${_summaryMoney(summary, [
+                    'totalCommission'
+                  ])} • Wallet ${_summaryMoney(summary, [
+                    'totalWalletBalance'
+                  ])}',
               icon: Icons.insights_rounded,
             ),
             const SizedBox(height: 14),
@@ -619,22 +622,22 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
           final data = snapshot.data ?? const <String, dynamic>{};
           final chairman =
               (data['chairman'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{};
+                  const <String, dynamic>{};
           final platinum =
               (data['platinum'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{};
-          final chairmanItem = (chairman['item'] as Map?)
-              ?.cast<String, dynamic>();
+                  const <String, dynamic>{};
+          final chairmanItem =
+              (chairman['item'] as Map?)?.cast<String, dynamic>();
           final items = ((platinum['items'] as List?) ?? const [])
               .whereType<Map>()
               .map((item) => item.cast<String, dynamic>())
               .toList(growable: false);
           final statusSummary =
               (platinum['statusSummary'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{};
+                  const <String, dynamic>{};
           final chairmanStatusSummary =
               (chairman['statusSummary'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{};
+                  const <String, dynamic>{};
           int combinedStatus(String status) =>
               _intFrom(statusSummary[status]) +
               _intFrom(chairmanStatusSummary[status]);
@@ -780,9 +783,9 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
                 onPressed: busy
                     ? null
                     : () => _openDemo(
-                        context,
-                        FounderProgramDetailScreen(founderId: founderId),
-                      ),
+                          context,
+                          FounderProgramDetailScreen(founderId: founderId),
+                        ),
                 icon: const Icon(Icons.visibility_rounded),
                 label: const Text('Detail'),
               ),
@@ -791,18 +794,17 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
                   onPressed: busy
                       ? null
                       : () => _changeStatus(
-                          founderId,
-                          'SUSPENDED',
-                          requireReason: true,
-                        ),
+                            founderId,
+                            'SUSPENDED',
+                            requireReason: true,
+                          ),
                   icon: const Icon(Icons.pause_circle_outline_rounded),
                   label: const Text('Suspend'),
                 ),
               if (status == 'SUSPENDED')
                 OutlinedButton.icon(
-                  onPressed: busy
-                      ? null
-                      : () => _changeStatus(founderId, 'ACTIVE'),
+                  onPressed:
+                      busy ? null : () => _changeStatus(founderId, 'ACTIVE'),
                   icon: const Icon(Icons.play_circle_outline_rounded),
                   label: const Text('Aktifkan'),
                 ),
@@ -811,10 +813,10 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
                   onPressed: busy
                       ? null
                       : () => _changeStatus(
-                          founderId,
-                          'REVOKED',
-                          requireReason: true,
-                        ),
+                            founderId,
+                            'REVOKED',
+                            requireReason: true,
+                          ),
                   icon: const Icon(Icons.block_rounded),
                   label: const Text('Revoke'),
                   style: FilledButton.styleFrom(
@@ -1287,10 +1289,10 @@ class _AdminMemberRequestScreenState
                     onPressed: busy
                         ? null
                         : () => _action(
-                            id,
-                            () => _apiClient.rejectMemberRequest(id),
-                            'Pengajuan member ditolak.',
-                          ),
+                              id,
+                              () => _apiClient.rejectMemberRequest(id),
+                              'Pengajuan member ditolak.',
+                            ),
                     child: const Text('Reject'),
                   ),
                 ),
@@ -1300,10 +1302,10 @@ class _AdminMemberRequestScreenState
                     onPressed: busy
                         ? null
                         : () => _action(
-                            id,
-                            () => _apiClient.approveMemberRequest(id),
-                            'Pengajuan member disetujui.',
-                          ),
+                              id,
+                              () => _apiClient.approveMemberRequest(id),
+                              'Pengajuan member disetujui.',
+                            ),
                     child: Text(busy ? 'Memproses...' : 'Approve'),
                   ),
                 ),
@@ -1395,8 +1397,7 @@ class _AdminReportScreenState extends State<_AdminReportScreen> {
               }
               final data = snapshot.data ?? const <String, dynamic>{};
               final items = _reportItems(data);
-              final total =
-                  data['totalBonus'] ??
+              final total = data['totalBonus'] ??
                   data['totalPpob'] ??
                   data['transactionCount'] ??
                   items.length;

@@ -5,24 +5,23 @@ class _TapGoApiClient {
     Dio? dio,
     _TapGoDeviceContextStore? deviceContextStore,
     this.baseUrl = 'https://api.tapgolion.id/api/v1/',
-  }) : _dio =
-           dio ??
-           Dio(
-             BaseOptions(
-               baseUrl: _normalizeApiBaseUrl(baseUrl),
-               connectTimeout: const Duration(seconds: 8),
-               receiveTimeout: const Duration(seconds: 12),
-               headers: {'Accept': 'application/json'},
-             ),
-           ),
-       _deviceContextStore = deviceContextStore ?? _TapGoDeviceContextStore() {
+  })  : _dio = dio ??
+            Dio(
+              BaseOptions(
+                baseUrl: _normalizeApiBaseUrl(baseUrl),
+                connectTimeout: const Duration(seconds: 8),
+                receiveTimeout: const Duration(seconds: 12),
+                headers: {'Accept': 'application/json'},
+              ),
+            ),
+        _deviceContextStore = deviceContextStore ?? _TapGoDeviceContextStore() {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           try {
             final context = await _deviceContextStore.load().timeout(
-              const Duration(seconds: 1),
-            );
+                  const Duration(seconds: 1),
+                );
             options.headers.addAll(context.headers);
           } catch (error) {
             _tapGoDebugLog('[TapGo Device] fingerprint skipped: $error');
@@ -104,9 +103,9 @@ class _TapGoApiClient {
     String? referralCode,
   }) async {
     final deviceContext = await _deviceContextStore.load().timeout(
-      const Duration(seconds: 1),
-      onTimeout: _TapGoDeviceContextStore.fallbackContext,
-    );
+          const Duration(seconds: 1),
+          onTimeout: _TapGoDeviceContextStore.fallbackContext,
+        );
     final body = {
       'name': name,
       'fullName': name,
@@ -737,36 +736,36 @@ class _TapGoDeviceContext {
   final String platform;
 
   Map<String, String> get headers => {
-    'X-TapGo-Device-Id': deviceId,
-    'X-TapGo-Device-Fingerprint': deviceFingerprint,
-    'X-TapGo-App-Version': appVersion,
-    'X-TapGo-Platform': platform,
-  };
+        'X-TapGo-Device-Id': deviceId,
+        'X-TapGo-Device-Fingerprint': deviceFingerprint,
+        'X-TapGo-App-Version': appVersion,
+        'X-TapGo-Platform': platform,
+      };
 }
 
 class _TapGoDeviceContextStore {
   _TapGoDeviceContextStore({FlutterSecureStorage? storage})
-    : _storage =
-          storage ??
-          const FlutterSecureStorage(
-            aOptions: AndroidOptions(encryptedSharedPreferences: true),
-          );
+      : _storage = storage ??
+            const FlutterSecureStorage(
+              aOptions: AndroidOptions(encryptedSharedPreferences: true),
+            );
 
   static const _deviceIdKey = 'tapgo.device_id.v1';
   static const _deviceFingerprintKey = 'tapgo.device_fingerprint.v1';
   static const _appVersion = '1.0.3+4';
 
   static _TapGoDeviceContext fallbackContext() => _TapGoDeviceContext(
-    deviceId: 'tapgo-session-${DateTime.now().millisecondsSinceEpoch}',
-    deviceFingerprint: 'tapgo:${Platform.operatingSystem}:session-unavailable',
-    appVersion: _appVersion,
-    platform: Platform.operatingSystem,
-  );
+        deviceId: 'tapgo-session-${DateTime.now().millisecondsSinceEpoch}',
+        deviceFingerprint:
+            'tapgo:${Platform.operatingSystem}:session-unavailable',
+        appVersion: _appVersion,
+        platform: Platform.operatingSystem,
+      );
 
   static Map<String, String> get fallbackHeaders => {
-    'X-TapGo-App-Version': _appVersion,
-    'X-TapGo-Platform': Platform.operatingSystem,
-  };
+        'X-TapGo-App-Version': _appVersion,
+        'X-TapGo-Platform': Platform.operatingSystem,
+      };
 
   final FlutterSecureStorage _storage;
   final Map<String, String> _memoryCache = {};
@@ -851,16 +850,16 @@ class _TapGoProductionSnapshot {
     required Map<String, dynamic> referralTree,
     required Map<String, dynamic> commissions,
   }) {
-    final membershipData = (membership['membership'] as Map?)
-        ?.cast<String, dynamic>();
-    final packageData = (membershipData?['membership'] as Map?)
-        ?.cast<String, dynamic>();
-    final orderData = (membershipData?['order'] as Map?)
-        ?.cast<String, dynamic>();
-    final invoiceData = (orderData?['invoice'] as Map?)
-        ?.cast<String, dynamic>();
-    final membershipMetadata = (membershipData?['metadata'] as Map?)
-        ?.cast<String, dynamic>();
+    final membershipData =
+        (membership['membership'] as Map?)?.cast<String, dynamic>();
+    final packageData =
+        (membershipData?['membership'] as Map?)?.cast<String, dynamic>();
+    final orderData =
+        (membershipData?['order'] as Map?)?.cast<String, dynamic>();
+    final invoiceData =
+        (orderData?['invoice'] as Map?)?.cast<String, dynamic>();
+    final membershipMetadata =
+        (membershipData?['metadata'] as Map?)?.cast<String, dynamic>();
     final walletBalance = _intFrom(wallet['balance']);
     final txItems = _listFromPayload(
       transactions,
@@ -882,12 +881,11 @@ class _TapGoProductionSnapshot {
     );
     final ppobBalance = _intFrom(packageData?['ppobBalance']);
     final todayBonus = _todayBonusFrom(commissionItems);
-    final founderRole =
-        (membershipData?['founderRole'] ??
-                membershipMetadata?['founderRole'] ??
-                membershipData?['founderProgramRole'])
-            ?.toString()
-            .toUpperCase();
+    final founderRole = (membershipData?['founderRole'] ??
+            membershipMetadata?['founderRole'] ??
+            membershipData?['founderProgramRole'])
+        ?.toString()
+        .toUpperCase();
     final isFounderChairman = founderRole == 'FOUNDER_CHAIRMAN';
     final isFounderPlatinum = founderRole == 'FOUNDER_PLATINUM';
 
@@ -1168,10 +1166,10 @@ class _TapGoAuthUser {
       referralCode: map['referralCode']?.toString(),
       isFounderChairman:
           map['founderRole']?.toString().toUpperCase() == 'FOUNDER_CHAIRMAN' ||
-          map['isFounderChairman'] == true,
+              map['isFounderChairman'] == true,
       isFounderPlatinum:
           map['founderRole']?.toString().toUpperCase() == 'FOUNDER_PLATINUM' ||
-          map['isFounderPlatinum'] == true,
+              map['isFounderPlatinum'] == true,
     );
   }
 }
@@ -1360,8 +1358,7 @@ class _TapGoEndpointCatalog {
 }
 
 List<Map<String, dynamic>> _listFromPayload(Map<String, dynamic> payload) {
-  final items =
-      payload['items'] ??
+  final items = payload['items'] ??
       payload['data'] ??
       payload['downlines'] ??
       payload['nodes'] ??
@@ -1473,8 +1470,7 @@ DemoReferralNode? _referralTreeFromApi(Map<String, dynamic> payload) {
     return null;
   }
   final rootMap = (payload['root'] as Map?)?.cast<String, dynamic>();
-  final rootId =
-      rootMap?['userId']?.toString() ??
+  final rootId = rootMap?['userId']?.toString() ??
       rootMap?['id']?.toString() ??
       rows
           .map((item) => item['sponsorId']?.toString())
@@ -1482,8 +1478,7 @@ DemoReferralNode? _referralTreeFromApi(Map<String, dynamic> payload) {
   final childrenBySponsor = <String, List<Map<String, dynamic>>>{};
   for (final item in rows) {
     final sponsorMap = (item['sponsor'] as Map?)?.cast<String, dynamic>();
-    final sponsorId =
-        item['sponsorId']?.toString() ??
+    final sponsorId = item['sponsorId']?.toString() ??
         item['sponsor_id']?.toString() ??
         sponsorMap?['id']?.toString() ??
         sponsorMap?['userId']?.toString();
@@ -1496,8 +1491,7 @@ DemoReferralNode? _referralTreeFromApi(Map<String, dynamic> payload) {
   DemoReferralNode nodeFromItem(Map<String, dynamic> item) {
     final userMap = (item['user'] as Map?)?.cast<String, dynamic>();
     final memberMap = (item['member'] as Map?)?.cast<String, dynamic>();
-    final userId =
-        item['userId']?.toString() ??
+    final userId = item['userId']?.toString() ??
         item['user_id']?.toString() ??
         item['id']?.toString() ??
         userMap?['id']?.toString() ??
@@ -1510,8 +1504,7 @@ DemoReferralNode? _referralTreeFromApi(Map<String, dynamic> payload) {
             .toList(growable: false);
     return DemoReferralNode(
       id: userId,
-      name:
-          item['fullName']?.toString() ??
+      name: item['fullName']?.toString() ??
           item['full_name']?.toString() ??
           item['name']?.toString() ??
           userMap?['fullName']?.toString() ??
@@ -1541,14 +1534,13 @@ DemoReferralNode? _referralTreeFromApi(Map<String, dynamic> payload) {
   final nestedChildren = rootId == null
       ? const <DemoReferralNode>[]
       : (childrenBySponsor[rootId] ?? const <Map<String, dynamic>>[])
-            .map(nodeFromItem)
-            .toList(growable: false);
+          .map(nodeFromItem)
+          .toList(growable: false);
   final flatChildren = rows.take(20).map(nodeFromItem).toList(growable: false);
 
   return DemoReferralNode(
     id: rootId ?? 'backend-root',
-    name:
-        rootMap?['fullName']?.toString() ??
+    name: rootMap?['fullName']?.toString() ??
         rootMap?['name']?.toString() ??
         'Referral Anda',
     packageName: _titleCase(
