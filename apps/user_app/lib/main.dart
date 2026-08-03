@@ -81,6 +81,13 @@ Future<Map<String, dynamic>> Function({
   required String message,
 })? tapGoCreateSupportTicketForTests;
 Future<Map<String, dynamic>> Function()? tapGoMemberIdentityLoaderForTests;
+
+// Hook Ojek Online, mengikuti pola loader-for-tests di atas. Dipakai test yang
+// menyentuh widget dashboard nyata, supaya tap tidak pernah menembak jaringan.
+// Nilai default null berarti produksi selalu memakai _apiClient.
+Future<List<Map<String, dynamic>>> Function()? tapGoRideHistoryLoaderForTests;
+Future<Map<String, dynamic>> Function(String reference)?
+    tapGoRideDetailLoaderForTests;
 const tapGoLocalSessionPersistenceWarning =
     'Anda berhasil masuk, tetapi sesi belum tersimpan di perangkat. '
     'Anda mungkin perlu login kembali saat aplikasi dibuka ulang.';

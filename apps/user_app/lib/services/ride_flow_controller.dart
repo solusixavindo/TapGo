@@ -54,6 +54,21 @@ const Map<String, String> tapGoRideCancellationReasons = {
 /// Batas panjang catatan pembatalan, mengikuti validator backend.
 const int tapGoRideCancellationNoteMaxLength = 500;
 
+/// Status yang berarti perjalanan masih berjalan dan wajib dipulihkan.
+///
+/// Daftar ini dipakai bersama `isFinal` dari server, bukan menggantinya: sebuah
+/// perjalanan hanya dianggap aktif bila server belum menyatakannya final DAN
+/// statusnya ada di sini. Dua syarat itu membuat status baru maupun status
+/// terminal tidak pernah salah dipulihkan sebagai perjalanan berjalan.
+const Set<String> tapGoRideActiveStatuses = {
+  'CREATED',
+  'SEARCHING_DRIVER',
+  'DRIVER_ASSIGNED',
+  'DRIVER_TO_PICKUP',
+  'DRIVER_ARRIVED',
+  'IN_TRIP',
+};
+
 /// Format Rupiah dari integer rupiah penuh yang dikirim backend.
 ///
 /// Backend mengirim bilangan bulat, bukan desimal, sehingga tidak ada
@@ -304,6 +319,14 @@ class RideOrderView {
         return 'Status perjalanan belum dapat ditampilkan';
     }
   }
+
+  /// Apakah perjalanan ini wajib dipulihkan saat pengguna membuka Ojek Online.
+  ///
+  /// Fail closed dua kali: server harus belum menyatakannya final, dan
+  /// statusnya harus dikenal sebagai status berjalan. Status yang tidak dikenal
+  /// tidak pernah dianggap aktif.
+  bool get isRestorableActive =>
+      !isFinal && tapGoRideActiveStatuses.contains(status);
 
   /// Pembatalan hanya ditawarkan pada fase yang backend memang mengizinkan.
   ///

@@ -207,6 +207,241 @@ class RideDetailRow extends StatelessWidget {
 }
 
 // ===========================================================================
+// Layar 0 — gerbang: pulihkan perjalanan aktif sebelum menawarkan pemesanan
+// ===========================================================================
+
+/// Titik masuk tunggal Ojek Online.
+///
+/// Sebelum menawarkan pemesanan, layar ini SELALU bertanya ke server apakah
+/// pengguna masih punya perjalanan berjalan. Ini yang membuat perjalanan tidak
+/// hilang ketika aplikasi ditutup, process dimatikan, atau widget dibuat ulang:
+/// tidak ada satu pun status perjalanan yang disimpan di perangkat, sehingga
+/// tidak ada yang bisa basi. Server tetap satu-satunya sumber kebenaran.
+///
+/// Nol quote dan nol order dibuat di sini — layar ini hanya membaca.
+class RideEntryScreen extends ConsumerStatefulWidget {
+  const RideEntryScreen({
+    super.key,
+    required this.service,
+    this.locationPort,
+    this.historyRequest,
+    this.quoteRequest,
+    this.orderRequest,
+    this.detailRequest,
+    this.cancelRequest,
+  });
+
+  final RideServiceKind service;
+  final LocationSelectionPort? locationPort;
+  final RideHistoryRequest? historyRequest;
+  final RideQuoteRequest? quoteRequest;
+  final RideOrderRequest? orderRequest;
+  final RideDetailRequest? detailRequest;
+  final RideCancelRequest? cancelRequest;
+
+  @override
+  ConsumerState<RideEntryScreen> createState() => _RideEntryScreenState();
+}
+
+/// Hasil penyelesaian gerbang.
+enum _RideEntryOutcome { loading, booking, restored, ambiguous, failed }
+
+class _RideEntryScreenState extends ConsumerState<RideEntryScreen> {
+  _RideEntryOutcome _outcome = _RideEntryOutcome.loading;
+  List<RideOrderView> _activeOrders = const [];
+  String? _errorMessage;
+  bool _isBusy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_resolve());
+  }
+
+  Future<void> _resolve() async {
+    if (_isBusy) {
+      return;
+    }
+    setState(() {
+      _isBusy = true;
+      _errorMessage = null;
+    });
+    try {
+      final request = widget.historyRequest ??
+          tapGoRideHistoryLoaderForTests ??
+          _apiClient.rideHistory;
+      final rows = await request();
+      if (!mounted) {
+        return;
+      }
+      final active = rows
+          .map(RideOrderView.fromJson)
+          .where((order) => order.isRestorableActive)
+          .toList();
+      setState(() {
+        _activeOrders = active;
+        _outcome = switch (active.length) {
+          0 => _RideEntryOutcome.booking,
+          1 => _RideEntryOutcome.restored,
+          // Backend seharusnya menjamin satu perjalanan aktif per pengguna.
+          // Bila ternyata lebih, memilih salah satu berarti menebak; jadi
+          // gerbang berhenti dan menyerahkan pilihan kepada pengguna.
+          _ => _RideEntryOutcome.ambiguous,
+        };
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      if (tapGoRideIsSessionExpired(error)) {
+        _handleRideSessionExpired(context, ref);
+        return;
+      }
+      // Kegagalan jaringan tidak menghapus apa pun dan tidak memulai pemesanan
+      // baru: pengguna diberi jalan mencoba lagi.
+      setState(() {
+        _outcome = _RideEntryOutcome.failed;
+        _errorMessage = tapGoRideErrorMessage(error);
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isBusy = false);
+      }
+    }
+  }
+
+  Widget _statusScreenFor(String reference) {
+    return RideStatusScreen(
+      reference: reference,
+      detailRequest: widget.detailRequest,
+      cancelRequest: widget.cancelRequest,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    switch (_outcome) {
+      case _RideEntryOutcome.booking:
+        return RideBookingScreen(
+          initialService: widget.service,
+          locationPort: widget.locationPort,
+          quoteRequest: widget.quoteRequest,
+          orderRequest: widget.orderRequest,
+          detailRequest: widget.detailRequest,
+          cancelRequest: widget.cancelRequest,
+        );
+
+      case _RideEntryOutcome.restored:
+        // Reference berasal dari server, bukan dari penyimpanan lokal. Layar
+        // status akan memuat ulang detailnya lewat GET /rides/:reference dan
+        // melanjutkan polling.
+        return _statusScreenFor(_activeOrders.single.reference);
+
+      case _RideEntryOutcome.loading:
+      case _RideEntryOutcome.failed:
+      case _RideEntryOutcome.ambiguous:
+        return _gateScaffold(context);
+    }
+  }
+
+  Widget _gateScaffold(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('TapGo ${widget.service.displayName}'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const RideDemoBadge(),
+              if (_outcome == _RideEntryOutcome.loading)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 40),
+                    child: _TapGoLoading(color: _brandBlue),
+                  ),
+                )
+              else if (_outcome == _RideEntryOutcome.failed)
+                RideNoticeCard(
+                  icon: Icons.wifi_off_rounded,
+                  title: 'Gagal memuat perjalanan',
+                  message: _errorMessage ??
+                      'Perjalanan belum dapat diproses. Silakan coba lagi.',
+                  actionLabel: 'Coba lagi',
+                  onAction: _isBusy ? null : () => unawaited(_resolve()),
+                )
+              else
+                ..._ambiguousSection(context),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _ambiguousSection(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return [
+      const RideNoticeCard(
+        icon: Icons.warning_amber_rounded,
+        title: 'Ada lebih dari satu perjalanan berjalan',
+        message:
+            'Kami tidak memilihkan secara otomatis agar tidak salah membuka. '
+            'Pilih perjalanan yang ingin kamu lihat. Pemesanan baru ditutup '
+            'sampai perjalanan berjalan selesai.',
+      ),
+      const SizedBox(height: 14),
+      ..._activeOrders.map(
+        (order) => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: InkWell(
+            onTap: () => Navigator.of(context).push(
+              _tapGoPageRoute((_) => _statusScreenFor(order.reference)),
+            ),
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 48),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: colorScheme.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: colorScheme.outlineVariant),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    order.statusTitle,
+                    style: TextStyle(
+                      color: colorScheme.onSurface,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    order.reference,
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: 12,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ];
+  }
+}
+
+// ===========================================================================
 // Layar 1 — pemesanan: pilih layanan, lokasi, estimasi, konfirmasi
 // ===========================================================================
 
@@ -743,7 +978,7 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
       _poller = RideStatusPoller(
         reference: widget.reference,
         interval: widget.pollInterval,
-        fetch: widget.detailRequest,
+        fetch: widget.detailRequest ?? tapGoRideDetailLoaderForTests,
         onUpdate: (order) {
           if (mounted) {
             setState(() {
@@ -781,9 +1016,10 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
       return;
     }
     if (state == AppLifecycleState.resumed) {
-      // Muat ulang dari server saat kembali: state lokal tidak pernah menjadi
-      // sumber kebenaran.
-      unawaited(poller.refreshNow());
+      // start() sendiri sudah menembak satu permintaan langsung sebelum memulai
+      // timer berkala, jadi resume menghasilkan TEPAT satu refresh. Memanggil
+      // refreshNow() di sini akan bergantung pada penjaga overlap untuk
+      // meredam permintaan kedua — dan benar karena kebetulan bukan jaminan.
       poller.start();
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {

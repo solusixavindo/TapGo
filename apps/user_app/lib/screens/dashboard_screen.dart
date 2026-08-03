@@ -1987,7 +1987,7 @@ VoidCallback? _tapGoServiceActionFor(BuildContext context, _ServiceItem item) {
   // fiturnya tidak dapat dibuka pada build Play meski kartunya ada.
   final rideService = tapGoRideEntryServiceFor(item.label);
   if (rideService != null) {
-    return () => tapGoOpenRideBooking(context, rideService);
+    return () => tapGoOpenRideEntry(context, rideService);
   }
   if (tapGoIsPlayDistribution) {
     return switch (item.label) {
@@ -2023,9 +2023,14 @@ RideServiceKind? tapGoRideEntryServiceFor(String label) {
   };
 }
 
-void tapGoOpenRideBooking(BuildContext context, RideServiceKind service) {
+/// Membuka Ojek Online melalui gerbang pemulihan.
+///
+/// Sengaja BUKAN langsung ke layar pemesanan: gerbang bertanya ke server lebih
+/// dulu, sehingga perjalanan yang masih berjalan dibuka kembali alih-alih
+/// pengguna menawarkan dirinya memesan dua kali.
+void tapGoOpenRideEntry(BuildContext context, RideServiceKind service) {
   Navigator.of(context).push(
-    _tapGoPageRoute((_) => RideBookingScreen(initialService: service)),
+    _tapGoPageRoute((_) => RideEntryScreen(service: service)),
   );
 }
 
