@@ -20,6 +20,7 @@ import { midtransRouter } from "./modules/payments/presentation/midtrans.routes.
 import { dokuPaymentRouter, dokuWebhookRouter } from "./modules/payments/presentation/doku.routes.js";
 import { profitSharingRouter } from "./modules/profit-sharing/presentation/profit-sharing.routes.js";
 import { referralRouter } from "./modules/referrals/presentation/referral.routes.js";
+import { driverReviewRouter } from "./modules/rides/presentation/driverReview.routes.js";
 import { adminRideRouter, driverRideRouter, rideRouter } from "./modules/rides/presentation/ride.routes.js";
 import { adminSupportRouter, supportRouter } from "./modules/support/presentation/support.routes.js";
 import { walletRouter } from "./modules/wallets/presentation/wallet.routes.js";
@@ -84,6 +85,7 @@ export function createApp() {
   app.use("/api/webhooks", paymentRateLimiter, dokuWebhookRouter);
   app.use("/api/v1/admin/profit-sharing", adminRateLimiter, profitSharingRouter);
   app.use("/api/v1/admin/rides", adminRateLimiter, adminRideRouter);
+  app.use("/api/v1/admin/driver-review", driverReviewRouter);
   app.use("/api/v1/admin/support", adminRateLimiter, adminSupportRouter);
   app.use("/api/v1/admin", adminRateLimiter, adminConsoleRouter);
   app.use("/api/v1/referrals", referralRouter);
