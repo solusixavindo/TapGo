@@ -319,13 +319,13 @@ describeIntegration("Stage R2.2 — driver review scope and lease", () => {
 
     const rows = await prisma.$queryRaw<Array<{ diff_seconds: number; skew_seconds: number }>>`
       SELECT EXTRACT(EPOCH FROM (claim_expires_at - claimed_at))::float8 AS diff_seconds,
-             EXTRACT(EPOCH FROM (now() - claimed_at))::float8 AS skew_seconds
+             EXTRACT(EPOCH FROM ((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - claimed_at))::float8 AS skew_seconds
       FROM "ride_driver_applications" WHERE id = ${application.id}::uuid
     `;
 
     // Selisih dihitung database, jadi harus persis 900 detik.
     expect(rows[0]!.diff_seconds).toBe(900);
-    // claimed_at berasal dari now() database, bukan jam Node.
+    // claimed_at berasal dari UTC database, bukan jam Node maupun session TZ.
     expect(Math.abs(rows[0]!.skew_seconds)).toBeLessThan(10);
   });
 
@@ -376,7 +376,7 @@ describeIntegration("Stage R2.2 — driver review scope and lease", () => {
     });
     await prisma.$executeRaw`
       UPDATE "ride_driver_applications"
-      SET "claim_expires_at" = now() - interval '1 minute'
+      SET "claim_expires_at" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 minute'
       WHERE id = ${application.id}::uuid
     `;
 
@@ -423,7 +423,7 @@ describeIntegration("Stage R2.2 — driver review scope and lease", () => {
     });
     await prisma.$executeRaw`
       UPDATE "ride_driver_applications"
-      SET "claim_expires_at" = now() - interval '1 minute'
+      SET "claim_expires_at" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 minute'
       WHERE id = ${application.id}::uuid
     `;
 
@@ -449,7 +449,7 @@ describeIntegration("Stage R2.2 — driver review scope and lease", () => {
     });
     await prisma.$executeRaw`
       UPDATE "ride_driver_applications"
-      SET "claim_expires_at" = now() - interval '1 minute'
+      SET "claim_expires_at" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 minute'
       WHERE id = ${application.id}::uuid
     `;
 
@@ -599,7 +599,15 @@ describeIntegration("Stage R2.2 — driver review scope and lease", () => {
     const before = await prisma.rideDriverApplication.findUniqueOrThrow({
       where: { id: application.id }
     });
-    const auditBefore = await prisma.auditLog.count({ where: { entityId: application.id } });
+    // Hanya audit LEASE yang dihitung. Sejak Stage R2.2A pemeriksaan scope yang
+    // berhasil menulis admin.scope.checked, dan itu memang terjadi: otorisasi
+    // lolos, hanya operasi lease-nya yang gagal. Menghitungnya sebagai mutasi
+    // parsial akan salah.
+    const leaseActions = {
+      action: { startsWith: "driver.application." },
+      entityId: application.id
+    };
+    const auditBefore = await prisma.auditLog.count({ where: leaseActions });
 
     const failed = await api(`/api/v1/admin/driver-review/applications/${application.id}/renew`, {
       method: "POST", token: other.token
@@ -610,7 +618,7 @@ describeIntegration("Stage R2.2 — driver review scope and lease", () => {
       where: { id: application.id }
     });
     expect(after).toEqual(before);
-    expect(await prisma.auditLog.count({ where: { entityId: application.id } })).toBe(auditBefore);
+    expect(await prisma.auditLog.count({ where: leaseActions })).toBe(auditBefore);
   });
 
   it("29. expiry bersifat lazy dan tidak membutuhkan scheduler", async () => {
@@ -629,7 +637,7 @@ describeIntegration("Stage R2.2 — driver review scope and lease", () => {
 
     await prisma.$executeRaw`
       UPDATE "ride_driver_applications"
-      SET "claim_expires_at" = now() - interval '1 second'
+      SET "claim_expires_at" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 second'
       WHERE id = ${application.id}::uuid
     `;
 

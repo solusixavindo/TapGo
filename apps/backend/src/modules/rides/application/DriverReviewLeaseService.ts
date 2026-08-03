@@ -6,11 +6,15 @@ import { DriverReviewScopeService } from "./DriverReviewScopeService.js";
 /**
  * Claim/lease review pengajuan driver.
  *
- * Seluruh keputusan waktu memakai `now()` MILIK DATABASE. Jam Node maupun jam
- * client tidak pernah dipercaya: beberapa instance backend dapat memiliki jam
- * yang berbeda, dan lease yang menentukan siapa boleh memutuskan sebuah
- * pengajuan tidak boleh bergantung pada mesin mana yang kebetulan melayani
- * permintaan.
+ * KONTRAK WAKTU: seluruh keputusan memakai UTC dari DATABASE, dinyatakan
+ * eksplisit sebagai `CURRENT_TIMESTAMP AT TIME ZONE 'UTC'`.
+ *
+ * Jam Node dan jam client tidak pernah dipercaya. Session timezone PostgreSQL
+ * juga tidak: `now()` maupun `LOCALTIMESTAMP` bergantung padanya, sehingga dua
+ * environment dengan setelan berbeda akan menghasilkan lease yang berbeda dari
+ * data yang sama. Ekspresi di atas menghasilkan wall-clock UTC apa pun setelan
+ * sesi, sehingga kolom `timestamp without time zone` pada schema ini menyimpan
+ * UTC dan Prisma membacanya kembali sebagai instant yang benar.
  *
  * Kedaluwarsa bersifat LAZY — dinilai saat dibaca, bukan oleh scheduler.
  * Tidak ada background job yang bisa mati diam-diam dan mengunci antrian.
@@ -79,24 +83,17 @@ export class DriverReviewLeaseService {
   ) {}
 
   /**
-   * Waktu database, satu-satunya sumber waktu yang dipercaya.
+   * Waktu UTC dari database — satu-satunya sumber waktu untuk keputusan lease.
    *
-   * Memakai LOCALTIMESTAMP, BUKAN now(). Kolom lease bertipe
-   * `timestamp without time zone` mengikuti konvensi schema repo ini, dan
-   * `now()` bertipe `timestamptz`. Menulis now() ke kolom tanpa zona membuat
-   * PostgreSQL mengonversinya memakai TimeZone sesi, sementara Prisma membaca
-   * kembali nilai itu seolah-olah UTC. Membandingkan hasil bacaan tersebut
-   * dengan now() di sisi JavaScript karena itu meleset sebesar offset zona —
-   * pada zona +07 sebuah lease tampak masih aktif tujuh jam setelah
-   * kedaluwarsa.
-   *
-   * LOCALTIMESTAMP berada pada kerangka yang sama dengan nilai tersimpan,
-   * sehingga perbandingan di sisi aplikasi menjadi benar. Perbandingan di
-   * dalam SQL sendiri sudah konsisten karena kedua sisi melalui konversi yang
-   * sama.
+   * LOCALTIMESTAMP yang dipakai sebelumnya memperbaiki pergeseran zona, tetapi
+   * masih bergantung pada session timezone dan karena itu bukan kontrak yang
+   * dapat dipegang lintas environment. `CURRENT_TIMESTAMP AT TIME ZONE 'UTC'`
+   * menghasilkan nilai yang sama pada setelan sesi apa pun.
    */
   private async databaseNow(tx: TxClient | PrismaClient): Promise<Date> {
-    const rows = await tx.$queryRaw<Array<{ now: Date }>>`SELECT LOCALTIMESTAMP AS now`;
+    const rows = await tx.$queryRaw<Array<{ now: Date }>>`
+      SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AS now
+    `;
     return rows[0]!.now;
   }
 
@@ -151,7 +148,10 @@ export class DriverReviewLeaseService {
     applicationId: string;
     expectedVersion?: number;
   }) {
-    await this.scopes.requireScope(input.actorId, "DRIVER_APPLICATION_CLAIM");
+    await this.scopes.requireScope(input.actorId, "DRIVER_APPLICATION_CLAIM", {
+      applicationId: input.applicationId,
+      auditAllowed: true
+    });
 
     return this.prisma.$transaction(async (tx) => {
       const now = await this.databaseNow(tx);
@@ -190,16 +190,16 @@ export class DriverReviewLeaseService {
       const claimed = await tx.$executeRaw`
         UPDATE "ride_driver_applications"
         SET "claimed_by_id" = ${input.actorId}::uuid,
-            "claimed_at" = now(),
-            "claim_expires_at" = now() + ${`${REVIEW_LEASE_MINUTES} minutes`}::interval,
+            "claimed_at" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC'),
+            "claim_expires_at" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '15 minutes',
             "released_at" = NULL,
             "release_reason_code" = NULL,
             "status" = 'UNDER_REVIEW',
             "version" = "version" + 1,
-            "updated_at" = now()
+            "updated_at" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
         WHERE "id" = ${input.applicationId}::uuid
           AND "version" = ${application.version}
-          AND ("claim_expires_at" IS NULL OR "claim_expires_at" <= now())
+          AND ("claim_expires_at" IS NULL OR "claim_expires_at" <= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC'))
       `;
 
       if (claimed !== 1) {
@@ -240,7 +240,10 @@ export class DriverReviewLeaseService {
 
   /** Memperpanjang lease milik sendiri. `claimed_at` awal tidak diubah. */
   async renewClaim(input: { actorId: string; applicationId: string }) {
-    await this.scopes.requireScope(input.actorId, "DRIVER_APPLICATION_RENEW");
+    await this.scopes.requireScope(input.actorId, "DRIVER_APPLICATION_RENEW", {
+      applicationId: input.applicationId,
+      auditAllowed: true
+    });
 
     return this.prisma.$transaction(async (tx) => {
       const application = await tx.rideDriverApplication.findUnique({
@@ -263,12 +266,12 @@ export class DriverReviewLeaseService {
       // ulang, agar takeover oleh admin lain tetap mungkin.
       const renewed = await tx.$executeRaw`
         UPDATE "ride_driver_applications"
-        SET "claim_expires_at" = now() + ${`${REVIEW_LEASE_MINUTES} minutes`}::interval,
+        SET "claim_expires_at" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '15 minutes',
             "version" = "version" + 1,
-            "updated_at" = now()
+            "updated_at" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
         WHERE "id" = ${input.applicationId}::uuid
           AND "claimed_by_id" = ${input.actorId}::uuid
-          AND "claim_expires_at" > now()
+          AND "claim_expires_at" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
       `;
 
       if (renewed !== 1) {
@@ -307,7 +310,10 @@ export class DriverReviewLeaseService {
     applicationId: string;
     reasonCode: ReleaseReasonCode;
   }) {
-    await this.scopes.requireScope(input.actorId, "DRIVER_APPLICATION_RELEASE");
+    await this.scopes.requireScope(input.actorId, "DRIVER_APPLICATION_RELEASE", {
+      applicationId: input.applicationId,
+      auditAllowed: true
+    });
 
     if (!RELEASE_REASON_CODES.includes(input.reasonCode)) {
       throw notEligible();
@@ -319,11 +325,11 @@ export class DriverReviewLeaseService {
         SET "claimed_by_id" = NULL,
             "claimed_at" = NULL,
             "claim_expires_at" = NULL,
-            "released_at" = now(),
+            "released_at" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC'),
             "release_reason_code" = ${input.reasonCode},
             "status" = 'SUBMITTED',
             "version" = "version" + 1,
-            "updated_at" = now()
+            "updated_at" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
         WHERE "id" = ${input.applicationId}::uuid
           AND "claimed_by_id" = ${input.actorId}::uuid
       `;
@@ -366,7 +372,10 @@ export class DriverReviewLeaseService {
     targetUserId: string;
     reasonCode: ReassignReasonCode;
   }) {
-    await this.scopes.requireScope(input.actorId, "DRIVER_APPLICATION_REASSIGN");
+    await this.scopes.requireScope(input.actorId, "DRIVER_APPLICATION_REASSIGN", {
+      applicationId: input.applicationId,
+      auditAllowed: true
+    });
 
     if (!REASSIGN_REASON_CODES.includes(input.reasonCode)) {
       throw new AppError(
@@ -405,13 +414,13 @@ export class DriverReviewLeaseService {
       const reassigned = await tx.$executeRaw`
         UPDATE "ride_driver_applications"
         SET "claimed_by_id" = ${input.targetUserId}::uuid,
-            "claimed_at" = now(),
-            "claim_expires_at" = now() + ${`${REVIEW_LEASE_MINUTES} minutes`}::interval,
+            "claimed_at" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC'),
+            "claim_expires_at" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '15 minutes',
             "released_at" = NULL,
             "release_reason_code" = NULL,
             "status" = 'UNDER_REVIEW',
             "version" = "version" + 1,
-            "updated_at" = now()
+            "updated_at" = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
         WHERE "id" = ${input.applicationId}::uuid
           AND "version" = ${application.version}
       `;
