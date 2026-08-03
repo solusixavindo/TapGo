@@ -411,10 +411,15 @@ describeIntegration("Stage 5.14B — RideDriverApplication schema foundation", (
     `;
 
     const names = rows.map((row) => row.conname);
+    // Daftar diperluas pada Stage R2.2: tiga CHECK claim/lease ditambahkan.
+    // Constraint Stage 5.14B tetap ada seluruhnya — tidak ada yang dilepas.
     expect(names).toEqual([
       "ride_driver_applications_approved_at_check",
+      "ride_driver_applications_claim_trio_check",
       "ride_driver_applications_cycle_number_check",
       "ride_driver_applications_rejected_at_check",
+      "ride_driver_applications_release_pair_check",
+      "ride_driver_applications_reviewed_pair_check",
       "ride_driver_applications_terminal_exclusive_check",
       "ride_driver_applications_version_check",
       "ride_driver_applications_withdrawn_at_check",

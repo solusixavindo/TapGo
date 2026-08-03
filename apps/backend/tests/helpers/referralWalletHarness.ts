@@ -84,6 +84,10 @@ export async function cleanDatabase() {
   // akan ditolak database. Relasi Ride lain (quote, order) tetap cascade dan
   // tidak perlu disebut di sini.
   await prisma.rideDriverApplication.deleteMany();
+  // AdminScopeGrant memakai FK RESTRICT ke users pada kolom user_id,
+  // granted_by_id, dan revoked_by_id. Tanpa baris ini, deleteMany() di bawah
+  // ditolak database.
+  await prisma.adminScopeGrant.deleteMany();
   await prisma.user.deleteMany();
   await prisma.membershipBenefit.deleteMany();
   await prisma.membership.deleteMany();
