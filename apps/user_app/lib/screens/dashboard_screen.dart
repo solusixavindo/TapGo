@@ -1886,11 +1886,13 @@ class _ServiceGrid extends StatelessWidget {
   const _ServiceGrid();
 
   static const _directServices = [
+    // Badge 'Segera' dilepas karena layanan sudah dapat dibuka; badge apa pun
+    // membuat onTap bernilai null pada _tapGoServiceActionFor.
     _ServiceItem(
       'TapGo Ride',
       Icons.two_wheeler_rounded,
       Color(0xFF0569E8),
-      'Segera',
+      null,
     ),
     _ServiceItem(
       'TapGo Car',
@@ -1989,7 +1991,31 @@ VoidCallback? _tapGoServiceActionFor(BuildContext context, _ServiceItem item) {
       _ => null,
     };
   }
+  // Distribusi direct: Ojek Online sudah tersedia. Layanan lain belum, dan
+  // tetap memakai pesan "belum dapat dibuka" yang jujur.
+  final rideService = tapGoRideEntryServiceFor(item.label);
+  if (rideService != null) {
+    return () => tapGoOpenRideBooking(context, rideService);
+  }
   return () => _showSoon(context);
+}
+
+/// Memetakan label kartu layanan dashboard ke jenis layanan Ojek Online.
+///
+/// Dipakai dashboard sebagai satu-satunya sumber kebenaran pemetaan, sehingga
+/// test menguji pemetaan yang sama dengan yang dipakai produksi.
+RideServiceKind? tapGoRideEntryServiceFor(String label) {
+  return switch (label) {
+    'TapGo Ride' => RideServiceKind.motorcycle,
+    'TapGo Car' => RideServiceKind.car,
+    _ => null,
+  };
+}
+
+void tapGoOpenRideBooking(BuildContext context, RideServiceKind service) {
+  Navigator.of(context).push(
+    _tapGoPageRoute((_) => RideBookingScreen(initialService: service)),
+  );
 }
 
 class _FloatingServiceTile extends StatefulWidget {
