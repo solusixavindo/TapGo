@@ -152,18 +152,35 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                 order: 3,
                 child: _WalletCard(session: session, state: production),
               ),
-              const SizedBox(height: 16),
-              _DashboardEntrance(
-                order: 4,
-                child: _MarketingPlanCard(
-                  session: session,
-                  isLoading: production.isLoading,
+              // Pada distribusi Play, kartu Membership biru di atas sudah
+              // menampilkan paket aktif sekaligus membuka detailnya, sehingga
+              // kartu status kuning hanya mengulang informasi yang sama.
+              // Kartu itu tidak dirender di sini; datanya sendiri tidak
+              // disentuh. Pada distribusi direct kartu biru adalah TapGoPay —
+              // bukan membership — jadi tidak ada duplikasi dan kartunya tetap
+              // dipertahankan sebagai satu-satunya jalan ke paket membership.
+              if (!tapGoIsPlayDistribution) ...[
+                const SizedBox(height: 16),
+                _DashboardEntrance(
+                  order: 4,
+                  child: _MarketingPlanCard(
+                    session: session,
+                    isLoading: production.isLoading,
+                  ),
                 ),
-              ),
+              ],
+              // Jarak tunggal menuju grid layanan, sehingga tidak ada ruang
+              // kosong yang tertinggal setelah kartu dihapus.
               const SizedBox(height: 22),
-              const _DashboardEntrance(order: 5, child: _ServiceGrid()),
+              _DashboardEntrance(
+                order: tapGoIsPlayDistribution ? 4 : 5,
+                child: const _ServiceGrid(),
+              ),
               const SizedBox(height: 24),
-              const _DashboardEntrance(order: 6, child: _ContentCards()),
+              _DashboardEntrance(
+                order: tapGoIsPlayDistribution ? 5 : 6,
+                child: const _ContentCards(),
+              ),
             ],
           ),
         ),

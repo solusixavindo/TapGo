@@ -607,7 +607,13 @@ void main() {
     (WidgetTester tester) async {
       await openDashboard(tester);
 
-      expect(find.text('Paket aktif: Basic'), findsOneWidget);
+      // Status Basic kini ditampilkan kartu Membership biru. Kartu status
+      // kuning yang mengulang informasi yang sama dihapus pada Stage R2.4T,
+      // jadi jaminan yang diuji tetap sama: dashboard menampilkan paket aktif
+      // Basic dan tidak menawarkan pembelian berbayar.
+      expect(find.text('Membership'), findsOneWidget);
+      expect(find.text('Basic'), findsWidgets);
+      expect(find.textContaining('Paket aktif:'), findsNothing);
       expect(find.text('Marketing Plan'), findsNothing);
       await tester.pumpWidget(
         const ProviderScope(
