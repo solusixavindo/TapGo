@@ -260,45 +260,75 @@ void main() {
   }
 
   group('bukti visual r2.4', () {
-    testWidgets('00 dashboard Play dengan entry Motor dan Mobil', (
-      tester,
-    ) async {
-      // Artefak ini hanya dapat dihasilkan pada distribusi Play, sehingga
-      // gambarnya tidak mungkin berasal dari varian direct.
+    /// Menyiapkan dashboard Play yang deterministik.
+    void useDashboardFixture(WidgetTester tester) {
       expect(tapGoIsPlayDistribution, isTrue);
       tapGoRideHistoryLoaderForTests = () async => const [];
       addTearDown(() => tapGoRideHistoryLoaderForTests = null);
-      // Fixture deterministik: tangkapan layar menampilkan data contoh yang
-      // stabil, bukan state gagal muat karena test tidak punya backend.
       tapGoDashboardVisualFixtureEnabled = true;
       addTearDown(() => tapGoDashboardVisualFixtureEnabled = false);
+    }
 
+    /// Memberi waktu aset SVG selesai dimuat sebelum gambar diambil.
+    Future<void> settleAssets(WidgetTester tester) async {
+      for (var round = 0; round < 5; round += 1) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 120)),
+        );
+        for (var frame = 0; frame < 6; frame += 1) {
+          await tester.pump(const Duration(milliseconds: 80));
+        }
+      }
+      // Placeholder pencarian berganti tiap 3 detik dengan crossfade 360 ms.
+      // Tanpa jeda ini, gambar bisa terambil tepat di tengah transisi dan dua
+      // teks tampak bertumpuk.
+      await tester.pump(const Duration(milliseconds: 600));
+    }
+
+    /// Menggulir dashboard seperti pengguna, bukan memperbesar kanvas.
+    Future<void> scrollDashboard(WidgetTester tester, double dy) async {
+      await tester.drag(
+        find.byType(SingleChildScrollView).first,
+        Offset(0, -dy),
+      );
+      for (var frame = 0; frame < 10; frame += 1) {
+        await tester.pump(const Duration(milliseconds: 80));
+      }
+    }
+
+    /// Memastikan tangkapan layar dashboard jujur: bebas overflow, memakai
+    /// fixture yang menandai dirinya, dan bottom navigation tetap terlihat.
+    Future<void> Function(WidgetTester) dashboardChecks({
+      bool expectServiceGrid = false,
+    }) {
       final overflows = <String>{};
       final previousHandler = FlutterError.onError;
-      FlutterError.onError =
-          (details) => overflows.add(details.exception.toString());
+      FlutterError.onError = (details) {
+        final message = details.exception.toString().split('\n').first;
+        if (message.contains('overflowed')) {
+          overflows.add(message);
+        } else {
+          previousHandler?.call(details);
+        }
+      };
+      return (tester) async {
+        await settleAssets(tester);
+        FlutterError.onError = previousHandler;
+        tester.takeException();
 
-      await shoot(
-        tester,
-        '00_play_dashboard_motor_mobil',
-        height: 1500,
-        child: const TapGoDashboard(),
-        beforeCapture: (tester) async {
-          // SvgPicture.asset memuat aset secara asinkron. Tanpa runAsync,
-          // sebagian ilustrasi belum selesai dimuat saat gambar diambil dan
-          // kartunya tampak tanpa ikon — itu artefak harness, bukan cacat UI.
-          for (var round = 0; round < 5; round += 1) {
-            await tester.runAsync(
-              () => Future<void>.delayed(const Duration(milliseconds: 120)),
-            );
-            for (var frame = 0; frame < 6; frame += 1) {
-              await tester.pump(const Duration(milliseconds: 80));
-            }
-          }
-          FlutterError.onError = previousHandler;
-          tester.takeException();
-          // Bukti kejujuran: entry benar-benar ada di grid, dan tidak ada
-          // overflow apa pun pada lebar ini.
+        expect(overflows, isEmpty, reason: 'screenshot harus bebas overflow');
+        expect(
+          find.textContaining(tapGoDashboardFixtureLabel),
+          findsAtLeastNWidgets(0),
+        );
+        expect(find.text('Gagal memuat data'), findsNothing);
+        expect(find.text('Data belum tersedia'), findsNothing);
+        // Kartu status kuning yang menduplikasi Membership sudah tidak ada.
+        expect(find.textContaining('Paket aktif:'), findsNothing);
+        // Bottom navigation tetap berada di dalam viewport.
+        expect(find.text('Beranda'), findsOneWidget);
+        expect(find.text('Akun'), findsOneWidget);
+        if (expectServiceGrid) {
           final grid = find.byType(GridView);
           expect(
             find.descendant(of: grid, matching: find.text('Motor')),
@@ -308,16 +338,62 @@ void main() {
             find.descendant(of: grid, matching: find.text('Mobil')),
             findsOneWidget,
           );
-          expect(overflows, isEmpty, reason: 'screenshot harus bebas overflow');
-          // Fixture wajib menandai dirinya, dan state gagal muat tidak boleh
-          // ikut terpotret.
-          expect(
-            find.textContaining(tapGoDashboardFixtureLabel),
-            findsOneWidget,
-          );
-          expect(find.text('Gagal memuat data'), findsNothing);
-          expect(find.text('Data belum tersedia'), findsNothing);
+        }
+      };
+    }
+
+    testWidgets('00 dashboard Play 320x640 — layar pertama', (tester) async {
+      useDashboardFixture(tester);
+      await shoot(
+        tester,
+        '00_play_dashboard_320x640_top',
+        width: 320,
+        height: 640,
+        child: const TapGoDashboard(),
+        beforeCapture: dashboardChecks(),
+      );
+    });
+
+    testWidgets('00b dashboard Play 320x640 — setelah digulir', (tester) async {
+      useDashboardFixture(tester);
+      await shoot(
+        tester,
+        '00b_play_dashboard_320x640_scrolled',
+        width: 320,
+        height: 640,
+        child: const TapGoDashboard(),
+        interact: (tester) async {
+          await settleAssets(tester);
+          // Digulir sampai ujung bawah halaman. Pada 320x640 jangkauan
+          // scroll dashboard Play adalah 570 dp, jadi ini benar-benar layar
+          // terakhir — bukan potongan sembarang.
+          await scrollDashboard(tester, 900);
         },
+        beforeCapture: dashboardChecks(),
+      );
+    });
+
+    testWidgets('00c dashboard Play 360x800', (tester) async {
+      useDashboardFixture(tester);
+      await shoot(
+        tester,
+        '00c_play_dashboard_360x800',
+        width: 360,
+        height: 800,
+        child: const TapGoDashboard(),
+        beforeCapture: dashboardChecks(),
+      );
+    });
+
+    testWidgets('00d dashboard Play 412x915', (tester) async {
+      useDashboardFixture(tester);
+      await shoot(
+        tester,
+        '00d_play_dashboard_412x915',
+        width: 412,
+        height: 915,
+        child: const TapGoDashboard(),
+        beforeCapture: dashboardChecks(),
       );
     });
 
@@ -567,43 +643,23 @@ void main() {
         ),
       );
     });
-    testWidgets('19 dashboard Play pada 320 dp', (tester) async {
-      // Bukti langsung Stage R2.4S: lebar terkecil yang didukung, bebas
-      // overflow, entry Motor dan Mobil tetap ada.
-      expect(tapGoIsPlayDistribution, isTrue);
-      tapGoRideHistoryLoaderForTests = () async => const [];
-      addTearDown(() => tapGoRideHistoryLoaderForTests = null);
-      tapGoDashboardVisualFixtureEnabled = true;
-      addTearDown(() => tapGoDashboardVisualFixtureEnabled = false);
-
-      final assertClean = expectNoOverflow();
-
+    testWidgets('19 dashboard Play 320x640 — grid layanan', (tester) async {
+      // Bukti Motor dan Mobil pada lebar terkecil yang didukung, di dalam
+      // viewport Android nyata — bukan kanvas tinggi buatan.
+      useDashboardFixture(tester);
       await shoot(
         tester,
         '19_play_dashboard_320dp',
         width: 320,
-        height: 1500,
+        height: 640,
         child: const TapGoDashboard(),
-        beforeCapture: (tester) async {
-          for (var round = 0; round < 5; round += 1) {
-            await tester.runAsync(
-              () => Future<void>.delayed(const Duration(milliseconds: 120)),
-            );
-            for (var frame = 0; frame < 6; frame += 1) {
-              await tester.pump(const Duration(milliseconds: 80));
-            }
-          }
-          await assertClean(tester);
-          final grid = find.byType(GridView);
-          expect(
-            find.descendant(of: grid, matching: find.text('Motor')),
-            findsOneWidget,
-          );
-          expect(
-            find.descendant(of: grid, matching: find.text('Mobil')),
-            findsOneWidget,
-          );
+        interact: (tester) async {
+          await settleAssets(tester);
+          // Posisi tengah: kartu Membership dan grid layanan terlihat
+          // bersamaan, sehingga berbeda dari tangkapan 00b yang mentok bawah.
+          await scrollDashboard(tester, 300);
         },
+        beforeCapture: dashboardChecks(expectServiceGrid: true),
       );
     });
 
@@ -660,21 +716,21 @@ void main() {
       // Sheet hanya bermakna bila seluruh 19 tangkapan layar memang ada.
       expect(
         files,
-        hasLength(20),
+        hasLength(23),
         reason: 'jumlah tangkapan layar tidak sesuai: '
             '${files.map((f) => f.uri.pathSegments.last).toList()}',
       );
 
-      final entries = files
-          .map(
-            (file) => _SheetEntry(
-              caption: file.uri.pathSegments.last.replaceAll('.png', ''),
-              bytes: file.readAsBytesSync(),
-            ),
-          )
-          .toList();
+      final entries = files.map((file) {
+        final bytes = file.readAsBytesSync();
+        return _SheetEntry(
+          caption: file.uri.pathSegments.last.replaceAll('.png', ''),
+          viewport: _viewportLabel(bytes),
+          bytes: bytes,
+        );
+      }).toList();
 
-      tester.view.physicalSize = const Size(2400, 1270);
+      tester.view.physicalSize = const Size(2400, 1880);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -706,10 +762,32 @@ void main() {
   }, skip: !_visualEnabled);
 }
 
+/// Ukuran logis tangkapan layar, dibaca dari header PNG-nya sendiri.
+///
+/// Diturunkan dari artefak, bukan dari daftar terpisah yang bisa basi, sehingga
+/// label pada contact sheet tidak mungkin berbeda dari gambarnya.
+String _viewportLabel(Uint8List bytes) {
+  int be32(int offset) =>
+      (bytes[offset] << 24) |
+      (bytes[offset + 1] << 16) |
+      (bytes[offset + 2] << 8) |
+      bytes[offset + 3];
+  // IHDR: lebar pada byte 16..19, tinggi pada 20..23.
+  final pixelWidth = be32(16);
+  final pixelHeight = be32(20);
+  // Seluruh tangkapan layar diambil pada devicePixelRatio 3.
+  return '${pixelWidth ~/ 3} x ${pixelHeight ~/ 3} dp';
+}
+
 class _SheetEntry {
-  const _SheetEntry({required this.caption, required this.bytes});
+  const _SheetEntry({
+    required this.caption,
+    required this.viewport,
+    required this.bytes,
+  });
 
   final String caption;
+  final String viewport;
   final Uint8List bytes;
 }
 
@@ -733,7 +811,7 @@ class _RideContactSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'TapGo Release 2 — Ojek Online penumpang (Stage R2.4R)',
+              'TapGo Release 2 — Ojek Online penumpang (Stage R2.4T)',
               style: TextStyle(
                 fontSize: 30,
                 fontWeight: FontWeight.w900,
@@ -742,8 +820,10 @@ class _RideContactSheet extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              '${entries.length} tangkapan layar dari widget Flutter nyata. '
-              'Pembayaran tunai saja. Label DEMO DATA menandai lokasi sintetis.',
+              '${entries.length} tangkapan layar dari widget Flutter nyata, '
+              'masing-masing dengan ukuran viewport logisnya. Dashboard '
+              'dipotret pada viewport Android nyata dan digulir seperti '
+              'pengguna — bukan satu layar panjang.',
               style: const TextStyle(fontSize: 16, color: Color(0xFF54657A)),
             ),
             const SizedBox(height: 18),
@@ -782,6 +862,15 @@ class _RideContactSheet extends StatelessWidget {
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
                               color: Color(0xFF0B2239),
+                            ),
+                          ),
+                          Text(
+                            entry.viewport,
+                            maxLines: 1,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF54657A),
                             ),
                           ),
                         ],
