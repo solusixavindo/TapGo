@@ -22,7 +22,8 @@
     "promote:admin": "tsx prisma/promote-admin.ts",
     "audit:production-data": "tsx ../../scripts/audit-production-data.ts",
     "cleanup:prelaunch": "tsx ../../scripts/pre-launch-cleanup.ts",
-    "doku:capture-webhook": "tsx ../../scripts/capture-doku-webhook.ts"
+    "doku:capture-webhook": "tsx ../../scripts/capture-doku-webhook.ts",
+    "admin:scope-bootstrap": "tsx scripts/admin-scope-bootstrap.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
