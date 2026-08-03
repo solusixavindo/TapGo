@@ -25,7 +25,13 @@ import 'package:tapgo_user_app/main.dart';
 
 const bool _visualEnabled = bool.fromEnvironment('TAPGO_RIDE_VISUAL');
 
+/// Path untuk `matchesGoldenFile`, yang diselesaikan relatif terhadap FILE test.
 const String _outputDir = '../../../docs/release-2/visual-review/'
+    'r2.4-customer-ride';
+
+/// Path yang sama untuk akses filesystem, yang diselesaikan relatif terhadap
+/// CWD proses test (apps/user_app) — bukan relatif terhadap file test.
+const String _outputDirFromCwd = '../../docs/release-2/visual-review/'
     'r2.4-customer-ride';
 
 /// Memuat font asli dari Flutter SDK yang sedang dipakai.
@@ -141,6 +147,7 @@ void main() {
     ThemeMode themeMode = ThemeMode.light,
     TextScaler textScaler = TextScaler.noScaling,
     Future<void> Function(WidgetTester tester)? interact,
+    Future<void> Function(WidgetTester tester)? beforeCapture,
   }) async {
     expect(
       fontsReady,
@@ -175,6 +182,9 @@ void main() {
     }
     if (interact != null) {
       await interact(tester);
+    }
+    if (beforeCapture != null) {
+      await beforeCapture(tester);
     }
 
     await expectLater(
@@ -230,6 +240,55 @@ void main() {
   }
 
   group('bukti visual r2.4', () {
+    testWidgets('00 dashboard Play dengan entry Motor dan Mobil', (
+      tester,
+    ) async {
+      // Artefak ini hanya dapat dihasilkan pada distribusi Play, sehingga
+      // gambarnya tidak mungkin berasal dari varian direct.
+      expect(tapGoIsPlayDistribution, isTrue);
+      tapGoRideHistoryLoaderForTests = () async => const [];
+      addTearDown(() => tapGoRideHistoryLoaderForTests = null);
+
+      final overflows = <String>{};
+      final previousHandler = FlutterError.onError;
+      FlutterError.onError =
+          (details) => overflows.add(details.exception.toString());
+
+      await shoot(
+        tester,
+        '00_play_dashboard_motor_mobil',
+        height: 1500,
+        child: const TapGoDashboard(),
+        beforeCapture: (tester) async {
+          // SvgPicture.asset memuat aset secara asinkron. Tanpa runAsync,
+          // sebagian ilustrasi belum selesai dimuat saat gambar diambil dan
+          // kartunya tampak tanpa ikon — itu artefak harness, bukan cacat UI.
+          for (var round = 0; round < 5; round += 1) {
+            await tester.runAsync(
+              () => Future<void>.delayed(const Duration(milliseconds: 120)),
+            );
+            for (var frame = 0; frame < 6; frame += 1) {
+              await tester.pump(const Duration(milliseconds: 80));
+            }
+          }
+          FlutterError.onError = previousHandler;
+          tester.takeException();
+          // Bukti kejujuran: entry benar-benar ada di grid, dan tidak ada
+          // overflow apa pun pada lebar ini.
+          final grid = find.byType(GridView);
+          expect(
+            find.descendant(of: grid, matching: find.text('Motor')),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(of: grid, matching: find.text('Mobil')),
+            findsOneWidget,
+          );
+          expect(overflows, isEmpty, reason: 'screenshot harus bebas overflow');
+        },
+      );
+    });
+
     testWidgets('01 pemilihan layanan', (tester) async {
       await shoot(tester, '01_service_selection', child: bookingScreen());
     });
@@ -474,7 +533,194 @@ void main() {
         ),
       );
     });
+    testWidgets('18 perjalanan aktif dipulihkan dari server', (tester) async {
+      await shoot(
+        tester,
+        '18_active_ride_restored',
+        child: RideEntryScreen(
+          service: RideServiceKind.motorcycle,
+          // Riwayat server memuat satu perjalanan berjalan, jadi gerbang
+          // membuka kembali perjalanan itu alih-alih menawarkan pemesanan.
+          historyRequest: () async => [
+            orderPayload(
+                status: 'COMPLETED',
+                isFinal: true,
+                reference: 'RID-OLD11AAAA1'),
+            orderPayload(
+                status: 'DRIVER_TO_PICKUP', reference: 'RID-RESTORED77'),
+          ],
+          detailRequest: (_) async => orderPayload(
+            status: 'DRIVER_TO_PICKUP',
+            reference: 'RID-RESTORED77',
+            driver: _driver,
+            vehicle: _vehicle,
+          ),
+        ),
+        beforeCapture: (tester) async {
+          expect(find.byType(RideStatusScreen), findsOneWidget);
+          expect(find.byType(RideBookingScreen), findsNothing);
+          expect(find.text('Kode perjalanan RID-RESTORED77'), findsOneWidget);
+        },
+      );
+    });
   }, skip: !_visualEnabled);
+
+  // Contact sheet dijalankan setelah seluruh tangkapan layar di atas ada,
+  // karena isinya adalah gambar-gambar itu sendiri — bukan render ulang dan
+  // bukan halaman HTML.
+  group('contact sheet r2.4', () {
+    testWidgets('menyusun seluruh tangkapan layar menjadi satu lembar', (
+      tester,
+    ) async {
+      expect(fontsReady, isTrue);
+
+      final directory = Directory(_outputDirFromCwd);
+      final files = directory
+          .listSync()
+          .whereType<File>()
+          .where((file) => file.path.endsWith('.png'))
+          .where((file) => !file.path.contains('CONTACT_SHEET'))
+          .toList()
+        ..sort((a, b) => a.path.compareTo(b.path));
+
+      // Sheet hanya bermakna bila seluruh 19 tangkapan layar memang ada.
+      expect(
+        files,
+        hasLength(19),
+        reason: 'jumlah tangkapan layar tidak sesuai: '
+            '${files.map((f) => f.uri.pathSegments.last).toList()}',
+      );
+
+      final entries = files
+          .map(
+            (file) => _SheetEntry(
+              caption: file.uri.pathSegments.last.replaceAll('.png', ''),
+              bytes: file.readAsBytesSync(),
+            ),
+          )
+          .toList();
+
+      tester.view.physicalSize = const Size(2400, 1270);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: tapGoReadableTheme(),
+          home: _RideContactSheet(entries: entries),
+        ),
+      );
+
+      // Decoding PNG butuh I/O nyata, jadi dilakukan di dalam runAsync.
+      await tester.runAsync(() async {
+        for (final entry in entries) {
+          await precacheImage(
+            MemoryImage(entry.bytes),
+            tester.element(find.byType(_RideContactSheet)),
+          );
+        }
+      });
+      await tester.pumpAndSettle();
+
+      await expectLater(
+        find.byType(_RideContactSheet),
+        matchesGoldenFile('$_outputDir/R2_4_CUSTOMER_RIDE_CONTACT_SHEET.png'),
+      );
+    });
+  }, skip: !_visualEnabled);
+}
+
+class _SheetEntry {
+  const _SheetEntry({required this.caption, required this.bytes});
+
+  final String caption;
+  final Uint8List bytes;
+}
+
+/// Lembar tinjauan: seluruh tangkapan layar Ojek Online dalam satu gambar.
+///
+/// Isinya murni gambar hasil render widget Flutter yang sudah disimpan, jadi
+/// tidak ada tampilan yang "dibuat ulang" khusus untuk lembar ini.
+class _RideContactSheet extends StatelessWidget {
+  const _RideContactSheet({required this.entries});
+
+  final List<_SheetEntry> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F8FB),
+      body: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'TapGo Release 2 — Ojek Online penumpang (Stage R2.4R)',
+              style: TextStyle(
+                fontSize: 30,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF0B2239),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${entries.length} tangkapan layar dari widget Flutter nyata. '
+              'Pembayaran tunai saja. Label DEMO DATA menandai lokasi sintetis.',
+              style: const TextStyle(fontSize: 16, color: Color(0xFF54657A)),
+            ),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              children: entries
+                  .map(
+                    (entry) => SizedBox(
+                      width: 208,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            height: 470,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: const Color(0xFFD7E2EC),
+                              ),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: Image.memory(
+                              entry.bytes,
+                              fit: BoxFit.contain,
+                              alignment: Alignment.topCenter,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            entry.caption,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0B2239),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// Kegagalan koneksi tanpa bergantung pada tipe internal Dio di harness ini.

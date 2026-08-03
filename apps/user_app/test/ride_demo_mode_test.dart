@@ -63,6 +63,13 @@ Map<String, dynamic> orderPayload({String status = 'SEARCHING_DRIVER'}) {
 void main() {
   setUp(() {
     tapGoDisablePersistenceForTests = true;
+    // Tap dashboard nyata melewati gerbang pemulihan, yang memanggil
+    // GET /api/v1/rides. Hook ini membuatnya tidak pernah menembak jaringan.
+    tapGoRideHistoryLoaderForTests = () async => const [];
+  });
+
+  tearDown(() {
+    tapGoRideHistoryLoaderForTests = null;
   });
 
   group('mode demo aktif', () {
@@ -170,10 +177,16 @@ void main() {
       await openDashboard(tester);
       await tapServiceTile(tester, 'TapGo Ride');
 
-      final screen = tester.widget<RideBookingScreen>(
+      // Entry membuka gerbang pemulihan; jenis layanan diteruskan apa adanya.
+      final gate = tester.widget<RideEntryScreen>(
+        find.byType(RideEntryScreen),
+      );
+      expect(gate.service, RideServiceKind.motorcycle);
+      // Tanpa perjalanan aktif, gerbang jatuh ke alur pemesanan.
+      final booking = tester.widget<RideBookingScreen>(
         find.byType(RideBookingScreen),
       );
-      expect(screen.initialService, RideServiceKind.motorcycle);
+      expect(booking.initialService, RideServiceKind.motorcycle);
       // Dilewati tanpa --dart-define=TAPGO_DISTRIBUTION=direct.
     }, skip: tapGoIsPlayDistribution);
 
@@ -184,10 +197,16 @@ void main() {
       await openDashboard(tester);
       await tapServiceTile(tester, 'TapGo Car');
 
-      final screen = tester.widget<RideBookingScreen>(
+      // Entry membuka gerbang pemulihan; jenis layanan diteruskan apa adanya.
+      final gate = tester.widget<RideEntryScreen>(
+        find.byType(RideEntryScreen),
+      );
+      expect(gate.service, RideServiceKind.car);
+      // Tanpa perjalanan aktif, gerbang jatuh ke alur pemesanan.
+      final booking = tester.widget<RideBookingScreen>(
         find.byType(RideBookingScreen),
       );
-      expect(screen.initialService, RideServiceKind.car);
+      expect(booking.initialService, RideServiceKind.car);
       // Dilewati tanpa --dart-define=TAPGO_DISTRIBUTION=direct.
     }, skip: tapGoIsPlayDistribution);
   });

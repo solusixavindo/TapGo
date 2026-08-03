@@ -199,9 +199,13 @@ void main() {
         wrapRide(
           Builder(
             builder: (context) => TextButton(
-              onPressed: () => tapGoOpenRideBooking(
-                context,
-                tapGoRideEntryServiceFor('TapGo Ride')!,
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => RideEntryScreen(
+                    service: tapGoRideEntryServiceFor('TapGo Ride')!,
+                    historyRequest: () async => const [],
+                  ),
+                ),
               ),
               child: const Text('buka'),
             ),
@@ -224,9 +228,13 @@ void main() {
         wrapRide(
           Builder(
             builder: (context) => TextButton(
-              onPressed: () => tapGoOpenRideBooking(
-                context,
-                tapGoRideEntryServiceFor('TapGo Car')!,
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => RideEntryScreen(
+                    service: tapGoRideEntryServiceFor('TapGo Car')!,
+                    historyRequest: () async => const [],
+                  ),
+                ),
               ),
               child: const Text('buka'),
             ),
@@ -259,7 +267,8 @@ void main() {
         RideLocationProviderStatus.unavailable,
       );
       expect(tapGoRideLocationPort().availableLocations(), isEmpty);
-    });
+      // Pernyataan ini khusus build default; dilewati bila demo dinyalakan.
+    }, skip: tapGoRideDemoMode);
 
     testWidgets('3b. tanpa provider, pemesanan tidak dapat dilanjutkan', (
       tester,
@@ -289,7 +298,7 @@ void main() {
 
       expect(find.textContaining(tapGoRideDemoLabel), findsNothing);
       expect(find.byType(SizedBox), findsWidgets);
-    });
+    }, skip: tapGoRideDemoMode);
 
     test('4b. flag demo hanya menyala untuk string literal true', () {
       // Nilai yang mirip tidak boleh menyalakan demo; ini diuji lewat port
