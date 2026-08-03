@@ -13,6 +13,11 @@ import { createHash, randomBytes } from "node:crypto";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../core/errors/AppError.js";
 import {
+  DisclosureSource,
+  PASSENGER_DISCLOSURE_INCLUDE,
+  buildPassengerDisclosure
+} from "./passengerDriverDisclosure.js";
+import {
   calculateFare,
   quoteExpiryFrom,
 } from "../domain/fareCalculator.js";
@@ -294,6 +299,9 @@ export class RideService {
       where: { passengerId: userId },
       orderBy: { createdAt: "desc" },
       take: Math.max(1, Math.min(limit, 50)),
+      // Projection minimum untuk pengungkapan driver; lihat
+      // PASSENGER_DISCLOSURE_INCLUDE.
+      include: PASSENGER_DISCLOSURE_INCLUDE,
     });
     return orders.map((o) => this.toOrderView(o));
   }
@@ -301,6 +309,7 @@ export class RideService {
   async getOrderForPassenger(userId: string, publicReference: string) {
     const order = await this.prisma.rideOrder.findUnique({
       where: { publicReference },
+      include: PASSENGER_DISCLOSURE_INCLUDE,
     });
     if (!order || order.passengerId !== userId) {
       // Tidak membocorkan keberadaan resource milik orang lain.
@@ -1469,7 +1478,22 @@ export class RideService {
     completedAt: Date | null;
     cancelledAt: Date | null;
     createdAt: Date;
+    // Opsional: hanya terisi pada jalur penumpang yang memuat relasinya.
+    // Jalur lain (mis. admin) memakai view tersendiri dan tidak terpengaruh.
+    driverProfileId?: string | null;
+    vehicleId?: string | null;
+    driverProfile?: DisclosureSource["driverProfile"];
+    vehicle?: DisclosureSource["vehicle"];
   }) {
+    const disclosure = buildPassengerDisclosure({
+      status: order.status,
+      driverProfileId: order.driverProfileId ?? null,
+      vehicleId: order.vehicleId ?? null,
+      assignedAt: order.assignedAt,
+      ...(order.driverProfile !== undefined ? { driverProfile: order.driverProfile } : {}),
+      ...(order.vehicle !== undefined ? { vehicle: order.vehicle } : {}),
+    });
+
     return {
       reference: order.publicReference,
       serviceType: order.serviceType,
@@ -1504,6 +1528,9 @@ export class RideService {
         startedAt: order.startedAt,
         completedAt: order.completedAt,
       },
+      // Tambahan additive Stage R2.4A. Bentuk field existing tidak diubah.
+      driver: disclosure.driver,
+      vehicle: disclosure.vehicle,
       createdAt: order.createdAt,
     };
   }
