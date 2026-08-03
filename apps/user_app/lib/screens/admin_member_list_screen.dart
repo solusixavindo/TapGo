@@ -22,14 +22,16 @@ class _AdminMemberListScreenState extends ConsumerState<AdminMemberListScreen> {
   @override
   Widget build(BuildContext context) {
     final adminSnapshot = ref.watch(_adminConsoleSnapshotProvider);
-    final apiMembers = adminSnapshot.valueOrNull?.members
+    final apiMembers =
+        adminSnapshot.valueOrNull?.members
             .map(DemoAdminMember.fromApi)
             .toList(growable: false) ??
         const <DemoAdminMember>[];
     return _DemoScaffold(
       title: 'Member Management',
-      subtitle:
-          adminSnapshot.hasValue ? 'Data member TapGo' : 'Data member TapGo',
+      subtitle: adminSnapshot.hasValue
+          ? 'Data member TapGo'
+          : 'Data member TapGo',
       child: FutureBuilder<List<DemoAdminMember>>(
         future: _registeredUsersFuture,
         builder: (context, snapshot) {
@@ -48,9 +50,7 @@ class _AdminMemberListScreenState extends ConsumerState<AdminMemberListScreen> {
               ],
               if (_isTapGoDevelopmentBuild && realUsers.isNotEmpty) ...[
                 const _AdminListSectionLabel('Real Registered Users'),
-                ...realUsers.map(
-                  (member) => _AdminMemberTile(member: member),
-                ),
+                ...realUsers.map((member) => _AdminMemberTile(member: member)),
                 const SizedBox(height: 10),
               ],
               if (!adminSnapshot.isLoading &&
@@ -154,8 +154,10 @@ class _AdminMemberTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded,
-                    color: Color(0xFF718096)),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFF718096),
+                ),
               ],
             ),
           ),

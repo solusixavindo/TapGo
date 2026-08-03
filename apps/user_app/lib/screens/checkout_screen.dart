@@ -1,11 +1,7 @@
 part of '../main.dart';
 
 class CheckoutScreen extends StatelessWidget {
-  const CheckoutScreen({
-    required this.form,
-    required this.invoice,
-    super.key,
-  });
+  const CheckoutScreen({required this.form, required this.invoice, super.key});
 
   final RegistrationFormModel form;
   final InvoiceModel invoice;

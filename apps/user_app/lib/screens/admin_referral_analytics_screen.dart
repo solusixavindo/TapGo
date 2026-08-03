@@ -6,7 +6,8 @@ class AdminReferralAnalyticsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final adminSnapshot = ref.watch(_adminConsoleSnapshotProvider);
-    final topSponsors = adminSnapshot.valueOrNull?.members
+    final topSponsors =
+        adminSnapshot.valueOrNull?.members
             .map(DemoAdminMember.fromApi)
             .toList(growable: false) ??
         (_isTapGoDevelopmentBuild
@@ -33,18 +34,22 @@ class AdminReferralAnalyticsScreen extends ConsumerWidget {
             Row(
               children: [
                 Expanded(
-                    child: _StatCard(
-                        label: 'Level Aktif',
-                        value: adminSnapshot.hasValue
-                            ? '${_activeLevelFromDirectSponsor(_intFrom(summary?['maxDirectSponsor']))}'
-                            : '-')),
+                  child: _StatCard(
+                    label: 'Level Aktif',
+                    value: adminSnapshot.hasValue
+                        ? '${_activeLevelFromDirectSponsor(_intFrom(summary?['maxDirectSponsor']))}'
+                        : '-',
+                  ),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
-                    child: _StatCard(
-                        label: 'Member',
-                        value: adminSnapshot.hasValue
-                            ? '${_intFrom(summary?['totalMembers'])}'
-                            : '-')),
+                  child: _StatCard(
+                    label: 'Member',
+                    value: adminSnapshot.hasValue
+                        ? '${_intFrom(summary?['totalMembers'])}'
+                        : '-',
+                  ),
+                ),
               ],
             ),
           const SizedBox(height: 14),
@@ -71,7 +76,9 @@ class AdminReferralAnalyticsScreen extends ConsumerWidget {
                   'Data jaringan akan muncul setelah user memakai sponsor.',
             )
           else
-            ...topSponsors.take(12).map(
+            ...topSponsors
+                .take(12)
+                .map(
                   (member) => _WalletLedgerItem(
                     title: member.name,
                     amount: '${member.totalDownline} downline',

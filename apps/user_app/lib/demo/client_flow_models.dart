@@ -1,7 +1,4 @@
-enum PaymentStatus {
-  waitingPayment,
-  paid,
-}
+enum PaymentStatus { waitingPayment, paid }
 
 class MembershipPackageModel {
   const MembershipPackageModel({

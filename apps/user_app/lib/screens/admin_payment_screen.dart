@@ -6,7 +6,8 @@ class AdminPaymentScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final adminSnapshot = ref.watch(_adminConsoleSnapshotProvider);
-    final invoices = adminSnapshot.valueOrNull?.invoices
+    final invoices =
+        adminSnapshot.valueOrNull?.invoices
             .map(DemoAdminInvoice.fromApi)
             .toList(growable: false) ??
         (_isTapGoDevelopmentBuild
@@ -25,11 +26,12 @@ class AdminPaymentScreen extends ConsumerWidget {
           Row(
             children: [
               Expanded(
-                  child: _StatCard(label: 'Lunas', value: '${paid.length}')),
+                child: _StatCard(label: 'Lunas', value: '${paid.length}'),
+              ),
               const SizedBox(width: 10),
               Expanded(
-                  child:
-                      _StatCard(label: 'Pending', value: '${pending.length}')),
+                child: _StatCard(label: 'Pending', value: '${pending.length}'),
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -62,10 +64,8 @@ class _AdminInvoiceTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final paid = invoice.status == 'Lunas';
     return InkWell(
-      onTap: () => _openDemo(
-        context,
-        _AdminPaymentDetailScreen(invoice: invoice),
-      ),
+      onTap: () =>
+          _openDemo(context, _AdminPaymentDetailScreen(invoice: invoice)),
       child: _WalletLedgerItem(
         title: '${invoice.number} • ${invoice.memberName}',
         amount: formatRupiah(invoice.amount),
@@ -94,7 +94,8 @@ class _AdminPaymentDetailScreenState
   @override
   Widget build(BuildContext context) {
     final invoice = widget.invoice;
-    final canCheckDoku = invoice.method.toUpperCase() == 'DOKU' &&
+    final canCheckDoku =
+        invoice.method.toUpperCase() == 'DOKU' &&
         invoice.referenceId != null &&
         invoice.referenceId!.isNotEmpty;
 
@@ -123,13 +124,16 @@ class _AdminPaymentDetailScreenState
             FilledButton.icon(
               onPressed: _checking ? null : _checkDokuStatus,
               icon: Icon(
-                  _checking ? Icons.hourglass_top_rounded : Icons.sync_rounded),
+                _checking ? Icons.hourglass_top_rounded : Icons.sync_rounded,
+              ),
               label: Text(_checking ? 'Mengecek...' : 'Check DOKU Status'),
               style: FilledButton.styleFrom(
                 backgroundColor: _brandBlue,
                 foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 14,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),

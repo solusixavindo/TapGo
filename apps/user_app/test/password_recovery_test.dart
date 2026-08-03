@@ -10,9 +10,7 @@ import 'package:tapgo_user_app/main.dart';
 /// kunci single-flight, dan pemetaan pesan error yang ramah pengguna.
 
 Widget wrap(Widget child) {
-  return ProviderScope(
-    child: MaterialApp(home: child),
-  );
+  return ProviderScope(child: MaterialApp(home: child));
 }
 
 void main() {
@@ -60,8 +58,9 @@ void main() {
       expect(find.text('Simpan password'), findsNothing);
     });
 
-    testWidgets('identifier kosong ditolak tanpa memanggil jaringan',
-        (tester) async {
+    testWidgets('identifier kosong ditolak tanpa memanggil jaringan', (
+      tester,
+    ) async {
       await tester.pumpWidget(wrap(const PasswordRecoveryScreen()));
 
       await tester.tap(find.text('Kirim kode'));
@@ -96,8 +95,9 @@ void main() {
   });
 
   group('VerificationGateScreen', () {
-    testWidgets('akun belum terverifikasi melihat gate dan tombol kirim kode',
-        (tester) async {
+    testWidgets('akun belum terverifikasi melihat gate dan tombol kirim kode', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         wrap(
           const VerificationGateScreen(

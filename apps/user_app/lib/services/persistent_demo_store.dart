@@ -2,9 +2,9 @@ part of '../main.dart';
 
 class _TapGoPersistentStore {
   _TapGoPersistentStore()
-      : _storage = const FlutterSecureStorage(
-          aOptions: AndroidOptions(encryptedSharedPreferences: true),
-        );
+    : _storage = const FlutterSecureStorage(
+        aOptions: AndroidOptions(encryptedSharedPreferences: true),
+      );
 
   static const _sessionKey = 'tapgo.demo.session.v1';
   static const _authKey = 'tapgo.demo.authenticated.v1';
@@ -130,8 +130,9 @@ class _TapGoPersistentStore {
         continue;
       }
       try {
-        final membership =
-            _sessionFromJson(jsonDecode(raw) as Map<String, dynamic>);
+        final membership = _sessionFromJson(
+          jsonDecode(raw) as Map<String, dynamic>,
+        );
         if (!_hasPaidMembership(membership)) {
           continue;
         }
@@ -320,9 +321,7 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
     if (!_loaded) {
       return const Scaffold(
         backgroundColor: _softBackground,
-        body: Center(
-          child: CircularProgressIndicator(color: _brandBlue),
-        ),
+        body: Center(child: CircularProgressIndicator(color: _brandBlue)),
       );
     }
     return widget.child;
@@ -332,15 +331,18 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
     var auth = false;
     DemoClientSession? restoredSession;
     try {
-      final storedAuth = await _persistentStore
-          .restoreAuth()
-          .timeout(const Duration(seconds: 2), onTimeout: () => false);
-      final session = await _persistentStore
-          .restoreSession()
-          .timeout(const Duration(seconds: 2), onTimeout: () => null);
+      final storedAuth = await _persistentStore.restoreAuth().timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => false,
+      );
+      final session = await _persistentStore.restoreSession().timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => null,
+      );
       final tokens = await _persistentStore.restoreTokens().timeout(
-          const Duration(seconds: 2),
-          onTimeout: () => (accessToken: null, refreshToken: null));
+        const Duration(seconds: 2),
+        onTimeout: () => (accessToken: null, refreshToken: null),
+      );
       if (!mounted) {
         return;
       }
@@ -351,9 +353,9 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
         auth = false;
         restoredSession = null;
         await _persistentStore.clearSession().timeout(
-              const Duration(seconds: 2),
-              onTimeout: () {},
-            );
+          const Duration(seconds: 2),
+          onTimeout: () {},
+        );
       }
       if (tokens.accessToken != null && tokens.accessToken!.isNotEmpty) {
         _apiClient.setAccessToken(tokens.accessToken);
@@ -392,19 +394,19 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
             );
           } catch (error) {
             _tapGoDebugLog(
-                '[TapGo Binding] restore production sync failed: $error');
+              '[TapGo Binding] restore production sync failed: $error',
+            );
           }
           auth = true;
-          await _persistentStore.saveSession(restoredSession!).timeout(
-                const Duration(seconds: 2),
-                onTimeout: () => false,
-              );
+          await _persistentStore
+              .saveSession(restoredSession!)
+              .timeout(const Duration(seconds: 2), onTimeout: () => false);
         } catch (error) {
           _tapGoDebugLog('[TapGo Auth] auth/me restore failed: $error');
           await _persistentStore.clearSession().timeout(
-                const Duration(seconds: 2),
-                onTimeout: () {},
-              );
+            const Duration(seconds: 2),
+            onTimeout: () {},
+          );
           _apiClient.setAccessToken(null);
           auth = false;
           restoredSession = null;
@@ -430,9 +432,9 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
       }
       try {
         await _persistentStore.clearSession().timeout(
-              const Duration(seconds: 2),
-              onTimeout: () {},
-            );
+          const Duration(seconds: 2),
+          onTimeout: () {},
+        );
       } catch (_) {}
     } finally {
       if (mounted) {
@@ -544,7 +546,8 @@ Map<String, dynamic> _adminMemberToJson(DemoAdminMember member) {
 
 DemoAdminMember _adminMemberFromJson(Map<String, dynamic> json) {
   return DemoAdminMember(
-    id: json['id']?.toString() ??
+    id:
+        json['id']?.toString() ??
         'LOCAL-${DateTime.now().millisecondsSinceEpoch}',
     name: json['name']?.toString() ?? 'Member TapGo',
     phone: json['phone']?.toString() ?? '-',

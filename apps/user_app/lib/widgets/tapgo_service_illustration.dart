@@ -107,18 +107,17 @@ extension PremiumTapGoIconActionAsset on PremiumTapGoIconAction {
   static const _basePath = 'assets/icons/basic_portal';
 
   String get assetPath => switch (this) {
-        PremiumTapGoIconAction.memberCard => '$_basePath/member_card.png',
-        PremiumTapGoIconAction.profile => '$_basePath/profile.png',
-        PremiumTapGoIconAction.supportTicket => '$_basePath/support_ticket.png',
-        PremiumTapGoIconAction.deleteAccount => '$_basePath/delete_account.png',
-        PremiumTapGoIconAction.privacyPolicy => '$_basePath/privacy_policy.png',
-        PremiumTapGoIconAction.termsConditions =>
-          '$_basePath/terms_conditions.png',
-        PremiumTapGoIconAction.contactUs => '$_basePath/contact_us.png',
-        PremiumTapGoIconAction.help => '$_basePath/help.png',
-        PremiumTapGoIconAction.themeSettings => '$_basePath/help.png',
-        PremiumTapGoIconAction.logout => '$_basePath/logout.png',
-      };
+    PremiumTapGoIconAction.memberCard => '$_basePath/member_card.png',
+    PremiumTapGoIconAction.profile => '$_basePath/profile.png',
+    PremiumTapGoIconAction.supportTicket => '$_basePath/support_ticket.png',
+    PremiumTapGoIconAction.deleteAccount => '$_basePath/delete_account.png',
+    PremiumTapGoIconAction.privacyPolicy => '$_basePath/privacy_policy.png',
+    PremiumTapGoIconAction.termsConditions => '$_basePath/terms_conditions.png',
+    PremiumTapGoIconAction.contactUs => '$_basePath/contact_us.png',
+    PremiumTapGoIconAction.help => '$_basePath/help.png',
+    PremiumTapGoIconAction.themeSettings => '$_basePath/help.png',
+    PremiumTapGoIconAction.logout => '$_basePath/logout.png',
+  };
 }
 
 class PremiumTapGoIcon extends StatelessWidget {
@@ -184,13 +183,7 @@ class _PremiumTapGoIconFallback extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Icon(
-        icon,
-        color: _brandBlue,
-        size: 28,
-      ),
-    );
+    return Center(child: Icon(icon, color: _brandBlue, size: 28));
   }
 }
 

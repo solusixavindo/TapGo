@@ -135,9 +135,11 @@ class _MembershipPackageCard extends StatelessWidget {
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: isPlayDistribution ? null : onSelected,
-                icon: Icon(isPlayDistribution
-                    ? Icons.verified_user_rounded
-                    : Icons.app_registration_rounded),
+                icon: Icon(
+                  isPlayDistribution
+                      ? Icons.verified_user_rounded
+                      : Icons.app_registration_rounded,
+                ),
                 label: Text(
                   isPlayDistribution ? 'Aktif sebagai Basic' : 'Daftar',
                   maxLines: 2,
@@ -147,10 +149,12 @@ class _MembershipPackageCard extends StatelessWidget {
                 style: FilledButton.styleFrom(
                   backgroundColor: package.accent,
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor:
-                      package.accent.withValues(alpha: 0.16),
-                  disabledForegroundColor:
-                      package.accent.withValues(alpha: 0.72),
+                  disabledBackgroundColor: package.accent.withValues(
+                    alpha: 0.16,
+                  ),
+                  disabledForegroundColor: package.accent.withValues(
+                    alpha: 0.72,
+                  ),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),

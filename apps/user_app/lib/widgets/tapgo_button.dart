@@ -1,9 +1,7 @@
 part of '../main.dart';
 
 void _openDemo(BuildContext context, Widget screen) {
-  Navigator.of(context).push(
-    _tapGoPageRoute((_) => screen),
-  );
+  Navigator.of(context).push(_tapGoPageRoute((_) => screen));
 }
 
 class _TapGoMotion {
@@ -24,10 +22,7 @@ class _TapGoMotion {
 }
 
 class _TapGoReveal extends StatefulWidget {
-  const _TapGoReveal({
-    required this.order,
-    required this.child,
-  });
+  const _TapGoReveal({required this.order, required this.child});
 
   final int order;
   final Widget child;
@@ -67,10 +62,7 @@ class _TapGoRevealState extends State<_TapGoReveal> {
 }
 
 class _TapGoFadeSwitcher extends StatelessWidget {
-  const _TapGoFadeSwitcher({
-    required this.valueKey,
-    required this.child,
-  });
+  const _TapGoFadeSwitcher({required this.valueKey, required this.child});
 
   final Object valueKey;
   final Widget child;
@@ -81,14 +73,9 @@ class _TapGoFadeSwitcher extends StatelessWidget {
       duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
       switchInCurve: _TapGoMotion.standardCurve,
       switchOutCurve: _TapGoMotion.exitCurve,
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: child,
-      ),
-      child: KeyedSubtree(
-        key: ValueKey(valueKey),
-        child: child,
-      ),
+      transitionBuilder: (child, animation) =>
+          FadeTransition(opacity: animation, child: child),
+      child: KeyedSubtree(key: ValueKey(valueKey), child: child),
     );
   }
 }
@@ -325,8 +312,10 @@ Future<T?> _showTapGoBottomSheet<T>({
 }
 
 Widget _roleDashboardForContext(BuildContext context) {
-  final session = ProviderScope.containerOf(context, listen: false)
-      .read(_demoSessionProvider);
+  final session = ProviderScope.containerOf(
+    context,
+    listen: false,
+  ).read(_demoSessionProvider);
   if (session.isSuperAdmin) {
     return const SuperAdminDashboardScreen();
   }
@@ -471,8 +460,9 @@ class _UploadDocumentField extends StatelessWidget {
               color: uploaded ? const Color(0xFF00A86B) : _brandBlue,
             ),
             padding: const EdgeInsets.symmetric(vertical: 14),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
           ),
         ),
         AnimatedSwitcher(
@@ -716,10 +706,7 @@ class _RetryStatusSurface extends StatelessWidget {
                 ],
               ),
             ),
-            TextButton(
-              onPressed: onRetry,
-              child: const Text('Muat Ulang'),
-            ),
+            TextButton(onPressed: onRetry, child: const Text('Muat Ulang')),
           ],
         ),
       ),
@@ -854,8 +841,10 @@ class _DemoMenuTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded,
-                    color: Color(0xFF718096)),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFF718096),
+                ),
               ],
             ),
           ),

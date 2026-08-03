@@ -17,20 +17,14 @@ class TapGoSessionPersistenceResult {
 }
 
 class TapGoSessionPersistStep {
-  const TapGoSessionPersistStep({
-    required this.name,
-    required this.persist,
-  });
+  const TapGoSessionPersistStep({required this.name, required this.persist});
 
   final String name;
   final Future<bool> Function(DemoClientSession session) persist;
 }
 
 class TapGoReferralClaimResult {
-  const TapGoReferralClaimResult({
-    required this.success,
-    this.warningMessage,
-  });
+  const TapGoReferralClaimResult({required this.success, this.warningMessage});
 
   final bool success;
   final String? warningMessage;
@@ -170,10 +164,13 @@ class TapGoRupiahInputFormatter extends TextInputFormatter {
       0,
       newValue.text.length,
     );
-    final digitsBeforeCursor =
-        tapGoDigitsOnly(newValue.text.substring(0, cursorEnd)).length;
-    final selectionOffset =
-        tapGoRupiahSelectionOffset(formatted, digitsBeforeCursor);
+    final digitsBeforeCursor = tapGoDigitsOnly(
+      newValue.text.substring(0, cursorEnd),
+    ).length;
+    final selectionOffset = tapGoRupiahSelectionOffset(
+      formatted,
+      digitsBeforeCursor,
+    );
     return TextEditingValue(
       text: formatted,
       selection: TextSelection.collapsed(offset: selectionOffset),
@@ -205,7 +202,7 @@ TapGoRuntimeActivationResult tapGoActivateAuthenticatedRuntimeSession({
 
 @visibleForTesting
 Future<TapGoSessionPersistenceResult>
-    tapGoPersistAuthenticatedSessionBestEffort({
+tapGoPersistAuthenticatedSessionBestEffort({
   required DemoClientSession session,
   required List<TapGoSessionPersistStep> steps,
   Duration stepTimeout = const Duration(seconds: 1),
@@ -355,8 +352,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       _tapGoDebugLog('[TapGo Auth] auth_response_mapping:$authMode');
       _validateAuthResult(authResult);
       _apiClient.setAccessToken(authResult.accessToken);
-      final referralCode =
-          tapGoIsDirectDistribution ? _referralController.text.trim() : '';
+      final referralCode = tapGoIsDirectDistribution
+          ? _referralController.text.trim()
+          : '';
       if (_isRegister &&
           referralCode.isNotEmpty &&
           (authResult.accessToken ?? '').isNotEmpty) {
@@ -399,7 +397,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     } on DioException catch (error) {
       _tapGoDebugLog('[TapGo Auth] backend auth failed: ${error.message}');
       _tapGoDebugLog(
-          '[TapGo Auth] error status: ${error.response?.statusCode}');
+        '[TapGo Auth] error status: ${error.response?.statusCode}',
+      );
       _tapGoDebugLog('[TapGo Auth] error body: <redacted>');
       _showAuthError(_authErrorMessage(error, isRegister: _isRegister));
     } on _InvalidAuthResponseException catch (error) {
@@ -590,9 +589,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
     await _showTapGoDialog<void>(
       context: context,
-      builder: (_) => _ServerConfigurationDialog(
-        initialUrl: saved ?? _apiClient.rootUrl,
-      ),
+      builder: (_) =>
+          _ServerConfigurationDialog(initialUrl: saved ?? _apiClient.rootUrl),
     );
   }
 
@@ -727,8 +725,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       validator: _passwordValidator,
                       textInputAction: _isRegister
                           ? (tapGoIsDirectDistribution
-                              ? TextInputAction.next
-                              : TextInputAction.done)
+                                ? TextInputAction.next
+                                : TextInputAction.done)
                           : TextInputAction.done,
                       onFieldSubmitted: (_) {
                         if (_isRegister && tapGoIsDirectDistribution) {
@@ -795,9 +793,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 
   void _openPasswordRecovery() {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const PasswordRecoveryScreen(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const PasswordRecoveryScreen()),
     );
   }
 

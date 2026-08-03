@@ -43,11 +43,7 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
     ]),
   ];
 
-  static const _searchHints = [
-    'Cari Membership',
-    'Cari Referral',
-    'Cari PPOB',
-  ];
+  static const _searchHints = ['Cari Membership', 'Cari Referral', 'Cari PPOB'];
 
   int _hintIndex = 0;
   Timer? _hintTimer;
@@ -101,11 +97,11 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
                     itemCount: group.items.length,
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 4,
-                      mainAxisSpacing: 14,
-                      crossAxisSpacing: 8,
-                      childAspectRatio: 0.62,
-                    ),
+                          crossAxisCount: 4,
+                          mainAxisSpacing: 14,
+                          crossAxisSpacing: 8,
+                          childAspectRatio: 0.62,
+                        ),
                     itemBuilder: (context, index) {
                       final item = group.items[index];
                       return _SuperMenuTile(
@@ -133,17 +129,15 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
 
 List<_SuperMenuGroup> _superMenuGroupsForDistribution(
   TapGoDistributionMode mode,
-) =>
-    mode == TapGoDistributionMode.play
-        ? _SuperMenuScreenState._playGroups
-        : _SuperMenuScreenState._directGroups;
+) => mode == TapGoDistributionMode.play
+    ? _SuperMenuScreenState._playGroups
+    : _SuperMenuScreenState._directGroups;
 
 List<String> tapGoSuperMenuLabelsForDistributionForTests(
   TapGoDistributionMode mode,
-) =>
-    _superMenuGroupsForDistribution(mode)
-        .expand((group) => group.items.map((item) => item.label))
-        .toList(growable: false);
+) => _superMenuGroupsForDistribution(mode)
+    .expand((group) => group.items.map((item) => item.label))
+    .toList(growable: false);
 
 Widget? _superMenuDestinationForLabel(String label) {
   if (tapGoIsPlayDistribution) {
@@ -213,8 +207,10 @@ class _SuperMenuSearchBar extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: AnimatedSwitcher(
-                  duration:
-                      _TapGoMotion.duration(context, _TapGoMotion.standard),
+                  duration: _TapGoMotion.duration(
+                    context,
+                    _TapGoMotion.standard,
+                  ),
                   switchInCurve: _TapGoMotion.standardCurve,
                   switchOutCurve: _TapGoMotion.exitCurve,
                   transitionBuilder: (child, animation) => FadeTransition(
@@ -395,7 +391,8 @@ class MembershipScreen extends ConsumerWidget {
     final production = ref.watch(_productionSnapshotProvider);
     final session = ref.watch(_demoSessionProvider);
     final package = DemoClientCatalog.packageByName(session.activePackageName);
-    final hasActivePackage = tapGoIsPlayDistribution ||
+    final hasActivePackage =
+        tapGoIsPlayDistribution ||
         session.activePackageName != 'Basic' ||
         session.lastInvoiceNumber != null ||
         session.ppobBalance > 0;
@@ -427,8 +424,8 @@ class MembershipScreen extends ConsumerWidget {
             value: session.isFounderChairman
                 ? 'Founder Chairman'
                 : session.isFounderPlatinum
-                    ? 'Founder Platinum'
-                    : package.name,
+                ? 'Founder Platinum'
+                : package.name,
             subtitle: 'Status: Aktif / Lunas',
             icon: Icons.workspace_premium_rounded,
           ),
@@ -542,7 +539,8 @@ class MembershipInvoiceScreen extends ConsumerWidget {
       title: 'Invoice Membership',
       subtitle: invoiceNumber ?? 'Invoice belum tersedia',
       child: FutureBuilder<Map<String, dynamic>>(
-        future: invoiceNumber == null ||
+        future:
+            invoiceNumber == null ||
                 invoiceNumber.isEmpty ||
                 token == null ||
                 token.isEmpty
@@ -634,7 +632,8 @@ class _InvoiceDetailPanel extends StatelessWidget {
           ),
           _PackageRow(
             label: 'Tanggal transaksi',
-            value: _dateLabel(invoice['createdAt']) ??
+            value:
+                _dateLabel(invoice['createdAt']) ??
                 session.membershipJoinedAt ??
                 'Belum tersedia',
           ),
@@ -644,7 +643,8 @@ class _InvoiceDetailPanel extends StatelessWidget {
           ),
           _PackageRow(
             label: 'Nomor invoice/order ID',
-            value: invoice['number']?.toString() ??
+            value:
+                invoice['number']?.toString() ??
                 session.lastInvoiceNumber ??
                 'Belum tersedia',
           ),
@@ -655,10 +655,7 @@ class _InvoiceDetailPanel extends StatelessWidget {
 }
 
 class _MembershipActiveDetailRow extends StatelessWidget {
-  const _MembershipActiveDetailRow({
-    required this.label,
-    required this.value,
-  });
+  const _MembershipActiveDetailRow({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -722,8 +719,11 @@ class _BenefitPanel extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.check_circle_rounded,
-                      color: Color(0xFF00A86B), size: 18),
+                  const Icon(
+                    Icons.check_circle_rounded,
+                    color: Color(0xFF00A86B),
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -753,8 +753,9 @@ class ReferralDashboardScreen extends ConsumerWidget {
     final session = ref.watch(_demoSessionProvider);
     return _DemoScaffold(
       title: 'Referral Dashboard',
-      subtitle:
-          production.hasValue ? 'Data referral TapGo' : 'Referral member TapGo',
+      subtitle: production.hasValue
+          ? 'Data referral TapGo'
+          : 'Referral member TapGo',
       child: Column(
         children: [
           _ProductionStatusTile(state: production),
@@ -819,7 +820,8 @@ class CommissionHistoryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final production = ref.watch(_productionSnapshotProvider);
-    final commissions = production.valueOrNull?.commissionTransactions ??
+    final commissions =
+        production.valueOrNull?.commissionTransactions ??
         const <WalletTransactionModel>[];
     return _DemoScaffold(
       title: 'Riwayat Komisi',
@@ -953,8 +955,9 @@ class DemoWalletScreen extends ConsumerWidget {
                 }
                 return Column(
                   children: withdrawals.take(5).map((item) {
-                    final status =
-                        _withdrawalStatusLabel(item['status']?.toString());
+                    final status = _withdrawalStatusLabel(
+                      item['status']?.toString(),
+                    );
                     return _WalletLedgerItem(
                       title: 'Withdraw $status',
                       amount: '- ${formatRupiah(_intFrom(item['amount']))}',
@@ -1019,18 +1022,22 @@ class DemoWalletScreen extends ConsumerWidget {
     final defaultAmount = session.walletBalance >= 100000
         ? 100000
         : session.walletBalance >= 50000
-            ? session.walletBalance
-            : 50000;
+        ? session.walletBalance
+        : 50000;
     final amountController = TextEditingController(
       text: tapGoFormatRupiahInput(defaultAmount.toString()),
     );
-    final bankController =
-        TextEditingController(text: bankAccount['bankName']?.toString() ?? '');
+    final bankController = TextEditingController(
+      text: bankAccount['bankName']?.toString() ?? '',
+    );
     final accountController = TextEditingController(
-        text: bankAccount['accountNumber']?.toString() ?? '');
+      text: bankAccount['accountNumber']?.toString() ?? '',
+    );
     final holderController = TextEditingController(
-        text: bankAccount['accountHolderName']?.toString() ??
-            ref.read(_demoSessionProvider).userName);
+      text:
+          bankAccount['accountHolderName']?.toString() ??
+          ref.read(_demoSessionProvider).userName,
+    );
     final formKey = GlobalKey<FormState>();
     final submitGuard = TapGoSingleFlightGuard();
     var isSubmitting = false;
@@ -1127,14 +1134,14 @@ class DemoWalletScreen extends ConsumerWidget {
                                     amountController.text,
                                   ),
                                   bankName: bankController.text.trim(),
-                                  bankCode:
-                                      _bankByNameOrCode(bankController.text)
-                                          ?.code,
+                                  bankCode: _bankByNameOrCode(
+                                    bankController.text,
+                                  )?.code,
                                   accountNumber: tapGoDigitsOnly(
                                     accountController.text,
                                   ),
-                                  accountHolderName:
-                                      holderController.text.trim(),
+                                  accountHolderName: holderController.text
+                                      .trim(),
                                 );
                                 return true;
                               });
@@ -1245,10 +1252,7 @@ _BankOption? _bankByNameOrCode(String value) {
 }
 
 class _BankDropdownField extends StatelessWidget {
-  const _BankDropdownField({
-    required this.controller,
-    required this.label,
-  });
+  const _BankDropdownField({required this.controller, required this.label});
 
   final TextEditingController controller;
   final String label;
@@ -1272,8 +1276,10 @@ class _BankDropdownField extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           child: InputDecorator(
             decoration: InputDecoration(
-              prefixIcon:
-                  const Icon(Icons.account_balance_rounded, color: _brandBlue),
+              prefixIcon: const Icon(
+                Icons.account_balance_rounded,
+                color: _brandBlue,
+              ),
               suffixIcon: const Icon(Icons.expand_more_rounded),
               labelText: label,
               hintText: 'Pilih bank',
@@ -1300,10 +1306,7 @@ class _BankDropdownField extends StatelessWidget {
     );
   }
 
-  Future<_BankOption?> _showBankPicker(
-    BuildContext context,
-    String current,
-  ) {
+  Future<_BankOption?> _showBankPicker(BuildContext context, String current) {
     final searchController = TextEditingController();
     final picker = _showTapGoBottomSheet<_BankOption>(
       context: context,
@@ -1377,8 +1380,10 @@ class _BankDropdownField extends StatelessWidget {
                             title: Text(bank.name),
                             subtitle: Text(bank.code),
                             trailing: selected
-                                ? const Icon(Icons.check_circle_rounded,
-                                    color: _brandBlue)
+                                ? const Icon(
+                                    Icons.check_circle_rounded,
+                                    color: _brandBlue,
+                                  )
                                 : null,
                             onTap: () => Navigator.of(context).pop(bank),
                           );
@@ -1439,10 +1444,7 @@ class _BankAccountScreenState extends ConsumerState<BankAccountScreen> {
                 title: 'Memuat rekening',
                 subtitle: 'Mengambil data rekening...',
               ),
-            _BankDropdownField(
-              controller: _bankController,
-              label: 'Nama bank',
-            ),
+            _BankDropdownField(controller: _bankController, label: 'Nama bank'),
             const SizedBox(height: 10),
             _InputField(
               controller: _accountController,
@@ -1470,8 +1472,9 @@ class _BankAccountScreenState extends ConsumerState<BankAccountScreen> {
                 icon: _saving
                     ? const _TapGoLoading(size: 18, strokeWidth: 2)
                     : const Icon(Icons.save_rounded),
-                label:
-                    Text(_saving ? 'Menyimpan...' : 'Simpan / Update Rekening'),
+                label: Text(
+                  _saving ? 'Menyimpan...' : 'Simpan / Update Rekening',
+                ),
                 style: FilledButton.styleFrom(
                   backgroundColor: _brandBlue,
                   foregroundColor: Colors.white,
@@ -1500,14 +1503,17 @@ class _BankAccountScreenState extends ConsumerState<BankAccountScreen> {
       if (!mounted) {
         return;
       }
-      final savedBank = account['bankCode']?.toString() ??
+      final savedBank =
+          account['bankCode']?.toString() ??
           account['bankName']?.toString() ??
           '';
-      _bankController.text = _bankByNameOrCode(savedBank)?.name ??
+      _bankController.text =
+          _bankByNameOrCode(savedBank)?.name ??
           account['bankName']?.toString() ??
           '';
       _accountController.text = account['accountNumber']?.toString() ?? '';
-      _holderController.text = account['accountHolderName']?.toString() ??
+      _holderController.text =
+          account['accountHolderName']?.toString() ??
           ref.read(_demoSessionProvider).userName;
     } catch (_) {
       if (!mounted) {
@@ -1547,10 +1553,7 @@ class _BankAccountScreenState extends ConsumerState<BankAccountScreen> {
       if (!mounted) {
         return;
       }
-      _TapGoSnackbar.error(
-        context,
-        _friendlyApiError(error),
-      );
+      _TapGoSnackbar.error(context, _friendlyApiError(error));
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -1620,8 +1623,11 @@ String get _tapGoTermsContent =>
     tapGoIsPlayDistribution ? _playTermsContent : _termsContent;
 
 class LegalInfoScreen extends StatelessWidget {
-  const LegalInfoScreen(
-      {super.key, required this.title, required this.content});
+  const LegalInfoScreen({
+    super.key,
+    required this.title,
+    required this.content,
+  });
 
   final String title;
   final String content;
@@ -1724,10 +1730,7 @@ class _DeleteAccountRequestScreenState
       );
       if (!mounted) return;
       setState(() => _latestRequest = data);
-      _TapGoSnackbar.success(
-        context,
-        'Pengajuan hapus akun berhasil dikirim.',
-      );
+      _TapGoSnackbar.success(context, 'Pengajuan hapus akun berhasil dikirim.');
     } catch (error) {
       if (!mounted) return;
       _TapGoSnackbar.error(
@@ -1776,8 +1779,9 @@ class _DeleteAccountRequestScreenState
             icon: _submitting
                 ? const _TapGoLoading(size: 18, strokeWidth: 2)
                 : const Icon(Icons.send_rounded),
-            label:
-                Text(_submitting ? 'Mengirim...' : 'Ajukan Penghapusan Akun'),
+            label: Text(
+              _submitting ? 'Mengirim...' : 'Ajukan Penghapusan Akun',
+            ),
           ),
         ],
       ),
@@ -1959,10 +1963,8 @@ class _SupportTicketCard extends StatelessWidget {
           ? content
           : InkWell(
               borderRadius: BorderRadius.circular(22),
-              onTap: () => _openDemo(
-                context,
-                SupportTicketDetailScreen(ticket: ticket),
-              ),
+              onTap: () =>
+                  _openDemo(context, SupportTicketDetailScreen(ticket: ticket)),
               child: content,
             ),
     );
@@ -2011,9 +2013,9 @@ class SupportTicketDetailScreen extends StatelessWidget {
           final status = data['status']?.toString() ?? 'OPEN';
           final messages = (data['messages'] is List)
               ? (data['messages'] as List)
-                  .whereType<Map>()
-                  .map((item) => item.cast<String, dynamic>())
-                  .toList()
+                    .whereType<Map>()
+                    .map((item) => item.cast<String, dynamic>())
+                    .toList()
               : <Map<String, dynamic>>[];
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

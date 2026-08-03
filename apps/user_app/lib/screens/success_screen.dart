@@ -25,10 +25,8 @@ class PaymentSuccessScreen extends StatelessWidget {
                 tween: Tween(begin: reduced ? 1 : 0.96, end: 1),
                 duration: _TapGoMotion.duration(context, _TapGoMotion.page),
                 curve: _TapGoMotion.standardCurve,
-                builder: (context, value, child) => Transform.scale(
-                  scale: value,
-                  child: child,
-                ),
+                builder: (context, value, child) =>
+                    Transform.scale(scale: value, child: child),
                 child: Container(
                   width: 122,
                   height: 122,
@@ -77,9 +75,8 @@ class PaymentSuccessScreen extends StatelessWidget {
               ),
               const SizedBox(height: 18),
               FilledButton.icon(
-                onPressed: () => Navigator.of(context).popUntil(
-                  (route) => route.isFirst,
-                ),
+                onPressed: () =>
+                    Navigator.of(context).popUntil((route) => route.isFirst),
                 icon: const Icon(Icons.home_rounded),
                 label: const Text('Kembali ke dashboard'),
                 style: FilledButton.styleFrom(

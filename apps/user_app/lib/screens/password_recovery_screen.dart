@@ -23,7 +23,9 @@ class TapGoPasswordRequirement {
 List<TapGoPasswordRequirement> tapGoPasswordRequirements(String password) {
   return [
     TapGoPasswordRequirement(
-        label: 'Minimal 8 karakter', met: password.length >= 8),
+      label: 'Minimal 8 karakter',
+      met: password.length >= 8,
+    ),
     TapGoPasswordRequirement(
       label: 'Mengandung huruf',
       met: RegExp(r'[A-Za-z]').hasMatch(password),
@@ -172,8 +174,9 @@ class _PasswordRecoveryScreenState
 
   Future<void> _resendCode() {
     return _guarded(() async {
-      await _apiClient
-          .requestPasswordRecovery(_identifierController.text.trim());
+      await _apiClient.requestPasswordRecovery(
+        _identifierController.text.trim(),
+      );
       if (mounted) {
         _startResendCountdown();
       }
@@ -207,7 +210,8 @@ class _PasswordRecoveryScreenState
       final password = _passwordController.text;
       if (!tapGoPasswordMeetsPolicy(password)) {
         setState(
-            () => _errorMessage = 'Password baru belum memenuhi ketentuan.');
+          () => _errorMessage = 'Password baru belum memenuhi ketentuan.',
+        );
         return;
       }
       if (password != _confirmController.text) {

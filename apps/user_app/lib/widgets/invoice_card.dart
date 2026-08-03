@@ -8,8 +8,9 @@ class _InvoiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusText =
-        invoice.status == PaymentStatus.paid ? 'Lunas' : 'Menunggu Pembayaran';
+    final statusText = invoice.status == PaymentStatus.paid
+        ? 'Lunas'
+        : 'Menunggu Pembayaran';
 
     return AnimatedContainer(
       duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
@@ -47,9 +48,13 @@ class _InvoiceCard extends StatelessWidget {
           _PackageRow(label: 'Nama member', value: invoice.memberName),
           _PackageRow(label: 'Paket', value: invoice.packageName),
           _PackageRow(
-              label: 'Harga paket', value: formatRupiah(invoice.packagePrice)),
+            label: 'Harga paket',
+            value: formatRupiah(invoice.packagePrice),
+          ),
           _PackageRow(
-              label: 'Admin fee', value: formatRupiah(invoice.adminFee)),
+            label: 'Admin fee',
+            value: formatRupiah(invoice.adminFee),
+          ),
           const Divider(height: 24),
           _PackageRow(label: 'Total', value: formatRupiah(invoice.total)),
           const SizedBox(height: 12),
@@ -104,8 +109,10 @@ class _PaymentMethodTile extends StatelessWidget {
             child: Row(
               children: [
                 AnimatedContainer(
-                  duration:
-                      _TapGoMotion.duration(context, _TapGoMotion.standard),
+                  duration: _TapGoMotion.duration(
+                    context,
+                    _TapGoMotion.standard,
+                  ),
                   curve: _TapGoMotion.standardCurve,
                   width: 44,
                   height: 44,

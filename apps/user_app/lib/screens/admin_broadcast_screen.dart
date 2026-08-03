@@ -8,8 +8,9 @@ class AdminBroadcastScreen extends StatefulWidget {
 }
 
 class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
-  final _titleController =
-      TextEditingController(text: 'Promo Upgrade Platinum TapGo');
+  final _titleController = TextEditingController(
+    text: 'Promo Upgrade Platinum TapGo',
+  );
   final _messageController = TextEditingController(
     text:
         'Halo member TapGo, upgrade paket Anda minggu ini dan nikmati benefit PPOB serta reward referral lebih besar.',

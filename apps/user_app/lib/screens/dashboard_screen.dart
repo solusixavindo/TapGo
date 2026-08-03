@@ -241,14 +241,9 @@ class _ProductionBindingBanner extends ConsumerWidget {
       duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
       switchInCurve: _TapGoMotion.standardCurve,
       switchOutCurve: _TapGoMotion.exitCurve,
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: child,
-      ),
-      child: KeyedSubtree(
-        key: ValueKey(stateKey),
-        child: child,
-      ),
+      transitionBuilder: (child, animation) =>
+          FadeTransition(opacity: animation, child: child),
+      child: KeyedSubtree(key: ValueKey(stateKey), child: child),
     );
   }
 }
@@ -333,11 +328,7 @@ class _SkeletonBar extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(999),
           gradient: const LinearGradient(
-            colors: [
-              Color(0xFFE7EEF8),
-              Color(0xFFF8FBFF),
-              Color(0xFFE7EEF8),
-            ],
+            colors: [Color(0xFFE7EEF8), Color(0xFFF8FBFF), Color(0xFFE7EEF8)],
           ),
         ),
       ),
@@ -346,10 +337,7 @@ class _SkeletonBar extends StatelessWidget {
 }
 
 class _DashboardValueSwitcher extends StatelessWidget {
-  const _DashboardValueSwitcher({
-    required this.value,
-    required this.style,
-  });
+  const _DashboardValueSwitcher({required this.value, required this.style});
 
   final String value;
   final TextStyle style;
@@ -360,10 +348,8 @@ class _DashboardValueSwitcher extends StatelessWidget {
       duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
       switchInCurve: _TapGoMotion.standardCurve,
       switchOutCurve: _TapGoMotion.exitCurve,
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: child,
-      ),
+      transitionBuilder: (child, animation) =>
+          FadeTransition(opacity: animation, child: child),
       child: Text(
         value,
         key: ValueKey(value),
@@ -500,10 +486,7 @@ class _CompactRetryPill extends StatelessWidget {
 }
 
 class _InlineStatePill extends StatelessWidget {
-  const _InlineStatePill({
-    required this.icon,
-    required this.label,
-  });
+  const _InlineStatePill({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
@@ -617,8 +600,8 @@ class _TopBar extends ConsumerWidget {
                     session.isFounderChairman
                         ? 'Founder Chairman'
                         : session.isFounderPlatinum
-                            ? 'Founder Platinum'
-                            : session.activePackageName,
+                        ? 'Founder Platinum'
+                        : session.activePackageName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -739,8 +722,9 @@ class _SearchRowState extends State<_SearchRow> {
     super.initState();
     _placeholderTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!mounted) return;
-      final placeholders =
-          tapGoIsPlayDistribution ? _playPlaceholders : _directPlaceholders;
+      final placeholders = tapGoIsPlayDistribution
+          ? _playPlaceholders
+          : _directPlaceholders;
       setState(() {
         _placeholderIndex = (_placeholderIndex + 1) % placeholders.length;
       });
@@ -755,8 +739,9 @@ class _SearchRowState extends State<_SearchRow> {
 
   @override
   Widget build(BuildContext context) {
-    final placeholders =
-        tapGoIsPlayDistribution ? _playPlaceholders : _directPlaceholders;
+    final placeholders = tapGoIsPlayDistribution
+        ? _playPlaceholders
+        : _directPlaceholders;
     final colorScheme = Theme.of(context).colorScheme;
     if (_placeholderIndex >= placeholders.length) {
       _placeholderIndex = 0;
@@ -864,27 +849,63 @@ void _showSearchMenu(BuildContext context) {
   final items = tapGoIsPlayDistribution
       ? const [
           _ServiceItem(
-              'Kartu Anggota', Icons.badge_rounded, Color(0xFFF59E0B), null),
+            'Kartu Anggota',
+            Icons.badge_rounded,
+            Color(0xFFF59E0B),
+            null,
+          ),
           _ServiceItem('Profil', Icons.person_rounded, Color(0xFF697386), null),
-          _ServiceItem('Tiket Bantuan', Icons.volunteer_activism_rounded,
-              Color(0xFF0569E8), null),
-          _ServiceItem('Hapus Akun', Icons.delete_outline_rounded,
-              Color(0xFFD97706), null),
+          _ServiceItem(
+            'Tiket Bantuan',
+            Icons.volunteer_activism_rounded,
+            Color(0xFF0569E8),
+            null,
+          ),
+          _ServiceItem(
+            'Hapus Akun',
+            Icons.delete_outline_rounded,
+            Color(0xFFD97706),
+            null,
+          ),
         ]
       : const [
           _ServiceItem(
-              'TapGo Ride', Icons.two_wheeler_rounded, Color(0xFF006AF5), null),
+            'TapGo Ride',
+            Icons.two_wheeler_rounded,
+            Color(0xFF006AF5),
+            null,
+          ),
           _ServiceItem(
-              'TapGo Car', Icons.local_taxi_rounded, Color(0xFF006AF5), null),
-          _ServiceItem('TapGo Food', Icons.restaurant_menu_rounded,
-              Color(0xFFFF6B00), null),
+            'TapGo Car',
+            Icons.local_taxi_rounded,
+            Color(0xFF006AF5),
+            null,
+          ),
           _ServiceItem(
-              'TapGo Mart', Icons.storefront_rounded, Color(0xFF0097A7), null),
+            'TapGo Food',
+            Icons.restaurant_menu_rounded,
+            Color(0xFFFF6B00),
+            null,
+          ),
+          _ServiceItem(
+            'TapGo Mart',
+            Icons.storefront_rounded,
+            Color(0xFF0097A7),
+            null,
+          ),
           _ServiceItem('Referral', Icons.hub_rounded, Color(0xFF006AF5), null),
-          _ServiceItem('Membership', Icons.workspace_premium_rounded,
-              Color(0xFFF59E0B), null),
           _ServiceItem(
-              'Reward', Icons.emoji_events_rounded, Color(0xFFF59E0B), null),
+            'Membership',
+            Icons.workspace_premium_rounded,
+            Color(0xFFF59E0B),
+            null,
+          ),
+          _ServiceItem(
+            'Reward',
+            Icons.emoji_events_rounded,
+            Color(0xFFF59E0B),
+            null,
+          ),
         ];
 
   _showTapGoBottomSheet<void>(
@@ -936,7 +957,9 @@ void _showSearchMenu(BuildContext context) {
                           _openDemo(context, const ContactUsScreen());
                         } else if (item.label == 'Hapus Akun') {
                           _openDemo(
-                              context, const DeleteAccountRequestScreen());
+                            context,
+                            const DeleteAccountRequestScreen(),
+                          );
                         }
                         return;
                       }
@@ -1192,8 +1215,9 @@ class _PromoSlide extends StatelessWidget {
                   height: 142,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color:
-                        Colors.white.withValues(alpha: hasImage ? 0.08 : 0.10),
+                    color: Colors.white.withValues(
+                      alpha: hasImage ? 0.08 : 0.10,
+                    ),
                   ),
                 ),
               ),
@@ -1348,10 +1372,7 @@ class _HeroOrbit extends StatelessWidget {
 }
 
 class _HeroMiniIcon extends StatelessWidget {
-  const _HeroMiniIcon({
-    required this.icon,
-    required this.color,
-  });
+  const _HeroMiniIcon({required this.icon, required this.color});
 
   final IconData icon;
   final Color color;
@@ -1391,22 +1412,22 @@ class _WalletCard extends ConsumerWidget {
     final caption = hasError
         ? 'Muat ulang'
         : isLoading
-            ? isPlayDistribution
-                ? 'Memuat membership'
-                : 'Menghubungkan wallet'
-            : isPlayDistribution
-                ? 'Klik untuk detail'
-                : 'Klik untuk riwayat';
+        ? isPlayDistribution
+              ? 'Memuat membership'
+              : 'Menghubungkan wallet'
+        : isPlayDistribution
+        ? 'Klik untuk detail'
+        : 'Klik untuk riwayat';
     return _TapScale(
       borderRadius: BorderRadius.circular(28),
       onTap: hasError
           ? () => ref.invalidate(_productionSnapshotProvider)
           : () => _openDemo(
-                context,
-                isPlayDistribution
-                    ? const MembershipScreen()
-                    : const DemoWalletScreen(),
-              ),
+              context,
+              isPlayDistribution
+                  ? const MembershipScreen()
+                  : const DemoWalletScreen(),
+            ),
       child: DecoratedBox(
         decoration: BoxDecoration(
           gradient: const LinearGradient(
@@ -1498,35 +1519,35 @@ class _WalletCard extends ConsumerWidget {
                           child: isLoading
                               ? const _SkeletonBar(width: 168)
                               : hasError
-                                  ? const _DashboardValueSwitcher(
-                                      value: 'Gagal memuat data',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 31,
-                                        height: 1,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    )
-                                  : isPlayDistribution
-                                      ? _DashboardValueSwitcher(
-                                          value: session.activePackageName,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 31,
-                                            height: 1,
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                        )
-                                      : _DashboardAnimatedValue(
-                                          value: session.walletBalance,
-                                          formatter: formatRupiah,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 31,
-                                            height: 1,
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                        ),
+                              ? const _DashboardValueSwitcher(
+                                  value: 'Gagal memuat data',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 31,
+                                    height: 1,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                )
+                              : isPlayDistribution
+                              ? _DashboardValueSwitcher(
+                                  value: session.activePackageName,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 31,
+                                    height: 1,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                )
+                              : _DashboardAnimatedValue(
+                                  value: session.walletBalance,
+                                  formatter: formatRupiah,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 31,
+                                    height: 1,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
                         ),
                         const SizedBox(height: 10),
                         Container(
@@ -1544,9 +1565,10 @@ class _WalletCard extends ConsumerWidget {
                           child: _DashboardValueSwitcher(
                             value: caption,
                             style: const TextStyle(
-                                color: Color(0xE6FFFFFF),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800),
+                              color: Color(0xE6FFFFFF),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
                       ],
@@ -1580,10 +1602,7 @@ class _WalletCard extends ConsumerWidget {
 }
 
 class _MarketingPlanCard extends StatelessWidget {
-  const _MarketingPlanCard({
-    required this.session,
-    required this.isLoading,
-  });
+  const _MarketingPlanCard({required this.session, required this.isLoading});
 
   final DemoClientSession session;
   final bool isLoading;
@@ -1591,11 +1610,13 @@ class _MarketingPlanCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final packageColor = _packagePrimary(session.activePackageName);
-    final premiumPackage =
-        session.activePackageName.toLowerCase().contains('platinum');
+    final premiumPackage = session.activePackageName.toLowerCase().contains(
+      'platinum',
+    );
     final titleColor = premiumPackage ? Colors.white : const Color(0xFF0A2A43);
-    final mutedColor =
-        premiumPackage ? const Color(0xDDEAF7FF) : const Color(0xFF718096);
+    final mutedColor = premiumPackage
+        ? const Color(0xDDEAF7FF)
+        : const Color(0xFF718096);
     return Container(
       decoration: BoxDecoration(
         gradient: const LinearGradient(
@@ -1664,10 +1685,7 @@ class _MarketingPlanCard extends StatelessWidget {
                                   : 'Kode ${session.referralCode} | Level aktif ${session.activeLevel}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: mutedColor,
-                                fontSize: 12,
-                              ),
+                              style: TextStyle(color: mutedColor, fontSize: 12),
                             ),
                           ],
                         ),
@@ -1679,8 +1697,9 @@ class _MarketingPlanCard extends StatelessWidget {
                     children: [
                       Expanded(
                         child: _MiniMetric(
-                          label:
-                              tapGoIsPlayDistribution ? 'Membership' : 'Wallet',
+                          label: tapGoIsPlayDistribution
+                              ? 'Membership'
+                              : 'Wallet',
                           value: tapGoIsPlayDistribution
                               ? session.activePackageName
                               : _formatCompactRupiah(session.walletBalance),
@@ -1756,9 +1775,11 @@ class _MarketingPlanCard extends StatelessWidget {
                       ),
                       icon: const Icon(Icons.workspace_premium_rounded),
                       label: FittedBox(
-                        child: Text(tapGoIsPlayDistribution
-                            ? 'Detail Basic'
-                            : 'Membership'),
+                        child: Text(
+                          tapGoIsPlayDistribution
+                              ? 'Detail Basic'
+                              : 'Membership',
+                        ),
                       ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: _brandBlue,
@@ -1870,28 +1891,60 @@ class _ServiceGrid extends StatelessWidget {
 
   static const _directServices = [
     _ServiceItem(
-        'TapGo Ride', Icons.two_wheeler_rounded, Color(0xFF0569E8), 'Segera'),
+      'TapGo Ride',
+      Icons.two_wheeler_rounded,
+      Color(0xFF0569E8),
+      'Segera',
+    ),
     _ServiceItem(
-        'TapGo Car', Icons.local_taxi_rounded, Color(0xFF0B7A75), null),
+      'TapGo Car',
+      Icons.local_taxi_rounded,
+      Color(0xFF0B7A75),
+      null,
+    ),
     _ServiceItem(
-        'TapGo Food', Icons.restaurant_menu_rounded, Color(0xFFE85D04), null),
+      'TapGo Food',
+      Icons.restaurant_menu_rounded,
+      Color(0xFFE85D04),
+      null,
+    ),
     _ServiceItem(
-        'TapGo Mart', Icons.storefront_rounded, Color(0xFF0088A6), null),
+      'TapGo Mart',
+      Icons.storefront_rounded,
+      Color(0xFF0088A6),
+      null,
+    ),
     _ServiceItem(
-        'Jasa', Icons.home_repair_service_rounded, Color(0xFFD97706), null),
+      'Jasa',
+      Icons.home_repair_service_rounded,
+      Color(0xFFD97706),
+      null,
+    ),
     _ServiceItem('Pulsa', Icons.phone_iphone_rounded, Color(0xFF1486B8), null),
-    _ServiceItem('TapGo Bantu', Icons.volunteer_activism_rounded,
-        Color(0xFF0569E8), 'Segera'),
+    _ServiceItem(
+      'TapGo Bantu',
+      Icons.volunteer_activism_rounded,
+      Color(0xFF0569E8),
+      'Segera',
+    ),
     _ServiceItem('Lainnya', Icons.grid_view_rounded, Color(0xFF697386), null),
   ];
 
   static const _playServices = [
     _ServiceItem('Kartu Anggota', Icons.badge_rounded, Color(0xFFF59E0B), null),
     _ServiceItem('Profil', Icons.person_rounded, Color(0xFF697386), null),
-    _ServiceItem('Tiket Bantuan', Icons.volunteer_activism_rounded,
-        Color(0xFF0569E8), null),
     _ServiceItem(
-        'Hapus Akun', Icons.delete_outline_rounded, Color(0xFFD97706), null),
+      'Tiket Bantuan',
+      Icons.volunteer_activism_rounded,
+      Color(0xFF0569E8),
+      null,
+    ),
+    _ServiceItem(
+      'Hapus Akun',
+      Icons.delete_outline_rounded,
+      Color(0xFFD97706),
+      null,
+    ),
   ];
 
   @override
@@ -1927,14 +1980,16 @@ VoidCallback? _tapGoServiceActionFor(BuildContext context, _ServiceItem item) {
   }
   if (tapGoIsPlayDistribution) {
     return switch (item.label) {
-      'Kartu Anggota' => () =>
-          _openDemo(context, const BasicMemberCardScreen()),
+      'Kartu Anggota' => () => _openDemo(
+        context,
+        const BasicMemberCardScreen(),
+      ),
       'Profil' => () => _openDemo(context, const ProfileDetailsScreen()),
       'Tiket Bantuan' => () => _openDemo(context, const ContactUsScreen()),
       'Hapus Akun' => () => _openDemo(
-            context,
-            const DeleteAccountRequestScreen(),
-          ),
+        context,
+        const DeleteAccountRequestScreen(),
+      ),
       _ => null,
     };
   }
@@ -1963,9 +2018,10 @@ class _FloatingServiceTileState extends State<_FloatingServiceTile>
       vsync: this,
       duration: Duration(milliseconds: 2800 + (widget.index * 120)),
     );
-    _offset = Tween<double>(begin: -2, end: 2).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _offset = Tween<double>(
+      begin: -2,
+      end: 2,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
     if (_dashboardLiveAnimationsEnabled) {
       Future<void>.delayed(Duration(milliseconds: widget.index * 90), () {
         if (mounted) _controller.repeat(reverse: true);
@@ -1984,10 +2040,8 @@ class _FloatingServiceTileState extends State<_FloatingServiceTile>
     if (!_dashboardLiveAnimationsEnabled) return widget.child;
     return AnimatedBuilder(
       animation: _offset,
-      builder: (context, child) => Transform.translate(
-        offset: Offset(0, _offset.value),
-        child: child,
-      ),
+      builder: (context, child) =>
+          Transform.translate(offset: Offset(0, _offset.value), child: child),
       child: widget.child,
     );
   }
@@ -2029,8 +2083,10 @@ class _ContentCards extends StatelessWidget {
                 ),
                 const Spacer(),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 9,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFF3434),
                     borderRadius: BorderRadius.circular(12),
@@ -2315,7 +2371,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     'Bonus',
     'Referral',
     'Layanan',
-    'Withdraw'
+    'Withdraw',
   ];
   static const _playTabs = ['Semua', 'Layanan'];
 
@@ -2327,27 +2383,27 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     final sourceItems = tapGoIsPlayDistribution
         ? const <_ActivityItem>[]
         : session.transactions
-            .map(
-              (transaction) => _ActivityItem(
-                _activityCategoryFromTitle(transaction.title),
-                _activityIconFromTitle(transaction.title),
-                transaction.title,
-                transaction.description,
-                transaction.amount == 0
-                    ? null
-                    : '${transaction.amount > 0 ? '+' : '-'}${formatRupiah(transaction.amount.abs())}',
-                transaction.status,
-                'Terbaru',
-              ),
-            )
-            .where(
-              (item) =>
-                  !tapGoIsPlayDistribution ||
-                  (item.category != 'Bonus' &&
-                      item.category != 'Withdraw' &&
-                      item.category != 'Referral'),
-            )
-            .toList(growable: false);
+              .map(
+                (transaction) => _ActivityItem(
+                  _activityCategoryFromTitle(transaction.title),
+                  _activityIconFromTitle(transaction.title),
+                  transaction.title,
+                  transaction.description,
+                  transaction.amount == 0
+                      ? null
+                      : '${transaction.amount > 0 ? '+' : '-'}${formatRupiah(transaction.amount.abs())}',
+                  transaction.status,
+                  'Terbaru',
+                ),
+              )
+              .where(
+                (item) =>
+                    !tapGoIsPlayDistribution ||
+                    (item.category != 'Bonus' &&
+                        item.category != 'Withdraw' &&
+                        item.category != 'Referral'),
+              )
+              .toList(growable: false);
     if (_tabIndex >= tabs.length) {
       _tabIndex = 0;
     }
@@ -2532,32 +2588,51 @@ class AccountScreen extends ConsumerWidget {
             ),
           ],
           const SizedBox(height: 16),
-          _AccountMenuTile('Kartu Anggota', Icons.badge_rounded,
-              () => _openDemo(context, const BasicMemberCardScreen())),
-          _AccountMenuTile('Profil', Icons.person_rounded,
-              () => _openDemo(context, const ProfileDetailsScreen())),
+          _AccountMenuTile(
+            'Kartu Anggota',
+            Icons.badge_rounded,
+            () => _openDemo(context, const BasicMemberCardScreen()),
+          ),
+          _AccountMenuTile(
+            'Profil',
+            Icons.person_rounded,
+            () => _openDemo(context, const ProfileDetailsScreen()),
+          ),
           _AccountMenuTile(
             'Tampilan',
             Icons.palette_rounded,
             () => _openDemo(context, const ThemeSettingsScreen()),
             subtitle: 'Atur tema aplikasi',
           ),
-          _AccountMenuTile('Tiket Bantuan', Icons.volunteer_activism_rounded,
-              () => _openDemo(context, const ContactUsScreen())),
+          _AccountMenuTile(
+            'Tiket Bantuan',
+            Icons.volunteer_activism_rounded,
+            () => _openDemo(context, const ContactUsScreen()),
+          ),
           if (tapGoIsDirectDistribution)
-            _AccountMenuTile('Jaringan Saya', Icons.account_tree_rounded,
-                () => _openDemo(context, const ReferralTreeScreen())),
+            _AccountMenuTile(
+              'Jaringan Saya',
+              Icons.account_tree_rounded,
+              () => _openDemo(context, const ReferralTreeScreen()),
+            ),
           if (tapGoIsDirectDistribution) ...[
             _AccountMenuTile(
-                'Wallet & Withdraw',
-                Icons.account_balance_wallet_rounded,
-                () => _openDemo(context, const DemoWalletScreen())),
-            _AccountMenuTile('Riwayat Komisi', Icons.receipt_long_rounded,
-                () => _openDemo(context, const CommissionHistoryScreen())),
+              'Wallet & Withdraw',
+              Icons.account_balance_wallet_rounded,
+              () => _openDemo(context, const DemoWalletScreen()),
+            ),
+            _AccountMenuTile(
+              'Riwayat Komisi',
+              Icons.receipt_long_rounded,
+              () => _openDemo(context, const CommissionHistoryScreen()),
+            ),
           ],
           if (tapGoIsDirectDistribution)
-            _AccountMenuTile('Reward', Icons.emoji_events_rounded,
-                () => _openDemo(context, const RewardScreen())),
+            _AccountMenuTile(
+              'Reward',
+              Icons.emoji_events_rounded,
+              () => _openDemo(context, const RewardScreen()),
+            ),
           if (session.isAdmin)
             _AccountMenuTile(
               session.isSuperAdmin
@@ -2573,40 +2648,59 @@ class AccountScreen extends ConsumerWidget {
             ),
           if (tapGoIsDirectDistribution)
             _AccountMenuTile(
-                'KYC',
-                Icons.verified_user_rounded,
-                () => _openDemo(
-                    context, const FeatureDetailScreen(title: 'KYC'))),
+              'KYC',
+              Icons.verified_user_rounded,
+              () => _openDemo(context, const FeatureDetailScreen(title: 'KYC')),
+            ),
           if (tapGoIsDirectDistribution)
-            _AccountMenuTile('Rekening Bank', Icons.account_balance_rounded,
-                () => _openDemo(context, const BankAccountScreen())),
+            _AccountMenuTile(
+              'Rekening Bank',
+              Icons.account_balance_rounded,
+              () => _openDemo(context, const BankAccountScreen()),
+            ),
           _AccountMenuTile(
-              'Kebijakan Privasi',
-              Icons.privacy_tip_rounded,
-              () => _openDemo(
-                  context,
-                  LegalInfoScreen(
-                    title: 'Kebijakan Privasi',
-                    content: _tapGoPrivacyPolicyContent,
-                  ))),
+            'Kebijakan Privasi',
+            Icons.privacy_tip_rounded,
+            () => _openDemo(
+              context,
+              LegalInfoScreen(
+                title: 'Kebijakan Privasi',
+                content: _tapGoPrivacyPolicyContent,
+              ),
+            ),
+          ),
           _AccountMenuTile(
-              'Syarat & Ketentuan',
-              Icons.gavel_rounded,
-              () => _openDemo(
-                  context,
-                  LegalInfoScreen(
-                    title: 'Syarat & Ketentuan',
-                    content: _tapGoTermsContent,
-                  ))),
-          _AccountMenuTile('Hapus Akun', Icons.delete_outline_rounded,
-              () => _openDemo(context, const DeleteAccountRequestScreen())),
-          _AccountMenuTile('Hubungi Kami', Icons.support_agent_rounded,
-              () => _openDemo(context, const ContactUsScreen())),
-          _AccountMenuTile('Bantuan', Icons.help_outline_rounded,
-              () => _openDemo(context, const HelpCenterScreen())),
+            'Syarat & Ketentuan',
+            Icons.gavel_rounded,
+            () => _openDemo(
+              context,
+              LegalInfoScreen(
+                title: 'Syarat & Ketentuan',
+                content: _tapGoTermsContent,
+              ),
+            ),
+          ),
+          _AccountMenuTile(
+            'Hapus Akun',
+            Icons.delete_outline_rounded,
+            () => _openDemo(context, const DeleteAccountRequestScreen()),
+          ),
+          _AccountMenuTile(
+            'Hubungi Kami',
+            Icons.support_agent_rounded,
+            () => _openDemo(context, const ContactUsScreen()),
+          ),
+          _AccountMenuTile(
+            'Bantuan',
+            Icons.help_outline_rounded,
+            () => _openDemo(context, const HelpCenterScreen()),
+          ),
           if (tapGoIsDirectDistribution)
-            _AccountMenuTile('Pengaturan', Icons.settings_rounded,
-                () => _openDemo(context, const SettingsScreen())),
+            _AccountMenuTile(
+              'Pengaturan',
+              Icons.settings_rounded,
+              () => _openDemo(context, const SettingsScreen()),
+            ),
           _AccountMenuTile(
             'Logout',
             Icons.logout_rounded,
@@ -2733,12 +2827,14 @@ class ProfileDetailsScreen extends ConsumerWidget {
         future: _load(session),
         builder: (context, snapshot) {
           final fallback = _BasicMemberCardData(
-            displayName:
-                session.userName.isEmpty ? 'Member TapGo' : session.userName,
+            displayName: session.userName.isEmpty
+                ? 'Member TapGo'
+                : session.userName,
             phone: session.phone,
             memberId: '-',
             status: 'ACTIVE',
-            joinedAt: DateTime.tryParse(session.membershipJoinedAt ?? '') ??
+            joinedAt:
+                DateTime.tryParse(session.membershipJoinedAt ?? '') ??
                 DateTime.now(),
           );
           final profile = snapshot.data ?? fallback;
@@ -2932,31 +3028,31 @@ class HelpCenterScreen extends StatelessWidget {
         'Cara daftar',
         tapGoIsPlayDistribution
             ? 'Isi nama, nomor HP, dan password untuk membuat akun Basic.'
-            : 'Isi nama, nomor HP, password, lalu gunakan kode referral jika ada.'
+            : 'Isi nama, nomor HP, password, lalu gunakan kode referral jika ada.',
       ),
       (
         'Membership',
         tapGoIsPlayDistribution
             ? 'Akun baru aktif otomatis sebagai Basic setelah registrasi.'
-            : 'Pilih paket Silver, Gold, atau Platinum lalu selesaikan invoice.'
+            : 'Pilih paket Silver, Gold, atau Platinum lalu selesaikan invoice.',
       ),
       if (tapGoIsDirectDistribution) ...[
         (
           'Kode referral',
-          'Bagikan kode referral Anda agar downline dan bonus tercatat otomatis.'
+          'Bagikan kode referral Anda agar downline dan bonus tercatat otomatis.',
         ),
         (
           'Saldo TapGoPay',
-          'Saldo berasal dari bonus registrasi, sponsor, komisi, dan reward real.'
+          'Saldo berasal dari bonus registrasi, sponsor, komisi, dan reward real.',
         ),
         (
           'Ajukan withdraw',
-          'Lengkapi rekening bank lalu ajukan penarikan dari halaman Wallet.'
+          'Lengkapi rekening bank lalu ajukan penarikan dari halaman Wallet.',
         ),
       ],
       (
         'FAQ singkat',
-        'Jika data belum tampil, pastikan koneksi internet dan coba muat ulang.'
+        'Jika data belum tampil, pastikan koneksi internet dan coba muat ulang.',
       ),
     ];
     return Scaffold(
@@ -3259,7 +3355,8 @@ class _BasicMemberCardData {
       phone: map['phone']?.toString() ?? '',
       memberId: map['memberId']?.toString() ?? '',
       status: map['status']?.toString() ?? 'ACTIVE',
-      joinedAt: DateTime.tryParse(map['joinedAt']?.toString() ?? '') ??
+      joinedAt:
+          DateTime.tryParse(map['joinedAt']?.toString() ?? '') ??
           DateTime.now(),
     );
   }
@@ -3279,8 +3376,9 @@ class _MemberCardLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment:
-          alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment: alignEnd
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
       children: [
         Text(
           label,
@@ -3483,10 +3581,7 @@ class _InfoCard extends StatelessWidget {
                     height: 1.35,
                   ),
                 ),
-                if (action != null) ...[
-                  const SizedBox(height: 12),
-                  action!,
-                ],
+                if (action != null) ...[const SizedBox(height: 12), action!],
               ],
             ),
           ),
@@ -3514,10 +3609,7 @@ class _SettingsTile extends StatelessWidget {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4),
       leading: Icon(icon, color: _brandBlue),
-      title: Text(
-        title,
-        style: const TextStyle(fontWeight: FontWeight.w800),
-      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
       subtitle: subtitle == null ? null : Text(subtitle!),
       trailing: onTap == null ? null : const Icon(Icons.chevron_right_rounded),
       onTap: onTap,
@@ -3575,11 +3667,7 @@ class _ServiceTile extends StatelessWidget {
           ],
         ),
         if (isUnavailable)
-          const Positioned(
-            top: -4,
-            right: 8,
-            child: _ServiceSoonBadge(),
-          ),
+          const Positioned(top: -4, right: 8, child: _ServiceSoonBadge()),
       ],
     );
     return Semantics(
@@ -3737,75 +3825,75 @@ class _ServiceAssetIcon extends StatelessWidget {
 _ServiceIconStyle _serviceIconStyle(String label) {
   return switch (label) {
     'TapGo Ride' => const _ServiceIconStyle(
-        primary: Color(0xFF006AF5),
-        secondary: Color(0xFF1FA2FF),
-        background: Color(0xFFEAF5FF),
-      ),
+      primary: Color(0xFF006AF5),
+      secondary: Color(0xFF1FA2FF),
+      background: Color(0xFFEAF5FF),
+    ),
     'TapGo Car' => const _ServiceIconStyle(
-        primary: Color(0xFF006AF5),
-        secondary: Color(0xFF2BB8FF),
-        background: Color(0xFFEAF3FF),
-      ),
+      primary: Color(0xFF006AF5),
+      secondary: Color(0xFF2BB8FF),
+      background: Color(0xFFEAF3FF),
+    ),
     'TapGo Food' => const _ServiceIconStyle(
-        primary: Color(0xFFFF6B00),
-        secondary: Color(0xFFFFA51F),
-        background: Color(0xFFFFF3E7),
-      ),
+      primary: Color(0xFFFF6B00),
+      secondary: Color(0xFFFFA51F),
+      background: Color(0xFFFFF3E7),
+    ),
     'TapGo Mart' => const _ServiceIconStyle(
-        primary: Color(0xFF0097A7),
-        secondary: Color(0xFF13C2C2),
-        background: Color(0xFFE8FAFF),
-      ),
+      primary: Color(0xFF0097A7),
+      secondary: Color(0xFF13C2C2),
+      background: Color(0xFFE8FAFF),
+    ),
     'Jasa' || 'TapGo Jasa' || 'Toko & Jasa' => const _ServiceIconStyle(
-        primary: Color(0xFF1565D8),
-        secondary: Color(0xFF4D96FF),
-        background: Color(0xFFEAF3FF),
-      ),
+      primary: Color(0xFF1565D8),
+      secondary: Color(0xFF4D96FF),
+      background: Color(0xFFEAF3FF),
+    ),
     'Pulsa' || 'PPOB' || 'Tagihan' => const _ServiceIconStyle(
-        primary: Color(0xFF4F46E5),
-        secondary: Color(0xFF818CF8),
-        background: Color(0xFFEEF2FF),
-      ),
+      primary: Color(0xFF4F46E5),
+      secondary: Color(0xFF818CF8),
+      background: Color(0xFFEEF2FF),
+    ),
     'TapGo Bantu' || 'Support' => const _ServiceIconStyle(
-        primary: Color(0xFF0877EE),
-        secondary: Color(0xFF38BDF8),
-        background: Color(0xFFEAF3FF),
-      ),
+      primary: Color(0xFF0877EE),
+      secondary: Color(0xFF38BDF8),
+      background: Color(0xFFEAF3FF),
+    ),
     'BPJS' => const _ServiceIconStyle(
-        primary: Color(0xFF16A34A),
-        secondary: Color(0xFF86EFAC),
-        background: Color(0xFFEAFBF0),
-      ),
+      primary: Color(0xFF16A34A),
+      secondary: Color(0xFF86EFAC),
+      background: Color(0xFFEAFBF0),
+    ),
     'Membership' || 'Marketing Plan' || 'Reward' => const _ServiceIconStyle(
-        primary: Color(0xFFF59E0B),
-        secondary: Color(0xFFFFD166),
-        background: Color(0xFFFFF4E4),
-      ),
+      primary: Color(0xFFF59E0B),
+      secondary: Color(0xFFFFD166),
+      background: Color(0xFFFFF4E4),
+    ),
     'Referral' => const _ServiceIconStyle(
-        primary: Color(0xFF006AF5),
-        secondary: Color(0xFF7DD3FC),
-        background: Color(0xFFEAF5FF),
-      ),
+      primary: Color(0xFF006AF5),
+      secondary: Color(0xFF7DD3FC),
+      background: Color(0xFFEAF5FF),
+    ),
     'Kelas Online' => const _ServiceIconStyle(
-        primary: Color(0xFF4F46E5),
-        secondary: Color(0xFFA5B4FC),
-        background: Color(0xFFEEF2FF),
-      ),
+      primary: Color(0xFF4F46E5),
+      secondary: Color(0xFFA5B4FC),
+      background: Color(0xFFEEF2FF),
+    ),
     'Webinar' => const _ServiceIconStyle(
-        primary: Color(0xFF7C3AED),
-        secondary: Color(0xFFC084FC),
-        background: Color(0xFFF5F3FF),
-      ),
+      primary: Color(0xFF7C3AED),
+      secondary: Color(0xFFC084FC),
+      background: Color(0xFFF5F3FF),
+    ),
     'Event' => const _ServiceIconStyle(
-        primary: Color(0xFFEA580C),
-        secondary: Color(0xFFFFA51F),
-        background: Color(0xFFFFF3E7),
-      ),
+      primary: Color(0xFFEA580C),
+      secondary: Color(0xFFFFA51F),
+      background: Color(0xFFFFF3E7),
+    ),
     _ => const _ServiceIconStyle(
-        primary: Color(0xFF334155),
-        secondary: Color(0xFFCBD5E1),
-        background: Color(0xFFF1F5F9),
-      ),
+      primary: Color(0xFF334155),
+      secondary: Color(0xFFCBD5E1),
+      background: Color(0xFFF1F5F9),
+    ),
   };
 }
 
@@ -3903,11 +3991,7 @@ class _ServiceIcon3D extends StatelessWidget {
                   ),
                 ],
               ),
-              child: Icon(
-                icon,
-                color: Colors.white,
-                size: size * 0.34,
-              ),
+              child: Icon(icon, color: Colors.white, size: size * 0.34),
             ),
           ),
           Positioned(

@@ -19,7 +19,7 @@ const _demoMemberships = [
       'Kaos TAPGO',
       'Saldo PPOB Rp100.000',
       'BPJS Ketenagakerjaan',
-      'JKK, JKM'
+      'JKK, JKM',
     ],
     sponsorBonus: '8% dari paket direct referral',
     levelBonus: 'Level 1-10 sesuai unlock 3/5/10 sponsor',
@@ -48,7 +48,7 @@ const _demoMemberships = [
       'Rompi',
       'Saldo PPOB Rp1.000.000',
       'BPJS TK',
-      'JKK, JKM, JHT'
+      'JKK, JKM, JHT',
     ],
     sponsorBonus: '8% dari paket direct referral',
     levelBonus: 'Unlock sampai level 10 dengan 10 sponsor',

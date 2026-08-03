@@ -52,10 +52,14 @@ part 'widgets/tapgo_button.dart';
 const _brandBlue = Color(0xFF0569E8);
 const _brandOrange = Color(0xFFFF8A00);
 const _softBackground = Color(0xFFF4F8FB);
-const _tapGoAppMode =
-    String.fromEnvironment('TAPGO_APP_MODE', defaultValue: 'production');
-const _tapGoDistributionValue =
-    String.fromEnvironment('TAPGO_DISTRIBUTION', defaultValue: 'play');
+const _tapGoAppMode = String.fromEnvironment(
+  'TAPGO_APP_MODE',
+  defaultValue: 'production',
+);
+const _tapGoDistributionValue = String.fromEnvironment(
+  'TAPGO_DISTRIBUTION',
+  defaultValue: 'play',
+);
 const _tapGoApiBaseUrl = String.fromEnvironment(
   'TAPGO_API_BASE_URL',
   defaultValue: 'https://api.tapgolion.id/api/v1',
@@ -65,14 +69,15 @@ const _isTapGoUatBuild = _tapGoAppMode == 'staging';
 const _isTapGoDevelopmentBuild = _tapGoAppMode == 'development';
 bool tapGoEnablePaymentSimulatorForTests = false;
 Future<List<Map<String, dynamic>>> Function()?
-    tapGoSupportTicketsLoaderForTests;
+tapGoSupportTicketsLoaderForTests;
 Future<Map<String, dynamic>> Function(String ticketId)?
-    tapGoSupportTicketDetailLoaderForTests;
+tapGoSupportTicketDetailLoaderForTests;
 Future<Map<String, dynamic>> Function({
   required String category,
   required String subject,
   required String message,
-})? tapGoCreateSupportTicketForTests;
+})?
+tapGoCreateSupportTicketForTests;
 Future<Map<String, dynamic>> Function()? tapGoMemberIdentityLoaderForTests;
 const tapGoLocalSessionPersistenceWarning =
     'Anda berhasil masuk, tetapi sesi belum tersimpan di perangkat. '
@@ -86,8 +91,9 @@ TapGoDistributionMode tapGoDistributionModeFromValue(String? value) {
       : TapGoDistributionMode.play;
 }
 
-final _tapGoDistributionMode =
-    tapGoDistributionModeFromValue(_tapGoDistributionValue);
+final _tapGoDistributionMode = tapGoDistributionModeFromValue(
+  _tapGoDistributionValue,
+);
 
 bool get tapGoIsPlayDistribution =>
     _tapGoDistributionMode == TapGoDistributionMode.play;
@@ -108,16 +114,16 @@ enum TapGoThemePreference {
   String get storageValue => name;
 
   String get label => switch (this) {
-        TapGoThemePreference.system => 'Ikuti sistem',
-        TapGoThemePreference.light => 'Tema terang',
-        TapGoThemePreference.dark => 'Tema gelap',
-      };
+    TapGoThemePreference.system => 'Ikuti sistem',
+    TapGoThemePreference.light => 'Tema terang',
+    TapGoThemePreference.dark => 'Tema gelap',
+  };
 
   ThemeMode get themeMode => switch (this) {
-        TapGoThemePreference.system => ThemeMode.system,
-        TapGoThemePreference.light => ThemeMode.light,
-        TapGoThemePreference.dark => ThemeMode.dark,
-      };
+    TapGoThemePreference.system => ThemeMode.system,
+    TapGoThemePreference.light => ThemeMode.light,
+    TapGoThemePreference.dark => ThemeMode.dark,
+  };
 
   static TapGoThemePreference fromStorageValue(String? value) {
     return switch (value?.trim().toLowerCase()) {
@@ -130,8 +136,8 @@ enum TapGoThemePreference {
 
 final tapGoThemePreferenceProvider =
     StateNotifierProvider<_TapGoThemeController, TapGoThemePreference>(
-  (ref) => _TapGoThemeController()..load(),
-);
+      (ref) => _TapGoThemeController()..load(),
+    );
 
 class _TapGoThemeController extends StateNotifier<TapGoThemePreference> {
   _TapGoThemeController() : super(TapGoThemePreference.system);
@@ -169,8 +175,9 @@ void _tapGoDebugLog(String message) {
 
 final _persistentStore = _TapGoPersistentStore();
 final _serverConfigStore = _TapGoServerConfigStore();
-final _apiClient =
-    _TapGoApiClient(baseUrl: _normalizeApiBaseUrl(_tapGoApiBaseUrl));
+final _apiClient = _TapGoApiClient(
+  baseUrl: _normalizeApiBaseUrl(_tapGoApiBaseUrl),
+);
 final _tapGoScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 const _productionApiRootUrl = 'https://api.tapgolion.id';
 const _productionFinalSyncResetKey =
@@ -243,9 +250,9 @@ Future<void> main() async {
       _apiClient.setBaseUrl(_productionApiRootUrl);
     } else {
       final savedApiBaseUrl = await _serverConfigStore.loadApiBaseUrl().timeout(
-            const Duration(seconds: 2),
-            onTimeout: () => null,
-          );
+        const Duration(seconds: 2),
+        onTimeout: () => null,
+      );
       if (savedApiBaseUrl != null && savedApiBaseUrl.trim().isNotEmpty) {
         _apiClient.setBaseUrl(savedApiBaseUrl);
       }
@@ -271,22 +278,22 @@ Future<void> _prepareProductionFinalSync() async {
   }
   try {
     await _serverConfigStore.resetApiBaseUrl().timeout(
-          const Duration(seconds: 1),
-        );
+      const Duration(seconds: 1),
+    );
   } catch (error) {
     _tapGoDebugLog('[TapGo Startup] server config reset skipped: $error');
   }
   try {
     await _persistentStore.clearProductionRuntimeCache().timeout(
-          const Duration(seconds: 2),
-        );
+      const Duration(seconds: 2),
+    );
   } catch (error) {
     _tapGoDebugLog('[TapGo Startup] secure cache reset skipped: $error');
   }
   try {
-    await preferences.setBool(_productionFinalSyncResetKey, true).timeout(
-          const Duration(seconds: 1),
-        );
+    await preferences
+        .setBool(_productionFinalSyncResetKey, true)
+        .timeout(const Duration(seconds: 1));
   } catch (error) {
     _tapGoDebugLog('[TapGo Startup] reset marker write skipped: $error');
   }
@@ -308,8 +315,9 @@ class TapGoUserApp extends ConsumerWidget {
       darkTheme: _tapGoReadableTheme(brightness: Brightness.dark),
       themeMode: themePreference.themeMode,
       home: _SessionBootstrap(
-        child:
-            isAuthenticated ? const _RoleDashboardGate() : const SplashGate(),
+        child: isAuthenticated
+            ? const _RoleDashboardGate()
+            : const SplashGate(),
       ),
     );
   }
@@ -320,21 +328,25 @@ ThemeData _tapGoReadableTheme({Brightness brightness = Brightness.light}) {
   final scaffoldBackground = isDark ? const Color(0xFF071525) : _softBackground;
   final surfaceColor = isDark ? const Color(0xFF0B1F35) : Colors.white;
   final inputFillColor = isDark ? const Color(0xFF102A44) : Colors.white;
-  final inputBorderColor =
-      isDark ? const Color(0xFF29445F) : const Color(0xFFEAF0F6);
-  final inputTextColor =
-      isDark ? const Color(0xFFEAF7FF) : const Color(0xFF172033);
-  final inputHintColor =
-      isDark ? const Color(0xFFA9B8C9) : const Color(0xFF94A3B8);
-  final scheme = ColorScheme.fromSeed(
-    seedColor: _brandBlue,
-    brightness: brightness,
-  ).copyWith(
-    surface: surfaceColor,
-    onSurface: inputTextColor,
-    onSurfaceVariant: inputHintColor,
-    outlineVariant: inputBorderColor,
-  );
+  final inputBorderColor = isDark
+      ? const Color(0xFF29445F)
+      : const Color(0xFFEAF0F6);
+  final inputTextColor = isDark
+      ? const Color(0xFFEAF7FF)
+      : const Color(0xFF172033);
+  final inputHintColor = isDark
+      ? const Color(0xFFA9B8C9)
+      : const Color(0xFF94A3B8);
+  final scheme =
+      ColorScheme.fromSeed(
+        seedColor: _brandBlue,
+        brightness: brightness,
+      ).copyWith(
+        surface: surfaceColor,
+        onSurface: inputTextColor,
+        onSurfaceVariant: inputHintColor,
+        outlineVariant: inputBorderColor,
+      );
 
   return ThemeData(
     colorScheme: scheme,
@@ -411,13 +423,10 @@ class _RoleDashboardGate extends ConsumerWidget {
     final dashboard = session.isSuperAdmin
         ? const SuperAdminDashboardScreen()
         : session.role == 'ADMIN'
-            ? const AdminDashboardScreen()
-            : const TapGoDashboard();
+        ? const AdminDashboardScreen()
+        : const TapGoDashboard();
 
-    return PopScope(
-      canPop: false,
-      child: dashboard,
-    );
+    return PopScope(canPop: false, child: dashboard);
   }
 }
 

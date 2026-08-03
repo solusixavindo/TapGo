@@ -60,23 +60,23 @@ class _MiniMetric extends StatelessWidget {
               child: isLoading
                   ? const _SkeletonBar(width: 84)
                   : animatedValue == null || formatter == null
-                      ? _DashboardValueSwitcher(
-                          value: value,
-                          style: const TextStyle(
-                            color: Color(0xFF0A2A43),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        )
-                      : _DashboardAnimatedValue(
-                          value: animatedValue!,
-                          formatter: formatter!,
-                          style: const TextStyle(
-                            color: Color(0xFF0A2A43),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
+                  ? _DashboardValueSwitcher(
+                      value: value,
+                      style: const TextStyle(
+                        color: Color(0xFF0A2A43),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    )
+                  : _DashboardAnimatedValue(
+                      value: animatedValue!,
+                      formatter: formatter!,
+                      style: const TextStyle(
+                        color: Color(0xFF0A2A43),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
             ),
           ),
         ],
@@ -371,9 +371,11 @@ class RewardScreen extends ConsumerWidget {
     final rewards = ref
         .watch(_demoSessionProvider)
         .transactions
-        .where((item) => '${item.title} ${item.description}'
-            .toLowerCase()
-            .contains('reward'))
+        .where(
+          (item) => '${item.title} ${item.description}'.toLowerCase().contains(
+            'reward',
+          ),
+        )
         .toList(growable: false);
     return _DemoScaffold(
       title: 'Reward',
@@ -450,7 +452,9 @@ class _MarketingRulesCard extends StatelessWidget {
           const _PackageRow(label: '3 sponsor', value: 'Unlock sampai level 3'),
           const _PackageRow(label: '5 sponsor', value: 'Unlock sampai level 5'),
           const _PackageRow(
-              label: '10 sponsor', value: 'Unlock sampai level 10'),
+            label: '10 sponsor',
+            value: 'Unlock sampai level 10',
+          ),
         ],
       ),
     );
@@ -508,10 +512,7 @@ class _SearchBox extends StatelessWidget {
           const Icon(Icons.search_rounded, color: _brandBlue),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              hint,
-              style: const TextStyle(color: Color(0xFF718096)),
-            ),
+            child: Text(hint, style: const TextStyle(color: Color(0xFF718096))),
           ),
         ],
       ),
@@ -583,10 +584,7 @@ class _ActivityTile extends StatelessWidget {
           if (item.amount != null)
             Text(
               item.amount!,
-              style: TextStyle(
-                color: amountColor,
-                fontWeight: FontWeight.w900,
-              ),
+              style: TextStyle(color: amountColor, fontWeight: FontWeight.w900),
             ),
         ],
       ),
@@ -610,11 +608,7 @@ class _AccountHero extends StatelessWidget {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF061A2E),
-              Color(0xFF0B3A6E),
-              Color(0xFF0569E8),
-            ],
+            colors: [Color(0xFF061A2E), Color(0xFF0B3A6E), Color(0xFF0569E8)],
           ),
           borderRadius: BorderRadius.circular(22),
           border: Border.all(color: const Color(0x3322D3EE)),
@@ -770,10 +764,7 @@ class _FounderPlatinumBadge extends StatelessWidget {
   }
 }
 
-void _copyAccountReferralLink(
-  BuildContext context,
-  DemoClientSession session,
-) {
+void _copyAccountReferralLink(BuildContext context, DemoClientSession session) {
   final referralCode = session.referralCode.trim();
   if (referralCode.isEmpty || referralCode == '-') {
     _TapGoSnackbar.warning(context, 'Kode referral belum tersedia');
@@ -847,7 +838,8 @@ class _DemoDocumentPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = imagePath != null &&
+    final hasImage =
+        imagePath != null &&
         imagePath!.isNotEmpty &&
         File(imagePath!).existsSync();
     return Container(
@@ -1018,8 +1010,10 @@ class _EmptyState extends StatelessWidget {
                 style: FilledButton.styleFrom(
                   backgroundColor: _brandBlue,
                   foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),

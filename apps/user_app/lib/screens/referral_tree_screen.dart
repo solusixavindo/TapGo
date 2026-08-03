@@ -72,9 +72,7 @@ class _ReferralTreeScreenState extends ConsumerState<ReferralTreeScreen> {
         children: [
           _ProductionStatusTile(state: production),
           const SizedBox(height: 12),
-          _ReferralTreeSummary(
-            session: session,
-          ),
+          _ReferralTreeSummary(session: session),
           const SizedBox(height: 16),
           _ReferralFilterChips(
             selected: _selectedFilter,

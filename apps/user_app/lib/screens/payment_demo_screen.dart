@@ -82,17 +82,16 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
           ),
           const SizedBox(height: 16),
           ..._methods.toList().asMap().entries.map(
-                (entry) => _TapGoReveal(
-                  order: entry.key + 1,
-                  child: _PaymentMethodTile(
-                    title: entry.value.$1,
-                    icon: entry.value.$2,
-                    selected: _selectedMethod == entry.value.$1,
-                    onTap: () =>
-                        setState(() => _selectedMethod = entry.value.$1),
-                  ),
-                ),
+            (entry) => _TapGoReveal(
+              order: entry.key + 1,
+              child: _PaymentMethodTile(
+                title: entry.value.$1,
+                icon: entry.value.$2,
+                selected: _selectedMethod == entry.value.$1,
+                onTap: () => setState(() => _selectedMethod = entry.value.$1),
               ),
+            ),
+          ),
           const SizedBox(height: 16),
           _TapGoReveal(
             order: _methods.length + 1,
@@ -190,7 +189,9 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
   }
 
   Future<void> _showPaymentUrlDialog(
-      String redirectUrl, String? gateway) async {
+    String redirectUrl,
+    String? gateway,
+  ) async {
     if (!mounted) {
       return;
     }
@@ -229,7 +230,8 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
                     : () async {
                         setDialogState(() => isChecking = true);
                         final closedContext = context;
-                        final paid = await statusCheckGuard.run(
+                        final paid =
+                            await statusCheckGuard.run(
                               () => _pollBackendOrderStatus(orderId),
                             ) ??
                             false;
@@ -288,7 +290,8 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
       if (!mounted) {
         return false;
       }
-      final message = status == 'FAILED' ||
+      final message =
+          status == 'FAILED' ||
               status == 'EXPIRED' ||
               invoiceStatus == 'FAILED' ||
               invoiceStatus == 'EXPIRED'
@@ -309,7 +312,8 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
   Future<void> _openSuccessFromBackend() async {
     final snapshot = await ref.refresh(_productionSnapshotProvider.future);
     _tapGoDebugLog(
-        '[TapGo Payment] snapshot refreshed at ${snapshot.loadedAt}');
+      '[TapGo Payment] snapshot refreshed at ${snapshot.loadedAt}',
+    );
     if (!mounted) {
       return;
     }
@@ -350,40 +354,40 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
       ppobBalance: package.ppobBalance,
       directSponsor: _isTapGoDevelopmentBuild
           ? (package.name == 'Platinum'
-              ? 10
-              : package.name == 'Gold'
-                  ? 5
-                  : package.name == 'Silver'
-                      ? 3
-                      : 0)
+                ? 10
+                : package.name == 'Gold'
+                ? 5
+                : package.name == 'Silver'
+                ? 3
+                : 0)
           : currentSession.directSponsor,
       downline: _isTapGoDevelopmentBuild && package.name != 'Basic' ? 124 : 0,
       activeLevel: _isTapGoDevelopmentBuild
           ? (package.name == 'Platinum'
-              ? 10
-              : package.name == 'Gold'
-                  ? 5
-                  : package.name == 'Silver'
-                      ? 3
-                      : 0)
+                ? 10
+                : package.name == 'Gold'
+                ? 5
+                : package.name == 'Silver'
+                ? 3
+                : 0)
           : currentSession.activeLevel,
       walletBalance: _isTapGoDevelopmentBuild
           ? (package.name == 'Platinum'
-              ? 1300000
-              : package.name == 'Gold'
-                  ? 2400000
-                  : package.name == 'Silver'
-                      ? 240000
-                      : 5000)
+                ? 1300000
+                : package.name == 'Gold'
+                ? 2400000
+                : package.name == 'Silver'
+                ? 240000
+                : 5000)
           : currentSession.walletBalance,
       todayBonus: _isTapGoDevelopmentBuild
           ? (package.name == 'Platinum'
-              ? 1300000
-              : package.name == 'Gold'
-                  ? 2400000
-                  : package.name == 'Silver'
-                      ? 240000
-                      : 5000)
+                ? 1300000
+                : package.name == 'Gold'
+                ? 2400000
+                : package.name == 'Silver'
+                ? 240000
+                : 5000)
           : currentSession.todayBonus,
       lastInvoiceNumber: widget.invoice.number,
       membershipJoinedAt: _formatDemoDate(DateTime.now()),

@@ -78,32 +78,42 @@ class _AdminDashboardBody extends ConsumerWidget {
             Row(
               children: [
                 Expanded(
-                    child: _StatCard(
-                        label: 'Total Member',
-                        value: '${adminSnapshot.hasValue ? totalMembers : 0}')),
+                  child: _StatCard(
+                    label: 'Total Member',
+                    value: '${adminSnapshot.hasValue ? totalMembers : 0}',
+                  ),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
-                    child: _StatCard(
-                        label: 'Omzet',
-                        value: _formatCompactRupiah(
-                            adminSnapshot.hasValue ? totalRevenue : 0))),
+                  child: _StatCard(
+                    label: 'Omzet',
+                    value: _formatCompactRupiah(
+                      adminSnapshot.hasValue ? totalRevenue : 0,
+                    ),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
-                    child: _StatCard(
-                        label: 'Total Komisi',
-                        value: _formatCompactRupiah(
-                            adminSnapshot.hasValue ? totalCommission : 0))),
+                  child: _StatCard(
+                    label: 'Total Komisi',
+                    value: _formatCompactRupiah(
+                      adminSnapshot.hasValue ? totalCommission : 0,
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
-                    child: _StatCard(
-                        label: 'Withdraw Pending',
-                        value: _formatCompactRupiah(adminSnapshot.hasValue
-                            ? totalWithdrawPending
-                            : 0))),
+                  child: _StatCard(
+                    label: 'Withdraw Pending',
+                    value: _formatCompactRupiah(
+                      adminSnapshot.hasValue ? totalWithdrawPending : 0,
+                    ),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 14),
@@ -190,10 +200,8 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
       icon: Icons.hub_rounded,
       title: 'Referral Analytics',
       subtitle: 'Top sponsor, level aktif, referral tree',
-      open: (context) => _openDemo(
-        context,
-        const AdminReferralAnalyticsScreen(),
-      ),
+      open: (context) =>
+          _openDemo(context, const AdminReferralAnalyticsScreen()),
     ),
     _AdminDashboardMenuItem(
       icon: Icons.assessment_rounded,
@@ -241,7 +249,9 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
         title: 'Broadcast',
         subtitle: 'Memerlukan persetujuan admin utama',
         open: (context) => _openDemo(
-            context, const _AdminProductionApprovalScreen(title: 'Broadcast')),
+          context,
+          const _AdminProductionApprovalScreen(title: 'Broadcast'),
+        ),
       ),
       _AdminDashboardMenuItem(
         icon: Icons.support_agent_rounded,
@@ -261,10 +271,7 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
       icon: Icons.workspace_premium_rounded,
       title: 'Founder Program',
       subtitle: 'Slot Founder Platinum, status, komisi, dan audit ringkas',
-      open: (context) => _openDemo(
-        context,
-        const FounderProgramScreen(),
-      ),
+      open: (context) => _openDemo(context, const FounderProgramScreen()),
     ),
     _AdminDashboardMenuItem(
       icon: Icons.pie_chart_rounded,
@@ -454,11 +461,8 @@ class AdminBusinessOverviewScreen extends ConsumerWidget {
               color: _brandBlue,
               title: 'Total Omzet',
               value: _summaryMoney(summary, ['totalRevenue']),
-              subtitle: 'Komisi ${_summaryMoney(summary, [
-                    'totalCommission'
-                  ])} • Wallet ${_summaryMoney(summary, [
-                    'totalWalletBalance'
-                  ])}',
+              subtitle:
+                  'Komisi ${_summaryMoney(summary, ['totalCommission'])} • Wallet ${_summaryMoney(summary, ['totalWalletBalance'])}',
               icon: Icons.insights_rounded,
             ),
             const SizedBox(height: 14),
@@ -538,10 +542,7 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
       _apiClient.adminFounderChairman(),
       _apiClient.adminFounderPlatinum(),
     ]);
-    return {
-      'chairman': results[0],
-      'platinum': results[1],
-    };
+    return {'chairman': results[0], 'platinum': results[1]};
   }
 
   void _reload() {
@@ -583,10 +584,7 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
       _reload();
     } catch (error) {
       if (!mounted) return;
-      _TapGoSnackbar.error(
-        context,
-        'Gagal memperbarui status Founder: $error',
-      );
+      _TapGoSnackbar.error(context, 'Gagal memperbarui status Founder: $error');
     } finally {
       if (mounted) {
         setState(() => _processing[founderId] = false);
@@ -621,22 +619,22 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
           final data = snapshot.data ?? const <String, dynamic>{};
           final chairman =
               (data['chairman'] as Map?)?.cast<String, dynamic>() ??
-                  const <String, dynamic>{};
+              const <String, dynamic>{};
           final platinum =
               (data['platinum'] as Map?)?.cast<String, dynamic>() ??
-                  const <String, dynamic>{};
-          final chairmanItem =
-              (chairman['item'] as Map?)?.cast<String, dynamic>();
+              const <String, dynamic>{};
+          final chairmanItem = (chairman['item'] as Map?)
+              ?.cast<String, dynamic>();
           final items = ((platinum['items'] as List?) ?? const [])
               .whereType<Map>()
               .map((item) => item.cast<String, dynamic>())
               .toList(growable: false);
           final statusSummary =
               (platinum['statusSummary'] as Map?)?.cast<String, dynamic>() ??
-                  const <String, dynamic>{};
+              const <String, dynamic>{};
           final chairmanStatusSummary =
               (chairman['statusSummary'] as Map?)?.cast<String, dynamic>() ??
-                  const <String, dynamic>{};
+              const <String, dynamic>{};
           int combinedStatus(String status) =>
               _intFrom(statusSummary[status]) +
               _intFrom(chairmanStatusSummary[status]);
@@ -782,9 +780,9 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
                 onPressed: busy
                     ? null
                     : () => _openDemo(
-                          context,
-                          FounderProgramDetailScreen(founderId: founderId),
-                        ),
+                        context,
+                        FounderProgramDetailScreen(founderId: founderId),
+                      ),
                 icon: const Icon(Icons.visibility_rounded),
                 label: const Text('Detail'),
               ),
@@ -793,17 +791,18 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
                   onPressed: busy
                       ? null
                       : () => _changeStatus(
-                            founderId,
-                            'SUSPENDED',
-                            requireReason: true,
-                          ),
+                          founderId,
+                          'SUSPENDED',
+                          requireReason: true,
+                        ),
                   icon: const Icon(Icons.pause_circle_outline_rounded),
                   label: const Text('Suspend'),
                 ),
               if (status == 'SUSPENDED')
                 OutlinedButton.icon(
-                  onPressed:
-                      busy ? null : () => _changeStatus(founderId, 'ACTIVE'),
+                  onPressed: busy
+                      ? null
+                      : () => _changeStatus(founderId, 'ACTIVE'),
                   icon: const Icon(Icons.play_circle_outline_rounded),
                   label: const Text('Aktifkan'),
                 ),
@@ -812,10 +811,10 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
                   onPressed: busy
                       ? null
                       : () => _changeStatus(
-                            founderId,
-                            'REVOKED',
-                            requireReason: true,
-                          ),
+                          founderId,
+                          'REVOKED',
+                          requireReason: true,
+                        ),
                   icon: const Icon(Icons.block_rounded),
                   label: const Text('Revoke'),
                   style: FilledButton.styleFrom(
@@ -1040,10 +1039,7 @@ Future<String?> _statusReasonDialog(
 }
 
 class _AdminRecordDetailScreen extends StatelessWidget {
-  const _AdminRecordDetailScreen({
-    required this.title,
-    required this.rows,
-  });
+  const _AdminRecordDetailScreen({required this.title, required this.rows});
 
   final String title;
   final List<String> rows;
@@ -1122,29 +1118,36 @@ class _AdminPackageBreakdown extends StatelessWidget {
             runSpacing: 8,
             children: [
               _BenefitChip(
-                  label:
-                      'Basic ${summary == null ? 0 : _intFrom(summary!['totalBasic'])}'),
+                label:
+                    'Basic ${summary == null ? 0 : _intFrom(summary!['totalBasic'])}',
+              ),
               _BenefitChip(
-                  label:
-                      'Silver ${summary == null ? _countPackage('Silver') : _intFrom(summary!['totalSilver'])}'),
+                label:
+                    'Silver ${summary == null ? _countPackage('Silver') : _intFrom(summary!['totalSilver'])}',
+              ),
               _BenefitChip(
-                  label:
-                      'Gold ${summary == null ? _countPackage('Gold') : _intFrom(summary!['totalGold'])}'),
+                label:
+                    'Gold ${summary == null ? _countPackage('Gold') : _intFrom(summary!['totalGold'])}',
+              ),
               _BenefitChip(
-                  label:
-                      'Platinum ${summary == null ? _countPackage('Platinum') : _intFrom(summary!['totalPlatinum'])}'),
+                label:
+                    'Platinum ${summary == null ? _countPackage('Platinum') : _intFrom(summary!['totalPlatinum'])}',
+              ),
               _BenefitChip(
-                  label: summary == null
-                      ? 'Sponsor Bonus Rp0'
-                      : 'Sponsor ${_formatCompactRupiah(_intFrom(summary!['totalSponsorBonus']))}'),
+                label: summary == null
+                    ? 'Sponsor Bonus Rp0'
+                    : 'Sponsor ${_formatCompactRupiah(_intFrom(summary!['totalSponsorBonus']))}',
+              ),
               _BenefitChip(
-                  label: summary == null
-                      ? 'Level Bonus Rp0'
-                      : 'Level ${_formatCompactRupiah(_intFrom(summary!['totalLevelBonus']))}'),
+                label: summary == null
+                    ? 'Level Bonus Rp0'
+                    : 'Level ${_formatCompactRupiah(_intFrom(summary!['totalLevelBonus']))}',
+              ),
               _BenefitChip(
-                  label: summary == null
-                      ? 'Reward Rp0'
-                      : 'Reward ${_formatCompactRupiah(_intFrom(summary!['totalRewardBonus']))}'),
+                label: summary == null
+                    ? 'Reward Rp0'
+                    : 'Reward ${_formatCompactRupiah(_intFrom(summary!['totalRewardBonus']))}',
+              ),
             ],
           ),
         ],
@@ -1229,9 +1232,7 @@ class _AdminMemberRequestScreenState
               subtitle: 'Order membership baru akan muncul di sini.',
             );
           }
-          return Column(
-            children: items.map(_requestCard).toList(),
-          );
+          return Column(children: items.map(_requestCard).toList());
         },
       ),
     );
@@ -1286,10 +1287,10 @@ class _AdminMemberRequestScreenState
                     onPressed: busy
                         ? null
                         : () => _action(
-                              id,
-                              () => _apiClient.rejectMemberRequest(id),
-                              'Pengajuan member ditolak.',
-                            ),
+                            id,
+                            () => _apiClient.rejectMemberRequest(id),
+                            'Pengajuan member ditolak.',
+                          ),
                     child: const Text('Reject'),
                   ),
                 ),
@@ -1299,10 +1300,10 @@ class _AdminMemberRequestScreenState
                     onPressed: busy
                         ? null
                         : () => _action(
-                              id,
-                              () => _apiClient.approveMemberRequest(id),
-                              'Pengajuan member disetujui.',
-                            ),
+                            id,
+                            () => _apiClient.approveMemberRequest(id),
+                            'Pengajuan member disetujui.',
+                          ),
                     child: Text(busy ? 'Memproses...' : 'Approve'),
                   ),
                 ),
@@ -1318,10 +1319,7 @@ class _AdminMemberRequestScreenState
 enum _AdminReportType { bonus, ppob, reward }
 
 class _AdminReportScreen extends StatefulWidget {
-  const _AdminReportScreen({
-    required this.title,
-    required this.type,
-  });
+  const _AdminReportScreen({required this.title, required this.type});
 
   final String title;
   final _AdminReportType type;
@@ -1397,7 +1395,8 @@ class _AdminReportScreenState extends State<_AdminReportScreen> {
               }
               final data = snapshot.data ?? const <String, dynamic>{};
               final items = _reportItems(data);
-              final total = data['totalBonus'] ??
+              final total =
+                  data['totalBonus'] ??
                   data['totalPpob'] ??
                   data['transactionCount'] ??
                   items.length;
@@ -1414,8 +1413,11 @@ class _AdminReportScreenState extends State<_AdminReportScreen> {
                   Row(
                     children: [
                       Expanded(
-                          child: _StatCard(
-                              label: 'Total', value: total.toString())),
+                        child: _StatCard(
+                          label: 'Total',
+                          value: total.toString(),
+                        ),
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: _StatCard(
@@ -1444,13 +1446,15 @@ class _AdminReportScreenState extends State<_AdminReportScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  ...items.map((item) => _WalletLedgerItem(
-                        title: _reportTitle(item),
-                        amount: formatRupiah(_intFrom(item['amount'])),
-                        note:
-                            '${item['type'] ?? item['status'] ?? '-'} • ${_dateLabel(item['createdAt']) ?? '-'}',
-                        color: _brandBlue,
-                      )),
+                  ...items.map(
+                    (item) => _WalletLedgerItem(
+                      title: _reportTitle(item),
+                      amount: formatRupiah(_intFrom(item['amount'])),
+                      note:
+                          '${item['type'] ?? item['status'] ?? '-'} • ${_dateLabel(item['createdAt']) ?? '-'}',
+                      color: _brandBlue,
+                    ),
+                  ),
                 ],
               );
             },
@@ -1533,7 +1537,9 @@ class _AdminReportScreenState extends State<_AdminReportScreen> {
             'CSV tersedia dengan filter laporan yang sama.',
             textAlign: TextAlign.center,
             style: TextStyle(
-                color: Color(0xFF64748B), fontWeight: FontWeight.w700),
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),

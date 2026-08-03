@@ -48,10 +48,7 @@ class AdminMemberDetailScreen extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: _StatCard(
-                  label: 'Status',
-                  value: member.paymentStatus,
-                ),
+                child: _StatCard(label: 'Status', value: member.paymentStatus),
               ),
             ],
           ),

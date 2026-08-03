@@ -15,7 +15,8 @@ class _ReferralTreeNodeWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isVisibleByFilter = selectedFilter.level == null ||
+    final isVisibleByFilter =
+        selectedFilter.level == null ||
         node.level == 0 ||
         node.level <= selectedFilter.level!;
 
@@ -46,8 +47,10 @@ class _ReferralTreeNodeWidget extends StatelessWidget {
                   ),
                 ),
                 AnimatedSwitcher(
-                  duration:
-                      _TapGoMotion.duration(context, _TapGoMotion.standard),
+                  duration: _TapGoMotion.duration(
+                    context,
+                    _TapGoMotion.standard,
+                  ),
                   switchInCurve: _TapGoMotion.standardCurve,
                   switchOutCurve: _TapGoMotion.exitCurve,
                   transitionBuilder: (child, animation) => SizeTransition(
@@ -78,10 +81,7 @@ class _ReferralTreeNodeWidget extends StatelessWidget {
 }
 
 class _ReferralNodeCard extends StatelessWidget {
-  const _ReferralNodeCard({
-    required this.node,
-    required this.onTap,
-  });
+  const _ReferralNodeCard({required this.node, required this.onTap});
 
   final DemoReferralNode node;
   final VoidCallback onTap;
@@ -121,10 +121,7 @@ class _ReferralNodeCard extends StatelessWidget {
                 ),
                 child: Text(
                   _initials(node.name),
-                  style: TextStyle(
-                    color: accent,
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: TextStyle(color: accent, fontWeight: FontWeight.w900),
                 ),
               ),
               const SizedBox(width: 12),

@@ -25,15 +25,16 @@ class _AdminWithdrawalScreenState extends ConsumerState<AdminWithdrawalScreen> {
   @override
   Widget build(BuildContext context) {
     final adminSnapshot = ref.watch(_adminConsoleSnapshotProvider);
-    final apiWithdrawals = adminSnapshot.valueOrNull?.withdrawals
+    final apiWithdrawals =
+        adminSnapshot.valueOrNull?.withdrawals
             .map(DemoAdminWithdrawal.fromApi)
             .toList(growable: false) ??
         const <DemoAdminWithdrawal>[];
     final withdrawals = adminSnapshot.hasValue
         ? apiWithdrawals
         : (_isTapGoDevelopmentBuild
-            ? _demoAdminWithdrawals
-            : const <DemoAdminWithdrawal>[]);
+              ? _demoAdminWithdrawals
+              : const <DemoAdminWithdrawal>[]);
     final canMarkPaid = ref.watch(_demoSessionProvider).isSuperAdmin;
     return _DemoScaffold(
       title: 'Withdrawal',
@@ -55,29 +56,31 @@ class _AdminWithdrawalScreenState extends ConsumerState<AdminWithdrawalScreen> {
               subtitle: 'Pengajuan member akan muncul di sini.',
             )
           else
-            ...withdrawals.map((withdrawal) => _WithdrawalApprovalCard(
-                  withdrawal: withdrawal,
-                  status: _statuses[withdrawal.id] ?? withdrawal.status,
-                  canMarkPaid: canMarkPaid,
-                  onApprove: () => _processWithdrawal(
-                    withdrawal.id,
-                    'Approved',
-                    () => _apiClient.approveWithdrawal(withdrawal.id),
-                    adminSnapshot.hasValue,
-                  ),
-                  onReject: () => _processWithdrawal(
-                    withdrawal.id,
-                    'Rejected',
-                    () => _apiClient.rejectWithdrawal(withdrawal.id),
-                    adminSnapshot.hasValue,
-                  ),
-                  onPaid: () => _processWithdrawal(
-                    withdrawal.id,
-                    'Paid',
-                    () => _apiClient.markWithdrawalPaid(withdrawal.id),
-                    adminSnapshot.hasValue,
-                  ),
-                )),
+            ...withdrawals.map(
+              (withdrawal) => _WithdrawalApprovalCard(
+                withdrawal: withdrawal,
+                status: _statuses[withdrawal.id] ?? withdrawal.status,
+                canMarkPaid: canMarkPaid,
+                onApprove: () => _processWithdrawal(
+                  withdrawal.id,
+                  'Approved',
+                  () => _apiClient.approveWithdrawal(withdrawal.id),
+                  adminSnapshot.hasValue,
+                ),
+                onReject: () => _processWithdrawal(
+                  withdrawal.id,
+                  'Rejected',
+                  () => _apiClient.rejectWithdrawal(withdrawal.id),
+                  adminSnapshot.hasValue,
+                ),
+                onPaid: () => _processWithdrawal(
+                  withdrawal.id,
+                  'Paid',
+                  () => _apiClient.markWithdrawalPaid(withdrawal.id),
+                  adminSnapshot.hasValue,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -105,10 +108,7 @@ class _AdminWithdrawalScreenState extends ConsumerState<AdminWithdrawalScreen> {
       if (!mounted) {
         return;
       }
-      _TapGoSnackbar.success(
-        context,
-        'Withdrawal $status berhasil diproses.',
-      );
+      _TapGoSnackbar.success(context, 'Withdrawal $status berhasil diproses.');
     } catch (error) {
       if (!mounted) {
         return;

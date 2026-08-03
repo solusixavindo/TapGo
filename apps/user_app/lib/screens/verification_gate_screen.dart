@@ -235,8 +235,9 @@ class _VerificationGateScreenState
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton(
-            onPressed:
-                (_resendSeconds > 0 || _isSubmitting) ? null : _requestCode,
+            onPressed: (_resendSeconds > 0 || _isSubmitting)
+                ? null
+                : _requestCode,
             child: Text(
               _resendSeconds > 0
                   ? 'Kirim ulang kode dalam $_resendSeconds detik'
@@ -308,7 +309,10 @@ class _VerificationStatusCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [
           BoxShadow(
-              color: Color(0x11000000), blurRadius: 14, offset: Offset(0, 6)),
+            color: Color(0x11000000),
+            blurRadius: 14,
+            offset: Offset(0, 6),
+          ),
         ],
       ),
       child: Row(
@@ -365,7 +369,10 @@ class _VerificationBadge extends StatelessWidget {
       child: Text(
         verified ? 'Terverifikasi' : 'Belum',
         style: TextStyle(
-            color: color, fontSize: 11.5, fontWeight: FontWeight.w800),
+          color: color,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }

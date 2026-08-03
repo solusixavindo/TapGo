@@ -33,9 +33,7 @@ class _MembershipRegistrationScreenState
     final session = ref.read(_demoSessionProvider);
     _nameController = TextEditingController(text: session.userName);
     _phoneController = TextEditingController(text: session.phone);
-    _emailController = TextEditingController(
-      text: session.email ?? '',
-    );
+    _emailController = TextEditingController(text: session.email ?? '');
     _loadSponsorReferralCode();
   }
 
@@ -159,15 +157,21 @@ class _MembershipRegistrationScreenState
                     initialValue: _gender,
                     items: const [
                       DropdownMenuItem(
-                          value: 'Laki-laki', child: Text('Laki-laki')),
+                        value: 'Laki-laki',
+                        child: Text('Laki-laki'),
+                      ),
                       DropdownMenuItem(
-                          value: 'Perempuan', child: Text('Perempuan')),
+                        value: 'Perempuan',
+                        child: Text('Perempuan'),
+                      ),
                     ],
                     onChanged: (value) =>
                         setState(() => _gender = value ?? _gender),
                     decoration: InputDecoration(
-                      prefixIcon:
-                          const Icon(Icons.wc_rounded, color: _brandBlue),
+                      prefixIcon: const Icon(
+                        Icons.wc_rounded,
+                        color: _brandBlue,
+                      ),
                       labelText: 'Jenis kelamin',
                       filled: true,
                       fillColor: Colors.white,
@@ -278,10 +282,7 @@ class _MembershipRegistrationScreenState
 
   Future<void> _continueToCheckout() async {
     if (tapGoIsPlayDistribution) {
-      _TapGoSnackbar.info(
-        context,
-        'Akun Anda sudah aktif sebagai Basic.',
-      );
+      _TapGoSnackbar.info(context, 'Akun Anda sudah aktif sebagai Basic.');
       return;
     }
     if (!(_formKey.currentState?.validate() ?? false)) {
@@ -289,7 +290,9 @@ class _MembershipRegistrationScreenState
     }
     if (_ktpDocument == null || _selfieDocument == null) {
       _TapGoSnackbar.warning(
-          context, 'Upload KTP dan foto diri wajib dipilih.');
+        context,
+        'Upload KTP dan foto diri wajib dipilih.',
+      );
       return;
     }
 
@@ -403,8 +406,9 @@ class _MembershipRegistrationScreenState
       final responseData = _dioResponseDataMap(error.response?.data);
       final code = responseData?['code']?.toString();
       if (code == 'MEMBERSHIP_ORDER_PENDING') {
-        final pending =
-            await _latestPendingOrderForPackage(widget.package.name);
+        final pending = await _latestPendingOrderForPackage(
+          widget.package.name,
+        );
         if (pending != null) {
           final invoice = (pending['invoice'] as Map?)?.cast<String, dynamic>();
           return fallbackInvoice.copyWith(
@@ -492,20 +496,26 @@ class _MembershipRegistrationScreenState
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading:
-                    const Icon(Icons.photo_library_rounded, color: _brandBlue),
+                leading: const Icon(
+                  Icons.photo_library_rounded,
+                  color: _brandBlue,
+                ),
                 title: const Text('Pilih dari Galeri'),
                 onTap: () => Navigator.of(context).pop(ImageSource.gallery),
               ),
               ListTile(
-                leading:
-                    const Icon(Icons.photo_camera_rounded, color: _brandOrange),
+                leading: const Icon(
+                  Icons.photo_camera_rounded,
+                  color: _brandOrange,
+                ),
                 title: const Text('Ambil Foto dengan Kamera'),
                 onTap: () => Navigator.of(context).pop(ImageSource.camera),
               ),
               ListTile(
-                leading:
-                    const Icon(Icons.close_rounded, color: Color(0xFF697386)),
+                leading: const Icon(
+                  Icons.close_rounded,
+                  color: Color(0xFF697386),
+                ),
                 title: const Text('Batal'),
                 onTap: () => Navigator.of(context).pop(),
               ),
@@ -548,7 +558,8 @@ class _MembershipRegistrationScreenState
         return;
       }
       _tapGoDebugLog(
-          '[TapGo Upload] image picker platform error: ${error.code}');
+        '[TapGo Upload] image picker platform error: ${error.code}',
+      );
       _showUploadMessage(tapGoDocumentUploadFailureMessage);
     } catch (error) {
       _tapGoDebugLog('[TapGo Upload] image picker failed: $error');
