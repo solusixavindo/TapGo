@@ -291,6 +291,11 @@ model User {
   founderProgramGrants       FounderProgramGrant[]       @relation("FounderGrantUser")
   founderProgramGrantActions FounderProgramGrant[]       @relation("FounderGrantActor")
   authChallenges             AuthChallenge[]
+  adminScopeGrants           AdminScopeGrant[]           @relation("AdminScopeSubject")
+  adminScopeGrantsIssued     AdminScopeGrant[]           @relation("AdminScopeGrantor")
+  adminScopeGrantsRevoked    AdminScopeGrant[]           @relation("AdminScopeRevoker")
+  driverApplicationsClaimed  RideDriverApplication[]     @relation("DriverApplicationClaimant")
+  driverApplicationsReviewed RideDriverApplication[]     @relation("DriverApplicationReviewer")
 
   // Release 2 — domain Ride (additive, terpisah dari model Ride legacy).
   rideDriverProfile      RideDriverProfile?
@@ -303,6 +308,61 @@ model User {
   @@index([role, status])
   @@index([membershipId])
   @@map("users")
+}
+
+/// Scope admin yang dibatasi. Sengaja berupa enum, BUKAN string bebas:
+/// scope tak dikenal tidak akan pernah dapat tersimpan, dan wildcard tidak
+/// dapat direpresentasikan sama sekali.
+enum AdminScope {
+  DRIVER_APPLICATION_QUEUE_READ
+  DRIVER_APPLICATION_CLAIM
+  DRIVER_APPLICATION_RENEW
+  DRIVER_APPLICATION_RELEASE
+  DRIVER_APPLICATION_REASSIGN
+}
+
+enum AdminScopeGrantStatus {
+  ACTIVE
+  REVOKED
+}
+
+/// Pemberian scope admin yang otoritatif dari database.
+///
+/// Role saja TIDAK memberi kewenangan review. ADMIN maupun SUPER_ADMIN tetap
+/// memerlukan grant aktif di tabel ini; tidak ada bypass berbasis role.
+///
+/// Riwayat dipertahankan penuh: pencabutan menandai baris REVOKED, tidak
+/// pernah menghapusnya.
+///
+/// Objek raw SQL pada migration yang tidak boleh hilang:
+///   - admin_scope_grants_one_active_per_scope_key (partial unique,
+///     WHERE status = 'ACTIVE')
+///   - admin_scope_grants_revocation_pair_check
+model AdminScopeGrant {
+  id     String                @id @default(uuid()) @db.Uuid
+  userId String                @map("user_id") @db.Uuid
+  scope  AdminScope
+  status AdminScopeGrantStatus @default(ACTIVE)
+
+  grantedById String   @map("granted_by_id") @db.Uuid
+  grantedAt   DateTime @default(now()) @map("granted_at")
+
+  revokedById String?   @map("revoked_by_id") @db.Uuid
+  revokedAt   DateTime? @map("revoked_at")
+
+  /// Kode alasan terbatas, BUKAN teks bebas dan bukan pesan exception.
+  reasonCode String? @map("reason_code") @db.VarChar(60)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user      User  @relation("AdminScopeSubject", fields: [userId], references: [id], onDelete: Restrict)
+  grantedBy User  @relation("AdminScopeGrantor", fields: [grantedById], references: [id], onDelete: Restrict)
+  revokedBy User? @relation("AdminScopeRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
+
+  @@index([userId, scope, status])
+  @@index([scope, status])
+  @@map("admin_scope_grants")
 }
 
 enum AuthChallengePurpose {
@@ -1318,6 +1378,20 @@ model RideDriverApplication {
   /// BUKAN pesan exception. Kosakata kode ditegakkan application service.
   decisionReasonCode String?   @map("decision_reason_code") @db.VarChar(60)
 
+  // --- Review claim/lease (Stage R2.2) --------------------------------
+  /// Admin yang sedang memegang klaim review. Restrict, bukan Cascade:
+  /// menghapus akun reviewer tidak boleh menghapus jejak review.
+  claimedById       String?   @map("claimed_by_id") @db.Uuid
+  claimedAt         DateTime? @map("claimed_at")
+  /// Batas lease. SELALU dihitung database lewat now() + interval, tidak
+  /// pernah dari jam client maupun Node.
+  claimExpiresAt    DateTime? @map("claim_expires_at")
+  releasedAt        DateTime? @map("released_at")
+  /// Kode alasan pelepasan yang dibatasi, bukan teks bebas.
+  releaseReasonCode String?   @map("release_reason_code") @db.VarChar(60)
+  reviewedById      String?   @map("reviewed_by_id") @db.Uuid
+  reviewedAt        DateTime? @map("reviewed_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -1328,10 +1402,15 @@ model RideDriverApplication {
   /// yang memiliki application akan DITOLAK database. Itu perilaku yang
   /// diinginkan; penghapusan akun di TapGo berupa AccountDeletionRequest,
   /// bukan hard delete.
-  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user       User  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  claimedBy  User? @relation("DriverApplicationClaimant", fields: [claimedById], references: [id], onDelete: Restrict)
+  reviewedBy User? @relation("DriverApplicationReviewer", fields: [reviewedById], references: [id], onDelete: Restrict)
 
   @@unique([userId, cycleNumber])
   @@index([status, createdAt])
+  /// Antrian review dan pemindaian lease kedaluwarsa.
+  @@index([status, claimExpiresAt])
+  @@index([claimedById, claimExpiresAt])
   @@map("ride_driver_applications")
 }
 
