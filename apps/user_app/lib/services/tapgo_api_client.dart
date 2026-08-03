@@ -983,9 +983,49 @@ class _TapGoProductionSnapshot {
   }
 }
 
+/// Menyalakan fixture visual dashboard.
+///
+/// HANYA dipakai harness bukti visual. Nilainya default false dan tidak ada
+/// satu pun jalur produksi yang menyetelnya, sehingga aplikasi yang dirilis
+/// selalu memakai data server yang sebenarnya.
+///
+/// Tanpa fixture, tangkapan layar dashboard di lingkungan test menampilkan
+/// "Data belum tersedia" dan "Gagal memuat data" — state gagal muat yang bukan
+/// bagian dari apa yang ingin ditinjau.
+bool tapGoDashboardVisualFixtureEnabled = false;
+
+/// Label kejujuran yang wajib tampil saat fixture aktif.
+const String tapGoDashboardFixtureLabel = 'DEMO DATA';
+
+/// Snapshot tetap untuk fixture visual.
+///
+/// Dibangun lewat `fromMaps` yang sama dengan jalur produksi, sehingga yang
+/// dipalsukan hanya sumber datanya — bukan cara aplikasi mengurainya.
+_TapGoProductionSnapshot _tapGoDashboardVisualSnapshot() {
+  return _TapGoProductionSnapshot.fromMaps(
+    membership: const {
+      'membership': {
+        'membership': {'name': 'Basic', 'ppobBalance': 0},
+        'activeAt': '2026-01-15T00:00:00.000Z',
+        'order': {
+          'invoice': {'number': 'INV-DEMO-0001'},
+        },
+      },
+    },
+    wallet: const {'balance': 125000},
+    transactions: const {'items': <Map<String, dynamic>>[]},
+    referralSummary: const {'directDownlines': 3, 'totalDownlines': 8},
+    referralTree: const {},
+    commissions: const {'items': <Map<String, dynamic>>[]},
+  );
+}
+
 final _productionSnapshotProvider = FutureProvider<_TapGoProductionSnapshot>((
   ref,
 ) async {
+  if (tapGoDashboardVisualFixtureEnabled) {
+    return _tapGoDashboardVisualSnapshot();
+  }
   final session = ref.read(_demoSessionProvider);
   if (session.accessToken == null || session.accessToken!.isEmpty) {
     throw StateError('Belum ada token backend.');

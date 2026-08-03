@@ -118,6 +118,10 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Hanya tampil saat harness bukti visual menyalakan fixture.
+              // Tidak pernah muncul pada aplikasi yang dirilis.
+              if (tapGoDashboardVisualFixtureEnabled)
+                const _DashboardFixtureBadge(),
               _ProductionBindingBanner(state: production),
               if (production.isLoading) const SizedBox(height: 10),
               _DashboardEntrance(
@@ -430,6 +434,44 @@ class _DashboardAnimatedValueState extends State<_DashboardAnimatedValue> {
   }
 }
 
+/// Label kejujuran saat dashboard memakai fixture visual.
+///
+/// Keberadaannya membuat tangkapan layar tidak dapat disalahartikan sebagai
+/// data produksi.
+class _DashboardFixtureBadge extends StatelessWidget {
+  const _DashboardFixtureBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFF8A00).withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.science_rounded, size: 16, color: Color(0xFFB45309)),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '$tapGoDashboardFixtureLabel — data contoh untuk tinjauan '
+              'visual, bukan data nyata.',
+              style: TextStyle(
+                color: Color(0xFFB45309),
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CompactRetryPill extends StatelessWidget {
   const _CompactRetryPill({
     required this.icon,
@@ -461,6 +503,8 @@ class _CompactRetryPill extends StatelessWidget {
               Expanded(
                 child: Text(
                   label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: colorScheme.onSurfaceVariant,
                     fontWeight: FontWeight.w800,
@@ -468,14 +512,22 @@ class _CompactRetryPill extends StatelessWidget {
                   ),
                 ),
               ),
-              TextButton(
-                onPressed: onRetry,
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  minimumSize: const Size(0, 32),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              // Tombol ikut dibatasi ruang yang ada; tanpa ini labelnya
+              // meluber saat teks diperbesar.
+              Flexible(
+                child: TextButton(
+                  onPressed: onRetry,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 32),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text(
+                    'Muat Ulang',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                child: const Text('Muat Ulang'),
               ),
             ],
           ),
@@ -1081,8 +1133,15 @@ class _PromoHeroState extends State<_PromoHero> {
 
   @override
   Widget build(BuildContext context) {
+    // Tinggi carousel dulu tetap 238 dp, sehingga isi kartu meluber saat teks
+    // diperbesar. Faktor di bawah bernilai 1 pada skala normal, jadi tampilan
+    // biasa tidak berubah sedikit pun.
+    final textScaleFactor = max(
+      1.0,
+      MediaQuery.textScalerOf(context).scale(12) / 12,
+    );
     return SizedBox(
-      height: 238,
+      height: 238 * textScaleFactor,
       child: Stack(
         children: [
           PageView.builder(
@@ -1500,12 +1559,18 @@ class _WalletCard extends ConsumerWidget {
                               ),
                             ),
                             const SizedBox(width: 9),
-                            Text(
-                              isPlayDistribution ? 'Membership' : 'TapGoPay',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
+                            // Judul dibatasi ruang yang ada supaya tidak
+                            // meluber saat teks diperbesar.
+                            Flexible(
+                              child: Text(
+                                isPlayDistribution ? 'Membership' : 'TapGoPay',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ),
                           ],
@@ -1954,24 +2019,48 @@ class _ServiceGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final services = tapGoIsPlayDistribution ? _playServices : _directServices;
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: services.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        mainAxisSpacing: 18,
-        crossAxisSpacing: 12,
-        childAspectRatio: 0.66,
-      ),
-      itemBuilder: (context, index) {
-        final item = services[index];
-        return _FloatingServiceTile(
-          index: index,
-          child: _ServiceTile(
-            item: item,
-            onTap: _tapGoServiceActionFor(context, item),
+
+    // Tinggi sel sebelumnya diturunkan semata dari childAspectRatio, sehingga
+    // ikut mengecil bersama lebar layar. Pada 320 dp sel menjadi lebih pendek
+    // daripada isi kartu dan itulah overflow 12 px-nya.
+    //
+    // Sekarang tinggi sel adalah yang TERBESAR antara tinggi rasio lama dan
+    // tinggi yang benar-benar dibutuhkan isi. Pada 360 dp dan 412 dp tinggi
+    // rasio sudah lebih besar, jadi tampilannya tidak berubah sedikit pun;
+    // yang berubah hanya lebar sempit yang memang tidak muat.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const crossAxisCount = 4;
+        const crossAxisSpacing = 12.0;
+        final tileWidth =
+            (constraints.maxWidth - crossAxisSpacing * (crossAxisCount - 1)) /
+                crossAxisCount;
+        final ratioHeight = tileWidth / 0.66;
+        final contentHeight = _serviceTileContentHeight(context);
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: services.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            mainAxisSpacing: 18,
+            crossAxisSpacing: crossAxisSpacing,
+            mainAxisExtent: max(ratioHeight, contentHeight),
           ),
+          itemBuilder: (context, index) {
+            final item = services[index];
+            return _FloatingServiceTile(
+              index: index,
+              child: _ServiceTile(
+                item: item,
+                // Label dibatasi lebar sel supaya tidak meluber ke kartu
+                // tetangga pada layar sempit.
+                maxLabelWidth: min(_serviceTileLabelWidth, tileWidth),
+                onTap: _tapGoServiceActionFor(context, item),
+              ),
+            );
+          },
         );
       },
     );
@@ -2234,7 +2323,7 @@ class _BottomNav extends StatelessWidget {
           right: 18,
           bottom: 18,
           child: Container(
-            height: 82,
+            height: _navBarHeight(context),
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
               color: colorScheme.surface,
@@ -2248,35 +2337,57 @@ class _BottomNav extends StatelessWidget {
                 ),
               ],
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _NavItem(
-                  icon: Icons.home_rounded,
-                  label: 'Beranda',
-                  active: selectedIndex == 0,
-                  onTap: () => onTabSelected(0),
-                ),
-                _NavItem(
-                  icon: Icons.receipt_rounded,
-                  label: 'Aktivitas',
-                  active: selectedIndex == 1,
-                  onTap: () => onTabSelected(1),
-                ),
-                SizedBox(width: centerGap),
-                _NavItem(
-                  icon: Icons.chat_bubble_outline_rounded,
-                  label: 'Chat',
-                  active: selectedIndex == 2,
-                  onTap: () => onTabSelected(2),
-                ),
-                _NavItem(
-                  icon: Icons.person_outline_rounded,
-                  label: 'Akun',
-                  active: selectedIndex == 3,
-                  onTap: () => onTabSelected(3),
-                ),
-              ],
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Lebar item nav dulu dipatok 58 dp. Pada 320 dp, empat item
+                // ditambah celah tengah melampaui lebar bar dan itulah
+                // overflow 30 px-nya.
+                //
+                // Lebar diukur dari constraint yang sebenarnya — bukan ditebak
+                // dari lebar layar dikurangi inset — lalu menyusut hanya bila
+                // memang tidak muat, dan tidak pernah di bawah 48 dp sehingga
+                // tap target minimum tetap terpenuhi. Pada 360 dp dan 412 dp
+                // hasilnya tetap 58 dp seperti sebelumnya.
+                final fitItemWidth = (constraints.maxWidth - centerGap) / 4;
+                final navItemWidth = fitItemWidth >= _navItemPreferredWidth
+                    ? _navItemPreferredWidth
+                    : max(_navItemMinWidth, fitItemWidth);
+
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _NavItem(
+                      icon: Icons.home_rounded,
+                      label: 'Beranda',
+                      width: navItemWidth,
+                      active: selectedIndex == 0,
+                      onTap: () => onTabSelected(0),
+                    ),
+                    _NavItem(
+                      icon: Icons.receipt_rounded,
+                      label: 'Aktivitas',
+                      width: navItemWidth,
+                      active: selectedIndex == 1,
+                      onTap: () => onTabSelected(1),
+                    ),
+                    SizedBox(width: centerGap),
+                    _NavItem(
+                      icon: Icons.chat_bubble_outline_rounded,
+                      label: 'Chat',
+                      width: navItemWidth,
+                      active: selectedIndex == 2,
+                      onTap: () => onTabSelected(2),
+                    ),
+                    _NavItem(
+                      icon: Icons.person_outline_rounded,
+                      label: 'Akun',
+                      width: navItemWidth,
+                      active: selectedIndex == 3,
+                      onTap: () => onTabSelected(3),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -2318,18 +2429,40 @@ class _BottomNav extends StatelessWidget {
   }
 }
 
+/// Lebar item nav yang diinginkan, dan lantai tap target minimum.
+const double _navItemPreferredWidth = 58;
+const double _navItemMinWidth = 48;
+
+/// Tinggi bar nav pada skala teks normal.
+const double _navBarBaseHeight = 82;
+
+/// Tinggi bar nav yang ikut skala teks.
+///
+/// Tinggi tetap 82 dp membuat isi item meluber saat pengguna memperbesar teks.
+/// Bar kini tumbuh ke atas seperlunya, dan pada skala normal nilainya tetap 82
+/// sehingga tampilannya tidak berubah.
+double _navBarHeight(BuildContext context) {
+  final scaler = MediaQuery.textScalerOf(context);
+  // Ikon aktif (26 + padding 8 atas-bawah), jarak 5, indikator 3 + margin 3,
+  // lalu label satu baris.
+  final needed = 42 + 5 + 6 + scaler.scale(12) * 1.35 + 8;
+  return max(_navBarBaseHeight, needed);
+}
+
 class _NavItem extends StatelessWidget {
   const _NavItem({
     required this.icon,
     required this.label,
     required this.onTap,
     this.active = false,
+    this.width = _navItemPreferredWidth,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
   final bool active;
+  final double width;
 
   @override
   Widget build(BuildContext context) {
@@ -2341,7 +2474,7 @@ class _NavItem extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       pressedScale: 0.97,
       child: SizedBox(
-        width: 58,
+        width: width,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -2380,6 +2513,9 @@ class _NavItem extends StatelessWidget {
               child: Text(
                 label,
                 maxLines: 1,
+                // Jaring pengaman saat item menyusut atau teks diperbesar;
+                // pada ukuran normal label tetap utuh.
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: color,
                   fontSize: 12,
@@ -3651,11 +3787,45 @@ class _SettingsTile extends StatelessWidget {
   }
 }
 
+/// Ukuran tetap kartu layanan. Dikumpulkan di satu tempat supaya tinggi sel
+/// grid dihitung dari angka yang sama dengan yang dipakai merender kartunya.
+const double _serviceTileIconSize = 64;
+const double _serviceTileIconGap = 8;
+const double _serviceTileLabelWidth = 82;
+const double _serviceTileLabelFontSize = 11.2;
+const double _serviceTileLabelLineHeight = 1.05;
+const double _serviceTileLabelMinHeight = 32;
+
+/// Tinggi label untuk dua baris teks pada skala teks yang sedang berlaku.
+///
+/// Ikut text scaler supaya kartu tetap muat saat pengguna memperbesar teks —
+/// tinggi tetap 32 dp dulu membuat teks besar terpotong.
+double _serviceTileLabelHeight(BuildContext context) {
+  final scaled = MediaQuery.textScalerOf(context).scale(
+    _serviceTileLabelFontSize,
+  );
+  return max(
+    _serviceTileLabelMinHeight,
+    scaled * _serviceTileLabelLineHeight * 2,
+  );
+}
+
+double _serviceTileContentHeight(BuildContext context) {
+  return _serviceTileIconSize +
+      _serviceTileIconGap +
+      _serviceTileLabelHeight(context);
+}
+
 class _ServiceTile extends StatelessWidget {
-  const _ServiceTile({required this.item, this.onTap});
+  const _ServiceTile({
+    required this.item,
+    this.onTap,
+    this.maxLabelWidth = _serviceTileLabelWidth,
+  });
 
   final _ServiceItem item;
   final VoidCallback? onTap;
+  final double maxLabelWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -3676,12 +3846,12 @@ class _ServiceTile extends StatelessWidget {
                 secondary: style.secondary,
                 background: style.background,
               ),
-              size: 64,
+              size: _serviceTileIconSize,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: _serviceTileIconGap),
             SizedBox(
-              width: 82,
-              height: 32,
+              width: maxLabelWidth,
+              height: _serviceTileLabelHeight(context),
               child: Center(
                 child: Text(
                   item.label,
@@ -3691,8 +3861,8 @@ class _ServiceTile extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Color(0xFF263241),
-                    fontSize: 11.2,
-                    height: 1.05,
+                    fontSize: _serviceTileLabelFontSize,
+                    height: _serviceTileLabelLineHeight,
                     fontWeight: FontWeight.w800,
                   ),
                 ),

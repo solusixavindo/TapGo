@@ -106,19 +106,9 @@ void main() {
       );
       await settleFrames(tester);
 
-      // Dashboard sudah overflow 74 px pada kartu promo "Kelas Online Spesial"
-      // sejak commit frozen 9d5c5c9befd1, terbukti dengan merender dashboard
-      // versi frozen. Struktur Dashboard tidak boleh diubah, jadi overflow itu
-      // hanya dikeluarkan dari antrean exception agar test ini benar-benar
-      // menguji entry point.
-      final pending = tester.takeException();
-      if (pending != null) {
-        expect(
-          pending.toString(),
-          contains('overflowed'),
-          reason: 'hanya overflow pre-existing yang boleh diabaikan',
-        );
-      }
+      // Sejak Stage R2.4S dashboard Play tidak lagi overflow, jadi tidak ada
+      // exception yang perlu dimaafkan di sini.
+      expect(tester.takeException(), isNull);
     }
 
     Finder serviceTile(String label) => find.descendant(
@@ -249,26 +239,22 @@ void main() {
       expect(find.byType(RideEntryScreen), findsOneWidget);
     });
 
-    // Overflow yang SUDAH ada pada dashboard Play sebelum entry Ride
-    // ditambahkan. Terbukti identik dengan dan tanpa kartu Motor/Mobil, jadi
-    // daftar ini mengunci baseline: overflow baru apa pun akan menggagalkan
-    // test, sementara yang lama tidak menutupi apa-apa.
-    final preExistingOverflows = <double, Set<String>>{
-      320.0: {
-        'A RenderFlex overflowed by 12 pixels on the bottom.',
-        'A RenderFlex overflowed by 30 pixels on the right.',
-      },
-      360.0: <String>{},
-      412.0: <String>{},
-    };
-
+    // Stage R2.4S menghilangkan seluruh overflow dashboard Play, jadi allowlist
+    // yang dulu dipakai di sini sudah dibuang: sekarang yang dituntut adalah
+    // NOL overflow, bukan kecocokan dengan daftar yang boleh ada.
     for (final width in <double>[320, 360, 412]) {
-      testWidgets('entry Ride tidak menambah overflow pada ${width.toInt()} dp',
+      testWidgets('entry Ride bebas overflow pada ${width.toInt()} dp',
           (tester) async {
         final captured = <String>{};
         final previousHandler = FlutterError.onError;
-        FlutterError.onError =
-            (details) => captured.add(details.exception.toString());
+        FlutterError.onError = (details) {
+          final message = details.exception.toString().split('\n').first;
+          if (message.contains('overflowed')) {
+            captured.add(message);
+          } else {
+            previousHandler?.call(details);
+          }
+        };
 
         useTallView(tester, width: width);
         await tester.pumpWidget(
@@ -278,11 +264,7 @@ void main() {
         FlutterError.onError = previousHandler;
         tester.takeException();
 
-        expect(
-          captured,
-          equals(preExistingOverflows[width]),
-          reason: 'entry Motor/Mobil tidak boleh menambah overflow baru',
-        );
+        expect(captured, isEmpty);
         expect(serviceTile('Motor'), findsOneWidget);
         expect(serviceTile('Mobil'), findsOneWidget);
       });
