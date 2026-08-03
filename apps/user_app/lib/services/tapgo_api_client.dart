@@ -163,6 +163,78 @@ class _TapGoApiClient {
     }
   }
 
+  // --- Ojek Online penumpang ------------------------------------------------
+  // Memakai kontrak backend yang sudah ada tanpa menambah endpoint maupun
+  // field. Idempotency-Key dikirim sebagai header sesuai kontrak, dan nilainya
+  // dibuat pemanggil agar tetap stabil saat percobaan ulang.
+
+  Future<Map<String, dynamic>> createRideQuote({
+    required String serviceType,
+    required Map<String, dynamic> pickup,
+    required Map<String, dynamic> dropoff,
+    String? idempotencyKey,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      _apiPath('rides/quotes'),
+      data: {
+        'serviceType': serviceType,
+        'pickup': pickup,
+        'dropoff': dropoff,
+      },
+      options: idempotencyKey == null
+          ? null
+          : Options(headers: {'Idempotency-Key': idempotencyKey}),
+    );
+    return _unwrap(response.data);
+  }
+
+  Future<Map<String, dynamic>> createRideOrder({
+    required String quoteId,
+    String? idempotencyKey,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      _apiPath('rides'),
+      // CASH sesuai kontrak tahap ini. DIGITAL tidak pernah dikirim.
+      data: {'quoteId': quoteId, 'paymentMethod': 'CASH'},
+      options: idempotencyKey == null
+          ? null
+          : Options(headers: {'Idempotency-Key': idempotencyKey}),
+    );
+    return _unwrap(response.data);
+  }
+
+  Future<Map<String, dynamic>> rideDetail(String reference) {
+    return get('rides/$reference');
+  }
+
+  Future<List<Map<String, dynamic>>> rideHistory({int limit = 20}) async {
+    final response = await _dio.get<dynamic>(
+      _apiPath('rides'),
+      queryParameters: {'limit': limit},
+    );
+    // Backend menjawab { success, data: [...] }. _unwrap membungkus payload
+    // non-map menjadi {'items': payload}, jadi daftar berada di 'items'.
+    final payload = _unwrapDynamic(response.data)['items'];
+    if (payload is! List) {
+      return const [];
+    }
+    return payload
+        .whereType<Map>()
+        .map((row) => row.cast<String, dynamic>())
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> cancelRide({
+    required String reference,
+    required String reasonCode,
+    String? note,
+  }) {
+    return post('rides/$reference/cancel', body: {
+      'reason': reasonCode,
+      if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+    });
+  }
+
   // --- Pemulihan password ---------------------------------------------------
   // Tidak ada satu pun method di bawah yang menulis identifier, OTP, reset
   // token, atau password ke log. Backend selalu menjawab permintaan pemulihan

@@ -36,10 +36,13 @@ part 'screens/membership_screen.dart';
 part 'screens/password_recovery_screen.dart';
 part 'screens/payment_demo_screen.dart';
 part 'screens/referral_tree_screen.dart';
+part 'screens/ride_customer_screens.dart';
 part 'screens/splash_screen.dart';
 part 'screens/success_screen.dart';
 part 'screens/verification_gate_screen.dart';
 part 'services/persistent_demo_store.dart';
+part 'services/ride_flow_controller.dart';
+part 'services/ride_location_port.dart';
 part 'services/tapgo_api_client.dart';
 part 'widgets/benefit_item.dart';
 part 'widgets/invoice_card.dart';
@@ -310,8 +313,8 @@ class TapGoUserApp extends ConsumerWidget {
       title: 'TapGo',
       scaffoldMessengerKey: _tapGoScaffoldMessengerKey,
       debugShowCheckedModeBanner: false,
-      theme: _tapGoReadableTheme(),
-      darkTheme: _tapGoReadableTheme(brightness: Brightness.dark),
+      theme: tapGoReadableTheme(),
+      darkTheme: tapGoReadableTheme(brightness: Brightness.dark),
       themeMode: themePreference.themeMode,
       home: _SessionBootstrap(
         child:
@@ -321,7 +324,10 @@ class TapGoUserApp extends ConsumerWidget {
   }
 }
 
-ThemeData _tapGoReadableTheme({Brightness brightness = Brightness.light}) {
+/// Tema aplikasi. Publik supaya harness bukti visual Stage R2.4 merender
+/// layar dengan tema yang sama persis dengan aplikasi, bukan tema Material
+/// bawaan yang warnanya berbeda dari merek TapGo.
+ThemeData tapGoReadableTheme({Brightness brightness = Brightness.light}) {
   final isDark = brightness == Brightness.dark;
   final scaffoldBackground = isDark ? const Color(0xFF071525) : _softBackground;
   final surfaceColor = isDark ? const Color(0xFF0B1F35) : Colors.white;
