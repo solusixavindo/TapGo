@@ -1929,6 +1929,12 @@ class _ServiceGrid extends StatelessWidget {
   ];
 
   static const _playServices = [
+    // Release 2 yang diunggah ke Play Store memuat Ojek Online, sehingga entry
+    // point Motor dan Mobil hadir di sini — bukan hanya pada distribusi direct.
+    // Keduanya tidak bergantung pada flag demo: menu tetap terlihat, dan yang
+    // fail closed adalah penyedia lokasi di dalam alurnya.
+    _ServiceItem('Motor', Icons.two_wheeler_rounded, Color(0xFF0569E8), null),
+    _ServiceItem('Mobil', Icons.local_taxi_rounded, Color(0xFF0B7A75), null),
     _ServiceItem('Kartu Anggota', Icons.badge_rounded, Color(0xFFF59E0B), null),
     _ServiceItem('Profil', Icons.person_rounded, Color(0xFF697386), null),
     _ServiceItem(
@@ -1976,6 +1982,13 @@ VoidCallback? _tapGoServiceActionFor(BuildContext context, _ServiceItem item) {
   if (item.badge != null) {
     return null;
   }
+  // Ojek Online diperiksa lebih dulu supaya berlaku pada kedua distribusi.
+  // Sebelumnya cabang play mengembalikan null untuk label ride, sehingga
+  // fiturnya tidak dapat dibuka pada build Play meski kartunya ada.
+  final rideService = tapGoRideEntryServiceFor(item.label);
+  if (rideService != null) {
+    return () => tapGoOpenRideBooking(context, rideService);
+  }
   if (tapGoIsPlayDistribution) {
     return switch (item.label) {
       'Kartu Anggota' => () => _openDemo(
@@ -1991,23 +2004,21 @@ VoidCallback? _tapGoServiceActionFor(BuildContext context, _ServiceItem item) {
       _ => null,
     };
   }
-  // Distribusi direct: Ojek Online sudah tersedia. Layanan lain belum, dan
-  // tetap memakai pesan "belum dapat dibuka" yang jujur.
-  final rideService = tapGoRideEntryServiceFor(item.label);
-  if (rideService != null) {
-    return () => tapGoOpenRideBooking(context, rideService);
-  }
+  // Layanan lain belum tersedia dan tetap memakai pesan "belum dapat dibuka"
+  // yang jujur.
   return () => _showSoon(context);
 }
 
 /// Memetakan label kartu layanan dashboard ke jenis layanan Ojek Online.
 ///
 /// Dipakai dashboard sebagai satu-satunya sumber kebenaran pemetaan, sehingga
-/// test menguji pemetaan yang sama dengan yang dipakai produksi.
+/// test menguji pemetaan yang sama dengan yang dipakai produksi. Label
+/// 'Motor'/'Mobil' dipakai dashboard Release 2; 'TapGo Ride'/'TapGo Car' adalah
+/// label distribusi direct yang tetap didukung.
 RideServiceKind? tapGoRideEntryServiceFor(String label) {
   return switch (label) {
-    'TapGo Ride' => RideServiceKind.motorcycle,
-    'TapGo Car' => RideServiceKind.car,
+    'TapGo Ride' || 'Motor' => RideServiceKind.motorcycle,
+    'TapGo Car' || 'Mobil' => RideServiceKind.car,
     _ => null,
   };
 }
@@ -3842,12 +3853,14 @@ class _ServiceAssetIcon extends StatelessWidget {
 
 _ServiceIconStyle _serviceIconStyle(String label) {
   return switch (label) {
-    'TapGo Ride' => const _ServiceIconStyle(
+    // 'Motor'/'Mobil' adalah alias label yang memakai gaya ikon yang sama,
+    // mengikuti pola alias yang sudah dipakai sistem ikon.
+    'TapGo Ride' || 'Motor' => const _ServiceIconStyle(
         primary: Color(0xFF006AF5),
         secondary: Color(0xFF1FA2FF),
         background: Color(0xFFEAF5FF),
       ),
-    'TapGo Car' => const _ServiceIconStyle(
+    'TapGo Car' || 'Mobil' => const _ServiceIconStyle(
         primary: Color(0xFF006AF5),
         secondary: Color(0xFF2BB8FF),
         background: Color(0xFFEAF3FF),

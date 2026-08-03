@@ -53,8 +53,12 @@ class _TapGoServiceIllustration extends StatelessWidget {
     'Event': '$_basePath/tg-event.svg',
     'TapGo Ride': '$_basePath/tg-ojek-motor.svg',
     'Ojek Motor': '$_basePath/tg-ojek-motor.svg',
+    // Label entry point Ojek Online pada dashboard Release 2. Alias, bukan
+    // ilustrasi baru: keduanya menunjuk aset yang sudah ada.
+    'Motor': '$_basePath/tg-ojek-motor.svg',
     'TapGo Car': '$_basePath/tg-ojek-mobil.svg',
     'Ojek Mobil': '$_basePath/tg-ojek-mobil.svg',
+    'Mobil': '$_basePath/tg-ojek-mobil.svg',
     'Activity': '$_basePath/tg-activity.svg',
     'Aktivitas': '$_basePath/tg-activity.svg',
     'Notification': '$_basePath/tg-notification.svg',
