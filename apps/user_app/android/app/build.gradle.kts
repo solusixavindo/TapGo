@@ -44,14 +44,42 @@ android {
 
     buildTypes {
         release {
-            if (!hasReleaseSigning) {
-                throw GradleException(
-                    "Release signing is not configured. Create apps/user_app/android/key.properties and apps/user_app/android/keystore/tapgo-upload-keystore.jks before building release."
-                )
+            // Signing release dipasang HANYA bila materialnya benar-benar ada.
+            // Bila tidak ada, penjaga di bawah menghentikan build release
+            // sebelum satu pun task berjalan — sehingga release tidak pernah
+            // diam-diam memakai debug signing.
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
             }
-
-            signingConfig = signingConfigs.getByName("release")
         }
+        // Debug sengaja tidak menyentuh material release sama sekali dan
+        // memakai debug keystore bawaan Android.
+    }
+}
+
+/**
+ * Penjaga release signing, dievaluasi pada waktu EKSEKUSI.
+ *
+ * Sebelumnya penjaga ini berupa `throw` di dalam blok `release { }`. Gradle
+ * mengonfigurasi SELURUH build type pada setiap invocation, sehingga
+ * `flutter build apk --debug` pun ikut gagal ketika key.properties tidak ada.
+ * Akibatnya build debug mustahil dijalankan di lingkungan mana pun yang tidak
+ * memegang material signing produksi — termasuk CI dan worktree bersih.
+ *
+ * Task graph hanya memuat task yang benar-benar akan dijalankan, sehingga
+ * pemeriksaan di sini menyentuh build release saja.
+ */
+gradle.taskGraph.whenReady {
+    val releaseRequested = allTasks.any { task ->
+        task.project == project && task.name.contains("Release", ignoreCase = false)
+    }
+
+    if (releaseRequested && !hasReleaseSigning) {
+        // Pesan menyebut nama berkas relatif yang perlu dibuat, tanpa path
+        // absolut, isi keystore, alias, maupun password.
+        throw GradleException(
+            "Release signing is not configured. Create android/key.properties and the upload keystore referenced by it before building release."
+        )
     }
 }
 
