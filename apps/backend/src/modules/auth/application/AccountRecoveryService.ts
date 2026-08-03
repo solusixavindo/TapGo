@@ -5,6 +5,7 @@ import { hashPassword } from "../../../core/security/passwordHasher.js";
 import { phoneLookupVariants } from "../../../core/security/phone.js";
 import {
   AUTH_RECOVERY_KEY_VERSION,
+  isAuthRecoveryConfigured,
   digestDestination,
   digestEquals,
   digestOtpCode,
@@ -12,7 +13,7 @@ import {
   generateOtpCode,
   generateResetToken
 } from "../../../core/security/otpDigest.js";
-import { OtpDeliveryProvider } from "../domain/OtpDeliveryProvider.js";
+import { OtpDeliveryProvider, channelUnavailableError } from "../domain/OtpDeliveryProvider.js";
 
 /**
  * Pemulihan akun dan verifikasi kepemilikan kontak.
@@ -143,6 +144,24 @@ export class AccountRecoveryService {
     const startedAt = Date.now();
     const response = { message: RECOVERY_GENERIC_MESSAGE };
 
+    // KONTRAK RESPONS (Owner Decision Stage R2.1).
+    //
+    // Ketidaktersediaan yang bersifat GLOBAL — secret belum dikonfigurasi atau
+    // tidak ada provider yang mendukung kanal mana pun — diperiksa SEBELUM
+    // account lookup, lalu dijawab 503 yang seragam.
+    //
+    // Diperiksa lebih dulu justru demi keamanan: keputusan ini tidak
+    // bergantung pada identifier sama sekali, sehingga status, body, dan waktu
+    // responsnya identik untuk nomor terdaftar maupun tidak. Bila diperiksa
+    // setelah lookup, lamanya pencarian akun akan menjadi oracle.
+    //
+    // Kegagalan yang SPESIFIK TERHADAP TARGET — akun tidak ada, kanal tidak
+    // memenuhi syarat, cooldown, atau provider menolak satu tujuan tertentu —
+    // tetap menghasilkan 202 generik di bawah.
+    if (!this.isRecoveryGloballyAvailable()) {
+      throw channelUnavailableError();
+    }
+
     let target: ChallengeTarget | null = null;
     try {
       target = await this.resolveRecoveryTarget(input.identifier);
@@ -166,6 +185,19 @@ export class AccountRecoveryService {
     }
 
     return enforceMinimumDuration(startedAt, response);
+  }
+
+  /**
+   * Apakah pemulihan dapat beroperasi sama sekali, tanpa melihat identifier.
+   *
+   * Sengaja tidak menerima argumen: hasilnya harus mustahil bergantung pada
+   * akun mana pun, karena nilainya menentukan status HTTP yang terlihat publik.
+   */
+  private isRecoveryGloballyAvailable(): boolean {
+    if (!isAuthRecoveryConfigured()) {
+      return false;
+    }
+    return this.provider.supports("PHONE") || this.provider.supports("EMAIL");
   }
 
   /** Langkah 2. Membuktikan OTP dan menerbitkan reset token sekali pakai. */

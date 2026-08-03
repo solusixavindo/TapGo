@@ -564,8 +564,12 @@ describeIntegration("Production hotfix — account recovery", () => {
       const requested = await api("POST", "/api/v1/auth/recovery/request", {
         identifier: user.phone
       });
-      // Respons publik tetap generik agar tidak bocor.
-      expect(requested.status).toBe(202);
+      // Kontrak Stage R2.1: ketidaktersediaan GLOBAL dijawab 503 seragam,
+      // diperiksa sebelum account lookup sehingga tetap tidak membocorkan
+      // keberadaan akun. Kesamaannya untuk identifier terdaftar maupun tidak
+      // dibuktikan pada recoveryResponseContract.integration.test.ts.
+      expect(requested.status).toBe(503);
+      expect(requested.body.code).toBe("AUTH_RECOVERY_CHANNEL_UNAVAILABLE");
 
       // Tetapi tidak ada kode yang beredar, dan verifikasi mustahil berhasil.
       const verify = await api("POST", "/api/v1/auth/recovery/verify", {

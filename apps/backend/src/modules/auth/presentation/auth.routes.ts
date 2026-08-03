@@ -17,7 +17,7 @@ import { PrismaAuthRepository } from "../infrastructure/PrismaAuthRepository.js"
 import { otpDeliveryProvider } from "../infrastructure/otpProviderRegistry.js";
 import { AuthController } from "./auth.controller.js";
 import { RecoveryController } from "./recovery.controller.js";
-import { loginSchema, otpRequestSchema, refreshSchema, registerSchema } from "./auth.validators.js";
+import { loginSchema, refreshSchema, registerSchema } from "./auth.validators.js";
 import {
   recoveryRequestSchema,
   recoveryResetSchema,
@@ -43,7 +43,17 @@ const recoveryController = new RecoveryController(recoveryService);
 
 export const authRouter = Router();
 
-authRouter.post("/otp/request", authRateLimiter, validateRequest(otpRequestSchema), asyncHandler(controller.requestOtp));
+// POST /otp/request DIPENSIUNKAN pada Stage R2.1.
+//
+// Route ini membuat OtpChallenge lalu tidak pernah mengirim apa pun, dan tidak
+// pernah punya pasangan verify — tidak ada satu pun jalur yang dapat menukar
+// kode itu menjadi sesi. Pencarian di seluruh repository menemukan nol
+// consumer: hanya baris pendaftarannya sendiri yang cocok. Di non-production
+// ia juga mengembalikan `developmentCode` pada response.
+//
+// Membiarkan endpoint publik yang mati berdampingan dengan alur pemulihan yang
+// nyata hanya menambah permukaan serang dan kebingungan. Alur OTP yang sah
+// sekarang adalah /recovery/* dan /verification/*.
 authRouter.post(
   "/register",
   authRateLimiter,

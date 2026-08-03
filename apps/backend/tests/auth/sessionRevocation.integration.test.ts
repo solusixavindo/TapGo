@@ -133,6 +133,9 @@ describeIntegration("Stage R2.1 — session revocation survives integration", ()
 
   afterAll(async () => {
     resetOtpDeliveryProvider();
+    // Dibersihkan di kedua ujung. Tanpa ini, baris yang tersisa terbawa ke
+    // file test berikutnya dan menggagalkan snapshot finansial di sana.
+    await cleanDatabase();
     await new Promise<void>((resolve, reject) => {
       if (!server) {
         resolve();
