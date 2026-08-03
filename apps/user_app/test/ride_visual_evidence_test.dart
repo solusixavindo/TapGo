@@ -193,6 +193,26 @@ void main() {
     );
   }
 
+  /// Menegaskan tangkapan layar bebas overflow, bukan sekadar terlihat rapi.
+  Future<void> Function(WidgetTester) expectNoOverflow() {
+    final overflows = <String>{};
+    final previousHandler = FlutterError.onError;
+    FlutterError.onError = (details) {
+      final message = details.exception.toString().split('\n').first;
+      if (message.contains('overflowed')) {
+        overflows.add(message);
+      } else {
+        previousHandler?.call(details);
+      }
+    };
+    return (tester) async {
+      FlutterError.onError = previousHandler;
+      tester.takeException();
+      expect(overflows, isEmpty,
+          reason: 'tangkapan layar harus bebas overflow');
+    };
+  }
+
   Future<void> pickRouteAndQuote(WidgetTester tester) async {
     for (final label in const ['LOKASI_DEMO_A', 'LOKASI_DEMO_B']) {
       final finder = label == 'LOKASI_DEMO_A'
@@ -248,6 +268,10 @@ void main() {
       expect(tapGoIsPlayDistribution, isTrue);
       tapGoRideHistoryLoaderForTests = () async => const [];
       addTearDown(() => tapGoRideHistoryLoaderForTests = null);
+      // Fixture deterministik: tangkapan layar menampilkan data contoh yang
+      // stabil, bukan state gagal muat karena test tidak punya backend.
+      tapGoDashboardVisualFixtureEnabled = true;
+      addTearDown(() => tapGoDashboardVisualFixtureEnabled = false);
 
       final overflows = <String>{};
       final previousHandler = FlutterError.onError;
@@ -285,6 +309,14 @@ void main() {
             findsOneWidget,
           );
           expect(overflows, isEmpty, reason: 'screenshot harus bebas overflow');
+          // Fixture wajib menandai dirinya, dan state gagal muat tidak boleh
+          // ikut terpotret.
+          expect(
+            find.textContaining(tapGoDashboardFixtureLabel),
+            findsOneWidget,
+          );
+          expect(find.text('Gagal memuat data'), findsNothing);
+          expect(find.text('Data belum tersedia'), findsNothing);
         },
       );
     });
@@ -491,6 +523,7 @@ void main() {
         '15_width_320',
         width: 320,
         height: 900,
+        beforeCapture: expectNoOverflow(),
         child: statusScreen(
           orderPayload(
             status: 'DRIVER_ARRIVED',
@@ -524,6 +557,7 @@ void main() {
         width: 390,
         height: 1100,
         textScaler: const TextScaler.linear(1.8),
+        beforeCapture: expectNoOverflow(),
         child: statusScreen(
           orderPayload(
             status: 'DRIVER_ARRIVED',
@@ -533,6 +567,46 @@ void main() {
         ),
       );
     });
+    testWidgets('19 dashboard Play pada 320 dp', (tester) async {
+      // Bukti langsung Stage R2.4S: lebar terkecil yang didukung, bebas
+      // overflow, entry Motor dan Mobil tetap ada.
+      expect(tapGoIsPlayDistribution, isTrue);
+      tapGoRideHistoryLoaderForTests = () async => const [];
+      addTearDown(() => tapGoRideHistoryLoaderForTests = null);
+      tapGoDashboardVisualFixtureEnabled = true;
+      addTearDown(() => tapGoDashboardVisualFixtureEnabled = false);
+
+      final assertClean = expectNoOverflow();
+
+      await shoot(
+        tester,
+        '19_play_dashboard_320dp',
+        width: 320,
+        height: 1500,
+        child: const TapGoDashboard(),
+        beforeCapture: (tester) async {
+          for (var round = 0; round < 5; round += 1) {
+            await tester.runAsync(
+              () => Future<void>.delayed(const Duration(milliseconds: 120)),
+            );
+            for (var frame = 0; frame < 6; frame += 1) {
+              await tester.pump(const Duration(milliseconds: 80));
+            }
+          }
+          await assertClean(tester);
+          final grid = find.byType(GridView);
+          expect(
+            find.descendant(of: grid, matching: find.text('Motor')),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(of: grid, matching: find.text('Mobil')),
+            findsOneWidget,
+          );
+        },
+      );
+    });
+
     testWidgets('18 perjalanan aktif dipulihkan dari server', (tester) async {
       await shoot(
         tester,
@@ -586,7 +660,7 @@ void main() {
       // Sheet hanya bermakna bila seluruh 19 tangkapan layar memang ada.
       expect(
         files,
-        hasLength(19),
+        hasLength(20),
         reason: 'jumlah tangkapan layar tidak sesuai: '
             '${files.map((f) => f.uri.pathSegments.last).toList()}',
       );
