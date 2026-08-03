@@ -275,6 +275,10 @@ export class AccountRecoveryService {
 
     const passwordHash = await hashPassword(input.newPassword);
 
+    // Satu transaksi atomik: password, versi otorisasi, audit timestamp,
+    // pencabutan seluruh Session, dan penghanguskan tantangan lain. Bila satu
+    // pun gagal, tidak ada yang berubah — mustahil ada state di mana password
+    // sudah berganti tetapi token lama masih sah.
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: challenge.userId },
@@ -284,6 +288,12 @@ export class AccountRecoveryService {
           // legacy inilah saat phoneVerifiedAt pertama kali terisi — lewat
           // bukti nyata, bukan lewat backfill migration.
           ...(challenge.channel === "PHONE" ? { phoneVerifiedAt: now } : {}),
+          // Increment relatif, bukan penetapan nilai absolut: dua reset yang
+          // berjalan bersamaan tetap menghasilkan hitungan yang konsisten
+          // karena database yang menambahkannya.
+          authVersion: { increment: 1 },
+          // Audit timestamp saja. Sejak Stage R2.1A kolom ini tidak lagi
+          // dipakai untuk keputusan otorisasi apa pun.
           sessionsRevokedAt: now
         }
       }),

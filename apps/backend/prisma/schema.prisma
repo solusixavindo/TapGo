@@ -244,10 +244,17 @@ model User {
   /// diisi tetapi NULL di sini, email tidak boleh dipakai sebagai recovery
   /// channel. Mengubah email mengosongkan kolom ini kembali.
   emailVerifiedAt   DateTime? @map("email_verified_at")
-  /// Epoch pencabutan sesi. Access token yang diterbitkan sebelum waktu ini
-  /// ditolak requireAuth. Diperlukan karena access token berumur 15 menit dan
-  /// sebelumnya tidak pernah diperiksa ke database, sehingga reset password
-  /// tidak benar-benar mencabut akses berjalan.
+  /// Versi otorisasi akun. Setiap pencabutan sesi menaikkannya tepat satu.
+  ///
+  /// Inilah penentu otoritatif keabsahan token — BUKAN perbandingan waktu.
+  /// Token membawa claim versi, dan requireAuth menuntut kesamaan persis.
+  /// Pendekatan berbasis waktu tidak dapat memutuskan token yang diterbitkan
+  /// pada detik yang sama dengan pencabutan, dan token semacam itu tetap sah
+  /// sampai TTL-nya habis. Bilangan bulat tidak punya ambiguitas itu.
+  authVersion       Int       @default(0) @map("auth_version")
+  /// Epoch pencabutan sesi. Dipertahankan sebagai AUDIT TIMESTAMP saja —
+  /// tidak lagi dipakai untuk keputusan otorisasi apa pun sejak Stage R2.1A.
+  /// Keputusan otorisasi memakai authVersion.
   sessionsRevokedAt DateTime? @map("sessions_revoked_at")
 
   createdAt DateTime @default(now()) @map("created_at")

@@ -48,6 +48,8 @@ export interface AuthRepository {
   findUserById(id: string): Promise<User | null>;
   createUser(input: CreateUserInput): Promise<User>;
   updateLastLogin(userId: string): Promise<void>;
+  /** Versi otorisasi akun saat ini. Dipakai saat menerbitkan token. */
+  getAuthVersion(userId: string): Promise<number>;
   createSession(input: CreateSessionInput): Promise<SessionRecord>;
   findSessionById(sessionId: string): Promise<SessionRecord | null>;
   rotateSession(sessionId: string, refreshTokenHash: string, expiresAt: Date): Promise<void>;

@@ -156,8 +156,30 @@ export class AuthService {
       throw new AppError("Account is not active", StatusCodes.FORBIDDEN, "ACCOUNT_INACTIVE");
     }
 
-    const accessToken = signAccessToken({ sub: user.id, role: user.role, sessionId: session.id });
-    const newRefreshToken = signRefreshToken({ sub: user.id, role: user.role, sessionId: session.id });
+    // Jalur refresh memakai aturan versi yang sama dengan requireAuth.
+    // Tanpa ini, refresh token lama masih dapat menukar dirinya menjadi
+    // access token baru setelah pencabutan.
+    const tokenVersion = payload.authVersion;
+    const versionAcceptable =
+      tokenVersion === undefined
+        ? user.authVersion === 0
+        : Number.isInteger(tokenVersion) && tokenVersion >= 0 && tokenVersion === user.authVersion;
+
+    if (!versionAcceptable) {
+      await this.authRepository.revokeSession(session.id);
+      throw new AppError(
+        "Sesi sudah tidak berlaku. Silakan login kembali.",
+        StatusCodes.UNAUTHORIZED,
+        "AUTH_SESSION_REVOKED"
+      );
+    }
+
+    const accessToken = signAccessToken({
+      sub: user.id, role: user.role, sessionId: session.id, authVersion: user.authVersion
+    });
+    const newRefreshToken = signRefreshToken({
+      sub: user.id, role: user.role, sessionId: session.id, authVersion: user.authVersion
+    });
     const expiresAt = this.refreshExpiryDate();
 
     await this.authRepository.rotateSession(session.id, this.hashToken(newRefreshToken), expiresAt);
@@ -185,9 +207,13 @@ export class AuthService {
   }
 
   private async issueTokenPair(userId: string, role: UserRole, context: AuthClientContext) {
+    // Versi otorisasi dibaca SEKARANG dan disematkan pada kedua token.
+    // Token yang lahir setelah pencabutan otomatis membawa versi baru dan
+    // langsung sah — termasuk bila diterbitkan pada detik yang sama.
+    const authVersion = await this.authRepository.getAuthVersion(userId);
     const provisionalSessionId = crypto.randomUUID();
-    const accessToken = signAccessToken({ sub: userId, role, sessionId: provisionalSessionId });
-    const refreshToken = signRefreshToken({ sub: userId, role, sessionId: provisionalSessionId });
+    const accessToken = signAccessToken({ sub: userId, role, sessionId: provisionalSessionId, authVersion });
+    const refreshToken = signRefreshToken({ sub: userId, role, sessionId: provisionalSessionId, authVersion });
     const expiresAt = this.refreshExpiryDate();
 
     const session = await this.authRepository.createSession({
@@ -198,8 +224,8 @@ export class AuthService {
       expiresAt
     });
 
-    const finalAccessToken = signAccessToken({ sub: userId, role, sessionId: session.id });
-    const finalRefreshToken = signRefreshToken({ sub: userId, role, sessionId: session.id });
+    const finalAccessToken = signAccessToken({ sub: userId, role, sessionId: session.id, authVersion });
+    const finalRefreshToken = signRefreshToken({ sub: userId, role, sessionId: session.id, authVersion });
 
     await this.authRepository.rotateSession(session.id, this.hashToken(finalRefreshToken), expiresAt);
 

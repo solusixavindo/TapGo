@@ -15,6 +15,14 @@ export type AccessTokenPayload = {
   sub: string;
   role: JwtRole;
   sessionId: string;
+  /**
+   * Versi otorisasi akun saat token diterbitkan.
+   *
+   * Opsional pada tipe SEMATA demi kompatibilitas token lama yang masih
+   * beredar. Seluruh token BARU wajib mengisinya; requireAuth menolak token
+   * tanpa versi begitu authVersion akun melewati 0.
+   */
+  authVersion?: number;
 };
 
 /**
@@ -26,6 +34,9 @@ export type VerifiedAccessTokenPayload = AccessTokenPayload & {
   iat?: number;
   exp?: number;
 };
+
+/** Nilai `authVersion` yang tersimpan pada akun yang belum pernah dicabut. */
+export const INITIAL_AUTH_VERSION = 0;
 
 type JwtExpiresIn = NonNullable<SignOptions["expiresIn"]>;
 

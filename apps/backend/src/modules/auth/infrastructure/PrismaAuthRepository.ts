@@ -46,6 +46,14 @@ export class PrismaAuthRepository implements AuthRepository {
     return this.prisma.user.findUnique({ where: { referralCode } });
   }
 
+  async getAuthVersion(userId: string): Promise<number> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { authVersion: true }
+    });
+    return user?.authVersion ?? 0;
+  }
+
   findUserById(id: string) {
     return this.prisma.user.findUnique({ where: { id } });
   }

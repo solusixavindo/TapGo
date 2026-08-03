@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../errors/AppError.js";
-import { JwtRole, verifyAccessToken } from "./tokenService.js";
+import { INITIAL_AUTH_VERSION, JwtRole, verifyAccessToken } from "./tokenService.js";
 
 declare global {
   namespace Express {
@@ -19,20 +19,24 @@ declare global {
 export const AUTH_SESSION_REVOKED = "AUTH_SESSION_REVOKED";
 
 /**
- * Pencabutan sesi yang otoritatif dari database.
+ * Pencabutan sesi berbasis VERSI, otoritatif dari database.
  *
- * Access token berumur 15 menit dan sebelumnya tidak pernah diperiksa ke
- * database, sehingga reset password tidak benar-benar mencabut akses yang
- * sedang berjalan — token lama tetap sah sampai kedaluwarsa sendiri.
+ * Pendekatan sebelumnya membandingkan `iat` token dengan
+ * `users.sessions_revoked_at`. Itu tidak memadai: `iat` hanya berpresisi
+ * detik, sehingga token yang diterbitkan pada detik yang sama dengan
+ * pencabutan lolos perbandingan — dan begitu lolos, ia tetap sah sampai TTL
+ * 15 menitnya habis. Keputusan otorisasi tidak boleh bergantung pada presisi
+ * jam.
  *
- * Sekarang setiap permintaan terautentikasi membandingkan `iat` token dengan
- * `users.sessions_revoked_at`. Token yang diterbitkan sebelum pencabutan
- * ditolak seketika.
+ * Sekarang token membawa claim `authVersion`, dan setiap permintaan menuntut
+ * KESAMAAN PERSIS dengan `users.auth_version`. Pencabutan menaikkan kolom itu
+ * satu langkah, sehingga seluruh token lama gugur seketika tanpa ambiguitas.
  *
- * Kenapa epoch pada User, bukan lookup baris Session:
- * memaksa keberadaan baris Session akan menolak setiap token yang tidak
- * diterbitkan lewat issueTokenPair. Epoch memberi pencabutan yang sama
- * kuatnya tanpa mengubah kontrak penerbitan token yang sudah ada.
+ * Kebijakan kompatibilitas untuk token lama yang masih beredar:
+ *   - token TANPA versi diterima hanya selama auth_version akun masih 0;
+ *   - begitu auth_version melewati 0, token tanpa versi ditolak;
+ *   - versi malformed — bukan integer, negatif, NaN, atau tak dikenal —
+ *     ditolak, tanpa fallback diam-diam.
  *
  * Biaya: satu pembacaan primary key per permintaan terautentikasi.
  */
@@ -56,37 +60,54 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
   prisma.user
     .findUnique({
       where: { id: payload.sub },
-      select: { sessionsRevokedAt: true }
+      select: { authVersion: true }
     })
     .then((user) => {
-      const revokedAt = user?.sessionsRevokedAt;
-      if (revokedAt) {
-        // FAIL-CLOSED. Bila epoch pencabutan aktif tetapi `iat` hilang atau
-        // tidak berbentuk angka berhingga, umur token TIDAK dapat dibuktikan
-        // lebih baru daripada pencabutan — maka token ditolak.
-        //
-        // Versi sebelumnya melewati pemeriksaan ketika `iat` undefined, yang
-        // membuat token tanpa `iat` lolos melewati pencabutan sesi. Itu
-        // fail-open dan merupakan bypass diam-diam.
-        const issuedAt = payload.iat;
-        const hasUsableIat = typeof issuedAt === "number" && Number.isFinite(issuedAt);
+      // Baris user tidak ditemukan: TIDAK ada keputusan otorisasi yang dibuat
+      // di sini, dan permintaan diteruskan seperti sebelumnya.
+      //
+      // Ini mempertahankan semantik yang sudah disetujui pada 59883f5 —
+      // kegagalan internal tidak boleh tersamarkan menjadi 401. Token untuk
+      // user yang tidak ada akan tetap gagal di lapisan bawah (mis. foreign
+      // key AuditLog) dan muncul sebagai 500 yang jujur.
+      //
+      // Menolaknya di sini juga akan MELEBIHI mandat Stage R2.1A, yang
+      // menyangkut perbandingan versi. Lihat laporan: kelayakan menolak token
+      // milik akun yang sudah tidak ada dicatat sebagai pertimbangan terpisah
+      // untuk Owner, bukan diputuskan diam-diam di sini.
+      if (!user) {
+        req.auth = {
+          userId: payload.sub,
+          role: payload.role,
+          sessionId: payload.sessionId
+        };
+        next();
+        return;
+      }
 
-        // Perbandingan dilakukan pada granularitas DETIK di kedua sisi.
-        //
-        // `iat` hanya berpresisi detik, sedangkan sessions_revoked_at
-        // berpresisi milidetik. Membandingkan langsung akan menolak token
-        // yang diterbitkan pada detik yang sama dengan pencabutan — termasuk
-        // login sah yang dilakukan pengguna tepat setelah reset password.
-        // Itu mengunci pengguna keluar dari akunnya sendiri.
-        //
-        // Sisa celahnya adalah access token yang diterbitkan pada detik yang
-        // sama persis dengan pencabutan. Menerbitkannya menuntut password
-        // LAMA, yang pada saat itu juga sudah diganti, dan seluruh baris
-        // Session sudah dicabut sehingga refresh mustahil. Risiko di bawah
-        // satu detik ini diterima secara sadar; mengunci pengguna sah keluar
-        // jauh lebih merugikan.
-        const revokedAtSeconds = Math.floor(revokedAt.getTime() / 1000);
-        if (!hasUsableIat || issuedAt < revokedAtSeconds) {
+      const currentVersion = user.authVersion;
+      const tokenVersion = payload.authVersion;
+
+      if (tokenVersion === undefined) {
+        // Token lama tanpa claim versi. Hanya boleh diterima selama akun
+        // belum pernah mengalami pencabutan sama sekali.
+        if (currentVersion !== INITIAL_AUTH_VERSION) {
+          throw new AppError(
+            "Sesi sudah tidak berlaku. Silakan login kembali.",
+            StatusCodes.UNAUTHORIZED,
+            AUTH_SESSION_REVOKED
+          );
+        }
+      } else {
+        // Versi yang ada wajib berupa integer non-negatif dan sama persis.
+        // Segala bentuk lain — string, pecahan, negatif, NaN, Infinity —
+        // ditolak. Tidak ada koersi, tidak ada fallback.
+        const usable =
+          typeof tokenVersion === "number" &&
+          Number.isInteger(tokenVersion) &&
+          tokenVersion >= 0;
+
+        if (!usable || tokenVersion !== currentVersion) {
           throw new AppError(
             "Sesi sudah tidak berlaku. Silakan login kembali.",
             StatusCodes.UNAUTHORIZED,

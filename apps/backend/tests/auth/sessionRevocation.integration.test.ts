@@ -1,7 +1,5 @@
 import http, { Server } from "node:http";
 import { AddressInfo } from "node:net";
-import crypto from "node:crypto";
-import jwt from "jsonwebtoken";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { cleanDatabase, prisma, runIntegration } from "../helpers/referralWalletHarness.js";
 import { RecordingOtpProvider } from "../../src/modules/auth/infrastructure/RecordingOtpProvider.js";
@@ -54,25 +52,6 @@ async function api(
   });
   const text = await response.text();
   return { status: response.status, body: text ? JSON.parse(text) : {} };
-}
-
-/**
- * Merakit JWT HS256 secara manual.
- *
- * Diperlukan karena `jwt.sign` menolak membuat token dengan `iat` non-numerik,
- * sedangkan penyerang tidak terikat batasan library. Tanpa ini, jalur
- * fail-closed untuk `iat` malformed tidak dapat diuji sama sekali.
- */
-function signRawJwt(payload: Record<string, unknown>, secret: string): string {
-  const b64 = (value: object) =>
-    Buffer.from(JSON.stringify(value)).toString("base64url");
-  const head = b64({ alg: "HS256", typ: "JWT" });
-  const body = b64(payload);
-  const signature = crypto
-    .createHmac("sha256", secret)
-    .update(`${head}.${body}`)
-    .digest("base64url");
-  return `${head}.${body}.${signature}`;
 }
 
 async function createAccount() {
@@ -215,42 +194,26 @@ describeIntegration("Stage R2.1 — session revocation survives integration", ()
     expect(response.status).toBe(200);
   });
 
-  it("6. token tanpa iat atau dengan iat malformed ditolak (fail-closed)", async () => {
+  it("6. sessionsRevokedAt kini murni audit dan tidak lagi memutuskan otorisasi", async () => {
     const { user, phone } = await createAccount();
     const { accessToken } = await login(phone, OLD_PASSWORD);
 
-    // Satu detik penuh dilewati sebelum epoch diaktifkan. Perbandingan
-    // pencabutan bekerja pada granularitas detik, sehingga tanpa jeda ini
-    // token lama berada pada detik yang SAMA dengan epoch dan memang sah
-    // diterima — itu perilaku yang benar, bukan yang sedang diuji di sini.
-    await new Promise((resolve) => setTimeout(resolve, 1100));
+    // Sebelum Stage R2.1A, menetapkan kolom ini saja sudah mencabut token.
+    // Sekarang kolomnya hanya jejak audit; keputusan otorisasi memakai
+    // authVersion, yang sengaja TIDAK diubah di sini.
     await prisma.user.update({
       where: { id: user.id },
-      data: { sessionsRevokedAt: new Date() }
+      data: { sessionsRevokedAt: new Date(Date.now() + 60_000) }
     });
 
-    const secret = process.env.JWT_ACCESS_SECRET!;
-    const claims = { sub: user.id, role: "USER", sessionId: "00000000-0000-4000-8000-000000000000" };
-    const signOptions = { issuer: "tapgo-api", audience: "tapgo-apps" } as const;
+    const stored = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(stored.sessionsRevokedAt).not.toBeNull();
+    expect(stored.authVersion).toBe(0);
 
-    // (a) tanpa iat sama sekali — jsonwebtoken menghilangkannya dengan noTimestamp
-    const withoutIat = jwt.sign(claims, secret, { ...signOptions, noTimestamp: true });
-    const decodedWithoutIat = jwt.decode(withoutIat) as Record<string, unknown>;
-    expect(decodedWithoutIat.iat).toBeUndefined();
-
-    const noIatResponse = await api("GET", "/api/v1/auth/me", undefined, withoutIat);
-    expect(noIatResponse.status).toBe(401);
-    expect(noIatResponse.body.code).toBe("AUTH_SESSION_REVOKED");
-
-    // (b) iat bukan angka. `jwt.sign` menolak membuatnya, sehingga token
-    // dirakit manual — persis seperti yang akan dilakukan penyerang.
-    const malformed = signRawJwt({ ...claims, iat: "bukan-angka", iss: "tapgo-api", aud: "tapgo-apps" }, secret);
-    const malformedResponse = await api("GET", "/api/v1/auth/me", undefined, malformed);
-    expect(malformedResponse.status).toBe(401);
-
-    // Token lama yang sah pun tetap ditolak — epoch aktif.
-    const oldResponse = await api("GET", "/api/v1/auth/me", undefined, accessToken);
-    expect(oldResponse.status).toBe(401);
+    // Token tetap sah karena versinya masih cocok. Pengujian fail-closed
+    // untuk claim versi yang hilang atau malformed berada di
+    // versionedRevocation.integration.test.ts.
+    expect((await api("GET", "/api/v1/auth/me", undefined, accessToken)).status).toBe(200);
   });
 
   it("7. epoch pencabutan tidak mengganggu akun yang tidak pernah reset", async () => {
