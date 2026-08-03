@@ -319,6 +319,11 @@ enum AdminScope {
   DRIVER_APPLICATION_RENEW
   DRIVER_APPLICATION_RELEASE
   DRIVER_APPLICATION_REASSIGN
+  /// Kewenangan mengelola scope lain. TIDAK pernah diberikan otomatis
+  /// berdasarkan role, tidak pernah dibuat saat startup, migration, maupun
+  /// seed. Pemegang pertama hanya dapat dibuat lewat CLI bootstrap sekali
+  /// pakai; sesudahnya hanya SUPER_ADMIN aktif yang sudah memegangnya.
+  ADMIN_SCOPE_MANAGE
 }
 
 enum AdminScopeGrantStatus {
