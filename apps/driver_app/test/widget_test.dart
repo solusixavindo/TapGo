@@ -41,7 +41,8 @@ void main() {
       expect(find.text('Ketersediaan'), findsNothing);
     });
 
-    testWidgets('profile required, pending, suspended, inactive tampil aman',
+    testWidgets(
+        'profile required, pending, suspended, rejected, inactive tampil aman',
         (tester) async {
       for (final entry in {
         'Profil driver diperlukan': const DriverApiException(
@@ -52,6 +53,16 @@ void main() {
         'Akun driver belum aktif': const DriverApiException(
           code: 'RIDE_DRIVER_NOT_ACTIVE',
           message: 'Akun driver belum aktif untuk menerima perjalanan.',
+          statusCode: 403,
+        ),
+        'Akses driver dihentikan': const DriverApiException(
+          code: 'RIDE_DRIVER_SUSPENDED',
+          message: 'Akses driver sedang dihentikan.',
+          statusCode: 403,
+        ),
+        'Pengajuan driver tidak dapat dilanjutkan.': const DriverApiException(
+          code: 'RIDE_DRIVER_REJECTED',
+          message: 'Pengajuan driver tidak dapat dilanjutkan.',
           statusCode: 403,
         ),
         'Akun tidak aktif': const DriverApiException(
@@ -77,6 +88,23 @@ void main() {
       expect(find.text('Ketersediaan'), findsOneWidget);
       expect(find.textContaining('ADMIN'), findsNothing);
       expect(find.textContaining('SUPER_ADMIN'), findsNothing);
+    });
+
+    testWidgets('stale token saat refresh mengunci workspace tanpa bypass',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        currentError: const DriverApiException(
+          code: 'AUTH_REQUIRED',
+          message: 'Sesi berakhir. Silakan login kembali.',
+          statusCode: 401,
+        ),
+      );
+      await pumpDriver(tester, repo);
+      expect(find.byKey(const ValueKey('session-expired')), findsOneWidget);
+      expect(find.text('Ketersediaan'), findsNothing);
+      expect(find.textContaining('DEMO_ACCESS'), findsNothing);
+      expect(find.textContaining('TEST_ACCESS'), findsNothing);
     });
   });
 
@@ -249,6 +277,24 @@ void main() {
       expect(find.text('Perjalanan selesai'), findsOneWidget);
       expect(find.byKey(const ValueKey('trip-primary-action')), findsNothing);
     });
+
+    testWidgets('lifecycle resume melakukan tepat satu refresh current ride',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        current: demoRide(RideStatus.driverToPickup),
+      );
+      await pumpDriver(tester, repo);
+      final controller = ProviderScope.containerOf(
+        tester.element(find.byType(DriverShell)),
+      ).read(driverControllerProvider.notifier);
+      final beforeResume = repo.currentRideCalls;
+      controller.didChangeAppLifecycleState(AppLifecycleState.paused);
+      controller.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(repo.currentRideCalls, beforeResume + 1);
+      expect(find.text('Perjalanan Aktif'), findsOneWidget);
+    });
   });
 
   group('R2.5B security, demo, responsive', () {
@@ -282,6 +328,29 @@ void main() {
           find.byKey(const ValueKey('demo-scenario-selector')), findsNothing);
       expect(find.textContaining('DEMO DATA'), findsNothing);
       expect(repo.networkCalls, 0);
+    });
+
+    testWidgets('demo repository tetap zero network setelah interaksi',
+        (tester) async {
+      final repo =
+          DemoDriverRepository(initialScenario: DriverScenario.offerAvailable);
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        buildTestableDriverApp(
+          repository: repo,
+          scenario: DriverScenario.offerAvailable,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tapReachable(
+          tester, find.byKey(const ValueKey('offer-RIDE-DEMO-001')));
+      await tester.pumpAndSettle();
+      await tapReachable(
+          tester, find.byKey(const ValueKey('accept-offer-button')));
+      await tester.pumpAndSettle();
+      expect(repo.networkCalls, 0);
+      expect(find.text('Perjalanan Aktif'), findsOneWidget);
     });
 
     testWidgets('synthetic location tidak terkirim tanpa provider sah',
@@ -429,6 +498,8 @@ class FakeDriverRepository implements DriverRepository {
   int completeCalls = 0;
   int cancelCalls = 0;
   int networkCalls = 0;
+  int currentRideCalls = 0;
+  int offersCalls = 0;
   final availabilityRequests = <DriverAvailability>[];
 
   @override
@@ -458,12 +529,14 @@ class FakeDriverRepository implements DriverRepository {
 
   @override
   Future<List<DriverRide>> offers() async {
+    offersCalls += 1;
     if (offersError != null) throw offersError!;
     return offerItems;
   }
 
   @override
   Future<DriverRide?> currentRide() async {
+    currentRideCalls += 1;
     if (currentError != null) throw currentError!;
     return current;
   }
