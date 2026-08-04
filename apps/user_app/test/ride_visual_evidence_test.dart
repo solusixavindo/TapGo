@@ -232,6 +232,30 @@ void main() {
     }
   }
 
+  Future<void> expectPrimaryScrollOffset(
+    WidgetTester tester, {
+    required bool scrolled,
+  }) async {
+    final scrollable = find.byType(Scrollable).first;
+    final state = tester.state<ScrollableState>(scrollable);
+    final offset = state.position.pixels;
+    if (scrolled) {
+      expect(offset, greaterThan(0), reason: 'SCROLLED harus offset > 0');
+    } else {
+      expect(offset, 0, reason: 'TOP harus offset 0');
+    }
+  }
+
+  Future<void> scrollPrimaryContent(
+    WidgetTester tester,
+    double dy,
+  ) async {
+    await tester.drag(find.byType(Scrollable).first, Offset(0, -dy));
+    for (var frame = 0; frame < 10; frame += 1) {
+      await tester.pump(const Duration(milliseconds: 80));
+    }
+  }
+
   Widget bookingScreen({
     RideServiceKind service = RideServiceKind.motorcycle,
     LocationSelectionPort? port,
@@ -420,22 +444,55 @@ void main() {
       );
     });
 
-    testWidgets('03 estimasi tarif', (tester) async {
+    testWidgets('03 estimasi tarif — atas 390x844', (tester) async {
       await shoot(
         tester,
-        '03_quote',
+        '03_quote_top_390x844',
         child: bookingScreen(),
-        height: 1200,
         interact: pickRouteAndQuote,
+        beforeCapture: (tester) async {
+          await expectPrimaryScrollOffset(tester, scrolled: false);
+        },
       );
     });
 
-    testWidgets('04 konfirmasi pemesanan', (tester) async {
+    testWidgets('03b estimasi tarif — digulir 390x844', (tester) async {
       await shoot(
         tester,
-        '04_order_confirmation',
+        '03b_quote_scrolled_390x844',
         child: bookingScreen(),
-        height: 900,
+        interact: (tester) async {
+          await pickRouteAndQuote(tester);
+          final confirm = find.text('Pesan Sekarang');
+          await tester.ensureVisible(confirm);
+          for (var index = 0; index < 8; index += 1) {
+            await tester.pump(const Duration(milliseconds: 80));
+          }
+        },
+        beforeCapture: (tester) async {
+          await expectPrimaryScrollOffset(tester, scrolled: true);
+          await expectNoOverflow()(tester);
+        },
+      );
+    });
+
+    testWidgets('04 konfirmasi pemesanan — atas 390x844', (tester) async {
+      await shoot(
+        tester,
+        '04_order_confirmation_top_390x844',
+        child: bookingScreen(),
+        interact: (tester) async {
+          await pickRouteAndQuote(tester);
+          await expectPrimaryScrollOffset(tester, scrolled: false);
+        },
+      );
+    });
+
+    testWidgets('04b konfirmasi pemesanan — digulir 390x844', (tester) async {
+      await shoot(
+        tester,
+        '04b_order_confirmation_scrolled_390x844',
+        child: bookingScreen(),
         interact: (tester) async {
           await pickRouteAndQuote(tester);
           // Menggulirkan sampai tombol konfirmasi terlihat.
@@ -444,6 +501,10 @@ void main() {
           for (var index = 0; index < 8; index += 1) {
             await tester.pump(const Duration(milliseconds: 80));
           }
+        },
+        beforeCapture: (tester) async {
+          await expectPrimaryScrollOffset(tester, scrolled: true);
+          await expectNoOverflow()(tester);
         },
       );
     });
@@ -593,13 +654,39 @@ void main() {
       );
     });
 
-    testWidgets('15 lebar 320 dp', (tester) async {
+    testWidgets('15 lebar 320 dp — atas', (tester) async {
       await shoot(
         tester,
-        '15_width_320',
+        '15_width_320x640_top',
         width: 320,
-        height: 900,
-        beforeCapture: expectNoOverflow(),
+        height: 640,
+        beforeCapture: (tester) async {
+          await expectPrimaryScrollOffset(tester, scrolled: false);
+          await expectNoOverflow()(tester);
+        },
+        child: statusScreen(
+          orderPayload(
+            status: 'DRIVER_ARRIVED',
+            driver: _driver,
+            vehicle: _vehicle,
+          ),
+        ),
+      );
+    });
+
+    testWidgets('15b lebar 320 dp — digulir', (tester) async {
+      await shoot(
+        tester,
+        '15b_width_320x640_scrolled',
+        width: 320,
+        height: 640,
+        interact: (tester) async {
+          await scrollPrimaryContent(tester, 480);
+        },
+        beforeCapture: (tester) async {
+          await expectPrimaryScrollOffset(tester, scrolled: true);
+          await expectNoOverflow()(tester);
+        },
         child: statusScreen(
           orderPayload(
             status: 'DRIVER_ARRIVED',
@@ -613,9 +700,9 @@ void main() {
     testWidgets('16 lebar 412 dp', (tester) async {
       await shoot(
         tester,
-        '16_width_412',
+        '16_width_412x915',
         width: 412,
-        height: 900,
+        height: 915,
         child: statusScreen(
           orderPayload(
             status: 'DRIVER_ARRIVED',
@@ -626,14 +713,41 @@ void main() {
       );
     });
 
-    testWidgets('17 teks besar', (tester) async {
+    testWidgets('17 teks besar — atas 390x844', (tester) async {
       await shoot(
         tester,
-        '17_large_text',
+        '17_large_text_top_390x844',
         width: 390,
-        height: 1100,
+        height: 844,
         textScaler: const TextScaler.linear(1.8),
-        beforeCapture: expectNoOverflow(),
+        beforeCapture: (tester) async {
+          await expectPrimaryScrollOffset(tester, scrolled: false);
+          await expectNoOverflow()(tester);
+        },
+        child: statusScreen(
+          orderPayload(
+            status: 'DRIVER_ARRIVED',
+            driver: _driver,
+            vehicle: _vehicle,
+          ),
+        ),
+      );
+    });
+
+    testWidgets('17b teks besar — digulir 390x844', (tester) async {
+      await shoot(
+        tester,
+        '17b_large_text_scrolled_390x844',
+        width: 390,
+        height: 844,
+        textScaler: const TextScaler.linear(1.8),
+        interact: (tester) async {
+          await scrollPrimaryContent(tester, 520);
+        },
+        beforeCapture: (tester) async {
+          await expectPrimaryScrollOffset(tester, scrolled: true);
+          await expectNoOverflow()(tester);
+        },
         child: statusScreen(
           orderPayload(
             status: 'DRIVER_ARRIVED',
@@ -713,10 +827,10 @@ void main() {
           .toList()
         ..sort((a, b) => a.path.compareTo(b.path));
 
-      // Sheet hanya bermakna bila seluruh 19 tangkapan layar memang ada.
+      // Sheet hanya bermakna bila seluruh tangkapan layar memang ada.
       expect(
         files,
-        hasLength(23),
+        hasLength(27),
         reason: 'jumlah tangkapan layar tidak sesuai: '
             '${files.map((f) => f.uri.pathSegments.last).toList()}',
       );
