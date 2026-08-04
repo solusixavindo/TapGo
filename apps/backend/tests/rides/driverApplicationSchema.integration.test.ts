@@ -84,9 +84,20 @@ function createApplication(
 function safeDbError(error: unknown): { kind: string; detail: string } {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     const target = error.meta?.target;
+    const fieldName = error.meta?.field_name;
+    const details = [
+      ...(Array.isArray(target) ? target : target === undefined ? [] : [target]),
+      ...(fieldName === undefined ? [] : [fieldName]),
+    ]
+      .map(String)
+      .join(",");
+    const fkMatch = /ride_driver_applications_user_id_fkey/i.exec(details);
+    if (error.code === "P2003" && fkMatch) {
+      return { kind: "FK_RESTRICT_VIOLATION", detail: "ride_driver_applications_user_id_fkey" };
+    }
     return {
       kind: error.code,
-      detail: Array.isArray(target) ? target.join(",") : String(target ?? ""),
+      detail: details,
     };
   }
   if (error instanceof Prisma.PrismaClientUnknownRequestError) {

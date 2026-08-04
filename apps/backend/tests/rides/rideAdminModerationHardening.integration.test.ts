@@ -884,7 +884,7 @@ async function inTripRide() {
  */
 async function seedExistingFinancialData() {
   const owner = await createUser("USER");
-  const basic = await prisma.membership.findFirstOrThrow({ where: { tier: "BASIC" } });
+  const basic = await ensureBasicMembership();
 
   const wallet = await prisma.wallet.create({
     data: {
@@ -1001,6 +1001,22 @@ async function seedExistingFinancialData() {
     membershipPaymentId: membershipPayment.id,
     membershipPaymentAmount: membershipPayment.amount.toFixed(2),
   };
+}
+
+async function ensureBasicMembership() {
+  return prisma.membership.upsert({
+    where: { tier: "BASIC" },
+    update: { name: "Basic", price: new Prisma.Decimal("0.00"), isActive: true },
+    create: {
+      tier: "BASIC",
+      name: "Basic",
+      price: new Prisma.Decimal("0.00"),
+      directBonus: new Prisma.Decimal("0.00"),
+      activeLevels: 1,
+      ppobBalance: new Prisma.Decimal("0.00"),
+      isActive: true,
+    },
+  });
 }
 
 /** Snapshot lengkap: jumlah baris, agregat nilai, dan sidik jari per baris. */
