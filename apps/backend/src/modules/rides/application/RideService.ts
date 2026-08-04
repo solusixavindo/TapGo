@@ -40,6 +40,12 @@ import {
 
 const CANCELLATION_POLICY_VERSION = "RIDE_CANCEL_POLICY_V1";
 const CANCELLATION_FEE = 2_000; // integer rupiah
+const DRIVER_ACTIVE_RIDE_STATUSES: RideOrderStatus[] = [
+  "DRIVER_ASSIGNED",
+  "DRIVER_TO_PICKUP",
+  "DRIVER_ARRIVED",
+  "IN_TRIP",
+];
 
 /**
  * Layanan domain Ride (authoritative server-side).
@@ -431,6 +437,35 @@ export class RideService {
     });
 
     return orders.map((o) => this.toOfferView(o));
+  }
+
+  /**
+   * Memulihkan perjalanan aktif milik driver dari database.
+   *
+   * Tidak bergantung pada availability ONLINE/OFFLINE dan tidak menerima
+   * identitas driver dari client. Bila data ganda ditemukan, endpoint fail
+   * closed agar aplikasi driver tidak memilih perjalanan secara acak.
+   */
+  async getCurrentRideForDriver(userId: string) {
+    const profile = await this.requireDriverProfile(userId);
+    const orders = await this.prisma.rideOrder.findMany({
+      where: {
+        driverProfileId: profile.id,
+        status: { in: DRIVER_ACTIVE_RIDE_STATUSES },
+      },
+      orderBy: { createdAt: "asc" },
+      take: 2,
+    });
+
+    if (orders.length > 1) {
+      throw new AppError(
+        "Status perjalanan aktif tidak dapat dipastikan",
+        StatusCodes.CONFLICT,
+        "RIDE_DRIVER_ACTIVE_RIDE_CONFLICT",
+      );
+    }
+
+    return orders[0] ? this.toOrderView(orders[0]) : null;
   }
 
   /**

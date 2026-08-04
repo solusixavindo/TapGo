@@ -42,6 +42,7 @@ let sequence = 0;
 const DRIVER_ACTION_ROUTES: Array<{ method: string; path: string; body?: unknown }> = [
   { method: "POST", path: "/api/v1/driver/availability", body: { availability: "ONLINE" } },
   { method: "GET", path: "/api/v1/driver/rides/offers" },
+  { method: "GET", path: "/api/v1/driver/rides/current" },
   { method: "POST", path: "/api/v1/driver/rides/RID-AB23456789/accept" },
   { method: "POST", path: "/api/v1/driver/rides/RID-AB23456789/reject" },
   { method: "POST", path: "/api/v1/driver/rides/RID-AB23456789/pickup" },

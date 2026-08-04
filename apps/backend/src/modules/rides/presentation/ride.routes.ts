@@ -193,6 +193,14 @@ driverRideRouter.get(
   }),
 );
 
+driverRideRouter.get(
+  "/rides/current",
+  asyncHandler(async (req, res) => {
+    const data = await rideService.getCurrentRideForDriver(req.auth!.userId);
+    res.json({ success: true, data });
+  }),
+);
+
 driverRideRouter.post(
   "/rides/:reference/accept",
   rideWriteRateLimiter,
