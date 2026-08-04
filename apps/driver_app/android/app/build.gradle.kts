@@ -26,7 +26,7 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            // Release signing is intentionally configured outside this MVP stage.
         }
     }
 }
