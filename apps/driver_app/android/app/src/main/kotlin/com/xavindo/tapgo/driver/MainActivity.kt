@@ -1,4 +1,4 @@
-package com.example.tapgo_driver_app
+package com.xavindo.tapgo.driver
 
 import io.flutter.embedding.android.FlutterActivity
 
