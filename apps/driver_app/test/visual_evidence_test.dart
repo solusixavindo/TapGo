@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tapgo_driver_app/main.dart';
 
@@ -12,8 +13,12 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const visualSkip = !kDriverDemoMode;
 
-  setUpAll(() {
+  setUpAll(() async {
     Directory(_outputPath).createSync(recursive: true);
+    // Tanpa ini flutter_test memakai font uji sehingga seluruh teks tergambar
+    // sebagai kotak tofu — persis cacat visual yang dilaporkan Owner. Font
+    // dimuat dari aset aplikasi dan dari Flutter SDK yang sedang dipakai.
+    await _loadRealFonts();
   });
 
   for (final capture in _captures) {
@@ -30,6 +35,43 @@ void main() {
       ),
     );
   }, skip: visualSkip);
+}
+
+/// Memuat font asli: Roboto dari aset aplikasi, MaterialIcons dan
+/// CupertinoIcons dari Flutter SDK yang sedang dipakai.
+///
+/// Path SDK diambil dari FLUTTER_ROOT, bukan ditulis keras, supaya harness
+/// tetap berjalan di mesin lain.
+Future<void> _loadRealFonts() async {
+  Future<void> load(String family, List<String> paths) async {
+    final loader = FontLoader(family);
+    var added = 0;
+    for (final path in paths) {
+      final file = File(path);
+      if (!file.existsSync()) continue;
+      loader.addFont(
+        Future<ByteData>.value(ByteData.sublistView(file.readAsBytesSync())),
+      );
+      added += 1;
+    }
+    if (added > 0) await loader.load();
+  }
+
+  await load('Roboto', const [
+    'assets/fonts/Roboto-Regular.ttf',
+    'assets/fonts/Roboto-Medium.ttf',
+    'assets/fonts/Roboto-Bold.ttf',
+  ]);
+
+  final root = Platform.environment['FLUTTER_ROOT'];
+  if (root == null || root.isEmpty) return;
+  await load('MaterialIcons', [
+    '$root/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
+  ]);
+  await load('CupertinoIcons', [
+    '$root/packages/flutter/lib/src/cupertino/'
+        'assets/CupertinoIcons.ttf',
+  ]);
 }
 
 const _captures = <_Capture>[
@@ -112,7 +154,22 @@ Future<void> _captureScenario(WidgetTester tester, _Capture capture) async {
       ),
     ),
   );
-  await tester.pump(const Duration(milliseconds: 350));
+  // Beberapa frame agar controller selesai memuat; satu pump saja membuat
+  // sebagian layar terpotret dalam keadaan masih menampilkan spinner.
+  for (var frame = 0; frame < 8; frame += 1) {
+    await tester.pump(const Duration(milliseconds: 120));
+  }
+  // Image.asset didekode secara asinkron. Tanpa runAsync, logo terpotret
+  // sebagai kotak kosong.
+  await tester.runAsync(() async {
+    await precacheImage(
+      const AssetImage(driverBrandLogoAsset),
+      tester.element(find.byType(MaterialApp)),
+    );
+  });
+  for (var frame = 0; frame < 4; frame += 1) {
+    await tester.pump(const Duration(milliseconds: 120));
+  }
   if (capture.openOffer) {
     final offer = find.byKey(const ValueKey('offer-RIDE-DEMO-001'));
     await Scrollable.ensureVisible(
@@ -183,7 +240,14 @@ Future<void> _makeContactSheet(
     );
     image.dispose();
     final paragraphBuilder = ui.ParagraphBuilder(
-      ui.ParagraphStyle(fontSize: 13, maxLines: 2, textAlign: TextAlign.left),
+      // fontFamily wajib disebut: tanpa ini label contact sheet tergambar
+      // sebagai kotak tofu memakai font uji.
+      ui.ParagraphStyle(
+        fontFamily: 'Roboto',
+        fontSize: 13,
+        maxLines: 2,
+        textAlign: TextAlign.left,
+      ),
     )
       ..pushStyle(
         ui.TextStyle(

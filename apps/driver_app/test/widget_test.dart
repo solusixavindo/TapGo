@@ -8,6 +8,297 @@ import 'package:tapgo_driver_app/main.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  group('R2.5C login branding dan ikon', () {
+    /// Membuka layar login pada viewport ponsel nyata.
+    Future<void> pumpLogin(
+      WidgetTester tester, {
+      ThemeMode themeMode = ThemeMode.light,
+      double textScale = 1.0,
+      Size size = const Size(360, 800),
+      FakeDriverRepository? repository,
+    }) async {
+      await tester.binding.setSurfaceSize(size);
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      });
+      final app = buildTestableDriverApp(
+        repository: repository ?? FakeDriverRepository(session: null),
+        themeMode: themeMode,
+      );
+      await tester.pumpWidget(
+        MediaQuery(
+          data: MediaQueryData(
+            size: size,
+            textScaler: TextScaler.linear(textScale),
+          ),
+          child: app,
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    Image logoImage(WidgetTester tester) {
+      return tester.widget<Image>(
+        find.descendant(
+          of: find.byType(LoginScreen),
+          matching: find.byType(Image),
+        ),
+      );
+    }
+
+    testWidgets('1. logo resmi TapGo dirender dari asset lokal', (
+      tester,
+    ) async {
+      await pumpLogin(tester);
+      final image = logoImage(tester);
+      final provider = image.image;
+      expect(provider, isA<AssetImage>());
+      expect(
+        (provider as AssetImage).assetName,
+        driverBrandLogoAsset,
+        reason: 'brand mark harus memakai asset logo resmi',
+      );
+      // Aset lokal, bukan jaringan.
+      expect(provider, isNot(isA<NetworkImage>()));
+      expect(driverBrandLogoAsset, 'assets/images/tapgo_logo_512.png');
+    });
+
+    testWidgets('2. Icons.local_taxi_rounded tidak lagi menjadi brand mark', (
+      tester,
+    ) async {
+      await pumpLogin(tester);
+      expect(
+        find.descendant(
+          of: find.byType(LoginScreen),
+          matching: find.byIcon(Icons.local_taxi_rounded),
+        ),
+        findsNothing,
+      );
+    });
+
+    testWidgets('3. CTA memakai copy Masuk sebagai Driver', (tester) async {
+      await pumpLogin(tester);
+      expect(find.text('Masuk sebagai Driver'), findsOneWidget);
+      expect(find.text('Login'), findsNothing);
+    });
+
+    testWidgets('4. field nomor HP punya leading icon', (tester) async {
+      await pumpLogin(tester);
+      final field = tester.widget<TextField>(
+        find.byKey(const ValueKey('driver-phone-input')),
+      );
+      expect(field.decoration?.prefixIcon, isNotNull);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('driver-phone-input')),
+          matching: find.byIcon(Icons.smartphone_rounded),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('5. field password punya leading icon', (tester) async {
+      await pumpLogin(tester);
+      final field = tester.widget<TextField>(
+        find.byKey(const ValueKey('driver-password-input')),
+      );
+      expect(field.decoration?.prefixIcon, isNotNull);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('driver-password-input')),
+          matching: find.byIcon(Icons.lock_rounded),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('6. kontrol visibility mengubah obscure state', (tester) async {
+      await pumpLogin(tester);
+      TextField passwordField() => tester.widget<TextField>(
+            find.byKey(const ValueKey('driver-password-input')),
+          );
+
+      // Default tersembunyi.
+      expect(passwordField().obscureText, isTrue);
+      expect(find.byIcon(Icons.visibility_rounded), findsOneWidget);
+
+      await tester
+          .tap(find.byKey(const ValueKey('driver-password-visibility')));
+      await tester.pumpAndSettle();
+      expect(passwordField().obscureText, isFalse);
+      expect(find.byIcon(Icons.visibility_off_rounded), findsOneWidget);
+
+      await tester
+          .tap(find.byKey(const ValueKey('driver-password-visibility')));
+      await tester.pumpAndSettle();
+      expect(passwordField().obscureText, isTrue);
+    });
+
+    testWidgets('7. login light theme tidak overflow', (tester) async {
+      final overflows = <String>{};
+      final previous = FlutterError.onError;
+      FlutterError.onError = (details) {
+        final message = details.exception.toString().split('\n').first;
+        if (message.contains('overflowed')) {
+          overflows.add(message);
+        } else {
+          previous?.call(details);
+        }
+      };
+      addTearDown(() => FlutterError.onError = previous);
+
+      await pumpLogin(tester);
+      expect(overflows, isEmpty);
+      expect(find.text('Masuk sebagai Driver'), findsOneWidget);
+    });
+
+    testWidgets('8. login dark theme tidak overflow dan terbaca', (
+      tester,
+    ) async {
+      final overflows = <String>{};
+      final previous = FlutterError.onError;
+      FlutterError.onError = (details) {
+        final message = details.exception.toString().split('\n').first;
+        if (message.contains('overflowed')) {
+          overflows.add(message);
+        } else {
+          previous?.call(details);
+        }
+      };
+      addTearDown(() => FlutterError.onError = previous);
+
+      await pumpLogin(tester, themeMode: ThemeMode.dark);
+      expect(overflows, isEmpty);
+      expect(find.text('TapGo Driver'), findsWidgets);
+      expect(find.text('Masuk sebagai Driver'), findsOneWidget);
+      expect(logoImage(tester).image, isA<AssetImage>());
+    });
+
+    testWidgets('9. text scale 1.8 tidak overflow dan tetap dapat digulir', (
+      tester,
+    ) async {
+      final overflows = <String>{};
+      final previous = FlutterError.onError;
+      FlutterError.onError = (details) {
+        final message = details.exception.toString().split('\n').first;
+        if (message.contains('overflowed')) {
+          overflows.add(message);
+        } else {
+          previous?.call(details);
+        }
+      };
+      addTearDown(() => FlutterError.onError = previous);
+
+      await pumpLogin(tester, textScale: 1.8, size: const Size(360, 800));
+      expect(overflows, isEmpty);
+
+      final position =
+          tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+      expect(position.maxScrollExtent, greaterThan(0));
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -260));
+      await tester.pumpAndSettle();
+      expect(position.pixels, greaterThan(0));
+      expect(overflows, isEmpty);
+    });
+
+    testWidgets('10. target sentuh aksi minimum 48 dp', (tester) async {
+      await pumpLogin(tester);
+      final cta = tester.getSize(
+        find.byKey(const ValueKey('driver-login-button')),
+      );
+      expect(cta.height, greaterThanOrEqualTo(48));
+      final toggle = tester.getSize(
+        find.byKey(const ValueKey('driver-password-visibility')),
+      );
+      expect(toggle.height, greaterThanOrEqualTo(48));
+      expect(toggle.width, greaterThanOrEqualTo(48));
+    });
+
+    testWidgets('11. state loading tetap menampilkan label CTA', (
+      tester,
+    ) async {
+      final gate = Completer<DriverSession>();
+      final repo = FakeDriverRepository(session: null, loginCompleter: gate);
+      await pumpLogin(tester, repository: repo);
+
+      await tester.tap(find.byKey(const ValueKey('driver-login-button')));
+      await tester.pump();
+
+      // Permintaan masih berjalan: label tetap terbaca dan tombol nonaktif,
+      // sehingga tap beruntun tidak mengirim login kedua.
+      final button = tester.widget<FilledButton>(
+        find.byKey(const ValueKey('driver-login-button')),
+      );
+      expect(button.onPressed, isNull);
+      expect(find.text('Masuk sebagai Driver'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('driver-login-button')),
+        warnIfMissed: false,
+      );
+      await tester.pump();
+      expect(repo.loginCalls, 1);
+
+      gate.complete(demoSession);
+      await tester.pumpAndSettle();
+      expect(repo.loginCalls, 1);
+    });
+
+    testWidgets('12. login demo tetap bekerja', (tester) async {
+      final repo = FakeDriverRepository(session: null);
+      await pumpLogin(tester, repository: repo);
+      await tester.tap(find.byKey(const ValueKey('driver-login-button')));
+      await tester.pumpAndSettle();
+      expect(repo.loginCalls, 1);
+      expect(find.byType(LoginScreen), findsNothing);
+    });
+
+    testWidgets('13. mode normal tidak memuat widget demo', (tester) async {
+      await pumpLogin(tester);
+      // Tanpa TAPGO_DRIVER_DEMO_MODE, widget demo tidak berada di widget tree
+      // sama sekali — bukan disembunyikan dengan opacity atau Offstage.
+      expect(kDriverDemoMode, isFalse);
+      expect(find.byType(DemoScenarioSelector), findsNothing);
+      expect(find.byType(DemoBanner), findsNothing);
+      expect(
+        find.textContaining('DEMO DATA'),
+        findsNothing,
+      );
+    });
+
+    testWidgets('14. auth contract tidak berubah', (tester) async {
+      final repo = FakeDriverRepository(session: null);
+      await pumpLogin(tester, repository: repo);
+      // Identitas driver tetap nomor HP, bukan email, sesuai kontrak auth.
+      expect(find.text('Nomor HP'), findsOneWidget);
+      expect(find.textContaining('Email'), findsNothing);
+      final field = tester.widget<TextField>(
+        find.byKey(const ValueKey('driver-phone-input')),
+      );
+      expect(field.keyboardType, TextInputType.phone);
+      expect(field.autofillHints, contains(AutofillHints.telephoneNumber));
+    });
+
+    testWidgets('15. pesan error aman tanpa exception mentah', (tester) async {
+      final repo = FakeDriverRepository(
+        session: null,
+        currentError: const DriverApiException(
+          code: 'AUTH_INVALID_CREDENTIALS',
+          message: 'Nomor HP atau password salah',
+          statusCode: 401,
+        ),
+      );
+      await pumpLogin(tester, repository: repo);
+      // Tidak ada jejak exception mentah pada layar login.
+      expect(find.textContaining('Exception'), findsNothing);
+      expect(find.textContaining('#0'), findsNothing);
+      expect(find.textContaining('DioException'), findsNothing);
+    });
+  });
+
   group('R2.5B auth and capability', () {
     testWidgets('session valid dipulihkan ke workspace driver', (tester) async {
       final repo = FakeDriverRepository(session: demoSession);
@@ -23,7 +314,10 @@ void main() {
       await tester.tap(find.byTooltip('Logout'));
       await tester.pumpAndSettle();
       expect(repo.logoutCalls, 1);
-      expect(find.text('Masuk Driver'), findsOneWidget);
+      // Diperiksa lewat widget layar login, bukan judulnya. Yang dijamin test
+      // ini adalah kembalinya pengguna ke login — bukan teks judul tertentu.
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(find.byKey(const ValueKey('driver-login-button')), findsOneWidget);
     });
 
     testWidgets('invalid session fail closed dan tidak membuka workspace',
@@ -477,6 +771,7 @@ class FakeDriverRepository implements DriverRepository {
     this.acceptError,
     this.availabilityCompleter,
     this.acceptCompleter,
+    this.loginCompleter,
   });
 
   DriverSession? session;
@@ -488,6 +783,7 @@ class FakeDriverRepository implements DriverRepository {
   DriverApiException? acceptError;
   Completer<DriverAvailability>? availabilityCompleter;
   Completer<DriverRide>? acceptCompleter;
+  Completer<DriverSession>? loginCompleter;
   int loginCalls = 0;
   int logoutCalls = 0;
   int acceptCalls = 0;
@@ -509,6 +805,13 @@ class FakeDriverRepository implements DriverRepository {
   Future<DriverSession> login(
       {required String phone, required String password}) async {
     loginCalls += 1;
+    // Bila test menyediakan completer, login ditahan sehingga state loading
+    // benar-benar dapat diamati.
+    if (loginCompleter != null) {
+      final result = await loginCompleter!.future;
+      session = result;
+      return result;
+    }
     session = demoSession;
     return demoSession;
   }

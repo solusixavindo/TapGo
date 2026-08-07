@@ -1,5 +1,12 @@
 part of '../../../main.dart';
 
+/// Brand mark resmi TapGo untuk aplikasi driver.
+///
+/// Aset lokal, bukan jaringan: tidak ada satu pun permintaan eksternal untuk
+/// merender logo. Berkasnya adalah salinan byte-identik dari
+/// google-play-assets/TapGo_Logo_512x512.png.
+const String driverBrandLogoAsset = 'assets/images/tapgo_logo_512.png';
+
 class DriverShell extends ConsumerWidget {
   const DriverShell({super.key});
 
@@ -158,6 +165,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _password =
       TextEditingController(text: kDriverDemoMode ? 'driver-demo' : '');
 
+  /// Password tersembunyi secara default; hanya pengguna yang membukanya.
+  bool _obscurePassword = true;
+
   @override
   void dispose() {
     _phone.dispose();
@@ -173,8 +183,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       padding: const EdgeInsets.fromLTRB(20, kDriverDemoMode ? 56 : 28, 20, 20),
       children: [
         const _BrandHeader(
-          title: 'Masuk Driver',
-          subtitle: 'Kelola perjalanan aktif dengan akses yang terverifikasi.',
+          title: 'TapGo Driver',
+          subtitle: 'Masuk untuk mengelola perjalanan dengan akses '
+              'mitra yang terverifikasi.',
         ),
         const SizedBox(height: 24),
         TextField(
@@ -185,6 +196,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           decoration: const InputDecoration(
             labelText: 'Nomor HP',
             hintText: '08xxxxxxxxxx',
+            // Leading icon memberi jangkar visual pada field identitas.
+            prefixIcon: Icon(Icons.smartphone_rounded),
             border: OutlineInputBorder(),
           ),
         ),
@@ -192,11 +205,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         TextField(
           key: const ValueKey('driver-password-input'),
           controller: _password,
-          obscureText: true,
+          obscureText: _obscurePassword,
           autofillHints: const [AutofillHints.password],
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Password',
-            border: OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.lock_rounded),
+            suffixIcon: IconButton(
+              key: const ValueKey('driver-password-visibility'),
+              // 48 dp memenuhi ukuran target sentuh minimum.
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              tooltip: _obscurePassword
+                  ? 'Tampilkan password'
+                  : 'Sembunyikan password',
+              onPressed: () =>
+                  setState(() => _obscurePassword = !_obscurePassword),
+              icon: Icon(
+                _obscurePassword
+                    ? Icons.visibility_rounded
+                    : Icons.visibility_off_rounded,
+              ),
+            ),
+            border: const OutlineInputBorder(),
           ),
           onSubmitted: (_) => controller.login(_phone.text, _password.text),
         ),
@@ -207,15 +236,51 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         const SizedBox(height: 20),
         FilledButton(
           key: const ValueKey('driver-login-button'),
+          // Kontras tinggi: gold TapGo dengan teks navy. Disabled state tetap
+          // memakai warna eksplisit supaya labelnya tidak memudar menjadi
+          // nyaris tak terbaca saat permintaan sedang berjalan.
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFFFFC857),
+            foregroundColor: const Color(0xFF061A2F),
+            disabledBackgroundColor: const Color(0xFFE0AE3F),
+            disabledForegroundColor: const Color(0xFF061A2F),
+            minimumSize: const Size.fromHeight(52),
+            textStyle: const TextStyle(
+              // fontFamily disebut eksplisit: TextStyle pada styleFrom tidak
+              // selalu mewarisi keluarga font tema, dan tanpa ini label dapat
+              // jatuh ke font bawaan.
+              fontFamily: 'Roboto',
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
           onPressed: state.isBusy
               ? null
               : () => controller.login(_phone.text, _password.text),
           child: state.isBusy
-              ? const SizedBox.square(
-                  dimension: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+              // Label tetap terbaca saat loading; spinner mendampinginya,
+              // bukan menggantikannya.
+              ? const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF061A2F),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Flexible(
+                      child: Text(
+                        'Masuk sebagai Driver',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 )
-              : const Text('Login'),
+              : const Text('Masuk sebagai Driver'),
         ),
         if (kDriverDemoMode) const DemoScenarioSelector(),
       ],
@@ -276,8 +341,30 @@ class _BrandHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.local_taxi_rounded,
-              color: Color(0xFFFFC857), size: 44),
+          // Brand mark resmi TapGo dari asset lokal. Sebelumnya di sini ada
+          // Icons.local_taxi_rounded — ikon generik Material yang bukan logo
+          // TapGo dan memberi kesan prototype.
+          Semantics(
+            label: 'Logo TapGo',
+            image: true,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Image.asset(
+                driverBrandLogoAsset,
+                width: 56,
+                height: 56,
+                // Rasio asli 1:1 dipertahankan; tanpa ini logo dapat
+                // teregang bila kotak induknya berubah.
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+                excludeFromSemantics: true,
+              ),
+            ),
+          ),
           const SizedBox(height: 18),
           Text(
             title,
