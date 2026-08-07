@@ -12,6 +12,12 @@ dependencies:
   flutter_riverpod: ^2.6.1
   dio: ^5.7.0
   flutter_secure_storage: ^9.2.2
+  # Runtime Flutter merujuk packages/cupertino_icons/CupertinoIcons melalui
+  # pustaka Cupertino yang ikut tertaut dari package:flutter/material.dart
+  # (lihat cupertino/text_field.dart). Tanpa dependency ini build memperingatkan
+  # font tersebut tidak ditemukan, dan glyph yang bersangkutan berisiko tampil
+  # sebagai kotak tofu. Bukan ditambahkan karena laporan lama menyebutnya.
+  cupertino_icons: ^1.0.8
 
 dev_dependencies:
   flutter_test:
@@ -20,6 +26,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/images/tapgo_logo_512.png
   fonts:
     - family: Roboto
       fonts:
