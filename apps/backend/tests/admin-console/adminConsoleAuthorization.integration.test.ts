@@ -49,6 +49,10 @@ const ADMIN_ENDPOINTS: ReadonlyArray<Endpoint> = [
     method: "POST",
     path: "/api/v1/admin/member-requests/00000000-0000-4000-8000-000000000000/verify-documents"
   },
+  {
+    method: "POST",
+    path: "/api/v1/admin/member-requests/00000000-0000-4000-8000-000000000000/reject-documents"
+  },
   { method: "GET", path: "/api/v1/admin/invoices" },
   { method: "GET", path: "/api/v1/admin/payments" },
   { method: "GET", path: "/api/v1/admin/commissions" },

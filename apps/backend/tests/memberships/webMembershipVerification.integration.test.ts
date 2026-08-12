@@ -29,6 +29,8 @@ type SignAccessToken = (payload: {
 
 const VERIFY_PATH = (orderId: string) =>
   `/api/v1/admin/member-requests/${orderId}/verify-documents`;
+const REJECT_PATH = (orderId: string) =>
+  `/api/v1/admin/member-requests/${orderId}/reject-documents`;
 
 let server: Server | undefined;
 let baseUrl = "";
@@ -179,6 +181,121 @@ describe.skipIf(!runIntegration)("Admin membership document verification", () =>
     expect(response.status).toBe(404);
     expect(await codeOf(response)).toBe("MEMBERSHIP_ORDER_NOT_FOUND");
   });
+
+  it("menolak penolakan dokumen oleh role USER", async () => {
+    const order = await createPaidWebOrder();
+    const outsider = await createUser("REJECTUSR", "USER");
+
+    const response = await reject(order.id, outsider);
+    expect(response.status).toBe(403);
+
+    const stored = await prisma.membershipOrder.findUniqueOrThrow({ where: { id: order.id } });
+    expect(stored.status).toBe("PAID");
+  });
+
+  it("membatalkan order dan mencatat refund penuh saat ADMIN menolak dokumen", async () => {
+    const order = await createPaidWebOrder({ withDocuments: true });
+    const admin = await createUser("REJECTADM", "ADMIN");
+
+    const response = await reject(order.id, admin, "KTP buram dan nama tidak cocok");
+    expect(response.status).toBe(200);
+
+    const stored = await prisma.membershipOrder.findUniqueOrThrow({ where: { id: order.id } });
+    expect(stored.status).toBe("CANCELLED");
+    expect(await documentStatuses(order.id)).toEqual(["REJECTED", "REJECTED"]);
+
+    const rejection = (stored.registrationData as Record<string, unknown>)
+      .documentRejection as Record<string, unknown>;
+    expect(rejection.rejectedBy).toBe(admin.id);
+    expect(rejection.reason).toBe("KTP buram dan nama tidak cocok");
+
+    // Refund harus penuh: sama persis dengan nilai order Silver.
+    const refund = rejection.refund as Record<string, unknown>;
+    expect(refund.amount).toBe("500000.00");
+    expect(refund.status).toBe("PENDING");
+  });
+
+  it("menyalin permintaan refund ke invoice dan payment tanpa mengklaim dana sudah kembali", async () => {
+    const order = await createPaidWebOrder();
+    const admin = await createUser("REJECTINV", "ADMIN");
+
+    expect((await reject(order.id, admin)).status).toBe(200);
+
+    const invoice = await prisma.invoice.findUniqueOrThrow({ where: { orderId: order.id } });
+    const payment = await prisma.membershipPayment.findFirstOrThrow({ where: { orderId: order.id } });
+
+    for (const record of [invoice, payment]) {
+      const refund = (record.metadata as Record<string, unknown>).refund as Record<string, unknown>;
+      expect(refund.amount).toBe("500000.00");
+      expect(refund.status).toBe("PENDING");
+    }
+
+    // Uangnya belum benar-benar dikembalikan, jadi statusnya belum boleh
+    // REFUNDED. Eksekusi ke penyedia pembayaran menyusul di tahap berikutnya.
+    expect(invoice.status).toBe("PAID");
+    expect(payment.status).toBe("PAID");
+  });
+
+  it("tidak membayar satu pun bonus setelah dokumen ditolak", async () => {
+    const order = await createPaidWebOrder();
+    const admin = await createUser("REJECTBON", "ADMIN");
+
+    expect((await reject(order.id, admin)).status).toBe(200);
+
+    await expectNotActivated(order.id);
+    const sponsorWallet = await prisma.wallet.findUnique({ where: { userId: order.sponsorId } });
+    expect(sponsorWallet?.cashBalance.toFixed(2) ?? "0.00").toBe("0.00");
+  });
+
+  it("mencatat jejak audit penolakan berisi nilai refund", async () => {
+    const order = await createPaidWebOrder();
+    const admin = await createUser("REJECTAUD", "ADMIN");
+
+    expect((await reject(order.id, admin, "dokumen tidak terbaca")).status).toBe(200);
+
+    const audit = await prisma.auditLog.findFirstOrThrow({
+      where: { action: "MEMBERSHIP_DOCUMENTS_REJECTED", entityId: order.id }
+    });
+    const metadata = audit.metadata as Record<string, unknown>;
+    expect(audit.actorId).toBe(admin.id);
+    expect(metadata.refundAmount).toBe("500000.00");
+    expect(metadata.reason).toBe("dokumen tidak terbaca");
+  });
+
+  it("menolak pembatalan order yang sudah terlanjur aktif", async () => {
+    const order = await createPaidWebOrder();
+    const admin = await createUser("REJECTACT", "ADMIN");
+    expect((await verify(order.id, admin)).status).toBe(200);
+
+    // Membalik order yang sudah aktif berarti menarik kembali bonus upline yang
+    // sudah terbayar. Alur pembalikan itu sengaja belum ada, jadi harus ditolak.
+    const response = await reject(order.id, admin);
+    expect(response.status).toBe(409);
+    expect(await codeOf(response)).toBe("MEMBERSHIP_ALREADY_ACTIVATED");
+
+    const stored = await prisma.membershipOrder.findUniqueOrThrow({ where: { id: order.id } });
+    expect(stored.status).toBe("PAID");
+  });
+
+  it("menutup jalan verifikasi setelah dokumen ditolak", async () => {
+    const order = await createPaidWebOrder();
+    const admin = await createUser("REJECTSEQ", "ADMIN");
+    expect((await reject(order.id, admin)).status).toBe(200);
+
+    const response = await verify(order.id, admin);
+    expect(response.status).toBe(409);
+    expect(await codeOf(response)).toBe("MEMBERSHIP_ORDER_NOT_PAID");
+    await expectNotActivated(order.id);
+  });
+
+  it("menolak penolakan dokumen pada order kanal APP", async () => {
+    const order = await createPaidWebOrder({ channel: "APP" });
+    const admin = await createUser("REJECTAPP", "ADMIN");
+
+    const response = await reject(order.id, admin);
+    expect(response.status).toBe(409);
+    expect(await codeOf(response)).toBe("MEMBERSHIP_VERIFICATION_NOT_REQUIRED");
+  });
 });
 
 async function createWebOrder(options: { channel?: MembershipOrderChannel; withDocuments?: boolean } = {}) {
@@ -240,13 +357,21 @@ async function codeOf(response: Response) {
 }
 
 async function verify(orderId: string, user?: User) {
-  return fetch(`${baseUrl}${VERIFY_PATH(orderId)}`, {
+  return post(VERIFY_PATH(orderId), user);
+}
+
+async function reject(orderId: string, user?: User, reason?: string) {
+  return post(REJECT_PATH(orderId), user, reason === undefined ? {} : { reason });
+}
+
+async function post(path: string, user?: User, body: Record<string, unknown> = {}) {
+  return fetch(`${baseUrl}${path}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       ...(user ? { authorization: `Bearer ${tokenFor(user)}` } : {})
     },
-    body: "{}"
+    body: JSON.stringify(body)
   });
 }
 
