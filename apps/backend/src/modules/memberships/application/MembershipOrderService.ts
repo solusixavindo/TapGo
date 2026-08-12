@@ -373,6 +373,146 @@ export class MembershipOrderService {
     });
   }
 
+  /// Penolakan dokumen KYC atas order kanal WEB yang sudah lunas (Stage R2.6
+  /// jalur A, poin 6). Keputusan Owner: pemohon menerima pengembalian dana
+  /// penuh.
+  ///
+  /// Operasi ini hanya berlaku selama order belum pernah aktif. Setelah aktif,
+  /// bonus sponsor dan bonus level sudah masuk ke wallet upline dan menariknya
+  /// kembali membutuhkan alur pembalikan tersendiri yang sengaja belum ada.
+  /// Karena order WEB tidak pernah aktif sebelum diverifikasi, penolakan di
+  /// sini selalu bersih: tidak ada satu pun catatan Business Engine yang perlu
+  /// dibatalkan.
+  async rejectOrderDocuments(input: { orderId: string; adminId: string; reason?: string }) {
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.membershipOrder.findUnique({
+        where: { id: input.orderId },
+        include: activationOrderInclude
+      });
+
+      if (!order) {
+        throw new AppError("Membership order not found", StatusCodes.NOT_FOUND, "MEMBERSHIP_ORDER_NOT_FOUND");
+      }
+
+      if (!this.requiresDocumentVerification(order.channel)) {
+        throw new AppError(
+          "Membership order for this channel activates on payment and has no document decision",
+          StatusCodes.CONFLICT,
+          "MEMBERSHIP_VERIFICATION_NOT_REQUIRED"
+        );
+      }
+
+      if (order.status !== "PAID") {
+        throw new AppError(
+          "Membership order must be paid before a document decision",
+          StatusCodes.CONFLICT,
+          "MEMBERSHIP_ORDER_NOT_PAID"
+        );
+      }
+
+      if (order.userMembership) {
+        throw new AppError(
+          "Membership order has already been activated",
+          StatusCodes.CONFLICT,
+          "MEMBERSHIP_ALREADY_ACTIVATED"
+        );
+      }
+
+      if (!order.invoice) {
+        throw new AppError("Membership order invoice not found", StatusCodes.CONFLICT, "MEMBERSHIP_INVOICE_NOT_FOUND");
+      }
+
+      const now = new Date();
+      const refundAmount = order.totalAmount.toFixed(2);
+      /// Statusnya PENDING, bukan REFUNDED. Baris ini mencatat bahwa dana WAJIB
+      /// dikembalikan penuh; perpindahan uangnya sendiri dieksekusi ke penyedia
+      /// pembayaran pada tahap berikutnya. Invoice dan payment sengaja tidak
+      /// ditandai REFUNDED lebih dulu supaya pembukuan tidak mengklaim uang
+      /// sudah kembali padahal belum.
+      const refund = {
+        status: "PENDING",
+        amount: refundAmount,
+        currency: order.invoice.currency,
+        requestedBy: input.adminId,
+        requestedAt: now.toISOString(),
+        reason: input.reason ?? null
+      };
+      const rejection = {
+        rejectedBy: input.adminId,
+        rejectedAt: now.toISOString(),
+        reason: input.reason ?? null,
+        refund
+      };
+
+      await tx.membershipDocument.updateMany({
+        where: { orderId: order.id, status: "PENDING" },
+        data: { status: "REJECTED" }
+      });
+
+      await tx.membershipOrder.update({
+        where: { id: order.id },
+        data: {
+          status: "CANCELLED",
+          registrationData: {
+            ...(this.asObject(order.registrationData)),
+            documentRejection: rejection
+          }
+        }
+      });
+
+      await tx.invoice.update({
+        where: { id: order.invoice.id },
+        data: {
+          metadata: {
+            ...(this.asObject(order.invoice.metadata)),
+            refund
+          }
+        }
+      });
+
+      for (const payment of order.payments.filter((item) => item.status === "PAID")) {
+        await tx.membershipPayment.update({
+          where: { id: payment.id },
+          data: {
+            metadata: {
+              ...(this.asObject(payment.metadata)),
+              refund
+            }
+          }
+        });
+      }
+
+      await tx.auditLog.create({
+        data: {
+          actorId: input.adminId,
+          action: "MEMBERSHIP_DOCUMENTS_REJECTED",
+          entityType: "MEMBERSHIP_ORDER",
+          entityId: order.id,
+          metadata: {
+            targetUserId: order.userId,
+            membershipId: order.membershipId,
+            channel: order.channel,
+            invoiceId: order.invoice.id,
+            invoiceNumber: order.invoice.number,
+            refundAmount,
+            reason: input.reason ?? null
+          }
+        }
+      });
+
+      return tx.membershipOrder.findUniqueOrThrow({
+        where: { id: order.id },
+        include: {
+          ...this.orderInclude(),
+          userMembership: true
+        }
+      });
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      timeout: 30000
+    });
+  }
+
   /// Hanya pembelian kanal WEB yang menunggu verifikasi dokumen. Aturannya
   /// ditegakkan di service, bukan di controller, supaya entry point baru tidak
   /// bisa melewatinya tanpa sengaja.

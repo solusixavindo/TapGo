@@ -147,6 +147,18 @@ export class AdminConsoleController {
     res.json({ success: true, data: result });
   };
 
+  /// Stage R2.6 jalur A: menolak dokumen KYC atas order kanal WEB yang sudah
+  /// lunas. Keputusan Owner untuk kasus ini adalah pengembalian dana penuh,
+  /// sehingga permintaan refund ikut dicatat di sini.
+  rejectMemberRequestDocuments = async (req: Request, res: Response) => {
+    const result = await this.membershipOrderService.rejectOrderDocuments({
+      orderId: String(req.params.id),
+      adminId: req.auth!.userId,
+      ...(typeof req.body.reason === "string" ? { reason: req.body.reason } : {})
+    });
+    res.json({ success: true, data: result });
+  };
+
   rejectMemberRequest = async (req: Request, res: Response) => {
     const result = await this.adminConsoleService.rejectMemberRequest({
       orderId: String(req.params.id),
