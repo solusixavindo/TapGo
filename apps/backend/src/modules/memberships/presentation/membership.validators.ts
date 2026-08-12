@@ -1,4 +1,4 @@
-import { MembershipTier } from "@prisma/client";
+import { MembershipDocumentType, MembershipTier } from "@prisma/client";
 import { z } from "zod";
 
 export const upgradeMembershipSchema = z.object({
@@ -50,6 +50,25 @@ export const membershipPaymentSuccessSchema = z.object({
 });
 
 export const payMembershipOrderSchema = z.object({
+  params: z.object({
+    id: z.string().uuid()
+  })
+});
+
+/// Tipe dokumen ditulis huruf kecil pada URL agar enak dibaca, lalu dinormalkan
+/// ke enum Prisma di controller.
+const membershipDocumentTypeParam = z
+  .enum(["ktp", "selfie", "KTP", "SELFIE"])
+  .transform((value) => value.toUpperCase() as MembershipDocumentType);
+
+export const membershipDocumentUploadSchema = z.object({
+  params: z.object({
+    id: z.string().uuid(),
+    type: membershipDocumentTypeParam
+  })
+});
+
+export const membershipDocumentListSchema = z.object({
   params: z.object({
     id: z.string().uuid()
   })

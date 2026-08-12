@@ -41,6 +41,18 @@ const envSchema = z.object({
   // recovery; penegakannya fail-closed pada titik pemakaian, lihat
   // core/security/otpDigest.ts.
   AUTH_RECOVERY_HMAC_SECRET: z.string().min(32).optional(),
+  /// Kunci enkripsi dokumen identitas (KTP dan swafoto) yang disimpan sementara
+  /// di database. SENGAJA terpisah dari secret domain lain: kebocoran satu
+  /// domain tidak boleh melemahkan domain lain.
+  ///
+  /// Kunci ini berada di environment, bukan di database, supaya salinan backup
+  /// database saja tidak cukup untuk membuka dokumen. Optional agar boot tidak
+  /// gagal pada environment yang belum memakai unggahan dokumen; penegakannya
+  /// fail-closed pada titik pemakaian, lihat core/security/documentCipher.ts.
+  MEMBERSHIP_DOCUMENT_SECRET: z.string().min(32).optional(),
+  /// Masa simpan dokumen identitas di database, dalam jam. Keputusan Owner:
+  /// 24 jam, setelah itu admin sudah mencetaknya sebagai berkas administrasi.
+  MEMBERSHIP_DOCUMENT_RETENTION_HOURS: z.coerce.number().int().positive().max(72).default(24),
   CORS_ORIGINS: z.string().default("http://localhost:3000"),
   MIDTRANS_SERVER_KEY: z.string().optional(),
   MIDTRANS_CLIENT_KEY: z.string().optional(),

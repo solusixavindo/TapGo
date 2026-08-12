@@ -596,23 +596,50 @@ model MembershipPayment {
   @@map("membership_payments")
 }
 
+/// Dokumen identitas untuk verifikasi keanggotaan.
+///
+/// Keputusan Owner (Stage R2.6 jalur A): berkasnya disimpan di database
+/// aplikasi maksimal 24 jam. Dalam rentang itu admin mencetaknya menjadi
+/// berkas administrasi, lalu isinya dihapus dari database.
+///
+/// Isi berkas TIDAK disimpan mentah. Yang tersimpan adalah ciphertext
+/// AES-256-GCM; kuncinya berada di environment, bukan di database, supaya
+/// salinan backup database saja tidak cukup untuk membukanya. Baris tetap
+/// bertahan setelah isinya dihapus karena status dan jejak waktunya masih
+/// dibutuhkan untuk audit.
 model MembershipDocument {
-  id        String                   @id @default(uuid()) @db.Uuid
-  orderId   String                   @map("order_id") @db.Uuid
-  userId    String                   @map("user_id") @db.Uuid
-  type      MembershipDocumentType
-  status    MembershipDocumentStatus @default(PENDING)
-  url       String?
-  localPath String?                  @map("local_path")
-  metadata  Json?
-  createdAt DateTime                 @default(now()) @map("created_at")
-  updatedAt DateTime                 @updatedAt @map("updated_at")
+  id          String                   @id @default(uuid()) @db.Uuid
+  orderId     String                   @map("order_id") @db.Uuid
+  userId      String                   @map("user_id") @db.Uuid
+  type        MembershipDocumentType
+  status      MembershipDocumentStatus @default(PENDING)
+  url         String?
+  localPath   String?                  @map("local_path")
+  /// Ciphertext AES-256-GCM. Null berarti belum diunggah atau sudah dihapus.
+  cipherText  Bytes?                   @map("cipher_text")
+  cipherIv    Bytes?                   @map("cipher_iv")
+  cipherTag   Bytes?                   @map("cipher_tag")
+  /// Versi kunci aktif, disimpan bersama ciphertext agar rotasi mungkin.
+  keyVersion  Int?                     @map("key_version")
+  contentType String?                  @map("content_type") @db.VarChar(40)
+  sizeBytes   Int?                     @map("size_bytes")
+  /// SHA-256 isi asli. Dipakai membuktikan hasil cetak sama dengan yang diunggah.
+  checksum    String?                  @db.VarChar(64)
+  uploadedAt  DateTime?                @map("uploaded_at")
+  /// Batas simpan. Setelah lewat, isi berkas tidak pernah disajikan lagi.
+  expiresAt   DateTime?                @map("expires_at")
+  purgedAt    DateTime?                @map("purged_at")
+  metadata    Json?
+  createdAt   DateTime                 @default(now()) @map("created_at")
+  updatedAt   DateTime                 @updatedAt @map("updated_at")
 
   order MembershipOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   user  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([orderId, type])
   @@index([userId, type])
+  /// Dipakai penyapu berkala untuk menemukan dokumen yang sudah lewat masa simpan.
+  @@index([expiresAt])
   @@map("membership_documents")
 }
 

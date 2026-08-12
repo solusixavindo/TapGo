@@ -7,7 +7,13 @@ import { AdminConsoleService } from "../application/AdminConsoleService.js";
 import { AdminConsoleController } from "./admin-console.controller.js";
 import { WalletService } from "../../wallets/application/WalletService.js";
 import { PrismaWalletRepository } from "../../wallets/infrastructure/PrismaWalletRepository.js";
+import { MembershipDocumentService } from "../../memberships/application/MembershipDocumentService.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
+import { MembershipDocumentController } from "../../memberships/presentation/membership-document.controller.js";
+import {
+  membershipDocumentListSchema,
+  membershipDocumentUploadSchema
+} from "../../memberships/presentation/membership.validators.js";
 import {
   adminCommissionQuerySchema,
   adminFounderChairmanDetailSchema,
@@ -38,6 +44,9 @@ const service = new AdminConsoleService(prisma);
 const walletService = new WalletService(new PrismaWalletRepository(prisma));
 const membershipOrderService = new MembershipOrderService(prisma);
 const controller = new AdminConsoleController(service, walletService, membershipOrderService);
+const documentController = new MembershipDocumentController(
+  new MembershipDocumentService(prisma)
+);
 
 export const adminConsoleRouter = Router();
 
@@ -52,6 +61,18 @@ adminConsoleRouter.post(
   "/member-requests/:id/approve",
   validateRequest(adminMemberRequestActionSchema),
   asyncHandler(controller.approveMemberRequest)
+);
+// Admin membuka dokumen untuk dicetak menjadi berkas administrasi. Ini
+// satu-satunya jalan keluar isi dokumen dari database.
+adminConsoleRouter.get(
+  "/member-requests/:id/documents",
+  validateRequest(membershipDocumentListSchema),
+  asyncHandler(documentController.adminDocuments)
+);
+adminConsoleRouter.get(
+  "/member-requests/:id/documents/:type",
+  validateRequest(membershipDocumentUploadSchema),
+  asyncHandler(documentController.adminDocumentFile)
 );
 adminConsoleRouter.post(
   "/member-requests/:id/verify-documents",
