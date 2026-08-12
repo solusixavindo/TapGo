@@ -735,6 +735,10 @@ export class MembershipOrderService {
       membership: { include: { benefits: { orderBy: { level: "asc" as const } } } },
       invoice: true,
       payments: { orderBy: { createdAt: "desc" as const } },
+      // Sejak Stage R2.6 jalur A, status PAID saja tidak lagi berarti aktif.
+      // Klien perlu membedakan "sudah bayar, menunggu verifikasi" dari "aktif",
+      // dan satu-satunya penanda adalah ada tidaknya userMembership.
+      userMembership: true,
       user: { select: { id: true, fullName: true, email: true, phone: true, referralCode: true } }
     };
   }
