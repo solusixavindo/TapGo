@@ -61,7 +61,8 @@ const ADMIN_ENDPOINTS: ReadonlyArray<Endpoint> = [
 /** Permukaan yang menuntut SUPER_ADMIN. */
 const SUPER_ADMIN_ENDPOINTS: ReadonlyArray<Endpoint> = [
   { method: "GET", path: "/api/v1/admin/commission-settings" },
-  { method: "POST", path: "/api/v1/admin/roles" },
+  { method: "GET", path: "/api/v1/admin/roles" },
+  { method: "PUT", path: "/api/v1/admin/roles/00000000-0000-4000-8000-000000000000" },
   { method: "PUT", path: "/api/v1/admin/app-settings" },
   { method: "GET", path: "/api/v1/admin/founder-chairman" },
   { method: "GET", path: "/api/v1/admin/founder-platinum" }
