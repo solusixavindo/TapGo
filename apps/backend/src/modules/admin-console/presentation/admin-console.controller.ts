@@ -135,6 +135,18 @@ export class AdminConsoleController {
     res.json({ success: true, data: result });
   };
 
+  /// Stage R2.6 jalur A: melepas order kanal WEB yang sudah lunas menjadi
+  /// membership aktif setelah dokumen KYC-nya diperiksa admin. Endpoint ini
+  /// terpisah dari approve, karena approve mengonfirmasi pembayaran sedangkan
+  /// endpoint ini mengonfirmasi identitas.
+  verifyMemberRequestDocuments = async (req: Request, res: Response) => {
+    const result = await this.membershipOrderService.activateVerifiedOrder({
+      orderId: String(req.params.id),
+      adminId: req.auth!.userId
+    });
+    res.json({ success: true, data: result });
+  };
+
   rejectMemberRequest = async (req: Request, res: Response) => {
     const result = await this.adminConsoleService.rejectMemberRequest({
       orderId: String(req.params.id),

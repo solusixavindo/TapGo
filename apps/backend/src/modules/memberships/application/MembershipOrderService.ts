@@ -333,6 +333,31 @@ export class MembershipOrderService {
         }
       });
 
+      await tx.membershipDocument.updateMany({
+        where: { orderId: order.id, status: "PENDING" },
+        data: { status: "APPROVED" }
+      });
+
+      // Verifikasi KYC adalah tindakan yang melepas uang: begitu lolos, bonus
+      // sponsor dan bonus level langsung terbayar. Karena itu selalu dicatat
+      // siapa adminnya, order mana, dan berapa nilainya.
+      await tx.auditLog.create({
+        data: {
+          actorId: input.adminId,
+          action: "MEMBERSHIP_DOCUMENTS_VERIFIED",
+          entityType: "MEMBERSHIP_ORDER",
+          entityId: order.id,
+          metadata: {
+            targetUserId: order.userId,
+            membershipId: order.membershipId,
+            channel: order.channel,
+            invoiceId: order.invoice.id,
+            invoiceNumber: order.invoice.number,
+            totalAmount: order.totalAmount.toFixed(2)
+          }
+        }
+      });
+
       await this.activateMembership(tx, order, now);
 
       return tx.membershipOrder.findUniqueOrThrow({

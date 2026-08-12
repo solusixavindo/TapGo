@@ -54,6 +54,11 @@ adminConsoleRouter.post(
   asyncHandler(controller.approveMemberRequest)
 );
 adminConsoleRouter.post(
+  "/member-requests/:id/verify-documents",
+  validateRequest(adminMemberRequestActionSchema),
+  asyncHandler(controller.verifyMemberRequestDocuments)
+);
+adminConsoleRouter.post(
   "/member-requests/:id/reject",
   validateRequest(adminMemberRequestActionSchema),
   asyncHandler(controller.rejectMemberRequest)
