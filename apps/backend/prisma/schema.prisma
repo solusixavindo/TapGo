@@ -70,6 +70,18 @@ enum MembershipOrderStatus {
   CANCELLED
 }
 
+/// Kanal asal order membership (Stage R2.6 jalur A).
+///
+/// Dipakai untuk audit: pembelian mana yang datang dari web, dari aplikasi
+/// mobile, atau dari konfirmasi manual admin. Kolomnya nullable karena order
+/// yang dibuat sebelum stage ini memang tidak diketahui kanalnya — memberi
+/// nilai tebakan pada baris lama berarti mengarang riwayat.
+enum MembershipOrderChannel {
+  WEB
+  APP
+  ADMIN
+}
+
 enum UserMembershipStatus {
   ACTIVE
   EXPIRED
@@ -513,6 +525,8 @@ model MembershipOrder {
   userId           String                @map("user_id") @db.Uuid
   membershipId     String                @map("membership_id") @db.Uuid
   status           MembershipOrderStatus @default(PENDING)
+  /// Null berarti order dibuat sebelum pelacakan kanal ada.
+  channel          MembershipOrderChannel?
   totalAmount      Decimal               @map("total_amount") @db.Decimal(14, 2)
   packageSnapshot  Json                  @map("package_snapshot")
   registrationData Json?                 @map("registration_data")
@@ -530,6 +544,7 @@ model MembershipOrder {
 
   @@index([userId, status])
   @@index([membershipId, status])
+  @@index([channel, status])
   @@map("membership_orders")
 }
 

@@ -1,4 +1,11 @@
-import { MembershipOrderStatus, MembershipTier, Prisma, PrismaClient, UserRole } from "@prisma/client";
+import {
+  MembershipOrderChannel,
+  MembershipOrderStatus,
+  MembershipTier,
+  Prisma,
+  PrismaClient,
+  UserRole
+} from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../core/errors/AppError.js";
 
@@ -53,6 +60,9 @@ export class MembershipOrderService {
     userId: string;
     packageId: string;
     registrationData?: Record<string, unknown>;
+    /// Kanal asal order. Dicatat untuk audit; tidak memengaruhi tarif maupun
+    /// entitlement. Otorisasi kanal ditegakkan di lapisan presentation.
+    channel?: MembershipOrderChannel;
   }) {
     return this.prisma.$transaction(async (tx) => {
       const membershipPackage = await tx.membership.findFirst({
@@ -87,6 +97,7 @@ export class MembershipOrderService {
           userId: input.userId,
           membershipId: membershipPackage.id,
           status: "PENDING",
+          ...(input.channel ? { channel: input.channel } : {}),
           totalAmount: amount,
           packageSnapshot: packageSnapshot as Prisma.InputJsonValue,
           registrationData: (input.registrationData ?? {}) as Prisma.InputJsonValue,
