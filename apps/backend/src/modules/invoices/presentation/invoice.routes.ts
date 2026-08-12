@@ -4,6 +4,7 @@ import { prisma } from "../../../config/prisma.js";
 import { AppError } from "../../../core/errors/AppError.js";
 import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { requireAuth } from "../../../core/security/authContext.js";
+import { isAdminRole } from "../../../core/security/roleHierarchy.js";
 
 export const invoiceRouter = Router();
 
@@ -27,7 +28,7 @@ invoiceRouter.get("/:id", asyncHandler(async (req, res) => {
     throw new AppError("Invoice not found", StatusCodes.NOT_FOUND, "INVOICE_NOT_FOUND");
   }
 
-  const canRead = invoice.userId === req.auth!.userId || req.auth!.role === "ADMIN" || req.auth!.role === "SUPER_ADMIN";
+  const canRead = invoice.userId === req.auth!.userId || isAdminRole(req.auth!.role);
   if (!canRead) {
     throw new AppError("You are not allowed to view this invoice", StatusCodes.FORBIDDEN, "INVOICE_FORBIDDEN");
   }

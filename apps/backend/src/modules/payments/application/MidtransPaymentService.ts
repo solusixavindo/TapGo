@@ -10,6 +10,7 @@ import { StatusCodes } from "http-status-codes";
 import { env } from "../../../config/env.js";
 import { AppError } from "../../../core/errors/AppError.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
+import { isAdminRole } from "../../../core/security/roleHierarchy.js";
 
 type PrismaTransaction = Prisma.TransactionClient;
 
@@ -589,7 +590,7 @@ export class MidtransPaymentService {
 
   private canReadOrder(role: UserRole, requesterId: string, ownerId: string) {
     return (
-      requesterId === ownerId || role === "ADMIN" || role === "SUPER_ADMIN"
+      requesterId === ownerId || isAdminRole(role)
     );
   }
 

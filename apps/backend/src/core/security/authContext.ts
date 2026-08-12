@@ -3,6 +3,7 @@ import { StatusCodes } from "http-status-codes";
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../errors/AppError.js";
 import { INITIAL_AUTH_VERSION, JwtRole, verifyAccessToken } from "./tokenService.js";
+import { roleSatisfiesAny } from "./roleHierarchy.js";
 
 declare global {
   namespace Express {
@@ -132,7 +133,10 @@ export function requireRoles(...roles: JwtRole[]) {
       throw new AppError("Authentication required", StatusCodes.UNAUTHORIZED, "AUTH_REQUIRED");
     }
 
-    if (!roles.includes(req.auth.role)) {
+    // Tangga role: peran yang lebih tinggi memenuhi penjaga peran yang lebih
+    // rendah. Tanpa ini, menambah role di atas SUPER_ADMIN justru membuatnya
+    // ditolak oleh puluhan penjaga yang menuliskan "SUPER_ADMIN" harfiah.
+    if (!roleSatisfiesAny(req.auth.role, roles)) {
       throw new AppError("Insufficient permissions", StatusCodes.FORBIDDEN, "FORBIDDEN");
     }
 

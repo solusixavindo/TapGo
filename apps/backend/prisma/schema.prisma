@@ -12,6 +12,13 @@ enum UserRole {
   DRIVER
   ADMIN
   SUPER_ADMIN
+  /// Role puncak pemilik sistem. Memenuhi seluruh penjaga SUPER_ADMIN lewat
+  /// tangga role di core/security/roleHierarchy.ts, dan hanya dapat dibuat
+  /// lewat CLI bootstrap — tidak pernah lewat API, migration, atau seed.
+  ///
+  /// Tetap BUKAN kewenangan: pengelolaan scope masih menuntut grant
+  /// ADMIN_SCOPE_MANAGE aktif, dan tidak ada bypass ke jalur driver.
+  SUPER_ADMIN_VIP
 }
 
 enum AccountStatus {

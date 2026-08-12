@@ -1,4 +1,4 @@
-import { AdminScope, Prisma, PrismaClient } from "@prisma/client";
+import { AdminScope, Prisma, PrismaClient, UserRole } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../core/errors/AppError.js";
 
@@ -23,7 +23,7 @@ export const DRIVER_REVIEW_ACCOUNT_INACTIVE = "DRIVER_REVIEW_ACCOUNT_INACTIVE";
 export const DRIVER_REVIEW_ROLE_REQUIRED = "DRIVER_REVIEW_ROLE_REQUIRED";
 
 /** Role yang boleh dipertimbangkan. Bukan pemberi kewenangan. */
-const REVIEWER_ROLES = new Set(["ADMIN", "SUPER_ADMIN"]);
+const REVIEWER_ROLES = new Set<UserRole>(["ADMIN", "SUPER_ADMIN", "SUPER_ADMIN_VIP"]);
 
 export const SCOPE_AUDIT_ALLOWED_ACTION = "admin.scope.checked";
 export const SCOPE_AUDIT_DENIED_ACTION = "admin.scope.denied";

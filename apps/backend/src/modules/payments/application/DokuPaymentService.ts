@@ -12,6 +12,7 @@ import { logger } from "../../../core/logger/logger.js";
 import { DokuClient } from "../../../lib/doku/client.js";
 import { DokuNotificationPayload } from "../../../lib/doku/types.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
+import { isAdminRole } from "../../../core/security/roleHierarchy.js";
 
 const successStatuses = new Set(["SUCCESS", "PAID", "SETTLEMENT", "CAPTURE"]);
 const pendingStatuses = new Set(["PENDING", "INITIATED"]);
@@ -481,7 +482,7 @@ export class DokuPaymentService {
 
   private canReadOrder(role: UserRole, requesterId: string, ownerId: string) {
     return (
-      requesterId === ownerId || role === "ADMIN" || role === "SUPER_ADMIN"
+      requesterId === ownerId || isAdminRole(role)
     );
   }
 

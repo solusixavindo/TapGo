@@ -1,6 +1,7 @@
-import { AdminScope, AdminScopeGrantStatus, Prisma, PrismaClient } from "@prisma/client";
+import { AdminScope, AdminScopeGrantStatus, Prisma, PrismaClient, UserRole } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../core/errors/AppError.js";
+import { isAdminRole, isSuperAdminRole, isTopLevelRole, roleSatisfies } from "../../../core/security/roleHierarchy.js";
 
 /**
  * Tata kelola scope admin.
@@ -33,6 +34,8 @@ export const ADMIN_SCOPE_LAST_MANAGER_PROTECTED = "ADMIN_SCOPE_LAST_MANAGER_PROT
 export const ADMIN_SCOPE_REASON_INVALID = "ADMIN_SCOPE_REASON_INVALID";
 export const ADMIN_SCOPE_BOOTSTRAP_NOT_ALLOWED = "ADMIN_SCOPE_BOOTSTRAP_NOT_ALLOWED";
 export const ADMIN_SCOPE_VERSION_CONFLICT = "ADMIN_SCOPE_VERSION_CONFLICT";
+/// Akun role puncak hanya boleh disentuh oleh sesama role puncak.
+export const ADMIN_SCOPE_TOP_LEVEL_PROTECTED = "ADMIN_SCOPE_TOP_LEVEL_PROTECTED";
 
 // --- Bounded reason codes --------------------------------------------------
 
@@ -119,6 +122,13 @@ export const REVIEW_SCOPES: AdminScope[] = [
  * membuat mutasi manage-scope berurutan, sehingga hitungannya selalu benar
  * tanpa bergantung pada serialization failure yang harus di-retry.
  */
+/**
+ * Role yang layak memegang ADMIN_SCOPE_MANAGE. Dipakai penghitung manager,
+ * sehingga perlindungan "jangan menyisakan nol pengelola" melihat seluruh
+ * tangga role, bukan hanya SUPER_ADMIN.
+ */
+const SCOPE_MANAGER_ROLES: UserRole[] = ["SUPER_ADMIN", "SUPER_ADMIN_VIP"];
+
 const MANAGE_LOCK_KEY = 918_273_645;
 
 type TxClient = Prisma.TransactionClient;
@@ -170,7 +180,7 @@ export class AdminScopeGovernanceService {
     }
     // SUPER_ADMIN adalah SYARAT, bukan pemberi kewenangan. ADMIN yang memegang
     // ADMIN_SCOPE_MANAGE tetap ditolak di sini.
-    if (actor.role !== "SUPER_ADMIN") {
+    if (!isSuperAdminRole(actor.role)) {
       throw new AppError(
         "Kewenangan pengelolaan scope tidak tersedia.",
         StatusCodes.FORBIDDEN,
@@ -193,13 +203,43 @@ export class AdminScopeGovernanceService {
     return actor;
   }
 
+  /**
+   * Akun role puncak hanya boleh menjadi sasaran tindakan oleh sesama role
+   * puncak. Berlaku untuk pencabutan scope maupun pemberiannya.
+   */
+  private async assertMayActOnTarget(
+    tx: Prisma.TransactionClient,
+    actorRole: UserRole,
+    targetUserId: string,
+    audit: { actorId: string; grantId?: string; scope?: AdminScope; reasonCode?: ScopeReasonCode }
+  ) {
+    const target = await tx.user.findUnique({
+      where: { id: targetUserId },
+      select: { role: true }
+    });
+    if (!target || !isTopLevelRole(target.role) || isTopLevelRole(actorRole)) {
+      return;
+    }
+
+    await this.writeAudit(SCOPE_GOVERNANCE_ACTIONS.revokeDenied, {
+      ...audit,
+      targetUserId,
+      outcome: "DENIED"
+    });
+    throw new AppError(
+      "Akun ini hanya dapat dikelola oleh pemegang role puncak.",
+      StatusCodes.FORBIDDEN,
+      ADMIN_SCOPE_TOP_LEVEL_PROTECTED
+    );
+  }
+
   /** Aktor untuk endpoint baca-diri-sendiri: cukup admin aktif. */
   private async requireActiveAdmin(actorId: string) {
     const actor = await this.prisma.user.findUnique({
       where: { id: actorId },
       select: { id: true, role: true, status: true }
     });
-    if (!actor || (actor.role !== "ADMIN" && actor.role !== "SUPER_ADMIN")) {
+    if (!actor || !isAdminRole(actor.role)) {
       throw new AppError(
         "Kewenangan tidak tersedia.",
         StatusCodes.FORBIDDEN,
@@ -341,9 +381,8 @@ export class AdminScopeGovernanceService {
 
     // ADMIN_SCOPE_MANAGE hanya boleh dipegang SUPER_ADMIN; scope review boleh
     // ADMIN maupun SUPER_ADMIN. USER tidak boleh memegang apa pun.
-    const requiredTargetRoles =
-      input.scope === MANAGE_SCOPE ? ["SUPER_ADMIN"] : ["ADMIN", "SUPER_ADMIN"];
-    if (!requiredTargetRoles.includes(target.role)) {
+    const requiredTargetRole: UserRole = input.scope === MANAGE_SCOPE ? "SUPER_ADMIN" : "ADMIN";
+    if (!roleSatisfies(target.role, requiredTargetRole)) {
       await this.writeAudit(SCOPE_GOVERNANCE_ACTIONS.grantDenied, {
         actorId: input.actorId,
         targetUserId: target.id,
@@ -524,6 +563,16 @@ export class AdminScopeGovernanceService {
         );
       }
 
+      // PERLINDUNGAN ROLE PUNCAK. Tanpa ini, SUPER_ADMIN dapat melucuti
+      // kewenangan pemilik sistem — persis kebalikan dari maksud role yang
+      // berada di atasnya.
+      await this.assertMayActOnTarget(tx, actor.role, grant.userId, {
+        actorId: actor.id,
+        grantId: grant.id,
+        scope: grant.scope,
+        reasonCode
+      });
+
       // PERLINDUNGAN MANAGER TERAKHIR. Dihitung di dalam lock, sehingga dua
       // pencabutan silang tidak dapat sama-sama melihat dua manager.
       if (grant.scope === MANAGE_SCOPE) {
@@ -616,7 +665,11 @@ export class AdminScopeGovernanceService {
         scope: MANAGE_SCOPE,
         status: "ACTIVE",
         ...(excludeGrantId ? { id: { not: excludeGrantId } } : {}),
-        user: { status: "ACTIVE", role: "SUPER_ADMIN" }
+        // Role puncak ikut dihitung. Kalau tidak, mencabut grant milik
+        // SUPER_ADMIN terakhir akan tertolak walau pemilik sistem masih
+        // memegangnya — dan sebaliknya, pemegang puncak terakhir bisa dicabut
+        // tanpa perlindungan.
+        user: { status: "ACTIVE", role: { in: SCOPE_MANAGER_ROLES } }
       }
     });
   }

@@ -8,6 +8,7 @@ import {
 } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../core/errors/AppError.js";
+import { isAdminRole } from "../../../core/security/roleHierarchy.js";
 
 type PrismaTransaction = Prisma.TransactionClient;
 
@@ -744,7 +745,7 @@ export class MembershipOrderService {
   }
 
   private canReadOrder(role: UserRole, requesterId: string, ownerId: string) {
-    return requesterId === ownerId || role === "ADMIN" || role === "SUPER_ADMIN";
+    return requesterId === ownerId || isAdminRole(role);
   }
 
   private async generateInvoiceNumber(tx: PrismaTransaction) {
