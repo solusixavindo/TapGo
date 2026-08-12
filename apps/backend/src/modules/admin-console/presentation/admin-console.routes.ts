@@ -8,6 +8,7 @@ import { AdminConsoleController } from "./admin-console.controller.js";
 import { WalletService } from "../../wallets/application/WalletService.js";
 import { PrismaWalletRepository } from "../../wallets/infrastructure/PrismaWalletRepository.js";
 import { MembershipDocumentService } from "../../memberships/application/MembershipDocumentService.js";
+import { AdminRoleService } from "../application/AdminRoleService.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
 import { MembershipDocumentController } from "../../memberships/presentation/membership-document.controller.js";
 import {
@@ -29,6 +30,8 @@ import {
   adminMemberDetailSchema,
   adminMemberRequestActionSchema,
   adminOrderQuerySchema,
+  adminRoleAssignSchema,
+  adminRoleCandidateSchema,
   adminPaymentQuerySchema,
   adminReportQuerySchema,
   adminRewardActionSchema,
@@ -43,7 +46,13 @@ import {
 const service = new AdminConsoleService(prisma);
 const walletService = new WalletService(new PrismaWalletRepository(prisma));
 const membershipOrderService = new MembershipOrderService(prisma);
-const controller = new AdminConsoleController(service, walletService, membershipOrderService);
+const adminRoleService = new AdminRoleService(prisma);
+const controller = new AdminConsoleController(
+  service,
+  walletService,
+  membershipOrderService,
+  adminRoleService
+);
 const documentController = new MembershipDocumentController(
   new MembershipDocumentService(prisma)
 );
@@ -236,20 +245,26 @@ adminConsoleRouter.post(
 );
 adminConsoleRouter.get("/delete-requests", validateRequest(adminGenericStatusQuerySchema), asyncHandler(controller.deleteRequests));
 adminConsoleRouter.get("/contact-messages", validateRequest(adminGenericStatusQuerySchema), asyncHandler(controller.contactMessages));
-adminConsoleRouter.post("/roles", requireRoles("SUPER_ADMIN"), (_req, res) => {
-  res.status(501).json({
-    success: false,
-    code: "PRODUCTION_APPROVAL_REQUIRED",
-    message: "Fitur ini membutuhkan approval production."
-  });
-});
-adminConsoleRouter.put("/roles/:userId", requireRoles("SUPER_ADMIN"), (_req, res) => {
-  res.status(501).json({
-    success: false,
-    code: "PRODUCTION_APPROVAL_REQUIRED",
-    message: "Fitur ini membutuhkan approval production."
-  });
-});
+// Pengelolaan role hanya untuk pemegang role puncak. requireRoles memakai
+// tangga role, dan tidak ada peran di atas SUPER_ADMIN_VIP — sehingga penjaga
+// ini efektif berarti "hanya VIP", termasuk menolak SUPER_ADMIN biasa.
+adminConsoleRouter.get(
+  "/roles",
+  requireRoles("SUPER_ADMIN_VIP"),
+  asyncHandler(controller.adminRoles)
+);
+adminConsoleRouter.get(
+  "/roles/candidates",
+  requireRoles("SUPER_ADMIN_VIP"),
+  validateRequest(adminRoleCandidateSchema),
+  asyncHandler(controller.adminRoleCandidates)
+);
+adminConsoleRouter.put(
+  "/roles/:userId",
+  requireRoles("SUPER_ADMIN_VIP"),
+  validateRequest(adminRoleAssignSchema),
+  asyncHandler(controller.assignAdminRole)
+);
 adminConsoleRouter.put("/app-settings", requireRoles("SUPER_ADMIN"), (_req, res) => {
   res.status(501).json({
     success: false,

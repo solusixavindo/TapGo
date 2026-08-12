@@ -2,12 +2,14 @@ import { Request, Response } from "express";
 import { AdminConsoleService } from "../application/AdminConsoleService.js";
 import { WalletService } from "../../wallets/application/WalletService.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
+import { AdminRoleService } from "../application/AdminRoleService.js";
 
 export class AdminConsoleController {
   constructor(
     private readonly adminConsoleService: AdminConsoleService,
     private readonly walletService: WalletService,
-    private readonly membershipOrderService: MembershipOrderService
+    private readonly membershipOrderService: MembershipOrderService,
+    private readonly adminRoleService: AdminRoleService
   ) {}
 
   summary = async (_req: Request, res: Response) => {
@@ -164,6 +166,28 @@ export class AdminConsoleController {
       orderId: String(req.params.id),
       adminId: req.auth!.userId,
       ...(typeof req.body.reason === "string" ? { reason: req.body.reason } : {})
+    });
+    res.json({ success: true, data: result });
+  };
+
+  /// Pengelolaan role. Rutenya dijaga khusus SUPER_ADMIN_VIP; service tetap
+  /// memeriksa ulang role aktor dari database, bukan dari klaim token.
+  adminRoles = async (_req: Request, res: Response) => {
+    const result = await this.adminRoleService.listAdmins();
+    res.json({ success: true, data: result });
+  };
+
+  adminRoleCandidates = async (req: Request, res: Response) => {
+    const result = await this.adminRoleService.searchCandidates(String(req.query.q ?? ""));
+    res.json({ success: true, data: result });
+  };
+
+  assignAdminRole = async (req: Request, res: Response) => {
+    const result = await this.adminRoleService.assignRole({
+      actorId: req.auth!.userId,
+      targetUserId: String(req.params.userId),
+      role: req.body.role,
+      reasonCode: req.body.reasonCode
     });
     res.json({ success: true, data: result });
   };

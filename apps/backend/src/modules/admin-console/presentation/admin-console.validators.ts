@@ -8,6 +8,7 @@ import {
   WithdrawalStatus
 } from "@prisma/client";
 import { z } from "zod";
+import { ROLE_REASON_CODES } from "../application/AdminRoleService.js";
 
 const paginationQuery = {
   page: z.coerce.number().int().min(1).default(1),
@@ -212,5 +213,23 @@ export const adminGenericStatusQuerySchema = z.object({
   query: z.object({
     ...paginationQuery,
     status: z.string().trim().min(1).max(40).optional()
+  })
+});
+
+/// Pengelolaan role oleh pemilik sistem. SUPER_ADMIN_VIP sengaja tidak ada di
+/// daftar role yang dapat diberikan: role puncak hanya lahir dari CLI.
+export const adminRoleAssignSchema = z.object({
+  params: z.object({
+    userId: z.string().uuid()
+  }),
+  body: z.object({
+    role: z.enum(["USER", "ADMIN", "SUPER_ADMIN"]),
+    reasonCode: z.enum(ROLE_REASON_CODES)
+  })
+});
+
+export const adminRoleCandidateSchema = z.object({
+  query: z.object({
+    q: z.string().trim().min(3).max(60)
   })
 });
