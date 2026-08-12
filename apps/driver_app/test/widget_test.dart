@@ -372,6 +372,53 @@ void main() {
       }
     });
 
+    testWidgets('login gagal 401 tidak membuka workspace', (tester) async {
+      // Penjaga ini sebelumnya tidak diuji: yang teruji hanya sesi tidak sah
+      // saat restore, bukan login yang ditolak server. Mutation testing
+      // membuktikan status login gagal dapat diubah menjadi active tanpa satu
+      // test pun gagal.
+      final repo = FakeDriverRepository(
+        session: null,
+        loginError: const DriverApiException(
+          code: 'AUTH_INVALID_CREDENTIALS',
+          message: 'Nomor HP atau password salah.',
+          statusCode: 401,
+        ),
+      );
+      await pumpDriver(tester, repo);
+
+      await tester.tap(find.byKey(const ValueKey('driver-login-button')));
+      await tester.pumpAndSettle();
+
+      expect(repo.loginCalls, 1);
+      // Workspace tidak boleh terbuka dalam bentuk apa pun.
+      expect(find.text('Ketersediaan'), findsNothing);
+      expect(find.byType(AvailabilityCard), findsNothing);
+      expect(find.byType(DriverHomeScreen), findsNothing);
+      // Pesan aman tanpa exception mentah.
+      expect(find.textContaining('Exception'), findsNothing);
+      expect(find.textContaining('#0'), findsNothing);
+    });
+
+    testWidgets('login gagal 500 juga tidak membuka workspace', (tester) async {
+      final repo = FakeDriverRepository(
+        session: null,
+        loginError: const DriverApiException(
+          code: 'INTERNAL',
+          message: 'Terjadi gangguan. Silakan coba lagi.',
+          statusCode: 500,
+        ),
+      );
+      await pumpDriver(tester, repo);
+
+      await tester.tap(find.byKey(const ValueKey('driver-login-button')));
+      await tester.pumpAndSettle();
+
+      expect(repo.loginCalls, 1);
+      expect(find.byType(DriverHomeScreen), findsNothing);
+      expect(find.text('Ketersediaan'), findsNothing);
+    });
+
     testWidgets('login berhasil, ADMIN tidak mendapat bypass dari client',
         (tester) async {
       final repo = FakeDriverRepository(session: null);
@@ -772,6 +819,7 @@ class FakeDriverRepository implements DriverRepository {
     this.availabilityCompleter,
     this.acceptCompleter,
     this.loginCompleter,
+    this.loginError,
   });
 
   DriverSession? session;
@@ -781,6 +829,7 @@ class FakeDriverRepository implements DriverRepository {
   DriverApiException? currentError;
   Object? offersError;
   DriverApiException? acceptError;
+  DriverApiException? loginError;
   Completer<DriverAvailability>? availabilityCompleter;
   Completer<DriverRide>? acceptCompleter;
   Completer<DriverSession>? loginCompleter;
@@ -805,6 +854,9 @@ class FakeDriverRepository implements DriverRepository {
   Future<DriverSession> login(
       {required String phone, required String password}) async {
     loginCalls += 1;
+    if (loginError != null) {
+      throw loginError!;
+    }
     // Bila test menyediakan completer, login ditahan sehingga state loading
     // benar-benar dapat diamati.
     if (loginCompleter != null) {
