@@ -47,7 +47,22 @@ const envSchema = z.object({
   MIDTRANS_IS_PRODUCTION: z.coerce.boolean().default(false),
   MIDTRANS_NOTIFICATION_SECRET: z.string().optional(),
   MIDTRANS_SNAP_URL: z.string().url().optional(),
+  // Satu flag ini dulu mengendalikan tiga hal sekaligus: visibilitas paket
+  // berbayar, pembelian membership, dan pencairan saldo wallet. Akibatnya
+  // menyalakan penjualan di web ikut membuka pencairan saldo di rilis Google
+  // Play — permukaan yang justru sengaja ditutup. Sekarang ketiganya berdiri
+  // sendiri, masing-masing fail closed.
+  //
+  // Dipertahankan sebagai master switch: bila false, ketiga kanal di bawah
+  // ikut mati apa pun nilainya. Ini menjaga perilaku deployment lama.
   EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED: strictEnvBoolean(false),
+  /// Pembelian membership lewat kanal web. Jalur A Stage R2.6.
+  MEMBERSHIP_PURCHASE_WEB_ENABLED: strictEnvBoolean(false),
+  /// Pembelian membership dari dalam aplikasi mobile. Tetap false untuk rilis
+  /// Google Play: pembelian di dalam app menuntut Play Billing.
+  MEMBERSHIP_PURCHASE_APP_ENABLED: strictEnvBoolean(false),
+  /// Pencairan saldo wallet. Terpisah penuh dari pembelian membership.
+  WALLET_CASH_OUT_ENABLED: strictEnvBoolean(false),
   // Release 1 tidak memakai realtime/chat. Fail-closed: Socket.IO hanya
   // di-attach bila diaktifkan eksplisit ("true"). Nilai lain -> false.
   REALTIME_ENABLED: strictEnvBoolean(false),

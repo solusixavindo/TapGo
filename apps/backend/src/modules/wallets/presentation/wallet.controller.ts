@@ -3,6 +3,7 @@ import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { env } from "../../../config/env.js";
 import { AppError } from "../../../core/errors/AppError.js";
+import { walletCashOutEnabled } from "../../memberships/application/purchaseChannel.js";
 import { WalletService } from "../application/WalletService.js";
 
 export class WalletController {
@@ -130,8 +131,16 @@ export class WalletController {
     return typeof status === "string" ? { status: status as WithdrawalStatus } : {};
   }
 
+  /**
+   * Pencairan saldo kini memakai flag-nya sendiri.
+   *
+   * Sebelumnya penjaga ini membaca EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED, flag
+   * yang sama dengan pembelian membership. Akibatnya menyalakan penjualan
+   * membership di web akan ikut membuka pencairan saldo pada rilis Google Play.
+   * Keduanya kebijakan yang berbeda, jadi flag-nya dipisah.
+   */
   private assertCashOutEnabledForPlay() {
-    if (!env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED) {
+    if (!walletCashOutEnabled()) {
       throw new AppError(
         "Fitur pencairan saldo belum tersedia pada rilis Google Play.",
         StatusCodes.FORBIDDEN,
