@@ -118,7 +118,7 @@ export function UpgradeShell({
               <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-brand-green">
                 Upgrade Membership
               </p>
-              <p className="text-sm font-bold text-brand-navy">PT Xavindo Solusi Teknologi</p>
+              <p className="text-sm font-bold text-brand-navy">PT. TapGo Lion Indonesia</p>
             </div>
           </div>
 
