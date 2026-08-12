@@ -42,6 +42,13 @@ const ADMIN_ENDPOINTS: ReadonlyArray<Endpoint> = [
   { method: "GET", path: "/api/v1/admin/dashboard/summary" },
   { method: "GET", path: "/api/v1/admin/members" },
   { method: "GET", path: "/api/v1/admin/member-requests" },
+  // Verifikasi dokumen KYC melepas pembayaran bonus sponsor dan bonus level,
+  // jadi guard-nya ikut diuji di tabel ini. Dengan id yang tidak ada, ADMIN sah
+  // menerima 404 — bukan 401/403 — sehingga kontrol negatif tetap berlaku.
+  {
+    method: "POST",
+    path: "/api/v1/admin/member-requests/00000000-0000-4000-8000-000000000000/verify-documents"
+  },
   { method: "GET", path: "/api/v1/admin/invoices" },
   { method: "GET", path: "/api/v1/admin/payments" },
   { method: "GET", path: "/api/v1/admin/commissions" },
