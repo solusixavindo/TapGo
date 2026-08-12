@@ -33,6 +33,7 @@ describe.skipIf(!runIntegration)("Admin console API", () => {
     originalExternalPaymentGateEnv =
       process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
     process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = "true";
+    process.env.MEMBERSHIP_PURCHASE_APP_ENABLED = "true";
 
     const [{ createApp }, tokenService, envModule] = await Promise.all([
       import("../../src/app.js"),
@@ -40,7 +41,10 @@ describe.skipIf(!runIntegration)("Admin console API", () => {
       import("../../src/config/env.js")
     ]);
     backendEnv = envModule.env;
+    // Stage R2.6 memisahkan kanal pembelian. Test ini menguji perilaku
+    // distribusi direct, di mana pembelian dari dalam aplikasi diizinkan.
     backendEnv.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = true;
+    backendEnv.MEMBERSHIP_PURCHASE_APP_ENABLED = true;
     signAccessToken = tokenService.signAccessToken;
 
     server = http.createServer(createApp());

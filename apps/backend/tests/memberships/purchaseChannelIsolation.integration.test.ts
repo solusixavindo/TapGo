@@ -237,6 +237,125 @@ describe.skipIf(!runIntegration)("Membership purchase channel isolation", () => 
     expect(policy.paidMembershipVisible("WEB")).toBe(false);
   });
 
+  it("kanal web dapat membuat order, kanal app tidak", async () => {
+    setFlags({ master: true, web: true, app: false, cashOut: false });
+    const user = await createUser("CHN00006", "0.00");
+    const silver = await prisma.membership.findFirstOrThrow({
+      where: { tier: "SILVER" }
+    });
+
+    // Kanal app ditolak.
+    const viaApp = await fetch(`${baseUrl}/api/v1/membership/orders`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${tokenFor(user)}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ packageId: silver.id })
+    });
+    expect(viaApp.status).toBe(403);
+    expect(((await viaApp.json()) as { code?: string }).code).toBe(
+      "PAID_MEMBERSHIP_DISABLED_FOR_PLAY"
+    );
+    expect(await prisma.membershipOrder.count()).toBe(0);
+
+    // Kanal web diizinkan.
+    const viaWeb = await fetch(`${baseUrl}/api/v1/web/membership/orders`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${tokenFor(user)}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ packageId: silver.id })
+    });
+    expect(viaWeb.status).toBe(201);
+
+    // Kanal tercatat untuk audit.
+    const order = await prisma.membershipOrder.findFirstOrThrow({
+      where: { userId: user.id }
+    });
+    expect(order.channel).toBe("WEB");
+    expect(order.status).toBe("PENDING");
+  });
+
+  it("kanal web ditutup menolak pembuatan order", async () => {
+    setFlags({ master: true, web: false, app: false, cashOut: false });
+    const user = await createUser("CHN00007", "0.00");
+    const silver = await prisma.membership.findFirstOrThrow({
+      where: { tier: "SILVER" }
+    });
+
+    const response = await fetch(`${baseUrl}/api/v1/web/membership/orders`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${tokenFor(user)}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ packageId: silver.id })
+    });
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { code?: string }).code).toBe(
+      "MEMBERSHIP_PURCHASE_CHANNEL_DISABLED"
+    );
+    expect(await prisma.membershipOrder.count()).toBe(0);
+  });
+
+  it("paket berbayar hanya terlihat pada kanal yang boleh membeli", async () => {
+    setFlags({ master: true, web: true, app: false, cashOut: false });
+
+    const appList = await fetch(`${baseUrl}/api/v1/membership/packages`);
+    const appRaw = JSON.stringify(await appList.json());
+    for (const paid of ["Silver", "Gold", "Platinum"]) {
+      expect(appRaw, `${paid} tidak boleh terlihat di kanal app`).not.toContain(
+        paid
+      );
+    }
+
+    const webList = await fetch(`${baseUrl}/api/v1/web/membership/packages`);
+    const webRaw = JSON.stringify(await webList.json());
+    expect(webRaw).toContain("Silver");
+  });
+
+  it("kanal web tidak mengekspos simulator pembayaran", async () => {
+    setFlags({ master: true, web: true, app: false, cashOut: false });
+    const user = await createUser("CHN00008", "0.00");
+    const silver = await prisma.membership.findFirstOrThrow({
+      where: { tier: "SILVER" }
+    });
+    const created = await fetch(`${baseUrl}/api/v1/web/membership/orders`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${tokenFor(user)}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ packageId: silver.id })
+    });
+    const orderId = ((await created.json()) as { data: { id: string } }).data.id;
+
+    // Aktivasi hanya boleh berasal dari webhook penyedia pembayaran.
+    const simulate = await fetch(
+      `${baseUrl}/api/v1/web/membership/orders/${orderId}/payment-success`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${tokenFor(user)}`,
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({})
+      }
+    );
+    expect(simulate.status).toBe(404);
+
+    // Order tetap PENDING dan nol membership aktif.
+    const order = await prisma.membershipOrder.findUniqueOrThrow({
+      where: { id: orderId }
+    });
+    expect(order.status).toBe("PENDING");
+    expect(
+      await prisma.userMembership.count({ where: { orderId } })
+    ).toBe(0);
+  });
+
   it("nol perubahan pada domain finansial saat kanal ditutup", async () => {
     setFlags({ master: true, web: true, app: false, cashOut: false });
     const user = await createUser("CHN00005", "250000.00");

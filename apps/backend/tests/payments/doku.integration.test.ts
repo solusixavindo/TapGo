@@ -49,6 +49,7 @@ describe.skipIf(!runIntegration)("DOKU checkout membership payments", () => {
       process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
     originalDokuEnabledEnv = process.env.DOKU_ENABLED;
     process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = "true";
+    process.env.MEMBERSHIP_PURCHASE_APP_ENABLED = "true";
     process.env.DOKU_ENABLED = "true";
     process.env.DOKU_INTEGRATION_MODE = "checkout";
     process.env.DOKU_CLIENT_ID = dokuClientId;
@@ -62,7 +63,10 @@ describe.skipIf(!runIntegration)("DOKU checkout membership payments", () => {
       import("../../src/config/env.js"),
     ]);
     backendEnv = envModule.env;
+    // Stage R2.6 memisahkan kanal pembelian. Test ini menguji perilaku
+    // distribusi direct, di mana pembelian dari dalam aplikasi diizinkan.
     backendEnv.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = true;
+    backendEnv.MEMBERSHIP_PURCHASE_APP_ENABLED = true;
     backendEnv.DOKU_ENABLED = true;
     signAccessToken = tokenService.signAccessToken;
 

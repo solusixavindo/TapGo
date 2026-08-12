@@ -65,6 +65,7 @@ describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
     process.env.MIDTRANS_SNAP_URL = `http://127.0.0.1:${snapAddress.port}/snap/v1/transactions`;
     process.env.DOKU_ENABLED = "false";
     process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = "true";
+    process.env.MEMBERSHIP_PURCHASE_APP_ENABLED = "true";
     Object.assign(env, {
       MIDTRANS_SERVER_KEY: midtransServerKey,
       MIDTRANS_CLIENT_KEY: "SB-Mid-client-test-key",

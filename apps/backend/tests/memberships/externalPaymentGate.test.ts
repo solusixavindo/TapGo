@@ -162,7 +162,10 @@ describe("External membership payment safety gate", () => {
   });
 
   it("preserves direct membership order creation when the gate is explicitly enabled", async () => {
+    // Stage R2.6 memisahkan kanal pembelian. Test ini menguji perilaku
+    // distribusi direct, di mana pembelian dari dalam aplikasi diizinkan.
     env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = true;
+    env.MEMBERSHIP_PURCHASE_APP_ENABLED = true;
     const createdOrder = { id: "order-1" };
     const membershipOrderService = {
       createOrder: vi.fn().mockResolvedValue(createdOrder),
@@ -181,6 +184,8 @@ describe("External membership payment safety gate", () => {
     expect(membershipOrderService.createOrder).toHaveBeenCalledWith({
       userId: "user-1",
       packageId: "package-1",
+      // Stage R2.6: kanal ikut dikirim ke service untuk audit.
+      channel: "APP",
       registrationData: { name: "Member" },
     });
     expect(response.status).toHaveBeenCalledWith(201);
