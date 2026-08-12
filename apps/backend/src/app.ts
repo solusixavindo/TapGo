@@ -16,6 +16,7 @@ import { invoiceRouter } from "./modules/invoices/presentation/invoice.routes.js
 import { legalRouter } from "./modules/legal/presentation/legal.routes.js";
 import { memberIdentityRouter } from "./modules/member-identity/presentation/member-identity.routes.js";
 import { membershipOrderRouter } from "./modules/memberships/presentation/membership-order.routes.js";
+import { webMembershipRouter } from "./modules/memberships/presentation/web-membership.routes.js";
 import { membershipRouter } from "./modules/memberships/presentation/membership.routes.js";
 import { midtransRouter } from "./modules/payments/presentation/midtrans.routes.js";
 import { dokuPaymentRouter, dokuWebhookRouter } from "./modules/payments/presentation/doku.routes.js";
@@ -75,6 +76,9 @@ export function createApp() {
   app.use("/api/v1/contact", contactRouter);
   app.use("/api/v1/invoices", invoiceRouter);
   app.use("/api/v1/member-identity", memberIdentityRouter);
+  // Kanal web didaftarkan lebih dulu agar prefix /web tidak tertangkap router
+  // membership aplikasi mobile.
+  app.use("/api/v1/web/membership", webMembershipRouter);
   app.use("/api/v1/membership", membershipOrderRouter);
   app.use("/api/v1/memberships", membershipRouter);
   app.use("/api/v1/payments", paymentRateLimiter, midtransRouter);
