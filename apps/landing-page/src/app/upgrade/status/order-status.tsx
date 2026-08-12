@@ -1,9 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { PREVIEW_MODE, UpgradeOrderStatus } from "../api";
+import {
+  ORDER_KEY,
+  PREVIEW_MODE,
+  TOKEN_KEY,
+  UpgradeOrder,
+  UpgradeOrderStatus,
+  getOrder,
+  readSession
+} from "../api";
 import { formatRupiah, secondaryButtonClass } from "../upgrade-shell";
 
 type Tone = "wait" | "review" | "done" | "refund";
@@ -57,46 +65,105 @@ const STATUS_VIEW: Record<
   }
 };
 
+/** Status yang masih dapat berubah sendiri, jadi layak ditanyakan ulang. */
+const LIVE_STATUSES: UpgradeOrderStatus[] = ["PENDING", "PAID_AWAITING_VERIFICATION"];
+const POLL_INTERVAL_MS = 15000;
+
 /** Data contoh; hanya dipakai saat PREVIEW_MODE menyala. */
-const PREVIEW_ORDER = {
+const PREVIEW_ORDER: UpgradeOrder = {
+  id: "preview-order",
   reference: "MBR-2026-000481",
   packageName: "Gold",
   amount: 3000000,
+  status: "PAID_AWAITING_VERIFICATION",
+  createdAt: "2026-08-12T09:20:00.000Z",
   invoiceNumber: "INV-2026-000481",
-  createdAt: "12 Agustus 2026, 16:20 WIB"
+  buyerName: "Budi Santoso"
 };
+
+function formatMoment(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "long",
+    timeStyle: "short"
+  }).format(parsed);
+}
 
 export default function OrderStatus() {
   // Query param dipakai, bukan segmen dinamis: situs ini diekspor statis dan
   // payment gateway juga mengembalikan pengguna dengan parameter.
-
-  // Pada tinjauan tampilan, seluruh kondisi dapat dilihat bergantian. Di
-  // produksi status hanya berasal dari server.
   const params = useSearchParams();
-  const orderId = params.get("id") ?? "-";
   const requested = params.get("state") as UpgradeOrderStatus | null;
-  const [status, setStatus] = useState<UpgradeOrderStatus>(
+
+  const [order, setOrder] = useState<UpgradeOrder | null>(PREVIEW_MODE ? PREVIEW_ORDER : null);
+  const [previewStatus, setPreviewStatus] = useState<UpgradeOrderStatus>(
     PREVIEW_MODE && requested && requested in STATUS_VIEW
       ? requested
       : "PAID_AWAITING_VERIFICATION"
   );
-  const view = STATUS_VIEW[status];
-  const tone = TONE_STYLE[view.tone];
+  const [loading, setLoading] = useState(!PREVIEW_MODE);
+  const [error, setError] = useState("");
 
-  if (!PREVIEW_MODE) {
-    // Di produksi status dibaca dari server. Tanpa itu halaman tidak menampilkan
-    // nomor pengajuan maupun nominal karangan.
+  // Id order berasal dari sesi. Query param hanya cadangan untuk pengguna yang
+  // kembali dari halaman penyedia pembayaran di tab yang sama.
+  const orderId = readSession(ORDER_KEY) || params.get("id") || "";
+
+  const refresh = useCallback(async () => {
+    const token = readSession(TOKEN_KEY);
+    if (!token || !orderId) {
+      setError("Sesi Anda sudah berakhir. Masuk kembali untuk melihat status.");
+      setLoading(false);
+      return;
+    }
+    try {
+      const result = await getOrder(token, orderId);
+      setOrder(result);
+      setError("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Status belum dapat dimuat.");
+    } finally {
+      setLoading(false);
+    }
+  }, [orderId]);
+
+  useEffect(() => {
+    if (PREVIEW_MODE) return;
+    void refresh();
+  }, [refresh]);
+
+  const status = PREVIEW_MODE ? previewStatus : order?.status;
+
+  useEffect(() => {
+    if (PREVIEW_MODE) return;
+    if (!status || !LIVE_STATUSES.includes(status)) return;
+    // Verifikasi dikerjakan manusia, jadi jeda 15 detik sudah memadai dan tidak
+    // membebani server. Polling berhenti sendiri begitu status final.
+    const timer = window.setInterval(() => void refresh(), POLL_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [status, refresh]);
+
+  if (loading) {
+    return <p className="text-sm font-semibold text-slate-500">Memuat status…</p>;
+  }
+
+  if (!order || !status) {
     return (
       <div className="rounded-2xl bg-slate-50 px-5 py-6 text-center">
         <p className="text-sm font-bold text-brand-navy">Status belum dapat dimuat</p>
         <p className="mt-2 text-sm leading-7 text-slate-600">
-          Muat ulang halaman ini beberapa saat lagi, atau buka kembali tautan
-          status dari email konfirmasi Anda.
+          {error ||
+            "Muat ulang halaman ini beberapa saat lagi, atau buka kembali tautan status dari email konfirmasi Anda."}
         </p>
-        <p className="mt-4 text-xs text-slate-400">Pengajuan #{orderId}</p>
+        <Link href="/upgrade" className={`${secondaryButtonClass} mt-5`}>
+          Masuk kembali
+        </Link>
       </div>
     );
   }
+
+  const view = STATUS_VIEW[status];
+  const tone = TONE_STYLE[view.tone];
 
   return (
     <div>
@@ -119,36 +186,33 @@ export default function OrderStatus() {
             <div className="flex items-start justify-between gap-6">
               <dt className="text-sm text-slate-500">Nomor pengajuan</dt>
               <dd className="text-right text-sm font-bold text-brand-navy">
-                {PREVIEW_ORDER.reference}
+                {order.reference}
               </dd>
             </div>
             <div className="flex items-start justify-between gap-6">
               <dt className="text-sm text-slate-500">Paket</dt>
               <dd className="text-right text-sm font-bold text-brand-navy">
-                {PREVIEW_ORDER.packageName}
+                {order.packageName}
               </dd>
             </div>
             <div className="flex items-start justify-between gap-6">
               <dt className="text-sm text-slate-500">Total</dt>
               <dd className="text-right text-sm font-bold text-brand-navy">
-                {formatRupiah(PREVIEW_ORDER.amount)}
+                {formatRupiah(order.amount)}
               </dd>
             </div>
             <div className="flex items-start justify-between gap-6">
               <dt className="text-sm text-slate-500">Diajukan</dt>
               <dd className="text-right text-sm font-bold text-brand-navy">
-                {PREVIEW_ORDER.createdAt}
+                {formatMoment(order.createdAt)}
               </dd>
             </div>
           </dl>
 
-          {status === "ACTIVE" || status === "PAID_AWAITING_VERIFICATION" ? (
-            <a
-              href="#"
-              className="mt-5 inline-flex items-center gap-2 text-sm font-black text-brand-blue"
-            >
-              Unduh invoice {PREVIEW_ORDER.invoiceNumber}
-            </a>
+          {error ? (
+            <p className="mt-5 rounded-2xl bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900">
+              Status terakhir yang berhasil dimuat ditampilkan di atas. {error}
+            </p>
           ) : null}
         </div>
       </div>
@@ -163,10 +227,10 @@ export default function OrderStatus() {
               <button
                 key={key}
                 type="button"
-                onClick={() => setStatus(key)}
+                onClick={() => setPreviewStatus(key)}
                 className={[
                   "rounded-full px-3 py-1.5 text-xs font-bold transition",
-                  status === key
+                  previewStatus === key
                     ? "bg-brand-navy text-white"
                     : "bg-white text-slate-500 hover:text-brand-navy"
                 ].join(" ")}
@@ -178,11 +242,15 @@ export default function OrderStatus() {
         </div>
       ) : null}
 
+      {LIVE_STATUSES.includes(status) && !PREVIEW_MODE ? (
+        <p className="mt-4 text-center text-xs text-slate-400">
+          Halaman ini menyegarkan status secara otomatis.
+        </p>
+      ) : null}
+
       <Link href="/" className={`${secondaryButtonClass} mt-6`}>
         Selesai
       </Link>
-
-      <p className="mt-4 text-center text-xs text-slate-400">Pengajuan #{orderId}</p>
     </div>
   );
 }

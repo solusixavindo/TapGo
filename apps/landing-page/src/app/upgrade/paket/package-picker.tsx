@@ -4,9 +4,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   MembershipPackage,
+  PACKAGE_KEY,
   PREVIEW_MODE,
   PREVIEW_PACKAGES,
-  listPackages
+  TOKEN_KEY,
+  listPackages,
+  readSession,
+  writeSession
 } from "../api";
 import { formatRupiah, primaryButtonClass } from "../upgrade-shell";
 
@@ -25,6 +29,11 @@ export default function PackagePicker() {
 
   useEffect(() => {
     if (PREVIEW_MODE) return;
+    // Tanpa sesi, langkah ini tidak ada artinya: order tidak dapat dibuat.
+    if (!readSession(TOKEN_KEY)) {
+      router.replace("/upgrade");
+      return;
+    }
     let alive = true;
     listPackages()
       .then((result) => {
@@ -43,11 +52,11 @@ export default function PackagePicker() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [router]);
 
   function onContinue() {
     if (!selected) return;
-    sessionStorage.setItem("tapgo.upgrade.packageId", selected);
+    writeSession(PACKAGE_KEY, selected);
     router.push("/upgrade/data");
   }
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { PREVIEW_MODE, login } from "./api";
+import { PREVIEW_MODE, TOKEN_KEY, login, writeSession } from "./api";
 import { Field, inputClass, primaryButtonClass } from "./upgrade-shell";
 
 export default function LoginForm() {
@@ -23,7 +23,7 @@ export default function LoginForm() {
       const result = await login(phone.trim(), password);
       // Token disimpan hanya untuk sesi tab ini. Tidak ada data sensitif lain
       // yang ditulis ke perangkat.
-      sessionStorage.setItem("tapgo.upgrade.token", result.accessToken);
+      writeSession(TOKEN_KEY, result.accessToken);
       router.push("/upgrade/paket");
     } catch (caught) {
       setError(

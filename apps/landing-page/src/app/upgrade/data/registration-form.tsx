@@ -1,28 +1,48 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
-import { PREVIEW_MODE } from "../api";
+import { FormEvent, useEffect, useState } from "react";
+import {
+  ORDER_KEY,
+  PACKAGE_KEY,
+  PREVIEW_MODE,
+  TOKEN_KEY,
+  createOrder,
+  readSession,
+  uploadDocument,
+  writeSession
+} from "../api";
 import { Field, inputClass, primaryButtonClass } from "../upgrade-shell";
 
 type DocumentSlot = "ktp" | "selfie";
+
+type PickedDocument = {
+  name: string;
+  size: number;
+  type: string;
+  /** Null hanya pada mode tinjauan tampilan, yang tidak pernah mengunggah. */
+  file: File | null;
+};
 
 const DOCUMENT_LABELS: Record<DocumentSlot, { title: string; hint: string }> = {
   ktp: { title: "Foto KTP", hint: "Pastikan NIK dan nama terbaca jelas." },
   selfie: { title: "Swafoto dengan KTP", hint: "Wajah dan KTP terlihat dalam satu foto." }
 };
 
+const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
+const ALLOWED_TYPES = ["image/png", "image/jpeg"];
+
 function DocumentUpload({
   slot,
-  fileName,
+  document,
   onPick
 }: {
   slot: DocumentSlot;
-  fileName: string;
-  onPick: (slot: DocumentSlot, name: string) => void;
+  document: PickedDocument | null;
+  onPick: (slot: DocumentSlot, file: File | null) => void;
 }) {
   const meta = DOCUMENT_LABELS[slot];
-  const filled = fileName.length > 0;
+  const filled = document !== null;
 
   return (
     <label
@@ -49,7 +69,7 @@ function DocumentUpload({
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-bold text-brand-navy">{meta.title}</span>
         <span className="mt-0.5 block truncate text-xs text-slate-500">
-          {filled ? fileName : meta.hint}
+          {document ? document.name : meta.hint}
         </span>
       </span>
       <span className="shrink-0 text-xs font-black uppercase tracking-wider text-brand-blue">
@@ -59,10 +79,16 @@ function DocumentUpload({
         type="file"
         accept="image/png,image/jpeg"
         className="sr-only"
-        onChange={(event) => onPick(slot, event.target.files?.[0]?.name ?? "")}
+        onChange={(event) => onPick(slot, event.target.files?.[0] ?? null)}
       />
     </label>
   );
+}
+
+/** Keterangan berkas untuk disimpan bersama pengajuan. Objek File tidak ikut. */
+function describe(document: PickedDocument | null) {
+  if (!document) return null;
+  return { name: document.name, size: document.size, type: document.type };
 }
 
 export default function RegistrationForm() {
@@ -71,32 +97,103 @@ export default function RegistrationForm() {
   const [address, setAddress] = useState(
     PREVIEW_MODE ? "Jl. Merdeka No. 12, Serang, Banten" : ""
   );
-  const [documents, setDocuments] = useState<Record<DocumentSlot, string>>({
-    ktp: PREVIEW_MODE ? "ktp-budi.jpg" : "",
-    selfie: PREVIEW_MODE ? "swafoto-budi.jpg" : ""
+  const [documents, setDocuments] = useState<Record<DocumentSlot, PickedDocument | null>>({
+    ktp: PREVIEW_MODE
+      ? { name: "ktp-budi.jpg", size: 512000, type: "image/jpeg", file: null }
+      : null,
+    selfie: PREVIEW_MODE
+      ? { name: "swafoto-budi.jpg", size: 480000, type: "image/jpeg", file: null }
+      : null
   });
   const [consent, setConsent] = useState(PREVIEW_MODE);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (PREVIEW_MODE) return;
+    if (!readSession(TOKEN_KEY)) {
+      router.replace("/upgrade");
+      return;
+    }
+    if (!readSession(PACKAGE_KEY)) {
+      router.replace("/upgrade/paket");
+    }
+  }, [router]);
 
   const complete =
     fullName.trim().length > 2 &&
     address.trim().length > 5 &&
-    documents.ktp.length > 0 &&
-    documents.selfie.length > 0 &&
+    documents.ktp !== null &&
+    documents.selfie !== null &&
     consent;
 
-  function onPick(slot: DocumentSlot, name: string) {
-    setDocuments((current) => ({ ...current, [slot]: name }));
+  function onPick(slot: DocumentSlot, file: File | null) {
+    if (!file) {
+      setDocuments((current) => ({ ...current, [slot]: null }));
+      return;
+    }
+    // Divalidasi di sini supaya pengguna tahu berkasnya bermasalah sebelum
+    // membayar, bukan setelah.
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setError("Dokumen harus berformat JPG atau PNG.");
+      return;
+    }
+    if (file.size > MAX_DOCUMENT_BYTES) {
+      setError("Ukuran dokumen maksimal 5 MB.");
+      return;
+    }
+    setError("");
+    setDocuments((current) => ({
+      ...current,
+      [slot]: { name: file.name, size: file.size, type: file.type, file }
+    }));
   }
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     if (!complete) {
       setError("Lengkapi seluruh data dan kedua dokumen terlebih dahulu.");
       return;
     }
     setError("");
-    router.push("/upgrade/bayar");
+
+    if (PREVIEW_MODE) {
+      router.push("/upgrade/bayar");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const order = await createOrder(readSession(TOKEN_KEY), readSession(PACKAGE_KEY), {
+        fullName: fullName.trim(),
+        address: address.trim(),
+        consentAt: new Date().toISOString(),
+        // Hanya keterangan berkasnya. Gambarnya dikirim terpisah di bawah,
+        // sebagai berkas mentah ke endpoint dokumen, dan tersimpan terenkripsi
+        // dengan masa simpan terbatas.
+        documents: {
+          ktp: describe(documents.ktp),
+          selfie: describe(documents.selfie)
+        }
+      });
+      writeSession(ORDER_KEY, order.id);
+
+      // Berkas diunggah setelah pengajuan terbentuk karena dokumen menempel
+      // pada satu pengajuan tertentu. Bila unggahan gagal, pengajuannya tetap
+      // ada dan pemohon dapat mengulang tanpa kehilangan nomor invoice.
+      const token = readSession(TOKEN_KEY);
+      await uploadDocument(token, order.id, "ktp", documents.ktp!.file!);
+      await uploadDocument(token, order.id, "selfie", documents.selfie!.file!);
+
+      router.push("/upgrade/bayar");
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : "Pengajuan belum dapat dibuat."
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -126,8 +223,13 @@ export default function RegistrationForm() {
         <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
           Dokumen verifikasi
         </p>
-        <DocumentUpload slot="ktp" fileName={documents.ktp} onPick={onPick} />
-        <DocumentUpload slot="selfie" fileName={documents.selfie} onPick={onPick} />
+        <DocumentUpload slot="ktp" document={documents.ktp} onPick={onPick} />
+        <DocumentUpload slot="selfie" document={documents.selfie} onPick={onPick} />
+        <p className="rounded-2xl bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-600">
+          Dokumen disimpan terenkripsi dan otomatis dihapus dari sistem paling
+          lama 24 jam setelah diunggah, setelah tim verifikasi selesai
+          memeriksanya.
+        </p>
       </div>
 
       <label className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3.5">
@@ -150,8 +252,8 @@ export default function RegistrationForm() {
         </p>
       ) : null}
 
-      <button type="submit" className={primaryButtonClass} disabled={!complete}>
-        Lanjut ke Pembayaran
+      <button type="submit" className={primaryButtonClass} disabled={!complete || busy}>
+        {busy ? "Menyimpan pengajuan…" : "Lanjut ke Pembayaran"}
       </button>
     </form>
   );

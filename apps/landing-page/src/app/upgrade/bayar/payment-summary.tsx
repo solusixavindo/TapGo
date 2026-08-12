@@ -1,28 +1,112 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { PREVIEW_MODE, PREVIEW_PACKAGES } from "../api";
+import { useEffect, useState } from "react";
+import {
+  ORDER_KEY,
+  PREVIEW_MODE,
+  PREVIEW_PACKAGES,
+  TOKEN_KEY,
+  UpgradeOrder,
+  getOrder,
+  payOrder,
+  readSession
+} from "../api";
 import { formatRupiah, primaryButtonClass, secondaryButtonClass } from "../upgrade-shell";
+
+/** Ringkasan contoh; hanya dipakai saat PREVIEW_MODE menyala. */
+const PREVIEW_ORDER: UpgradeOrder = {
+  id: "preview-order",
+  reference: "INV-MBR-20260812-CONTOH",
+  packageName: PREVIEW_PACKAGES[1]!.name,
+  amount: PREVIEW_PACKAGES[1]!.price,
+  status: "PENDING",
+  createdAt: new Date().toISOString(),
+  invoiceNumber: "INV-MBR-20260812-CONTOH",
+  buyerName: "Budi Santoso"
+};
 
 export default function PaymentSummary() {
   const router = useRouter();
+  const [order, setOrder] = useState<UpgradeOrder | null>(PREVIEW_MODE ? PREVIEW_ORDER : null);
+  const [loading, setLoading] = useState(!PREVIEW_MODE);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  // Ringkasan hanya diisi data contoh pada mode tinjauan. Di produksi, data
-  // berasal dari order yang dibuat server — halaman ini tidak boleh menampilkan
-  // nama atau nominal karangan.
-  const chosen = PREVIEW_MODE ? PREVIEW_PACKAGES[1]! : null;
+  useEffect(() => {
+    if (PREVIEW_MODE) return;
+    const token = readSession(TOKEN_KEY);
+    const orderId = readSession(ORDER_KEY);
+    if (!token) {
+      router.replace("/upgrade");
+      return;
+    }
+    if (!orderId) {
+      router.replace("/upgrade/paket");
+      return;
+    }
 
-  if (!chosen) {
+    let alive = true;
+    getOrder(token, orderId)
+      .then((result) => {
+        if (!alive) return;
+        setOrder(result);
+        setError("");
+      })
+      .catch((caught: unknown) =>
+        alive
+          ? setError(
+              caught instanceof Error
+                ? caught.message
+                : "Ringkasan pembayaran belum dapat dimuat."
+            )
+          : undefined
+      )
+      .finally(() => (alive ? setLoading(false) : undefined));
+    return () => {
+      alive = false;
+    };
+  }, [router]);
+
+  async function onPay() {
+    if (busy || !order) return;
+    setBusy(true);
+    setError("");
+    try {
+      if (PREVIEW_MODE) {
+        router.push(`/upgrade/status?id=${encodeURIComponent(order.id)}`);
+        return;
+      }
+
+      const handoff = await payOrder(readSession(TOKEN_KEY), order.id);
+      if (handoff.redirectUrl) {
+        // Pengguna berpindah ke halaman penyedia pembayaran. Aktivasi tetap
+        // hanya boleh datang dari webhook penyedia, bukan dari kembalinya
+        // pengguna ke situs ini.
+        window.location.assign(handoff.redirectUrl);
+        return;
+      }
+      router.push(`/upgrade/status?id=${encodeURIComponent(order.id)}`);
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : "Pembayaran belum dapat diproses."
+      );
+      setBusy(false);
+    }
+  }
+
+  if (loading) {
+    return <p className="text-sm font-semibold text-slate-500">Memuat ringkasan…</p>;
+  }
+
+  if (!order) {
     return (
       <div className="rounded-2xl bg-slate-50 px-5 py-6 text-center">
         <p className="text-sm font-bold text-brand-navy">
           Ringkasan pembayaran belum tersedia
         </p>
         <p className="mt-2 text-sm leading-7 text-slate-600">
-          Mulai dari langkah pertama agar pengajuan Anda terbentuk lebih dulu.
+          {error || "Mulai dari langkah pertama agar pengajuan Anda terbentuk lebih dulu."}
         </p>
         <button
           type="button"
@@ -35,29 +119,11 @@ export default function PaymentSummary() {
     );
   }
 
-  async function onPay() {
-    if (busy) return;
-    setBusy(true);
-    setError("");
-    try {
-      if (PREVIEW_MODE) {
-        router.push("/upgrade/status?id=MBR-2026-000481");
-        return;
-      }
-      // Alur pembayaran sesungguhnya menyusul bersama kredensial sandbox
-      // Midtrans; halaman ini sengaja tidak memalsukan keberhasilan.
-      setError("Pembayaran belum dapat diproses. Silakan coba beberapa saat lagi.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   const rows = [
-    { label: "Paket dipilih", value: chosen.name },
-    { label: "Nama", value: "Budi Santoso" },
-    { label: "Dokumen", value: "KTP dan swafoto terlampir" }
-  ];
-
+    { label: "Nomor pengajuan", value: order.reference },
+    { label: "Paket dipilih", value: order.packageName },
+    { label: "Nama", value: order.buyerName }
+  ].filter((row) => row.value.length > 0);
 
   return (
     <div>
@@ -75,7 +141,7 @@ export default function PaymentSummary() {
           <div className="flex items-baseline justify-between gap-6">
             <span className="text-sm font-bold text-slate-500">Total pembayaran</span>
             <span className="text-3xl font-black text-brand-blue">
-              {formatRupiah(chosen.price)}
+              {formatRupiah(order.amount)}
             </span>
           </div>
         </div>
@@ -97,7 +163,7 @@ export default function PaymentSummary() {
       ) : null}
 
       <button type="button" onClick={onPay} disabled={busy} className={`${primaryButtonClass} mt-6`}>
-        {busy ? "Menyiapkan pembayaran…" : `Bayar ${formatRupiah(chosen.price)}`}
+        {busy ? "Menyiapkan pembayaran…" : `Bayar ${formatRupiah(order.amount)}`}
       </button>
 
       <button
