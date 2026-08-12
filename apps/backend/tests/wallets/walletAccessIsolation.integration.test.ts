@@ -33,7 +33,7 @@ let originalCashOutGate: string | undefined;
 
 /** Menyalakan pencairan saldo hanya untuk test yang memang memerlukannya. */
 function setCashOutEnabled(enabled: boolean) {
-  backendEnv.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = enabled;
+  backendEnv.WALLET_CASH_OUT_ENABLED = enabled;
 }
 
 /** Seluruh endpoint wallet milik pengguna beserta metodenya. */
@@ -63,7 +63,7 @@ describe.skipIf(!runIntegration)("Wallet access isolation", () => {
     process.env.JWT_ACCESS_TTL = process.env.JWT_ACCESS_TTL ?? "15m";
     process.env.JWT_REFRESH_TTL_DAYS = process.env.JWT_REFRESH_TTL_DAYS ?? "30";
 
-    originalCashOutGate = process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
+    originalCashOutGate = process.env.WALLET_CASH_OUT_ENABLED;
 
     const [{ createApp }, tokenService, envModule] = await Promise.all([
       import("../../src/app.js"),
@@ -90,13 +90,13 @@ describe.skipIf(!runIntegration)("Wallet access isolation", () => {
 
   afterAll(async () => {
     if (backendEnv) {
-      backendEnv.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED =
+      backendEnv.WALLET_CASH_OUT_ENABLED =
         originalCashOutGate?.trim().toLowerCase() === "true";
     }
     if (originalCashOutGate == null) {
-      delete process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
+      delete process.env.WALLET_CASH_OUT_ENABLED;
     } else {
-      process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = originalCashOutGate;
+      process.env.WALLET_CASH_OUT_ENABLED = originalCashOutGate;
     }
     await cleanDatabase();
     await new Promise<void>((resolve, reject) => {

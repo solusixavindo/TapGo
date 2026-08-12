@@ -31,9 +31,8 @@ describe.skipIf(!runIntegration)("Withdrawal API", () => {
     process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? "test-refresh-secret-for-tapgo-withdrawal-api";
     process.env.JWT_ACCESS_TTL = process.env.JWT_ACCESS_TTL ?? "15m";
     process.env.JWT_REFRESH_TTL_DAYS = process.env.JWT_REFRESH_TTL_DAYS ?? "30";
-    originalExternalPaymentGateEnv =
-      process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
-    process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = "true";
+    originalExternalPaymentGateEnv = process.env.WALLET_CASH_OUT_ENABLED;
+    process.env.WALLET_CASH_OUT_ENABLED = "true";
 
     const [{ createApp }, tokenService, envModule] = await Promise.all([
       import("../../src/app.js"),
@@ -41,7 +40,9 @@ describe.skipIf(!runIntegration)("Withdrawal API", () => {
       import("../../src/config/env.js")
     ]);
     backendEnv = envModule.env;
-    backendEnv.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = true;
+    // Pencairan saldo kini memakai flag sendiri, terpisah dari pembelian
+    // membership. Stage R2.6.
+    backendEnv.WALLET_CASH_OUT_ENABLED = true;
     signAccessToken = tokenService.signAccessToken;
 
     server = http.createServer(createApp());
@@ -57,14 +58,13 @@ describe.skipIf(!runIntegration)("Withdrawal API", () => {
 
   afterAll(async () => {
     if (backendEnv) {
-      backendEnv.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED =
+      backendEnv.WALLET_CASH_OUT_ENABLED =
         originalExternalPaymentGateEnv?.trim().toLowerCase() === "true";
     }
     if (originalExternalPaymentGateEnv == null) {
-      delete process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
+      delete process.env.WALLET_CASH_OUT_ENABLED;
     } else {
-      process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED =
-        originalExternalPaymentGateEnv;
+      process.env.WALLET_CASH_OUT_ENABLED = originalExternalPaymentGateEnv;
     }
     await new Promise<void>((resolve, reject) => {
       if (!server) {
