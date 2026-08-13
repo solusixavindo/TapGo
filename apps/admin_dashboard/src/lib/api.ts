@@ -151,6 +151,56 @@ export async function fetchDocumentObjectUrl(orderId: string, type: DocumentType
   };
 }
 
+// --- Pengelolaan role (hanya SUPER_ADMIN_VIP) ------------------------------
+
+export type AdminAccount = {
+  id: string;
+  fullName: string;
+  phone: string;
+  role: string;
+  status: string;
+  createdAt: string;
+  lastLoginAt: string | null;
+  holdsScopeManage: boolean;
+};
+
+export type RoleCandidate = {
+  id: string;
+  fullName: string;
+  phone: string;
+  referralCode: string;
+  role: string;
+};
+
+/** Daftar tertutup, sama dengan yang diterima server. */
+export const ROLE_REASON_CODES = [
+  "NEW_ADMIN_ASSIGNMENT",
+  "PROMOTION",
+  "DEMOTION",
+  "RESPONSIBILITY_CHANGE",
+  "ACCESS_REMOVAL",
+  "OFFBOARDING",
+  "SECURITY_INCIDENT"
+] as const;
+
+/** Role puncak sengaja tidak ada: hanya dapat diberikan lewat CLI di server. */
+export const ASSIGNABLE_ROLES = ["USER", "ADMIN", "SUPER_ADMIN"] as const;
+
+export function listAdminAccounts() {
+  return request<AdminAccount[]>("/admin/roles");
+}
+
+export function searchRoleCandidates(query: string) {
+  return request<RoleCandidate[]>(`/admin/roles/candidates?q=${encodeURIComponent(query)}`);
+}
+
+export function assignAdminRole(userId: string, role: string, reasonCode: string) {
+  return request<AdminAccount>(`/admin/roles/${userId}`, {
+    method: "PUT",
+    body: JSON.stringify({ role, reasonCode })
+  });
+}
+
 export function formatRupiah(value: string | number) {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",

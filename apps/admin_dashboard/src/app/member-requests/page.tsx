@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -143,6 +144,14 @@ export default function MemberRequestsPage() {
             </p>
           </div>
           <div className="flex gap-2">
+            {role === "SUPER_ADMIN_VIP" ? (
+              <Link
+                href="/roles"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold"
+              >
+                Pengelolaan role
+              </Link>
+            ) : null}
             <button
               type="button"
               onClick={() => void refresh()}
