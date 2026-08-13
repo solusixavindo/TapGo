@@ -6,7 +6,7 @@
 
 <title>TapGo Lion Indonesia | Ojek Online, Mitra Driver, PPOB &amp; Membership</title>
 <meta name="description" content="TapGo Lion Indonesia menyatukan ojek online, kemitraan driver, layanan PPOB, dan membership dalam satu aplikasi. Tarif transparan, driver terverifikasi, pembayaran lewat gateway berlisensi." />
-<meta name="keywords" content="ojek online Serang, ojek online Banten, mitra driver, PPOB, agen PPOB, token listrik, membership TapGo, TapGo Lion Indonesia" />
+<meta name="keywords" content="aplikasi ojek online, daftar mitra driver ojek online, aplikasi PPOB, agen PPOB, jual token listrik, bisnis pulsa, membership TapGo, TapGo Lion Indonesia" />
 <meta name="author" content="PT. TapGo Lion Indonesia" />
 <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
 <link rel="canonical" href="https://tapgolion.id/" />
@@ -63,7 +63,8 @@
   --font:Manrope,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   --font-display:Sora,var(--font);
 }
-html.light{
+html.light,
+:root:has(#theme-cb:checked){
   --bg:#F6F9FC; --bg-alt:#FFFFFF; --surface:#FFFFFF;
   --text:#123048; --heading:#061A2F; --muted:#5A7183;
   --line:rgba(6,26,47,.12); --line-2:rgba(6,26,47,.22);
@@ -111,7 +112,8 @@ svg{display:block;flex:none}
   background:
     radial-gradient(48rem 24rem at 12% -10%,rgba(255,200,87,.13),transparent 62%),
     radial-gradient(44rem 22rem at 88% -6%,rgba(8,119,232,.22),transparent 62%)}
-html.light .wash{background:
+html.light .wash,
+:root:has(#theme-cb:checked) .wash{background:
     radial-gradient(48rem 24rem at 12% -10%,rgba(224,174,63,.16),transparent 62%),
     radial-gradient(44rem 22rem at 88% -6%,rgba(8,119,232,.14),transparent 62%)}
 
@@ -196,7 +198,8 @@ html.light .wash{background:
 
 /* ── 9. Navigasi ───────────────────────────────────────────────────── */
 .topbar{display:none;background:var(--navy-900);border-bottom:1px solid var(--line);font-size:13px}
-html.light .topbar{background:var(--bg-alt)}
+html.light .topbar,
+:root:has(#theme-cb:checked) .topbar{background:var(--bg-alt)}
 .topbar .shell{display:flex;align-items:center;justify-content:space-between;height:40px}
 .topbar-links{display:flex;align-items:center;gap:24px}
 .link-gold{color:var(--gold);display:inline-flex;align-items:center;gap:6px;font-weight:600}
@@ -223,9 +226,26 @@ html.light .topbar{background:var(--bg-alt)}
 .icon-btn:hover{border-color:var(--gold);color:var(--gold)}
 .icon-btn svg{width:18px;height:18px}
 .nav-cta{display:none}
-.burger{display:grid}
-.drawer{display:none;background:var(--bg-alt);border-top:1px solid var(--line)}
-.drawer.open{display:block}
+
+/* Tombol tema. Ikon ditukar murni lewat CSS mengikuti kotak centang, sehingga
+   pergantian mode tetap bekerja meski JavaScript tidak berjalan sama sekali. */
+.theme-btn{cursor:pointer}
+.theme-btn .ic-moon,#theme-cb:checked ~ .theme-btn .ic-sun{display:none}
+#theme-cb:checked ~ .theme-btn .ic-moon{display:block}
+#theme-cb:focus-visible ~ .theme-btn{outline:2px solid var(--gold);outline-offset:3px}
+
+/* Menu memakai <details> bawaan HTML: terbuka tanpa satu baris JavaScript pun. */
+.menu{position:static}
+.menu > summary{display:grid;cursor:pointer;list-style:none}
+.menu > summary::-webkit-details-marker{display:none}
+.menu > summary::marker{content:""}
+.menu .ic-close{display:none}
+.menu[open] > summary .ic-menu{display:none}
+.menu[open] > summary .ic-close{display:block}
+.menu[open] > summary{border-color:var(--gold);color:var(--gold)}
+/* Dipatok ke .nav yang position:sticky, jadi laci jatuh tepat di bawah bilah. */
+.drawer{position:absolute;left:0;right:0;top:100%;
+  background:var(--bg-alt);border-top:1px solid var(--line);box-shadow:var(--sh-2)}
 .drawer .shell{padding-top:10px;padding-bottom:14px}
 .drawer a.mob{display:block;padding:12px 14px;border-radius:var(--r-md);font-weight:600}
 .drawer a.mob:hover{background:var(--tint)}
@@ -237,6 +257,10 @@ html.light .topbar{background:var(--bg-alt)}
 .hero{position:relative;padding:52px 0 0}
 .hero-copy{text-align:center;max-width:760px;margin:0 auto}
 .cta-row{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:28px}
+.hero-proof{display:flex;flex-wrap:wrap;gap:10px 22px;justify-content:center;margin-top:22px;
+  font-size:13.5px;font-weight:600;color:var(--muted)}
+.hero-proof span{display:inline-flex;align-items:center;gap:7px}
+.hero-proof svg{width:15px;height:15px;color:var(--gold)}
 
 /* Media melebar seiring gulir: --p berjalan 0 → 1. */
 .expand-wrap{margin-top:44px;padding-bottom:76px}
@@ -252,11 +276,8 @@ html.light .topbar{background:var(--bg-alt)}
 @media (max-width:767px){ .expand{width:calc(84% + 16% * var(--p))} }
 .expand-inner{position:relative;aspect-ratio:16/10;
   background:radial-gradient(100% 100% at 20% 0%,var(--navy-600),var(--navy-900))}
-html.light .expand-inner{background:radial-gradient(100% 100% at 20% 0%,#123B63,#061A2F)}
-.expand-grid{position:absolute;inset:0;opacity:.5;
-  background-image:linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),
-                   linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px);
-  background-size:44px 44px}
+html.light .expand-inner,
+:root:has(#theme-cb:checked) .expand-inner{background:radial-gradient(100% 100% at 20% 0%,#123B63,#061A2F)}
 .expand-glow{position:absolute;inset:0;
   background:radial-gradient(60% 50% at 50% 45%,rgba(255,200,87,.22),transparent 70%)}
 .expand-mid{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:22px}
@@ -384,7 +405,8 @@ details[open] .chev{transform:rotate(180deg)}
 
 /* ── 18. Footer ────────────────────────────────────────────────────── */
 .foot{background:var(--navy-900);border-top:1px solid var(--line);padding:52px 0 0}
-html.light .foot{background:var(--bg-alt)}
+html.light .foot,
+:root:has(#theme-cb:checked) .foot{background:var(--bg-alt)}
 .foot-grid{display:grid;gap:36px}
 .foot h4{font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);font-family:var(--font)}
 .foot ul{margin-top:16px;display:grid;gap:11px;font-size:14.5px}
@@ -405,9 +427,53 @@ html.light .foot{background:var(--bg-alt)}
 .wa-fab svg{width:20px;height:20px}
 .wa-fab .lbl{display:none}
 
-/* ── 20. Reveal ────────────────────────────────────────────────────── */
+/* ── 20. Animasi gulir ─────────────────────────────────────────────── */
+/* Jalur cadangan: dijalankan JavaScript lewat IntersectionObserver. */
 html.js [data-reveal]{opacity:0;transform:translateY(16px)}
 html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,transform .6s cubic-bezier(.2,.7,.3,1)}
+
+@keyframes reveal-in{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
+@keyframes rise{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:none}}
+@keyframes bar-grow{from{width:0}to{width:100%}}
+@keyframes hero-fade{to{opacity:.25;transform:translateY(-40px)}}
+@keyframes expand-grow{from{width:58%;border-radius:var(--r-xl)}to{width:100%;border-radius:14px}}
+@keyframes expand-grow-mobile{from{width:84%;border-radius:var(--r-xl)}to{width:100%;border-radius:14px}}
+
+/* Animasi gulir bawaan CSS. Tidak menyentuh JavaScript sama sekali, jadi tetap
+   berjalan di perangkat yang skripnya diblokir — dan lebih halus, karena
+   dijalankan di thread kompositor, bukan thread utama. */
+@supports (animation-timeline: view()){
+  html.js [data-reveal],[data-reveal]{
+    opacity:1;transform:none;
+    animation:reveal-in linear both;
+    animation-timeline:view();
+    animation-range:entry 0% entry 45%;
+  }
+  /* Kartu di dalam satu baris menyala berurutan, bukan serempak. */
+  .grid > [data-reveal]:nth-child(2){animation-range:entry 6% entry 52%}
+  .grid > [data-reveal]:nth-child(3){animation-range:entry 12% entry 58%}
+  .grid > [data-reveal]:nth-child(4){animation-range:entry 18% entry 64%}
+
+  /* Judul bagian naik lebih jauh, memberi kesan kedalaman. */
+  .section .narrow > .h2,.section .narrow > .lede{
+    animation:rise linear both;animation-timeline:view();animation-range:entry 0% entry 50%}
+
+  /* Teks hero memudar dan naik saat digulir melewatinya. */
+  .hero-copy{animation:hero-fade linear both;animation-timeline:view(block);
+    animation-range:exit -10% exit 90%}
+
+  /* Panel media melebar mengikuti gulir, tanpa pendengar peristiwa scroll. */
+  /* Panel media memang sengaja memakai cover: pelebarannya justru harus
+     berlangsung sepanjang panel melintasi layar. */
+  .expand{animation:expand-grow linear both;animation-timeline:view();
+    animation-range:entry 40% cover 60%}
+  @media (max-width:767px){
+    .expand{animation-name:expand-grow-mobile}
+  }
+
+  /* Bilah kemajuan baca mengikuti gulir dokumen. */
+  #progress{animation:bar-grow linear both;animation-timeline:scroll(root block)}
+}
 
 /* ══════════════════ 21. TITIK PATAH ══════════════════ */
 @media (min-width:640px){
@@ -433,8 +499,7 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
 @media (min-width:1024px){
   .topbar{display:block}
   .nav-links{display:flex}
-  .burger{display:none}
-  .drawer{display:none!important}
+  .menu{display:none}
   .section{padding:108px 0}
   .contact-grid{grid-template-columns:1fr 1fr}
   .contact-left{border-bottom:0;border-right:1px solid var(--line)}
@@ -448,8 +513,10 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
   html{scroll-behavior:auto}
   html.js [data-reveal]{opacity:1!important;transform:none!important}
   .ico svg path,.ico svg circle,.ico svg rect{stroke-dashoffset:0!important}
-  .expand{width:100%!important}
+  .expand{width:100%!important;animation:none!important}
   .spin{animation:none!important}
+  [data-reveal],.hero-copy,.section .narrow > .h2,.section .narrow > .lede,#progress{
+    animation:none!important;opacity:1!important;transform:none!important}
 }
 </style>
 
@@ -457,7 +524,7 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
 {"@context":"https://schema.org","@graph":[
  {"@type":"Organization","@id":"https://tapgolion.id/#org","name":"PT. TapGo Lion Indonesia",
   "alternateName":"TapGo Lion","url":"https://tapgolion.id/","logo":"https://tapgolion.id/logo.png",
-  "areaServed":{"@type":"AdministrativeArea","name":"Banten, Indonesia"},
+  "areaServed":{"@type":"Country","name":"Indonesia"},
   "contactPoint":[{"@type":"ContactPoint","telephone":"+62-838-0025-5588","contactType":"customer service","availableLanguage":["id"]}]},
  {"@type":"WebSite","@id":"https://tapgolion.id/#site","url":"https://tapgolion.id/","name":"TapGo Lion Indonesia",
   "inLanguage":"id-ID","publisher":{"@id":"https://tapgolion.id/#org"}},
@@ -482,6 +549,7 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
 <symbol id="i-wa" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 20.5l1.6-4.9A8.4 8.4 0 0 1 3.6 11 8.4 8.4 0 0 1 12 2.6a8.4 8.4 0 0 1 9 8.9Z"/></symbol>
 <symbol id="i-play" viewBox="0 0 24 24"><path fill="#00D2FF" d="M3.6 1.8a1.9 1.9 0 0 0-.6 1.4v17.6c0 .6.2 1 .6 1.4l9.8-10.2L3.6 1.8Z"/><path fill="#FFD400" d="m16.6 8.6-3.2 4 3.2 4 4.2-2.4c1.1-.7 1.1-2.5 0-3.2l-4.2-2.4Z"/><path fill="#FF3A44" d="M3.6 1.8 16.6 8.6l-3.2 4L3.6 1.8Z"/><path fill="#00C853" d="m3.4 22.2 10-9.6 3.2 4-13.2 5.6Z"/></symbol>
+<symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></symbol>
 <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
 <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M5 5l1.4 1.4M17.6 17.6 19 19M2 12h2M20 12h2M5 19l1.4-1.4M17.6 6.4 19 5"/></symbol>
 <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></symbol>
@@ -511,7 +579,7 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
 <!-- ══════════ BAR UTILITAS ══════════ -->
 <div class="topbar">
   <div class="shell">
-    <p class="muted">Melayani Serang, Cilegon, dan sekitarnya · Setiap hari</p>
+    <p class="muted">Layanan aktif setiap hari · Pendaftaran mitra dibuka untuk seluruh Indonesia</p>
     <div class="topbar-links">
       <a href="https://wa.me/6283800255588" class="link-gold"><svg><use href="#i-wa"/></svg> +62 838-0025-5588</a>
       <a href="/upgrade/" class="link-gold">Upgrade Membership</a>
@@ -536,15 +604,22 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
     </nav>
 
     <div class="nav-act">
-      <button id="theme" class="icon-btn" aria-label="Ganti mode terang atau gelap"><svg id="theme-ic"><use href="#i-sun"/></svg></button>
+      <input type="checkbox" id="theme-cb" class="sr-only" />
+      <label for="theme-cb" class="icon-btn theme-btn" title="Ganti mode terang atau gelap">
+        <svg class="ic-sun"><use href="#i-sun"/></svg>
+        <svg class="ic-moon"><use href="#i-moon"/></svg>
+        <span class="sr-only">Ganti mode terang atau gelap</span>
+      </label>
       <a href="https://play.google.com/store/apps/details?id=com.xavindo.tapgo" target="_blank" rel="noopener"
          class="btn btn-gold nav-cta" data-glass><svg><use href="#i-download"/></svg> Unduh Aplikasi</a>
-      <button id="burger" class="icon-btn burger" aria-label="Buka menu navigasi" aria-expanded="false" aria-controls="drawer"><svg><use href="#i-menu"/></svg></button>
-    </div>
-  </div>
-
-  <div class="drawer" id="drawer">
-    <div class="shell">
+      <details class="menu" id="menu">
+        <summary class="icon-btn burger" title="Menu navigasi">
+          <svg class="ic-menu"><use href="#i-menu"/></svg>
+          <svg class="ic-close"><use href="#i-close"/></svg>
+          <span class="sr-only">Buka menu navigasi</span>
+        </summary>
+        <div class="drawer" id="drawer">
+          <div class="shell">
       <a class="mob" href="#layanan">Layanan</a>
       <a class="mob" href="#cara-kerja">Cara Kerja</a>
       <a class="mob" href="#membership">Membership</a>
@@ -552,7 +627,10 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
       <a class="mob" href="#faq">FAQ</a>
       <a class="mob" href="#kontak">Kontak</a>
       <a href="https://play.google.com/store/apps/details?id=com.xavindo.tapgo" target="_blank" rel="noopener" class="btn btn-gold btn-full" data-glass><svg><use href="#i-download"/></svg> Unduh di Google Play</a>
-      <a href="https://wa.me/6283800255588" class="btn btn-wa btn-full" data-glass><svg><use href="#i-wa"/></svg> Chat WhatsApp</a>
+          <a href="https://wa.me/6283800255588" class="btn btn-wa btn-full" data-glass><svg><use href="#i-wa"/></svg> Chat WhatsApp</a>
+          </div>
+        </div>
+      </details>
     </div>
   </div>
 </header>
@@ -562,13 +640,19 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
 <!-- ══════════ HERO — Scroll Media Expansion ══════════ -->
 <section class="hero" aria-labelledby="h1">
   <div class="shell hero-copy">
-    <p class="chip" data-reveal style="margin:0 auto"><span class="dot"></span> Beroperasi di Banten &amp; sekitarnya</p>
-    <h1 class="h1" id="h1" data-reveal style="margin-top:20px">
-      Satu aplikasi untuk perjalanan, penghasilan, dan <span class="gold">pembayaran harian</span>
+    <h1 class="h1" id="h1" data-reveal style="margin-top:8px">
+      Aplikasi yang mengantar Anda hari ini, dan <span class="gold">menghidupi Anda besok</span>
     </h1>
-    <p class="lede" data-reveal style="margin-top:20px;max-width:38em;margin-left:auto;margin-right:auto">
-      TapGo Lion Indonesia menghubungkan penumpang, mitra driver, dan agen pembayaran
-      dalam satu ekosistem. Tarif diketahui sebelum memesan, identitas driver terverifikasi.
+    <p class="lede" data-reveal style="margin-top:22px;max-width:40em;margin-left:auto;margin-right:auto">
+      TapGo menyatukan ojek online, kemitraan driver, dan layanan pembayaran PPOB
+      dalam satu akun. Pesan perjalanan dengan tarif yang sudah pasti sejak awal —
+      atau ubah aplikasi yang sama menjadi sumber penghasilan, dengan modal awal
+      dan pendampingan yang jelas sejak hari pertama.
+    </p>
+    <p class="hero-proof" data-reveal>
+      <span><svg><use href="#i-check"/></svg> Gratis diunduh</span>
+      <span><svg><use href="#i-check"/></svg> Tanpa biaya tersembunyi</span>
+      <span><svg><use href="#i-check"/></svg> Daftar dalam hitungan menit</span>
     </p>
     <div class="cta-row" data-reveal>
       <a href="https://play.google.com/store/apps/details?id=com.xavindo.tapgo" target="_blank" rel="noopener" class="store" data-glass>
@@ -584,7 +668,6 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
   <div class="expand-wrap">
     <div class="expand" id="expand">
       <div class="expand-inner">
-        <div class="expand-grid" aria-hidden="true"></div>
         <div class="expand-glow" aria-hidden="true"></div>
         <div class="expand-mid">
           <span class="logo-hero" role="img" aria-label="Lambang singa TapGo Lion Indonesia"></span>
@@ -599,10 +682,10 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
 <!-- ══════════ PITA KEPERCAYAAN ══════════ -->
 <section class="band section-sm" aria-label="Jaminan layanan">
   <div class="shell trust">
-    <div class="trust-item" data-reveal><svg><use href="#i-build"/></svg><div><b>Badan usaha resmi</b><p>PT. TapGo Lion Indonesia</p></div></div>
-    <div class="trust-item" data-reveal><svg><use href="#i-card"/></svg><div><b>Gateway berlisensi</b><p>Bukan transfer pribadi</p></div></div>
-    <div class="trust-item" data-reveal><svg><use href="#i-usercheck"/></svg><div><b>Driver terverifikasi</b><p>Diperiksa sebelum aktif</p></div></div>
-    <div class="trust-item" data-reveal><svg><use href="#i-lock"/></svg><div><b>Dokumen terenkripsi</b><p>Dihapus dalam 24 jam</p></div></div>
+    <div class="trust-item" data-reveal><svg><use href="#i-build"/></svg><div><b>Badan usaha resmi</b><p>Bukan perorangan — PT berbadan hukum</p></div></div>
+    <div class="trust-item" data-reveal><svg><use href="#i-card"/></svg><div><b>Uang Anda aman</b><p>Lewat gateway berlisensi, bukan rekening pribadi</p></div></div>
+    <div class="trust-item" data-reveal><svg><use href="#i-usercheck"/></svg><div><b>Driver terverifikasi</b><p>Identitas diperiksa sebelum boleh menerima orderan</p></div></div>
+    <div class="trust-item" data-reveal><svg><use href="#i-lock"/></svg><div><b>Data Anda tidak menumpuk</b><p>Dokumen terenkripsi, terhapus dalam 24 jam</p></div></div>
   </div>
 </section>
 
@@ -611,10 +694,11 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
   <div class="shell">
     <div class="narrow">
       <p class="eyebrow" data-reveal>Layanan</p>
-      <h2 class="h2" id="h-lay" data-reveal style="margin-top:12px">Empat layanan yang saling menyambung</h2>
+      <h2 class="h2" id="h-lay" data-reveal style="margin-top:12px">Empat layanan, satu akun, satu perputaran uang</h2>
       <p class="lede" data-reveal style="margin-top:16px">
-        Dirancang agar penghasilan dari satu layanan dapat langsung dipakai di layanan
-        lain — tanpa berpindah aplikasi, tanpa mendaftar ulang.
+        Penghasilan Anda sebagai driver bisa langsung dipakai menjual token listrik.
+        Saldo PPOB Anda bisa melayani tetangga. Tidak ada dana yang perlu dipindah
+        antaraplikasi, dan tidak ada pendaftaran yang perlu diulang.
       </p>
     </div>
 
@@ -622,8 +706,8 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
       <article class="card card-hover card-pad" data-reveal>
         <span class="ico"><svg><use href="#i-bike"/></svg></span>
         <span class="chip" style="margin-top:16px">Ojek Online</span>
-        <h3 class="h3" style="margin-top:12px">Perjalanan harian tanpa tebak-tebakan</h3>
-        <p class="muted" style="margin-top:12px">Tarif ditampilkan penuh sebelum Anda menekan tombol pesan. Tidak ada biaya yang muncul belakangan, dan setiap perjalanan tersimpan di riwayat.</p>
+        <h3 class="h3" style="margin-top:12px">Tahu persis berapa bayarnya, sebelum berangkat</h3>
+        <p class="muted" style="margin-top:12px">Tarif muncul penuh sebelum Anda menekan tombol pesan, lalu dikunci. Macet di tengah jalan tidak menambah biaya, dan tidak ada tagihan yang muncul belakangan.</p>
         <ul class="ticks">
           <li><svg><use href="#i-check"/></svg> Tarif final diketahui di awal</li>
           <li><svg><use href="#i-check"/></svg> Identitas dan kendaraan driver terverifikasi</li>
@@ -634,8 +718,8 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
       <article class="card card-hover card-pad" data-reveal>
         <span class="ico"><svg><use href="#i-case"/></svg></span>
         <span class="chip" style="margin-top:16px">Mitra Driver</span>
-        <h3 class="h3" style="margin-top:12px">Waktu luang menjadi penghasilan</h3>
-        <p class="muted" style="margin-top:12px">Pendaftaran terpandu langkah demi langkah, syarat berkas yang jelas sejak awal, dan penghasilan yang tercatat transparan setiap harinya.</p>
+        <h3 class="h3" style="margin-top:12px">Punya motor dan waktu luang? Itu sudah cukup</h3>
+        <p class="muted" style="margin-top:12px">Tidak ada setoran harian dan tidak ada jam wajib. Anda yang menentukan kapan menyalakan aplikasi, dan setiap rupiah yang masuk tercatat per perjalanan.</p>
         <ul class="ticks">
           <li><svg><use href="#i-check"/></svg> Jam kerja fleksibel</li>
           <li><svg><use href="#i-check"/></svg> Status verifikasi dapat dipantau</li>
@@ -646,16 +730,16 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
       <article class="card card-hover card-pad" data-reveal>
         <span class="ico"><svg><use href="#i-zap"/></svg></span>
         <span class="chip" style="margin-top:16px">Layanan PPOB</span>
-        <h3 class="h3" style="margin-top:12px">Tagihan bulanan selesai dari satu layar</h3>
-        <p class="muted" style="margin-top:12px">Pulsa, paket data, token listrik, dan tagihan rutin. Anggota juga dapat melayani transaksi orang lain sebagai agen, lengkap dengan pencatatannya.</p>
+        <h3 class="h3" style="margin-top:12px">Ubah ponsel Anda menjadi loket pembayaran</h3>
+        <p class="muted" style="margin-top:12px">Pulsa, paket data, token listrik, dan tagihan rutin. Anggota dapat melayani tetangga dan pelanggan warung — tanpa sewa tempat, tanpa etalase, tanpa jam buka.</p>
         <div class="tags"><span class="chip">Pulsa</span><span class="chip">Paket Data</span><span class="chip">Token PLN</span><span class="chip">Tagihan Rutin</span></div>
       </article>
 
       <article class="card card-hover card-pad" data-reveal>
         <span class="ico"><svg><use href="#i-award"/></svg></span>
         <span class="chip" style="margin-top:16px">Membership</span>
-        <h3 class="h3" style="margin-top:12px">Keanggotaan dengan manfaat nyata</h3>
-        <p class="muted" style="margin-top:12px">Tiga tingkatan dengan saldo PPOB awal, kartu anggota digital, dan akses sebagai agen. Manfaat aktif setelah dokumen identitas diverifikasi.</p>
+        <h3 class="h3" style="margin-top:12px">Mulai usaha tanpa menyiapkan stok barang</h3>
+        <p class="muted" style="margin-top:12px">Setiap tingkat keanggotaan sudah membawa saldo PPOB sebagai modal awal — jadi Anda bisa langsung berjualan di hari yang sama, bukan menunggu barang datang.</p>
         <a href="#membership" style="display:inline-flex;align-items:center;gap:8px;margin-top:18px;font-weight:700;color:var(--gold)">
           Bandingkan paket <svg style="width:16px;height:16px"><use href="#i-right"/></svg></a>
       </article>
@@ -669,7 +753,7 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
     <div class="narrow">
       <p class="eyebrow" data-reveal>Cara Kerja</p>
       <h2 class="h2" id="h-cara" data-reveal style="margin-top:12px">Empat titik yang berputar di satu poros</h2>
-      <p class="lede" data-reveal style="margin-top:16px">Satu akun menjadi pusatnya. Dari sana Anda memilih peran, dan semuanya tetap terhubung.</p>
+      <p class="lede" data-reveal style="margin-top:16px">Dari mengunduh sampai menerima uang pertama, seluruhnya berjalan di satu akun. Anda tidak perlu memilih peran sekarang — satu akun bisa menjadi penumpang, driver, dan agen sekaligus.</p>
     </div>
 
     <div class="orbit-wrap" data-reveal>
@@ -718,10 +802,11 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
     <div class="card card-pad" style="text-align:center;padding-block:44px" data-reveal>
       <span class="logo-big" role="img" aria-label="Logo TapGo Lion Indonesia"></span>
       <p class="eyebrow" style="margin-top:20px">Gratis di Google Play</p>
-      <h2 class="h2" id="h-unduh" style="margin-top:12px">Unduh aplikasi TapGo sekarang</h2>
-      <p class="lede" style="margin-top:14px;max-width:46ch;margin-left:auto;margin-right:auto">
-        Pesan perjalanan, kelola penghasilan, dan bayar tagihan dari satu aplikasi.
-        Tersedia untuk Android.
+      <h2 class="h2" id="h-unduh" style="margin-top:12px">Pasang dulu, putuskan nanti</h2>
+      <p class="lede" style="margin-top:14px;max-width:50ch;margin-left:auto;margin-right:auto">
+        Mengunduh dan mendaftar sepenuhnya gratis, dan Anda tidak terikat apa pun.
+        Lihat sendiri tarifnya, lihat sendiri layanannya — baru tentukan apakah Anda
+        ingin menjadi penumpang, mitra driver, atau agen. Tersedia untuk Android.
       </p>
       <div class="cta-row" style="margin-top:26px">
         <a href="https://play.google.com/store/apps/details?id=com.xavindo.tapgo" target="_blank" rel="noopener" class="store" data-glass>
@@ -739,45 +824,50 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
   <div class="shell">
     <div class="narrow">
       <p class="eyebrow" data-reveal>Membership</p>
-      <h2 class="h2" id="h-mem" data-reveal style="margin-top:12px">Pilih tingkat yang sesuai langkah Anda</h2>
-      <p class="lede" data-reveal style="margin-top:16px">Upgrade diproses melalui situs ini. Aplikasi di Google Play hanya menampilkan status paket aktif Anda.</p>
+      <h2 class="h2" id="h-mem" data-reveal style="margin-top:12px">Modal usaha yang langsung bisa diputar</h2>
+      <p class="lede" data-reveal style="margin-top:16px">
+        Biaya keanggotaan tidak hilang begitu saja — sebagian besar kembali kepada Anda
+        sebagai saldo PPOB yang siap dijual. Upgrade diproses di situs ini; aplikasi
+        di Google Play hanya menampilkan status paket aktif Anda.
+      </p>
     </div>
     <div class="grid g-3" style="margin-top:40px">
       <article class="card card-hover card-pad price-card" data-reveal>
         <p class="tier">Silver</p><p class="amount">Rp&nbsp;500.000</p>
-        <p class="small muted" style="margin-top:6px">Langkah pertama menjadi anggota</p>
+        <p class="small muted" style="margin-top:6px">Untuk mencoba lebih dulu sebelum melangkah besar</p>
         <ul class="ticks">
           <li><svg><use href="#i-check"/></svg> Saldo PPOB awal Rp 100.000</li>
           <li><svg><use href="#i-check"/></svg> Kartu anggota digital</li>
           <li><svg><use href="#i-check"/></svg> Akses layanan PPOB sebagai agen</li>
         </ul>
-        <a href="/upgrade/" class="btn glass btn-full" data-glass>Pilih Silver</a>
+        <a href="/upgrade/" class="btn glass btn-full" data-glass>Mulai dari Silver</a>
       </article>
       <article class="card card-hover card-pad price-card featured" data-reveal>
         <span class="badge">Paling dipilih</span>
         <p class="tier">Gold</p><p class="amount">Rp&nbsp;3.000.000</p>
-        <p class="small muted" style="margin-top:6px">Untuk yang serius bertumbuh</p>
+        <p class="small muted" style="margin-top:6px">Modal enam kali lipat Silver — pilihan yang paling banyak diambil</p>
         <ul class="ticks">
           <li><svg><use href="#i-check"/></svg> Seluruh manfaat Silver</li>
           <li><svg><use href="#i-check"/></svg> Saldo PPOB awal Rp 600.000</li>
           <li><svg><use href="#i-check"/></svg> Prioritas dukungan mitra</li>
         </ul>
-        <a href="/upgrade/" class="btn btn-gold btn-full" data-glass>Pilih Gold</a>
+        <a href="/upgrade/" class="btn btn-gold btn-full" data-glass>Ambil paket Gold</a>
       </article>
       <article class="card card-hover card-pad price-card" data-reveal>
         <p class="tier">Platinum</p><p class="amount">Rp&nbsp;5.500.000</p>
-        <p class="small muted" style="margin-top:6px">Manfaat paling lengkap</p>
+        <p class="small muted" style="margin-top:6px">Modal terbesar dan pendampingan langsung dari tim kami</p>
         <ul class="ticks">
           <li><svg><use href="#i-check"/></svg> Seluruh manfaat Gold</li>
           <li><svg><use href="#i-check"/></svg> Saldo PPOB awal Rp 1.000.000</li>
           <li><svg><use href="#i-check"/></svg> Pendampingan mitra khusus</li>
         </ul>
-        <a href="/upgrade/" class="btn glass btn-full" data-glass>Pilih Platinum</a>
+        <a href="/upgrade/" class="btn glass btn-full" data-glass>Ambil paket Platinum</a>
       </article>
     </div>
     <p class="small muted" data-reveal style="margin-top:26px;max-width:70ch;line-height:1.8">
-      Harga sudah termasuk seluruh biaya. Pembayaran diproses payment gateway berlisensi. Bila dokumen
-      identitas tidak dapat diverifikasi, pembayaran dikembalikan penuh sesuai
+      Harga sudah termasuk seluruh biaya — tidak ada iuran bulanan dan tidak ada potongan tersembunyi.
+      Pembayaran diproses payment gateway berlisensi. Bila dokumen identitas tidak dapat
+      diverifikasi, pembayaran dikembalikan <strong style="color:var(--gold)">penuh</strong> sesuai
       <a href="/refund-policy" style="color:var(--gold);font-weight:600;text-decoration:underline">kebijakan pengembalian dana</a>.
     </p>
   </div>
@@ -789,7 +879,7 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
     <div class="narrow">
       <p class="eyebrow" data-reveal>Pusat Edukasi</p>
       <h2 class="h2" id="h-edu" data-reveal style="margin-top:12px">Panduan lengkap memakai TapGo</h2>
-      <p class="lede" data-reveal style="margin-top:16px">Ditulis untuk dibaca tuntas, bukan sekadar dilewati. Klik judul untuk membuka isi lengkapnya.</p>
+      <p class="lede" data-reveal style="margin-top:16px">Enam panduan yang menjawab pertanyaan sebenarnya: berapa biayanya, apa syaratnya, dan apa yang terjadi kalau ada masalah. Klik judul untuk membaca isi lengkapnya.</p>
     </div>
 
     <div class="grid" style="margin-top:40px;gap:14px">
@@ -1003,7 +1093,7 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
         <div class="contact-left">
           <p class="eyebrow">Hubungi Kami</p>
           <h2 class="h2" id="h-kon" style="margin-top:12px;font-size:clamp(24px,3.4vw,34px)">Siap bergabung dengan TapGo Lion?</h2>
-          <p class="muted" style="margin-top:16px">Cara tercepat mendapat jawaban adalah lewat WhatsApp. Tim kami membantu Anda memilih layanan yang tepat — sebagai penumpang, mitra driver, agen PPOB, atau anggota.</p>
+          <p class="muted" style="margin-top:16px">Masih ragu paket mana yang cocok, atau ingin memastikan syarat menjadi mitra driver? Kirim pesan WhatsApp dan tim kami menjawab langsung — tanpa biaya, tanpa kewajiban mendaftar.</p>
           <div class="cta-row" style="justify-content:flex-start;margin-top:24px">
             <a href="https://wa.me/6283800255588?text=Halo%20TapGo%20Lion%2C%20saya%20ingin%20berkonsultasi." class="btn btn-wa" data-glass><svg><use href="#i-wa"/></svg> Chat WhatsApp</a>
             <a href="https://play.google.com/store/apps/details?id=com.xavindo.tapgo" target="_blank" rel="noopener" class="btn glass" data-glass><svg><use href="#i-download"/></svg> Unduh Aplikasi</a>
@@ -1044,7 +1134,7 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
           <span class="logo-mark" role="img" aria-label="Logo TapGo Lion Indonesia"></span>
           <span><span class="brand-name">TapGo Lion</span><span class="brand-sub">Indonesia</span></span>
         </div>
-        <p class="muted" style="margin-top:16px;max-width:30ch;font-size:14.5px">Satu aplikasi untuk perjalanan, penghasilan, dan pembayaran harian di Banten dan sekitarnya.</p>
+        <p class="muted" style="margin-top:16px;max-width:30ch;font-size:14.5px">Satu aplikasi untuk perjalanan, penghasilan, dan pembayaran harian. Dimulai dari Banten, dibangun untuk Indonesia.</p>
         <a href="https://play.google.com/store/apps/details?id=com.xavindo.tapgo" target="_blank" rel="noopener" class="store" style="margin-top:20px" data-glass>
           <svg><use href="#i-play"/></svg><span><small>DAPATKAN DI</small><b>Google Play</b></span></a>
       </div>
@@ -1074,22 +1164,29 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
 (function () {
   'use strict';
   var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /* Bila peramban mendukung animasi berbasis gulir milik CSS, seluruh gerakan
+     ditangani CSS. JS tidak boleh ikut campur — dua mekanisme yang mengatur
+     properti yang sama hanya saling menimpa. */
+  var cssScroll = CSS.supports('animation-timeline', 'view()');
   function $(s){ return document.querySelector(s); }
   function $$(s){ return Array.prototype.slice.call(document.querySelectorAll(s)); }
 
   var t = $('#tahun'); if (t) t.textContent = new Date().getFullYear();
 
-  /* Tema — bawaan gelap (navy), mengikuti aplikasi. */
-  var root = document.documentElement, ic = $('#theme-ic');
-  function paint(){ if (ic) ic.innerHTML = '<use href="#i-' + (root.classList.contains('light') ? 'moon' : 'sun') + '"/>'; }
-  try { if (localStorage.getItem('tapgo-theme') === 'light') root.classList.add('light'); } catch (e) {}
-  paint();
-  var tb = $('#theme');
-  if (tb) tb.addEventListener('click', function () {
-    root.classList.toggle('light');
-    try { localStorage.setItem('tapgo-theme', root.classList.contains('light') ? 'light' : 'dark'); } catch (e) {}
-    paint();
-  });
+  /* Tema. Peralihannya sudah ditangani CSS lewat kotak centang, jadi bagian
+     ini HANYA mengingat pilihan dan menyalakan jalur cadangan .light untuk
+     peramban yang belum mengenal :has(). Tanpa JS, tombolnya tetap berfungsi. */
+  var root = document.documentElement, cb = $('#theme-cb');
+  function syncTheme() {
+    if (!cb) return;
+    root.classList.toggle('light', cb.checked);
+    try { localStorage.setItem('tapgo-theme', cb.checked ? 'light' : 'dark'); } catch (e) {}
+  }
+  if (cb) {
+    try { cb.checked = localStorage.getItem('tapgo-theme') === 'light'; } catch (e) {}
+    root.classList.toggle('light', cb.checked);
+    cb.addEventListener('change', syncTheme);
+  }
 
   /* Navbar, progres, dan Scroll Media Expansion — satu frame gulir. */
   var nav = $('#nav'), bar = $('#progress'), expand = $('#expand');
@@ -1097,10 +1194,11 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
 
   function frame() {
     if (nav) nav.classList.toggle('stuck', scrollY > 8);
-    var max = document.body.scrollHeight - innerHeight;
-    if (bar) bar.style.width = max > 0 ? (scrollY / max) * 100 + '%' : '0%';
-
-    if (expand && !reduced) {
+    if (bar && !cssScroll) {
+      var max = document.body.scrollHeight - innerHeight;
+      bar.style.width = max > 0 ? (scrollY / max) * 100 + '%' : '0%';
+    }
+    if (expand && !reduced && !cssScroll) {
       var r = expand.getBoundingClientRect();
       // 0 saat baru muncul dari bawah layar, 1 saat sudah naik ke atas.
       var p = 1 - Math.min(Math.max(r.top / (innerHeight * 0.9), 0), 1);
@@ -1111,18 +1209,15 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
   addEventListener('scroll', frame, { passive: true });
   addEventListener('resize', frame);
 
-  /* Menu ponsel */
-  var drawer = $('#drawer'), burger = $('#burger');
-  if (burger && drawer) {
-    burger.addEventListener('click', function () {
-      var open = drawer.classList.toggle('open');
-      burger.setAttribute('aria-expanded', String(open));
+  /* Menu. Membukanya sudah tugas <details>; JS hanya menutup laci setelah
+     sebuah tautan dipilih, dan menutupnya saat menekan Esc. */
+  var menu = $('#menu');
+  if (menu) {
+    menu.addEventListener('click', function (e) {
+      if (e.target.closest('a')) menu.removeAttribute('open');
     });
-    $$('.mob').forEach(function (a) {
-      a.addEventListener('click', function () {
-        drawer.classList.remove('open');
-        burger.setAttribute('aria-expanded', 'false');
-      });
+    addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') menu.removeAttribute('open');
     });
   }
 
@@ -1158,7 +1253,9 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
 
   /* Reveal — dengan jaring pengaman bila observer tidak pernah menyala. */
   var items = $$('[data-reveal]');
-  if (reduced || !('IntersectionObserver' in window)) {
+  if (cssScroll) {
+    /* CSS sudah menganimasikannya; tidak ada yang perlu dikerjakan di sini. */
+  } else if (reduced || !('IntersectionObserver' in window)) {
     items.forEach(function (el) { el.classList.add('in'); });
   } else {
     var io = new IntersectionObserver(function (es, ob) {
