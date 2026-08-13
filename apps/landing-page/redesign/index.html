@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TapGo Lion Indonesia — Ojek Online, Driver, PPOB & Membership</title>
+<meta name="description" content="Satu aplikasi untuk perjalanan, penghasilan, dan pembayaran harian. Ojek online, kemitraan driver, layanan PPOB, dan membership TapGo Lion Indonesia." />
+<meta name="theme-color" content="#0A0A0F" />
+
+<!-- Open Graph -->
+<meta property="og:type" content="website" />
+<meta property="og:title" content="TapGo Lion Indonesia" />
+<meta property="og:description" content="Satu aplikasi untuk perjalanan, penghasilan, dan pembayaran harian." />
+<meta property="og:url" content="https://tapgolion.id" />
+
+<!-- Ditandai sebelum render: kelas .js menjadi syarat penyembunyian elemen
+     animasi. Tanpa JavaScript, seluruh konten tetap terlihat. -->
+<script>document.documentElement.classList.add('js');</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet" />
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          obsidian: { DEFAULT: '#0A0A0F', 800: '#12121B', 700: '#1A1A26' },
+          cyan:  { neon: '#22D3EE' },
+          violet:{ electric: '#A855F7' },
+        },
+        fontFamily: {
+          sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+          display: ['Sora', 'system-ui', 'sans-serif'],
+        },
+      },
+    },
+  };
+</script>
+
+<style>
+  /* ── Tokens ──────────────────────────────────────────────────────────── */
+  :root {
+    --bg: #F6F7FB;      --surface: #FFFFFF;   --surface-2: #FFFFFFCC;
+    --text: #0B0B14;    --muted: #55566B;     --line: #0B0B1416;
+    --cyan: #0891B2;    --violet: #7C3AED;
+    --glow: 0 0 40px -8px rgba(8,145,178,.45);
+  }
+  .dark {
+    --bg: #0A0A0F;      --surface: #12121B;   --surface-2: #FFFFFF0A;
+    --text: #F3F4FB;    --muted: #A0A2BD;     --line: #FFFFFF14;
+    --cyan: #22D3EE;    --violet: #A855F7;
+    --glow: 0 0 48px -6px rgba(34,211,238,.45);
+  }
+
+  /* overflow-x WAJIB di html DAN body. Hanya di body, dokumen (html) tetap
+     menggulir ke samping — di 375px halaman ini meluber 16px sebelum
+     diperbaiki. Dipakai `clip`, bukan `hidden`, karena `hidden` menjadikan
+     html sebagai kontainer gulir dan mematahkan position: sticky. */
+  html { -webkit-text-size-adjust: 100%; overflow-x: clip; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+    overflow-x: clip;
+    transition: background-color .5s ease, color .5s ease;
+  }
+  ::selection { background: var(--violet); color: #fff; }
+
+  /* ── Mesh gradient background ───────────────────────────────────────── */
+  .mesh { position: fixed; inset: 0; z-index: -2; overflow: hidden; pointer-events: none; }
+  .blob {
+    position: absolute; border-radius: 9999px; filter: blur(90px); opacity: .5;
+    will-change: transform;
+  }
+  .blob-1 { width: 46vw; height: 46vw; background: var(--cyan);   top: -12%; left: -10%; animation: drift1 22s ease-in-out infinite; }
+  .blob-2 { width: 40vw; height: 40vw; background: var(--violet); top: 34%;  right: -12%; animation: drift2 26s ease-in-out infinite; }
+  .blob-3 { width: 34vw; height: 34vw; background: #F472B6;       bottom: -14%; left: 28%; animation: drift3 30s ease-in-out infinite; opacity:.32; }
+  .dark .blob { opacity: .28; }
+  .dark .blob-3 { opacity: .18; }
+  @keyframes drift1 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(6vw,5vh) scale(1.12)} }
+  @keyframes drift2 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(-7vw,-4vh) scale(1.08)} }
+  @keyframes drift3 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(4vw,-6vh) scale(1.15)} }
+
+  .grid-overlay {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background-image:
+      linear-gradient(to right, var(--line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--line) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
+  }
+
+  /* ── Glass ───────────────────────────────────────────────────────────── */
+  .glass {
+    background: var(--surface-2);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    border: 1px solid var(--line);
+  }
+
+  /* ── Gradient text ───────────────────────────────────────────────────── */
+  .grad-text {
+    background: linear-gradient(100deg, var(--cyan), var(--violet) 55%, var(--cyan));
+    background-size: 220% auto;
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+    animation: shimmer 6s linear infinite;
+  }
+  @keyframes shimmer { to { background-position: 220% center; } }
+
+  /* ── Buttons ─────────────────────────────────────────────────────────── */
+  .btn-primary {
+    position: relative; isolation: isolate; overflow: hidden;
+    background: linear-gradient(100deg, var(--cyan), var(--violet));
+    color: #fff; box-shadow: var(--glow);
+    transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s;
+  }
+  .btn-primary::after {
+    content: ''; position: absolute; inset: 0; z-index: -1;
+    background: linear-gradient(100deg, var(--violet), var(--cyan));
+    opacity: 0; transition: opacity .35s;
+  }
+  .btn-primary:hover::after { opacity: 1; }
+  .btn-primary:hover { box-shadow: 0 0 60px -6px rgba(168,85,247,.6); }
+
+  .btn-ghost {
+    border: 1px solid var(--line); color: var(--text);
+    transition: border-color .3s, background-color .3s, transform .25s;
+  }
+  .btn-ghost:hover { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
+
+  /* ── Glowing border cards ────────────────────────────────────────────── */
+  .card-glow { position: relative; transition: transform .4s cubic-bezier(.2,.8,.2,1); }
+  .card-glow::before {
+    content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 1px;
+    background: radial-gradient(320px circle at var(--mx,50%) var(--my,50%), var(--cyan), transparent 45%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    opacity: 0; transition: opacity .35s; pointer-events: none;
+  }
+  .card-glow:hover::before { opacity: 1; }
+  .card-glow::after {
+    content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    background: radial-gradient(340px circle at var(--mx,50%) var(--my,50%), color-mix(in srgb, var(--cyan) 12%, transparent), transparent 45%);
+    opacity: 0; transition: opacity .35s;
+  }
+  .card-glow:hover::after { opacity: 1; }
+  .card-glow:hover { transform: translateY(-6px); }
+
+  /* ── Scroll progress ─────────────────────────────────────────────────── */
+  #progress {
+    position: fixed; top: 0; left: 0; height: 3px; width: 0%; z-index: 100;
+    background: linear-gradient(90deg, var(--cyan), var(--violet));
+    box-shadow: 0 0 12px var(--cyan);
+  }
+
+  /* ── Floating label inputs ───────────────────────────────────────────── */
+  .field { position: relative; }
+  .field input, .field textarea {
+    width: 100%; background: transparent; color: var(--text);
+    border: 1px solid var(--line); border-radius: 14px;
+    padding: 22px 16px 10px; outline: none;
+    transition: border-color .3s, box-shadow .3s;
+  }
+  .field textarea { min-height: 132px; resize: vertical; }
+  .field label {
+    position: absolute; left: 16px; top: 16px; color: var(--muted);
+    font-size: 15px; pointer-events: none;
+    transition: transform .22s cubic-bezier(.2,.8,.2,1), font-size .22s, color .22s;
+    transform-origin: left top;
+  }
+  .field input:focus, .field textarea:focus {
+    border-color: var(--cyan); box-shadow: 0 0 0 4px color-mix(in srgb, var(--cyan) 16%, transparent);
+  }
+  .field input:focus + label,
+  .field input:not(:placeholder-shown) + label,
+  .field textarea:focus + label,
+  .field textarea:not(:placeholder-shown) + label {
+    transform: translateY(-9px) scale(.78); color: var(--cyan);
+  }
+
+  /* ── Marquee ─────────────────────────────────────────────────────────── */
+  .marquee { display: flex; gap: 3rem; width: max-content; animation: slide 32s linear infinite; }
+  @keyframes slide { to { transform: translateX(-50%); } }
+  .marquee-wrap:hover .marquee { animation-play-state: paused; }
+
+  /* ── Reveal ──────────────────────────────────────────────────────────── */
+  .js [data-reveal] { opacity: 0; transform: translateY(28px); }
+
+  /* ── Accessibility: hormati preferensi pengguna ──────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: .001ms !important; animation-iteration-count: 1 !important;
+      transition-duration: .001ms !important; scroll-behavior: auto !important;
+    }
+    [data-reveal] { opacity: 1 !important; transform: none !important; }
+  }
+  :focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; border-radius: 6px; }
+</style>
+</head>
+
+<body class="antialiased">
+
+<!-- ══════════════════ LATAR ══════════════════ -->
+<div class="mesh" aria-hidden="true">
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+</div>
+<div class="grid-overlay" aria-hidden="true"></div>
+<div id="progress" aria-hidden="true"></div>
+
+<a href="#hero" class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[110] focus:glass focus:px-4 focus:py-2 focus:rounded-xl">Lompat ke konten</a>
+
+<!-- ══════════════════ NAVBAR ══════════════════ -->
+<header id="navbar" class="fixed top-0 inset-x-0 z-50 transition-all duration-500">
+  <nav class="mx-auto max-w-7xl px-4 sm:px-6">
+    <div class="glass mt-3 flex items-center justify-between rounded-2xl px-4 py-3 sm:px-5">
+
+      <a href="#hero" class="flex items-center gap-3 group">
+        <span class="relative grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-[var(--cyan)] to-[var(--violet)] text-white font-display font-extrabold text-lg shadow-lg">
+          T
+          <span class="absolute inset-0 rounded-xl bg-gradient-to-br from-[var(--cyan)] to-[var(--violet)] blur-md opacity-60 -z-10 group-hover:opacity-90 transition"></span>
+        </span>
+        <span class="leading-tight">
+          <span class="block font-display text-[15px] font-extrabold tracking-tight">TapGo Lion</span>
+          <span class="block text-[10px] uppercase tracking-[0.18em] text-[var(--muted)]">Indonesia</span>
+        </span>
+      </a>
+
+      <ul class="hidden items-center gap-1 lg:flex">
+        <li><a class="nav-link px-4 py-2 text-sm font-semibold rounded-lg hover:text-[var(--cyan)] transition" href="#layanan">Layanan</a></li>
+        <li><a class="nav-link px-4 py-2 text-sm font-semibold rounded-lg hover:text-[var(--cyan)] transition" href="#membership">Membership</a></li>
+        <li><a class="nav-link px-4 py-2 text-sm font-semibold rounded-lg hover:text-[var(--cyan)] transition" href="#showcase">Galeri</a></li>
+        <li><a class="nav-link px-4 py-2 text-sm font-semibold rounded-lg hover:text-[var(--cyan)] transition" href="#angka">Angka</a></li>
+        <li><a class="nav-link px-4 py-2 text-sm font-semibold rounded-lg hover:text-[var(--cyan)] transition" href="#cerita">Cerita</a></li>
+        <li><a class="nav-link px-4 py-2 text-sm font-semibold rounded-lg hover:text-[var(--cyan)] transition" href="#kontak">Kontak</a></li>
+      </ul>
+
+      <div class="flex items-center gap-2">
+        <button id="theme-toggle" aria-label="Ganti mode terang atau gelap"
+                class="grid h-10 w-10 place-items-center rounded-xl border border-[var(--line)] hover:border-[var(--cyan)] transition">
+          <i data-lucide="sun" class="hidden h-[18px] w-[18px] dark:block"></i>
+          <i data-lucide="moon" class="h-[18px] w-[18px] dark:hidden"></i>
+        </button>
+
+        <a href="#kontak" data-magnetic
+           class="btn-primary hidden rounded-xl px-5 py-2.5 text-sm font-bold sm:inline-flex items-center gap-2">
+          Mulai Sekarang <i data-lucide="arrow-right" class="h-4 w-4"></i>
+        </a>
+
+        <button id="menu-toggle" aria-label="Buka menu" aria-expanded="false"
+                class="grid h-10 w-10 place-items-center rounded-xl border border-[var(--line)] lg:hidden">
+          <i data-lucide="menu" class="h-5 w-5"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Menu seluler -->
+    <div id="mobile-menu" class="glass mt-2 hidden overflow-hidden rounded-2xl p-2 lg:hidden">
+      <a class="mob-link block rounded-xl px-4 py-3 text-sm font-semibold hover:bg-[var(--surface-2)]" href="#layanan">Layanan</a>
+      <a class="mob-link block rounded-xl px-4 py-3 text-sm font-semibold hover:bg-[var(--surface-2)]" href="#membership">Membership</a>
+      <a class="mob-link block rounded-xl px-4 py-3 text-sm font-semibold hover:bg-[var(--surface-2)]" href="#showcase">Galeri</a>
+      <a class="mob-link block rounded-xl px-4 py-3 text-sm font-semibold hover:bg-[var(--surface-2)]" href="#angka">Angka</a>
+      <a class="mob-link block rounded-xl px-4 py-3 text-sm font-semibold hover:bg-[var(--surface-2)]" href="#cerita">Cerita</a>
+      <a class="mob-link block rounded-xl px-4 py-3 text-sm font-semibold hover:bg-[var(--surface-2)]" href="#kontak">Kontak</a>
+      <a href="#kontak" class="btn-primary mt-2 block rounded-xl px-4 py-3 text-center text-sm font-bold">Mulai Sekarang</a>
+    </div>
+  </nav>
+</header>
+
+<main>
+
+<!-- ══════════════════ HERO ══════════════════ -->
+<section id="hero" class="relative flex min-h-[100svh] items-center pt-32 pb-20">
+  <div class="mx-auto grid w-full max-w-7xl gap-14 px-4 sm:px-6 lg:grid-cols-[1.05fr_.95fr] lg:items-center">
+
+    <div>
+      <div data-reveal class="glass inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold">
+        <span class="relative flex h-2 w-2">
+          <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--cyan)] opacity-75"></span>
+          <span class="relative inline-flex h-2 w-2 rounded-full bg-[var(--cyan)]"></span>
+        </span>
+        Kini melayani di Banten &amp; sekitarnya
+      </div>
+
+      <h1 class="mt-6 font-display text-[clamp(2.4rem,6.2vw,4.6rem)] font-extrabold leading-[1.05] tracking-tight">
+        <span class="kinetic block">Satu aplikasi.</span>
+        <span class="kinetic grad-text block">Perjalanan, penghasilan,</span>
+        <span class="kinetic block">dan pembayaran harian.</span>
+      </h1>
+
+      <p data-reveal class="mt-6 max-w-xl text-[17px] leading-8 text-[var(--muted)]">
+        TapGo Lion Indonesia menyatukan ojek online, kemitraan driver, layanan PPOB,
+        dan program membership dalam satu ekosistem yang rapi — dibangun untuk
+        keseharian, bukan sekadar sesekali.
+      </p>
+
+      <div data-reveal class="mt-9 flex flex-wrap items-center gap-3">
+        <a href="#membership" data-magnetic class="btn-primary inline-flex items-center gap-2 rounded-2xl px-7 py-4 text-[15px] font-bold">
+          Lihat Membership <i data-lucide="sparkles" class="h-[18px] w-[18px]"></i>
+        </a>
+        <a href="#layanan" data-magnetic class="btn-ghost inline-flex items-center gap-2 rounded-2xl px-7 py-4 text-[15px] font-bold">
+          Jelajahi Layanan <i data-lucide="compass" class="h-[18px] w-[18px]"></i>
+        </a>
+      </div>
+
+      <dl data-reveal class="mt-12 grid max-w-lg grid-cols-3 gap-4">
+        <div><dt class="text-[11px] uppercase tracking-widest text-[var(--muted)]">Layanan</dt><dd class="mt-1 font-display text-2xl font-extrabold">4</dd></div>
+        <div><dt class="text-[11px] uppercase tracking-widest text-[var(--muted)]">Tingkat Member</dt><dd class="mt-1 font-display text-2xl font-extrabold">3</dd></div>
+        <div><dt class="text-[11px] uppercase tracking-widest text-[var(--muted)]">Dukungan</dt><dd class="mt-1 font-display text-2xl font-extrabold">24/7</dd></div>
+      </dl>
+    </div>
+
+    <!-- Visual hero: mockup ponsel interaktif -->
+    <div data-reveal class="relative mx-auto w-full max-w-[420px]" data-parallax="0.12">
+      <div data-tilt class="relative">
+        <div class="absolute -inset-8 rounded-[3rem] bg-gradient-to-tr from-[var(--cyan)] to-[var(--violet)] opacity-25 blur-3xl"></div>
+
+        <div class="glass relative rounded-[2.6rem] p-3 shadow-2xl">
+          <div class="overflow-hidden rounded-[2.1rem] bg-[var(--surface)]">
+            <!-- Bar status -->
+            <div class="flex items-center justify-between px-6 pt-5 text-[11px] font-semibold text-[var(--muted)]">
+              <span>09:41</span>
+              <span class="flex items-center gap-1.5">
+                <i data-lucide="signal" class="h-3.5 w-3.5"></i>
+                <i data-lucide="wifi" class="h-3.5 w-3.5"></i>
+                <i data-lucide="battery-full" class="h-3.5 w-3.5"></i>
+              </span>
+            </div>
+
+            <div class="px-6 pb-7 pt-5">
+              <p class="text-xs text-[var(--muted)]">Selamat pagi,</p>
+              <p class="font-display text-xl font-extrabold">Anggota TapGo</p>
+
+              <div class="mt-5 rounded-2xl bg-gradient-to-br from-[var(--cyan)] to-[var(--violet)] p-4 text-white shadow-lg">
+                <p class="text-[10px] uppercase tracking-[0.18em] opacity-80">Saldo PPOB</p>
+                <p class="mt-1 font-display text-2xl font-extrabold">Rp 600.000</p>
+                <p class="mt-3 text-[11px] opacity-85">Membership Gold · Aktif</p>
+              </div>
+
+              <div class="mt-5 grid grid-cols-4 gap-2 text-center">
+                <div class="rounded-xl border border-[var(--line)] p-2.5"><i data-lucide="bike" class="mx-auto h-5 w-5 text-[var(--cyan)]"></i><p class="mt-1.5 text-[10px] font-semibold">Ojek</p></div>
+                <div class="rounded-xl border border-[var(--line)] p-2.5"><i data-lucide="zap" class="mx-auto h-5 w-5 text-[var(--violet)]"></i><p class="mt-1.5 text-[10px] font-semibold">Token</p></div>
+                <div class="rounded-xl border border-[var(--line)] p-2.5"><i data-lucide="smartphone" class="mx-auto h-5 w-5 text-[var(--cyan)]"></i><p class="mt-1.5 text-[10px] font-semibold">Pulsa</p></div>
+                <div class="rounded-xl border border-[var(--line)] p-2.5"><i data-lucide="receipt" class="mx-auto h-5 w-5 text-[var(--violet)]"></i><p class="mt-1.5 text-[10px] font-semibold">Tagihan</p></div>
+              </div>
+
+              <div class="mt-5 space-y-2">
+                <div class="flex items-center gap-3 rounded-xl border border-[var(--line)] p-3">
+                  <span class="grid h-9 w-9 place-items-center rounded-lg bg-[var(--cyan)]/15 text-[var(--cyan)]"><i data-lucide="check" class="h-4 w-4"></i></span>
+                  <span class="flex-1"><span class="block text-xs font-bold">Token listrik</span><span class="block text-[10px] text-[var(--muted)]">Berhasil · Rp 100.000</span></span>
+                </div>
+                <div class="flex items-center gap-3 rounded-xl border border-[var(--line)] p-3">
+                  <span class="grid h-9 w-9 place-items-center rounded-lg bg-[var(--violet)]/15 text-[var(--violet)]"><i data-lucide="map-pin" class="h-4 w-4"></i></span>
+                  <span class="flex-1"><span class="block text-xs font-bold">Perjalanan selesai</span><span class="block text-[10px] text-[var(--muted)]">Serang → Cilegon</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Lencana melayang -->
+        <div class="glass absolute -left-6 top-24 hidden rounded-2xl px-4 py-3 shadow-xl sm:block" data-float>
+          <p class="text-[10px] uppercase tracking-widest text-[var(--muted)]">Driver aktif</p>
+          <p class="font-display text-lg font-extrabold text-[var(--cyan)]">Online</p>
+        </div>
+        <div class="glass absolute -right-4 bottom-24 hidden rounded-2xl px-4 py-3 shadow-xl sm:block" data-float data-float-delay="1.4">
+          <p class="text-[10px] uppercase tracking-widest text-[var(--muted)]">Verifikasi</p>
+          <p class="font-display text-lg font-extrabold text-[var(--violet)]">Terjamin</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <a href="#layanan" class="absolute bottom-7 left-1/2 hidden -translate-x-1/2 flex-col items-center gap-2 text-[var(--muted)] md:flex" aria-label="Gulir ke bawah">
+    <span class="text-[10px] uppercase tracking-[0.22em]">Gulir</span>
+    <span class="grid h-9 w-9 place-items-center rounded-full border border-[var(--line)]">
+      <i data-lucide="chevron-down" class="h-4 w-4 animate-bounce"></i>
+    </span>
+  </a>
+</section>
+
+<!-- ══════════════════ MARQUEE ══════════════════ -->
+<section class="marquee-wrap overflow-hidden border-y border-[var(--line)] py-5" aria-hidden="true">
+  <div class="marquee">
+    <!-- Digandakan dua kali agar gulirannya mulus tanpa jeda -->
+    <div class="flex shrink-0 items-center gap-12 pr-12 text-sm font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
+      <span>Ojek Online</span><span class="text-[var(--cyan)]">◆</span>
+      <span>Mitra Driver</span><span class="text-[var(--violet)]">◆</span>
+      <span>PPOB</span><span class="text-[var(--cyan)]">◆</span>
+      <span>Membership</span><span class="text-[var(--violet)]">◆</span>
+      <span>Pembayaran Aman</span><span class="text-[var(--cyan)]">◆</span>
+    </div>
+    <div class="flex shrink-0 items-center gap-12 pr-12 text-sm font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
+      <span>Ojek Online</span><span class="text-[var(--cyan)]">◆</span>
+      <span>Mitra Driver</span><span class="text-[var(--violet)]">◆</span>
+      <span>PPOB</span><span class="text-[var(--cyan)]">◆</span>
+      <span>Membership</span><span class="text-[var(--violet)]">◆</span>
+      <span>Pembayaran Aman</span><span class="text-[var(--cyan)]">◆</span>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ LAYANAN — BENTO GRID ══════════════════ -->
+<section id="layanan" class="relative py-24 sm:py-32">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6">
+
+    <div class="mx-auto max-w-2xl text-center">
+      <p data-reveal class="text-xs font-bold uppercase tracking-[0.24em] text-[var(--cyan)]">Ekosistem</p>
+      <h2 data-reveal class="mt-3 font-display text-[clamp(2rem,4.4vw,3.2rem)] font-extrabold leading-tight tracking-tight">
+        Empat layanan, <span class="grad-text">satu genggaman</span>
+      </h2>
+      <p data-reveal class="mt-4 text-[var(--muted)] leading-7">
+        Dirancang saling menyambung: penghasilan dari satu layanan bisa langsung
+        dipakai di layanan lainnya.
+      </p>
+    </div>
+
+    <div class="mt-16 grid gap-5 md:grid-cols-6 lg:grid-cols-12">
+
+      <!-- Ojek Online — kartu besar -->
+      <article data-reveal data-tilt class="card-glow glass group relative col-span-full overflow-hidden rounded-3xl p-8 md:col-span-6 lg:col-span-7 lg:p-10">
+        <div class="relative z-10 max-w-md">
+          <span class="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-[var(--cyan)] to-[var(--violet)] text-white shadow-lg">
+            <i data-lucide="bike" class="h-7 w-7"></i>
+          </span>
+          <h3 class="mt-6 font-display text-2xl font-extrabold">Ojek Online</h3>
+          <p class="mt-3 leading-7 text-[var(--muted)]">
+            Pesan perjalanan dengan tarif yang jelas di muka. Driver terverifikasi,
+            status perjalanan terpantau, dan riwayat tersimpan rapi.
+          </p>
+          <ul class="mt-6 space-y-2.5 text-sm">
+            <li class="flex items-center gap-2.5"><i data-lucide="check-circle-2" class="h-4 w-4 text-[var(--cyan)]"></i> Tarif diketahui sebelum memesan</li>
+            <li class="flex items-center gap-2.5"><i data-lucide="check-circle-2" class="h-4 w-4 text-[var(--cyan)]"></i> Identitas driver terverifikasi</li>
+            <li class="flex items-center gap-2.5"><i data-lucide="check-circle-2" class="h-4 w-4 text-[var(--cyan)]"></i> Riwayat perjalanan lengkap</li>
+          </ul>
+        </div>
+        <img src="https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=900&q=70"
+             alt="" aria-hidden="true" loading="lazy"
+             class="pointer-events-none absolute -right-10 -bottom-10 h-64 w-64 rounded-3xl object-cover opacity-15 transition duration-700 group-hover:scale-110 group-hover:opacity-25" />
+      </article>
+
+      <!-- Mitra Driver -->
+      <article data-reveal data-tilt class="card-glow glass col-span-full overflow-hidden rounded-3xl p-8 md:col-span-3 lg:col-span-5">
+        <span class="grid h-14 w-14 place-items-center rounded-2xl border border-[var(--line)] text-[var(--violet)]">
+          <i data-lucide="steering-wheel" class="h-7 w-7"></i>
+        </span>
+        <h3 class="mt-6 font-display text-2xl font-extrabold">Mitra Driver</h3>
+        <p class="mt-3 leading-7 text-[var(--muted)]">
+          Jadikan waktu luang sebagai penghasilan. Pendaftaran terpandu, verifikasi
+          berkas jelas, dan penghasilan tercatat transparan.
+        </p>
+        <a href="#kontak" class="mt-6 inline-flex items-center gap-2 text-sm font-bold text-[var(--cyan)] hover:gap-3 transition-all">
+          Daftar jadi mitra <i data-lucide="arrow-right" class="h-4 w-4"></i>
+        </a>
+      </article>
+
+      <!-- PPOB -->
+      <article data-reveal data-tilt class="card-glow glass col-span-full overflow-hidden rounded-3xl p-8 md:col-span-3 lg:col-span-5">
+        <span class="grid h-14 w-14 place-items-center rounded-2xl border border-[var(--line)] text-[var(--cyan)]">
+          <i data-lucide="zap" class="h-7 w-7"></i>
+        </span>
+        <h3 class="mt-6 font-display text-2xl font-extrabold">Layanan PPOB</h3>
+        <p class="mt-3 leading-7 text-[var(--muted)]">
+          Pulsa, paket data, token listrik, dan tagihan bulanan — selesai dari satu
+          layar, dengan bukti transaksi yang tersimpan.
+        </p>
+        <div class="mt-6 flex flex-wrap gap-2">
+          <span class="rounded-full border border-[var(--line)] px-3 py-1 text-xs font-semibold">Pulsa</span>
+          <span class="rounded-full border border-[var(--line)] px-3 py-1 text-xs font-semibold">Token PLN</span>
+          <span class="rounded-full border border-[var(--line)] px-3 py-1 text-xs font-semibold">Paket Data</span>
+          <span class="rounded-full border border-[var(--line)] px-3 py-1 text-xs font-semibold">Tagihan</span>
+        </div>
+      </article>
+
+      <!-- Keamanan -->
+      <article data-reveal data-tilt class="card-glow glass col-span-full overflow-hidden rounded-3xl p-8 md:col-span-6 lg:col-span-7">
+        <div class="flex flex-wrap items-start gap-6">
+          <span class="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[var(--violet)] to-[var(--cyan)] text-white shadow-lg">
+            <i data-lucide="shield-check" class="h-7 w-7"></i>
+          </span>
+          <div class="min-w-[240px] flex-1">
+            <h3 class="font-display text-2xl font-extrabold">Dibangun dengan disiplin keamanan</h3>
+            <p class="mt-3 leading-7 text-[var(--muted)]">
+              Dokumen identitas disimpan terenkripsi dengan masa simpan terbatas,
+              setiap tindakan admin meninggalkan jejak audit, dan pembayaran diproses
+              lewat payment gateway berlisensi.
+            </p>
+            <div class="mt-6 grid gap-3 sm:grid-cols-3">
+              <div class="rounded-xl border border-[var(--line)] p-3"><p class="text-xs font-bold">Enkripsi dokumen</p><p class="mt-1 text-[11px] text-[var(--muted)]">AES-256-GCM</p></div>
+              <div class="rounded-xl border border-[var(--line)] p-3"><p class="text-xs font-bold">Masa simpan</p><p class="mt-1 text-[11px] text-[var(--muted)]">Maksimal 24 jam</p></div>
+              <div class="rounded-xl border border-[var(--line)] p-3"><p class="text-xs font-bold">Jejak audit</p><p class="mt-1 text-[11px] text-[var(--muted)]">Setiap tindakan</p></div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ MEMBERSHIP ══════════════════ -->
+<section id="membership" class="relative py-24 sm:py-32">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6">
+
+    <div class="mx-auto max-w-2xl text-center">
+      <p data-reveal class="text-xs font-bold uppercase tracking-[0.24em] text-[var(--violet)]">Membership</p>
+      <h2 data-reveal class="mt-3 font-display text-[clamp(2rem,4.4vw,3.2rem)] font-extrabold leading-tight tracking-tight">
+        Pilih tingkat yang <span class="grad-text">sesuai langkah Anda</span>
+      </h2>
+      <p data-reveal class="mt-4 text-[var(--muted)] leading-7">
+        Upgrade diproses melalui situs ini. Manfaat aktif setelah dokumen identitas
+        diverifikasi tim kami.
+      </p>
+    </div>
+
+    <div class="mt-16 grid gap-6 lg:grid-cols-3">
+
+      <article data-reveal data-tilt class="card-glow glass rounded-3xl p-8">
+        <p class="text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]">Silver</p>
+        <p class="mt-4 font-display text-4xl font-extrabold">Rp 500<span class="text-2xl">rb</span></p>
+        <p class="mt-2 text-sm text-[var(--muted)]">Langkah pertama menjadi anggota</p>
+        <ul class="mt-7 space-y-3 text-sm">
+          <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 shrink-0 text-[var(--cyan)]"></i> Saldo PPOB awal Rp 100.000</li>
+          <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 shrink-0 text-[var(--cyan)]"></i> Kartu anggota digital</li>
+          <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 shrink-0 text-[var(--cyan)]"></i> Akses layanan PPOB sebagai agen</li>
+        </ul>
+        <a href="#kontak" class="btn-ghost mt-8 block rounded-2xl px-5 py-3.5 text-center text-sm font-bold">Pilih Silver</a>
+      </article>
+
+      <article data-reveal data-tilt class="card-glow glass relative rounded-3xl p-8 ring-1 ring-[var(--cyan)]/40 lg:-mt-4 lg:mb-4">
+        <span class="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-[var(--cyan)] to-[var(--violet)] px-4 py-1 text-[10px] font-extrabold uppercase tracking-widest text-white shadow-lg">Paling dipilih</span>
+        <p class="text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]">Gold</p>
+        <p class="mt-4 font-display text-4xl font-extrabold grad-text">Rp 3<span class="text-2xl">jt</span></p>
+        <p class="mt-2 text-sm text-[var(--muted)]">Untuk yang serius bertumbuh</p>
+        <ul class="mt-7 space-y-3 text-sm">
+          <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 shrink-0 text-[var(--cyan)]"></i> Seluruh manfaat Silver</li>
+          <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 shrink-0 text-[var(--cyan)]"></i> Saldo PPOB awal Rp 600.000</li>
+          <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 shrink-0 text-[var(--cyan)]"></i> Prioritas dukungan mitra</li>
+        </ul>
+        <a href="#kontak" data-magnetic class="btn-primary mt-8 block rounded-2xl px-5 py-3.5 text-center text-sm font-bold">Pilih Gold</a>
+      </article>
+
+      <article data-reveal data-tilt class="card-glow glass rounded-3xl p-8">
+        <p class="text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]">Platinum</p>
+        <p class="mt-4 font-display text-4xl font-extrabold">Rp 5,5<span class="text-2xl">jt</span></p>
+        <p class="mt-2 text-sm text-[var(--muted)]">Manfaat paling lengkap</p>
+        <ul class="mt-7 space-y-3 text-sm">
+          <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 shrink-0 text-[var(--cyan)]"></i> Seluruh manfaat Gold</li>
+          <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 shrink-0 text-[var(--cyan)]"></i> Saldo PPOB awal Rp 1.000.000</li>
+          <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 shrink-0 text-[var(--cyan)]"></i> Pendampingan mitra khusus</li>
+        </ul>
+        <a href="#kontak" class="btn-ghost mt-8 block rounded-2xl px-5 py-3.5 text-center text-sm font-bold">Pilih Platinum</a>
+      </article>
+    </div>
+
+    <p data-reveal class="mx-auto mt-10 max-w-3xl text-center text-xs leading-6 text-[var(--muted)]">
+      Harga sudah termasuk seluruh biaya. Pembayaran diproses payment gateway berlisensi.
+      Bila dokumen identitas tidak dapat diverifikasi, pembayaran dikembalikan penuh sesuai
+      kebijakan pengembalian dana. Benefit dan program mengikuti syarat serta verifikasi
+      PT. TapGo Lion Indonesia.
+    </p>
+  </div>
+</section>
+
+<!-- ══════════════════ SHOWCASE — GALERI FILTERABLE ══════════════════ -->
+<section id="showcase" class="relative py-24 sm:py-32">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6">
+
+    <div class="flex flex-wrap items-end justify-between gap-6">
+      <div class="max-w-xl">
+        <p data-reveal class="text-xs font-bold uppercase tracking-[0.24em] text-[var(--cyan)]">Galeri</p>
+        <h2 data-reveal class="mt-3 font-display text-[clamp(2rem,4.4vw,3.2rem)] font-extrabold leading-tight tracking-tight">
+          Ekosistem yang <span class="grad-text">bekerja tiap hari</span>
+        </h2>
+      </div>
+      <div data-reveal class="flex flex-wrap gap-2" role="tablist" aria-label="Saring galeri">
+        <button class="filter-btn rounded-full border border-[var(--line)] px-4 py-2 text-xs font-bold transition" data-filter="all" aria-pressed="true">Semua</button>
+        <button class="filter-btn rounded-full border border-[var(--line)] px-4 py-2 text-xs font-bold transition" data-filter="ojek" aria-pressed="false">Ojek</button>
+        <button class="filter-btn rounded-full border border-[var(--line)] px-4 py-2 text-xs font-bold transition" data-filter="driver" aria-pressed="false">Driver</button>
+        <button class="filter-btn rounded-full border border-[var(--line)] px-4 py-2 text-xs font-bold transition" data-filter="ppob" aria-pressed="false">PPOB</button>
+        <button class="filter-btn rounded-full border border-[var(--line)] px-4 py-2 text-xs font-bold transition" data-filter="member" aria-pressed="false">Member</button>
+      </div>
+    </div>
+
+    <div id="gallery" class="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <!-- Gambar Unsplash bersifat placeholder. Ganti dengan foto asli sebelum tayang. -->
+      <button class="gal-item card-glow glass group overflow-hidden rounded-3xl text-left" data-cat="ojek"
+        data-title="Perjalanan Harian" data-desc="Antar-jemput dalam kota dengan tarif yang diketahui di muka dan driver terverifikasi."
+        data-img="https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=1200&q=75">
+        <span class="block h-56 overflow-hidden">
+          <img src="https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=800&q=70" alt="Pengendara motor di jalan kota" loading="lazy"
+               class="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
+        </span>
+        <span class="block p-6">
+          <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--cyan)]">Ojek Online</span>
+          <span class="mt-2 block font-display text-lg font-extrabold">Perjalanan Harian</span>
+        </span>
+      </button>
+
+      <button class="gal-item card-glow glass group overflow-hidden rounded-3xl text-left" data-cat="driver"
+        data-title="Kemitraan Driver" data-desc="Pendaftaran terpandu, verifikasi berkas yang jelas, dan penghasilan yang tercatat transparan."
+        data-img="https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?auto=format&fit=crop&w=1200&q=75">
+        <span class="block h-56 overflow-hidden">
+          <img src="https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?auto=format&fit=crop&w=800&q=70" alt="Pengemudi mengenakan helm" loading="lazy"
+               class="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
+        </span>
+        <span class="block p-6">
+          <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--violet)]">Mitra Driver</span>
+          <span class="mt-2 block font-display text-lg font-extrabold">Kemitraan Driver</span>
+        </span>
+      </button>
+
+      <button class="gal-item card-glow glass group overflow-hidden rounded-3xl text-left" data-cat="ppob"
+        data-title="Token &amp; Tagihan" data-desc="Token listrik, pulsa, paket data, dan tagihan bulanan selesai dari satu layar."
+        data-img="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=1200&q=75">
+        <span class="block h-56 overflow-hidden">
+          <img src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=800&q=70" alt="Transaksi pembayaran digital" loading="lazy"
+               class="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
+        </span>
+        <span class="block p-6">
+          <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--cyan)]">PPOB</span>
+          <span class="mt-2 block font-display text-lg font-extrabold">Token &amp; Tagihan</span>
+        </span>
+      </button>
+
+      <button class="gal-item card-glow glass group overflow-hidden rounded-3xl text-left" data-cat="member"
+        data-title="Kartu Anggota Digital" data-desc="Identitas keanggotaan yang berlaku di seluruh layanan dalam ekosistem TapGo."
+        data-img="https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=1200&q=75">
+        <span class="block h-56 overflow-hidden">
+          <img src="https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=800&q=70" alt="Kartu keanggotaan digital" loading="lazy"
+               class="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
+        </span>
+        <span class="block p-6">
+          <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--violet)]">Membership</span>
+          <span class="mt-2 block font-display text-lg font-extrabold">Kartu Anggota Digital</span>
+        </span>
+      </button>
+
+      <button class="gal-item card-glow glass group overflow-hidden rounded-3xl text-left" data-cat="ppob"
+        data-title="Agen PPOB" data-desc="Anggota dapat melayani transaksi PPOB dan mencatat setiap penjualannya."
+        data-img="https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=1200&q=75">
+        <span class="block h-56 overflow-hidden">
+          <img src="https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=800&q=70" alt="Layanan pelanggan di konter" loading="lazy"
+               class="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
+        </span>
+        <span class="block p-6">
+          <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--cyan)]">PPOB</span>
+          <span class="mt-2 block font-display text-lg font-extrabold">Agen PPOB</span>
+        </span>
+      </button>
+
+      <button class="gal-item card-glow glass group overflow-hidden rounded-3xl text-left" data-cat="ojek"
+        data-title="Jangkauan Kota" data-desc="Melayani rute dalam kota dan antarkota terdekat di wilayah Banten dan sekitarnya."
+        data-img="https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?auto=format&fit=crop&w=1200&q=75">
+        <span class="block h-56 overflow-hidden">
+          <img src="https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?auto=format&fit=crop&w=800&q=70" alt="Jalanan kota dari atas" loading="lazy"
+               class="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
+        </span>
+        <span class="block p-6">
+          <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--cyan)]">Ojek Online</span>
+          <span class="mt-2 block font-display text-lg font-extrabold">Jangkauan Kota</span>
+        </span>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- Modal galeri -->
+<div id="modal" class="fixed inset-0 z-[90] hidden items-center justify-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div id="modal-card" class="glass w-full max-w-2xl overflow-hidden rounded-3xl">
+    <img id="modal-img" alt="" class="h-64 w-full object-cover sm:h-80" />
+    <div class="p-7">
+      <h3 id="modal-title" class="font-display text-2xl font-extrabold"></h3>
+      <p id="modal-desc" class="mt-3 leading-7 text-[var(--muted)]"></p>
+      <div class="mt-7 flex flex-wrap gap-3">
+        <a href="#kontak" id="modal-cta" class="btn-primary rounded-2xl px-6 py-3 text-sm font-bold">Hubungi Kami</a>
+        <button id="modal-close" class="btn-ghost rounded-2xl px-6 py-3 text-sm font-bold">Tutup</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ ANGKA ══════════════════ -->
+<section id="angka" class="relative py-24 sm:py-32">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6">
+    <div class="glass overflow-hidden rounded-[2rem] p-8 sm:p-12">
+      <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+        <div data-reveal class="text-center">
+          <p class="font-display text-[clamp(2.4rem,5vw,3.6rem)] font-extrabold grad-text" data-count="4" data-suffix="">0</p>
+          <p class="mt-2 text-sm font-semibold">Layanan terintegrasi</p>
+          <p class="mt-1 text-xs text-[var(--muted)]">Ojek, Driver, PPOB, Membership</p>
+        </div>
+        <div data-reveal class="text-center">
+          <p class="font-display text-[clamp(2.4rem,5vw,3.6rem)] font-extrabold grad-text" data-count="3" data-suffix="">0</p>
+          <p class="mt-2 text-sm font-semibold">Tingkat keanggotaan</p>
+          <p class="mt-1 text-xs text-[var(--muted)]">Silver, Gold, Platinum</p>
+        </div>
+        <div data-reveal class="text-center">
+          <p class="font-display text-[clamp(2.4rem,5vw,3.6rem)] font-extrabold grad-text" data-count="24" data-suffix=" jam">0</p>
+          <p class="mt-2 text-sm font-semibold">Masa simpan dokumen</p>
+          <p class="mt-1 text-xs text-[var(--muted)]">Terenkripsi, lalu dihapus</p>
+        </div>
+        <div data-reveal class="text-center">
+          <p class="font-display text-[clamp(2.4rem,5vw,3.6rem)] font-extrabold grad-text" data-count="100" data-suffix="%">0</p>
+          <p class="mt-2 text-sm font-semibold">Pengembalian dana</p>
+          <p class="mt-1 text-xs text-[var(--muted)]">Bila dokumen tidak terverifikasi</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ TESTIMONI ══════════════════ -->
+<!--
+  CATATAN PENTING: seluruh testimoni di bawah ini adalah CONTOH ISI, bukan
+  kutipan pelanggan sungguhan. WAJIB diganti dengan testimoni asli beserta izin
+  dari orangnya sebelum situs ini ditayangkan.
+-->
+<section id="cerita" class="relative overflow-hidden py-24 sm:py-32">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6">
+    <div class="mx-auto max-w-2xl text-center">
+      <p data-reveal class="text-xs font-bold uppercase tracking-[0.24em] text-[var(--violet)]">Cerita Pengguna</p>
+      <h2 data-reveal class="mt-3 font-display text-[clamp(2rem,4.4vw,3.2rem)] font-extrabold leading-tight tracking-tight">
+        Suara dari <span class="grad-text">lapangan</span>
+      </h2>
+    </div>
+
+    <div class="relative mt-14">
+      <div id="carousel" class="flex snap-x snap-mandatory gap-5 overflow-x-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <article class="card-glow glass w-[86%] shrink-0 snap-center rounded-3xl p-8 sm:w-[420px]">
+          <div class="flex items-center gap-4">
+            <span class="relative">
+              <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=160&q=70" alt="" class="h-14 w-14 rounded-full object-cover" />
+              <span class="absolute -inset-1 rounded-full bg-gradient-to-tr from-[var(--cyan)] to-[var(--violet)] opacity-70 blur-[6px] -z-10"></span>
+            </span>
+            <div><p class="font-bold">Contoh Nama</p><p class="text-xs text-[var(--muted)]">Mitra Driver · Serang</p></div>
+          </div>
+          <p class="mt-6 leading-7 text-[var(--muted)]">"Contoh testimoni. Ganti bagian ini dengan cerita mitra driver yang sebenarnya, beserta izin tertulis dari yang bersangkutan."</p>
+          <div class="mt-5 flex gap-1 text-[var(--cyan)]" aria-label="5 dari 5">
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i>
+          </div>
+        </article>
+
+        <article class="card-glow glass w-[86%] shrink-0 snap-center rounded-3xl p-8 sm:w-[420px]">
+          <div class="flex items-center gap-4">
+            <span class="relative">
+              <img src="https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?auto=format&fit=crop&w=160&q=70" alt="" class="h-14 w-14 rounded-full object-cover" />
+              <span class="absolute -inset-1 rounded-full bg-gradient-to-tr from-[var(--violet)] to-[var(--cyan)] opacity-70 blur-[6px] -z-10"></span>
+            </span>
+            <div><p class="font-bold">Contoh Nama</p><p class="text-xs text-[var(--muted)]">Agen PPOB · Cilegon</p></div>
+          </div>
+          <p class="mt-6 leading-7 text-[var(--muted)]">"Contoh testimoni. Ganti dengan pengalaman agen PPOB yang sesungguhnya — sebutkan hal konkret yang mereka rasakan."</p>
+          <div class="mt-5 flex gap-1 text-[var(--cyan)]" aria-label="5 dari 5">
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i>
+          </div>
+        </article>
+
+        <article class="card-glow glass w-[86%] shrink-0 snap-center rounded-3xl p-8 sm:w-[420px]">
+          <div class="flex items-center gap-4">
+            <span class="relative">
+              <img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=160&q=70" alt="" class="h-14 w-14 rounded-full object-cover" />
+              <span class="absolute -inset-1 rounded-full bg-gradient-to-tr from-[var(--cyan)] to-[var(--violet)] opacity-70 blur-[6px] -z-10"></span>
+            </span>
+            <div><p class="font-bold">Contoh Nama</p><p class="text-xs text-[var(--muted)]">Anggota Gold · Tangerang</p></div>
+          </div>
+          <p class="mt-6 leading-7 text-[var(--muted)]">"Contoh testimoni. Ganti dengan cerita anggota mengenai manfaat yang benar-benar mereka pakai."</p>
+          <div class="mt-5 flex gap-1 text-[var(--cyan)]" aria-label="5 dari 5">
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i>
+          </div>
+        </article>
+
+        <article class="card-glow glass w-[86%] shrink-0 snap-center rounded-3xl p-8 sm:w-[420px]">
+          <div class="flex items-center gap-4">
+            <span class="relative">
+              <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=160&q=70" alt="" class="h-14 w-14 rounded-full object-cover" />
+              <span class="absolute -inset-1 rounded-full bg-gradient-to-tr from-[var(--violet)] to-[var(--cyan)] opacity-70 blur-[6px] -z-10"></span>
+            </span>
+            <div><p class="font-bold">Contoh Nama</p><p class="text-xs text-[var(--muted)]">Penumpang · Serang</p></div>
+          </div>
+          <p class="mt-6 leading-7 text-[var(--muted)]">"Contoh testimoni. Ganti dengan komentar penumpang mengenai perjalanan mereka."</p>
+          <div class="mt-5 flex gap-1 text-[var(--cyan)]" aria-label="5 dari 5">
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i>
+          </div>
+        </article>
+      </div>
+
+      <div class="mt-6 flex justify-center gap-3">
+        <button id="prev" aria-label="Sebelumnya" class="btn-ghost grid h-11 w-11 place-items-center rounded-full"><i data-lucide="arrow-left" class="h-4 w-4"></i></button>
+        <button id="next" aria-label="Berikutnya" class="btn-ghost grid h-11 w-11 place-items-center rounded-full"><i data-lucide="arrow-right" class="h-4 w-4"></i></button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ KONTAK ══════════════════ -->
+<section id="kontak" class="relative py-24 sm:py-32">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6">
+    <div class="glass overflow-hidden rounded-[2rem]">
+      <div class="grid lg:grid-cols-2">
+
+        <div class="relative p-8 sm:p-12">
+          <div class="absolute inset-0 bg-gradient-to-br from-[var(--cyan)]/12 to-[var(--violet)]/12"></div>
+          <div class="relative">
+            <p class="text-xs font-bold uppercase tracking-[0.24em] text-[var(--cyan)]">Hubungi Kami</p>
+            <h2 class="mt-3 font-display text-[clamp(1.9rem,3.6vw,2.8rem)] font-extrabold leading-tight tracking-tight">
+              Siap bergabung dengan <span class="grad-text">TapGo Lion?</span>
+            </h2>
+            <p class="mt-4 leading-7 text-[var(--muted)]">
+              Tim kami membantu Anda memilih layanan yang tepat — sebagai penumpang,
+              mitra driver, agen PPOB, atau anggota.
+            </p>
+
+            <ul class="mt-9 space-y-4 text-sm">
+              <li class="flex items-center gap-4">
+                <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--line)] text-[var(--cyan)]"><i data-lucide="message-circle" class="h-5 w-5"></i></span>
+                <span><span class="block text-xs text-[var(--muted)]">WhatsApp</span><a class="font-bold hover:text-[var(--cyan)] transition" href="https://wa.me/6283800255588">+62 838-0025-5588</a></span>
+              </li>
+              <li class="flex items-center gap-4">
+                <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--line)] text-[var(--violet)]"><i data-lucide="globe" class="h-5 w-5"></i></span>
+                <span><span class="block text-xs text-[var(--muted)]">Situs</span><span class="font-bold">tapgolion.id</span></span>
+              </li>
+              <li class="flex items-center gap-4">
+                <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--line)] text-[var(--cyan)]"><i data-lucide="building-2" class="h-5 w-5"></i></span>
+                <span><span class="block text-xs text-[var(--muted)]">Badan Usaha</span><span class="font-bold">PT. TapGo Lion Indonesia</span></span>
+              </li>
+            </ul>
+
+            <div class="mt-9 flex gap-3">
+              <a href="#" aria-label="Instagram" class="grid h-11 w-11 place-items-center rounded-xl border border-[var(--line)] transition hover:border-[var(--cyan)] hover:text-[var(--cyan)]"><i data-lucide="instagram" class="h-5 w-5"></i></a>
+              <a href="#" aria-label="Facebook" class="grid h-11 w-11 place-items-center rounded-xl border border-[var(--line)] transition hover:border-[var(--cyan)] hover:text-[var(--cyan)]"><i data-lucide="facebook" class="h-5 w-5"></i></a>
+              <a href="#" aria-label="YouTube" class="grid h-11 w-11 place-items-center rounded-xl border border-[var(--line)] transition hover:border-[var(--cyan)] hover:text-[var(--cyan)]"><i data-lucide="youtube" class="h-5 w-5"></i></a>
+            </div>
+          </div>
+        </div>
+
+        <div class="p-8 sm:p-12">
+          <!--
+            Form ini belum terhubung ke server. Sambungkan `action` ke endpoint
+            Anda, atau ganti dengan tautan WhatsApp, sebelum ditayangkan.
+          -->
+          <form id="contact-form" class="space-y-5" novalidate>
+            <div class="field">
+              <input id="nama" name="nama" type="text" placeholder=" " required autocomplete="name" />
+              <label for="nama">Nama lengkap</label>
+            </div>
+            <div class="field">
+              <input id="wa" name="wa" type="tel" placeholder=" " required inputmode="tel" autocomplete="tel" />
+              <label for="wa">Nomor WhatsApp</label>
+            </div>
+            <div class="field">
+              <input id="email" name="email" type="email" placeholder=" " autocomplete="email" />
+              <label for="email">Email (opsional)</label>
+            </div>
+            <div class="field">
+              <textarea id="pesan" name="pesan" placeholder=" " required></textarea>
+              <label for="pesan">Ceritakan kebutuhan Anda</label>
+            </div>
+
+            <button type="submit" data-magnetic class="btn-primary flex w-full items-center justify-center gap-2 rounded-2xl px-6 py-4 text-[15px] font-bold">
+              Kirim Pesan <i data-lucide="send" class="h-[18px] w-[18px]"></i>
+            </button>
+
+            <p id="form-note" class="hidden rounded-xl bg-[var(--cyan)]/10 px-4 py-3 text-sm font-semibold text-[var(--cyan)]" role="status"></p>
+            <p class="text-center text-xs leading-6 text-[var(--muted)]">
+              Dengan mengirim, Anda menyetujui pemrosesan data sesuai Kebijakan Privasi kami.
+            </p>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- ══════════════════ FOOTER ══════════════════ -->
+<footer class="relative border-t border-[var(--line)] py-16">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6">
+    <div class="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
+
+      <div class="lg:col-span-1">
+        <a href="#hero" class="flex items-center gap-3">
+          <span class="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-[var(--cyan)] to-[var(--violet)] font-display text-lg font-extrabold text-white">T</span>
+          <span class="font-display text-[15px] font-extrabold">TapGo Lion</span>
+        </a>
+        <p class="mt-4 max-w-xs text-sm leading-7 text-[var(--muted)]">
+          Satu aplikasi untuk perjalanan, penghasilan, dan pembayaran harian.
+        </p>
+      </div>
+
+      <div>
+        <p class="text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]">Layanan</p>
+        <ul class="mt-4 space-y-3 text-sm">
+          <li><a class="hover:text-[var(--cyan)] transition" href="#layanan">Ojek Online</a></li>
+          <li><a class="hover:text-[var(--cyan)] transition" href="#layanan">Mitra Driver</a></li>
+          <li><a class="hover:text-[var(--cyan)] transition" href="#layanan">Layanan PPOB</a></li>
+          <li><a class="hover:text-[var(--cyan)] transition" href="#membership">Membership</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <p class="text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]">Perusahaan</p>
+        <ul class="mt-4 space-y-3 text-sm">
+          <li><a class="hover:text-[var(--cyan)] transition" href="#cerita">Cerita Pengguna</a></li>
+          <li><a class="hover:text-[var(--cyan)] transition" href="#kontak">Kontak</a></li>
+          <li><a class="hover:text-[var(--cyan)] transition" href="/privacy-policy">Kebijakan Privasi</a></li>
+          <li><a class="hover:text-[var(--cyan)] transition" href="/terms-and-conditions">Syarat &amp; Ketentuan</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <p class="text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]">Bantuan</p>
+        <ul class="mt-4 space-y-3 text-sm">
+          <li><a class="hover:text-[var(--cyan)] transition" href="/refund-policy">Pengembalian Dana</a></li>
+          <li><a class="hover:text-[var(--cyan)] transition" href="/hapus-akun">Hapus Akun</a></li>
+          <li><a class="hover:text-[var(--cyan)] transition" href="https://wa.me/6283800255588">WhatsApp</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="mt-14 flex flex-col items-center justify-between gap-5 border-t border-[var(--line)] pt-8 sm:flex-row">
+      <p class="text-xs text-[var(--muted)]">© <span id="year">2026</span> PT. TapGo Lion Indonesia. Seluruh hak cipta dilindungi.</p>
+      <a href="#hero" data-magnetic class="btn-ghost inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-xs font-bold">
+        <i data-lucide="arrow-up" class="h-4 w-4"></i> Kembali ke atas
+      </a>
+    </div>
+  </div>
+</footer>
+
+<!-- Tombol WhatsApp melayang -->
+<a href="https://wa.me/6283800255588" aria-label="Chat WhatsApp"
+   class="fixed bottom-6 right-6 z-40 grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-2xl transition hover:scale-110">
+  <i data-lucide="message-circle" class="h-6 w-6"></i>
+</a>
+
+<!-- ══════════════════ SKRIP ══════════════════ -->
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $  = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+  /* ── Ikon & tahun ──────────────────────────────────────────────────── */
+  if (window.lucide) lucide.createIcons();
+  $('#year').textContent = new Date().getFullYear();
+
+  /* ── Mode terang / gelap ───────────────────────────────────────────── */
+  const root = document.documentElement;
+  const saved = localStorage.getItem('tapgo-theme');
+  if (saved === 'light') root.classList.remove('dark');
+  else if (saved === 'dark') root.classList.add('dark');
+
+  $('#theme-toggle').addEventListener('click', () => {
+    root.classList.toggle('dark');
+    localStorage.setItem('tapgo-theme', root.classList.contains('dark') ? 'dark' : 'light');
+  });
+
+  /* ── Navbar: menyusut saat digulir ─────────────────────────────────── */
+  const navbar = $('#navbar');
+  const onScrollNav = () => {
+    const past = window.scrollY > 24;
+    navbar.classList.toggle('py-0', past);
+    navbar.querySelector('.glass').classList.toggle('shadow-2xl', past);
+    navbar.querySelector('.glass').classList.toggle('mt-1', past);
+    navbar.querySelector('.glass').classList.toggle('mt-3', !past);
+  };
+  onScrollNav();
+  window.addEventListener('scroll', onScrollNav, { passive: true });
+
+  /* ── Bilah kemajuan gulir ──────────────────────────────────────────── */
+  const bar = $('#progress');
+  window.addEventListener('scroll', () => {
+    const max = document.body.scrollHeight - innerHeight;
+    bar.style.width = max > 0 ? (scrollY / max) * 100 + '%' : '0%';
+  }, { passive: true });
+
+  /* ── Menu seluler ──────────────────────────────────────────────────── */
+  const menu = $('#mobile-menu');
+  const menuBtn = $('#menu-toggle');
+  menuBtn.addEventListener('click', () => {
+    const open = menu.classList.toggle('hidden');
+    menuBtn.setAttribute('aria-expanded', String(!open));
+  });
+  $$('.mob-link, #mobile-menu a').forEach((a) =>
+    a.addEventListener('click', () => {
+      menu.classList.add('hidden');
+      menuBtn.setAttribute('aria-expanded', 'false');
+    })
+  );
+
+  /* ── Penanda tautan aktif ──────────────────────────────────────────── */
+  const links = $$('.nav-link');
+  const sections = links
+    .map((l) => document.querySelector(l.getAttribute('href')))
+    .filter(Boolean);
+
+  if ('IntersectionObserver' in window) {
+    const spy = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (!e.isIntersecting) return;
+          links.forEach((l) => {
+            const on = l.getAttribute('href') === '#' + e.target.id;
+            l.classList.toggle('text-[var(--cyan)]', on);
+            l.classList.toggle('bg-[var(--surface-2)]', on);
+          });
+        });
+      },
+      { rootMargin: '-45% 0px -50% 0px' }
+    );
+    sections.forEach((s) => spy.observe(s));
+  }
+
+  /* ── Animasi masuk (GSAP) ──────────────────────────────────────────── */
+  if (window.gsap && !reduced) {
+    gsap.registerPlugin(ScrollTrigger);
+
+    // Teks kinetik pada hero
+    gsap.from('.kinetic', {
+      yPercent: 110, opacity: 0, duration: 1.1, ease: 'power4.out', stagger: 0.12, delay: 0.15,
+    });
+
+    // Reveal bertahap per bagian
+    $$('[data-reveal]').forEach((el) => {
+      gsap.to(el, {
+        opacity: 1, y: 0, duration: 0.9, ease: 'power3.out',
+        scrollTrigger: { trigger: el, start: 'top 88%', once: true },
+      });
+    });
+
+    // Parallax lembut
+    $$('[data-parallax]').forEach((el) => {
+      gsap.to(el, {
+        yPercent: -parseFloat(el.dataset.parallax) * 100,
+        ease: 'none',
+        scrollTrigger: { trigger: el, start: 'top bottom', end: 'bottom top', scrub: 1 },
+      });
+    });
+
+    // Lencana melayang
+    $$('[data-float]').forEach((el) => {
+      gsap.to(el, {
+        y: -14, duration: 2.6, ease: 'sine.inOut', repeat: -1, yoyo: true,
+        delay: parseFloat(el.dataset.floatDelay || 0),
+      });
+    });
+  } else {
+    $$('[data-reveal]').forEach((el) => { el.style.opacity = 1; el.style.transform = 'none'; });
+  }
+
+  /* ── Tombol magnetik ───────────────────────────────────────────────── */
+  if (!reduced && matchMedia('(pointer: fine)').matches) {
+    $$('[data-magnetic]').forEach((el) => {
+      el.addEventListener('mousemove', (e) => {
+        const r = el.getBoundingClientRect();
+        const x = e.clientX - r.left - r.width / 2;
+        const y = e.clientY - r.top - r.height / 2;
+        el.style.transform = `translate(${x * 0.22}px, ${y * 0.3}px)`;
+      });
+      el.addEventListener('mouseleave', () => { el.style.transform = 'translate(0,0)'; });
+    });
+  }
+
+  /* ── Kemiringan 3D + sorotan mengikuti kursor ──────────────────────── */
+  if (!reduced && matchMedia('(pointer: fine)').matches) {
+    $$('[data-tilt]').forEach((el) => {
+      el.addEventListener('mousemove', (e) => {
+        const r = el.getBoundingClientRect();
+        const px = (e.clientX - r.left) / r.width;
+        const py = (e.clientY - r.top) / r.height;
+        el.style.transform = `perspective(1000px) rotateY(${(px - 0.5) * 9}deg) rotateX(${(0.5 - py) * 9}deg) translateY(-6px)`;
+      });
+      el.addEventListener('mouseleave', () => { el.style.transform = ''; });
+    });
+  }
+
+  // Sorotan pada kartu berpendar berlaku juga di layar sentuh (tanpa kemiringan).
+  $$('.card-glow').forEach((el) => {
+    el.addEventListener('mousemove', (e) => {
+      const r = el.getBoundingClientRect();
+      el.style.setProperty('--mx', e.clientX - r.left + 'px');
+      el.style.setProperty('--my', e.clientY - r.top + 'px');
+    });
+  });
+
+  /* ── Penghitung angka ──────────────────────────────────────────────── */
+  const counters = $$('[data-count]');
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((entries, obs) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const el = entry.target;
+        const target = parseFloat(el.dataset.count);
+        const suffix = el.dataset.suffix || '';
+        if (reduced) { el.textContent = target + suffix; obs.unobserve(el); return; }
+
+        const started = performance.now();
+        const dur = 1600;
+        const step = (now) => {
+          const p = Math.min((now - started) / dur, 1);
+          // easeOutExpo agar berhenti terasa mantap, bukan mendadak
+          const eased = p === 1 ? 1 : 1 - Math.pow(2, -10 * p);
+          el.textContent = Math.round(target * eased) + suffix;
+          if (p < 1) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+        obs.unobserve(el);
+      });
+    }, { threshold: 0.4 });
+    counters.forEach((c) => io.observe(c));
+  } else {
+    counters.forEach((c) => { c.textContent = c.dataset.count + (c.dataset.suffix || ''); });
+  }
+
+  /* ── Saringan galeri ───────────────────────────────────────────────── */
+  const items = $$('.gal-item');
+  const setActiveFilter = (btn) => {
+    $$('.filter-btn').forEach((b) => {
+      const on = b === btn;
+      b.setAttribute('aria-pressed', String(on));
+      b.classList.toggle('bg-gradient-to-r', on);
+      b.classList.toggle('from-[var(--cyan)]', on);
+      b.classList.toggle('to-[var(--violet)]', on);
+      b.classList.toggle('text-white', on);
+      b.classList.toggle('border-transparent', on);
+    });
+  };
+  setActiveFilter($('.filter-btn'));
+
+  $$('.filter-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const f = btn.dataset.filter;
+      setActiveFilter(btn);
+      items.forEach((it) => {
+        const show = f === 'all' || it.dataset.cat === f;
+        it.style.display = show ? '' : 'none';
+        if (show && window.gsap && !reduced) {
+          gsap.fromTo(it, { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' });
+        }
+      });
+    });
+  });
+
+  /* ── Modal galeri ──────────────────────────────────────────────────── */
+  const modal = $('#modal');
+  let lastFocused = null;
+
+  const openModal = (item) => {
+    lastFocused = item;
+    $('#modal-img').src = item.dataset.img;
+    $('#modal-img').alt = item.dataset.title;
+    $('#modal-title').textContent = item.dataset.title;
+    $('#modal-desc').textContent = item.dataset.desc;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.body.style.overflow = 'hidden';
+    $('#modal-close').focus();
+    if (window.gsap && !reduced) {
+      gsap.fromTo('#modal-card', { scale: 0.94, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.35, ease: 'power3.out' });
+    }
+  };
+  const closeModal = () => {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.body.style.overflow = '';
+    if (lastFocused) lastFocused.focus();
+  };
+
+  items.forEach((it) => it.addEventListener('click', () => openModal(it)));
+  $('#modal-close').addEventListener('click', closeModal);
+  $('#modal-cta').addEventListener('click', closeModal);
+  modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+  });
+
+  /* ── Korsel testimoni ──────────────────────────────────────────────── */
+  const car = $('#carousel');
+  const slide = () => Math.min(car.clientWidth * 0.9, 440);
+  $('#next').addEventListener('click', () => car.scrollBy({ left: slide(), behavior: 'smooth' }));
+  $('#prev').addEventListener('click', () => car.scrollBy({ left: -slide(), behavior: 'smooth' }));
+
+  /* ── Form kontak ───────────────────────────────────────────────────── */
+  // Belum terhubung ke server. Ganti bagian ini dengan pengiriman sesungguhnya.
+  $('#contact-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const note = $('#form-note');
+    const form = e.currentTarget;
+
+    if (!form.checkValidity()) {
+      note.textContent = 'Mohon lengkapi nama, nomor WhatsApp, dan pesan Anda.';
+      note.classList.remove('hidden');
+      return;
+    }
+    note.textContent = 'Terima kasih. Form ini belum terhubung ke server — sambungkan sebelum situs ditayangkan.';
+    note.classList.remove('hidden');
+  });
+
+  /* ── Jaring pengaman ───────────────────────────────────────────────── */
+  // Kalau GSAP gagal dimuat, ScrollTrigger tidak sempat menyala, atau gambar
+  // menggeser tata letak — konten tetap harus muncul. Animasi adalah hiasan,
+  // bukan syarat keterbacaan.
+  window.addEventListener('load', () => {
+    if (window.ScrollTrigger) ScrollTrigger.refresh();
+    setTimeout(() => {
+      $$('[data-reveal]').forEach((el) => {
+        if (parseFloat(getComputedStyle(el).opacity) < 0.05) {
+          el.style.opacity = 1;
+          el.style.transform = 'none';
+        }
+      });
+    }, 2500);
+  });
+
+  /* ── Gulir mulus untuk tautan dalam halaman ────────────────────────── */
+  $$('a[href^="#"]').forEach((a) => {
+    a.addEventListener('click', (e) => {
+      const id = a.getAttribute('href');
+      if (id.length < 2) return;
+      const el = document.querySelector(id);
+      if (!el) return;
+      e.preventDefault();
+      window.scrollTo({
+        top: el.getBoundingClientRect().top + window.scrollY - 84,
+        behavior: reduced ? 'auto' : 'smooth',
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>
