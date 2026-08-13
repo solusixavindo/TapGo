@@ -9,6 +9,7 @@ import { WalletService } from "../../wallets/application/WalletService.js";
 import { PrismaWalletRepository } from "../../wallets/infrastructure/PrismaWalletRepository.js";
 import { MembershipDocumentService } from "../../memberships/application/MembershipDocumentService.js";
 import { AdminRoleService } from "../application/AdminRoleService.js";
+import { MembershipRefundService } from "../../memberships/application/MembershipRefundService.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
 import { MembershipDocumentController } from "../../memberships/presentation/membership-document.controller.js";
 import {
@@ -47,11 +48,13 @@ const service = new AdminConsoleService(prisma);
 const walletService = new WalletService(new PrismaWalletRepository(prisma));
 const membershipOrderService = new MembershipOrderService(prisma);
 const adminRoleService = new AdminRoleService(prisma);
+const membershipRefundService = new MembershipRefundService(prisma);
 const controller = new AdminConsoleController(
   service,
   walletService,
   membershipOrderService,
-  adminRoleService
+  adminRoleService,
+  membershipRefundService
 );
 const documentController = new MembershipDocumentController(
   new MembershipDocumentService(prisma)
@@ -92,6 +95,11 @@ adminConsoleRouter.post(
   "/member-requests/:id/reject-documents",
   validateRequest(adminMemberRequestActionSchema),
   asyncHandler(controller.rejectMemberRequestDocuments)
+);
+adminConsoleRouter.post(
+  "/member-requests/:id/execute-refund",
+  validateRequest(adminMemberRequestActionSchema),
+  asyncHandler(controller.executeMemberRequestRefund)
 );
 adminConsoleRouter.post(
   "/member-requests/:id/reject",

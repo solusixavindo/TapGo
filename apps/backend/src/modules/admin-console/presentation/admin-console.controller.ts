@@ -3,13 +3,15 @@ import { AdminConsoleService } from "../application/AdminConsoleService.js";
 import { WalletService } from "../../wallets/application/WalletService.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
 import { AdminRoleService } from "../application/AdminRoleService.js";
+import { MembershipRefundService } from "../../memberships/application/MembershipRefundService.js";
 
 export class AdminConsoleController {
   constructor(
     private readonly adminConsoleService: AdminConsoleService,
     private readonly walletService: WalletService,
     private readonly membershipOrderService: MembershipOrderService,
-    private readonly adminRoleService: AdminRoleService
+    private readonly adminRoleService: AdminRoleService,
+    private readonly membershipRefundService: MembershipRefundService
   ) {}
 
   summary = async (_req: Request, res: Response) => {
@@ -157,6 +159,17 @@ export class AdminConsoleController {
       orderId: String(req.params.id),
       adminId: req.auth!.userId,
       ...(typeof req.body.reason === "string" ? { reason: req.body.reason } : {})
+    });
+    res.json({ success: true, data: result });
+  };
+
+  /// Menjalankan pengembalian dana yang sudah diputuskan. Terpisah dari
+  /// penolakan dokumen supaya kegagalan penyedia tidak membatalkan keputusan
+  /// admin, dan supaya percobaannya dapat diulang.
+  executeMemberRequestRefund = async (req: Request, res: Response) => {
+    const result = await this.membershipRefundService.executeRefund({
+      orderId: String(req.params.id),
+      adminId: req.auth!.userId
     });
     res.json({ success: true, data: result });
   };
