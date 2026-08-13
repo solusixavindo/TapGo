@@ -205,6 +205,73 @@ describe.skipIf(!runIntegration)("Membership document storage", () => {
     expect(await documentService.purgeExpired()).toBe(0);
   });
 
+  it("mencatat siapa yang membuka dokumen identitas", async () => {
+    const scenario = await createScenario();
+    await upload(scenario, "ktp", PNG);
+
+    const response = await fetch(
+      `${baseUrl}/api/v1/admin/member-requests/${scenario.orderId}/documents/ktp`,
+      { headers: { authorization: `Bearer ${tokenFor(scenario.admin)}` } }
+    );
+    expect(response.status).toBe(200);
+
+    // Membuka KTP orang lain harus meninggalkan jejak. Tanpa ini, tidak ada
+    // cara membuktikan siapa saja yang pernah melihat identitas seorang pemohon.
+    const audit = await prisma.auditLog.findFirstOrThrow({
+      where: { action: "MEMBERSHIP_DOCUMENT_VIEWED" }
+    });
+    const metadata = audit.metadata as Record<string, unknown>;
+    expect(audit.actorId).toBe(scenario.admin.id);
+    expect(audit.entityType).toBe("MEMBERSHIP_DOCUMENT");
+    expect(metadata.orderId).toBe(scenario.orderId);
+    expect(metadata.targetUserId).toBe(scenario.buyer.id);
+    expect(metadata.documentType).toBe("KTP");
+  });
+
+  it("mencatat setiap pembukaan, bukan hanya yang pertama", async () => {
+    const scenario = await createScenario();
+    await upload(scenario, "ktp", PNG);
+    await upload(scenario, "selfie", JPEG);
+
+    for (const type of ["ktp", "selfie", "ktp"]) {
+      const response = await fetch(
+        `${baseUrl}/api/v1/admin/member-requests/${scenario.orderId}/documents/${type}`,
+        { headers: { authorization: `Bearer ${tokenFor(scenario.admin)}` } }
+      );
+      expect(response.status).toBe(200);
+    }
+
+    expect(
+      await prisma.auditLog.count({ where: { action: "MEMBERSHIP_DOCUMENT_VIEWED" } })
+    ).toBe(3);
+  });
+
+  it("tidak mencatat pembukaan yang gagal", async () => {
+    const scenario = await createScenario();
+    await upload(scenario, "ktp", PNG);
+    await prisma.membershipDocument.updateMany({
+      where: { orderId: scenario.orderId, type: "KTP" },
+      data: { expiresAt: new Date(Date.now() - 1000) }
+    });
+
+    const expired = await fetch(
+      `${baseUrl}/api/v1/admin/member-requests/${scenario.orderId}/documents/ktp`,
+      { headers: { authorization: `Bearer ${tokenFor(scenario.admin)}` } }
+    );
+    expect(expired.status).toBe(410);
+
+    const forbidden = await fetch(
+      `${baseUrl}/api/v1/admin/member-requests/${scenario.orderId}/documents/selfie`,
+      { headers: { authorization: `Bearer ${tokenFor(scenario.buyer)}` } }
+    );
+    expect(forbidden.status).toBe(403);
+
+    // Tidak ada isi dokumen yang keluar, jadi tidak ada yang "dilihat".
+    expect(
+      await prisma.auditLog.count({ where: { action: "MEMBERSHIP_DOCUMENT_VIEWED" } })
+    ).toBe(0);
+  });
+
   it("menolak berkas yang bukan gambar walau content-type-nya mengaku gambar", async () => {
     const scenario = await createScenario();
     const disguised = Buffer.from("%PDF-1.7 ini sebenarnya PDF", "utf8");
