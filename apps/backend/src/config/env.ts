@@ -56,7 +56,12 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().default("http://localhost:3000"),
   MIDTRANS_SERVER_KEY: z.string().optional(),
   MIDTRANS_CLIENT_KEY: z.string().optional(),
-  MIDTRANS_IS_PRODUCTION: z.coerce.boolean().default(false),
+  /// strictEnvBoolean, BUKAN z.coerce.boolean(). Coerce memakai Boolean(value),
+  /// dan string "false" bernilai truthy — sehingga MIDTRANS_IS_PRODUCTION=false
+  /// justru mengarahkan seluruh permintaan ke endpoint PRODUKSI. Persis
+  /// kebalikan dari yang tertulis, pada flag yang menentukan uang sungguhan
+  /// bergerak atau tidak.
+  MIDTRANS_IS_PRODUCTION: strictEnvBoolean(false),
   MIDTRANS_NOTIFICATION_SECRET: z.string().optional(),
   MIDTRANS_SNAP_URL: z.string().url().optional(),
   // Satu flag ini dulu mengendalikan tiga hal sekaligus: visibilitas paket
@@ -83,7 +88,9 @@ const envSchema = z.object({
   DOKU_API_KEY: z.string().optional(),
   DOKU_PUBLIC_KEY: z.string().optional(),
   DOKU_MERCHANT_PUBLIC_KEY: z.string().optional(),
-  DOKU_ENABLED: z.coerce.boolean().default(false),
+  /// Lihat catatan pada MIDTRANS_IS_PRODUCTION: DOKU_ENABLED=false dengan
+  /// z.coerce.boolean() justru MENYALAKAN DOKU.
+  DOKU_ENABLED: strictEnvBoolean(false),
   DOKU_INTEGRATION_MODE: z
     .enum(["checkout", "snap_direct"])
     .default("checkout"),
