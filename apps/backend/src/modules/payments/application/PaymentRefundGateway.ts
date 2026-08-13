@@ -38,15 +38,33 @@ export interface PaymentRefundGateway {
 export const REFUND_PROVIDER_NOT_CONFIGURED = "REFUND_PROVIDER_NOT_CONFIGURED";
 export const REFUND_PROVIDER_REJECTED = "REFUND_PROVIDER_REJECTED";
 
+/** Status yang berarti dana sudah terbalik. Percobaan ulang harus berhasil. */
+const ALREADY_REVERSED = new Set(["refund", "partial_refund", "cancel", "expire"]);
+
+/** Belum settle: Midtrans menuntut cancel, dan menolak refund. */
+const SAME_DAY_CANCEL = new Set(["capture", "pending", "authorize"]);
+
 /**
- * Refund lewat Core API Midtrans: `POST /v2/{order_id}/refund`.
+ * Pembalikan dana lewat Core API Midtrans.
  *
- * Endpoint dan bentuk permintaannya BELUM diverifikasi terhadap sandbox yang
- * hidup — kredensial sandbox belum tersedia saat ini ditulis. Yang sudah
- * terbukti lewat test hanyalah perilaku di sekitarnya: kunci idempotensi
- * dikirim, kegagalan tidak membatalkan keputusan penolakan, dan status hanya
- * berubah setelah penyedia mengonfirmasi. Satu kali uji nyata ke sandbox masih
- * diperlukan sebelum dipakai menerima uang sungguhan.
+ * Midtrans memakai DUA operasi berbeda, dan yang benar ditentukan oleh status
+ * transaksi saat itu — bukan oleh pilihan kita:
+ *
+ *   settlement            -> POST /v2/{order_id}/refund
+ *   capture / pending     -> POST /v2/{order_id}/cancel   (pembatalan hari sama)
+ *
+ * Memakai yang keliru dijawab "Transaction status cannot be updated" dan
+ * uangnya tidak bergerak. Keduanya sudah diverifikasi terhadap sandbox yang
+ * hidup: transaksi kartu berstatus capture berhasil dibalik lewat cancel.
+ *
+ * Status yang sudah final — refund, partial_refund, cancel, expire —
+ * diperlakukan sebagai BERHASIL, bukan galat. Inilah yang membuat percobaan
+ * ulang aman ketika penyedia sudah membalik dana tetapi pencatatan di sisi kita
+ * gagal.
+ *
+ * Catatan hasil uji nyata yang perlu diketahui operasional: bank transfer (VA)
+ * DITOLAK Midtrans untuk refund lewat API, dan refund atas saldo yang sudah
+ * settle menuntut saldo merchant mencukupi.
  */
 export class MidtransRefundGateway implements PaymentRefundGateway {
   readonly provider = "MIDTRANS";
@@ -64,37 +82,41 @@ export class MidtransRefundGateway implements PaymentRefundGateway {
     const host = env.MIDTRANS_IS_PRODUCTION
       ? "https://api.midtrans.com"
       : "https://api.sandbox.midtrans.com";
+    const auth = `Basic ${Buffer.from(`${serverKey}:`).toString("base64")}`;
+    const orderPath = encodeURIComponent(request.invoiceNumber);
 
-    const response = await fetch(
-      `${host}/v2/${encodeURIComponent(request.invoiceNumber)}/refund`,
-      {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          Authorization: `Basic ${Buffer.from(`${serverKey}:`).toString("base64")}`
-        },
-        body: JSON.stringify({
-          refund_key: request.refundKey,
-          amount: Number(request.amount.toFixed(2)),
-          reason: request.reason
-        })
-      }
+    const status = await this.read(`${host}/v2/${orderPath}/status`, auth);
+    const transactionStatus = String(status.transaction_status ?? "");
+
+    // Sudah terbalik sebelumnya: perlakukan sebagai berhasil supaya percobaan
+    // ulang setelah kegagalan pencatatan tidak berubah menjadi galat.
+    if (ALREADY_REVERSED.has(transactionStatus)) {
+      return {
+        provider: this.provider,
+        providerReference: String(status.refund_key ?? status.transaction_id ?? request.refundKey),
+        raw: status
+      };
+    }
+
+    const useCancel = SAME_DAY_CANCEL.has(transactionStatus);
+    const body = await this.write(
+      `${host}/v2/${orderPath}/${useCancel ? "cancel" : "refund"}`,
+      auth,
+      useCancel
+        ? undefined
+        : {
+            refund_key: request.refundKey,
+            amount: Number(request.amount.toFixed(2)),
+            reason: request.reason
+          }
     );
 
-    const body = (await response.json().catch(() => ({}))) as {
-      status_code?: string;
-      status_message?: string;
-      refund_key?: string;
-      transaction_id?: string;
-    };
-
-    // Midtrans menjawab 200 untuk keberhasilan maupun sebagian penolakan, dan
-    // membedakannya lewat status_code. Karena itu keduanya diperiksa.
-    const accepted = response.ok && (body.status_code === "200" || body.status_code === "201");
-    if (!accepted) {
+    if (body.status_code !== "200" && body.status_code !== "201") {
       throw new AppError(
-        body.status_message ?? "Penyedia pembayaran menolak permintaan pengembalian dana.",
+        String(
+          body.status_message ??
+            "Penyedia pembayaran menolak permintaan pengembalian dana."
+        ),
         StatusCodes.BAD_GATEWAY,
         REFUND_PROVIDER_REJECTED
       );
@@ -102,9 +124,31 @@ export class MidtransRefundGateway implements PaymentRefundGateway {
 
     return {
       provider: this.provider,
-      providerReference: body.refund_key ?? body.transaction_id ?? request.refundKey,
+      providerReference: String(
+        body.refund_key ?? body.transaction_id ?? request.refundKey
+      ),
       raw: body
     };
+  }
+
+  private async read(url: string, auth: string) {
+    const response = await fetch(url, {
+      headers: { Accept: "application/json", Authorization: auth }
+    });
+    return (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  }
+
+  private async write(url: string, auth: string, payload?: unknown) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: auth
+      },
+      ...(payload === undefined ? {} : { body: JSON.stringify(payload) })
+    });
+    return (await response.json().catch(() => ({}))) as Record<string, unknown>;
   }
 }
 
