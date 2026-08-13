@@ -1,875 +1,831 @@
 <!DOCTYPE html>
-<html lang="id" class="scroll-smooth dark">
+<html lang="id" prefix="og: https://ogp.me/ns#">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>TapGo Lion Indonesia — Ojek Online, Driver, PPOB & Membership</title>
-<meta name="description" content="Satu aplikasi untuk perjalanan, penghasilan, dan pembayaran harian. Ojek online, kemitraan driver, layanan PPOB, dan membership TapGo Lion Indonesia." />
-<meta name="theme-color" content="#0A0A0F" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
-<!-- Open Graph -->
+<!-- ═══════════════════════════ SEO ═══════════════════════════ -->
+<title>TapGo Lion Indonesia | Ojek Online, Mitra Driver, PPOB &amp; Membership</title>
+<meta name="description" content="TapGo Lion Indonesia menyatukan ojek online, kemitraan driver, layanan PPOB, dan membership dalam satu aplikasi. Tarif transparan, driver terverifikasi, pembayaran lewat gateway berlisensi." />
+<meta name="keywords" content="ojek online Serang, ojek online Banten, mitra driver, PPOB, agen PPOB, token listrik, membership TapGo, TapGo Lion Indonesia" />
+<meta name="author" content="PT. TapGo Lion Indonesia" />
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+<link rel="canonical" href="https://tapgolion.id/" />
+<meta name="theme-color" content="#0B66E4" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#06182B" media="(prefers-color-scheme: dark)" />
+
 <meta property="og:type" content="website" />
-<meta property="og:title" content="TapGo Lion Indonesia" />
-<meta property="og:description" content="Satu aplikasi untuk perjalanan, penghasilan, dan pembayaran harian." />
-<meta property="og:url" content="https://tapgolion.id" />
+<meta property="og:locale" content="id_ID" />
+<meta property="og:site_name" content="TapGo Lion Indonesia" />
+<meta property="og:title" content="TapGo Lion Indonesia | Ojek Online, Mitra Driver, PPOB &amp; Membership" />
+<meta property="og:description" content="Satu aplikasi untuk perjalanan, penghasilan, dan pembayaran harian. Tarif transparan, driver terverifikasi." />
+<meta property="og:url" content="https://tapgolion.id/" />
+<meta property="og:image" content="https://tapgolion.id/og-image.jpg" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
 
-<!-- Ditandai sebelum render: kelas .js menjadi syarat penyembunyian elemen
-     animasi. Tanpa JavaScript, seluruh konten tetap terlihat. -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="TapGo Lion Indonesia" />
+<meta name="twitter:description" content="Satu aplikasi untuk perjalanan, penghasilan, dan pembayaran harian." />
+<meta name="twitter:image" content="https://tapgolion.id/og-image.jpg" />
+
+<!-- Ditandai sebelum render: konten hanya disembunyikan bila JavaScript hidup. -->
 <script>document.documentElement.classList.add('js');</script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet" />
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
   tailwind.config = {
     darkMode: 'class',
-    theme: {
-      extend: {
-        colors: {
-          obsidian: { DEFAULT: '#0A0A0F', 800: '#12121B', 700: '#1A1A26' },
-          cyan:  { neon: '#22D3EE' },
-          violet:{ electric: '#A855F7' },
-        },
-        fontFamily: {
-          sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
-          display: ['Sora', 'system-ui', 'sans-serif'],
-        },
+    theme: { extend: {
+      fontFamily: {
+        sans: ['Manrope','system-ui','sans-serif'],
+        display: ['Sora','system-ui','sans-serif'],
       },
-    },
+    }},
   };
 </script>
 
 <style>
-  /* ── Tokens ──────────────────────────────────────────────────────────── */
-  :root {
-    --bg: #F6F7FB;      --surface: #FFFFFF;   --surface-2: #FFFFFFCC;
-    --text: #0B0B14;    --muted: #55566B;     --line: #0B0B1416;
-    --cyan: #0891B2;    --violet: #7C3AED;
-    --glow: 0 0 40px -8px rgba(8,145,178,.45);
-  }
-  .dark {
-    --bg: #0A0A0F;      --surface: #12121B;   --surface-2: #FFFFFF0A;
-    --text: #F3F4FB;    --muted: #A0A2BD;     --line: #FFFFFF14;
-    --cyan: #22D3EE;    --violet: #A855F7;
-    --glow: 0 0 48px -6px rgba(34,211,238,.45);
-  }
+/* ══════════════════════════════════════════════════════════════════
+   TOKEN WARNA — diambil dari identitas resmi tapgolion.id
+   biru #0B66E4 · cyan #13B8C8 · hijau #12B981 · navy #08233F
+   ══════════════════════════════════════════════════════════════════ */
+:root{
+  --blue:#0B66E4; --cyan:#13B8C8; --green:#12B981; --navy:#08233F;
+  --bg:#F7FBFC; --bg-alt:#FFFFFF; --surface:#FFFFFF;
+  --text:#102033; --heading:#08233F; --muted:#54687C;
+  --line:rgba(8,35,63,.10); --line-2:rgba(8,35,63,.18);
+  --sh-sm:0 1px 2px rgba(8,35,63,.05),0 4px 14px rgba(8,35,63,.05);
+  --sh-md:0 12px 34px rgba(8,35,63,.10);
+  --sh-lg:0 24px 70px rgba(8,35,63,.14);
+  --tint:rgba(11,102,228,.06);
+}
+.dark{
+  --bg:#06182B; --bg-alt:#08202F; --surface:#0B2439;
+  --text:#E6F0F6; --heading:#FFFFFF; --muted:#93A9BB;
+  --line:rgba(255,255,255,.10); --line-2:rgba(255,255,255,.20);
+  --sh-sm:0 1px 2px rgba(0,0,0,.28);
+  --sh-md:0 12px 34px rgba(0,0,0,.34);
+  --sh-lg:0 24px 70px rgba(0,0,0,.44);
+  --tint:rgba(19,184,200,.10);
+}
 
-  /* overflow-x WAJIB di html DAN body. Hanya di body, dokumen (html) tetap
-     menggulir ke samping — di 375px halaman ini meluber 16px sebelum
-     diperbaiki. Dipakai `clip`, bukan `hidden`, karena `hidden` menjadikan
-     html sebagai kontainer gulir dan mematahkan position: sticky. */
-  html { -webkit-text-size-adjust: 100%; overflow-x: clip; }
-  body {
-    background: var(--bg); color: var(--text);
-    font-family: "Plus Jakarta Sans", system-ui, sans-serif;
-    overflow-x: clip;
-    transition: background-color .5s ease, color .5s ease;
-  }
-  ::selection { background: var(--violet); color: #fff; }
+*,*::before,*::after{box-sizing:border-box}
+html{
+  -webkit-text-size-adjust:100%;
+  overflow-x:clip;            /* WAJIB di html DAN body. Hanya di body,
+                                 dokumen tetap menggulir menyamping. */
+  scroll-behavior:smooth; scroll-padding-top:92px;
+}
+body{
+  margin:0; overflow-x:clip;
+  background:var(--bg); color:var(--text);
+  font-family:Manrope,system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px; line-height:1.7;
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+  transition:background-color .35s ease,color .35s ease;
+}
+h1,h2,h3,h4{font-family:Sora,system-ui,sans-serif;color:var(--heading);letter-spacing:-.021em;line-height:1.16;margin:0}
+p,ul,ol{margin:0}
+img{max-width:100%;height:auto;display:block}
+a{color:inherit;text-decoration:none}
+::selection{background:rgba(18,185,129,.22);color:var(--heading)}
+:focus-visible{outline:2px solid var(--blue);outline-offset:3px;border-radius:6px}
 
-  /* ── Mesh gradient background ───────────────────────────────────────── */
-  .mesh { position: fixed; inset: 0; z-index: -2; overflow: hidden; pointer-events: none; }
-  .blob {
-    position: absolute; border-radius: 9999px; filter: blur(90px); opacity: .5;
-    will-change: transform;
-  }
-  .blob-1 { width: 46vw; height: 46vw; background: var(--cyan);   top: -12%; left: -10%; animation: drift1 22s ease-in-out infinite; }
-  .blob-2 { width: 40vw; height: 40vw; background: var(--violet); top: 34%;  right: -12%; animation: drift2 26s ease-in-out infinite; }
-  .blob-3 { width: 34vw; height: 34vw; background: #F472B6;       bottom: -14%; left: 28%; animation: drift3 30s ease-in-out infinite; opacity:.32; }
-  .dark .blob { opacity: .28; }
-  .dark .blob-3 { opacity: .18; }
-  @keyframes drift1 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(6vw,5vh) scale(1.12)} }
-  @keyframes drift2 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(-7vw,-4vh) scale(1.08)} }
-  @keyframes drift3 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(4vw,-6vh) scale(1.15)} }
+/* ── Ritme jarak tunggal, dipakai seluruh bagian ─────────────────── */
+.section{padding-block:clamp(4.5rem,9vw,7.5rem)}
+.section-sm{padding-block:clamp(2.75rem,5vw,4rem)}
+.shell{width:100%;max-width:1180px;margin-inline:auto;padding-inline:clamp(1.25rem,4vw,2rem)}
+.stack-sm > * + *{margin-top:.75rem}
 
-  .grid-overlay {
-    position: fixed; inset: 0; z-index: -1; pointer-events: none;
-    background-image:
-      linear-gradient(to right, var(--line) 1px, transparent 1px),
-      linear-gradient(to bottom, var(--line) 1px, transparent 1px);
-    background-size: 64px 64px;
-    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
-    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
-  }
+/* ── Latar: gradasi halus, bukan blob neon ───────────────────────── */
+.wash{
+  position:absolute;inset:0 0 auto;height:min(780px,90vh);z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(58rem 28rem at 10% -10%,rgba(19,184,200,.17),transparent 62%),
+    radial-gradient(48rem 24rem at 90% -6%,rgba(18,185,129,.15),transparent 62%);
+}
+.dark .wash{
+  background:
+    radial-gradient(58rem 28rem at 10% -10%,rgba(19,184,200,.15),transparent 62%),
+    radial-gradient(48rem 24rem at 90% -6%,rgba(11,102,228,.20),transparent 62%);
+}
+.ruled{
+  position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:56px 56px;
+  mask-image:linear-gradient(to bottom,#000,transparent 72%);
+  -webkit-mask-image:linear-gradient(to bottom,#000,transparent 72%);
+}
 
-  /* ── Glass ───────────────────────────────────────────────────────────── */
-  .glass {
-    background: var(--surface-2);
-    backdrop-filter: blur(18px) saturate(150%);
-    -webkit-backdrop-filter: blur(18px) saturate(150%);
-    border: 1px solid var(--line);
-  }
+/* ── Komponen ────────────────────────────────────────────────────── */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--sh-sm);
+      transition:transform .3s cubic-bezier(.2,.7,.3,1),box-shadow .3s,border-color .3s}
+.card-hover:hover{transform:translateY(-4px);box-shadow:var(--sh-md);border-color:var(--line-2)}
 
-  /* ── Gradient text ───────────────────────────────────────────────────── */
-  .grad-text {
-    background: linear-gradient(100deg, var(--cyan), var(--violet) 55%, var(--cyan));
-    background-size: 220% auto;
-    -webkit-background-clip: text; background-clip: text;
-    -webkit-text-fill-color: transparent; color: transparent;
-    animation: shimmer 6s linear infinite;
-  }
-  @keyframes shimmer { to { background-position: 220% center; } }
+.eyebrow{font-size:.75rem;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--blue)}
+.dark .eyebrow{color:var(--cyan)}
+.h-sec{font-size:clamp(1.85rem,3.6vw,2.75rem);font-weight:800}
+.lede{font-size:17px;line-height:1.85;color:var(--muted)}
 
-  /* ── Buttons ─────────────────────────────────────────────────────────── */
-  .btn-primary {
-    position: relative; isolation: isolate; overflow: hidden;
-    background: linear-gradient(100deg, var(--cyan), var(--violet));
-    color: #fff; box-shadow: var(--glow);
-    transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s;
-  }
-  .btn-primary::after {
-    content: ''; position: absolute; inset: 0; z-index: -1;
-    background: linear-gradient(100deg, var(--violet), var(--cyan));
-    opacity: 0; transition: opacity .35s;
-  }
-  .btn-primary:hover::after { opacity: 1; }
-  .btn-primary:hover { box-shadow: 0 0 60px -6px rgba(168,85,247,.6); }
+.accent{background:linear-gradient(96deg,var(--blue),var(--cyan) 58%,var(--green));
+        -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
 
-  .btn-ghost {
-    border: 1px solid var(--line); color: var(--text);
-    transition: border-color .3s, background-color .3s, transform .25s;
-  }
-  .btn-ghost:hover { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.55rem;font-weight:700;font-size:.94rem;
+     border-radius:12px;padding:.82rem 1.45rem;white-space:nowrap;
+     transition:transform .18s,box-shadow .25s,background-color .25s,border-color .25s,color .25s}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--blue);color:#fff;box-shadow:0 10px 26px rgba(11,102,228,.26)}
+.btn-primary:hover{background:#0956C4;box-shadow:0 14px 32px rgba(11,102,228,.34)}
+.btn-wa{background:var(--green);color:#fff;box-shadow:0 10px 26px rgba(18,185,129,.26)}
+.btn-wa:hover{background:#0EA372;box-shadow:0 14px 32px rgba(18,185,129,.34)}
+.btn-outline{border:1px solid var(--line-2);color:var(--heading)}
+.btn-outline:hover{border-color:var(--blue);color:var(--blue);background:var(--tint)}
 
-  /* ── Glowing border cards ────────────────────────────────────────────── */
-  .card-glow { position: relative; transition: transform .4s cubic-bezier(.2,.8,.2,1); }
-  .card-glow::before {
-    content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 1px;
-    background: radial-gradient(320px circle at var(--mx,50%) var(--my,50%), var(--cyan), transparent 45%);
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor; mask-composite: exclude;
-    opacity: 0; transition: opacity .35s; pointer-events: none;
-  }
-  .card-glow:hover::before { opacity: 1; }
-  .card-glow::after {
-    content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-    background: radial-gradient(340px circle at var(--mx,50%) var(--my,50%), color-mix(in srgb, var(--cyan) 12%, transparent), transparent 45%);
-    opacity: 0; transition: opacity .35s;
-  }
-  .card-glow:hover::after { opacity: 1; }
-  .card-glow:hover { transform: translateY(-6px); }
+.chip{display:inline-flex;align-items:center;gap:.4rem;border:1px solid var(--line);border-radius:999px;
+      padding:.32rem .72rem;font-size:.775rem;font-weight:700;color:var(--muted);background:var(--surface)}
 
-  /* ── Scroll progress ─────────────────────────────────────────────────── */
-  #progress {
-    position: fixed; top: 0; left: 0; height: 3px; width: 0%; z-index: 100;
-    background: linear-gradient(90deg, var(--cyan), var(--violet));
-    box-shadow: 0 0 12px var(--cyan);
-  }
+/* ── <details> asli: aksesibel, bekerja tanpa JS ─────────────────── */
+details > summary{list-style:none;cursor:pointer}
+details > summary::-webkit-details-marker{display:none}
+details[open] .chev{transform:rotate(180deg)}
+.chev{transition:transform .28s}
 
-  /* ── Floating label inputs ───────────────────────────────────────────── */
-  .field { position: relative; }
-  .field input, .field textarea {
-    width: 100%; background: transparent; color: var(--text);
-    border: 1px solid var(--line); border-radius: 14px;
-    padding: 22px 16px 10px; outline: none;
-    transition: border-color .3s, box-shadow .3s;
-  }
-  .field textarea { min-height: 132px; resize: vertical; }
-  .field label {
-    position: absolute; left: 16px; top: 16px; color: var(--muted);
-    font-size: 15px; pointer-events: none;
-    transition: transform .22s cubic-bezier(.2,.8,.2,1), font-size .22s, color .22s;
-    transform-origin: left top;
-  }
-  .field input:focus, .field textarea:focus {
-    border-color: var(--cyan); box-shadow: 0 0 0 4px color-mix(in srgb, var(--cyan) 16%, transparent);
-  }
-  .field input:focus + label,
-  .field input:not(:placeholder-shown) + label,
-  .field textarea:focus + label,
-  .field textarea:not(:placeholder-shown) + label {
-    transform: translateY(-9px) scale(.78); color: var(--cyan);
-  }
+/* ── Isi artikel ─────────────────────────────────────────────────── */
+.prose{max-width:68ch;font-size:15.5px;line-height:1.85;color:var(--muted)}
+.prose > * + *{margin-top:1rem}
+.prose h4{margin-top:1.7rem;margin-bottom:-.25rem;font-size:1.03rem;color:var(--heading)}
+.prose ol{list-style:decimal;padding-left:1.2rem}
+.prose ul{list-style:disc;padding-left:1.2rem}
+.prose li + li{margin-top:.45rem}
+.prose strong{color:var(--heading);font-weight:700}
+.prose a{color:var(--blue);font-weight:600;text-decoration:underline}
 
-  /* ── Marquee ─────────────────────────────────────────────────────────── */
-  .marquee { display: flex; gap: 3rem; width: max-content; animation: slide 32s linear infinite; }
-  @keyframes slide { to { transform: translateX(-50%); } }
-  .marquee-wrap:hover .marquee { animation-play-state: paused; }
+/* ── Reveal & progres ────────────────────────────────────────────── */
+.js [data-reveal]{opacity:0;transform:translateY(18px)}
+#progress{position:fixed;top:0;left:0;height:3px;width:0;z-index:60;
+          background:linear-gradient(90deg,var(--blue),var(--cyan),var(--green))}
 
-  /* ── Reveal ──────────────────────────────────────────────────────────── */
-  .js [data-reveal] { opacity: 0; transform: translateY(28px); }
+/* ── WhatsApp mengambang ─────────────────────────────────────────── */
+.wa-fab{position:fixed;right:clamp(1rem,3vw,1.75rem);bottom:clamp(1rem,3vw,1.75rem);z-index:50;
+        display:inline-flex;align-items:center;gap:.55rem;background:var(--green);color:#fff;
+        border-radius:999px;padding:.8rem 1.05rem;font-weight:700;font-size:.9rem;
+        box-shadow:0 14px 34px rgba(18,185,129,.38);transition:transform .25s,box-shadow .25s}
+.wa-fab:hover{transform:translateY(-3px);box-shadow:0 18px 42px rgba(18,185,129,.48)}
+.wa-fab .lbl{display:none}
+@media (min-width:640px){.wa-fab .lbl{display:inline}}
 
-  /* ── Accessibility: hormati preferensi pengguna ──────────────────────── */
-  @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-      animation-duration: .001ms !important; animation-iteration-count: 1 !important;
-      transition-duration: .001ms !important; scroll-behavior: auto !important;
-    }
-    [data-reveal] { opacity: 1 !important; transform: none !important; }
-  }
-  :focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; border-radius: 6px; }
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+  html{scroll-behavior:auto}
+  .js [data-reveal]{opacity:1!important;transform:none!important}
+}
 </style>
+
+<!-- ═════════════════ DATA TERSTRUKTUR ═════════════════ -->
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+ {"@type":"Organization","@id":"https://tapgolion.id/#org","name":"PT. TapGo Lion Indonesia",
+  "alternateName":"TapGo Lion","url":"https://tapgolion.id/","logo":"https://tapgolion.id/logo.png",
+  "areaServed":{"@type":"AdministrativeArea","name":"Banten, Indonesia"},
+  "contactPoint":[{"@type":"ContactPoint","telephone":"+62-838-0025-5588","contactType":"customer service","availableLanguage":["id"]}]},
+ {"@type":"WebSite","@id":"https://tapgolion.id/#site","url":"https://tapgolion.id/","name":"TapGo Lion Indonesia",
+  "inLanguage":"id-ID","publisher":{"@id":"https://tapgolion.id/#org"}},
+ {"@type":"MobileApplication","name":"TapGo","operatingSystem":"Android","applicationCategory":"TravelApplication",
+  "offers":{"@type":"Offer","price":"0","priceCurrency":"IDR"}},
+ {"@type":"FAQPage","mainEntity":[
+  {"@type":"Question","name":"Apa saja layanan yang tersedia di TapGo?","acceptedAnswer":{"@type":"Answer","text":"Empat layanan: ojek online untuk perjalanan harian, kemitraan driver bagi yang ingin berpenghasilan, layanan PPOB untuk pulsa dan tagihan, serta program membership dengan tiga tingkatan."}},
+  {"@type":"Question","name":"Bagaimana cara menjadi mitra driver TapGo?","acceptedAnswer":{"@type":"Answer","text":"Daftar melalui aplikasi TapGo Driver, lengkapi data diri dan berkas kendaraan, lalu tunggu verifikasi tim kami. Setelah disetujui, akun Anda langsung dapat menerima orderan."}},
+  {"@type":"Question","name":"Apakah tarif diketahui sebelum memesan?","acceptedAnswer":{"@type":"Answer","text":"Ya. Tarif ditampilkan penuh sebelum Anda menekan tombol pesan, sehingga tidak ada biaya tersembunyi di akhir perjalanan."}},
+  {"@type":"Question","name":"Bagaimana cara upgrade membership?","acceptedAnswer":{"@type":"Answer","text":"Melalui situs tapgolion.id. Masuk dengan akun yang sama dengan aplikasi, pilih paket, lengkapi data dan dokumen identitas, lalu selesaikan pembayaran."}},
+  {"@type":"Question","name":"Bagaimana jika dokumen saya tidak lolos verifikasi?","acceptedAnswer":{"@type":"Answer","text":"Pembayaran dikembalikan penuh sesuai kebijakan pengembalian dana. Manfaat membership hanya aktif setelah dokumen berhasil diverifikasi."}},
+  {"@type":"Question","name":"Berapa lama dokumen identitas saya disimpan?","acceptedAnswer":{"@type":"Answer","text":"Disimpan terenkripsi dan otomatis dihapus paling lama 24 jam setelah diunggah. Setiap akses petugas terhadap dokumen tercatat."}}]}
+]}
+</script>
 </head>
 
-<body class="antialiased">
-
-<!-- ══════════════════ LATAR ══════════════════ -->
-<div class="mesh" aria-hidden="true">
-  <div class="blob blob-1"></div>
-  <div class="blob blob-2"></div>
-  <div class="blob blob-3"></div>
-</div>
-<div class="grid-overlay" aria-hidden="true"></div>
+<body>
+<div class="wash" aria-hidden="true"></div>
 <div id="progress" aria-hidden="true"></div>
+<a href="#utama" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[70] focus:rounded-xl focus:bg-[var(--surface)] focus:px-4 focus:py-2 focus:shadow-lg">Lompat ke konten utama</a>
 
-<a href="#hero" class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[110] focus:glass focus:px-4 focus:py-2 focus:rounded-xl">Lompat ke konten</a>
-
-<!-- ══════════════════ NAVBAR ══════════════════ -->
-<header id="navbar" class="fixed top-0 inset-x-0 z-50 transition-all duration-500">
-  <nav class="mx-auto max-w-7xl px-4 sm:px-6">
-    <div class="glass mt-3 flex items-center justify-between rounded-2xl px-4 py-3 sm:px-5">
-
-      <a href="#hero" class="flex items-center gap-3 group">
-        <span class="relative grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-[var(--cyan)] to-[var(--violet)] text-white font-display font-extrabold text-lg shadow-lg">
-          T
-          <span class="absolute inset-0 rounded-xl bg-gradient-to-br from-[var(--cyan)] to-[var(--violet)] blur-md opacity-60 -z-10 group-hover:opacity-90 transition"></span>
-        </span>
-        <span class="leading-tight">
-          <span class="block font-display text-[15px] font-extrabold tracking-tight">TapGo Lion</span>
-          <span class="block text-[10px] uppercase tracking-[0.18em] text-[var(--muted)]">Indonesia</span>
-        </span>
+<!-- ══════════ BAR UTILITAS ══════════ -->
+<div class="hidden border-b border-[var(--line)] bg-[var(--bg-alt)] lg:block">
+  <div class="shell flex h-10 items-center justify-between text-[13px]">
+    <p class="text-[var(--muted)]">Melayani Serang, Cilegon, dan sekitarnya · Setiap hari</p>
+    <div class="flex items-center gap-6">
+      <a href="https://wa.me/6283800255588" class="inline-flex items-center gap-1.5 font-semibold text-[var(--green)] hover:underline">
+        <i data-lucide="message-circle" class="h-4 w-4"></i> +62 838-0025-5588
       </a>
-
-      <ul class="hidden items-center gap-1 lg:flex">
-        <li><a class="nav-link px-4 py-2 text-sm font-semibold rounded-lg hover:text-[var(--cyan)] transition" href="#layanan">Layanan</a></li>
-        <li><a class="nav-link px-4 py-2 text-sm font-semibold rounded-lg hover:text-[var(--cyan)] transition" href="#membership">Membership</a></li>
-        <li><a class="nav-link px-4 py-2 text-sm font-semibold rounded-lg hover:text-[var(--cyan)] transition" href="#showcase">Galeri</a></li>
-        <li><a class="nav-link px-4 py-2 text-sm font-semibold rounded-lg hover:text-[var(--cyan)] transition" href="#angka">Angka</a></li>
-        <li><a class="nav-link px-4 py-2 text-sm font-semibold rounded-lg hover:text-[var(--cyan)] transition" href="#cerita">Cerita</a></li>
-        <li><a class="nav-link px-4 py-2 text-sm font-semibold rounded-lg hover:text-[var(--cyan)] transition" href="#kontak">Kontak</a></li>
-      </ul>
-
-      <div class="flex items-center gap-2">
-        <button id="theme-toggle" aria-label="Ganti mode terang atau gelap"
-                class="grid h-10 w-10 place-items-center rounded-xl border border-[var(--line)] hover:border-[var(--cyan)] transition">
-          <i data-lucide="sun" class="hidden h-[18px] w-[18px] dark:block"></i>
-          <i data-lucide="moon" class="h-[18px] w-[18px] dark:hidden"></i>
-        </button>
-
-        <a href="#kontak" data-magnetic
-           class="btn-primary hidden rounded-xl px-5 py-2.5 text-sm font-bold sm:inline-flex items-center gap-2">
-          Mulai Sekarang <i data-lucide="arrow-right" class="h-4 w-4"></i>
-        </a>
-
-        <button id="menu-toggle" aria-label="Buka menu" aria-expanded="false"
-                class="grid h-10 w-10 place-items-center rounded-xl border border-[var(--line)] lg:hidden">
-          <i data-lucide="menu" class="h-5 w-5"></i>
-        </button>
-      </div>
+      <a href="/upgrade/" class="font-semibold text-[var(--blue)] hover:underline">Upgrade Membership</a>
     </div>
+  </div>
+</div>
 
-    <!-- Menu seluler -->
-    <div id="mobile-menu" class="glass mt-2 hidden overflow-hidden rounded-2xl p-2 lg:hidden">
-      <a class="mob-link block rounded-xl px-4 py-3 text-sm font-semibold hover:bg-[var(--surface-2)]" href="#layanan">Layanan</a>
-      <a class="mob-link block rounded-xl px-4 py-3 text-sm font-semibold hover:bg-[var(--surface-2)]" href="#membership">Membership</a>
-      <a class="mob-link block rounded-xl px-4 py-3 text-sm font-semibold hover:bg-[var(--surface-2)]" href="#showcase">Galeri</a>
-      <a class="mob-link block rounded-xl px-4 py-3 text-sm font-semibold hover:bg-[var(--surface-2)]" href="#angka">Angka</a>
-      <a class="mob-link block rounded-xl px-4 py-3 text-sm font-semibold hover:bg-[var(--surface-2)]" href="#cerita">Cerita</a>
-      <a class="mob-link block rounded-xl px-4 py-3 text-sm font-semibold hover:bg-[var(--surface-2)]" href="#kontak">Kontak</a>
-      <a href="#kontak" class="btn-primary mt-2 block rounded-xl px-4 py-3 text-center text-sm font-bold">Mulai Sekarang</a>
+<!-- ══════════ NAVBAR ══════════ -->
+<header id="nav" class="sticky top-0 z-50 border-b border-transparent bg-[var(--bg)]/85 backdrop-blur-xl transition-all duration-300">
+  <nav class="shell flex h-[66px] items-center justify-between gap-6" aria-label="Navigasi utama">
+    <a href="#utama" class="flex shrink-0 items-center gap-2.5" aria-label="TapGo Lion Indonesia — beranda">
+      <span class="grid h-9 w-9 place-items-center rounded-[10px] bg-gradient-to-br from-[var(--blue)] to-[var(--cyan)] font-display text-base font-extrabold text-white">T</span>
+      <span class="leading-none">
+        <span class="block font-display text-[15px] font-extrabold text-[var(--heading)]">TapGo Lion</span>
+        <span class="mt-1 block text-[10px] font-bold uppercase tracking-[.15em] text-[var(--muted)]">Indonesia</span>
+      </span>
+    </a>
+
+    <ul class="hidden items-center gap-0.5 lg:flex">
+      <li><a class="nav-link rounded-lg px-3.5 py-2 text-[14.5px] font-semibold text-[var(--muted)] transition hover:bg-[var(--tint)] hover:text-[var(--blue)]" href="#layanan">Layanan</a></li>
+      <li><a class="nav-link rounded-lg px-3.5 py-2 text-[14.5px] font-semibold text-[var(--muted)] transition hover:bg-[var(--tint)] hover:text-[var(--blue)]" href="#cara-kerja">Cara Kerja</a></li>
+      <li><a class="nav-link rounded-lg px-3.5 py-2 text-[14.5px] font-semibold text-[var(--muted)] transition hover:bg-[var(--tint)] hover:text-[var(--blue)]" href="#membership">Membership</a></li>
+      <li><a class="nav-link rounded-lg px-3.5 py-2 text-[14.5px] font-semibold text-[var(--muted)] transition hover:bg-[var(--tint)] hover:text-[var(--blue)]" href="#edukasi">Edukasi</a></li>
+      <li><a class="nav-link rounded-lg px-3.5 py-2 text-[14.5px] font-semibold text-[var(--muted)] transition hover:bg-[var(--tint)] hover:text-[var(--blue)]" href="#faq">FAQ</a></li>
+    </ul>
+
+    <div class="flex items-center gap-2">
+      <button id="theme" aria-label="Ganti mode terang atau gelap"
+              class="grid h-10 w-10 place-items-center rounded-xl border border-[var(--line)] text-[var(--muted)] transition hover:border-[var(--blue)] hover:text-[var(--blue)]">
+        <i data-lucide="sun" class="hidden h-[18px] w-[18px] dark:block"></i>
+        <i data-lucide="moon" class="h-[18px] w-[18px] dark:hidden"></i>
+      </button>
+      <a href="https://wa.me/6283800255588?text=Halo%20TapGo%20Lion%2C%20saya%20ingin%20bertanya%20mengenai%20layanan%20TapGo."
+         class="btn btn-wa hidden sm:inline-flex"><i data-lucide="message-circle" class="h-[18px] w-[18px]"></i> Chat WhatsApp</a>
+      <button id="burger" aria-label="Buka menu navigasi" aria-expanded="false" aria-controls="menu"
+              class="grid h-10 w-10 place-items-center rounded-xl border border-[var(--line)] lg:hidden">
+        <i data-lucide="menu" class="h-5 w-5"></i>
+      </button>
     </div>
   </nav>
+
+  <div id="menu" class="hidden border-t border-[var(--line)] bg-[var(--surface)] lg:hidden">
+    <div class="shell space-y-1 py-3">
+      <a class="mob block rounded-xl px-4 py-3 font-semibold" href="#layanan">Layanan</a>
+      <a class="mob block rounded-xl px-4 py-3 font-semibold" href="#cara-kerja">Cara Kerja</a>
+      <a class="mob block rounded-xl px-4 py-3 font-semibold" href="#membership">Membership</a>
+      <a class="mob block rounded-xl px-4 py-3 font-semibold" href="#edukasi">Artikel Edukasi</a>
+      <a class="mob block rounded-xl px-4 py-3 font-semibold" href="#faq">FAQ</a>
+      <a class="mob block rounded-xl px-4 py-3 font-semibold" href="#kontak">Kontak</a>
+      <a href="https://wa.me/6283800255588" class="btn btn-wa mt-2 w-full"><i data-lucide="message-circle" class="h-[18px] w-[18px]"></i> Chat WhatsApp</a>
+    </div>
+  </div>
 </header>
 
-<main>
+<main id="utama">
 
-<!-- ══════════════════ HERO ══════════════════ -->
-<section id="hero" class="relative flex min-h-[100svh] items-center pt-32 pb-20">
-  <div class="mx-auto grid w-full max-w-7xl gap-14 px-4 sm:px-6 lg:grid-cols-[1.05fr_.95fr] lg:items-center">
-
+<!-- ══════════ HERO ══════════ -->
+<section class="relative section" aria-labelledby="h1">
+  <div class="ruled" aria-hidden="true"></div>
+  <div class="shell grid items-center gap-14 lg:grid-cols-[1.06fr_.94fr]">
     <div>
-      <div data-reveal class="glass inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold">
-        <span class="relative flex h-2 w-2">
-          <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--cyan)] opacity-75"></span>
-          <span class="relative inline-flex h-2 w-2 rounded-full bg-[var(--cyan)]"></span>
-        </span>
-        Kini melayani di Banten &amp; sekitarnya
-      </div>
-
-      <h1 class="mt-6 font-display text-[clamp(2.4rem,6.2vw,4.6rem)] font-extrabold leading-[1.05] tracking-tight">
-        <span class="kinetic block">Satu aplikasi.</span>
-        <span class="kinetic grad-text block">Perjalanan, penghasilan,</span>
-        <span class="kinetic block">dan pembayaran harian.</span>
+      <p data-reveal class="chip"><span class="h-1.5 w-1.5 rounded-full bg-[var(--green)]"></span> Beroperasi di Banten &amp; sekitarnya</p>
+      <h1 id="h1" data-reveal class="mt-5 font-display text-[clamp(2.25rem,5.2vw,3.75rem)] font-extrabold">
+        Satu aplikasi untuk perjalanan, penghasilan, dan <span class="accent">pembayaran harian</span>
       </h1>
-
-      <p data-reveal class="mt-6 max-w-xl text-[17px] leading-8 text-[var(--muted)]">
-        TapGo Lion Indonesia menyatukan ojek online, kemitraan driver, layanan PPOB,
-        dan program membership dalam satu ekosistem yang rapi — dibangun untuk
-        keseharian, bukan sekadar sesekali.
+      <p data-reveal class="lede mt-5 max-w-xl">
+        TapGo Lion Indonesia menghubungkan penumpang, mitra driver, dan agen pembayaran
+        dalam satu ekosistem. Tarif diketahui sebelum memesan, identitas driver
+        terverifikasi, dan setiap transaksi tercatat rapi.
       </p>
-
-      <div data-reveal class="mt-9 flex flex-wrap items-center gap-3">
-        <a href="#membership" data-magnetic class="btn-primary inline-flex items-center gap-2 rounded-2xl px-7 py-4 text-[15px] font-bold">
-          Lihat Membership <i data-lucide="sparkles" class="h-[18px] w-[18px]"></i>
+      <div data-reveal class="mt-8 flex flex-wrap gap-3">
+        <a href="https://wa.me/6283800255588?text=Halo%20TapGo%20Lion%2C%20saya%20tertarik%20menggunakan%20layanan%20TapGo." class="btn btn-wa">
+          <i data-lucide="message-circle" class="h-[18px] w-[18px]"></i> Konsultasi via WhatsApp
         </a>
-        <a href="#layanan" data-magnetic class="btn-ghost inline-flex items-center gap-2 rounded-2xl px-7 py-4 text-[15px] font-bold">
-          Jelajahi Layanan <i data-lucide="compass" class="h-[18px] w-[18px]"></i>
-        </a>
+        <a href="#layanan" class="btn btn-outline">Lihat Layanan <i data-lucide="arrow-down" class="h-[18px] w-[18px]"></i></a>
       </div>
-
-      <dl data-reveal class="mt-12 grid max-w-lg grid-cols-3 gap-4">
-        <div><dt class="text-[11px] uppercase tracking-widest text-[var(--muted)]">Layanan</dt><dd class="mt-1 font-display text-2xl font-extrabold">4</dd></div>
-        <div><dt class="text-[11px] uppercase tracking-widest text-[var(--muted)]">Tingkat Member</dt><dd class="mt-1 font-display text-2xl font-extrabold">3</dd></div>
-        <div><dt class="text-[11px] uppercase tracking-widest text-[var(--muted)]">Dukungan</dt><dd class="mt-1 font-display text-2xl font-extrabold">24/7</dd></div>
+      <dl data-reveal class="mt-11 grid max-w-lg grid-cols-3 gap-6 border-t border-[var(--line)] pt-7">
+        <div><dt class="text-[12px] font-bold uppercase tracking-wider text-[var(--muted)]">Layanan</dt><dd class="mt-1 font-display text-[26px] font-extrabold text-[var(--heading)]">4</dd></div>
+        <div><dt class="text-[12px] font-bold uppercase tracking-wider text-[var(--muted)]">Tingkat member</dt><dd class="mt-1 font-display text-[26px] font-extrabold text-[var(--heading)]">3</dd></div>
+        <div><dt class="text-[12px] font-bold uppercase tracking-wider text-[var(--muted)]">Dukungan</dt><dd class="mt-1 font-display text-[26px] font-extrabold text-[var(--heading)]">7 hari</dd></div>
       </dl>
     </div>
 
-    <!-- Visual hero: mockup ponsel interaktif -->
-    <div data-reveal class="relative mx-auto w-full max-w-[420px]" data-parallax="0.12">
-      <div data-tilt class="relative">
-        <div class="absolute -inset-8 rounded-[3rem] bg-gradient-to-tr from-[var(--cyan)] to-[var(--violet)] opacity-25 blur-3xl"></div>
-
-        <div class="glass relative rounded-[2.6rem] p-3 shadow-2xl">
-          <div class="overflow-hidden rounded-[2.1rem] bg-[var(--surface)]">
-            <!-- Bar status -->
-            <div class="flex items-center justify-between px-6 pt-5 text-[11px] font-semibold text-[var(--muted)]">
-              <span>09:41</span>
-              <span class="flex items-center gap-1.5">
-                <i data-lucide="signal" class="h-3.5 w-3.5"></i>
-                <i data-lucide="wifi" class="h-3.5 w-3.5"></i>
-                <i data-lucide="battery-full" class="h-3.5 w-3.5"></i>
-              </span>
+    <div data-reveal class="relative mx-auto w-full max-w-[370px]">
+      <div class="card overflow-hidden !rounded-[26px] p-2.5" style="box-shadow:var(--sh-lg)">
+        <div class="overflow-hidden rounded-[18px] bg-[var(--bg-alt)]">
+          <div class="flex items-center justify-between border-b border-[var(--line)] px-5 py-3">
+            <span class="text-[11px] font-bold text-[var(--muted)]">09:41</span>
+            <span class="flex gap-1.5 text-[var(--muted)]"><i data-lucide="signal" class="h-3.5 w-3.5"></i><i data-lucide="wifi" class="h-3.5 w-3.5"></i><i data-lucide="battery-full" class="h-3.5 w-3.5"></i></span>
+          </div>
+          <div class="p-5">
+            <p class="text-[13px] text-[var(--muted)]">Selamat datang,</p>
+            <p class="font-display text-lg font-extrabold text-[var(--heading)]">Anggota TapGo</p>
+            <div class="mt-4 rounded-2xl bg-gradient-to-br from-[var(--blue)] to-[var(--cyan)] p-4 text-white">
+              <p class="text-[10px] font-bold uppercase tracking-[.16em] opacity-85">Saldo PPOB</p>
+              <p class="mt-1 font-display text-[26px] font-extrabold">Rp 600.000</p>
+              <p class="mt-2 text-[11px] opacity-90">Membership Gold · Aktif</p>
             </div>
-
-            <div class="px-6 pb-7 pt-5">
-              <p class="text-xs text-[var(--muted)]">Selamat pagi,</p>
-              <p class="font-display text-xl font-extrabold">Anggota TapGo</p>
-
-              <div class="mt-5 rounded-2xl bg-gradient-to-br from-[var(--cyan)] to-[var(--violet)] p-4 text-white shadow-lg">
-                <p class="text-[10px] uppercase tracking-[0.18em] opacity-80">Saldo PPOB</p>
-                <p class="mt-1 font-display text-2xl font-extrabold">Rp 600.000</p>
-                <p class="mt-3 text-[11px] opacity-85">Membership Gold · Aktif</p>
+            <div class="mt-4 grid grid-cols-4 gap-2">
+              <div class="rounded-xl border border-[var(--line)] py-2.5 text-center"><i data-lucide="bike" class="mx-auto h-[18px] w-[18px] text-[var(--blue)]"></i><p class="mt-1 text-[10px] font-bold">Ojek</p></div>
+              <div class="rounded-xl border border-[var(--line)] py-2.5 text-center"><i data-lucide="zap" class="mx-auto h-[18px] w-[18px] text-[var(--cyan)]"></i><p class="mt-1 text-[10px] font-bold">Token</p></div>
+              <div class="rounded-xl border border-[var(--line)] py-2.5 text-center"><i data-lucide="smartphone" class="mx-auto h-[18px] w-[18px] text-[var(--green)]"></i><p class="mt-1 text-[10px] font-bold">Pulsa</p></div>
+              <div class="rounded-xl border border-[var(--line)] py-2.5 text-center"><i data-lucide="receipt" class="mx-auto h-[18px] w-[18px] text-[var(--blue)]"></i><p class="mt-1 text-[10px] font-bold">Tagihan</p></div>
+            </div>
+            <div class="mt-4 space-y-2">
+              <div class="flex items-center gap-3 rounded-xl border border-[var(--line)] p-3">
+                <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[rgba(18,185,129,.12)] text-[var(--green)]"><i data-lucide="check" class="h-4 w-4"></i></span>
+                <span><span class="block text-[12px] font-bold text-[var(--heading)]">Token listrik berhasil</span><span class="block text-[11px] text-[var(--muted)]">Rp 100.000 · 10 menit lalu</span></span>
               </div>
-
-              <div class="mt-5 grid grid-cols-4 gap-2 text-center">
-                <div class="rounded-xl border border-[var(--line)] p-2.5"><i data-lucide="bike" class="mx-auto h-5 w-5 text-[var(--cyan)]"></i><p class="mt-1.5 text-[10px] font-semibold">Ojek</p></div>
-                <div class="rounded-xl border border-[var(--line)] p-2.5"><i data-lucide="zap" class="mx-auto h-5 w-5 text-[var(--violet)]"></i><p class="mt-1.5 text-[10px] font-semibold">Token</p></div>
-                <div class="rounded-xl border border-[var(--line)] p-2.5"><i data-lucide="smartphone" class="mx-auto h-5 w-5 text-[var(--cyan)]"></i><p class="mt-1.5 text-[10px] font-semibold">Pulsa</p></div>
-                <div class="rounded-xl border border-[var(--line)] p-2.5"><i data-lucide="receipt" class="mx-auto h-5 w-5 text-[var(--violet)]"></i><p class="mt-1.5 text-[10px] font-semibold">Tagihan</p></div>
-              </div>
-
-              <div class="mt-5 space-y-2">
-                <div class="flex items-center gap-3 rounded-xl border border-[var(--line)] p-3">
-                  <span class="grid h-9 w-9 place-items-center rounded-lg bg-[var(--cyan)]/15 text-[var(--cyan)]"><i data-lucide="check" class="h-4 w-4"></i></span>
-                  <span class="flex-1"><span class="block text-xs font-bold">Token listrik</span><span class="block text-[10px] text-[var(--muted)]">Berhasil · Rp 100.000</span></span>
-                </div>
-                <div class="flex items-center gap-3 rounded-xl border border-[var(--line)] p-3">
-                  <span class="grid h-9 w-9 place-items-center rounded-lg bg-[var(--violet)]/15 text-[var(--violet)]"><i data-lucide="map-pin" class="h-4 w-4"></i></span>
-                  <span class="flex-1"><span class="block text-xs font-bold">Perjalanan selesai</span><span class="block text-[10px] text-[var(--muted)]">Serang → Cilegon</span></span>
-                </div>
+              <div class="flex items-center gap-3 rounded-xl border border-[var(--line)] p-3">
+                <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[rgba(11,102,228,.12)] text-[var(--blue)]"><i data-lucide="map-pin" class="h-4 w-4"></i></span>
+                <span><span class="block text-[12px] font-bold text-[var(--heading)]">Perjalanan selesai</span><span class="block text-[11px] text-[var(--muted)]">Serang → Cilegon</span></span>
               </div>
             </div>
           </div>
-        </div>
-
-        <!-- Lencana melayang -->
-        <div class="glass absolute -left-6 top-24 hidden rounded-2xl px-4 py-3 shadow-xl sm:block" data-float>
-          <p class="text-[10px] uppercase tracking-widest text-[var(--muted)]">Driver aktif</p>
-          <p class="font-display text-lg font-extrabold text-[var(--cyan)]">Online</p>
-        </div>
-        <div class="glass absolute -right-4 bottom-24 hidden rounded-2xl px-4 py-3 shadow-xl sm:block" data-float data-float-delay="1.4">
-          <p class="text-[10px] uppercase tracking-widest text-[var(--muted)]">Verifikasi</p>
-          <p class="font-display text-lg font-extrabold text-[var(--violet)]">Terjamin</p>
         </div>
       </div>
     </div>
   </div>
-
-  <a href="#layanan" class="absolute bottom-7 left-1/2 hidden -translate-x-1/2 flex-col items-center gap-2 text-[var(--muted)] md:flex" aria-label="Gulir ke bawah">
-    <span class="text-[10px] uppercase tracking-[0.22em]">Gulir</span>
-    <span class="grid h-9 w-9 place-items-center rounded-full border border-[var(--line)]">
-      <i data-lucide="chevron-down" class="h-4 w-4 animate-bounce"></i>
-    </span>
-  </a>
 </section>
 
-<!-- ══════════════════ MARQUEE ══════════════════ -->
-<section class="marquee-wrap overflow-hidden border-y border-[var(--line)] py-5" aria-hidden="true">
-  <div class="marquee">
-    <!-- Digandakan dua kali agar gulirannya mulus tanpa jeda -->
-    <div class="flex shrink-0 items-center gap-12 pr-12 text-sm font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
-      <span>Ojek Online</span><span class="text-[var(--cyan)]">◆</span>
-      <span>Mitra Driver</span><span class="text-[var(--violet)]">◆</span>
-      <span>PPOB</span><span class="text-[var(--cyan)]">◆</span>
-      <span>Membership</span><span class="text-[var(--violet)]">◆</span>
-      <span>Pembayaran Aman</span><span class="text-[var(--cyan)]">◆</span>
-    </div>
-    <div class="flex shrink-0 items-center gap-12 pr-12 text-sm font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
-      <span>Ojek Online</span><span class="text-[var(--cyan)]">◆</span>
-      <span>Mitra Driver</span><span class="text-[var(--violet)]">◆</span>
-      <span>PPOB</span><span class="text-[var(--cyan)]">◆</span>
-      <span>Membership</span><span class="text-[var(--violet)]">◆</span>
-      <span>Pembayaran Aman</span><span class="text-[var(--cyan)]">◆</span>
-    </div>
+<!-- ══════════ PITA KEPERCAYAAN ══════════ -->
+<section class="border-y border-[var(--line)] bg-[var(--bg-alt)] section-sm" aria-label="Jaminan layanan">
+  <div class="shell grid gap-7 sm:grid-cols-2 lg:grid-cols-4">
+    <div data-reveal class="flex gap-3.5"><i data-lucide="building-2" class="mt-0.5 h-5 w-5 shrink-0 text-[var(--blue)]"></i>
+      <div><p class="font-bold text-[var(--heading)]">Badan usaha resmi</p><p class="mt-1 text-sm text-[var(--muted)]">PT. TapGo Lion Indonesia</p></div></div>
+    <div data-reveal class="flex gap-3.5"><i data-lucide="credit-card" class="mt-0.5 h-5 w-5 shrink-0 text-[var(--cyan)]"></i>
+      <div><p class="font-bold text-[var(--heading)]">Gateway berlisensi</p><p class="mt-1 text-sm text-[var(--muted)]">Bukan transfer pribadi</p></div></div>
+    <div data-reveal class="flex gap-3.5"><i data-lucide="user-check" class="mt-0.5 h-5 w-5 shrink-0 text-[var(--green)]"></i>
+      <div><p class="font-bold text-[var(--heading)]">Driver terverifikasi</p><p class="mt-1 text-sm text-[var(--muted)]">Diperiksa sebelum aktif</p></div></div>
+    <div data-reveal class="flex gap-3.5"><i data-lucide="lock" class="mt-0.5 h-5 w-5 shrink-0 text-[var(--blue)]"></i>
+      <div><p class="font-bold text-[var(--heading)]">Dokumen terenkripsi</p><p class="mt-1 text-sm text-[var(--muted)]">Dihapus dalam 24 jam</p></div></div>
   </div>
 </section>
 
-<!-- ══════════════════ LAYANAN — BENTO GRID ══════════════════ -->
-<section id="layanan" class="relative py-24 sm:py-32">
-  <div class="mx-auto max-w-7xl px-4 sm:px-6">
-
-    <div class="mx-auto max-w-2xl text-center">
-      <p data-reveal class="text-xs font-bold uppercase tracking-[0.24em] text-[var(--cyan)]">Ekosistem</p>
-      <h2 data-reveal class="mt-3 font-display text-[clamp(2rem,4.4vw,3.2rem)] font-extrabold leading-tight tracking-tight">
-        Empat layanan, <span class="grad-text">satu genggaman</span>
-      </h2>
-      <p data-reveal class="mt-4 text-[var(--muted)] leading-7">
-        Dirancang saling menyambung: penghasilan dari satu layanan bisa langsung
-        dipakai di layanan lainnya.
+<!-- ══════════ LAYANAN ══════════ -->
+<section id="layanan" class="section" aria-labelledby="h-layanan">
+  <div class="shell">
+    <div class="max-w-2xl">
+      <p data-reveal class="eyebrow">Layanan</p>
+      <h2 id="h-layanan" data-reveal class="h-sec mt-3 font-display">Empat layanan yang saling menyambung</h2>
+      <p data-reveal class="lede mt-4">
+        Dirancang agar penghasilan dari satu layanan dapat langsung dipakai di layanan
+        lain — tanpa berpindah aplikasi, tanpa mendaftar ulang.
       </p>
     </div>
 
-    <div class="mt-16 grid gap-5 md:grid-cols-6 lg:grid-cols-12">
-
-      <!-- Ojek Online — kartu besar -->
-      <article data-reveal data-tilt class="card-glow glass group relative col-span-full overflow-hidden rounded-3xl p-8 md:col-span-6 lg:col-span-7 lg:p-10">
-        <div class="relative z-10 max-w-md">
-          <span class="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-[var(--cyan)] to-[var(--violet)] text-white shadow-lg">
-            <i data-lucide="bike" class="h-7 w-7"></i>
-          </span>
-          <h3 class="mt-6 font-display text-2xl font-extrabold">Ojek Online</h3>
-          <p class="mt-3 leading-7 text-[var(--muted)]">
-            Pesan perjalanan dengan tarif yang jelas di muka. Driver terverifikasi,
-            status perjalanan terpantau, dan riwayat tersimpan rapi.
-          </p>
-          <ul class="mt-6 space-y-2.5 text-sm">
-            <li class="flex items-center gap-2.5"><i data-lucide="check-circle-2" class="h-4 w-4 text-[var(--cyan)]"></i> Tarif diketahui sebelum memesan</li>
-            <li class="flex items-center gap-2.5"><i data-lucide="check-circle-2" class="h-4 w-4 text-[var(--cyan)]"></i> Identitas driver terverifikasi</li>
-            <li class="flex items-center gap-2.5"><i data-lucide="check-circle-2" class="h-4 w-4 text-[var(--cyan)]"></i> Riwayat perjalanan lengkap</li>
+    <div class="mt-12 grid gap-6 lg:grid-cols-2">
+      <article data-reveal class="card card-hover overflow-hidden">
+        <img src="https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=1000&q=72"
+             alt="Pengendara sepeda motor melintas di jalan kota" loading="lazy" width="1000" height="480" class="h-48 w-full object-cover" />
+        <div class="p-7">
+          <span class="chip"><i data-lucide="bike" class="h-3.5 w-3.5 text-[var(--blue)]"></i> Ojek Online</span>
+          <h3 class="mt-4 font-display text-[21px] font-extrabold">Perjalanan harian tanpa tebak-tebakan</h3>
+          <p class="mt-3 leading-8 text-[var(--muted)]">Tarif ditampilkan penuh sebelum Anda menekan tombol pesan. Tidak ada biaya yang muncul belakangan, dan setiap perjalanan tersimpan di riwayat.</p>
+          <ul class="mt-5 space-y-2.5 text-[15px]">
+            <li class="flex gap-2.5"><i data-lucide="check" class="mt-1.5 h-4 w-4 shrink-0 text-[var(--green)]"></i> Tarif final diketahui di awal</li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="mt-1.5 h-4 w-4 shrink-0 text-[var(--green)]"></i> Identitas dan kendaraan driver terverifikasi</li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="mt-1.5 h-4 w-4 shrink-0 text-[var(--green)]"></i> Riwayat perjalanan lengkap</li>
           </ul>
         </div>
-        <img src="https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=900&q=70"
-             alt="" aria-hidden="true" loading="lazy"
-             class="pointer-events-none absolute -right-10 -bottom-10 h-64 w-64 rounded-3xl object-cover opacity-15 transition duration-700 group-hover:scale-110 group-hover:opacity-25" />
       </article>
 
-      <!-- Mitra Driver -->
-      <article data-reveal data-tilt class="card-glow glass col-span-full overflow-hidden rounded-3xl p-8 md:col-span-3 lg:col-span-5">
-        <span class="grid h-14 w-14 place-items-center rounded-2xl border border-[var(--line)] text-[var(--violet)]">
-          <i data-lucide="steering-wheel" class="h-7 w-7"></i>
-        </span>
-        <h3 class="mt-6 font-display text-2xl font-extrabold">Mitra Driver</h3>
-        <p class="mt-3 leading-7 text-[var(--muted)]">
-          Jadikan waktu luang sebagai penghasilan. Pendaftaran terpandu, verifikasi
-          berkas jelas, dan penghasilan tercatat transparan.
-        </p>
-        <a href="#kontak" class="mt-6 inline-flex items-center gap-2 text-sm font-bold text-[var(--cyan)] hover:gap-3 transition-all">
-          Daftar jadi mitra <i data-lucide="arrow-right" class="h-4 w-4"></i>
-        </a>
-      </article>
-
-      <!-- PPOB -->
-      <article data-reveal data-tilt class="card-glow glass col-span-full overflow-hidden rounded-3xl p-8 md:col-span-3 lg:col-span-5">
-        <span class="grid h-14 w-14 place-items-center rounded-2xl border border-[var(--line)] text-[var(--cyan)]">
-          <i data-lucide="zap" class="h-7 w-7"></i>
-        </span>
-        <h3 class="mt-6 font-display text-2xl font-extrabold">Layanan PPOB</h3>
-        <p class="mt-3 leading-7 text-[var(--muted)]">
-          Pulsa, paket data, token listrik, dan tagihan bulanan — selesai dari satu
-          layar, dengan bukti transaksi yang tersimpan.
-        </p>
-        <div class="mt-6 flex flex-wrap gap-2">
-          <span class="rounded-full border border-[var(--line)] px-3 py-1 text-xs font-semibold">Pulsa</span>
-          <span class="rounded-full border border-[var(--line)] px-3 py-1 text-xs font-semibold">Token PLN</span>
-          <span class="rounded-full border border-[var(--line)] px-3 py-1 text-xs font-semibold">Paket Data</span>
-          <span class="rounded-full border border-[var(--line)] px-3 py-1 text-xs font-semibold">Tagihan</span>
+      <article data-reveal class="card card-hover overflow-hidden">
+        <img src="https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?auto=format&fit=crop&w=1000&q=72"
+             alt="Pengemudi mengenakan helm bersiap menerima pesanan" loading="lazy" width="1000" height="480" class="h-48 w-full object-cover" />
+        <div class="p-7">
+          <span class="chip"><i data-lucide="briefcase" class="h-3.5 w-3.5 text-[var(--cyan)]"></i> Mitra Driver</span>
+          <h3 class="mt-4 font-display text-[21px] font-extrabold">Waktu luang menjadi penghasilan</h3>
+          <p class="mt-3 leading-8 text-[var(--muted)]">Pendaftaran terpandu langkah demi langkah, syarat berkas yang jelas sejak awal, dan penghasilan yang tercatat transparan setiap harinya.</p>
+          <ul class="mt-5 space-y-2.5 text-[15px]">
+            <li class="flex gap-2.5"><i data-lucide="check" class="mt-1.5 h-4 w-4 shrink-0 text-[var(--green)]"></i> Jam kerja fleksibel</li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="mt-1.5 h-4 w-4 shrink-0 text-[var(--green)]"></i> Status verifikasi dapat dipantau</li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="mt-1.5 h-4 w-4 shrink-0 text-[var(--green)]"></i> Rincian penghasilan per perjalanan</li>
+          </ul>
         </div>
       </article>
 
-      <!-- Keamanan -->
-      <article data-reveal data-tilt class="card-glow glass col-span-full overflow-hidden rounded-3xl p-8 md:col-span-6 lg:col-span-7">
-        <div class="flex flex-wrap items-start gap-6">
-          <span class="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[var(--violet)] to-[var(--cyan)] text-white shadow-lg">
-            <i data-lucide="shield-check" class="h-7 w-7"></i>
-          </span>
-          <div class="min-w-[240px] flex-1">
-            <h3 class="font-display text-2xl font-extrabold">Dibangun dengan disiplin keamanan</h3>
-            <p class="mt-3 leading-7 text-[var(--muted)]">
-              Dokumen identitas disimpan terenkripsi dengan masa simpan terbatas,
-              setiap tindakan admin meninggalkan jejak audit, dan pembayaran diproses
-              lewat payment gateway berlisensi.
-            </p>
-            <div class="mt-6 grid gap-3 sm:grid-cols-3">
-              <div class="rounded-xl border border-[var(--line)] p-3"><p class="text-xs font-bold">Enkripsi dokumen</p><p class="mt-1 text-[11px] text-[var(--muted)]">AES-256-GCM</p></div>
-              <div class="rounded-xl border border-[var(--line)] p-3"><p class="text-xs font-bold">Masa simpan</p><p class="mt-1 text-[11px] text-[var(--muted)]">Maksimal 24 jam</p></div>
-              <div class="rounded-xl border border-[var(--line)] p-3"><p class="text-xs font-bold">Jejak audit</p><p class="mt-1 text-[11px] text-[var(--muted)]">Setiap tindakan</p></div>
-            </div>
+      <article data-reveal class="card card-hover overflow-hidden">
+        <img src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=1000&q=72"
+             alt="Layar ponsel menampilkan proses pembayaran digital" loading="lazy" width="1000" height="480" class="h-48 w-full object-cover" />
+        <div class="p-7">
+          <span class="chip"><i data-lucide="zap" class="h-3.5 w-3.5 text-[var(--green)]"></i> Layanan PPOB</span>
+          <h3 class="mt-4 font-display text-[21px] font-extrabold">Tagihan bulanan selesai dari satu layar</h3>
+          <p class="mt-3 leading-8 text-[var(--muted)]">Pulsa, paket data, token listrik, dan tagihan rutin. Anggota juga dapat melayani transaksi orang lain sebagai agen, lengkap dengan pencatatannya.</p>
+          <div class="mt-5 flex flex-wrap gap-2">
+            <span class="chip">Pulsa</span><span class="chip">Paket Data</span><span class="chip">Token PLN</span><span class="chip">Tagihan Rutin</span>
           </div>
         </div>
       </article>
 
+      <article data-reveal class="card card-hover overflow-hidden">
+        <img src="https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=1000&q=72"
+             alt="Kartu keanggotaan digital ditampilkan di layar ponsel" loading="lazy" width="1000" height="480" class="h-48 w-full object-cover" />
+        <div class="p-7">
+          <span class="chip"><i data-lucide="award" class="h-3.5 w-3.5 text-[var(--blue)]"></i> Membership</span>
+          <h3 class="mt-4 font-display text-[21px] font-extrabold">Keanggotaan dengan manfaat nyata</h3>
+          <p class="mt-3 leading-8 text-[var(--muted)]">Tiga tingkatan dengan saldo PPOB awal, kartu anggota digital, dan akses sebagai agen. Manfaat aktif setelah dokumen identitas diverifikasi.</p>
+          <a href="#membership" class="mt-5 inline-flex items-center gap-2 font-bold text-[var(--blue)] transition-all hover:gap-3">Bandingkan paket <i data-lucide="arrow-right" class="h-4 w-4"></i></a>
+        </div>
+      </article>
     </div>
   </div>
 </section>
 
-<!-- ══════════════════ MEMBERSHIP ══════════════════ -->
-<section id="membership" class="relative py-24 sm:py-32">
-  <div class="mx-auto max-w-7xl px-4 sm:px-6">
+<!-- ══════════ CARA KERJA ══════════ -->
+<section id="cara-kerja" class="border-y border-[var(--line)] bg-[var(--bg-alt)] section" aria-labelledby="h-cara">
+  <div class="shell">
+    <div class="max-w-2xl">
+      <p data-reveal class="eyebrow">Cara Kerja</p>
+      <h2 id="h-cara" data-reveal class="h-sec mt-3 font-display">Mulai dalam tiga langkah</h2>
+    </div>
+    <ol class="mt-12 grid gap-6 md:grid-cols-3">
+      <li data-reveal class="card p-7">
+        <span class="font-display text-[40px] font-extrabold leading-none text-[var(--line-2)]">01</span>
+        <h3 class="mt-3 font-display text-xl font-extrabold">Unduh dan daftar</h3>
+        <p class="mt-3 leading-8 text-[var(--muted)]">Pasang aplikasi TapGo, daftar dengan nomor ponsel aktif, lalu verifikasi lewat kode yang dikirim melalui SMS.</p>
+      </li>
+      <li data-reveal class="card p-7">
+        <span class="font-display text-[40px] font-extrabold leading-none text-[var(--line-2)]">02</span>
+        <h3 class="mt-3 font-display text-xl font-extrabold">Pilih peran Anda</h3>
+        <p class="mt-3 leading-8 text-[var(--muted)]">Sebagai penumpang, mitra driver, atau agen PPOB. Satu akun dapat memakai lebih dari satu layanan.</p>
+      </li>
+      <li data-reveal class="card p-7">
+        <span class="font-display text-[40px] font-extrabold leading-none text-[var(--line-2)]">03</span>
+        <h3 class="mt-3 font-display text-xl font-extrabold">Mulai bertransaksi</h3>
+        <p class="mt-3 leading-8 text-[var(--muted)]">Pesan perjalanan, terima orderan, atau bayar tagihan. Semua tercatat dan dapat ditinjau kapan saja.</p>
+      </li>
+    </ol>
+  </div>
+</section>
 
-    <div class="mx-auto max-w-2xl text-center">
-      <p data-reveal class="text-xs font-bold uppercase tracking-[0.24em] text-[var(--violet)]">Membership</p>
-      <h2 data-reveal class="mt-3 font-display text-[clamp(2rem,4.4vw,3.2rem)] font-extrabold leading-tight tracking-tight">
-        Pilih tingkat yang <span class="grad-text">sesuai langkah Anda</span>
-      </h2>
-      <p data-reveal class="mt-4 text-[var(--muted)] leading-7">
-        Upgrade diproses melalui situs ini. Manfaat aktif setelah dokumen identitas
-        diverifikasi tim kami.
-      </p>
+<!-- ══════════ MEMBERSHIP ══════════ -->
+<section id="membership" class="section" aria-labelledby="h-member">
+  <div class="shell">
+    <div class="max-w-2xl">
+      <p data-reveal class="eyebrow">Membership</p>
+      <h2 id="h-member" data-reveal class="h-sec mt-3 font-display">Pilih tingkat yang sesuai langkah Anda</h2>
+      <p data-reveal class="lede mt-4">Upgrade diproses melalui situs ini. Aplikasi di Google Play hanya menampilkan status paket aktif Anda.</p>
     </div>
 
-    <div class="mt-16 grid gap-6 lg:grid-cols-3">
-
-      <article data-reveal data-tilt class="card-glow glass rounded-3xl p-8">
-        <p class="text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]">Silver</p>
-        <p class="mt-4 font-display text-4xl font-extrabold">Rp 500<span class="text-2xl">rb</span></p>
-        <p class="mt-2 text-sm text-[var(--muted)]">Langkah pertama menjadi anggota</p>
-        <ul class="mt-7 space-y-3 text-sm">
-          <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 shrink-0 text-[var(--cyan)]"></i> Saldo PPOB awal Rp 100.000</li>
-          <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 shrink-0 text-[var(--cyan)]"></i> Kartu anggota digital</li>
-          <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 shrink-0 text-[var(--cyan)]"></i> Akses layanan PPOB sebagai agen</li>
+    <div class="mt-12 grid gap-6 lg:grid-cols-3">
+      <article data-reveal class="card card-hover flex flex-col p-7">
+        <p class="text-[13px] font-extrabold uppercase tracking-[.16em] text-[var(--muted)]">Silver</p>
+        <p class="mt-3 font-display text-[36px] font-extrabold text-[var(--heading)]">Rp&nbsp;500.000</p>
+        <p class="mt-1.5 text-sm text-[var(--muted)]">Langkah pertama menjadi anggota</p>
+        <ul class="mt-6 flex-1 space-y-3 text-[15px]">
+          <li class="flex gap-2.5"><i data-lucide="check" class="mt-1.5 h-4 w-4 shrink-0 text-[var(--green)]"></i> Saldo PPOB awal Rp 100.000</li>
+          <li class="flex gap-2.5"><i data-lucide="check" class="mt-1.5 h-4 w-4 shrink-0 text-[var(--green)]"></i> Kartu anggota digital</li>
+          <li class="flex gap-2.5"><i data-lucide="check" class="mt-1.5 h-4 w-4 shrink-0 text-[var(--green)]"></i> Akses layanan PPOB sebagai agen</li>
         </ul>
-        <a href="#kontak" class="btn-ghost mt-8 block rounded-2xl px-5 py-3.5 text-center text-sm font-bold">Pilih Silver</a>
+        <a href="/upgrade/" class="btn btn-outline mt-7 w-full">Pilih Silver</a>
       </article>
 
-      <article data-reveal data-tilt class="card-glow glass relative rounded-3xl p-8 ring-1 ring-[var(--cyan)]/40 lg:-mt-4 lg:mb-4">
-        <span class="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-[var(--cyan)] to-[var(--violet)] px-4 py-1 text-[10px] font-extrabold uppercase tracking-widest text-white shadow-lg">Paling dipilih</span>
-        <p class="text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]">Gold</p>
-        <p class="mt-4 font-display text-4xl font-extrabold grad-text">Rp 3<span class="text-2xl">jt</span></p>
-        <p class="mt-2 text-sm text-[var(--muted)]">Untuk yang serius bertumbuh</p>
-        <ul class="mt-7 space-y-3 text-sm">
-          <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 shrink-0 text-[var(--cyan)]"></i> Seluruh manfaat Silver</li>
-          <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 shrink-0 text-[var(--cyan)]"></i> Saldo PPOB awal Rp 600.000</li>
-          <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 shrink-0 text-[var(--cyan)]"></i> Prioritas dukungan mitra</li>
+      <article data-reveal class="card card-hover relative flex flex-col p-7" style="border-color:var(--blue);box-shadow:var(--sh-md)">
+        <span class="absolute -top-3 left-7 rounded-full bg-[var(--blue)] px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white">Paling dipilih</span>
+        <p class="text-[13px] font-extrabold uppercase tracking-[.16em] text-[var(--muted)]">Gold</p>
+        <p class="mt-3 font-display text-[36px] font-extrabold text-[var(--heading)]">Rp&nbsp;3.000.000</p>
+        <p class="mt-1.5 text-sm text-[var(--muted)]">Untuk yang serius bertumbuh</p>
+        <ul class="mt-6 flex-1 space-y-3 text-[15px]">
+          <li class="flex gap-2.5"><i data-lucide="check" class="mt-1.5 h-4 w-4 shrink-0 text-[var(--green)]"></i> Seluruh manfaat Silver</li>
+          <li class="flex gap-2.5"><i data-lucide="check" class="mt-1.5 h-4 w-4 shrink-0 text-[var(--green)]"></i> Saldo PPOB awal Rp 600.000</li>
+          <li class="flex gap-2.5"><i data-lucide="check" class="mt-1.5 h-4 w-4 shrink-0 text-[var(--green)]"></i> Prioritas dukungan mitra</li>
         </ul>
-        <a href="#kontak" data-magnetic class="btn-primary mt-8 block rounded-2xl px-5 py-3.5 text-center text-sm font-bold">Pilih Gold</a>
+        <a href="/upgrade/" class="btn btn-primary mt-7 w-full">Pilih Gold</a>
       </article>
 
-      <article data-reveal data-tilt class="card-glow glass rounded-3xl p-8">
-        <p class="text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]">Platinum</p>
-        <p class="mt-4 font-display text-4xl font-extrabold">Rp 5,5<span class="text-2xl">jt</span></p>
-        <p class="mt-2 text-sm text-[var(--muted)]">Manfaat paling lengkap</p>
-        <ul class="mt-7 space-y-3 text-sm">
-          <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 shrink-0 text-[var(--cyan)]"></i> Seluruh manfaat Gold</li>
-          <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 shrink-0 text-[var(--cyan)]"></i> Saldo PPOB awal Rp 1.000.000</li>
-          <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 shrink-0 text-[var(--cyan)]"></i> Pendampingan mitra khusus</li>
+      <article data-reveal class="card card-hover flex flex-col p-7">
+        <p class="text-[13px] font-extrabold uppercase tracking-[.16em] text-[var(--muted)]">Platinum</p>
+        <p class="mt-3 font-display text-[36px] font-extrabold text-[var(--heading)]">Rp&nbsp;5.500.000</p>
+        <p class="mt-1.5 text-sm text-[var(--muted)]">Manfaat paling lengkap</p>
+        <ul class="mt-6 flex-1 space-y-3 text-[15px]">
+          <li class="flex gap-2.5"><i data-lucide="check" class="mt-1.5 h-4 w-4 shrink-0 text-[var(--green)]"></i> Seluruh manfaat Gold</li>
+          <li class="flex gap-2.5"><i data-lucide="check" class="mt-1.5 h-4 w-4 shrink-0 text-[var(--green)]"></i> Saldo PPOB awal Rp 1.000.000</li>
+          <li class="flex gap-2.5"><i data-lucide="check" class="mt-1.5 h-4 w-4 shrink-0 text-[var(--green)]"></i> Pendampingan mitra khusus</li>
         </ul>
-        <a href="#kontak" class="btn-ghost mt-8 block rounded-2xl px-5 py-3.5 text-center text-sm font-bold">Pilih Platinum</a>
+        <a href="/upgrade/" class="btn btn-outline mt-7 w-full">Pilih Platinum</a>
       </article>
     </div>
 
-    <p data-reveal class="mx-auto mt-10 max-w-3xl text-center text-xs leading-6 text-[var(--muted)]">
-      Harga sudah termasuk seluruh biaya. Pembayaran diproses payment gateway berlisensi.
-      Bila dokumen identitas tidak dapat diverifikasi, pembayaran dikembalikan penuh sesuai
-      kebijakan pengembalian dana. Benefit dan program mengikuti syarat serta verifikasi
-      PT. TapGo Lion Indonesia.
+    <p data-reveal class="mt-8 max-w-3xl text-[13px] leading-7 text-[var(--muted)]">
+      Harga sudah termasuk seluruh biaya. Pembayaran diproses payment gateway berlisensi. Bila dokumen
+      identitas tidak dapat diverifikasi, pembayaran dikembalikan penuh sesuai
+      <a href="/refund-policy" class="font-semibold text-[var(--blue)] underline">kebijakan pengembalian dana</a>.
+      Benefit dan program mengikuti syarat serta verifikasi PT. TapGo Lion Indonesia.
     </p>
   </div>
 </section>
 
-<!-- ══════════════════ SHOWCASE — GALERI FILTERABLE ══════════════════ -->
-<section id="showcase" class="relative py-24 sm:py-32">
-  <div class="mx-auto max-w-7xl px-4 sm:px-6">
-
-    <div class="flex flex-wrap items-end justify-between gap-6">
-      <div class="max-w-xl">
-        <p data-reveal class="text-xs font-bold uppercase tracking-[0.24em] text-[var(--cyan)]">Galeri</p>
-        <h2 data-reveal class="mt-3 font-display text-[clamp(2rem,4.4vw,3.2rem)] font-extrabold leading-tight tracking-tight">
-          Ekosistem yang <span class="grad-text">bekerja tiap hari</span>
-        </h2>
-      </div>
-      <div data-reveal class="flex flex-wrap gap-2" role="tablist" aria-label="Saring galeri">
-        <button class="filter-btn rounded-full border border-[var(--line)] px-4 py-2 text-xs font-bold transition" data-filter="all" aria-pressed="true">Semua</button>
-        <button class="filter-btn rounded-full border border-[var(--line)] px-4 py-2 text-xs font-bold transition" data-filter="ojek" aria-pressed="false">Ojek</button>
-        <button class="filter-btn rounded-full border border-[var(--line)] px-4 py-2 text-xs font-bold transition" data-filter="driver" aria-pressed="false">Driver</button>
-        <button class="filter-btn rounded-full border border-[var(--line)] px-4 py-2 text-xs font-bold transition" data-filter="ppob" aria-pressed="false">PPOB</button>
-        <button class="filter-btn rounded-full border border-[var(--line)] px-4 py-2 text-xs font-bold transition" data-filter="member" aria-pressed="false">Member</button>
-      </div>
+<!-- ══════════ ARTIKEL EDUKASI ══════════ -->
+<section id="edukasi" class="border-y border-[var(--line)] bg-[var(--bg-alt)] section" aria-labelledby="h-edukasi">
+  <div class="shell">
+    <div class="max-w-2xl">
+      <p data-reveal class="eyebrow">Pusat Edukasi</p>
+      <h2 id="h-edukasi" data-reveal class="h-sec mt-3 font-display">Panduan lengkap memakai TapGo</h2>
+      <p data-reveal class="lede mt-4">Ditulis untuk dibaca tuntas, bukan sekadar dilewati. Klik judul untuk membuka isi lengkapnya.</p>
     </div>
 
-    <div id="gallery" class="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-      <!-- Gambar Unsplash bersifat placeholder. Ganti dengan foto asli sebelum tayang. -->
-      <button class="gal-item card-glow glass group overflow-hidden rounded-3xl text-left" data-cat="ojek"
-        data-title="Perjalanan Harian" data-desc="Antar-jemput dalam kota dengan tarif yang diketahui di muka dan driver terverifikasi."
-        data-img="https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=1200&q=75">
-        <span class="block h-56 overflow-hidden">
-          <img src="https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=800&q=70" alt="Pengendara motor di jalan kota" loading="lazy"
-               class="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
-        </span>
-        <span class="block p-6">
-          <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--cyan)]">Ojek Online</span>
-          <span class="mt-2 block font-display text-lg font-extrabold">Perjalanan Harian</span>
-        </span>
-      </button>
+    <div class="mt-12 space-y-4">
 
-      <button class="gal-item card-glow glass group overflow-hidden rounded-3xl text-left" data-cat="driver"
-        data-title="Kemitraan Driver" data-desc="Pendaftaran terpandu, verifikasi berkas yang jelas, dan penghasilan yang tercatat transparan."
-        data-img="https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?auto=format&fit=crop&w=1200&q=75">
-        <span class="block h-56 overflow-hidden">
-          <img src="https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?auto=format&fit=crop&w=800&q=70" alt="Pengemudi mengenakan helm" loading="lazy"
-               class="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
-        </span>
-        <span class="block p-6">
-          <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--violet)]">Mitra Driver</span>
-          <span class="mt-2 block font-display text-lg font-extrabold">Kemitraan Driver</span>
-        </span>
-      </button>
-
-      <button class="gal-item card-glow glass group overflow-hidden rounded-3xl text-left" data-cat="ppob"
-        data-title="Token &amp; Tagihan" data-desc="Token listrik, pulsa, paket data, dan tagihan bulanan selesai dari satu layar."
-        data-img="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=1200&q=75">
-        <span class="block h-56 overflow-hidden">
-          <img src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=800&q=70" alt="Transaksi pembayaran digital" loading="lazy"
-               class="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
-        </span>
-        <span class="block p-6">
-          <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--cyan)]">PPOB</span>
-          <span class="mt-2 block font-display text-lg font-extrabold">Token &amp; Tagihan</span>
-        </span>
-      </button>
-
-      <button class="gal-item card-glow glass group overflow-hidden rounded-3xl text-left" data-cat="member"
-        data-title="Kartu Anggota Digital" data-desc="Identitas keanggotaan yang berlaku di seluruh layanan dalam ekosistem TapGo."
-        data-img="https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=1200&q=75">
-        <span class="block h-56 overflow-hidden">
-          <img src="https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=800&q=70" alt="Kartu keanggotaan digital" loading="lazy"
-               class="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
-        </span>
-        <span class="block p-6">
-          <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--violet)]">Membership</span>
-          <span class="mt-2 block font-display text-lg font-extrabold">Kartu Anggota Digital</span>
-        </span>
-      </button>
-
-      <button class="gal-item card-glow glass group overflow-hidden rounded-3xl text-left" data-cat="ppob"
-        data-title="Agen PPOB" data-desc="Anggota dapat melayani transaksi PPOB dan mencatat setiap penjualannya."
-        data-img="https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=1200&q=75">
-        <span class="block h-56 overflow-hidden">
-          <img src="https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=800&q=70" alt="Layanan pelanggan di konter" loading="lazy"
-               class="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
-        </span>
-        <span class="block p-6">
-          <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--cyan)]">PPOB</span>
-          <span class="mt-2 block font-display text-lg font-extrabold">Agen PPOB</span>
-        </span>
-      </button>
-
-      <button class="gal-item card-glow glass group overflow-hidden rounded-3xl text-left" data-cat="ojek"
-        data-title="Jangkauan Kota" data-desc="Melayani rute dalam kota dan antarkota terdekat di wilayah Banten dan sekitarnya."
-        data-img="https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?auto=format&fit=crop&w=1200&q=75">
-        <span class="block h-56 overflow-hidden">
-          <img src="https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?auto=format&fit=crop&w=800&q=70" alt="Jalanan kota dari atas" loading="lazy"
-               class="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
-        </span>
-        <span class="block p-6">
-          <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--cyan)]">Ojek Online</span>
-          <span class="mt-2 block font-display text-lg font-extrabold">Jangkauan Kota</span>
-        </span>
-      </button>
-    </div>
-  </div>
-</section>
-
-<!-- Modal galeri -->
-<div id="modal" class="fixed inset-0 z-[90] hidden items-center justify-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-  <div id="modal-card" class="glass w-full max-w-2xl overflow-hidden rounded-3xl">
-    <img id="modal-img" alt="" class="h-64 w-full object-cover sm:h-80" />
-    <div class="p-7">
-      <h3 id="modal-title" class="font-display text-2xl font-extrabold"></h3>
-      <p id="modal-desc" class="mt-3 leading-7 text-[var(--muted)]"></p>
-      <div class="mt-7 flex flex-wrap gap-3">
-        <a href="#kontak" id="modal-cta" class="btn-primary rounded-2xl px-6 py-3 text-sm font-bold">Hubungi Kami</a>
-        <button id="modal-close" class="btn-ghost rounded-2xl px-6 py-3 text-sm font-bold">Tutup</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════ ANGKA ══════════════════ -->
-<section id="angka" class="relative py-24 sm:py-32">
-  <div class="mx-auto max-w-7xl px-4 sm:px-6">
-    <div class="glass overflow-hidden rounded-[2rem] p-8 sm:p-12">
-      <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
-        <div data-reveal class="text-center">
-          <p class="font-display text-[clamp(2.4rem,5vw,3.6rem)] font-extrabold grad-text" data-count="4" data-suffix="">0</p>
-          <p class="mt-2 text-sm font-semibold">Layanan terintegrasi</p>
-          <p class="mt-1 text-xs text-[var(--muted)]">Ojek, Driver, PPOB, Membership</p>
-        </div>
-        <div data-reveal class="text-center">
-          <p class="font-display text-[clamp(2.4rem,5vw,3.6rem)] font-extrabold grad-text" data-count="3" data-suffix="">0</p>
-          <p class="mt-2 text-sm font-semibold">Tingkat keanggotaan</p>
-          <p class="mt-1 text-xs text-[var(--muted)]">Silver, Gold, Platinum</p>
-        </div>
-        <div data-reveal class="text-center">
-          <p class="font-display text-[clamp(2.4rem,5vw,3.6rem)] font-extrabold grad-text" data-count="24" data-suffix=" jam">0</p>
-          <p class="mt-2 text-sm font-semibold">Masa simpan dokumen</p>
-          <p class="mt-1 text-xs text-[var(--muted)]">Terenkripsi, lalu dihapus</p>
-        </div>
-        <div data-reveal class="text-center">
-          <p class="font-display text-[clamp(2.4rem,5vw,3.6rem)] font-extrabold grad-text" data-count="100" data-suffix="%">0</p>
-          <p class="mt-2 text-sm font-semibold">Pengembalian dana</p>
-          <p class="mt-1 text-xs text-[var(--muted)]">Bila dokumen tidak terverifikasi</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ══════════════════ TESTIMONI ══════════════════ -->
-<!--
-  CATATAN PENTING: seluruh testimoni di bawah ini adalah CONTOH ISI, bukan
-  kutipan pelanggan sungguhan. WAJIB diganti dengan testimoni asli beserta izin
-  dari orangnya sebelum situs ini ditayangkan.
--->
-<section id="cerita" class="relative overflow-hidden py-24 sm:py-32">
-  <div class="mx-auto max-w-7xl px-4 sm:px-6">
-    <div class="mx-auto max-w-2xl text-center">
-      <p data-reveal class="text-xs font-bold uppercase tracking-[0.24em] text-[var(--violet)]">Cerita Pengguna</p>
-      <h2 data-reveal class="mt-3 font-display text-[clamp(2rem,4.4vw,3.2rem)] font-extrabold leading-tight tracking-tight">
-        Suara dari <span class="grad-text">lapangan</span>
-      </h2>
-    </div>
-
-    <div class="relative mt-14">
-      <div id="carousel" class="flex snap-x snap-mandatory gap-5 overflow-x-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <article class="card-glow glass w-[86%] shrink-0 snap-center rounded-3xl p-8 sm:w-[420px]">
-          <div class="flex items-center gap-4">
-            <span class="relative">
-              <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=160&q=70" alt="" class="h-14 w-14 rounded-full object-cover" />
-              <span class="absolute -inset-1 rounded-full bg-gradient-to-tr from-[var(--cyan)] to-[var(--violet)] opacity-70 blur-[6px] -z-10"></span>
-            </span>
-            <div><p class="font-bold">Contoh Nama</p><p class="text-xs text-[var(--muted)]">Mitra Driver · Serang</p></div>
+      <article data-reveal class="card overflow-hidden">
+        <details>
+          <summary class="flex items-start justify-between gap-5 p-6 sm:p-7">
+            <div>
+              <div class="flex flex-wrap items-center gap-2"><span class="chip">Pengenalan</span><span class="text-[13px] text-[var(--muted)]">6 menit baca</span></div>
+              <h3 class="mt-3 font-display text-[19px] font-extrabold sm:text-[21px]">Apa itu TapGo Lion dan bagaimana ekosistemnya bekerja</h3>
+              <p class="mt-2 text-[15px] leading-7 text-[var(--muted)]">Mengapa empat layanan disatukan dalam satu aplikasi, dan apa untungnya bagi Anda.</p>
+            </div>
+            <i data-lucide="chevron-down" class="chev mt-1 h-5 w-5 shrink-0 text-[var(--muted)]"></i>
+          </summary>
+          <div class="prose border-t border-[var(--line)] px-6 pb-7 pt-6 sm:px-7">
+            <p>TapGo Lion Indonesia dibangun dari satu pengamatan sederhana: kebanyakan orang di kota kecil dan menengah memakai aplikasi yang berbeda untuk hal-hal yang sebenarnya saling berkaitan. Satu aplikasi untuk memesan ojek, satu lagi untuk membeli pulsa, satu lagi untuk mengurus penghasilan sampingan. Masing-masing meminta pendaftaran ulang, verifikasi ulang, dan saldo yang terpisah.</p>
+            <p>TapGo menyatukan empat hal itu — perjalanan, kemitraan driver, pembayaran harian, dan keanggotaan — di atas satu akun.</p>
+            <h4>Empat bagian yang saling menyambung</h4>
+            <p><strong>Ojek online</strong> adalah pintu masuk yang paling sering dipakai. Anda memasukkan titik jemput dan tujuan, tarif muncul lebih dulu, lalu Anda memutuskan. Tidak ada perhitungan ulang di akhir perjalanan.</p>
+            <p><strong>Kemitraan driver</strong> adalah sisi sebaliknya. Orang yang punya kendaraan dan waktu luang dapat mendaftar, melewati verifikasi, dan mulai menerima orderan dari penumpang di aplikasi yang sama.</p>
+            <p><strong>Layanan PPOB</strong> menangani kebutuhan yang berulang tiap bulan: pulsa, paket data, token listrik, dan tagihan rutin. Anggota bahkan dapat melayani orang lain sebagai agen.</p>
+            <p><strong>Membership</strong> mengikat ketiganya. Anggota memperoleh saldo PPOB awal, kartu anggota digital, dan akses sebagai agen.</p>
+            <h4>Mengapa disatukan?</h4>
+            <p>Karena uangnya berputar di tempat yang sama. Penghasilan seorang mitra driver dapat langsung dipakai membeli token listrik. Saldo PPOB seorang anggota dapat dipakai melayani tetangga. Tidak perlu memindahkan dana antaraplikasi, dan tidak perlu mendaftar dua kali.</p>
+            <h4>Siapa yang berdiri di belakangnya</h4>
+            <p>Layanan ini dijalankan PT. TapGo Lion Indonesia, badan usaha berbadan hukum di Indonesia. Pembayaran diproses melalui payment gateway berlisensi, bukan transfer ke rekening pribadi.</p>
           </div>
-          <p class="mt-6 leading-7 text-[var(--muted)]">"Contoh testimoni. Ganti bagian ini dengan cerita mitra driver yang sebenarnya, beserta izin tertulis dari yang bersangkutan."</p>
-          <div class="mt-5 flex gap-1 text-[var(--cyan)]" aria-label="5 dari 5">
-            <i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i>
-          </div>
-        </article>
+        </details>
+      </article>
 
-        <article class="card-glow glass w-[86%] shrink-0 snap-center rounded-3xl p-8 sm:w-[420px]">
-          <div class="flex items-center gap-4">
-            <span class="relative">
-              <img src="https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?auto=format&fit=crop&w=160&q=70" alt="" class="h-14 w-14 rounded-full object-cover" />
-              <span class="absolute -inset-1 rounded-full bg-gradient-to-tr from-[var(--violet)] to-[var(--cyan)] opacity-70 blur-[6px] -z-10"></span>
-            </span>
-            <div><p class="font-bold">Contoh Nama</p><p class="text-xs text-[var(--muted)]">Agen PPOB · Cilegon</p></div>
-          </div>
-          <p class="mt-6 leading-7 text-[var(--muted)]">"Contoh testimoni. Ganti dengan pengalaman agen PPOB yang sesungguhnya — sebutkan hal konkret yang mereka rasakan."</p>
-          <div class="mt-5 flex gap-1 text-[var(--cyan)]" aria-label="5 dari 5">
-            <i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i>
-          </div>
-        </article>
-
-        <article class="card-glow glass w-[86%] shrink-0 snap-center rounded-3xl p-8 sm:w-[420px]">
-          <div class="flex items-center gap-4">
-            <span class="relative">
-              <img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=160&q=70" alt="" class="h-14 w-14 rounded-full object-cover" />
-              <span class="absolute -inset-1 rounded-full bg-gradient-to-tr from-[var(--cyan)] to-[var(--violet)] opacity-70 blur-[6px] -z-10"></span>
-            </span>
-            <div><p class="font-bold">Contoh Nama</p><p class="text-xs text-[var(--muted)]">Anggota Gold · Tangerang</p></div>
-          </div>
-          <p class="mt-6 leading-7 text-[var(--muted)]">"Contoh testimoni. Ganti dengan cerita anggota mengenai manfaat yang benar-benar mereka pakai."</p>
-          <div class="mt-5 flex gap-1 text-[var(--cyan)]" aria-label="5 dari 5">
-            <i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i>
-          </div>
-        </article>
-
-        <article class="card-glow glass w-[86%] shrink-0 snap-center rounded-3xl p-8 sm:w-[420px]">
-          <div class="flex items-center gap-4">
-            <span class="relative">
-              <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=160&q=70" alt="" class="h-14 w-14 rounded-full object-cover" />
-              <span class="absolute -inset-1 rounded-full bg-gradient-to-tr from-[var(--violet)] to-[var(--cyan)] opacity-70 blur-[6px] -z-10"></span>
-            </span>
-            <div><p class="font-bold">Contoh Nama</p><p class="text-xs text-[var(--muted)]">Penumpang · Serang</p></div>
-          </div>
-          <p class="mt-6 leading-7 text-[var(--muted)]">"Contoh testimoni. Ganti dengan komentar penumpang mengenai perjalanan mereka."</p>
-          <div class="mt-5 flex gap-1 text-[var(--cyan)]" aria-label="5 dari 5">
-            <i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i><i data-lucide="star" class="h-4 w-4 fill-current"></i>
-          </div>
-        </article>
-      </div>
-
-      <div class="mt-6 flex justify-center gap-3">
-        <button id="prev" aria-label="Sebelumnya" class="btn-ghost grid h-11 w-11 place-items-center rounded-full"><i data-lucide="arrow-left" class="h-4 w-4"></i></button>
-        <button id="next" aria-label="Berikutnya" class="btn-ghost grid h-11 w-11 place-items-center rounded-full"><i data-lucide="arrow-right" class="h-4 w-4"></i></button>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ══════════════════ KONTAK ══════════════════ -->
-<section id="kontak" class="relative py-24 sm:py-32">
-  <div class="mx-auto max-w-7xl px-4 sm:px-6">
-    <div class="glass overflow-hidden rounded-[2rem]">
-      <div class="grid lg:grid-cols-2">
-
-        <div class="relative p-8 sm:p-12">
-          <div class="absolute inset-0 bg-gradient-to-br from-[var(--cyan)]/12 to-[var(--violet)]/12"></div>
-          <div class="relative">
-            <p class="text-xs font-bold uppercase tracking-[0.24em] text-[var(--cyan)]">Hubungi Kami</p>
-            <h2 class="mt-3 font-display text-[clamp(1.9rem,3.6vw,2.8rem)] font-extrabold leading-tight tracking-tight">
-              Siap bergabung dengan <span class="grad-text">TapGo Lion?</span>
-            </h2>
-            <p class="mt-4 leading-7 text-[var(--muted)]">
-              Tim kami membantu Anda memilih layanan yang tepat — sebagai penumpang,
-              mitra driver, agen PPOB, atau anggota.
-            </p>
-
-            <ul class="mt-9 space-y-4 text-sm">
-              <li class="flex items-center gap-4">
-                <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--line)] text-[var(--cyan)]"><i data-lucide="message-circle" class="h-5 w-5"></i></span>
-                <span><span class="block text-xs text-[var(--muted)]">WhatsApp</span><a class="font-bold hover:text-[var(--cyan)] transition" href="https://wa.me/6283800255588">+62 838-0025-5588</a></span>
-              </li>
-              <li class="flex items-center gap-4">
-                <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--line)] text-[var(--violet)]"><i data-lucide="globe" class="h-5 w-5"></i></span>
-                <span><span class="block text-xs text-[var(--muted)]">Situs</span><span class="font-bold">tapgolion.id</span></span>
-              </li>
-              <li class="flex items-center gap-4">
-                <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--line)] text-[var(--cyan)]"><i data-lucide="building-2" class="h-5 w-5"></i></span>
-                <span><span class="block text-xs text-[var(--muted)]">Badan Usaha</span><span class="font-bold">PT. TapGo Lion Indonesia</span></span>
-              </li>
+      <article data-reveal class="card overflow-hidden">
+        <details>
+          <summary class="flex items-start justify-between gap-5 p-6 sm:p-7">
+            <div>
+              <div class="flex flex-wrap items-center gap-2"><span class="chip">Panduan Penumpang</span><span class="text-[13px] text-[var(--muted)]">5 menit baca</span></div>
+              <h3 class="mt-3 font-display text-[19px] font-extrabold sm:text-[21px]">Cara memesan ojek online di aplikasi TapGo, langkah demi langkah</h3>
+              <p class="mt-2 text-[15px] leading-7 text-[var(--muted)]">Dari membuka aplikasi sampai perjalanan selesai, termasuk cara membaca tarif.</p>
+            </div>
+            <i data-lucide="chevron-down" class="chev mt-1 h-5 w-5 shrink-0 text-[var(--muted)]"></i>
+          </summary>
+          <div class="prose border-t border-[var(--line)] px-6 pb-7 pt-6 sm:px-7">
+            <p>Memesan perjalanan di TapGo dirancang selesai dalam waktu kurang dari satu menit. Berikut urutannya.</p>
+            <h4>Langkah pemesanan</h4>
+            <ol>
+              <li><strong>Buka aplikasi dan pastikan lokasi aktif.</strong> Titik jemput terisi otomatis dari lokasi Anda, dan tetap dapat digeser bila kurang tepat.</li>
+              <li><strong>Masukkan tujuan.</strong> Ketik nama tempat atau alamat. Semakin lengkap alamatnya, semakin akurat perkiraan tarifnya.</li>
+              <li><strong>Periksa tarif yang muncul.</strong> Angka yang ditampilkan adalah tarif final. Bila Anda setuju, lanjutkan.</li>
+              <li><strong>Tekan pesan dan tunggu driver.</strong> Aplikasi mencarikan driver terdekat yang sedang tersedia.</li>
+              <li><strong>Cocokkan identitas sebelum naik.</strong> Nama, foto, dan nomor kendaraan ditampilkan di aplikasi. Pastikan cocok dengan yang datang.</li>
+            </ol>
+            <h4>Membaca tarif dengan benar</h4>
+            <p>Tarif dihitung dari jarak tempuh dan dikunci sebelum perjalanan dimulai. Karena itu, kemacetan di tengah jalan tidak menambah biaya Anda.</p>
+            <h4>Bila terjadi kendala</h4>
+            <p>Setiap perjalanan tersimpan di menu riwayat, lengkap dengan waktu, rute, dan nominalnya. Bila ada yang perlu ditanyakan, sebutkan nomor perjalanan tersebut saat menghubungi kami — penanganannya akan jauh lebih cepat.</p>
+            <h4>Tips singkat</h4>
+            <ul>
+              <li>Tunggu di titik yang mudah dijangkau kendaraan, bukan di dalam gang sempit.</li>
+              <li>Simpan alamat rumah dan kantor agar tidak perlu mengetik ulang.</li>
+              <li>Pastikan baterai ponsel cukup agar driver tetap dapat menghubungi Anda.</li>
             </ul>
-
-            <div class="mt-9 flex gap-3">
-              <a href="#" aria-label="Instagram" class="grid h-11 w-11 place-items-center rounded-xl border border-[var(--line)] transition hover:border-[var(--cyan)] hover:text-[var(--cyan)]"><i data-lucide="instagram" class="h-5 w-5"></i></a>
-              <a href="#" aria-label="Facebook" class="grid h-11 w-11 place-items-center rounded-xl border border-[var(--line)] transition hover:border-[var(--cyan)] hover:text-[var(--cyan)]"><i data-lucide="facebook" class="h-5 w-5"></i></a>
-              <a href="#" aria-label="YouTube" class="grid h-11 w-11 place-items-center rounded-xl border border-[var(--line)] transition hover:border-[var(--cyan)] hover:text-[var(--cyan)]"><i data-lucide="youtube" class="h-5 w-5"></i></a>
-            </div>
           </div>
+        </details>
+      </article>
+
+      <article data-reveal class="card overflow-hidden">
+        <details>
+          <summary class="flex items-start justify-between gap-5 p-6 sm:p-7">
+            <div>
+              <div class="flex flex-wrap items-center gap-2"><span class="chip">Panduan Mitra</span><span class="text-[13px] text-[var(--muted)]">7 menit baca</span></div>
+              <h3 class="mt-3 font-display text-[19px] font-extrabold sm:text-[21px]">Menjadi mitra driver TapGo: syarat, berkas, dan proses verifikasi</h3>
+              <p class="mt-2 text-[15px] leading-7 text-[var(--muted)]">Apa yang perlu disiapkan sebelum mendaftar, dan apa yang terjadi setelahnya.</p>
+            </div>
+            <i data-lucide="chevron-down" class="chev mt-1 h-5 w-5 shrink-0 text-[var(--muted)]"></i>
+          </summary>
+          <div class="prose border-t border-[var(--line)] px-6 pb-7 pt-6 sm:px-7">
+            <p>Menjadi mitra driver berarti Anda menentukan sendiri kapan bekerja. Namun karena Anda akan membawa orang lain, prosesnya memang menuntut pemeriksaan.</p>
+            <h4>Yang perlu disiapkan</h4>
+            <ul>
+              <li>KTP yang masih berlaku dan terbaca jelas.</li>
+              <li>SIM sesuai jenis kendaraan yang akan dipakai.</li>
+              <li>STNK kendaraan yang masih berlaku.</li>
+              <li>Nomor ponsel aktif yang dapat menerima SMS.</li>
+              <li>Rekening bank atas nama Anda sendiri untuk penerimaan penghasilan.</li>
+            </ul>
+            <h4>Alur pendaftaran</h4>
+            <ol>
+              <li><strong>Daftar di aplikasi TapGo Driver.</strong> Isi data diri sesuai KTP — bukan nama panggilan.</li>
+              <li><strong>Lengkapi data kendaraan.</strong> Jenis, merek, dan nomor polisi harus sama persis dengan STNK.</li>
+              <li><strong>Kirim berkas.</strong> Foto di tempat terang, seluruh bagian dokumen masuk dalam bingkai, tidak buram, dan tidak tertutup jari.</li>
+              <li><strong>Tunggu verifikasi.</strong> Tim kami memeriksa kecocokan data. Statusnya dapat dipantau langsung di aplikasi.</li>
+              <li><strong>Mulai menerima orderan.</strong> Begitu disetujui, akun Anda aktif.</li>
+            </ol>
+            <h4>Penyebab pendaftaran tertunda</h4>
+            <p>Yang paling sering: foto dokumen buram, nama di KTP berbeda dengan nama di STNK tanpa keterangan, masa berlaku dokumen sudah lewat, atau nomor polisi salah ketik. Semuanya dapat dihindari dengan memeriksa ulang sebelum mengirim.</p>
+            <h4>Setelah aktif</h4>
+            <p>Penghasilan tercatat per perjalanan dan dapat ditinjau kapan saja. Karena kewenangan driver diperiksa ulang pada setiap operasi, perubahan status akun berlaku seketika — ini menjaga keamanan penumpang sekaligus mitra.</p>
+          </div>
+        </details>
+      </article>
+
+      <article data-reveal class="card overflow-hidden">
+        <details>
+          <summary class="flex items-start justify-between gap-5 p-6 sm:p-7">
+            <div>
+              <div class="flex flex-wrap items-center gap-2"><span class="chip">Panduan PPOB</span><span class="text-[13px] text-[var(--muted)]">5 menit baca</span></div>
+              <h3 class="mt-3 font-display text-[19px] font-extrabold sm:text-[21px]">Transaksi PPOB: pulsa, token listrik, dan tagihan bulanan</h3>
+              <p class="mt-2 text-[15px] leading-7 text-[var(--muted)]">Cara bertransaksi dengan aman, dan cara melayani orang lain sebagai agen.</p>
+            </div>
+            <i data-lucide="chevron-down" class="chev mt-1 h-5 w-5 shrink-0 text-[var(--muted)]"></i>
+          </summary>
+          <div class="prose border-t border-[var(--line)] px-6 pb-7 pt-6 sm:px-7">
+            <p>PPOB adalah singkatan dari Payment Point Online Bank — istilah untuk layanan pembayaran tagihan dan pembelian produk digital lewat satu titik. Di TapGo, layanan ini tersedia bagi semua pengguna, dan anggota dapat memakainya untuk melayani orang lain.</p>
+            <h4>Alur transaksi</h4>
+            <ol>
+              <li><strong>Pilih jenis layanan.</strong> Pulsa, paket data, token listrik, atau tagihan.</li>
+              <li><strong>Masukkan nomor tujuan.</strong> Nomor ponsel untuk pulsa, atau nomor meter untuk token listrik.</li>
+              <li><strong>Periksa nama pelanggan yang muncul.</strong> Untuk token listrik dan tagihan, sistem menampilkan nama pemilik. Cocokkan sebelum melanjutkan — ini pemeriksaan terpenting.</li>
+              <li><strong>Konfirmasi dan bayar.</strong> Nominal beserta biaya layanan ditampilkan sebelum Anda menyetujui.</li>
+              <li><strong>Simpan bukti transaksi.</strong> Setiap transaksi menghasilkan bukti yang tersimpan di riwayat.</li>
+            </ol>
+            <h4>Menjadi agen PPOB</h4>
+            <p>Anggota memperoleh saldo PPOB awal sesuai tingkat keanggotaannya. Saldo ini dapat dipakai melayani transaksi orang lain — tetangga, pelanggan warung, atau rekan kerja. Setiap penjualan tercatat, sehingga Anda dapat menghitung sendiri perputarannya.</p>
+            <h4>Hal yang perlu diperhatikan</h4>
+            <ul>
+              <li>Selalu cocokkan nama pelanggan sebelum menekan bayar. Token yang salah kirim sulit ditarik kembali.</li>
+              <li>Token listrik yang berhasil akan menampilkan nomor token. Catat atau kirim segera kepada pelanggan.</li>
+              <li>Bila transaksi terlihat menggantung, periksa riwayat lebih dulu sebelum mengulang — untuk menghindari pembayaran ganda.</li>
+            </ul>
+          </div>
+        </details>
+      </article>
+
+      <article data-reveal class="card overflow-hidden">
+        <details>
+          <summary class="flex items-start justify-between gap-5 p-6 sm:p-7">
+            <div>
+              <div class="flex flex-wrap items-center gap-2"><span class="chip">Membership</span><span class="text-[13px] text-[var(--muted)]">6 menit baca</span></div>
+              <h3 class="mt-3 font-display text-[19px] font-extrabold sm:text-[21px]">Memahami membership TapGo dan cara melakukan upgrade</h3>
+              <p class="mt-2 text-[15px] leading-7 text-[var(--muted)]">Perbedaan Silver, Gold, dan Platinum, serta lima langkah proses upgrade.</p>
+            </div>
+            <i data-lucide="chevron-down" class="chev mt-1 h-5 w-5 shrink-0 text-[var(--muted)]"></i>
+          </summary>
+          <div class="prose border-t border-[var(--line)] px-6 pb-7 pt-6 sm:px-7">
+            <p>Membership TapGo bukan sekadar lencana. Yang membedakan tiap tingkatan adalah saldo PPOB awal yang Anda terima dan tingkat dukungan yang menyertainya.</p>
+            <h4>Perbandingan singkat</h4>
+            <ul>
+              <li><strong>Silver — Rp 500.000.</strong> Saldo PPOB awal Rp 100.000, kartu anggota digital, dan akses sebagai agen PPOB.</li>
+              <li><strong>Gold — Rp 3.000.000.</strong> Seluruh manfaat Silver, saldo PPOB awal Rp 600.000, dan prioritas dukungan mitra.</li>
+              <li><strong>Platinum — Rp 5.500.000.</strong> Seluruh manfaat Gold, saldo PPOB awal Rp 1.000.000, dan pendampingan mitra khusus.</li>
+            </ul>
+            <h4>Lima langkah upgrade</h4>
+            <ol>
+              <li><strong>Masuk di situs ini.</strong> Gunakan nomor ponsel dan password yang sama dengan aplikasi. Tidak perlu membuat akun baru.</li>
+              <li><strong>Pilih paket.</strong> Paket hanya dapat dinaikkan, tidak dapat diturunkan.</li>
+              <li><strong>Lengkapi data dan dokumen.</strong> Nama sesuai KTP, alamat domisili, foto KTP, dan swafoto memegang KTP.</li>
+              <li><strong>Selesaikan pembayaran.</strong> Diproses melalui payment gateway berlisensi.</li>
+              <li><strong>Tunggu verifikasi.</strong> Manfaat aktif setelah dokumen diperiksa tim kami.</li>
+            </ol>
+            <h4>Mengapa upgrade dilakukan di situs, bukan di aplikasi?</h4>
+            <p>Aplikasi TapGo di Google Play hanya menampilkan status paket aktif Anda. Pembelian dilakukan melalui situs ini agar sesuai dengan ketentuan distribusi aplikasi.</p>
+            <h4>Bila dokumen tidak lolos verifikasi</h4>
+            <p>Pembayaran dikembalikan penuh. Status pengembalian dana dapat Anda pantau di halaman status pengajuan.</p>
+          </div>
+        </details>
+      </article>
+
+      <article data-reveal class="card overflow-hidden">
+        <details>
+          <summary class="flex items-start justify-between gap-5 p-6 sm:p-7">
+            <div>
+              <div class="flex flex-wrap items-center gap-2"><span class="chip">Keamanan</span><span class="text-[13px] text-[var(--muted)]">5 menit baca</span></div>
+              <h3 class="mt-3 font-display text-[19px] font-extrabold sm:text-[21px]">Bagaimana data dan dokumen identitas Anda dilindungi</h3>
+              <p class="mt-2 text-[15px] leading-7 text-[var(--muted)]">Apa yang kami simpan, berapa lama, dan siapa saja yang dapat melihatnya.</p>
+            </div>
+            <i data-lucide="chevron-down" class="chev mt-1 h-5 w-5 shrink-0 text-[var(--muted)]"></i>
+          </summary>
+          <div class="prose border-t border-[var(--line)] px-6 pb-7 pt-6 sm:px-7">
+            <p>Untuk memverifikasi keanggotaan, kami perlu melihat dokumen identitas Anda. Karena itu data paling sensitif yang Anda serahkan, berikut penjelasan apa adanya mengenai perlakuannya.</p>
+            <h4>Disimpan terenkripsi, bukan apa adanya</h4>
+            <p>Foto KTP dan swafoto tidak pernah tersimpan dalam bentuk gambar biasa. Isinya dienkripsi, dan kuncinya disimpan terpisah dari database. Artinya, salinan database saja tidak cukup untuk membuka dokumen Anda.</p>
+            <h4>Dihapus otomatis dalam 24 jam</h4>
+            <p>Dokumen hanya diperlukan selama proses pemeriksaan. Paling lama 24 jam setelah diunggah, isinya dihapus dari sistem. Yang tersisa hanya catatan bahwa dokumen pernah ada dan sudah diperiksa — bukan dokumennya.</p>
+            <h4>Setiap akses tercatat</h4>
+            <p>Ketika petugas membuka dokumen Anda, sistem mencatat siapa yang membuka, dokumen milik siapa, dan kapan. Catatan ini tidak dapat dihapus lewat jalur biasa.</p>
+            <h4>Pembayaran tidak lewat rekening pribadi</h4>
+            <p>Seluruh pembayaran diproses melalui payment gateway berlisensi. Kami tidak pernah meminta transfer ke rekening pribadi siapa pun. Bila ada yang mengaku dari TapGo dan meminta hal tersebut, itu penipuan — mohon laporkan kepada kami.</p>
+            <h4>Hak Anda</h4>
+            <p>Anda dapat meminta penghapusan akun melalui halaman <a href="/hapus-akun">hapus akun</a>. Rincian selengkapnya ada pada <a href="/privacy-policy">Kebijakan Privasi</a>.</p>
+          </div>
+        </details>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ ANGKA ══════════ -->
+<section class="section" aria-labelledby="h-angka">
+  <div class="shell">
+    <h2 id="h-angka" class="sr-only">Ringkasan layanan dalam angka</h2>
+    <div class="card grid gap-9 p-9 sm:grid-cols-2 lg:grid-cols-4 lg:p-11">
+      <div data-reveal>
+        <p class="font-display text-[clamp(2.1rem,4.2vw,2.9rem)] font-extrabold text-[var(--blue)]" data-count="4">0</p>
+        <p class="mt-2 font-bold text-[var(--heading)]">Layanan terintegrasi</p>
+        <p class="mt-1 text-sm text-[var(--muted)]">Ojek, Driver, PPOB, Membership</p>
+      </div>
+      <div data-reveal>
+        <p class="font-display text-[clamp(2.1rem,4.2vw,2.9rem)] font-extrabold text-[var(--cyan)]" data-count="3">0</p>
+        <p class="mt-2 font-bold text-[var(--heading)]">Tingkat keanggotaan</p>
+        <p class="mt-1 text-sm text-[var(--muted)]">Silver, Gold, Platinum</p>
+      </div>
+      <div data-reveal>
+        <p class="font-display text-[clamp(2.1rem,4.2vw,2.9rem)] font-extrabold text-[var(--green)]" data-count="24" data-suffix=" jam">0</p>
+        <p class="mt-2 font-bold text-[var(--heading)]">Masa simpan dokumen</p>
+        <p class="mt-1 text-sm text-[var(--muted)]">Terenkripsi, lalu dihapus</p>
+      </div>
+      <div data-reveal>
+        <p class="font-display text-[clamp(2.1rem,4.2vw,2.9rem)] font-extrabold text-[var(--blue)]" data-count="100" data-suffix="%">0</p>
+        <p class="mt-2 font-bold text-[var(--heading)]">Pengembalian dana</p>
+        <p class="mt-1 text-sm text-[var(--muted)]">Bila dokumen tidak terverifikasi</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ FAQ ══════════ -->
+<section id="faq" class="border-y border-[var(--line)] bg-[var(--bg-alt)] section" aria-labelledby="h-faq">
+  <div class="shell grid gap-12 lg:grid-cols-[.82fr_1.18fr]">
+    <div>
+      <p data-reveal class="eyebrow">Pertanyaan Umum</p>
+      <h2 id="h-faq" data-reveal class="h-sec mt-3 font-display">Yang paling sering ditanyakan</h2>
+      <p data-reveal class="lede mt-4">Tidak menemukan jawabannya? Tim kami membalas pesan WhatsApp setiap hari.</p>
+      <a data-reveal href="https://wa.me/6283800255588" class="btn btn-wa mt-6"><i data-lucide="message-circle" class="h-[18px] w-[18px]"></i> Tanya via WhatsApp</a>
+    </div>
+    <div class="space-y-3">
+      <details data-reveal class="card p-5 sm:p-6">
+        <summary class="flex items-center justify-between gap-4 font-display text-[16.5px] font-bold text-[var(--heading)]">Apa saja layanan yang tersedia di TapGo?<i data-lucide="chevron-down" class="chev h-5 w-5 shrink-0 text-[var(--muted)]"></i></summary>
+        <p class="mt-4 leading-8 text-[var(--muted)]">Empat layanan: ojek online untuk perjalanan harian, kemitraan driver bagi yang ingin berpenghasilan, layanan PPOB untuk pulsa dan tagihan, serta program membership dengan tiga tingkatan.</p>
+      </details>
+      <details data-reveal class="card p-5 sm:p-6">
+        <summary class="flex items-center justify-between gap-4 font-display text-[16.5px] font-bold text-[var(--heading)]">Bagaimana cara menjadi mitra driver TapGo?<i data-lucide="chevron-down" class="chev h-5 w-5 shrink-0 text-[var(--muted)]"></i></summary>
+        <p class="mt-4 leading-8 text-[var(--muted)]">Daftar melalui aplikasi TapGo Driver, lengkapi data diri dan berkas kendaraan, lalu tunggu verifikasi tim kami. Setelah disetujui, akun Anda langsung dapat menerima orderan.</p>
+      </details>
+      <details data-reveal class="card p-5 sm:p-6">
+        <summary class="flex items-center justify-between gap-4 font-display text-[16.5px] font-bold text-[var(--heading)]">Apakah tarif diketahui sebelum memesan?<i data-lucide="chevron-down" class="chev h-5 w-5 shrink-0 text-[var(--muted)]"></i></summary>
+        <p class="mt-4 leading-8 text-[var(--muted)]">Ya. Tarif ditampilkan penuh sebelum Anda menekan tombol pesan, sehingga tidak ada biaya tersembunyi di akhir perjalanan.</p>
+      </details>
+      <details data-reveal class="card p-5 sm:p-6">
+        <summary class="flex items-center justify-between gap-4 font-display text-[16.5px] font-bold text-[var(--heading)]">Bagaimana cara upgrade membership?<i data-lucide="chevron-down" class="chev h-5 w-5 shrink-0 text-[var(--muted)]"></i></summary>
+        <p class="mt-4 leading-8 text-[var(--muted)]">Melalui situs ini. Masuk dengan akun yang sama dengan aplikasi, pilih paket, lengkapi data dan dokumen identitas, lalu selesaikan pembayaran. Aplikasi di Google Play hanya menampilkan status paket aktif Anda.</p>
+      </details>
+      <details data-reveal class="card p-5 sm:p-6">
+        <summary class="flex items-center justify-between gap-4 font-display text-[16.5px] font-bold text-[var(--heading)]">Bagaimana jika dokumen saya tidak lolos verifikasi?<i data-lucide="chevron-down" class="chev h-5 w-5 shrink-0 text-[var(--muted)]"></i></summary>
+        <p class="mt-4 leading-8 text-[var(--muted)]">Pembayaran dikembalikan penuh sesuai kebijakan pengembalian dana. Manfaat membership hanya aktif setelah dokumen berhasil diverifikasi.</p>
+      </details>
+      <details data-reveal class="card p-5 sm:p-6">
+        <summary class="flex items-center justify-between gap-4 font-display text-[16.5px] font-bold text-[var(--heading)]">Berapa lama dokumen identitas saya disimpan?<i data-lucide="chevron-down" class="chev h-5 w-5 shrink-0 text-[var(--muted)]"></i></summary>
+        <p class="mt-4 leading-8 text-[var(--muted)]">Disimpan terenkripsi dan otomatis dihapus paling lama 24 jam setelah diunggah. Setiap akses petugas terhadap dokumen tercatat.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ KONTAK ══════════ -->
+<section id="kontak" class="section" aria-labelledby="h-kontak">
+  <div class="shell">
+    <div class="card overflow-hidden">
+      <div class="grid lg:grid-cols-2">
+        <div class="border-b border-[var(--line)] p-8 sm:p-11 lg:border-b-0 lg:border-r">
+          <p class="eyebrow">Hubungi Kami</p>
+          <h2 id="h-kontak" class="mt-3 font-display text-[clamp(1.65rem,3vw,2.3rem)] font-extrabold">Siap bergabung dengan TapGo Lion?</h2>
+          <p class="mt-4 leading-8 text-[var(--muted)]">Cara tercepat mendapat jawaban adalah lewat WhatsApp. Tim kami membantu Anda memilih layanan yang tepat — sebagai penumpang, mitra driver, agen PPOB, atau anggota.</p>
+          <a href="https://wa.me/6283800255588?text=Halo%20TapGo%20Lion%2C%20saya%20ingin%20berkonsultasi." class="btn btn-wa mt-7 w-full sm:w-auto"><i data-lucide="message-circle" class="h-[18px] w-[18px]"></i> Chat WhatsApp Sekarang</a>
+          <ul class="mt-9 space-y-5 border-t border-[var(--line)] pt-8">
+            <li class="flex items-start gap-4"><i data-lucide="phone" class="mt-1 h-5 w-5 shrink-0 text-[var(--green)]"></i>
+              <div><p class="text-[13px] text-[var(--muted)]">WhatsApp</p><a href="https://wa.me/6283800255588" class="font-bold text-[var(--heading)] hover:text-[var(--green)]">+62 838-0025-5588</a></div></li>
+            <li class="flex items-start gap-4"><i data-lucide="globe" class="mt-1 h-5 w-5 shrink-0 text-[var(--blue)]"></i>
+              <div><p class="text-[13px] text-[var(--muted)]">Situs resmi</p><p class="font-bold text-[var(--heading)]">tapgolion.id</p></div></li>
+            <li class="flex items-start gap-4"><i data-lucide="building-2" class="mt-1 h-5 w-5 shrink-0 text-[var(--cyan)]"></i>
+              <div><p class="text-[13px] text-[var(--muted)]">Badan usaha</p><p class="font-bold text-[var(--heading)]">PT. TapGo Lion Indonesia</p></div></li>
+          </ul>
         </div>
 
-        <div class="p-8 sm:p-12">
-          <!--
-            Form ini belum terhubung ke server. Sambungkan `action` ke endpoint
-            Anda, atau ganti dengan tautan WhatsApp, sebelum ditayangkan.
-          -->
-          <form id="contact-form" class="space-y-5" novalidate>
-            <div class="field">
-              <input id="nama" name="nama" type="text" placeholder=" " required autocomplete="name" />
-              <label for="nama">Nama lengkap</label>
+        <div class="p-8 sm:p-11">
+          <!-- Form belum tersambung ke server. Hubungkan ke endpoint Anda atau
+               ganti dengan tautan WhatsApp sebelum situs ditayangkan. -->
+          <form id="form" class="space-y-5" novalidate>
+            <div>
+              <label for="nama" class="mb-2 block text-[13px] font-bold text-[var(--heading)]">Nama lengkap</label>
+              <input id="nama" name="nama" type="text" required autocomplete="name" placeholder="Nama sesuai identitas"
+                     class="w-full rounded-xl border border-[var(--line)] bg-transparent px-4 py-3 text-[15px] text-[var(--text)] outline-none transition focus:border-[var(--blue)]" />
             </div>
-            <div class="field">
-              <input id="wa" name="wa" type="tel" placeholder=" " required inputmode="tel" autocomplete="tel" />
-              <label for="wa">Nomor WhatsApp</label>
+            <div>
+              <label for="wa" class="mb-2 block text-[13px] font-bold text-[var(--heading)]">Nomor WhatsApp</label>
+              <input id="wa" name="wa" type="tel" required inputmode="tel" autocomplete="tel" placeholder="08xxxxxxxxxx"
+                     class="w-full rounded-xl border border-[var(--line)] bg-transparent px-4 py-3 text-[15px] text-[var(--text)] outline-none transition focus:border-[var(--blue)]" />
             </div>
-            <div class="field">
-              <input id="email" name="email" type="email" placeholder=" " autocomplete="email" />
-              <label for="email">Email (opsional)</label>
+            <div>
+              <label for="minat" class="mb-2 block text-[13px] font-bold text-[var(--heading)]">Saya tertarik sebagai</label>
+              <select id="minat" name="minat" class="w-full rounded-xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-[15px] text-[var(--text)] outline-none transition focus:border-[var(--blue)]">
+                <option>Penumpang</option><option>Mitra driver</option><option>Agen PPOB</option><option>Anggota membership</option>
+              </select>
             </div>
-            <div class="field">
-              <textarea id="pesan" name="pesan" placeholder=" " required></textarea>
-              <label for="pesan">Ceritakan kebutuhan Anda</label>
+            <div>
+              <label for="pesan" class="mb-2 block text-[13px] font-bold text-[var(--heading)]">Pesan</label>
+              <textarea id="pesan" name="pesan" required rows="4" placeholder="Ceritakan kebutuhan Anda"
+                        class="w-full resize-y rounded-xl border border-[var(--line)] bg-transparent px-4 py-3 text-[15px] text-[var(--text)] outline-none transition focus:border-[var(--blue)]"></textarea>
             </div>
-
-            <button type="submit" data-magnetic class="btn-primary flex w-full items-center justify-center gap-2 rounded-2xl px-6 py-4 text-[15px] font-bold">
-              Kirim Pesan <i data-lucide="send" class="h-[18px] w-[18px]"></i>
-            </button>
-
-            <p id="form-note" class="hidden rounded-xl bg-[var(--cyan)]/10 px-4 py-3 text-sm font-semibold text-[var(--cyan)]" role="status"></p>
-            <p class="text-center text-xs leading-6 text-[var(--muted)]">
-              Dengan mengirim, Anda menyetujui pemrosesan data sesuai Kebijakan Privasi kami.
-            </p>
+            <button type="submit" class="btn btn-primary w-full">Kirim Pesan <i data-lucide="send" class="h-[18px] w-[18px]"></i></button>
+            <p id="note" class="hidden rounded-xl bg-[var(--tint)] px-4 py-3 text-sm font-semibold text-[var(--blue)]" role="status"></p>
+            <p class="text-[12.5px] leading-6 text-[var(--muted)]">Dengan mengirim, Anda menyetujui pemrosesan data sesuai <a href="/privacy-policy" class="font-semibold text-[var(--blue)] underline">Kebijakan Privasi</a>.</p>
           </form>
         </div>
       </div>
@@ -878,365 +834,176 @@
 </section>
 </main>
 
-<!-- ══════════════════ FOOTER ══════════════════ -->
-<footer class="relative border-t border-[var(--line)] py-16">
-  <div class="mx-auto max-w-7xl px-4 sm:px-6">
-    <div class="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
-
-      <div class="lg:col-span-1">
-        <a href="#hero" class="flex items-center gap-3">
-          <span class="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-[var(--cyan)] to-[var(--violet)] font-display text-lg font-extrabold text-white">T</span>
-          <span class="font-display text-[15px] font-extrabold">TapGo Lion</span>
-        </a>
-        <p class="mt-4 max-w-xs text-sm leading-7 text-[var(--muted)]">
-          Satu aplikasi untuk perjalanan, penghasilan, dan pembayaran harian.
-        </p>
-      </div>
-
+<!-- ══════════ FOOTER ══════════ -->
+<footer class="border-t border-[var(--line)] bg-[var(--bg-alt)]">
+  <div class="shell py-14">
+    <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
       <div>
-        <p class="text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]">Layanan</p>
-        <ul class="mt-4 space-y-3 text-sm">
-          <li><a class="hover:text-[var(--cyan)] transition" href="#layanan">Ojek Online</a></li>
-          <li><a class="hover:text-[var(--cyan)] transition" href="#layanan">Mitra Driver</a></li>
-          <li><a class="hover:text-[var(--cyan)] transition" href="#layanan">Layanan PPOB</a></li>
-          <li><a class="hover:text-[var(--cyan)] transition" href="#membership">Membership</a></li>
-        </ul>
+        <div class="flex items-center gap-2.5">
+          <span class="grid h-9 w-9 place-items-center rounded-[10px] bg-gradient-to-br from-[var(--blue)] to-[var(--cyan)] font-display text-base font-extrabold text-white">T</span>
+          <span class="font-display text-[15px] font-extrabold text-[var(--heading)]">TapGo Lion</span>
+        </div>
+        <p class="mt-4 max-w-xs text-[14.5px] leading-7 text-[var(--muted)]">Satu aplikasi untuk perjalanan, penghasilan, dan pembayaran harian di Banten dan sekitarnya.</p>
+        <a href="https://wa.me/6283800255588" class="btn btn-wa mt-5 !py-2.5 !text-[13px]"><i data-lucide="message-circle" class="h-4 w-4"></i> WhatsApp</a>
       </div>
-
-      <div>
-        <p class="text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]">Perusahaan</p>
-        <ul class="mt-4 space-y-3 text-sm">
-          <li><a class="hover:text-[var(--cyan)] transition" href="#cerita">Cerita Pengguna</a></li>
-          <li><a class="hover:text-[var(--cyan)] transition" href="#kontak">Kontak</a></li>
-          <li><a class="hover:text-[var(--cyan)] transition" href="/privacy-policy">Kebijakan Privasi</a></li>
-          <li><a class="hover:text-[var(--cyan)] transition" href="/terms-and-conditions">Syarat &amp; Ketentuan</a></li>
+      <nav aria-label="Layanan">
+        <p class="text-[12px] font-extrabold uppercase tracking-[.16em] text-[var(--muted)]">Layanan</p>
+        <ul class="mt-4 space-y-3 text-[14.5px]">
+          <li><a class="text-[var(--muted)] transition hover:text-[var(--blue)]" href="#layanan">Ojek Online</a></li>
+          <li><a class="text-[var(--muted)] transition hover:text-[var(--blue)]" href="#layanan">Mitra Driver</a></li>
+          <li><a class="text-[var(--muted)] transition hover:text-[var(--blue)]" href="#layanan">Layanan PPOB</a></li>
+          <li><a class="text-[var(--muted)] transition hover:text-[var(--blue)]" href="#membership">Membership</a></li>
         </ul>
-      </div>
-
-      <div>
-        <p class="text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]">Bantuan</p>
-        <ul class="mt-4 space-y-3 text-sm">
-          <li><a class="hover:text-[var(--cyan)] transition" href="/refund-policy">Pengembalian Dana</a></li>
-          <li><a class="hover:text-[var(--cyan)] transition" href="/hapus-akun">Hapus Akun</a></li>
-          <li><a class="hover:text-[var(--cyan)] transition" href="https://wa.me/6283800255588">WhatsApp</a></li>
+      </nav>
+      <nav aria-label="Informasi">
+        <p class="text-[12px] font-extrabold uppercase tracking-[.16em] text-[var(--muted)]">Informasi</p>
+        <ul class="mt-4 space-y-3 text-[14.5px]">
+          <li><a class="text-[var(--muted)] transition hover:text-[var(--blue)]" href="#edukasi">Artikel Edukasi</a></li>
+          <li><a class="text-[var(--muted)] transition hover:text-[var(--blue)]" href="#cara-kerja">Cara Kerja</a></li>
+          <li><a class="text-[var(--muted)] transition hover:text-[var(--blue)]" href="#faq">FAQ</a></li>
+          <li><a class="text-[var(--muted)] transition hover:text-[var(--blue)]" href="#kontak">Kontak</a></li>
         </ul>
-      </div>
+      </nav>
+      <nav aria-label="Legal dan bantuan">
+        <p class="text-[12px] font-extrabold uppercase tracking-[.16em] text-[var(--muted)]">Legal &amp; Bantuan</p>
+        <ul class="mt-4 space-y-3 text-[14.5px]">
+          <li><a class="text-[var(--muted)] transition hover:text-[var(--blue)]" href="/privacy-policy">Kebijakan Privasi</a></li>
+          <li><a class="text-[var(--muted)] transition hover:text-[var(--blue)]" href="/terms-and-conditions">Syarat &amp; Ketentuan</a></li>
+          <li><a class="text-[var(--muted)] transition hover:text-[var(--blue)]" href="/refund-policy">Pengembalian Dana</a></li>
+          <li><a class="text-[var(--muted)] transition hover:text-[var(--blue)]" href="/hapus-akun">Hapus Akun</a></li>
+        </ul>
+      </nav>
     </div>
-
-    <div class="mt-14 flex flex-col items-center justify-between gap-5 border-t border-[var(--line)] pt-8 sm:flex-row">
-      <p class="text-xs text-[var(--muted)]">© <span id="year">2026</span> PT. TapGo Lion Indonesia. Seluruh hak cipta dilindungi.</p>
-      <a href="#hero" data-magnetic class="btn-ghost inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-xs font-bold">
-        <i data-lucide="arrow-up" class="h-4 w-4"></i> Kembali ke atas
-      </a>
+    <div class="mt-12 flex flex-col items-center justify-between gap-4 border-t border-[var(--line)] pt-7 sm:flex-row">
+      <p class="text-[13px] text-[var(--muted)]">© <span id="tahun">2026</span> PT. TapGo Lion Indonesia. Seluruh hak cipta dilindungi.</p>
+      <a href="#utama" class="inline-flex items-center gap-2 text-[13px] font-bold text-[var(--muted)] transition hover:text-[var(--blue)]"><i data-lucide="arrow-up" class="h-4 w-4"></i> Kembali ke atas</a>
     </div>
   </div>
 </footer>
 
-<!-- Tombol WhatsApp melayang -->
-<a href="https://wa.me/6283800255588" aria-label="Chat WhatsApp"
-   class="fixed bottom-6 right-6 z-40 grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-2xl transition hover:scale-110">
-  <i data-lucide="message-circle" class="h-6 w-6"></i>
+<a href="https://wa.me/6283800255588?text=Halo%20TapGo%20Lion%2C%20saya%20ingin%20bertanya." class="wa-fab" aria-label="Hubungi kami lewat WhatsApp">
+  <i data-lucide="message-circle" class="h-5 w-5"></i><span class="lbl">WhatsApp</span>
 </a>
 
-<!-- ══════════════════ SKRIP ══════════════════ -->
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
-<script>
-(function () {
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" defer></script>
+<script defer>
+window.addEventListener('DOMContentLoaded', function () {
   'use strict';
+  var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function $(s, r) { return (r || document).querySelector(s); }
+  function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
 
-  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const $  = (s, r = document) => r.querySelector(s);
-  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
-
-  /* ── Ikon & tahun ──────────────────────────────────────────────────── */
   if (window.lucide) lucide.createIcons();
-  $('#year').textContent = new Date().getFullYear();
+  $('#tahun').textContent = new Date().getFullYear();
 
-  /* ── Mode terang / gelap ───────────────────────────────────────────── */
-  const root = document.documentElement;
-  const saved = localStorage.getItem('tapgo-theme');
+  /* Tema */
+  var root = document.documentElement;
+  var saved = localStorage.getItem('tapgo-theme');
+  if (saved === 'dark') root.classList.add('dark');
   if (saved === 'light') root.classList.remove('dark');
-  else if (saved === 'dark') root.classList.add('dark');
-
-  $('#theme-toggle').addEventListener('click', () => {
+  $('#theme').addEventListener('click', function () {
     root.classList.toggle('dark');
     localStorage.setItem('tapgo-theme', root.classList.contains('dark') ? 'dark' : 'light');
   });
 
-  /* ── Navbar: menyusut saat digulir ─────────────────────────────────── */
-  const navbar = $('#navbar');
-  const onScrollNav = () => {
-    const past = window.scrollY > 24;
-    navbar.classList.toggle('py-0', past);
-    navbar.querySelector('.glass').classList.toggle('shadow-2xl', past);
-    navbar.querySelector('.glass').classList.toggle('mt-1', past);
-    navbar.querySelector('.glass').classList.toggle('mt-3', !past);
-  };
-  onScrollNav();
-  window.addEventListener('scroll', onScrollNav, { passive: true });
-
-  /* ── Bilah kemajuan gulir ──────────────────────────────────────────── */
-  const bar = $('#progress');
-  window.addEventListener('scroll', () => {
-    const max = document.body.scrollHeight - innerHeight;
+  /* Navbar + progres */
+  var nav = $('#nav'), bar = $('#progress');
+  function onScroll() {
+    nav.classList.toggle('border-[var(--line)]', scrollY > 8);
+    var max = document.body.scrollHeight - innerHeight;
     bar.style.width = max > 0 ? (scrollY / max) * 100 + '%' : '0%';
-  }, { passive: true });
+  }
+  onScroll();
+  addEventListener('scroll', onScroll, { passive: true });
 
-  /* ── Menu seluler ──────────────────────────────────────────────────── */
-  const menu = $('#mobile-menu');
-  const menuBtn = $('#menu-toggle');
-  menuBtn.addEventListener('click', () => {
-    const open = menu.classList.toggle('hidden');
-    menuBtn.setAttribute('aria-expanded', String(!open));
+  /* Menu seluler */
+  var menu = $('#menu'), burger = $('#burger');
+  burger.addEventListener('click', function () {
+    var closed = menu.classList.toggle('hidden');
+    burger.setAttribute('aria-expanded', String(!closed));
   });
-  $$('.mob-link, #mobile-menu a').forEach((a) =>
-    a.addEventListener('click', () => {
+  $$('.mob').forEach(function (a) {
+    a.addEventListener('click', function () {
       menu.classList.add('hidden');
-      menuBtn.setAttribute('aria-expanded', 'false');
-    })
-  );
+      burger.setAttribute('aria-expanded', 'false');
+    });
+  });
 
-  /* ── Penanda tautan aktif ──────────────────────────────────────────── */
-  const links = $$('.nav-link');
-  const sections = links
-    .map((l) => document.querySelector(l.getAttribute('href')))
-    .filter(Boolean);
-
+  /* Bagian aktif */
+  var links = $$('.nav-link');
   if ('IntersectionObserver' in window) {
-    const spy = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (!e.isIntersecting) return;
-          links.forEach((l) => {
-            const on = l.getAttribute('href') === '#' + e.target.id;
-            l.classList.toggle('text-[var(--cyan)]', on);
-            l.classList.toggle('bg-[var(--surface-2)]', on);
-          });
+    var spy = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        links.forEach(function (l) {
+          var on = l.getAttribute('href') === '#' + e.target.id;
+          l.classList.toggle('text-[var(--blue)]', on);
+          l.classList.toggle('bg-[var(--tint)]', on);
         });
-      },
-      { rootMargin: '-45% 0px -50% 0px' }
-    );
-    sections.forEach((s) => spy.observe(s));
+      });
+    }, { rootMargin: '-45% 0px -50% 0px' });
+    links.forEach(function (l) {
+      var s = document.querySelector(l.getAttribute('href'));
+      if (s) spy.observe(s);
+    });
   }
 
-  /* ── Animasi masuk (GSAP) ──────────────────────────────────────────── */
+  /* Reveal */
   if (window.gsap && !reduced) {
     gsap.registerPlugin(ScrollTrigger);
-
-    // Teks kinetik pada hero
-    gsap.from('.kinetic', {
-      yPercent: 110, opacity: 0, duration: 1.1, ease: 'power4.out', stagger: 0.12, delay: 0.15,
-    });
-
-    // Reveal bertahap per bagian
-    $$('[data-reveal]').forEach((el) => {
-      gsap.to(el, {
-        opacity: 1, y: 0, duration: 0.9, ease: 'power3.out',
-        scrollTrigger: { trigger: el, start: 'top 88%', once: true },
-      });
-    });
-
-    // Parallax lembut
-    $$('[data-parallax]').forEach((el) => {
-      gsap.to(el, {
-        yPercent: -parseFloat(el.dataset.parallax) * 100,
-        ease: 'none',
-        scrollTrigger: { trigger: el, start: 'top bottom', end: 'bottom top', scrub: 1 },
-      });
-    });
-
-    // Lencana melayang
-    $$('[data-float]').forEach((el) => {
-      gsap.to(el, {
-        y: -14, duration: 2.6, ease: 'sine.inOut', repeat: -1, yoyo: true,
-        delay: parseFloat(el.dataset.floatDelay || 0),
-      });
+    $$('[data-reveal]').forEach(function (el) {
+      gsap.to(el, { opacity: 1, y: 0, duration: .7, ease: 'power2.out',
+        scrollTrigger: { trigger: el, start: 'top 92%', once: true } });
     });
   } else {
-    $$('[data-reveal]').forEach((el) => { el.style.opacity = 1; el.style.transform = 'none'; });
+    $$('[data-reveal]').forEach(function (el) { el.style.opacity = 1; el.style.transform = 'none'; });
   }
 
-  /* ── Tombol magnetik ───────────────────────────────────────────────── */
-  if (!reduced && matchMedia('(pointer: fine)').matches) {
-    $$('[data-magnetic]').forEach((el) => {
-      el.addEventListener('mousemove', (e) => {
-        const r = el.getBoundingClientRect();
-        const x = e.clientX - r.left - r.width / 2;
-        const y = e.clientY - r.top - r.height / 2;
-        el.style.transform = `translate(${x * 0.22}px, ${y * 0.3}px)`;
-      });
-      el.addEventListener('mouseleave', () => { el.style.transform = 'translate(0,0)'; });
-    });
-  }
-
-  /* ── Kemiringan 3D + sorotan mengikuti kursor ──────────────────────── */
-  if (!reduced && matchMedia('(pointer: fine)').matches) {
-    $$('[data-tilt]').forEach((el) => {
-      el.addEventListener('mousemove', (e) => {
-        const r = el.getBoundingClientRect();
-        const px = (e.clientX - r.left) / r.width;
-        const py = (e.clientY - r.top) / r.height;
-        el.style.transform = `perspective(1000px) rotateY(${(px - 0.5) * 9}deg) rotateX(${(0.5 - py) * 9}deg) translateY(-6px)`;
-      });
-      el.addEventListener('mouseleave', () => { el.style.transform = ''; });
-    });
-  }
-
-  // Sorotan pada kartu berpendar berlaku juga di layar sentuh (tanpa kemiringan).
-  $$('.card-glow').forEach((el) => {
-    el.addEventListener('mousemove', (e) => {
-      const r = el.getBoundingClientRect();
-      el.style.setProperty('--mx', e.clientX - r.left + 'px');
-      el.style.setProperty('--my', e.clientY - r.top + 'px');
-    });
-  });
-
-  /* ── Penghitung angka ──────────────────────────────────────────────── */
-  const counters = $$('[data-count]');
+  /* Penghitung */
   if ('IntersectionObserver' in window) {
-    const io = new IntersectionObserver((entries, obs) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
-        const el = entry.target;
-        const target = parseFloat(el.dataset.count);
-        const suffix = el.dataset.suffix || '';
-        if (reduced) { el.textContent = target + suffix; obs.unobserve(el); return; }
-
-        const started = performance.now();
-        const dur = 1600;
-        const step = (now) => {
-          const p = Math.min((now - started) / dur, 1);
-          // easeOutExpo agar berhenti terasa mantap, bukan mendadak
-          const eased = p === 1 ? 1 : 1 - Math.pow(2, -10 * p);
-          el.textContent = Math.round(target * eased) + suffix;
+    var io = new IntersectionObserver(function (es, ob) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        var el = e.target, target = parseFloat(el.dataset.count), suffix = el.dataset.suffix || '';
+        if (reduced) { el.textContent = target + suffix; ob.unobserve(el); return; }
+        var t0 = performance.now();
+        (function step(now) {
+          var p = Math.min((now - t0) / 1400, 1);
+          el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3))) + suffix;
           if (p < 1) requestAnimationFrame(step);
-        };
-        requestAnimationFrame(step);
-        obs.unobserve(el);
+        })(t0);
+        ob.unobserve(el);
       });
-    }, { threshold: 0.4 });
-    counters.forEach((c) => io.observe(c));
+    }, { threshold: .4 });
+    $$('[data-count]').forEach(function (c) { io.observe(c); });
   } else {
-    counters.forEach((c) => { c.textContent = c.dataset.count + (c.dataset.suffix || ''); });
+    $$('[data-count]').forEach(function (c) { c.textContent = c.dataset.count + (c.dataset.suffix || ''); });
   }
 
-  /* ── Saringan galeri ───────────────────────────────────────────────── */
-  const items = $$('.gal-item');
-  const setActiveFilter = (btn) => {
-    $$('.filter-btn').forEach((b) => {
-      const on = b === btn;
-      b.setAttribute('aria-pressed', String(on));
-      b.classList.toggle('bg-gradient-to-r', on);
-      b.classList.toggle('from-[var(--cyan)]', on);
-      b.classList.toggle('to-[var(--violet)]', on);
-      b.classList.toggle('text-white', on);
-      b.classList.toggle('border-transparent', on);
-    });
-  };
-  setActiveFilter($('.filter-btn'));
-
-  $$('.filter-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const f = btn.dataset.filter;
-      setActiveFilter(btn);
-      items.forEach((it) => {
-        const show = f === 'all' || it.dataset.cat === f;
-        it.style.display = show ? '' : 'none';
-        if (show && window.gsap && !reduced) {
-          gsap.fromTo(it, { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' });
-        }
-      });
-    });
-  });
-
-  /* ── Modal galeri ──────────────────────────────────────────────────── */
-  const modal = $('#modal');
-  let lastFocused = null;
-
-  const openModal = (item) => {
-    lastFocused = item;
-    $('#modal-img').src = item.dataset.img;
-    $('#modal-img').alt = item.dataset.title;
-    $('#modal-title').textContent = item.dataset.title;
-    $('#modal-desc').textContent = item.dataset.desc;
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-    document.body.style.overflow = 'hidden';
-    $('#modal-close').focus();
-    if (window.gsap && !reduced) {
-      gsap.fromTo('#modal-card', { scale: 0.94, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.35, ease: 'power3.out' });
-    }
-  };
-  const closeModal = () => {
-    modal.classList.add('hidden');
-    modal.classList.remove('flex');
-    document.body.style.overflow = '';
-    if (lastFocused) lastFocused.focus();
-  };
-
-  items.forEach((it) => it.addEventListener('click', () => openModal(it)));
-  $('#modal-close').addEventListener('click', closeModal);
-  $('#modal-cta').addEventListener('click', closeModal);
-  modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
-  });
-
-  /* ── Korsel testimoni ──────────────────────────────────────────────── */
-  const car = $('#carousel');
-  const slide = () => Math.min(car.clientWidth * 0.9, 440);
-  $('#next').addEventListener('click', () => car.scrollBy({ left: slide(), behavior: 'smooth' }));
-  $('#prev').addEventListener('click', () => car.scrollBy({ left: -slide(), behavior: 'smooth' }));
-
-  /* ── Form kontak ───────────────────────────────────────────────────── */
-  // Belum terhubung ke server. Ganti bagian ini dengan pengiriman sesungguhnya.
-  $('#contact-form').addEventListener('submit', (e) => {
+  /* Form */
+  $('#form').addEventListener('submit', function (e) {
     e.preventDefault();
-    const note = $('#form-note');
-    const form = e.currentTarget;
-
-    if (!form.checkValidity()) {
-      note.textContent = 'Mohon lengkapi nama, nomor WhatsApp, dan pesan Anda.';
-      note.classList.remove('hidden');
-      return;
-    }
-    note.textContent = 'Terima kasih. Form ini belum terhubung ke server — sambungkan sebelum situs ditayangkan.';
+    var note = $('#note');
+    note.textContent = e.currentTarget.checkValidity()
+      ? 'Terima kasih. Form ini belum terhubung ke server — sambungkan sebelum situs ditayangkan.'
+      : 'Mohon lengkapi nama, nomor WhatsApp, dan pesan Anda.';
     note.classList.remove('hidden');
   });
 
-  /* ── Jaring pengaman ───────────────────────────────────────────────── */
-  // Kalau GSAP gagal dimuat, ScrollTrigger tidak sempat menyala, atau gambar
-  // menggeser tata letak — konten tetap harus muncul. Animasi adalah hiasan,
-  // bukan syarat keterbacaan.
-  window.addEventListener('load', () => {
+  /* Jaring pengaman: animasi adalah hiasan, bukan syarat keterbacaan. */
+  addEventListener('load', function () {
     if (window.ScrollTrigger) ScrollTrigger.refresh();
-    setTimeout(() => {
-      $$('[data-reveal]').forEach((el) => {
-        if (parseFloat(getComputedStyle(el).opacity) < 0.05) {
-          el.style.opacity = 1;
-          el.style.transform = 'none';
+    setTimeout(function () {
+      $$('[data-reveal]').forEach(function (el) {
+        if (parseFloat(getComputedStyle(el).opacity) < .05) {
+          el.style.opacity = 1; el.style.transform = 'none';
         }
       });
-    }, 2500);
+    }, 2200);
   });
-
-  /* ── Gulir mulus untuk tautan dalam halaman ────────────────────────── */
-  $$('a[href^="#"]').forEach((a) => {
-    a.addEventListener('click', (e) => {
-      const id = a.getAttribute('href');
-      if (id.length < 2) return;
-      const el = document.querySelector(id);
-      if (!el) return;
-      e.preventDefault();
-      window.scrollTo({
-        top: el.getBoundingClientRect().top + window.scrollY - 84,
-        behavior: reduced ? 'auto' : 'smooth',
-      });
-    });
-  });
-})();
+});
 </script>
 </body>
 </html>
