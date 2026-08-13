@@ -48,7 +48,8 @@ export class MembershipDocumentController {
   adminDocumentFile = async (req: Request, res: Response) => {
     const document = await this.documentService.readForAdmin({
       orderId: String(req.params.id),
-      type: String(req.params.type).toUpperCase() as MembershipDocumentType
+      type: String(req.params.type).toUpperCase() as MembershipDocumentType,
+      adminId: req.auth!.userId
     });
 
     // Dokumen identitas tidak boleh singgah di cache mana pun, termasuk cache

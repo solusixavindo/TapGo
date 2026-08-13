@@ -168,8 +168,16 @@ export class MembershipDocumentService {
     }));
   }
 
-  /** Isi berkas untuk dicetak admin. Satu-satunya jalan keluar isi dokumen. */
-  async readForAdmin(input: { orderId: string; type: MembershipDocumentType }) {
+  /**
+   * Isi berkas untuk dicetak admin. Satu-satunya jalan keluar isi dokumen dari
+   * database, dan karena itu satu-satunya tempat yang perlu mencatat siapa
+   * yang pernah melihat KTP seseorang.
+   */
+  async readForAdmin(input: {
+    orderId: string;
+    type: MembershipDocumentType;
+    adminId: string;
+  }) {
     const document = await this.prisma.membershipDocument.findUnique({
       where: { orderId_type: { orderId: input.orderId, type: input.type } }
     });
@@ -200,15 +208,37 @@ export class MembershipDocumentService {
       );
     }
 
+    const bytes = decryptDocument({
+      cipherText: document.cipherText,
+      cipherIv: document.cipherIv,
+      cipherTag: document.cipherTag,
+      keyVersion: document.keyVersion
+    });
+
+    // Dicatat SETELAH dekripsi berhasil: percobaan yang gagal tidak menghasilkan
+    // pembacaan, dan mencatatnya sebagai "dilihat" akan menyesatkan audit.
+    // Ditulis di luar transaksi apa pun karena pembacaan memang tidak punya
+    // transaksi — kegagalan menulis jejak tidak boleh menghalangi admin
+    // mencetak, jadi kesalahannya dibiarkan naik apa adanya.
+    await this.prisma.auditLog.create({
+      data: {
+        actorId: input.adminId,
+        action: "MEMBERSHIP_DOCUMENT_VIEWED",
+        entityType: "MEMBERSHIP_DOCUMENT",
+        entityId: document.id,
+        metadata: {
+          orderId: input.orderId,
+          targetUserId: document.userId,
+          documentType: input.type,
+          checksum: document.checksum
+        }
+      }
+    });
+
     return {
       contentType: document.contentType ?? "application/octet-stream",
       checksum: document.checksum,
-      bytes: decryptDocument({
-        cipherText: document.cipherText,
-        cipherIv: document.cipherIv,
-        cipherTag: document.cipherTag,
-        keyVersion: document.keyVersion
-      })
+      bytes
     };
   }
 
