@@ -181,6 +181,38 @@ class DemoDriverRepository implements DriverRepository {
     _scenario = DriverScenario.cancelled;
     return _demoRide(RideStatus.cancelledByDriver);
   }
+
+  /// Dokumen demo disimpan di memori saja dan TIDAK pernah menyentuh jaringan.
+  /// Mode demo dipakai untuk tinjauan tampilan; mengirim foto identitas sungguhan
+  /// dari mode ini akan menjadi kejutan yang tidak seorang pun minta.
+  final Map<DriverDocumentKind, DriverDocumentSummary> _demoDocuments = {};
+
+  @override
+  Future<List<DriverDocumentSummary>> documents() async {
+    final list = _demoDocuments.values.toList()
+      ..sort((a, b) => a.kind.api.compareTo(b.kind.api));
+    return list;
+  }
+
+  @override
+  Future<List<DriverDocumentSummary>> uploadDocument({
+    required DriverDocumentKind kind,
+    required Uint8List bytes,
+    required String contentType,
+  }) async {
+    final now = DateTime.now();
+    _demoDocuments[kind] = DriverDocumentSummary(
+      kind: kind,
+      review: DriverDocumentReview.pending,
+      available: true,
+      uploadedAt: now,
+      // Masa simpan demo mengikuti kebijakan sungguhan supaya hitungan mundur
+      // di layar terlihat sebagaimana adanya nanti.
+      expiresAt: now.add(const Duration(hours: 24)),
+      sizeBytes: bytes.length,
+    );
+    return documents();
+  }
 }
 
 DriverRide get _demoOffer => const DriverRide(

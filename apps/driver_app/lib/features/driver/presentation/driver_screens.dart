@@ -82,14 +82,29 @@ class DriverShell extends ConsumerWidget {
           title: 'Akun driver belum aktif',
           message: state.message ?? 'Pengajuan driver sedang ditinjau.',
           icon: Icons.hourglass_top_rounded,
+          // Menunggu peninjauan adalah saat berkas paling dibutuhkan.
+          showDocuments: true,
+        );
+      case DriverWorkspaceStatus.rejected:
+        return CapabilityScreen(
+          key: const ValueKey('rejected'),
+          title: 'Pengajuan perlu diperbaiki',
+          message: state.message ??
+              'Berkas Anda belum dapat diterima. Unggah ulang berkas yang diminta.',
+          icon: Icons.error_outline_rounded,
+          // Ditolak berarti ada yang harus diperbaiki, jadi jalur unggahnya
+          // wajib terbuka. Tanpa ini driver terjebak tanpa cara memperbaiki.
+          showDocuments: true,
         );
       case DriverWorkspaceStatus.suspended:
-      case DriverWorkspaceStatus.rejected:
         return CapabilityScreen(
           key: const ValueKey('suspended'),
           title: 'Akses driver dihentikan',
           message: state.message ?? 'Akun driver belum dapat digunakan.',
           icon: Icons.block_rounded,
+          // Penghentian akses TIDAK dibuka jalur unggahnya: mengunggah berkas
+          // tidak akan mengubah keputusan itu, dan menampilkan tombolnya hanya
+          // menjanjikan sesuatu yang tidak terjadi.
         );
       case DriverWorkspaceStatus.accountInactive:
         return CapabilityScreen(
@@ -761,6 +776,7 @@ class CapabilityScreen extends ConsumerWidget {
     required this.icon,
     this.showRetry = false,
     this.showLoginAction = false,
+    this.showDocuments = false,
     super.key,
   });
 
@@ -769,6 +785,7 @@ class CapabilityScreen extends ConsumerWidget {
   final IconData icon;
   final bool showRetry;
   final bool showLoginAction;
+  final bool showDocuments;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -778,6 +795,10 @@ class CapabilityScreen extends ConsumerWidget {
       children: [
         EmptyStateCard(icon: icon, title: title, message: message),
         const SizedBox(height: 16),
+        if (showDocuments) ...[
+          const DriverDocumentsSection(),
+          const SizedBox(height: 16),
+        ],
         if (showRetry)
           FilledButton(
             key: const ValueKey('retry-button'),

@@ -137,6 +137,58 @@ class DriverController extends StateNotifier<DriverState>
     }
   }
 
+  /// Memuat ulang ringkasan dokumen.
+  ///
+  /// Kegagalan di sini SENGAJA tidak mengubah status ruang kerja: dokumen
+  /// adalah bagian tambahan, dan kendala memuatnya tidak boleh melempar driver
+  /// keluar dari layar perjalanannya.
+  Future<void> refreshDocuments() async {
+    if (!_startFlight('documents')) return;
+    try {
+      final items = await _repository.documents();
+      state = state.copyWith(documents: items);
+    } on DriverApiException catch (error) {
+      if (error.statusCode == 401) {
+        _applyCapabilityError(error);
+      } else {
+        state = state.copyWith(message: error.message);
+      }
+    } finally {
+      _endFlight('documents');
+    }
+  }
+
+  Future<void> uploadDocument({
+    required DriverDocumentKind kind,
+    required Uint8List bytes,
+    required String contentType,
+  }) async {
+    if (!_startFlight('upload-${kind.api}')) return;
+    state = state.copyWith(uploadingDocument: kind, clearMessage: true);
+    try {
+      final items = await _repository.uploadDocument(
+        kind: kind,
+        bytes: bytes,
+        contentType: contentType,
+      );
+      state = state.copyWith(
+        documents: items,
+        message: '${kind.label} berhasil dikirim dan menunggu pemeriksaan.',
+      );
+    } on DriverApiException catch (error) {
+      if (error.statusCode == 401) {
+        _applyCapabilityError(error);
+      } else {
+        // Pesan dari lapisan API sudah diterjemahkan menjadi kalimat yang
+        // memberi tahu apa yang harus dilakukan; dipakai apa adanya.
+        state = state.copyWith(message: error.message);
+      }
+    } finally {
+      _endFlight('upload-${kind.api}');
+      state = state.copyWith(clearUploadingDocument: true);
+    }
+  }
+
   void selectOffer(DriverRide ride) {
     state = state.copyWith(selectedOffer: ride);
   }

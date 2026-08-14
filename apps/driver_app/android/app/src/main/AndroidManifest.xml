@@ -1,5 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Diperlukan untuk memotret dokumen verifikasi mitra. Hanya kamera dan
+         pembacaan galeri; TIDAK ada izin tulis, karena aplikasi ini tidak
+         pernah menyimpan berkas ke penyimpanan bersama. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <application
         android:label="TapGo Driver"
         android:name="${applicationName}"

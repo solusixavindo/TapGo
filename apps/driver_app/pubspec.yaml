@@ -12,6 +12,10 @@ dependencies:
   flutter_riverpod: ^2.6.1
   dio: ^5.7.0
   flutter_secure_storage: ^9.2.2
+  # Versi disamakan dengan user_app supaya kedua aplikasi menarik plugin native
+  # yang sama; versi berbeda pada plugin platform mudah berakhir sebagai
+  # kegagalan build yang hanya muncul di salah satu aplikasi.
+  image_picker: ^1.1.2
   # Runtime Flutter merujuk packages/cupertino_icons/CupertinoIcons melalui
   # pustaka Cupertino yang ikut tertaut dari package:flutter/material.dart
   # (lihat cupertino/text_field.dart). Tanpa dependency ini build memperingatkan

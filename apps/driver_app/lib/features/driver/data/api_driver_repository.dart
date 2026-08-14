@@ -131,6 +131,52 @@ class ApiDriverRepository implements DriverRepository {
     return DriverRide.fromJson(data);
   }
 
+  @override
+  Future<List<DriverDocumentSummary>> documents() async {
+    final data = await _request(() => _dio.get<dynamic>('/driver/documents'));
+    return _documentsFrom(data);
+  }
+
+  @override
+  Future<List<DriverDocumentSummary>> uploadDocument({
+    required DriverDocumentKind kind,
+    required Uint8List bytes,
+    required String contentType,
+  }) async {
+    await _request(
+      () => _dio.post<dynamic>(
+        '/driver/documents/${kind.api}',
+        data: Stream<List<int>>.fromIterable([bytes]),
+        options: Options(
+          headers: {
+            Headers.contentTypeHeader: contentType,
+            // Dio tidak dapat menghitung panjang aliran sendiri, sedangkan
+            // parser mentah di backend menuntutnya. Tanpa header ini
+            // permintaannya menggantung sampai timeout.
+            Headers.contentLengthHeader: bytes.length,
+          },
+        ),
+      ),
+    );
+
+    // Daftar dibaca ulang dari server, bukan disusun dari tebakan lokal:
+    // masa simpan dan status pemeriksaan ditentukan backend, dan hanya backend
+    // yang tahu nilainya setelah unggahan diterima.
+    return documents();
+  }
+
+  List<DriverDocumentSummary> _documentsFrom(Map<String, dynamic> data) {
+    final items = data['items'] is List ? data['items'] as List : const [];
+    final result = <DriverDocumentSummary>[];
+    for (final item in items) {
+      if (item is! Map) continue;
+      final parsed =
+          DriverDocumentSummary.fromJson(Map<String, dynamic>.from(item));
+      if (parsed != null) result.add(parsed);
+    }
+    return result;
+  }
+
   Future<DriverRide> _rideMutation(String path) async {
     final data = await _request(() => _dio.post<dynamic>(path));
     return DriverRide.fromJson(data);
@@ -232,6 +278,20 @@ String _friendlyMessage(String code, String fallback) {
       return 'Status perjalanan aktif perlu diperiksa admin.';
     case 'AUTH_REQUIRED':
       return 'Sesi berakhir. Silakan login kembali.';
+    // Kode di bawah datang dari jalur unggah dokumen. Pesannya ditulis ulang
+    // agar menyebutkan apa yang harus driver lakukan, bukan sekadar menolak.
+    case 'DRIVER_PROFILE_NOT_FOUND':
+      return 'Profil mitra driver belum terdaftar. Hubungi admin TapGo.';
+    case 'DRIVER_DOCUMENT_TYPE_INVALID':
+      return 'Berkas harus berupa foto JPG atau PNG. Coba potret ulang.';
+    case 'DRIVER_DOCUMENT_TOO_LARGE':
+      return 'Ukuran foto melebihi 5 MB. Potret ulang dengan kualitas lebih rendah.';
+    case 'DRIVER_DOCUMENT_TYPE_UNKNOWN':
+      return 'Jenis dokumen tidak dikenal. Perbarui aplikasi Anda.';
+    case 'DRIVER_KYC_ALREADY_APPROVED':
+      return 'Verifikasi Anda sudah disetujui, dokumen tidak dapat diubah lagi.';
+    case 'MEMBERSHIP_DOCUMENT_SECRET_UNAVAILABLE':
+      return 'Layanan unggah dokumen sedang tidak tersedia. Coba beberapa saat lagi.';
     default:
       return fallback.isEmpty
           ? 'Terjadi kendala. Silakan coba lagi.'

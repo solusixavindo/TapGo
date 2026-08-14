@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -943,6 +944,44 @@ class FakeDriverRepository implements DriverRepository {
     cancelCalls += 1;
     current = demoRide(RideStatus.cancelledByDriver);
     return current!;
+  }
+
+  /* ── Dokumen verifikasi mitra ───────────────────────────────────────── */
+
+  List<DriverDocumentSummary> documentItems = const [];
+  Object? documentsError;
+  Object? uploadError;
+  final List<DriverDocumentKind> uploadedKinds = <DriverDocumentKind>[];
+  final List<int> uploadedSizes = <int>[];
+
+  @override
+  Future<List<DriverDocumentSummary>> documents() async {
+    if (documentsError != null) throw documentsError!;
+    return documentItems;
+  }
+
+  @override
+  Future<List<DriverDocumentSummary>> uploadDocument({
+    required DriverDocumentKind kind,
+    required Uint8List bytes,
+    required String contentType,
+  }) async {
+    if (uploadError != null) throw uploadError!;
+    uploadedKinds.add(kind);
+    uploadedSizes.add(bytes.length);
+    final now = DateTime.now();
+    documentItems = [
+      ...documentItems.where((item) => item.kind != kind),
+      DriverDocumentSummary(
+        kind: kind,
+        review: DriverDocumentReview.pending,
+        available: true,
+        uploadedAt: now,
+        expiresAt: now.add(const Duration(hours: 24)),
+        sizeBytes: bytes.length,
+      ),
+    ];
+    return documentItems;
   }
 }
 
