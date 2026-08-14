@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
-import { normalizePhone, parseRole } from "./admin-utils.js";
+import { phoneLookupVariants } from "../src/core/security/phone.js";
+import { parseRole } from "./admin-utils.js";
 
 const prisma = new PrismaClient();
 
@@ -16,16 +17,27 @@ async function main() {
     throw new Error("Missing --phone. Example: npm --workspace apps/backend run promote:admin -- --phone=081234567890 --role=SUPER_ADMIN");
   }
 
-  const phone = normalizePhone(rawPhone);
   const role = parseRole(rawRole);
 
-  const user = await prisma.user.findUnique({ where: { phone } });
+  /*
+   * Pencarian memakai phoneLookupVariants, sama seperti jalur login.
+   *
+   * Sebelumnya skrip ini menormalkan ke "+62…" lewat admin-utils, sedangkan
+   * aplikasi menyimpan nomor sebagai "08…" (lihat normalizePhoneNumber di
+   * src/core/security/phone.ts). Keduanya menormalkan ke arah BERLAWANAN,
+   * sehingga skrip ini tidak pernah dapat menemukan satu pun pengguna yang
+   * mendaftar lewat API — promosi admin selalu gagal dengan "was not found".
+   */
+  const variants = phoneLookupVariants(rawPhone);
+  const user = await prisma.user.findFirst({ where: { phone: { in: variants } } });
   if (!user) {
-    throw new Error(`User with phone ${phone} was not found.`);
+    throw new Error(
+      `User with phone ${rawPhone} was not found (dicari sebagai: ${variants.join(", ")}).`
+    );
   }
 
   const updated = await prisma.user.update({
-    where: { phone },
+    where: { id: user.id },
     data: {
       role,
       status: "ACTIVE"
