@@ -7,9 +7,22 @@ import { AdminConsoleService } from "../application/AdminConsoleService.js";
 import { AdminConsoleController } from "./admin-console.controller.js";
 import { WalletService } from "../../wallets/application/WalletService.js";
 import { PrismaWalletRepository } from "../../wallets/infrastructure/PrismaWalletRepository.js";
+import { MembershipDocumentService } from "../../memberships/application/MembershipDocumentService.js";
+import { DriverDocumentService } from "../../drivers/application/DriverDocumentService.js";
+import { DriverDocumentController } from "../../drivers/presentation/driver-document.controller.js";
+import { AdminRoleService } from "../application/AdminRoleService.js";
+import { MembershipRefundService } from "../../memberships/application/MembershipRefundService.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
+import { MembershipDocumentController } from "../../memberships/presentation/membership-document.controller.js";
+import {
+  membershipDocumentListSchema,
+  membershipDocumentUploadSchema
+} from "../../memberships/presentation/membership.validators.js";
 import {
   adminCommissionQuerySchema,
+  adminFounderChairmanDetailSchema,
+  adminFounderChairmanGrantSchema,
+  adminFounderChairmanStatusSchema,
   adminFounderPlatinumDetailSchema,
   adminFounderPlatinumGrantSchema,
   adminFounderPlatinumStatusSchema,
@@ -20,6 +33,8 @@ import {
   adminMemberDetailSchema,
   adminMemberRequestActionSchema,
   adminOrderQuerySchema,
+  adminRoleAssignSchema,
+  adminRoleCandidateSchema,
   adminPaymentQuerySchema,
   adminReportQuerySchema,
   adminRewardActionSchema,
@@ -34,7 +49,21 @@ import {
 const service = new AdminConsoleService(prisma);
 const walletService = new WalletService(new PrismaWalletRepository(prisma));
 const membershipOrderService = new MembershipOrderService(prisma);
-const controller = new AdminConsoleController(service, walletService, membershipOrderService);
+const adminRoleService = new AdminRoleService(prisma);
+const membershipRefundService = new MembershipRefundService(prisma);
+const controller = new AdminConsoleController(
+  service,
+  walletService,
+  membershipOrderService,
+  adminRoleService,
+  membershipRefundService
+);
+const documentController = new MembershipDocumentController(
+  new MembershipDocumentService(prisma)
+);
+const driverDocumentController = new DriverDocumentController(
+  new DriverDocumentService(prisma)
+);
 
 export const adminConsoleRouter = Router();
 
@@ -50,10 +79,78 @@ adminConsoleRouter.post(
   validateRequest(adminMemberRequestActionSchema),
   asyncHandler(controller.approveMemberRequest)
 );
+// Admin membuka dokumen untuk dicetak menjadi berkas administrasi. Ini
+// satu-satunya jalan keluar isi dokumen dari database.
+adminConsoleRouter.get(
+  "/member-requests/:id/documents",
+  validateRequest(membershipDocumentListSchema),
+  asyncHandler(documentController.adminDocuments)
+);
+adminConsoleRouter.get(
+  "/member-requests/:id/documents/:type",
+  validateRequest(membershipDocumentUploadSchema),
+  asyncHandler(documentController.adminDocumentFile)
+);
+// Dokumen mitra driver. Aturannya sama persis dengan dokumen membership:
+// isinya hanya keluar lewat jalur ini, dan setiap pembukaan dicatat.
+//
+// Jalurnya sengaja /driver-documents, BUKAN /drivers/documents: yang kedua akan
+// tertangkap lebih dulu oleh pola /drivers/:driverId/documents dan membuat kata
+// "documents" diperlakukan sebagai driverId.
+adminConsoleRouter.get(
+  "/driver-documents",
+  asyncHandler(driverDocumentController.adminQueue)
+);
+adminConsoleRouter.get(
+  "/drivers/:driverId/documents",
+  asyncHandler(driverDocumentController.adminDocuments)
+);
+adminConsoleRouter.get(
+  "/drivers/:driverId/documents/:type",
+  asyncHandler(driverDocumentController.adminDocumentFile)
+);
+adminConsoleRouter.post(
+  "/member-requests/:id/verify-documents",
+  validateRequest(adminMemberRequestActionSchema),
+  asyncHandler(controller.verifyMemberRequestDocuments)
+);
+adminConsoleRouter.post(
+  "/member-requests/:id/reject-documents",
+  validateRequest(adminMemberRequestActionSchema),
+  asyncHandler(controller.rejectMemberRequestDocuments)
+);
+adminConsoleRouter.post(
+  "/member-requests/:id/execute-refund",
+  validateRequest(adminMemberRequestActionSchema),
+  asyncHandler(controller.executeMemberRequestRefund)
+);
 adminConsoleRouter.post(
   "/member-requests/:id/reject",
   validateRequest(adminMemberRequestActionSchema),
   asyncHandler(controller.rejectMemberRequest)
+);
+adminConsoleRouter.post(
+  "/founder-chairman/grant",
+  requireRoles("SUPER_ADMIN"),
+  validateRequest(adminFounderChairmanGrantSchema),
+  asyncHandler(controller.grantFounderChairman)
+);
+adminConsoleRouter.get(
+  "/founder-chairman",
+  requireRoles("SUPER_ADMIN"),
+  asyncHandler(controller.founderChairman)
+);
+adminConsoleRouter.get(
+  "/founder-chairman/:founderId",
+  requireRoles("SUPER_ADMIN"),
+  validateRequest(adminFounderChairmanDetailSchema),
+  asyncHandler(controller.founderChairmanDetail)
+);
+adminConsoleRouter.patch(
+  "/founder-chairman/:founderId/status",
+  requireRoles("SUPER_ADMIN"),
+  validateRequest(adminFounderChairmanStatusSchema),
+  asyncHandler(controller.updateFounderChairmanStatus)
 );
 adminConsoleRouter.post(
   "/founder-platinum/grants",
@@ -179,20 +276,26 @@ adminConsoleRouter.post(
 );
 adminConsoleRouter.get("/delete-requests", validateRequest(adminGenericStatusQuerySchema), asyncHandler(controller.deleteRequests));
 adminConsoleRouter.get("/contact-messages", validateRequest(adminGenericStatusQuerySchema), asyncHandler(controller.contactMessages));
-adminConsoleRouter.post("/roles", requireRoles("SUPER_ADMIN"), (_req, res) => {
-  res.status(501).json({
-    success: false,
-    code: "PRODUCTION_APPROVAL_REQUIRED",
-    message: "Fitur ini membutuhkan approval production."
-  });
-});
-adminConsoleRouter.put("/roles/:userId", requireRoles("SUPER_ADMIN"), (_req, res) => {
-  res.status(501).json({
-    success: false,
-    code: "PRODUCTION_APPROVAL_REQUIRED",
-    message: "Fitur ini membutuhkan approval production."
-  });
-});
+// Pengelolaan role hanya untuk pemegang role puncak. requireRoles memakai
+// tangga role, dan tidak ada peran di atas SUPER_ADMIN_VIP — sehingga penjaga
+// ini efektif berarti "hanya VIP", termasuk menolak SUPER_ADMIN biasa.
+adminConsoleRouter.get(
+  "/roles",
+  requireRoles("SUPER_ADMIN_VIP"),
+  asyncHandler(controller.adminRoles)
+);
+adminConsoleRouter.get(
+  "/roles/candidates",
+  requireRoles("SUPER_ADMIN_VIP"),
+  validateRequest(adminRoleCandidateSchema),
+  asyncHandler(controller.adminRoleCandidates)
+);
+adminConsoleRouter.put(
+  "/roles/:userId",
+  requireRoles("SUPER_ADMIN_VIP"),
+  validateRequest(adminRoleAssignSchema),
+  asyncHandler(controller.assignAdminRole)
+);
 adminConsoleRouter.put("/app-settings", requireRoles("SUPER_ADMIN"), (_req, res) => {
   res.status(501).json({
     success: false,

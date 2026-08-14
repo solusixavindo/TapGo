@@ -46,7 +46,7 @@ class _AdminWithdrawalScreenState extends ConsumerState<AdminWithdrawalScreen> {
             const _StatusSurface(
               icon: Icons.sync_rounded,
               title: 'Memuat withdrawal',
-              subtitle: 'Mengambil daftar withdrawal backend...',
+              subtitle: 'Mengambil daftar withdrawal...',
             )
           else if (withdrawals.isEmpty)
             const _StatusSurface(
@@ -55,29 +55,31 @@ class _AdminWithdrawalScreenState extends ConsumerState<AdminWithdrawalScreen> {
               subtitle: 'Pengajuan member akan muncul di sini.',
             )
           else
-            ...withdrawals.map((withdrawal) => _WithdrawalApprovalCard(
-                  withdrawal: withdrawal,
-                  status: _statuses[withdrawal.id] ?? withdrawal.status,
-                  canMarkPaid: canMarkPaid,
-                  onApprove: () => _processWithdrawal(
-                    withdrawal.id,
-                    'Approved',
-                    () => _apiClient.approveWithdrawal(withdrawal.id),
-                    adminSnapshot.hasValue,
-                  ),
-                  onReject: () => _processWithdrawal(
-                    withdrawal.id,
-                    'Rejected',
-                    () => _apiClient.rejectWithdrawal(withdrawal.id),
-                    adminSnapshot.hasValue,
-                  ),
-                  onPaid: () => _processWithdrawal(
-                    withdrawal.id,
-                    'Paid',
-                    () => _apiClient.markWithdrawalPaid(withdrawal.id),
-                    adminSnapshot.hasValue,
-                  ),
-                )),
+            ...withdrawals.map(
+              (withdrawal) => _WithdrawalApprovalCard(
+                withdrawal: withdrawal,
+                status: _statuses[withdrawal.id] ?? withdrawal.status,
+                canMarkPaid: canMarkPaid,
+                onApprove: () => _processWithdrawal(
+                  withdrawal.id,
+                  'Approved',
+                  () => _apiClient.approveWithdrawal(withdrawal.id),
+                  adminSnapshot.hasValue,
+                ),
+                onReject: () => _processWithdrawal(
+                  withdrawal.id,
+                  'Rejected',
+                  () => _apiClient.rejectWithdrawal(withdrawal.id),
+                  adminSnapshot.hasValue,
+                ),
+                onPaid: () => _processWithdrawal(
+                  withdrawal.id,
+                  'Paid',
+                  () => _apiClient.markWithdrawalPaid(withdrawal.id),
+                  adminSnapshot.hasValue,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -105,16 +107,12 @@ class _AdminWithdrawalScreenState extends ConsumerState<AdminWithdrawalScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Withdrawal $status berhasil diproses.')),
-      );
+      _TapGoSnackbar.success(context, 'Withdrawal $status berhasil diproses.');
     } catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal proses withdrawal: $error')),
-      );
+      _TapGoSnackbar.error(context, 'Gagal proses withdrawal: $error');
     }
   }
 

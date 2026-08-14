@@ -10,6 +10,28 @@ import {
   SessionRecord
 } from "../domain/AuthRepository.js";
 
+// P1-4: advisory-lock key konstan untuk klaim kuota benefit Basic PPOB.
+// Banyak registrasi yang meng-UPDATE baris kuota yang sama harus diantre, bukan
+// dibiarkan saling menabrak. Advisory lock (lock DB tingkat transaksi)
+// mengantre klaim sehingga tetap atomik, tidak over-grant, dan registrasi tidak
+// gagal karena race — tanpa memerlukan Serializable isolation (lihat catatan
+// pada opsi $transaction di createUser).
+const BASIC_PPOB_QUOTA_LOCK_KEY = 552025001;
+
+/**
+ * Namespace (classid) advisory lock per jenis sinyal anti-abuse registrasi.
+ *
+ * Memakai bentuk dua-argumen pg_advisory_xact_lock(classid, objid) agar sinyal
+ * berbeda tidak pernah bertabrakan meski objid-nya sama. Nilai sensitif tidak
+ * pernah menjadi bagian dari key: objid diturunkan lewat SHA-256 (lihat
+ * advisoryObjectId) dan tidak di-log.
+ */
+const ABUSE_LOCK_NAMESPACE = {
+  device: 5581,
+  ip: 5582,
+  referral: 5583
+} as const;
+
 export class PrismaAuthRepository implements AuthRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -24,18 +46,40 @@ export class PrismaAuthRepository implements AuthRepository {
     return this.prisma.user.findUnique({ where: { referralCode } });
   }
 
+  async getAuthVersion(userId: string): Promise<number> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { authVersion: true }
+    });
+    return user?.authVersion ?? 0;
+  }
+
   findUserById(id: string) {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
   createUser(input: CreateUserInput) {
-    return this.prisma.$transaction(async (tx) => {
+    return this.runWithSerializationRetry(() => this.prisma.$transaction(async (tx) => {
       const basic = await tx.membership.findUnique({ where: { tier: "BASIC" } });
-      const registeredUsers = await tx.user.count({ where: { role: UserRole.USER } });
-      const registrationBonus =
-        input.role === UserRole.USER && registeredUsers < 1000
-          ? new Prisma.Decimal(5000)
-          : new Prisma.Decimal(0);
+      // P1-4: klaim slot benefit Basic PPOB Rp5.000 secara atomik. Conditional
+      // UPDATE ... RETURNING mengambil row lock pada baris kuota sehingga dua
+      // registrasi yang berlomba di batas ke-1.000 tidak dapat double-claim dan
+      // total penerima tidak akan melebihi limit. Hanya role USER yang memakai slot.
+      let registrationBonus = new Prisma.Decimal(0);
+      if (input.role === UserRole.USER) {
+        // Advisory lock mengantre (bukan meng-abort) klaim kuota, sehingga
+        // hanya satu registrasi menyentuh baris kuota pada satu waktu.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BASIC_PPOB_QUOTA_LOCK_KEY})`;
+        const claimed = await tx.$queryRaw<Array<{ granted: number }>>`
+          UPDATE "registration_quota"
+          SET "granted" = "granted" + 1, "updated_at" = CURRENT_TIMESTAMP
+          WHERE "key" = 'BASIC_PPOB_FIRST_1000' AND "granted" < "limit"
+          RETURNING "granted"
+        `;
+        if (claimed.length > 0) {
+          registrationBonus = new Prisma.Decimal(5000);
+        }
+      }
 	      const sponsorReferralCode = input.sponsorReferralCode?.trim().toUpperCase();
       const sponsor = sponsorReferralCode
         ? await tx.user.findUnique({ where: { referralCode: sponsorReferralCode } })
@@ -133,10 +177,84 @@ export class PrismaAuthRepository implements AuthRepository {
 
 	      return user;
     }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      // Isolation: Read Committed (default PostgreSQL).
+      //
+      // Serializable SENGAJA tidak dipakai di sini. Invarian kuota first-1000
+      // dijamin sepenuhnya oleh dua mekanisme di atas, bukan oleh isolation
+      // level: (1) pg_advisory_xact_lock menyerialkan klaim, dan (2) conditional
+      // UPDATE ... WHERE "granted" < "limit" RETURNING bersifat atomik — row
+      // lock ditahan sampai COMMIT dan predikat dievaluasi ulang terhadap versi
+      // baris terbaru, sehingga over-grant tidak mungkin terjadi. Seluruh
+      // penambahan counter, pembuatan wallet, dan kredit bonus berada dalam satu
+      // transaksi, jadi rollback membatalkan semuanya.
+      //
+      // Sebaliknya, Serializable memunculkan SQLSTATE 40001 ("could not
+      // serialize access due to read/write dependencies", Prisma P2034) sebagai
+      // false positive pada registrasi konkuren — konflik SSI pada INSERT ke
+      // users/wallets/registration_events, bukan pada baris kuota. Di bawah 20
+      // registrasi bersamaan, retry bisa habis dan registrasi yang sah gagal.
       timeout: 15000
-    });
-	  }
+    }));
+  }
+
+  // P1-4: jaring pengaman untuk kegagalan transient DB yang SUDAH dipastikan
+  // aman di-retry (lihat isSerializationFailure). Transaksi yang dibatalkan
+  // PostgreSQL selalu di-rollback penuh — penambahan counter kuota, pembuatan
+  // user/wallet, dan kredit bonus batal bersama — sehingga menjalankan ulang
+  // seluruh operasi tidak dapat menghasilkan double credit atau over-grant.
+  //
+  // Backoff memakai jitter acak: tanpa jitter, seluruh registrasi yang
+  // bertabrakan akan retry pada tick yang sama (thundering herd) dan terus
+  // bertabrakan sampai attempt habis.
+  private async runWithSerializationRetry<T>(
+    operation: () => Promise<T>,
+    maxAttempts = 8
+  ): Promise<T> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        return await operation();
+      } catch (error) {
+        if (this.isSerializationFailure(error)) {
+          lastError = error;
+          if (attempt < maxAttempts) {
+            const base = 10 * attempt;
+            const delay = base + Math.floor(Math.random() * base);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            continue;
+          }
+          // Attempt habis: kembalikan error aplikasi terkendali, bukan error
+          // Prisma mentah, agar klien menerima 503 + kode stabil dan tidak
+          // pernah melihat detail internal database.
+          throw new AppError(
+            "Sistem sedang sibuk. Silakan coba lagi sesaat lagi.",
+            StatusCodes.SERVICE_UNAVAILABLE,
+            "REGISTRATION_TEMPORARILY_UNAVAILABLE"
+          );
+        }
+        throw error;
+      }
+    }
+    throw lastError;
+  }
+
+  private isSerializationFailure(error: unknown): boolean {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+      return false;
+    }
+    // P2034/P2037: write conflict / deadlock pada transaksi Prisma.
+    if (error.code === "P2034" || error.code === "P2037") {
+      return true;
+    }
+    // P2010: raw query gagal. Klaim kuota memakai $queryRaw, sehingga
+    // serialization failure PostgreSQL (SQLSTATE 40001) dan deadlock (40P01)
+    // muncul terbungkus di sini pada error.meta.code.
+    if (error.code === "P2010") {
+      const pgCode = (error.meta as { code?: string } | undefined)?.code;
+      return pgCode === "40001" || pgCode === "40P01";
+    }
+    return false;
+  }
 
 	  private async recordRegistrationEvent(
 	    tx: Prisma.TransactionClient,
@@ -151,6 +269,11 @@ export class PrismaAuthRepository implements AuthRepository {
 	  ) {
 	    const suspiciousReasons: string[] = [];
 	    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+	    // Serialkan evaluasi sinyal anti-abuse per-key (bukan satu lock global).
+	    // Tanpa ini, dua registrasi bersamaan yang berbagi device/IP/kode
+	    // referral bisa sama-sama membaca count lama sehingga flag tidak naik.
+	    await this.lockAbuseSignals(tx, input);
 
 	    if (input.deviceFingerprintHash) {
 	      const sameDeviceCount = await tx.registrationEvent.count({
@@ -222,6 +345,78 @@ export class PrismaAuthRepository implements AuthRepository {
 
 	  private hashValue(value: string) {
 	    return crypto.createHash("sha256").update(value).digest("hex");
+	  }
+
+	  /**
+	   * Turunkan objid int32 signed yang deterministik dari nilai sensitif.
+	   *
+	   * Nilai mentah (IP, device identifier, kode referral) TIDAK pernah keluar
+	   * dari fungsi ini: hanya 4 byte pertama SHA-256 yang dipakai sebagai angka
+	   * lock. Angka ini tidak di-log dan tidak dikembalikan ke klien.
+	   */
+	  private advisoryObjectId(value: string): number {
+	    return crypto.createHash("sha256").update(value).digest().readInt32BE(0);
+	  }
+
+	  /**
+	   * Ambil transaction-scoped advisory lock untuk setiap sinyal anti-abuse yang
+	   * relevan, sehingga blok count -> evaluate -> write event berjalan
+	   * sequentially consistent terhadap registrasi lain yang berbagi key yang
+	   * sama.
+	   *
+	   * Desain:
+	   * - Dua-argumen pg_advisory_xact_lock(classid, objid). classid adalah
+	   *   namespace per jenis sinyal sehingga device/IP/referral tidak pernah
+	   *   bertabrakan satu sama lain.
+	   * - Key di-dedupe, lalu diurutkan deterministik (classid, objid) sebelum
+	   *   diambil. Semua transaksi memakai urutan yang sama, sehingga tidak ada
+	   *   siklus tunggu -> tidak ada deadlock.
+	   * - Lock bersifat transaction-scoped: dilepas otomatis saat COMMIT maupun
+	   *   ROLLBACK, jadi kegagalan tidak meninggalkan lock menggantung.
+	   * - Registrasi yang tidak membawa sinyal apa pun tidak mengambil lock.
+	   */
+	  private async lockAbuseSignals(
+	    tx: Prisma.TransactionClient,
+	    input: {
+	      sponsorReferralCode?: string;
+	      deviceFingerprintHash?: string;
+	      ipAddress?: string;
+	    }
+	  ) {
+	    const keys: Array<[number, number]> = [];
+
+	    if (input.deviceFingerprintHash) {
+	      keys.push([
+	        ABUSE_LOCK_NAMESPACE.device,
+	        this.advisoryObjectId(input.deviceFingerprintHash)
+	      ]);
+	    }
+	    if (input.ipAddress) {
+	      keys.push([ABUSE_LOCK_NAMESPACE.ip, this.advisoryObjectId(input.ipAddress)]);
+	    }
+	    if (input.sponsorReferralCode) {
+	      keys.push([
+	        ABUSE_LOCK_NAMESPACE.referral,
+	        this.advisoryObjectId(input.sponsorReferralCode)
+	      ]);
+	    }
+
+	    if (keys.length === 0) {
+	      return;
+	    }
+
+	    // Dedupe lalu urutkan deterministik untuk mencegah deadlock.
+	    const unique = new Map<string, [number, number]>();
+	    for (const key of keys) {
+	      unique.set(`${key[0]}:${key[1]}`, key);
+	    }
+	    const ordered = [...unique.values()].sort(
+	      (left, right) => left[0] - right[0] || left[1] - right[1]
+	    );
+
+	    for (const [classId, objectId] of ordered) {
+	      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${classId}::int, ${objectId}::int)`;
+	    }
 	  }
 
 	  private severityForReason(reason: string): AbuseFlagSeverity {

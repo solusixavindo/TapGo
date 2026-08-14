@@ -23,11 +23,6 @@ export class AuthController {
     res.json({ success: true, data: result });
   };
 
-  requestOtp = async (req: Request, res: Response) => {
-    const result = await this.authService.requestOtp(req.body);
-    res.status(StatusCodes.ACCEPTED).json({ success: true, data: result });
-  };
-
   refresh = async (req: Request, res: Response) => {
     const result = await this.authService.refresh(req.body.refreshToken, this.getContext(req));
     res.json({ success: true, data: result });

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none" role="img" aria-label="TapGo Tagihan 3D service icon">
+  <title>Tagihan</title>
+  <defs>
+    <linearGradient id="paper" x1="28" y1="14" x2="70" y2="78" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#E9F3FF"/></linearGradient>
+    <linearGradient id="blue" x1="24" y1="18" x2="74" y2="80" gradientUnits="userSpaceOnUse"><stop stop-color="#45C5FF"/><stop offset="1" stop-color="#1754D8"/></linearGradient>
+    <linearGradient id="gold" x1="46" y1="47" x2="77" y2="78" gradientUnits="userSpaceOnUse"><stop stop-color="#FFE58A"/><stop offset="0.58" stop-color="#FFBE25"/><stop offset="1" stop-color="#D88A06"/></linearGradient>
+  </defs>
+  <ellipse cx="48" cy="82" rx="27" ry="6" fill="#07213D" opacity="0.14"/>
+  <path d="M28 17h30l13 13v43c0 4-3 7-7 7H28c-4 0-7-3-7-7V24c0-4 3-7 7-7Z" fill="url(#blue)"/>
+  <path d="M31 23h24l10 10v37H31Z" fill="url(#paper)" opacity="0.98"/>
+  <path d="M55 23v12h12" fill="#CBE8FF"/>
+  <rect x="37" y="42" width="21" height="5" rx="2.5" fill="#1E7BFF" opacity="0.72"/>
+  <rect x="37" y="53" width="16" height="5" rx="2.5" fill="#1E7BFF" opacity="0.45"/>
+  <circle cx="65" cy="63" r="13" fill="url(#gold)"/>
+  <path d="M59 63h12M65 57v12" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>
+</svg>

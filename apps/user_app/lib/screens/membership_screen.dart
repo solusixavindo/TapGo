@@ -8,7 +8,7 @@ class SuperMenuScreen extends StatefulWidget {
 }
 
 class _SuperMenuScreenState extends State<SuperMenuScreen> {
-  static const _groups = [
+  static const _directGroups = [
     _SuperMenuGroup('Layanan', [
       _SuperMenuItem('TapGo Ride', Icons.two_wheeler_rounded),
       _SuperMenuItem('TapGo Car', Icons.local_taxi_rounded),
@@ -34,15 +34,16 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
     ]),
   ];
 
-  static const _searchHints = [
-    'Cari Membership',
-    'Cari Referral',
-    'Cari Reward',
-    'Cari PPOB',
-    'Cari BPJS',
-    'Cari Webinar',
-    'Cari Kelas Online',
+  static const _playGroups = [
+    _SuperMenuGroup('Akun', [
+      _SuperMenuItem('Kartu Anggota', Icons.badge_rounded),
+      _SuperMenuItem('Profil', Icons.person_rounded),
+      _SuperMenuItem('Tiket Bantuan', Icons.volunteer_activism_rounded),
+      _SuperMenuItem('Hapus Akun', Icons.delete_outline_rounded),
+    ]),
   ];
+
+  static const _searchHints = ['Cari Membership', 'Cari Referral', 'Cari PPOB'];
 
   int _hintIndex = 0;
   Timer? _hintTimer;
@@ -64,15 +65,18 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final groups = _superMenuGroupsForDistribution(_tapGoDistributionMode);
     return _DemoScaffold(
       title: 'Super Menu',
       subtitle: 'Semua layanan TapGo dalam satu akses',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SuperMenuSearchBar(hint: _searchHints[_hintIndex]),
-          const SizedBox(height: 18),
-          ..._groups.map(
+          if (tapGoIsDirectDistribution) ...[
+            _SuperMenuSearchBar(hint: _searchHints[_hintIndex]),
+            const SizedBox(height: 18),
+          ],
+          ...groups.map(
             (group) => Padding(
               padding: const EdgeInsets.only(bottom: 20),
               child: Column(
@@ -116,19 +120,48 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
   }
 
   void _openMenuDetail(BuildContext context, String label) {
-    if (label == 'Membership') {
-      _openDemo(context, const MembershipPackagesScreen());
-    } else if (label == 'Referral') {
-      _openDemo(context, const ReferralDashboardScreen());
-    } else if (label == 'Marketing Plan') {
-      _openDemo(context, const MarketingPlanScreen());
-    } else if (label == 'Reward') {
-      _openDemo(context, const RewardScreen());
-    } else {
-      _openDemo(context, FeatureDetailScreen(title: label));
+    final destination = _superMenuDestinationForLabel(label);
+    if (destination != null) {
+      _openDemo(context, destination);
     }
   }
 }
+
+List<_SuperMenuGroup> _superMenuGroupsForDistribution(
+  TapGoDistributionMode mode,
+) =>
+    mode == TapGoDistributionMode.play
+        ? _SuperMenuScreenState._playGroups
+        : _SuperMenuScreenState._directGroups;
+
+List<String> tapGoSuperMenuLabelsForDistributionForTests(
+  TapGoDistributionMode mode,
+) =>
+    _superMenuGroupsForDistribution(mode)
+        .expand((group) => group.items.map((item) => item.label))
+        .toList(growable: false);
+
+Widget? _superMenuDestinationForLabel(String label) {
+  if (tapGoIsPlayDistribution) {
+    return switch (label) {
+      'Kartu Anggota' => const BasicMemberCardScreen(),
+      'Profil' => const ProfileDetailsScreen(),
+      'Tiket Bantuan' => const ContactUsScreen(),
+      'Hapus Akun' => const DeleteAccountRequestScreen(),
+      _ => null,
+    };
+  }
+  return switch (label) {
+    'Membership' || 'Membership Saya' => const MembershipPackagesScreen(),
+    'Referral' => const ReferralDashboardScreen(),
+    'Marketing Plan' => const MarketingPlanScreen(),
+    'Reward' => const RewardScreen(),
+    _ => FeatureDetailScreen(title: label),
+  };
+}
+
+Widget? tapGoSuperMenuDestinationForLabelForTests(String label) =>
+    _superMenuDestinationForLabel(label);
 
 class _SuperMenuSearchBar extends StatelessWidget {
   const _SuperMenuSearchBar({required this.hint});
@@ -141,7 +174,8 @@ class _SuperMenuSearchBar extends StatelessWidget {
       color: Colors.white,
       borderRadius: BorderRadius.circular(24),
       child: InkWell(
-        onTap: () => _showInfoSnack(context, 'Pencarian segera tersedia'),
+        onTap: () =>
+            _showInfoSnack(context, 'Pencarian belum dapat digunakan saat ini'),
         borderRadius: BorderRadius.circular(24),
         child: Container(
           height: 56,
@@ -175,7 +209,12 @@ class _SuperMenuSearchBar extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 320),
+                  duration: _TapGoMotion.duration(
+                    context,
+                    _TapGoMotion.standard,
+                  ),
+                  switchInCurve: _TapGoMotion.standardCurve,
+                  switchOutCurve: _TapGoMotion.exitCurve,
                   transitionBuilder: (child, animation) => FadeTransition(
                     opacity: animation,
                     child: SlideTransition(
@@ -221,11 +260,11 @@ class FeatureDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return _DemoScaffold(
       title: title,
-      subtitle: 'Kesiapan UAT',
+      subtitle: 'Informasi layanan',
       child: _EmptyState(
         icon: Icons.rocket_launch_rounded,
-        title: '$title siap dikembangkan',
-        subtitle: 'Fitur ini siap dikembangkan untuk versi production.',
+        title: '$title belum dapat dibuka saat ini',
+        subtitle: 'Silakan gunakan menu TapGo lain yang sudah tersedia.',
       ),
     );
   }
@@ -236,6 +275,9 @@ class MarketingPlanScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (tapGoIsPlayDistribution) {
+      return const MembershipScreen();
+    }
     return _DemoScaffold(
       title: 'Marketing Plan',
       subtitle: 'PT. TapGo Lion Indonesia',
@@ -246,24 +288,27 @@ class MarketingPlanScreen extends StatelessWidget {
           _DemoMenuTile(
             icon: Icons.workspace_premium_rounded,
             title: 'Membership Package',
-            subtitle: 'Basic, Silver, Gold, Platinum',
+            subtitle: 'Silver, Gold, Platinum',
             onTap: () => _openDemo(context, const MembershipPackagesScreen()),
           ),
           _DemoMenuTile(
             icon: Icons.hub_rounded,
             title: 'Referral Dashboard',
-            subtitle: 'Kode referral, level aktif, downline, bonus',
+            subtitle: tapGoIsPlayDistribution
+                ? 'Kode referral, level aktif, dan downline'
+                : 'Kode referral, level aktif, downline, bonus',
             onTap: () => _openDemo(context, const ReferralDashboardScreen()),
           ),
-          _DemoMenuTile(
-            icon: Icons.account_balance_wallet_rounded,
-            title: 'Wallet',
-            subtitle: 'Saldo, PPOB, riwayat bonus, withdraw',
-            onTap: () => _openDemo(context, const DemoWalletScreen()),
-          ),
+          if (tapGoIsDirectDistribution)
+            _DemoMenuTile(
+              icon: Icons.account_balance_wallet_rounded,
+              title: 'Wallet',
+              subtitle: 'Saldo, PPOB, riwayat bonus, withdraw',
+              onTap: () => _openDemo(context, const DemoWalletScreen()),
+            ),
           _DemoMenuTile(
             icon: Icons.account_tree_rounded,
-            title: 'Referral Tree',
+            title: 'Jaringan Referral',
             subtitle: 'Visual struktur downline level 1 sampai 10',
             onTap: () => _openDemo(context, const ReferralTreeScreen()),
           ),
@@ -273,18 +318,64 @@ class MarketingPlanScreen extends StatelessWidget {
   }
 }
 
-class MembershipPackagesScreen extends StatelessWidget {
+class MembershipPackagesScreen extends StatefulWidget {
   const MembershipPackagesScreen({super.key});
 
   @override
+  State<MembershipPackagesScreen> createState() =>
+      _MembershipPackagesScreenState();
+}
+
+class _MembershipPackagesScreenState extends State<MembershipPackagesScreen> {
+  String? _selectedPackageName;
+
+  void _openPackage(_MembershipPackage package) {
+    setState(() => _selectedPackageName = package.name);
+    if (tapGoIsPlayDistribution) {
+      _TapGoSnackbar.info(context, 'Akun Anda sudah aktif sebagai Basic.');
+      return;
+    }
+    _openDemo(
+      context,
+      MembershipRegistrationScreen(
+        package: DemoClientCatalog.packageByName(package.name),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (tapGoIsPlayDistribution) {
+      return const BasicMemberCardScreen();
+    }
+
+    final upgradePackages = _demoMemberships
+        .where((package) => package.name.toLowerCase() != 'basic')
+        .toList(growable: false);
+
     return _DemoScaffold(
       title: 'Membership',
-      subtitle: 'Paket bisnis TapGo',
+      subtitle: 'Pilih paket upgrade TapGo',
       child: Column(
-        children: _demoMemberships
-            .map((item) => _MembershipPackageCard(package: item))
-            .toList(),
+        children: upgradePackages.isEmpty
+            ? const [
+                _StatusSurface(
+                  icon: Icons.workspace_premium_rounded,
+                  title: 'Paket upgrade belum tersedia',
+                  subtitle: 'Silakan cek kembali beberapa saat lagi.',
+                ),
+              ]
+            : upgradePackages.asMap().entries.map((entry) {
+                final item = entry.value;
+                return _TapGoReveal(
+                  order: entry.key,
+                  child: _MembershipPackageCard(
+                    package: item,
+                    selected: _selectedPackageName == item.name,
+                    onSelected: () => _openPackage(item),
+                  ),
+                );
+              }).toList(),
       ),
     );
   }
@@ -295,10 +386,15 @@ class MembershipScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (tapGoIsPlayDistribution) {
+      return const BasicMemberCardScreen();
+    }
+
     final production = ref.watch(_productionSnapshotProvider);
     final session = ref.watch(_demoSessionProvider);
     final package = DemoClientCatalog.packageByName(session.activePackageName);
-    final hasActivePackage = session.activePackageName != 'Basic' ||
+    final hasActivePackage = tapGoIsPlayDistribution ||
+        session.activePackageName != 'Basic' ||
         session.lastInvoiceNumber != null ||
         session.ppobBalance > 0;
     if (!hasActivePackage) {
@@ -326,16 +422,26 @@ class MembershipScreen extends ConsumerWidget {
           _InfoPanel(
             color: _packageAccent(package.name),
             title: 'Paket Aktif',
-            value:
-                session.isFounderPlatinum ? 'Founder Platinum' : package.name,
+            value: session.isFounderChairman
+                ? 'Founder Chairman'
+                : session.isFounderPlatinum
+                    ? 'Founder Platinum'
+                    : package.name,
             subtitle: 'Status: Aktif / Lunas',
             icon: Icons.workspace_premium_rounded,
           ),
-          if (session.isFounderPlatinum) ...[
+          if (session.isFounderChairman || session.isFounderPlatinum) ...[
             const SizedBox(height: 10),
-            const Align(
+            Align(
               alignment: Alignment.centerLeft,
-              child: _FounderPlatinumBadge(),
+              child: _FounderPlatinumBadge(
+                label: session.isFounderChairman
+                    ? 'Founder Chairman'
+                    : 'Founder Platinum',
+                icon: session.isFounderChairman
+                    ? Icons.emoji_events_rounded
+                    : Icons.workspace_premium_rounded,
+              ),
             ),
           ],
           const SizedBox(height: 14),
@@ -371,26 +477,29 @@ class MembershipScreen extends ConsumerWidget {
           _DemoDocumentPreview(
             title: 'KTP',
             imagePath: session.ktpImagePath,
-            emptyLabel: 'Belum ada preview KTP',
+            emptyLabel: 'Belum ada pratinjau KTP',
           ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: () => _openDemo(
-              context,
-              MembershipInvoiceScreen(session: session, package: package),
-            ),
-            icon: const Icon(Icons.receipt_long_rounded),
-            label: const Text('Lihat Invoice'),
-            style: FilledButton.styleFrom(
-              backgroundColor: _brandBlue,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+          if (!tapGoIsPlayDistribution ||
+              session.lastInvoiceNumber != null) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () => _openDemo(
+                context,
+                MembershipInvoiceScreen(session: session, package: package),
+              ),
+              icon: const Icon(Icons.receipt_long_rounded),
+              label: const Text('Lihat Invoice'),
+              style: FilledButton.styleFrom(
+                backgroundColor: _brandBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
             ),
-          ),
-          if (package.name != 'Platinum') ...[
+          ],
+          if (tapGoIsDirectDistribution && package.name != 'Platinum') ...[
             const SizedBox(height: 10),
             OutlinedButton.icon(
               onPressed: () =>
@@ -442,7 +551,7 @@ class MembershipInvoiceScreen extends ConsumerWidget {
             return const _StatusSurface(
               icon: Icons.sync_rounded,
               title: 'Memuat invoice',
-              subtitle: 'Mengambil detail invoice dari backend...',
+              subtitle: 'Mengambil detail invoice...',
             );
           }
           if (snapshot.hasError) {
@@ -544,10 +653,7 @@ class _InvoiceDetailPanel extends StatelessWidget {
 }
 
 class _MembershipActiveDetailRow extends StatelessWidget {
-  const _MembershipActiveDetailRow({
-    required this.label,
-    required this.value,
-  });
+  const _MembershipActiveDetailRow({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -611,8 +717,11 @@ class _BenefitPanel extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.check_circle_rounded,
-                      color: Color(0xFF00A86B), size: 18),
+                  const Icon(
+                    Icons.check_circle_rounded,
+                    color: Color(0xFF00A86B),
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -635,13 +744,15 @@ class ReferralDashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (tapGoIsPlayDistribution) {
+      return const MembershipScreen();
+    }
     final production = ref.watch(_productionSnapshotProvider);
     final session = ref.watch(_demoSessionProvider);
     return _DemoScaffold(
       title: 'Referral Dashboard',
-      subtitle: production.hasValue
-          ? 'Data referral backend'
-          : 'Referral member TapGo',
+      subtitle:
+          production.hasValue ? 'Data referral TapGo' : 'Referral member TapGo',
       child: Column(
         children: [
           _ProductionStatusTile(state: production),
@@ -681,13 +792,19 @@ class ReferralDashboardScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
-                child: _StatCard(label: 'Profit sharing', value: 'Bulanan'),
+              Expanded(
+                child: _StatCard(
+                  label: tapGoIsPlayDistribution
+                      ? 'Status benefit'
+                      : 'Profit sharing',
+                  value: tapGoIsPlayDistribution ? 'Aktif' : 'Bulanan',
+                ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          _BonusBreakdownCard(transactions: session.transactions),
+          if (tapGoIsDirectDistribution)
+            _BonusBreakdownCard(transactions: session.transactions),
         ],
       ),
     );
@@ -704,7 +821,7 @@ class CommissionHistoryScreen extends ConsumerWidget {
         const <WalletTransactionModel>[];
     return _DemoScaffold(
       title: 'Riwayat Komisi',
-      subtitle: 'Komisi real dari database',
+      subtitle: 'Komisi dari transaksi TapGo',
       child: Column(
         children: [
           _ProductionStatusTile(state: production),
@@ -713,7 +830,7 @@ class CommissionHistoryScreen extends ConsumerWidget {
             const _StatusSurface(
               icon: Icons.sync_rounded,
               title: 'Memuat komisi',
-              subtitle: 'Mengambil riwayat komisi dari backend...',
+              subtitle: 'Mengambil riwayat komisi...',
             )
           else if (production.hasError)
             _RetryStatusSurface(
@@ -748,12 +865,16 @@ class DemoWalletScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (tapGoIsPlayDistribution) {
+      return const MembershipScreen();
+    }
+
     final production = ref.watch(_productionSnapshotProvider);
     final session = ref.watch(_demoSessionProvider);
     return _DemoScaffold(
       title: 'Wallet',
       subtitle: production.hasValue
-          ? 'Ledger bonus dan saldo backend'
+          ? 'Ledger bonus dan saldo TapGo'
           : 'Saldo dan transaksi TapGo',
       child: Column(
         children: [
@@ -783,7 +904,7 @@ class DemoWalletScreen extends ConsumerWidget {
             const _EmptyState(
               icon: Icons.receipt_long_rounded,
               title: 'Belum ada transaksi',
-              subtitle: 'Transaksi wallet dari backend akan muncul di sini.',
+              subtitle: 'Transaksi wallet akan muncul di sini.',
             ),
           if (_isTapGoDevelopmentBuild && !production.hasValue) ...[
             const _WalletLedgerItem(
@@ -807,7 +928,7 @@ class DemoWalletScreen extends ConsumerWidget {
             const _WalletLedgerItem(
               title: 'Profit Sharing',
               amount: 'Menunggu',
-              note: 'Placeholder bonus bulanan',
+              note: 'Menunggu periode distribusi',
               color: Color(0xFF697386),
             ),
           ],
@@ -822,7 +943,7 @@ class DemoWalletScreen extends ConsumerWidget {
                   return const _StatusSurface(
                     icon: Icons.sync_rounded,
                     title: 'Memuat withdraw',
-                    subtitle: 'Mengambil riwayat withdrawal backend...',
+                    subtitle: 'Mengambil riwayat withdrawal...',
                   );
                 }
                 if (withdrawals.isEmpty) {
@@ -830,13 +951,14 @@ class DemoWalletScreen extends ConsumerWidget {
                 }
                 return Column(
                   children: withdrawals.take(5).map((item) {
-                    final status =
-                        _withdrawalStatusLabel(item['status']?.toString());
+                    final status = _withdrawalStatusLabel(
+                      item['status']?.toString(),
+                    );
                     return _WalletLedgerItem(
                       title: 'Withdraw $status',
                       amount: '- ${formatRupiah(_intFrom(item['amount']))}',
                       note:
-                          '${item['bankName'] ?? 'Bank'} • ${_dateLabel(item['requestedAt']) ?? 'Backend'}',
+                          '${item['bankName'] ?? 'Bank'} • ${_dateLabel(item['requestedAt']) ?? 'Tanggal belum tersedia'}',
                       color: switch (status) {
                         'Rejected' => const Color(0xFFE51E3E),
                         'Paid' => const Color(0xFF00A86B),
@@ -874,6 +996,14 @@ class DemoWalletScreen extends ConsumerWidget {
   }
 
   Future<void> _showWithdrawalForm(BuildContext context, WidgetRef ref) async {
+    if (tapGoIsPlayDistribution) {
+      _TapGoSnackbar.info(
+        context,
+        'Pengelolaan saldo belum tersedia pada rilis Google Play.',
+      );
+      return;
+    }
+
     final session = ref.read(_demoSessionProvider);
     Map<String, dynamic> bankAccount = const <String, dynamic>{};
     if (session.accessToken != null && session.accessToken!.isNotEmpty) {
@@ -890,123 +1020,163 @@ class DemoWalletScreen extends ConsumerWidget {
         : session.walletBalance >= 50000
             ? session.walletBalance
             : 50000;
-    final amountController =
-        TextEditingController(text: defaultAmount.toString());
-    final bankController =
-        TextEditingController(text: bankAccount['bankName']?.toString() ?? '');
+    final amountController = TextEditingController(
+      text: tapGoFormatRupiahInput(defaultAmount.toString()),
+    );
+    final bankController = TextEditingController(
+      text: bankAccount['bankName']?.toString() ?? '',
+    );
     final accountController = TextEditingController(
-        text: bankAccount['accountNumber']?.toString() ?? '');
+      text: bankAccount['accountNumber']?.toString() ?? '',
+    );
     final holderController = TextEditingController(
-        text: bankAccount['accountHolderName']?.toString() ??
-            ref.read(_demoSessionProvider).userName);
+      text: bankAccount['accountHolderName']?.toString() ??
+          ref.read(_demoSessionProvider).userName,
+    );
     final formKey = GlobalKey<FormState>();
+    final submitGuard = TapGoSingleFlightGuard();
+    var isSubmitting = false;
 
-    await showModalBottomSheet<void>(
+    await _showTapGoBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          8,
-          20,
-          MediaQuery.of(context).viewInsets.bottom + 20,
-        ),
-        child: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Ajukan Withdrawal',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 14),
-              _InputField(
-                controller: amountController,
-                icon: Icons.payments_rounded,
-                label: 'Nominal',
-                hint: 'Minimal Rp50.000',
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  final amount = _intFrom(value);
-                  if (amount < 50000) {
-                    return 'Minimal withdraw Rp50.000';
-                  }
-                  if (amount > session.walletBalance) {
-                    return 'Saldo TapGoPay belum cukup';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 10),
-              _BankDropdownField(
-                controller: bankController,
-                label: 'Bank',
-              ),
-              const SizedBox(height: 10),
-              _InputField(
-                controller: accountController,
-                icon: Icons.numbers_rounded,
-                label: 'Nomor rekening',
-                hint: '1234567890',
-                keyboardType: TextInputType.number,
-                validator: (value) => (value ?? '').trim().length >= 6
-                    ? null
-                    : 'Rekening tidak valid',
-              ),
-              const SizedBox(height: 10),
-              _InputField(
-                controller: holderController,
-                icon: Icons.person_rounded,
-                label: 'Nama rekening',
-                hint: 'Nama pemilik rekening',
-                validator: (value) => (value ?? '').trim().length >= 2
-                    ? null
-                    : 'Nama wajib diisi',
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () async {
-                    if (!(formKey.currentState?.validate() ?? false)) {
-                      return;
-                    }
-                    final rootContext = context;
-                    try {
-                      final session = ref.read(_demoSessionProvider);
-                      _apiClient.setAccessToken(session.accessToken);
-                      await _apiClient.requestWithdrawal(
-                        amount: _intFrom(amountController.text),
-                        bankName: bankController.text.trim(),
-                        bankCode: _bankByNameOrCode(bankController.text)?.code,
-                        accountNumber: accountController.text.trim(),
-                        accountHolderName: holderController.text.trim(),
-                      );
-                      if (!rootContext.mounted) {
-                        return;
-                      }
-                      Navigator.of(rootContext).pop();
-                      ScaffoldMessenger.of(rootContext).showSnackBar(
-                        const SnackBar(
-                            content: Text('Withdrawal berhasil diajukan.')),
-                      );
-                      ref.invalidate(_productionSnapshotProvider);
-                    } catch (error) {
-                      if (!rootContext.mounted) {
-                        return;
-                      }
-                      ScaffoldMessenger.of(rootContext).showSnackBar(
-                        SnackBar(content: Text(_friendlyApiError(error))),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.send_rounded),
-                  label: const Text('Kirim Pengajuan'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            8,
+            20,
+            MediaQuery.of(context).viewInsets.bottom + 20,
+          ),
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Ajukan Withdrawal',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                 ),
-              ),
-            ],
+                const SizedBox(height: 14),
+                _InputField(
+                  controller: amountController,
+                  icon: Icons.payments_rounded,
+                  label: 'Nominal',
+                  hint: 'Minimal Rp50.000',
+                  keyboardType: TextInputType.number,
+                  inputFormatters: tapGoRupiahInputFormatters,
+                  readOnly: isSubmitting,
+                  validator: (value) {
+                    final amount = tapGoCanonicalRupiahValue(value);
+                    if (amount < 50000) {
+                      return 'Minimal withdraw Rp50.000';
+                    }
+                    if (amount > session.walletBalance) {
+                      return 'Saldo TapGoPay belum cukup';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 10),
+                AbsorbPointer(
+                  absorbing: isSubmitting,
+                  child: _BankDropdownField(
+                    controller: bankController,
+                    label: 'Bank',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _InputField(
+                  controller: accountController,
+                  icon: Icons.numbers_rounded,
+                  label: 'Nomor rekening',
+                  hint: '1234567890',
+                  keyboardType: TextInputType.number,
+                  inputFormatters: tapGoDigitsOnlyInputFormatters,
+                  readOnly: isSubmitting,
+                  validator: tapGoBankAccountValidatorMessage,
+                ),
+                const SizedBox(height: 10),
+                _InputField(
+                  controller: holderController,
+                  icon: Icons.person_rounded,
+                  label: 'Nama rekening',
+                  hint: 'Nama pemilik rekening',
+                  readOnly: isSubmitting,
+                  validator: (value) => (value ?? '').trim().length >= 2
+                      ? null
+                      : 'Nama wajib diisi',
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: isSubmitting
+                        ? null
+                        : () async {
+                            if (!(formKey.currentState?.validate() ?? false)) {
+                              return;
+                            }
+                            setModalState(() => isSubmitting = true);
+                            final rootContext = context;
+                            try {
+                              final success = await submitGuard.run(() async {
+                                final session = ref.read(_demoSessionProvider);
+                                _apiClient.setAccessToken(session.accessToken);
+                                await _apiClient.requestWithdrawal(
+                                  amount: tapGoCanonicalRupiahValue(
+                                    amountController.text,
+                                  ),
+                                  bankName: bankController.text.trim(),
+                                  bankCode: _bankByNameOrCode(
+                                    bankController.text,
+                                  )?.code,
+                                  accountNumber: tapGoDigitsOnly(
+                                    accountController.text,
+                                  ),
+                                  accountHolderName:
+                                      holderController.text.trim(),
+                                );
+                                return true;
+                              });
+                              if (!rootContext.mounted) {
+                                return;
+                              }
+                              if (success == true) {
+                                setModalState(() => isSubmitting = false);
+                                Navigator.of(rootContext).pop();
+                                _TapGoSnackbar.success(
+                                  rootContext,
+                                  'Withdrawal berhasil diajukan.',
+                                );
+                                ref.invalidate(_productionSnapshotProvider);
+                                return;
+                              }
+                            } catch (error) {
+                              if (!rootContext.mounted) {
+                                return;
+                              }
+                              _TapGoSnackbar.error(
+                                rootContext,
+                                _friendlyApiError(error),
+                              );
+                            } finally {
+                              if (rootContext.mounted && isSubmitting) {
+                                setModalState(() => isSubmitting = false);
+                              }
+                            }
+                          },
+                    icon: isSubmitting
+                        ? const _TapGoLoading(size: 18, strokeWidth: 2)
+                        : const Icon(Icons.send_rounded),
+                    label: Text(
+                      isSubmitting ? 'Mengirim...' : 'Kirim Pengajuan',
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1077,10 +1247,7 @@ _BankOption? _bankByNameOrCode(String value) {
 }
 
 class _BankDropdownField extends StatelessWidget {
-  const _BankDropdownField({
-    required this.controller,
-    required this.label,
-  });
+  const _BankDropdownField({required this.controller, required this.label});
 
   final TextEditingController controller;
   final String label;
@@ -1095,7 +1262,7 @@ class _BankDropdownField extends StatelessWidget {
         return InkWell(
           onTap: () async {
             final selected = await _showBankPicker(context, controller.text);
-            if (selected == null) {
+            if (selected == null || !field.context.mounted) {
               return;
             }
             controller.text = selected.name;
@@ -1104,8 +1271,10 @@ class _BankDropdownField extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           child: InputDecorator(
             decoration: InputDecoration(
-              prefixIcon:
-                  const Icon(Icons.account_balance_rounded, color: _brandBlue),
+              prefixIcon: const Icon(
+                Icons.account_balance_rounded,
+                color: _brandBlue,
+              ),
               suffixIcon: const Icon(Icons.expand_more_rounded),
               labelText: label,
               hintText: 'Pilih bank',
@@ -1132,12 +1301,9 @@ class _BankDropdownField extends StatelessWidget {
     );
   }
 
-  Future<_BankOption?> _showBankPicker(
-    BuildContext context,
-    String current,
-  ) {
+  Future<_BankOption?> _showBankPicker(BuildContext context, String current) {
     final searchController = TextEditingController();
-    return showModalBottomSheet<_BankOption>(
+    final picker = _showTapGoBottomSheet<_BankOption>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -1209,8 +1375,10 @@ class _BankDropdownField extends StatelessWidget {
                             title: Text(bank.name),
                             subtitle: Text(bank.code),
                             trailing: selected
-                                ? const Icon(Icons.check_circle_rounded,
-                                    color: _brandBlue)
+                                ? const Icon(
+                                    Icons.check_circle_rounded,
+                                    color: _brandBlue,
+                                  )
                                 : null,
                             onTap: () => Navigator.of(context).pop(bank),
                           );
@@ -1224,7 +1392,12 @@ class _BankDropdownField extends StatelessWidget {
           },
         );
       },
-    ).whenComplete(searchController.dispose);
+    );
+    return picker.whenComplete(() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        searchController.dispose();
+      });
+    });
   }
 }
 
@@ -1264,12 +1437,9 @@ class _BankAccountScreenState extends ConsumerState<BankAccountScreen> {
               const _StatusSurface(
                 icon: Icons.sync_rounded,
                 title: 'Memuat rekening',
-                subtitle: 'Mengambil data rekening dari backend...',
+                subtitle: 'Mengambil data rekening...',
               ),
-            _BankDropdownField(
-              controller: _bankController,
-              label: 'Nama bank',
-            ),
+            _BankDropdownField(controller: _bankController, label: 'Nama bank'),
             const SizedBox(height: 10),
             _InputField(
               controller: _accountController,
@@ -1277,9 +1447,8 @@ class _BankAccountScreenState extends ConsumerState<BankAccountScreen> {
               label: 'Nomor rekening',
               hint: 'Nomor rekening',
               keyboardType: TextInputType.number,
-              validator: (value) => (value ?? '').trim().length >= 6
-                  ? null
-                  : 'Nomor rekening tidak valid',
+              inputFormatters: tapGoDigitsOnlyInputFormatters,
+              validator: tapGoBankAccountValidatorMessage,
             ),
             const SizedBox(height: 10),
             _InputField(
@@ -1296,14 +1465,11 @@ class _BankAccountScreenState extends ConsumerState<BankAccountScreen> {
               child: FilledButton.icon(
                 onPressed: _saving ? null : _save,
                 icon: _saving
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const _TapGoLoading(size: 18, strokeWidth: 2)
                     : const Icon(Icons.save_rounded),
-                label:
-                    Text(_saving ? 'Menyimpan...' : 'Simpan / Update Rekening'),
+                label: Text(
+                  _saving ? 'Menyimpan...' : 'Simpan / Update Rekening',
+                ),
                 style: FilledButton.styleFrom(
                   backgroundColor: _brandBlue,
                   foregroundColor: Colors.white,
@@ -1345,9 +1511,7 @@ class _BankAccountScreenState extends ConsumerState<BankAccountScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Data rekening belum tersedia.')),
-      );
+      _TapGoSnackbar.info(context, 'Data rekening belum tersedia.');
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -1361,9 +1525,7 @@ class _BankAccountScreenState extends ConsumerState<BankAccountScreen> {
     }
     final token = ref.read(_demoSessionProvider).accessToken;
     if (token == null || token.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Silakan login ulang untuk menyimpan.')),
-      );
+      _TapGoSnackbar.warning(context, 'Silakan login ulang untuk menyimpan.');
       return;
     }
     setState(() => _saving = true);
@@ -1372,22 +1534,18 @@ class _BankAccountScreenState extends ConsumerState<BankAccountScreen> {
       await _apiClient.updateBankAccount(
         bankName: _bankController.text.trim(),
         bankCode: _bankByNameOrCode(_bankController.text)?.code,
-        accountNumber: _accountController.text.trim(),
+        accountNumber: tapGoDigitsOnly(_accountController.text),
         accountHolderName: _holderController.text.trim(),
       );
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Rekening bank berhasil disimpan.')),
-      );
+      _TapGoSnackbar.success(context, 'Rekening bank berhasil disimpan.');
     } catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal menyimpan rekening: $error')),
-      );
+      _TapGoSnackbar.error(context, _friendlyApiError(error));
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -1424,15 +1582,51 @@ Pengguna dilarang membuat akun palsu, menyalahgunakan referral, melakukan klaim 
 TapGo dapat memperbarui layanan, benefit, dan ketentuan dengan pemberitahuan yang wajar. PT. TapGo Lion Indonesia tidak bertanggung jawab atas kerugian yang timbul dari penyalahgunaan akun atau informasi yang tidak benar dari pengguna.
 ''';
 
+const _playPrivacyPolicyContent = '''
+PT. TapGo Lion Indonesia mengumpulkan data yang diperlukan untuk menjalankan akun Basic dan layanan digital TapGo.
+
+Data yang dikumpulkan dapat meliputi nama, nomor HP, alamat, nomor KTP jika digunakan, foto KTP jika digunakan, foto diri jika digunakan, serta riwayat permintaan layanan akun.
+
+Data digunakan untuk registrasi, verifikasi akun, pengelolaan status Basic, keamanan akun, serta customer support.
+
+TapGo menerapkan pembatasan akses, autentikasi, dan pencatatan transaksi untuk menjaga keamanan data. Data transaksi penting dapat disimpan sesuai kebutuhan hukum, audit, dan penyelesaian kewajiban layanan.
+
+Pengguna dapat meminta penghapusan atau penonaktifan akun melalui menu Hapus Akun. Permintaan akan ditinjau agar tidak menghapus data transaksi penting yang wajib dipertahankan untuk audit dan kepatuhan.
+
+Kontak support: support@tapgolion.id, WhatsApp +62 838-0025-5588, alamat Jalan Kp. Pasir Gendok No. 11, Desa Bojongleles, Kecamatan Rangkasbitung, Kabupaten Lebak, Banten, Indonesia.
+''';
+
+const _playTermsContent = '''
+Dengan menggunakan TapGo, pengguna menyetujui ketentuan layanan akun Basic dan layanan digital yang berlaku.
+
+Paket Basic bersifat gratis sebagai status awal member.
+
+Benefit akun ditampilkan sesuai layanan yang tersedia di aplikasi.
+
+Pengguna dilarang membuat akun palsu, melakukan klaim ganda, atau memanipulasi data layanan. TapGo berhak membatasi, menolak, atau menangguhkan akun yang melanggar.
+
+TapGo dapat memperbarui layanan, benefit, dan ketentuan dengan pemberitahuan yang wajar. PT. TapGo Lion Indonesia tidak bertanggung jawab atas kerugian yang timbul dari penyalahgunaan akun atau informasi yang tidak benar dari pengguna.
+''';
+
+String get _tapGoPrivacyPolicyContent =>
+    tapGoIsPlayDistribution ? _playPrivacyPolicyContent : _privacyPolicyContent;
+
+String get _tapGoTermsContent =>
+    tapGoIsPlayDistribution ? _playTermsContent : _termsContent;
+
 class LegalInfoScreen extends StatelessWidget {
-  const LegalInfoScreen(
-      {super.key, required this.title, required this.content});
+  const LegalInfoScreen({
+    super.key,
+    required this.title,
+    required this.content,
+  });
 
   final String title;
   final String content;
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return _DemoScaffold(
       title: title,
       subtitle: 'PT. TapGo Lion Indonesia',
@@ -1440,14 +1634,14 @@ class LegalInfoScreen extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: colorScheme.surface,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFFEAF0F6)),
+          border: Border.all(color: colorScheme.outlineVariant),
         ),
         child: Text(
           content,
-          style: const TextStyle(
-            color: Color(0xFF334155),
+          style: TextStyle(
+            color: colorScheme.onSurface,
             height: 1.55,
             fontWeight: FontWeight.w600,
           ),
@@ -1495,6 +1689,32 @@ class _DeleteAccountRequestScreenState
   }
 
   Future<void> _submit() async {
+    final confirmed = await _showTapGoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Konfirmasi hapus akun'),
+        content: const Text(
+          'Permintaan ini akan ditinjau tim TapGo. Data transaksi penting '
+          'seperti invoice, wallet ledger, dan withdrawal dapat tetap '
+          'disimpan untuk audit dan kepatuhan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Kirim Pengajuan'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
     setState(() => _submitting = true);
     try {
       final data = await _apiClient.submitAccountDeletionRequest(
@@ -1502,13 +1722,12 @@ class _DeleteAccountRequestScreenState
       );
       if (!mounted) return;
       setState(() => _latestRequest = data);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pengajuan hapus akun berhasil dikirim.')),
-      );
+      _TapGoSnackbar.success(context, 'Pengajuan hapus akun berhasil dikirim.');
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal mengirim pengajuan: $error')),
+      _TapGoSnackbar.error(
+        context,
+        'Pengajuan belum dapat dikirim. Silakan coba lagi.',
       );
     } finally {
       if (mounted) {
@@ -1550,14 +1769,11 @@ class _DeleteAccountRequestScreenState
           FilledButton.icon(
             onPressed: _submitting ? null : _submit,
             icon: _submitting
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const _TapGoLoading(size: 18, strokeWidth: 2)
                 : const Icon(Icons.send_rounded),
-            label:
-                Text(_submitting ? 'Mengirim...' : 'Ajukan Penghapusan Akun'),
+            label: Text(
+              _submitting ? 'Mengirim...' : 'Ajukan Penghapusan Akun',
+            ),
           ),
         ],
       ),
@@ -1573,57 +1789,66 @@ class ContactUsScreen extends ConsumerStatefulWidget {
 }
 
 class _ContactUsScreenState extends ConsumerState<ContactUsScreen> {
-  late final TextEditingController _nameController;
-  late final TextEditingController _contactController;
-  final _categoryController = TextEditingController(text: 'Support');
+  final _subjectController = TextEditingController();
   final _messageController = TextEditingController();
   bool _submitting = false;
+  late Future<List<Map<String, dynamic>>> _ticketFuture;
 
   @override
   void initState() {
     super.initState();
-    final session = ref.read(_demoSessionProvider);
-    _nameController = TextEditingController(text: session.userName);
-    _contactController = TextEditingController(text: session.phone);
+    _ticketFuture = _loadTickets();
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _contactController.dispose();
-    _categoryController.dispose();
+    _subjectController.dispose();
     _messageController.dispose();
     super.dispose();
   }
 
+  Future<List<Map<String, dynamic>>> _loadTickets() async {
+    final loader = tapGoSupportTicketsLoaderForTests;
+    if (loader != null) {
+      return loader();
+    }
+    if (tapGoDisablePersistenceForTests) {
+      return const [];
+    }
+    return _apiClient.supportTickets();
+  }
+
   Future<void> _submit() async {
-    if (_nameController.text.trim().isEmpty ||
-        _contactController.text.trim().isEmpty ||
-        _categoryController.text.trim().isEmpty ||
-        _messageController.text.trim().length < 5) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lengkapi form kontak terlebih dahulu.')),
-      );
+    if (_subjectController.text.trim().length < 3 ||
+        _messageController.text.trim().length < 10) {
+      _TapGoSnackbar.warning(context, 'Lengkapi judul dan pesan bantuan.');
       return;
     }
 
     setState(() => _submitting = true);
     try {
-      await _apiClient.submitContactMessage(
-        name: _nameController.text,
-        contact: _contactController.text,
-        category: _categoryController.text,
-        message: _messageController.text,
-      );
+      final createTicket = tapGoCreateSupportTicketForTests;
+      await (createTicket != null
+          ? createTicket(
+              category: 'OTHER',
+              subject: _subjectController.text,
+              message: _messageController.text,
+            )
+          : _apiClient.createSupportTicket(
+              category: 'OTHER',
+              subject: _subjectController.text,
+              message: _messageController.text,
+            ));
       if (!mounted) return;
+      _subjectController.clear();
       _messageController.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pesan berhasil dikirim ke TapGo.')),
-      );
+      setState(() => _ticketFuture = _loadTickets());
+      _TapGoSnackbar.success(context, 'Tiket bantuan berhasil dibuat.');
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal mengirim pesan: $error')),
+      _TapGoSnackbar.error(
+        context,
+        'Tiket bantuan belum dapat dibuat. Silakan coba lagi.',
       );
     } finally {
       if (mounted) {
@@ -1635,8 +1860,8 @@ class _ContactUsScreenState extends ConsumerState<ContactUsScreen> {
   @override
   Widget build(BuildContext context) {
     return _DemoScaffold(
-      title: 'Hubungi Kami',
-      subtitle: 'PT. TapGo Lion Indonesia',
+      title: 'Bantuan TapGo',
+      subtitle: 'Pusat bantuan member',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1644,46 +1869,198 @@ class _ContactUsScreenState extends ConsumerState<ContactUsScreen> {
             icon: Icons.support_agent_rounded,
             title: 'Support TapGo',
             subtitle:
-                'Email: support@tapgolion.id\nWhatsApp: +62 838-0025-5588\nAlamat: Jalan Kp. Pasir Gendok No. 11, Desa Bojongleles, Kecamatan Rangkasbitung, Kabupaten Lebak, Banten, Indonesia',
+                'Buat tiket bantuan untuk pertanyaan akun, membership Basic, atau kendala aplikasi.',
           ),
           const SizedBox(height: 14),
           TextField(
-            controller: _nameController,
-            decoration: const InputDecoration(labelText: 'Nama'),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _contactController,
-            decoration: const InputDecoration(labelText: 'Nomor HP / Email'),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _categoryController,
-            decoration: const InputDecoration(labelText: 'Kategori'),
+            controller: _subjectController,
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(labelText: 'Judul bantuan'),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _messageController,
             minLines: 4,
             maxLines: 6,
-            decoration: const InputDecoration(labelText: 'Pesan'),
+            decoration: const InputDecoration(labelText: 'Pesan bantuan'),
           ),
           const SizedBox(height: 14),
           FilledButton.icon(
             onPressed: _submitting ? null : _submit,
             icon: _submitting
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const _TapGoLoading(size: 18, strokeWidth: 2)
                 : const Icon(Icons.send_rounded),
             label: Text(_submitting ? 'Mengirim...' : 'Kirim Pesan'),
+          ),
+          const SizedBox(height: 20),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: _ticketFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Center(child: _TapGoLoading(size: 24));
+              }
+              if (snapshot.hasError) {
+                return const _StatusSurface(
+                  icon: Icons.wifi_off_rounded,
+                  title: 'Riwayat bantuan belum dapat dimuat',
+                  subtitle:
+                      'Tiket baru tetap dapat dikirim saat koneksi tersedia.',
+                );
+              }
+              final tickets = snapshot.data ?? const [];
+              if (tickets.isEmpty) {
+                return const _StatusSurface(
+                  icon: Icons.mark_chat_unread_outlined,
+                  title: 'Belum ada tiket bantuan',
+                  subtitle: 'Tiket yang Anda kirim akan muncul di halaman ini.',
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _SectionHeader(
+                    title: 'Riwayat Bantuan',
+                    subtitle: 'Status tiket yang pernah Anda kirim',
+                  ),
+                  const SizedBox(height: 10),
+                  ...tickets.map(_SupportTicketCard.new),
+                ],
+              );
+            },
           ),
         ],
       ),
     );
   }
+}
+
+class _SupportTicketCard extends StatelessWidget {
+  const _SupportTicketCard(this.ticket);
+
+  final Map<String, dynamic> ticket;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = ticket['status']?.toString() ?? 'OPEN';
+    final id = ticket['id']?.toString();
+    final content = _InfoCard(
+      icon: Icons.confirmation_number_rounded,
+      title: ticket['subject']?.toString() ?? 'Tiket bantuan',
+      subtitle:
+          '${ticket['reference'] ?? '-'} • ${_supportStatusLabel(status)}',
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: id == null || id.isEmpty
+          ? content
+          : InkWell(
+              borderRadius: BorderRadius.circular(22),
+              onTap: () =>
+                  _openDemo(context, SupportTicketDetailScreen(ticket: ticket)),
+              child: content,
+            ),
+    );
+  }
+}
+
+class SupportTicketDetailScreen extends StatelessWidget {
+  const SupportTicketDetailScreen({required this.ticket, super.key});
+
+  final Map<String, dynamic> ticket;
+
+  Future<Map<String, dynamic>> _load() async {
+    final id = ticket['id']?.toString();
+    if (id == null || id.isEmpty) {
+      return ticket;
+    }
+    final loader = tapGoSupportTicketDetailLoaderForTests;
+    if (loader != null) {
+      return loader(id);
+    }
+    if (tapGoDisablePersistenceForTests) {
+      return ticket;
+    }
+    return _apiClient.supportTicketDetail(id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _DemoScaffold(
+      title: 'Detail Tiket',
+      subtitle: 'Status dan pesan bantuan',
+      child: FutureBuilder<Map<String, dynamic>>(
+        future: _load(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: _TapGoLoading(size: 24));
+          }
+          if (snapshot.hasError) {
+            return const _StatusSurface(
+              icon: Icons.wifi_off_rounded,
+              title: 'Detail tiket belum dapat dimuat',
+              subtitle: 'Pastikan koneksi internet aktif, lalu coba lagi.',
+            );
+          }
+          final data = snapshot.data ?? ticket;
+          final status = data['status']?.toString() ?? 'OPEN';
+          final messages = (data['messages'] is List)
+              ? (data['messages'] as List)
+                  .whereType<Map>()
+                  .map((item) => item.cast<String, dynamic>())
+                  .toList()
+              : <Map<String, dynamic>>[];
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _StatusSurface(
+                icon: Icons.confirmation_number_rounded,
+                title: data['subject']?.toString() ?? 'Tiket bantuan',
+                subtitle:
+                    '${data['reference'] ?? '-'} • ${_supportStatusLabel(status)}',
+              ),
+              const SizedBox(height: 14),
+              const _SectionHeader(
+                title: 'Pesan',
+                subtitle: 'Riwayat komunikasi terkait tiket ini',
+              ),
+              const SizedBox(height: 10),
+              if (messages.isEmpty)
+                const _StatusSurface(
+                  icon: Icons.mark_chat_read_outlined,
+                  title: 'Belum ada pesan tambahan',
+                  subtitle: 'Balasan admin akan tampil di halaman ini.',
+                )
+              else
+                ...messages.map(
+                  (message) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _InfoCard(
+                      icon: message['authorRole']?.toString() == 'USER'
+                          ? Icons.person_rounded
+                          : Icons.support_agent_rounded,
+                      title: message['authorRole']?.toString() == 'USER'
+                          ? 'Anda'
+                          : 'Admin TapGo',
+                      subtitle: message['body']?.toString() ?? '-',
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+String _supportStatusLabel(String status) {
+  return switch (status.toUpperCase()) {
+    'OPEN' => 'Terbuka',
+    'IN_PROGRESS' => 'Diproses',
+    'RESOLVED' => 'Selesai',
+    'CLOSED' => 'Ditutup',
+    _ => 'Terbuka',
+  };
 }
 
 String _friendlyApiError(Object error) {
@@ -1693,7 +2070,9 @@ String _friendlyApiError(Object error) {
       final code = responseData['code']?.toString();
       final message = responseData['message']?.toString();
       if (code == 'INSUFFICIENT_BALANCE') {
-        return 'Saldo TapGoPay belum cukup untuk withdraw.';
+        return tapGoIsPlayDistribution
+            ? 'Saldo belum cukup untuk melanjutkan.'
+            : 'Saldo TapGoPay belum cukup untuk withdraw.';
       }
       if (code == 'WITHDRAWAL_MINIMUM_NOT_MET') {
         return 'Minimal withdraw Rp50.000.';
@@ -1720,28 +2099,29 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFEAF0F6)),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Row(
         children: [
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
-                color: Color(0xFF64748B),
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w700,
               ),
             ),
           ),
           Text(
             value,
-            style: const TextStyle(
-              color: Color(0xFF0A2A43),
+            style: TextStyle(
+              color: colorScheme.onSurface,
               fontWeight: FontWeight.w900,
             ),
           ),

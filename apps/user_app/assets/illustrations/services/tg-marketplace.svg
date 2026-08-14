@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none" role="img" aria-label="TapGo Marketplace 3D service icon">
+  <title>Marketplace</title>
+  <defs>
+    <linearGradient id="stall" x1="18" y1="20" x2="76" y2="78" gradientUnits="userSpaceOnUse"><stop stop-color="#5BE7DE"/><stop offset="1" stop-color="#0FA6B6"/></linearGradient>
+    <linearGradient id="awning" x1="20" y1="20" x2="75" y2="52" gradientUnits="userSpaceOnUse"><stop stop-color="#FFE58A"/><stop offset="0.55" stop-color="#FFBE25"/><stop offset="1" stop-color="#F05A24"/></linearGradient>
+    <linearGradient id="bag" x1="50" y1="48" x2="78" y2="78" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#E9F3FF"/></linearGradient>
+    <linearGradient id="blue" x1="20" y1="28" x2="76" y2="72" gradientUnits="userSpaceOnUse"><stop stop-color="#45C5FF"/><stop offset="1" stop-color="#1754D8"/></linearGradient>
+  </defs>
+  <ellipse cx="48" cy="82" rx="27" ry="6" fill="#07213D" opacity="0.14"/>
+  <rect x="22" y="35" width="50" height="39" rx="14" fill="url(#stall)"/>
+  <path d="M27 24h40l8 16H19Z" fill="url(#awning)"/>
+  <path d="M21 40c0 6 5 10 10 10s10-4 10-10M41 40c0 6 5 10 10 10s10-4 10-10M61 40c0 6 5 10 10 10s10-4 10-10" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity="0.62"/>
+  <rect x="30" y="55" width="18" height="19" rx="7" fill="#FFFFFF" opacity="0.42"/>
+  <path d="M54 57h22l-3 18H57Z" fill="url(#bag)"/>
+  <path d="M60 57c0-8 10-8 10 0" stroke="url(#blue)" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <circle cx="68" cy="27" r="7" fill="#FFFFFF" opacity="0.38"/>
+</svg>

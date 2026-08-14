@@ -20,8 +20,8 @@ class _ReferralTreeNodeWidget extends StatelessWidget {
         node.level <= selectedFilter.level!;
 
     return AnimatedSize(
-      duration: const Duration(milliseconds: 240),
-      curve: Curves.easeOutCubic,
+      duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
+      curve: _TapGoMotion.standardCurve,
       alignment: Alignment.topCenter,
       child: !isVisibleByFilter
           ? const SizedBox.shrink()
@@ -46,9 +46,12 @@ class _ReferralTreeNodeWidget extends StatelessWidget {
                   ),
                 ),
                 AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 240),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeOutCubic,
+                  duration: _TapGoMotion.duration(
+                    context,
+                    _TapGoMotion.standard,
+                  ),
+                  switchInCurve: _TapGoMotion.standardCurve,
+                  switchOutCurve: _TapGoMotion.exitCurve,
                   transitionBuilder: (child, animation) => SizeTransition(
                     sizeFactor: animation,
                     alignment: Alignment.topCenter,
@@ -77,10 +80,7 @@ class _ReferralTreeNodeWidget extends StatelessWidget {
 }
 
 class _ReferralNodeCard extends StatelessWidget {
-  const _ReferralNodeCard({
-    required this.node,
-    required this.onTap,
-  });
+  const _ReferralNodeCard({required this.node, required this.onTap});
 
   final DemoReferralNode node;
   final VoidCallback onTap;
@@ -120,10 +120,7 @@ class _ReferralNodeCard extends StatelessWidget {
                 ),
                 child: Text(
                   _initials(node.name),
-                  style: TextStyle(
-                    color: accent,
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: TextStyle(color: accent, fontWeight: FontWeight.w900),
                 ),
               ),
               const SizedBox(width: 12),
@@ -177,7 +174,7 @@ class _ReferralNodeCard extends StatelessWidget {
               if (node.hasChildren)
                 AnimatedRotation(
                   turns: node.isExpanded ? 0.5 : 0,
-                  duration: const Duration(milliseconds: 180),
+                  duration: _TapGoMotion.duration(context, _TapGoMotion.quick),
                   child: const Icon(
                     Icons.keyboard_arrow_down_rounded,
                     color: Color(0xFF718096),

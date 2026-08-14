@@ -15,9 +15,11 @@ import {
 } from "./membership.validators.js";
 
 const service = new MembershipOrderService(prisma);
-const midtransPaymentService = new MidtransPaymentService(prisma, service);
-const dokuPaymentService = new DokuPaymentService(prisma, service);
-const controller = new MembershipOrderController(service, midtransPaymentService, dokuPaymentService);
+const controller = new MembershipOrderController(
+  service,
+  () => new MidtransPaymentService(prisma, service),
+  () => new DokuPaymentService(prisma, service),
+);
 
 export const membershipOrderRouter = Router();
 

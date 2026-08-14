@@ -28,13 +28,13 @@ class _TapGoPersistentStore {
     }
   }
 
-  Future<void> saveAuth(bool value) async {
+  static const _storageWriteTimeout = Duration(milliseconds: 900);
+
+  Future<bool> saveAuth(bool value) async {
     if (tapGoDisablePersistenceForTests) {
-      return;
+      return true;
     }
-    try {
-      await _storage.write(key: _authKey, value: value ? 'true' : 'false');
-    } catch (_) {}
+    return _safeWrite(_authKey, value ? 'true' : 'false');
   }
 
   Future<DemoClientSession?> restoreSession() async {
@@ -52,30 +52,32 @@ class _TapGoPersistentStore {
     }
   }
 
-  Future<void> saveSession(DemoClientSession session) async {
+  Future<bool> saveSession(DemoClientSession session) async {
     if (tapGoDisablePersistenceForTests) {
-      return;
+      return true;
     }
-    await _safeWrite(_sessionKey, jsonEncode(_sessionToJson(session)));
+    return _safeWrite(_sessionKey, jsonEncode(_sessionToJson(session)));
   }
 
-  Future<void> saveTokens({
+  Future<bool> saveTokens({
     required String? accessToken,
     required String? refreshToken,
   }) async {
     if (tapGoDisablePersistenceForTests) {
-      return;
+      return true;
     }
+    var success = true;
     if (accessToken == null || accessToken.isEmpty) {
-      await _safeDelete(_accessTokenKey);
+      success = await _safeDelete(_accessTokenKey) && success;
     } else {
-      await _safeWrite(_accessTokenKey, accessToken);
+      success = await _safeWrite(_accessTokenKey, accessToken) && success;
     }
     if (refreshToken == null || refreshToken.isEmpty) {
-      await _safeDelete(_refreshTokenKey);
+      success = await _safeDelete(_refreshTokenKey) && success;
     } else {
-      await _safeWrite(_refreshTokenKey, refreshToken);
+      success = await _safeWrite(_refreshTokenKey, refreshToken) && success;
     }
+    return success;
   }
 
   Future<({String? accessToken, String? refreshToken})> restoreTokens() async {
@@ -88,30 +90,32 @@ class _TapGoPersistentStore {
     );
   }
 
-  Future<void> saveRegisteredUser(DemoClientSession session) async {
+  Future<bool> saveRegisteredUser(DemoClientSession session) async {
     if (tapGoDisablePersistenceForTests) {
-      return;
+      return true;
     }
     final users = await restoreRegisteredUsers();
     users.removeWhere((user) => user.phone == session.phone);
     users.insert(0, DemoAdminMember.fromSession(session));
-    await _safeWrite(
+    return _safeWrite(
       _registeredUsersKey,
       jsonEncode(users.map((user) => _adminMemberToJson(user)).toList()),
     );
   }
 
-  Future<void> saveMembershipSnapshot(DemoClientSession session) async {
+  Future<bool> saveMembershipSnapshot(DemoClientSession session) async {
     if (tapGoDisablePersistenceForTests) {
-      return;
+      return true;
     }
     if (!_hasPaidMembership(session)) {
-      return;
+      return true;
     }
     final encoded = jsonEncode(_sessionToJson(session));
+    var success = true;
     for (final key in _membershipKeysFor(session)) {
-      await _safeWrite(key, encoded);
+      success = await _safeWrite(key, encoded) && success;
     }
+    return success;
   }
 
   Future<DemoClientSession> restoreMembershipSnapshot(
@@ -126,8 +130,9 @@ class _TapGoPersistentStore {
         continue;
       }
       try {
-        final membership =
-            _sessionFromJson(jsonDecode(raw) as Map<String, dynamic>);
+        final membership = _sessionFromJson(
+          jsonDecode(raw) as Map<String, dynamic>,
+        );
         if (!_hasPaidMembership(membership)) {
           continue;
         }
@@ -250,16 +255,26 @@ class _TapGoPersistentStore {
     }
   }
 
-  Future<void> _safeWrite(String key, String value) async {
+  Future<bool> _safeWrite(String key, String value) async {
     try {
-      await _storage.write(key: key, value: value);
-    } catch (_) {}
+      await _storage
+          .write(key: key, value: value)
+          .timeout(_storageWriteTimeout);
+      return true;
+    } catch (error) {
+      _tapGoDebugLog('[TapGo Storage] write skipped for $key: $error');
+      return false;
+    }
   }
 
-  Future<void> _safeDelete(String key) async {
+  Future<bool> _safeDelete(String key) async {
     try {
-      await _storage.delete(key: key);
-    } catch (_) {}
+      await _storage.delete(key: key).timeout(_storageWriteTimeout);
+      return true;
+    } catch (error) {
+      _tapGoDebugLog('[TapGo Storage] delete skipped for $key: $error');
+      return false;
+    }
   }
 
   bool _hasPaidMembership(DemoClientSession session) {
@@ -306,9 +321,7 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
     if (!_loaded) {
       return const Scaffold(
         backgroundColor: _softBackground,
-        body: Center(
-          child: CircularProgressIndicator(color: _brandBlue),
-        ),
+        body: Center(child: CircularProgressIndicator(color: _brandBlue)),
       );
     }
     return widget.child;
@@ -318,15 +331,18 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
     var auth = false;
     DemoClientSession? restoredSession;
     try {
-      final storedAuth = await _persistentStore
-          .restoreAuth()
-          .timeout(const Duration(seconds: 2), onTimeout: () => false);
-      final session = await _persistentStore
-          .restoreSession()
-          .timeout(const Duration(seconds: 2), onTimeout: () => null);
+      final storedAuth = await _persistentStore.restoreAuth().timeout(
+            const Duration(seconds: 2),
+            onTimeout: () => false,
+          );
+      final session = await _persistentStore.restoreSession().timeout(
+            const Duration(seconds: 2),
+            onTimeout: () => null,
+          );
       final tokens = await _persistentStore.restoreTokens().timeout(
-          const Duration(seconds: 2),
-          onTimeout: () => (accessToken: null, refreshToken: null));
+            const Duration(seconds: 2),
+            onTimeout: () => (accessToken: null, refreshToken: null),
+          );
       if (!mounted) {
         return;
       }
@@ -344,9 +360,9 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
       if (tokens.accessToken != null && tokens.accessToken!.isNotEmpty) {
         _apiClient.setAccessToken(tokens.accessToken);
         try {
-          debugPrint('[TapGo Auth] auth/me restore request');
+          _tapGoDebugLog('[TapGo Auth] auth/me restore request');
           final user = await _apiClient.me();
-          debugPrint('[TapGo Auth] auth/me restore success: ${user.name}');
+          _tapGoDebugLog('[TapGo Auth] auth/me restore success.');
           restoredSession = _sessionFromAuthUser(
             user,
             accessToken: tokens.accessToken,
@@ -377,16 +393,16 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
               isDemoMode: false,
             );
           } catch (error) {
-            debugPrint(
-                '[TapGo Binding] restore production sync failed: $error');
+            _tapGoDebugLog(
+              '[TapGo Binding] restore production sync failed: $error',
+            );
           }
           auth = true;
-          await _persistentStore.saveSession(restoredSession!).timeout(
-                const Duration(seconds: 2),
-                onTimeout: () {},
-              );
+          await _persistentStore
+              .saveSession(restoredSession!)
+              .timeout(const Duration(seconds: 2), onTimeout: () => false);
         } catch (error) {
-          debugPrint('[TapGo Auth] auth/me restore failed: $error');
+          _tapGoDebugLog('[TapGo Auth] auth/me restore failed: $error');
           await _persistentStore.clearSession().timeout(
                 const Duration(seconds: 2),
                 onTimeout: () {},
@@ -409,7 +425,7 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
       }
       ref.read(_isAuthenticatedProvider.notifier).state = auth;
     } catch (error) {
-      debugPrint('[TapGo Startup] session bootstrap failed open: $error');
+      _tapGoDebugLog('[TapGo Startup] session bootstrap failed open: $error');
       _apiClient.setAccessToken(null);
       if (mounted) {
         ref.read(_isAuthenticatedProvider.notifier).state = false;
@@ -428,6 +444,14 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
   }
 }
 
+@visibleForTesting
+Map<String, dynamic> tapGoSessionToJsonForTests(DemoClientSession session) =>
+    _sessionToJson(session);
+
+@visibleForTesting
+DemoClientSession tapGoSessionFromJsonForTests(Map<String, dynamic> json) =>
+    _sessionFromJson(json);
+
 Map<String, dynamic> _sessionToJson(DemoClientSession session) {
   return {
     'userId': session.userId,
@@ -440,6 +464,7 @@ Map<String, dynamic> _sessionToJson(DemoClientSession session) {
     'ktpImagePath': session.ktpImagePath,
     'lastInvoiceNumber': session.lastInvoiceNumber,
     'membershipJoinedAt': session.membershipJoinedAt,
+    'isFounderChairman': session.isFounderChairman,
     'isFounderPlatinum': session.isFounderPlatinum,
     'userName': session.userName,
     'phone': session.phone,
@@ -476,6 +501,7 @@ DemoClientSession _sessionFromJson(Map<String, dynamic> json) {
     ktpImagePath: json['ktpImagePath']?.toString(),
     lastInvoiceNumber: json['lastInvoiceNumber']?.toString(),
     membershipJoinedAt: json['membershipJoinedAt']?.toString(),
+    isFounderChairman: json['isFounderChairman'] == true,
     isFounderPlatinum: json['isFounderPlatinum'] == true,
     userName: json['userName']?.toString() ?? 'Member TapGo',
     phone: json['phone']?.toString() ?? '',

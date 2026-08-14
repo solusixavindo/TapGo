@@ -1,5 +1,0 @@
-package id.tapgo.membership
-
-import io.flutter.embedding.android.FlutterActivity
-
-class MainActivity : FlutterActivity()

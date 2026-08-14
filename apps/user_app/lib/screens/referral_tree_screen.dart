@@ -53,6 +53,9 @@ class _ReferralTreeScreenState extends ConsumerState<ReferralTreeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (tapGoIsPlayDistribution) {
+      return const MembershipScreen();
+    }
     final production = ref.watch(_productionSnapshotProvider);
     final session = ref.watch(_demoSessionProvider);
     final backendTree = production.valueOrNull?.referralTree;
@@ -60,18 +63,16 @@ class _ReferralTreeScreenState extends ConsumerState<ReferralTreeScreen> {
         ? _root
         : _applyExpansionState(_rootFromBackendTree(backendTree, session));
     return _DemoScaffold(
-      title: 'Referral Tree',
+      title: 'Jaringan Referral',
       subtitle: production.hasValue
-          ? 'Jaringan unilevel dari backend'
+          ? 'Jaringan unilevel TapGo'
           : 'Jaringan unilevel TapGo 10 level',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _ProductionStatusTile(state: production),
           const SizedBox(height: 12),
-          _ReferralTreeSummary(
-            session: session,
-          ),
+          _ReferralTreeSummary(session: session),
           const SizedBox(height: 16),
           _ReferralFilterChips(
             selected: _selectedFilter,
@@ -194,8 +195,12 @@ class _ReferralTreeSummary extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: _MiniMetric(
-                  label: 'Estimasi Bonus',
-                  value: formatRupiah(session.todayBonus),
+                  label: tapGoIsPlayDistribution
+                      ? 'Status Referral'
+                      : 'Estimasi Bonus',
+                  value: tapGoIsPlayDistribution
+                      ? 'Aktif'
+                      : formatRupiah(session.todayBonus),
                 ),
               ),
             ],

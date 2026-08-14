@@ -33,11 +33,22 @@ class _TapGoDashboardState extends State<TapGoDashboard> {
       body: SafeArea(
         child: Stack(
           children: [
-            IndexedStack(index: _selectedIndex, children: _pages),
-            _BottomNav(
-              selectedIndex: _selectedIndex,
-              onTabSelected: _selectTab,
-              onCenterTap: _openSuperMenu,
+            AnimatedSwitcher(
+              duration: _TapGoMotion.duration(context, _TapGoMotion.quick),
+              switchInCurve: _TapGoMotion.standardCurve,
+              switchOutCurve: _TapGoMotion.exitCurve,
+              child: KeyedSubtree(
+                key: ValueKey(_selectedIndex),
+                child: _pages[_selectedIndex],
+              ),
+            ),
+            _DashboardEntrance(
+              order: 7,
+              child: _BottomNav(
+                selectedIndex: _selectedIndex,
+                onTabSelected: _selectTab,
+                onCenterTap: _openSuperMenu,
+              ),
             ),
           ],
         ),
@@ -56,6 +67,7 @@ class _HomeTab extends ConsumerStatefulWidget {
 class _HomeTabState extends ConsumerState<_HomeTab> {
   final _scrollController = ScrollController();
   double _scrollOffset = 0;
+  bool _refreshing = false;
 
   @override
   void initState() {
@@ -83,52 +95,95 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
     final session = ref.watch(_demoSessionProvider);
     final parallax = _scrollOffset / 120;
     final promoScale = 1 + (parallax * 0.035);
-    return SingleChildScrollView(
-      controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 176),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _ProductionBindingBanner(state: production),
-          if (production.isLoading) const SizedBox(height: 10),
-          _DashboardEntrance(
-            order: 0,
-            child: Transform.translate(
-              offset: Offset(0, -parallax * 8),
-              child: Transform.scale(
-                scale: 1 - (parallax * 0.025),
-                child: _TopBar(session: session),
+    return RefreshIndicator(
+      color: _brandBlue,
+      onRefresh: () async {
+        setState(() => _refreshing = true);
+        try {
+          final _ = await ref.refresh(_productionSnapshotProvider.future);
+        } finally {
+          if (mounted) {
+            setState(() => _refreshing = false);
+          }
+        }
+      },
+      child: AnimatedOpacity(
+        opacity: _refreshing ? 0.86 : 1,
+        duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
+        curve: _TapGoMotion.standardCurve,
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 176),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Hanya tampil saat harness bukti visual menyalakan fixture.
+              // Tidak pernah muncul pada aplikasi yang dirilis.
+              if (tapGoDashboardVisualFixtureEnabled)
+                const _DashboardFixtureBadge(),
+              _ProductionBindingBanner(state: production),
+              if (production.isLoading) const SizedBox(height: 10),
+              _DashboardEntrance(
+                order: 0,
+                child: Transform.translate(
+                  offset: Offset(0, -parallax * 8),
+                  child: Transform.scale(
+                    scale: 1 - (parallax * 0.025),
+                    child: _TopBar(session: session),
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(height: 18),
-          const _DashboardEntrance(order: 1, child: _SearchRow()),
-          const SizedBox(height: 18),
-          _DashboardEntrance(
-            order: 2,
-            child: Transform.translate(
-              offset: Offset(0, parallax * 8),
-              child: Transform.scale(
-                scale: promoScale,
-                child: const _PromoHero(),
+              const SizedBox(height: 18),
+              const _DashboardEntrance(order: 1, child: _SearchRow()),
+              const SizedBox(height: 18),
+              _DashboardEntrance(
+                order: 2,
+                child: Transform.translate(
+                  offset: Offset(0, parallax * 8),
+                  child: Transform.scale(
+                    scale: promoScale,
+                    child: const _PromoHero(),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(height: 14),
+              _DashboardEntrance(
+                order: 3,
+                child: _WalletCard(session: session, state: production),
+              ),
+              // Pada distribusi Play, kartu Membership biru di atas sudah
+              // menampilkan paket aktif sekaligus membuka detailnya, sehingga
+              // kartu status kuning hanya mengulang informasi yang sama.
+              // Kartu itu tidak dirender di sini; datanya sendiri tidak
+              // disentuh. Pada distribusi direct kartu biru adalah TapGoPay —
+              // bukan membership — jadi tidak ada duplikasi dan kartunya tetap
+              // dipertahankan sebagai satu-satunya jalan ke paket membership.
+              if (!tapGoIsPlayDistribution) ...[
+                const SizedBox(height: 16),
+                _DashboardEntrance(
+                  order: 4,
+                  child: _MarketingPlanCard(
+                    session: session,
+                    isLoading: production.isLoading,
+                  ),
+                ),
+              ],
+              // Jarak tunggal menuju grid layanan, sehingga tidak ada ruang
+              // kosong yang tertinggal setelah kartu dihapus.
+              const SizedBox(height: 22),
+              _DashboardEntrance(
+                order: tapGoIsPlayDistribution ? 4 : 5,
+                child: const _ServiceGrid(),
+              ),
+              const SizedBox(height: 24),
+              _DashboardEntrance(
+                order: tapGoIsPlayDistribution ? 5 : 6,
+                child: const _ContentCards(),
+              ),
+            ],
           ),
-          const SizedBox(height: 14),
-          _DashboardEntrance(
-            order: 3,
-            child: _WalletCard(session: session, state: production),
-          ),
-          const SizedBox(height: 16),
-          _DashboardEntrance(
-            order: 4,
-            child: _MarketingPlanCard(session: session),
-          ),
-          const SizedBox(height: 22),
-          const _DashboardEntrance(order: 5, child: _ServiceGrid()),
-          const SizedBox(height: 24),
-          const _DashboardEntrance(order: 6, child: _ContentCards()),
-        ],
+        ),
       ),
     );
   }
@@ -154,21 +209,22 @@ class _DashboardEntranceState extends State<_DashboardEntrance> {
   @override
   void initState() {
     super.initState();
-    Future<void>.delayed(Duration(milliseconds: 70 * widget.order), () {
+    Future<void>.delayed(Duration(milliseconds: 54 * widget.order), () {
       if (mounted) setState(() => _visible = true);
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final reduced = _TapGoMotion.reduce(context);
     return AnimatedOpacity(
-      opacity: _visible ? 1 : 0,
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
+      opacity: _visible || reduced ? 1 : 0,
+      duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
+      curve: _TapGoMotion.standardCurve,
       child: AnimatedSlide(
-        offset: _visible ? Offset.zero : const Offset(0, 0.08),
-        duration: const Duration(milliseconds: 360),
-        curve: Curves.easeOutCubic,
+        offset: _visible || reduced ? Offset.zero : const Offset(0, 0.055),
+        duration: _TapGoMotion.duration(context, _TapGoMotion.page),
+        curve: _TapGoMotion.standardCurve,
         child: widget.child,
       ),
     );
@@ -182,21 +238,33 @@ class _ProductionBindingBanner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    late final Widget child;
+    late final String stateKey;
     if (state.isLoading) {
-      return const _DashboardSkeletonLoading();
-    }
-
-    if (state.hasError) {
-      return _CompactRetryPill(
+      stateKey = 'loading';
+      child = const _DashboardSkeletonLoading();
+    } else if (state.hasError) {
+      stateKey = 'error';
+      child = _CompactRetryPill(
         icon: Icons.cloud_off_rounded,
         label: 'Data belum tersedia',
         onRetry: () => ref.invalidate(_productionSnapshotProvider),
       );
+    } else {
+      stateKey = 'ready';
+      child = const _InlineStatePill(
+        icon: Icons.cloud_done_rounded,
+        label: 'Data TapGo tersinkron',
+      );
     }
 
-    return const _InlineStatePill(
-      icon: Icons.cloud_done_rounded,
-      label: 'Data backend tersinkron',
+    return AnimatedSwitcher(
+      duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
+      switchInCurve: _TapGoMotion.standardCurve,
+      switchOutCurve: _TapGoMotion.exitCurve,
+      transitionBuilder: (child, animation) =>
+          FadeTransition(opacity: animation, child: child),
+      child: KeyedSubtree(key: ValueKey(stateKey), child: child),
     );
   }
 }
@@ -206,15 +274,53 @@ class _DashboardSkeletonLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.only(bottom: 10),
-      child: Row(
+    return const Column(
+      children: [
+        Padding(
+          padding: EdgeInsets.only(bottom: 10),
+          child: Row(
+            children: [
+              _SkeletonBar(width: 72),
+              SizedBox(width: 8),
+              Expanded(child: _SkeletonBar(width: double.infinity)),
+              SizedBox(width: 8),
+              _SkeletonBar(width: 48),
+            ],
+          ),
+        ),
+        _DashboardSkeletonCard(),
+        SizedBox(height: 10),
+      ],
+    );
+  }
+}
+
+class _DashboardSkeletonCard extends StatelessWidget {
+  const _DashboardSkeletonCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SkeletonBar(width: 72),
-          SizedBox(width: 8),
-          Expanded(child: _SkeletonBar(width: double.infinity)),
-          SizedBox(width: 8),
-          _SkeletonBar(width: 48),
+          _SkeletonBar(width: 112),
+          SizedBox(height: 12),
+          _SkeletonBar(width: 220),
+          SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _SkeletonBar(width: double.infinity)),
+              SizedBox(width: 12),
+              Expanded(child: _SkeletonBar(width: double.infinity)),
+            ],
+          ),
         ],
       ),
     );
@@ -228,9 +334,13 @@ class _SkeletonBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final reduced = _TapGoMotion.reduce(context);
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.45, end: 1),
-      duration: const Duration(milliseconds: 700),
+      duration: _TapGoMotion.duration(
+        context,
+        reduced ? Duration.zero : const Duration(milliseconds: 700),
+      ),
       curve: Curves.easeInOut,
       builder: (context, value, child) => Opacity(opacity: value, child: child),
       child: Container(
@@ -239,13 +349,141 @@ class _SkeletonBar extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(999),
           gradient: const LinearGradient(
-            colors: [
-              Color(0xFFE7EEF8),
-              Color(0xFFF8FBFF),
-              Color(0xFFE7EEF8),
-            ],
+            colors: [Color(0xFFE7EEF8), Color(0xFFF8FBFF), Color(0xFFE7EEF8)],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _DashboardValueSwitcher extends StatelessWidget {
+  const _DashboardValueSwitcher({required this.value, required this.style});
+
+  final String value;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
+      switchInCurve: _TapGoMotion.standardCurve,
+      switchOutCurve: _TapGoMotion.exitCurve,
+      transitionBuilder: (child, animation) =>
+          FadeTransition(opacity: animation, child: child),
+      child: Text(
+        value,
+        key: ValueKey(value),
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: style,
+      ),
+    );
+  }
+}
+
+class _DashboardAnimatedValue extends StatefulWidget {
+  const _DashboardAnimatedValue({
+    required this.value,
+    required this.formatter,
+    required this.style,
+  });
+
+  final int value;
+  final String Function(int value) formatter;
+  final TextStyle style;
+
+  @override
+  State<_DashboardAnimatedValue> createState() =>
+      _DashboardAnimatedValueState();
+}
+
+class _DashboardAnimatedValueState extends State<_DashboardAnimatedValue> {
+  late int _beginValue;
+
+  @override
+  void initState() {
+    super.initState();
+    _beginValue = widget.value;
+  }
+
+  @override
+  void didUpdateWidget(covariant _DashboardAnimatedValue oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value) {
+      _beginValue = oldWidget.value;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_TapGoMotion.reduce(context)) {
+      return Text(
+        widget.formatter(widget.value),
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: widget.style,
+      );
+    }
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(
+        begin: _beginValue.toDouble(),
+        end: widget.value.toDouble(),
+      ),
+      duration: _TapGoMotion.duration(
+        context,
+        const Duration(milliseconds: 360),
+      ),
+      curve: _TapGoMotion.standardCurve,
+      builder: (context, animatedValue, child) {
+        return Text(
+          widget.formatter(animatedValue.round()),
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
+          style: widget.style,
+        );
+      },
+    );
+  }
+}
+
+/// Label kejujuran saat dashboard memakai fixture visual.
+///
+/// Keberadaannya membuat tangkapan layar tidak dapat disalahartikan sebagai
+/// data produksi.
+class _DashboardFixtureBadge extends StatelessWidget {
+  const _DashboardFixtureBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFF8A00).withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.science_rounded, size: 16, color: Color(0xFFB45309)),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '$tapGoDashboardFixtureLabel — data contoh untuk tinjauan '
+              'visual, bukan data nyata.',
+              style: TextStyle(
+                color: Color(0xFFB45309),
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -264,12 +502,14 @@ class _CompactRetryPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: colorScheme.outlineVariant),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -280,21 +520,31 @@ class _CompactRetryPill extends StatelessWidget {
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(
-                    color: Color(0xFF718096),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
                     fontWeight: FontWeight.w800,
                     fontSize: 12,
                   ),
                 ),
               ),
-              TextButton(
-                onPressed: onRetry,
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  minimumSize: const Size(0, 32),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              // Tombol ikut dibatasi ruang yang ada; tanpa ini labelnya
+              // meluber saat teks diperbesar.
+              Flexible(
+                child: TextButton(
+                  onPressed: onRetry,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 32),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text(
+                    'Muat Ulang',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                child: const Text('Muat Ulang'),
               ),
             ],
           ),
@@ -305,22 +555,21 @@ class _CompactRetryPill extends StatelessWidget {
 }
 
 class _InlineStatePill extends StatelessWidget {
-  const _InlineStatePill({
-    required this.icon,
-    required this.label,
-  });
+  const _InlineStatePill({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: colorScheme.outlineVariant),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -331,8 +580,8 @@ class _InlineStatePill extends StatelessWidget {
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(
-                    color: Color(0xFF718096),
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
                   ),
@@ -417,9 +666,11 @@ class _TopBar extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
-                    session.isFounderPlatinum
-                        ? 'Founder Platinum'
-                        : session.activePackageName,
+                    session.isFounderChairman
+                        ? 'Founder Chairman'
+                        : session.isFounderPlatinum
+                            ? 'Founder Platinum'
+                            : session.activePackageName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -435,8 +686,10 @@ class _TopBar extends ConsumerWidget {
           _HeaderIconButton(
             icon: Icons.notifications_none_rounded,
             tooltip: 'Notifikasi',
-            badge: '2',
-            onTap: () => _showInfoSnack(context, 'Notifikasi segera tersedia'),
+            onTap: () => _showInfoSnack(
+              context,
+              'Notifikasi belum dapat dibuka saat ini',
+            ),
           ),
           const SizedBox(width: 8),
           _HeaderIconButton(
@@ -455,48 +708,39 @@ class _HeaderIconButton extends StatelessWidget {
     required this.icon,
     required this.tooltip,
     required this.onTap,
-    this.badge,
   });
 
   final IconData icon;
   final String tooltip;
   final VoidCallback onTap;
-  final String? badge;
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
-      child: _TapScale(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.16),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
-              ),
-              child: Icon(icon, color: Colors.white, size: 23),
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: _TapScale(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(999),
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.16),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
             ),
-            if (badge != null)
-              Positioned(
-                right: -2,
-                top: -3,
-                child: _PulseBadge(label: badge!),
-              ),
-          ],
+            child: Icon(icon, color: Colors.white, size: 23),
+          ),
         ),
       ),
     );
   }
 }
 
-class _TapScale extends StatefulWidget {
+class _TapScale extends StatelessWidget {
   const _TapScale({
     required this.child,
     required this.onTap,
@@ -508,30 +752,12 @@ class _TapScale extends StatefulWidget {
   final BorderRadius borderRadius;
 
   @override
-  State<_TapScale> createState() => _TapScaleState();
-}
-
-class _TapScaleState extends State<_TapScale> {
-  bool _pressed = false;
-
-  @override
   Widget build(BuildContext context) {
-    return AnimatedScale(
-      scale: _pressed ? 0.96 : 1,
-      duration: const Duration(milliseconds: 110),
-      curve: Curves.easeOut,
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: widget.borderRadius,
-        child: InkWell(
-          borderRadius: widget.borderRadius,
-          onTap: widget.onTap,
-          onTapDown: (_) => setState(() => _pressed = true),
-          onTapCancel: () => setState(() => _pressed = false),
-          onTapUp: (_) => setState(() => _pressed = false),
-          child: widget.child,
-        ),
-      ),
+    return _TapGoPressable(
+      onTap: onTap,
+      borderRadius: borderRadius,
+      pressedScale: 0.96,
+      child: child,
     );
   }
 }
@@ -544,14 +770,17 @@ class _SearchRow extends StatefulWidget {
 }
 
 class _SearchRowState extends State<_SearchRow> {
-  static const _placeholders = [
+  static const _directPlaceholders = [
     'Cari layanan TapGo',
-    'Cari Membership',
+    'Cari Membership Saya',
     'Cari Referral',
-    'Cari Reward',
     'Cari PPOB',
-    'Cari BPJS',
-    'Cari Withdraw',
+    'Cari Bantuan',
+  ];
+  static const _playPlaceholders = [
+    'Cari akun TapGo',
+    'Cari Kartu Anggota',
+    'Cari Bantuan',
   ];
 
   int _placeholderIndex = 0;
@@ -562,8 +791,10 @@ class _SearchRowState extends State<_SearchRow> {
     super.initState();
     _placeholderTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!mounted) return;
+      final placeholders =
+          tapGoIsPlayDistribution ? _playPlaceholders : _directPlaceholders;
       setState(() {
-        _placeholderIndex = (_placeholderIndex + 1) % _placeholders.length;
+        _placeholderIndex = (_placeholderIndex + 1) % placeholders.length;
       });
     });
   }
@@ -576,8 +807,14 @@ class _SearchRowState extends State<_SearchRow> {
 
   @override
   Widget build(BuildContext context) {
+    final placeholders =
+        tapGoIsPlayDistribution ? _playPlaceholders : _directPlaceholders;
+    final colorScheme = Theme.of(context).colorScheme;
+    if (_placeholderIndex >= placeholders.length) {
+      _placeholderIndex = 0;
+    }
     return Material(
-      color: Colors.white.withValues(alpha: 0.82),
+      color: colorScheme.surface,
       borderRadius: BorderRadius.circular(26),
       child: InkWell(
         onTap: () => _showSearchMenu(context),
@@ -587,13 +824,7 @@ class _SearchRowState extends State<_SearchRow> {
           padding: const EdgeInsets.only(left: 18, right: 6),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(26),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.86)),
-            gradient: LinearGradient(
-              colors: [
-                Colors.white.withValues(alpha: 0.96),
-                const Color(0xFFF4F9FF).withValues(alpha: 0.88),
-              ],
-            ),
+            border: Border.all(color: colorScheme.outlineVariant),
             boxShadow: [
               BoxShadow(
                 color: _brandBlue.withValues(alpha: 0.10),
@@ -618,12 +849,12 @@ class _SearchRowState extends State<_SearchRow> {
                     ),
                   ),
                   child: Text(
-                    _placeholders[_placeholderIndex],
-                    key: ValueKey(_placeholders[_placeholderIndex]),
+                    placeholders[_placeholderIndex],
+                    key: ValueKey(placeholders[_placeholderIndex]),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF7A8699),
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
                       fontSize: 15,
                     ),
                   ),
@@ -674,34 +905,77 @@ class _SearchPulseIcon extends StatelessWidget {
 }
 
 void _showSoon(BuildContext context) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Fitur segera tersedia')),
-  );
+  _TapGoSnackbar.info(context, 'Layanan belum dapat dibuka saat ini');
 }
 
 void _showInfoSnack(BuildContext context, String message) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(message)),
-  );
+  _TapGoSnackbar.info(context, message);
 }
 
 void _showSearchMenu(BuildContext context) {
-  const items = [
-    _ServiceItem(
-        'TapGo Ride', Icons.two_wheeler_rounded, Color(0xFF006AF5), null),
-    _ServiceItem(
-        'TapGo Car', Icons.local_taxi_rounded, Color(0xFF006AF5), null),
-    _ServiceItem(
-        'TapGo Food', Icons.restaurant_menu_rounded, Color(0xFFFF6B00), null),
-    _ServiceItem(
-        'TapGo Mart', Icons.storefront_rounded, Color(0xFF0097A7), null),
-    _ServiceItem(
-        'Membership', Icons.workspace_premium_rounded, Color(0xFFF59E0B), null),
-    _ServiceItem('Referral', Icons.hub_rounded, Color(0xFF006AF5), null),
-    _ServiceItem('Reward', Icons.emoji_events_rounded, Color(0xFFF59E0B), null),
-  ];
+  final items = tapGoIsPlayDistribution
+      ? const [
+          _ServiceItem(
+            'Kartu Anggota',
+            Icons.badge_rounded,
+            Color(0xFFF59E0B),
+            null,
+          ),
+          _ServiceItem('Profil', Icons.person_rounded, Color(0xFF697386), null),
+          _ServiceItem(
+            'Tiket Bantuan',
+            Icons.volunteer_activism_rounded,
+            Color(0xFF0569E8),
+            null,
+          ),
+          _ServiceItem(
+            'Hapus Akun',
+            Icons.delete_outline_rounded,
+            Color(0xFFD97706),
+            null,
+          ),
+        ]
+      : const [
+          _ServiceItem(
+            'TapGo Ride',
+            Icons.two_wheeler_rounded,
+            Color(0xFF006AF5),
+            null,
+          ),
+          _ServiceItem(
+            'TapGo Car',
+            Icons.local_taxi_rounded,
+            Color(0xFF006AF5),
+            null,
+          ),
+          _ServiceItem(
+            'TapGo Food',
+            Icons.restaurant_menu_rounded,
+            Color(0xFFFF6B00),
+            null,
+          ),
+          _ServiceItem(
+            'TapGo Mart',
+            Icons.storefront_rounded,
+            Color(0xFF0097A7),
+            null,
+          ),
+          _ServiceItem('Referral', Icons.hub_rounded, Color(0xFF006AF5), null),
+          _ServiceItem(
+            'Membership',
+            Icons.workspace_premium_rounded,
+            Color(0xFFF59E0B),
+            null,
+          ),
+          _ServiceItem(
+            'Reward',
+            Icons.emoji_events_rounded,
+            Color(0xFFF59E0B),
+            null,
+          ),
+        ];
 
-  showModalBottomSheet<void>(
+  _showTapGoBottomSheet<void>(
     context: context,
     showDragHandle: true,
     backgroundColor: const Color(0xFFF4F8FB),
@@ -741,7 +1015,25 @@ void _showSearchMenu(BuildContext context) {
                     borderRadius: BorderRadius.circular(18),
                     onTap: () {
                       Navigator.of(context).pop();
-                      _showInfoSnack(context, '${item.label} segera tersedia');
+                      if (tapGoIsPlayDistribution) {
+                        if (item.label == 'Kartu Anggota') {
+                          _openDemo(context, const BasicMemberCardScreen());
+                        } else if (item.label == 'Profil') {
+                          _openDemo(context, const ProfileDetailsScreen());
+                        } else if (item.label == 'Tiket Bantuan') {
+                          _openDemo(context, const ContactUsScreen());
+                        } else if (item.label == 'Hapus Akun') {
+                          _openDemo(
+                            context,
+                            const DeleteAccountRequestScreen(),
+                          );
+                        }
+                        return;
+                      }
+                      _showInfoSnack(
+                        context,
+                        '${item.label} belum dapat dibuka saat ini',
+                      );
                     },
                     child: _SearchServiceTile(item: item),
                   );
@@ -858,8 +1150,15 @@ class _PromoHeroState extends State<_PromoHero> {
 
   @override
   Widget build(BuildContext context) {
+    // Tinggi carousel dulu tetap 238 dp, sehingga isi kartu meluber saat teks
+    // diperbesar. Faktor di bawah bernilai 1 pada skala normal, jadi tampilan
+    // biasa tidak berubah sedikit pun.
+    final textScaleFactor = max(
+      1.0,
+      MediaQuery.textScalerOf(context).scale(12) / 12,
+    );
     return SizedBox(
-      height: 238,
+      height: 238 * textScaleFactor,
       child: Stack(
         children: [
           PageView.builder(
@@ -990,8 +1289,9 @@ class _PromoSlide extends StatelessWidget {
                   height: 142,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color:
-                        Colors.white.withValues(alpha: hasImage ? 0.08 : 0.10),
+                    color: Colors.white.withValues(
+                      alpha: hasImage ? 0.08 : 0.10,
+                    ),
                   ),
                 ),
               ),
@@ -1146,10 +1446,7 @@ class _HeroOrbit extends StatelessWidget {
 }
 
 class _HeroMiniIcon extends StatelessWidget {
-  const _HeroMiniIcon({
-    required this.icon,
-    required this.color,
-  });
+  const _HeroMiniIcon({required this.icon, required this.color});
 
   final IconData icon;
   final Color color;
@@ -1185,21 +1482,26 @@ class _WalletCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final hasError = state.hasError;
     final isLoading = state.isLoading;
-    final balanceLabel = hasError
-        ? 'Gagal memuat saldo'
-        : isLoading
-            ? 'Memuat saldo...'
-            : formatRupiah(session.walletBalance);
+    final isPlayDistribution = tapGoIsPlayDistribution;
     final caption = hasError
         ? 'Muat ulang'
         : isLoading
-            ? 'Menghubungkan wallet'
-            : 'Klik untuk riwayat';
+            ? isPlayDistribution
+                ? 'Memuat membership'
+                : 'Menghubungkan wallet'
+            : isPlayDistribution
+                ? 'Klik untuk detail'
+                : 'Klik untuk riwayat';
     return _TapScale(
       borderRadius: BorderRadius.circular(28),
       onTap: hasError
           ? () => ref.invalidate(_productionSnapshotProvider)
-          : () => _openDemo(context, const DemoWalletScreen()),
+          : () => _openDemo(
+                context,
+                isPlayDistribution
+                    ? const MembershipScreen()
+                    : const DemoWalletScreen(),
+              ),
       child: DecoratedBox(
         decoration: BoxDecoration(
           gradient: const LinearGradient(
@@ -1274,12 +1576,18 @@ class _WalletCard extends ConsumerWidget {
                               ),
                             ),
                             const SizedBox(width: 9),
-                            const Text(
-                              'TapGoPay',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
+                            // Judul dibatasi ruang yang ada supaya tidak
+                            // meluber saat teks diperbesar.
+                            Flexible(
+                              child: Text(
+                                isPlayDistribution ? 'Membership' : 'TapGoPay',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ),
                           ],
@@ -1288,16 +1596,38 @@ class _WalletCard extends ConsumerWidget {
                         FittedBox(
                           fit: BoxFit.scaleDown,
                           alignment: Alignment.centerLeft,
-                          child: Text(
-                            balanceLabel,
-                            maxLines: 1,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 31,
-                              height: 1,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
+                          child: isLoading
+                              ? const _SkeletonBar(width: 168)
+                              : hasError
+                                  ? const _DashboardValueSwitcher(
+                                      value: 'Gagal memuat data',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 31,
+                                        height: 1,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    )
+                                  : isPlayDistribution
+                                      ? _DashboardValueSwitcher(
+                                          value: session.activePackageName,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 31,
+                                            height: 1,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        )
+                                      : _DashboardAnimatedValue(
+                                          value: session.walletBalance,
+                                          formatter: formatRupiah,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 31,
+                                            height: 1,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
                         ),
                         const SizedBox(height: 10),
                         Container(
@@ -1312,8 +1642,8 @@ class _WalletCard extends ConsumerWidget {
                               color: Colors.white.withValues(alpha: 0.12),
                             ),
                           ),
-                          child: Text(
-                            caption,
+                          child: _DashboardValueSwitcher(
+                            value: caption,
                             style: const TextStyle(
                               color: Color(0xE6FFFFFF),
                               fontSize: 12,
@@ -1324,17 +1654,23 @@ class _WalletCard extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  _WalletAction(
-                    icon: Icons.add_rounded,
-                    onTap: () =>
-                        _showInfoSnack(context, 'Top up segera tersedia'),
-                  ),
-                  const SizedBox(width: 12),
-                  _WalletAction(
-                    icon: Icons.near_me_rounded,
-                    onTap: () =>
-                        _showInfoSnack(context, 'Transfer segera tersedia'),
-                  ),
+                  if (!isPlayDistribution) ...[
+                    _WalletAction(
+                      icon: Icons.add_rounded,
+                      onTap: () => _showInfoSnack(
+                        context,
+                        'Top up belum dapat diproses saat ini',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    _WalletAction(
+                      icon: Icons.near_me_rounded,
+                      onTap: () => _showInfoSnack(
+                        context,
+                        'Transfer belum dapat diproses saat ini',
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1346,15 +1682,17 @@ class _WalletCard extends ConsumerWidget {
 }
 
 class _MarketingPlanCard extends StatelessWidget {
-  const _MarketingPlanCard({required this.session});
+  const _MarketingPlanCard({required this.session, required this.isLoading});
 
   final DemoClientSession session;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
     final packageColor = _packagePrimary(session.activePackageName);
-    final premiumPackage =
-        session.activePackageName.toLowerCase().contains('platinum');
+    final premiumPackage = session.activePackageName.toLowerCase().contains(
+          'platinum',
+        );
     final titleColor = premiumPackage ? Colors.white : const Color(0xFF0A2A43);
     final mutedColor =
         premiumPackage ? const Color(0xDDEAF7FF) : const Color(0xFF718096);
@@ -1421,13 +1759,12 @@ class _MarketingPlanCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              'Kode ${session.referralCode} | Level aktif ${session.activeLevel}',
+                              tapGoIsPlayDistribution
+                                  ? 'Status akun Basic aktif'
+                                  : 'Kode ${session.referralCode} | Level aktif ${session.activeLevel}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: mutedColor,
-                                fontSize: 12,
-                              ),
+                              style: TextStyle(color: mutedColor, fontSize: 12),
                             ),
                           ],
                         ),
@@ -1439,54 +1776,89 @@ class _MarketingPlanCard extends StatelessWidget {
                     children: [
                       Expanded(
                         child: _MiniMetric(
-                          label: 'Wallet',
-                          value: _formatCompactRupiah(session.walletBalance),
+                          label:
+                              tapGoIsPlayDistribution ? 'Membership' : 'Wallet',
+                          value: tapGoIsPlayDistribution
+                              ? session.activePackageName
+                              : _formatCompactRupiah(session.walletBalance),
+                          animatedValue: tapGoIsPlayDistribution
+                              ? null
+                              : session.walletBalance,
+                          formatter: _formatCompactRupiah,
+                          isLoading: isLoading,
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: _MiniMetric(
-                          label: 'Bonus hari ini',
-                          value: _formatCompactRupiah(session.todayBonus),
+                          label: tapGoIsPlayDistribution
+                              ? 'Benefit'
+                              : 'Bonus hari ini',
+                          value: tapGoIsPlayDistribution
+                              ? 'Aktif'
+                              : _formatCompactRupiah(session.todayBonus),
+                          animatedValue: tapGoIsPlayDistribution
+                              ? null
+                              : session.todayBonus,
+                          formatter: _formatCompactRupiah,
+                          isLoading: isLoading,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _MiniMetric(
-                          label: 'Referral Saya',
-                          value: '${session.directSponsor} direct',
+                  if (tapGoIsDirectDistribution) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _MiniMetric(
+                            label: 'Referral Saya',
+                            value: '${session.directSponsor} direct',
+                            animatedValue: session.directSponsor,
+                            formatter: (value) => '$value direct',
+                            isLoading: isLoading,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _MiniMetric(
-                          label: 'Downline Saya',
-                          value: '${session.downline} user',
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _MiniMetric(
+                            label: 'Downline Saya',
+                            value: '${session.downline} user',
+                            animatedValue: session.downline,
+                            formatter: (value) => '$value user',
+                            isLoading: isLoading,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Referral Saya adalah jumlah orang yang memakai kode referral Anda.',
-                    style: TextStyle(
-                      color: mutedColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                      ],
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Referral Saya adalah jumlah orang yang memakai kode referral Anda.',
+                      style: TextStyle(
+                        color: mutedColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: () =>
-                          _openDemo(context, const MembershipPackagesScreen()),
+                      onPressed: () => _openDemo(
+                        context,
+                        tapGoIsPlayDistribution
+                            ? const BasicMemberCardScreen()
+                            : const MembershipPackagesScreen(),
+                      ),
                       icon: const Icon(Icons.workspace_premium_rounded),
-                      label: const FittedBox(child: Text('Membership')),
+                      label: FittedBox(
+                        child: Text(
+                          tapGoIsPlayDistribution
+                              ? 'Detail Basic'
+                              : 'Membership',
+                        ),
+                      ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: _brandBlue,
                         backgroundColor: Colors.white.withValues(alpha: 0.72),
@@ -1595,41 +1967,177 @@ List<Color> _packageGradient(String packageName) {
 class _ServiceGrid extends StatelessWidget {
   const _ServiceGrid();
 
-  static const services = [
-    _ServiceItem('TapGo Ride', Icons.two_wheeler_rounded, Color(0xFF0569E8),
-        'Diskon 5000'),
+  static const _directServices = [
+    // Badge 'Segera' dilepas karena layanan sudah dapat dibuka; badge apa pun
+    // membuat onTap bernilai null pada _tapGoServiceActionFor.
     _ServiceItem(
-        'TapGo Car', Icons.local_taxi_rounded, Color(0xFF0B7A75), null),
+      'TapGo Ride',
+      Icons.two_wheeler_rounded,
+      Color(0xFF0569E8),
+      null,
+    ),
     _ServiceItem(
-        'TapGo Food', Icons.restaurant_menu_rounded, Color(0xFFE85D04), null),
+      'TapGo Car',
+      Icons.local_taxi_rounded,
+      Color(0xFF0B7A75),
+      null,
+    ),
     _ServiceItem(
-        'TapGo Mart', Icons.storefront_rounded, Color(0xFF0088A6), null),
-    _ServiceItem('TapGo Jasa', Icons.home_repair_service_rounded,
-        Color(0xFFD97706), null),
+      'TapGo Food',
+      Icons.restaurant_menu_rounded,
+      Color(0xFFE85D04),
+      null,
+    ),
+    _ServiceItem(
+      'TapGo Mart',
+      Icons.storefront_rounded,
+      Color(0xFF0088A6),
+      null,
+    ),
+    _ServiceItem(
+      'Jasa',
+      Icons.home_repair_service_rounded,
+      Color(0xFFD97706),
+      null,
+    ),
     _ServiceItem('Pulsa', Icons.phone_iphone_rounded, Color(0xFF1486B8), null),
-    _ServiceItem('TapGo Bantu', Icons.volunteer_activism_rounded,
-        Color(0xFF0569E8), 'Baru'),
+    _ServiceItem(
+      'TapGo Bantu',
+      Icons.volunteer_activism_rounded,
+      Color(0xFF0569E8),
+      'Segera',
+    ),
     _ServiceItem('Lainnya', Icons.grid_view_rounded, Color(0xFF697386), null),
+  ];
+
+  static const _playServices = [
+    // Release 2 yang diunggah ke Play Store memuat Ojek Online, sehingga entry
+    // point Motor dan Mobil hadir di sini — bukan hanya pada distribusi direct.
+    // Keduanya tidak bergantung pada flag demo: menu tetap terlihat, dan yang
+    // fail closed adalah penyedia lokasi di dalam alurnya.
+    _ServiceItem('Motor', Icons.two_wheeler_rounded, Color(0xFF0569E8), null),
+    _ServiceItem('Mobil', Icons.local_taxi_rounded, Color(0xFF0B7A75), null),
+    _ServiceItem('Kartu Anggota', Icons.badge_rounded, Color(0xFFF59E0B), null),
+    _ServiceItem('Profil', Icons.person_rounded, Color(0xFF697386), null),
+    _ServiceItem(
+      'Tiket Bantuan',
+      Icons.volunteer_activism_rounded,
+      Color(0xFF0569E8),
+      null,
+    ),
+    _ServiceItem(
+      'Hapus Akun',
+      Icons.delete_outline_rounded,
+      Color(0xFFD97706),
+      null,
+    ),
   ];
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: services.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        mainAxisSpacing: 18,
-        crossAxisSpacing: 12,
-        childAspectRatio: 0.66,
-      ),
-      itemBuilder: (context, index) => _FloatingServiceTile(
-        index: index,
-        child: _ServiceTile(item: services[index]),
-      ),
+    final services = tapGoIsPlayDistribution ? _playServices : _directServices;
+
+    // Tinggi sel sebelumnya diturunkan semata dari childAspectRatio, sehingga
+    // ikut mengecil bersama lebar layar. Pada 320 dp sel menjadi lebih pendek
+    // daripada isi kartu dan itulah overflow 12 px-nya.
+    //
+    // Sekarang tinggi sel adalah yang TERBESAR antara tinggi rasio lama dan
+    // tinggi yang benar-benar dibutuhkan isi. Pada 360 dp dan 412 dp tinggi
+    // rasio sudah lebih besar, jadi tampilannya tidak berubah sedikit pun;
+    // yang berubah hanya lebar sempit yang memang tidak muat.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const crossAxisCount = 4;
+        const crossAxisSpacing = 12.0;
+        final tileWidth =
+            (constraints.maxWidth - crossAxisSpacing * (crossAxisCount - 1)) /
+                crossAxisCount;
+        final ratioHeight = tileWidth / 0.66;
+        final contentHeight = _serviceTileContentHeight(context);
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: services.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            mainAxisSpacing: 18,
+            crossAxisSpacing: crossAxisSpacing,
+            mainAxisExtent: max(ratioHeight, contentHeight),
+          ),
+          itemBuilder: (context, index) {
+            final item = services[index];
+            return _FloatingServiceTile(
+              index: index,
+              child: _ServiceTile(
+                item: item,
+                // Label dibatasi lebar sel supaya tidak meluber ke kartu
+                // tetangga pada layar sempit.
+                maxLabelWidth: min(_serviceTileLabelWidth, tileWidth),
+                onTap: _tapGoServiceActionFor(context, item),
+              ),
+            );
+          },
+        );
+      },
     );
   }
+}
+
+VoidCallback? _tapGoServiceActionFor(BuildContext context, _ServiceItem item) {
+  if (item.badge != null) {
+    return null;
+  }
+  // Ojek Online diperiksa lebih dulu supaya berlaku pada kedua distribusi.
+  // Sebelumnya cabang play mengembalikan null untuk label ride, sehingga
+  // fiturnya tidak dapat dibuka pada build Play meski kartunya ada.
+  final rideService = tapGoRideEntryServiceFor(item.label);
+  if (rideService != null) {
+    return () => tapGoOpenRideEntry(context, rideService);
+  }
+  if (tapGoIsPlayDistribution) {
+    return switch (item.label) {
+      'Kartu Anggota' => () => _openDemo(
+            context,
+            const BasicMemberCardScreen(),
+          ),
+      'Profil' => () => _openDemo(context, const ProfileDetailsScreen()),
+      'Tiket Bantuan' => () => _openDemo(context, const ContactUsScreen()),
+      'Hapus Akun' => () => _openDemo(
+            context,
+            const DeleteAccountRequestScreen(),
+          ),
+      _ => null,
+    };
+  }
+  // Layanan lain belum tersedia dan tetap memakai pesan "belum dapat dibuka"
+  // yang jujur.
+  return () => _showSoon(context);
+}
+
+/// Memetakan label kartu layanan dashboard ke jenis layanan Ojek Online.
+///
+/// Dipakai dashboard sebagai satu-satunya sumber kebenaran pemetaan, sehingga
+/// test menguji pemetaan yang sama dengan yang dipakai produksi. Label
+/// 'Motor'/'Mobil' dipakai dashboard Release 2; 'TapGo Ride'/'TapGo Car' adalah
+/// label distribusi direct yang tetap didukung.
+RideServiceKind? tapGoRideEntryServiceFor(String label) {
+  return switch (label) {
+    'TapGo Ride' || 'Motor' => RideServiceKind.motorcycle,
+    'TapGo Car' || 'Mobil' => RideServiceKind.car,
+    _ => null,
+  };
+}
+
+/// Membuka Ojek Online melalui gerbang pemulihan.
+///
+/// Sengaja BUKAN langsung ke layar pemesanan: gerbang bertanya ke server lebih
+/// dulu, sehingga perjalanan yang masih berjalan dibuka kembali alih-alih
+/// pengguna menawarkan dirinya memesan dua kali.
+void tapGoOpenRideEntry(BuildContext context, RideServiceKind service) {
+  Navigator.of(context).push(
+    _tapGoPageRoute((_) => RideEntryScreen(service: service)),
+  );
 }
 
 class _FloatingServiceTile extends StatefulWidget {
@@ -1654,9 +2162,10 @@ class _FloatingServiceTileState extends State<_FloatingServiceTile>
       vsync: this,
       duration: Duration(milliseconds: 2800 + (widget.index * 120)),
     );
-    _offset = Tween<double>(begin: -2, end: 2).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _offset = Tween<double>(
+      begin: -2,
+      end: 2,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
     if (_dashboardLiveAnimationsEnabled) {
       Future<void>.delayed(Duration(milliseconds: widget.index * 90), () {
         if (mounted) _controller.repeat(reverse: true);
@@ -1675,10 +2184,8 @@ class _FloatingServiceTileState extends State<_FloatingServiceTile>
     if (!_dashboardLiveAnimationsEnabled) return widget.child;
     return AnimatedBuilder(
       animation: _offset,
-      builder: (context, child) => Transform.translate(
-        offset: Offset(0, _offset.value),
-        child: child,
-      ),
+      builder: (context, child) =>
+          Transform.translate(offset: Offset(0, _offset.value), child: child),
       child: widget.child,
     );
   }
@@ -1689,6 +2196,9 @@ class _ContentCards extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (tapGoIsPlayDistribution) {
+      return const SizedBox.shrink();
+    }
     return Row(
       children: [
         Expanded(
@@ -1717,8 +2227,10 @@ class _ContentCards extends StatelessWidget {
                 ),
                 const Spacer(),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 9,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFF3434),
                     borderRadius: BorderRadius.circular(12),
@@ -1759,22 +2271,26 @@ class _ContentCards extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'PPOB & Benefit',
+                Text(
+                  tapGoIsPlayDistribution
+                      ? 'Layanan Digital'
+                      : 'PPOB & Benefit',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,
                     fontSize: 16,
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Saldo, transaksi, dan reward dalam satu dashboard.',
+                Text(
+                  tapGoIsPlayDistribution
+                      ? 'Akses layanan tersedia melalui membership TapGo.'
+                      : 'Saldo, transaksi, dan reward dalam satu dashboard.',
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Color(0xDDEAF7FF),
                     fontSize: 12,
                     height: 1.3,
@@ -1813,6 +2329,10 @@ class _BottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final centerGap = screenWidth < 380 ? 60.0 : 74.0;
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Stack(
       children: [
         Positioned(
@@ -1820,49 +2340,71 @@ class _BottomNav extends StatelessWidget {
           right: 18,
           bottom: 18,
           child: Container(
-            height: 82,
+            height: _navBarHeight(context),
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: colorScheme.surface,
               borderRadius: BorderRadius.circular(28),
-              boxShadow: const [
+              border: Border.all(color: colorScheme.outlineVariant),
+              boxShadow: [
                 BoxShadow(
-                  color: Color(0x22000000),
+                  color: Colors.black.withValues(alpha: 0.14),
                   blurRadius: 22,
-                  offset: Offset(0, 10),
+                  offset: const Offset(0, 10),
                 ),
               ],
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _NavItem(
-                  icon: Icons.home_rounded,
-                  label: 'Beranda',
-                  active: selectedIndex == 0,
-                  onTap: () => onTabSelected(0),
-                ),
-                _NavItem(
-                  icon: Icons.receipt_rounded,
-                  label: 'Aktivitas',
-                  active: selectedIndex == 1,
-                  onTap: () => onTabSelected(1),
-                ),
-                const SizedBox(width: 74),
-                _NavItem(
-                  icon: Icons.chat_bubble_outline_rounded,
-                  label: 'Chat',
-                  badge: '2',
-                  active: selectedIndex == 2,
-                  onTap: () => onTabSelected(2),
-                ),
-                _NavItem(
-                  icon: Icons.person_outline_rounded,
-                  label: 'Akun',
-                  active: selectedIndex == 3,
-                  onTap: () => onTabSelected(3),
-                ),
-              ],
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Lebar item nav dulu dipatok 58 dp. Pada 320 dp, empat item
+                // ditambah celah tengah melampaui lebar bar dan itulah
+                // overflow 30 px-nya.
+                //
+                // Lebar diukur dari constraint yang sebenarnya — bukan ditebak
+                // dari lebar layar dikurangi inset — lalu menyusut hanya bila
+                // memang tidak muat, dan tidak pernah di bawah 48 dp sehingga
+                // tap target minimum tetap terpenuhi. Pada 360 dp dan 412 dp
+                // hasilnya tetap 58 dp seperti sebelumnya.
+                final fitItemWidth = (constraints.maxWidth - centerGap) / 4;
+                final navItemWidth = fitItemWidth >= _navItemPreferredWidth
+                    ? _navItemPreferredWidth
+                    : max(_navItemMinWidth, fitItemWidth);
+
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _NavItem(
+                      icon: Icons.home_rounded,
+                      label: 'Beranda',
+                      width: navItemWidth,
+                      active: selectedIndex == 0,
+                      onTap: () => onTabSelected(0),
+                    ),
+                    _NavItem(
+                      icon: Icons.receipt_rounded,
+                      label: 'Aktivitas',
+                      width: navItemWidth,
+                      active: selectedIndex == 1,
+                      onTap: () => onTabSelected(1),
+                    ),
+                    SizedBox(width: centerGap),
+                    _NavItem(
+                      icon: Icons.chat_bubble_outline_rounded,
+                      label: 'Chat',
+                      width: navItemWidth,
+                      active: selectedIndex == 2,
+                      onTap: () => onTabSelected(2),
+                    ),
+                    _NavItem(
+                      icon: Icons.person_outline_rounded,
+                      label: 'Akun',
+                      width: navItemWidth,
+                      active: selectedIndex == 3,
+                      onTap: () => onTabSelected(3),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -1871,15 +2413,17 @@ class _BottomNav extends StatelessWidget {
           right: 0,
           bottom: 42,
           child: Center(
-            child: GestureDetector(
+            child: _TapGoPressable(
               onTap: onCenterTap,
+              borderRadius: BorderRadius.circular(999),
+              pressedScale: 0.96,
               child: Container(
                 width: 72,
                 height: 72,
                 decoration: BoxDecoration(
                   color: _brandBlue,
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 6),
+                  border: Border.all(color: colorScheme.surface, width: 6),
                   boxShadow: [
                     BoxShadow(
                       color: _brandBlue.withValues(alpha: 0.32),
@@ -1902,30 +2446,52 @@ class _BottomNav extends StatelessWidget {
   }
 }
 
+/// Lebar item nav yang diinginkan, dan lantai tap target minimum.
+const double _navItemPreferredWidth = 58;
+const double _navItemMinWidth = 48;
+
+/// Tinggi bar nav pada skala teks normal.
+const double _navBarBaseHeight = 82;
+
+/// Tinggi bar nav yang ikut skala teks.
+///
+/// Tinggi tetap 82 dp membuat isi item meluber saat pengguna memperbesar teks.
+/// Bar kini tumbuh ke atas seperlunya, dan pada skala normal nilainya tetap 82
+/// sehingga tampilannya tidak berubah.
+double _navBarHeight(BuildContext context) {
+  final scaler = MediaQuery.textScalerOf(context);
+  // Ikon aktif (26 + padding 8 atas-bawah), jarak 5, indikator 3 + margin 3,
+  // lalu label satu baris.
+  final needed = 42 + 5 + 6 + scaler.scale(12) * 1.35 + 8;
+  return max(_navBarBaseHeight, needed);
+}
+
 class _NavItem extends StatelessWidget {
   const _NavItem({
     required this.icon,
     required this.label,
     required this.onTap,
     this.active = false,
-    this.badge,
+    this.width = _navItemPreferredWidth,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
   final bool active;
-  final String? badge;
+  final double width;
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? _brandBlue : const Color(0xFF4B5563);
+    final colorScheme = Theme.of(context).colorScheme;
+    final color = active ? _brandBlue : colorScheme.onSurfaceVariant;
 
-    return GestureDetector(
+    return _TapGoPressable(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      borderRadius: BorderRadius.circular(18),
+      pressedScale: 0.97,
       child: SizedBox(
-        width: 58,
+        width: width,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -1943,18 +2509,7 @@ class _NavItem extends StatelessWidget {
                 scale: active ? 1.10 : 1,
                 duration: const Duration(milliseconds: 220),
                 curve: Curves.easeOutCubic,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Icon(icon, color: color, size: 26),
-                    if (badge != null)
-                      Positioned(
-                        right: -8,
-                        top: -8,
-                        child: _PulseBadge(label: badge!),
-                      ),
-                  ],
-                ),
+                child: Icon(icon, color: color, size: 26),
               ),
             ),
             const SizedBox(height: 5),
@@ -1968,13 +2523,21 @@ class _NavItem extends StatelessWidget {
                 borderRadius: BorderRadius.circular(999),
               ),
             ),
-            Text(
-              label,
-              maxLines: 1,
-              style: TextStyle(
-                color: color,
-                fontSize: 12,
-                fontWeight: active ? FontWeight.w900 : FontWeight.w700,
+            AnimatedOpacity(
+              opacity: active ? 1 : 0.74,
+              duration: _TapGoMotion.duration(context, _TapGoMotion.quick),
+              curve: _TapGoMotion.standardCurve,
+              child: Text(
+                label,
+                maxLines: 1,
+                // Jaring pengaman saat item menyusut atau teks diperbesar;
+                // pada ukuran normal label tetap utuh.
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: active ? FontWeight.w900 : FontWeight.w700,
+                ),
               ),
             ),
           ],
@@ -1994,28 +2557,48 @@ class ActivityScreen extends ConsumerStatefulWidget {
 class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   int _tabIndex = 0;
 
-  static const _tabs = ['Semua', 'Bonus', 'Referral', 'Layanan', 'Withdraw'];
+  static const _directTabs = [
+    'Semua',
+    'Bonus',
+    'Referral',
+    'Layanan',
+    'Withdraw',
+  ];
+  static const _playTabs = ['Semua', 'Layanan'];
 
   @override
   Widget build(BuildContext context) {
     final production = ref.watch(_productionSnapshotProvider);
     final session = ref.watch(_demoSessionProvider);
-    final sourceItems = session.transactions
-        .map(
-          (transaction) => _ActivityItem(
-            _activityCategoryFromTitle(transaction.title),
-            _activityIconFromTitle(transaction.title),
-            transaction.title,
-            transaction.description,
-            transaction.amount == 0
-                ? null
-                : '${transaction.amount > 0 ? '+' : '-'}${formatRupiah(transaction.amount.abs())}',
-            transaction.status,
-            'Terbaru',
-          ),
-        )
-        .toList(growable: false);
-    final selected = _tabs[_tabIndex];
+    final tabs = tapGoIsPlayDistribution ? _playTabs : _directTabs;
+    final sourceItems = tapGoIsPlayDistribution
+        ? const <_ActivityItem>[]
+        : session.transactions
+            .map(
+              (transaction) => _ActivityItem(
+                _activityCategoryFromTitle(transaction.title),
+                _activityIconFromTitle(transaction.title),
+                transaction.title,
+                transaction.description,
+                transaction.amount == 0
+                    ? null
+                    : '${transaction.amount > 0 ? '+' : '-'}${formatRupiah(transaction.amount.abs())}',
+                transaction.status,
+                'Terbaru',
+              ),
+            )
+            .where(
+              (item) =>
+                  !tapGoIsPlayDistribution ||
+                  (item.category != 'Bonus' &&
+                      item.category != 'Withdraw' &&
+                      item.category != 'Referral'),
+            )
+            .toList(growable: false);
+    if (_tabIndex >= tabs.length) {
+      _tabIndex = 0;
+    }
+    final selected = tabs[_tabIndex];
     final items = selected == 'Semua'
         ? sourceItems
         : sourceItems.where((item) => item.category == selected).toList();
@@ -2025,20 +2608,22 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionHeader(
+          _SectionHeader(
             title: 'Aktivitas',
-            subtitle: 'Bonus, referral, layanan, dan withdraw',
+            subtitle: tapGoIsPlayDistribution
+                ? 'Aktivitas layanan TapGo'
+                : 'Bonus, referral, layanan, dan withdraw',
           ),
           const SizedBox(height: 16),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: List.generate(
-                _tabs.length,
+                tabs.length,
                 (index) => Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: ChoiceChip(
-                    label: Text(_tabs[index]),
+                    label: Text(tabs[index]),
                     selected: _tabIndex == index,
                     selectedColor: _brandBlue,
                     labelStyle: TextStyle(
@@ -2058,7 +2643,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
             const _StatusSurface(
               icon: Icons.sync_rounded,
               title: 'Memuat aktivitas',
-              subtitle: 'Mengambil histori transaksi dari backend...',
+              subtitle: 'Mengambil histori transaksi TapGo...',
             )
           else if (production.hasError)
             _RetryStatusSurface(
@@ -2153,54 +2738,92 @@ class AccountScreen extends ConsumerWidget {
         children: [
           _AccountHero(session: session),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _StatCard(
-                  label: 'Wallet',
-                  value: _formatCompactRupiah(session.walletBalance),
+          if (tapGoIsPlayDistribution)
+            _PlayProfileMembershipSummary(session: session)
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: _StatCard(
+                    label: 'Wallet',
+                    value: _formatCompactRupiah(session.walletBalance),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatCard(
-                  label: 'PPOB',
-                  value: _formatCompactRupiah(session.ppobBalance),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _StatCard(
+                    label: 'PPOB',
+                    value: _formatCompactRupiah(session.ppobBalance),
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _StatCard(
-                  label: 'Sponsor',
-                  value: '${session.directSponsor}',
+              ],
+            ),
+          if (tapGoIsDirectDistribution) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _StatCard(
+                    label: 'Sponsor',
+                    value: '${session.directSponsor}',
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatCard(
-                  label: 'Level aktif',
-                  value: '${session.activeLevel}',
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _StatCard(
+                    label: 'Level aktif',
+                    value: '${session.activeLevel}',
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
           const SizedBox(height: 16),
-          _AccountMenuTile('Membership Saya', Icons.workspace_premium_rounded,
-              () => _openDemo(context, const MembershipScreen())),
-          _AccountMenuTile('Jaringan Saya', Icons.account_tree_rounded,
-              () => _openDemo(context, const ReferralTreeScreen())),
           _AccountMenuTile(
+            'Kartu Anggota',
+            Icons.badge_rounded,
+            () => _openDemo(context, const BasicMemberCardScreen()),
+          ),
+          _AccountMenuTile(
+            'Profil',
+            Icons.person_rounded,
+            () => _openDemo(context, const ProfileDetailsScreen()),
+          ),
+          _AccountMenuTile(
+            'Tampilan',
+            Icons.palette_rounded,
+            () => _openDemo(context, const ThemeSettingsScreen()),
+            subtitle: 'Atur tema aplikasi',
+          ),
+          _AccountMenuTile(
+            'Tiket Bantuan',
+            Icons.volunteer_activism_rounded,
+            () => _openDemo(context, const ContactUsScreen()),
+          ),
+          if (tapGoIsDirectDistribution)
+            _AccountMenuTile(
+              'Jaringan Saya',
+              Icons.account_tree_rounded,
+              () => _openDemo(context, const ReferralTreeScreen()),
+            ),
+          if (tapGoIsDirectDistribution) ...[
+            _AccountMenuTile(
               'Wallet & Withdraw',
               Icons.account_balance_wallet_rounded,
-              () => _openDemo(context, const DemoWalletScreen())),
-          _AccountMenuTile('Riwayat Komisi', Icons.receipt_long_rounded,
-              () => _openDemo(context, const CommissionHistoryScreen())),
-          _AccountMenuTile('Reward', Icons.emoji_events_rounded,
-              () => _openDemo(context, const RewardScreen())),
+              () => _openDemo(context, const DemoWalletScreen()),
+            ),
+            _AccountMenuTile(
+              'Riwayat Komisi',
+              Icons.receipt_long_rounded,
+              () => _openDemo(context, const CommissionHistoryScreen()),
+            ),
+          ],
+          if (tapGoIsDirectDistribution)
+            _AccountMenuTile(
+              'Reward',
+              Icons.emoji_events_rounded,
+              () => _openDemo(context, const RewardScreen()),
+            ),
           if (session.isAdmin)
             _AccountMenuTile(
               session.isSuperAdmin
@@ -2214,39 +2837,61 @@ class AccountScreen extends ConsumerWidget {
                     : const AdminDashboardScreen(),
               ),
             ),
-          _AccountMenuTile(
+          if (tapGoIsDirectDistribution)
+            _AccountMenuTile(
               'KYC',
               Icons.verified_user_rounded,
-              () =>
-                  _openDemo(context, const FeatureDetailScreen(title: 'KYC'))),
-          _AccountMenuTile('Rekening Bank', Icons.account_balance_rounded,
-              () => _openDemo(context, const BankAccountScreen())),
+              () => _openDemo(context, const FeatureDetailScreen(title: 'KYC')),
+            ),
+          if (tapGoIsDirectDistribution)
+            _AccountMenuTile(
+              'Rekening Bank',
+              Icons.account_balance_rounded,
+              () => _openDemo(context, const BankAccountScreen()),
+            ),
           _AccountMenuTile(
-              'Privacy Policy',
-              Icons.privacy_tip_rounded,
-              () => _openDemo(
-                  context,
-                  const LegalInfoScreen(
-                    title: 'Privacy Policy',
-                    content: _privacyPolicyContent,
-                  ))),
+            'Kebijakan Privasi',
+            Icons.privacy_tip_rounded,
+            () => _openDemo(
+              context,
+              LegalInfoScreen(
+                title: 'Kebijakan Privasi',
+                content: _tapGoPrivacyPolicyContent,
+              ),
+            ),
+          ),
           _AccountMenuTile(
-              'Terms & Conditions',
-              Icons.gavel_rounded,
-              () => _openDemo(
-                  context,
-                  const LegalInfoScreen(
-                    title: 'Syarat & Ketentuan',
-                    content: _termsContent,
-                  ))),
-          _AccountMenuTile('Hapus Akun', Icons.delete_outline_rounded,
-              () => _openDemo(context, const DeleteAccountRequestScreen())),
-          _AccountMenuTile('Hubungi Kami', Icons.support_agent_rounded,
-              () => _openDemo(context, const ContactUsScreen())),
-          _AccountMenuTile('Bantuan', Icons.help_outline_rounded,
-              () => _openDemo(context, const HelpCenterScreen())),
-          _AccountMenuTile('Pengaturan', Icons.settings_rounded,
-              () => _openDemo(context, const SettingsScreen())),
+            'Syarat & Ketentuan',
+            Icons.gavel_rounded,
+            () => _openDemo(
+              context,
+              LegalInfoScreen(
+                title: 'Syarat & Ketentuan',
+                content: _tapGoTermsContent,
+              ),
+            ),
+          ),
+          _AccountMenuTile(
+            'Hapus Akun',
+            Icons.delete_outline_rounded,
+            () => _openDemo(context, const DeleteAccountRequestScreen()),
+          ),
+          _AccountMenuTile(
+            'Hubungi Kami',
+            Icons.support_agent_rounded,
+            () => _openDemo(context, const ContactUsScreen()),
+          ),
+          _AccountMenuTile(
+            'Bantuan',
+            Icons.help_outline_rounded,
+            () => _openDemo(context, const HelpCenterScreen()),
+          ),
+          if (tapGoIsDirectDistribution)
+            _AccountMenuTile(
+              'Pengaturan',
+              Icons.settings_rounded,
+              () => _openDemo(context, const SettingsScreen()),
+            ),
           _AccountMenuTile(
             'Logout',
             Icons.logout_rounded,
@@ -2256,6 +2901,301 @@ class AccountScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+class ThemeSettingsScreen extends ConsumerWidget {
+  const ThemeSettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(tapGoThemePreferenceProvider);
+    return _DemoScaffold(
+      title: 'Tampilan',
+      subtitle: 'Atur tema aplikasi',
+      child: Column(
+        children: [
+          for (final preference in TapGoThemePreference.values)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _ThemeOptionTile(
+                preference: preference,
+                selected: selected == preference,
+                onSelected: () => ref
+                    .read(tapGoThemePreferenceProvider.notifier)
+                    .setPreference(preference),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ThemeOptionTile extends StatelessWidget {
+  const _ThemeOptionTile({
+    required this.preference,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final TapGoThemePreference preference;
+  final bool selected;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return _TapGoPressable(
+      onTap: onSelected,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        key: ValueKey('theme_option_${preference.storageValue}'),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? _brandBlue : colorScheme.outlineVariant,
+            width: selected ? 1.4 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              selected
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              color: selected ? _brandBlue : colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                preference.label,
+                style: TextStyle(
+                  color: colorScheme.onSurface,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  decoration: TextDecoration.none,
+                ),
+              ),
+            ),
+            if (selected)
+              const Icon(Icons.check_circle_rounded, color: _brandBlue),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class ProfileDetailsScreen extends ConsumerWidget {
+  const ProfileDetailsScreen({super.key});
+
+  Future<_BasicMemberCardData> _load(DemoClientSession session) async {
+    final loader = tapGoMemberIdentityLoaderForTests;
+    if (loader != null) {
+      return _BasicMemberCardData.fromMap(await loader());
+    }
+    if (tapGoDisablePersistenceForTests) {
+      return _BasicMemberCardData(
+        displayName: session.userName,
+        phone: session.phone,
+        memberId: 'TGM-TESTCARD',
+        status: 'ACTIVE',
+        joinedAt: DateTime(2026, 7, 14),
+      );
+    }
+    final data = await _apiClient.memberIdentity();
+    return _BasicMemberCardData.fromMap(data);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final session = ref.watch(_demoSessionProvider);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Profil')),
+      body: FutureBuilder<_BasicMemberCardData>(
+        future: _load(session),
+        builder: (context, snapshot) {
+          final fallback = _BasicMemberCardData(
+            displayName:
+                session.userName.isEmpty ? 'Member TapGo' : session.userName,
+            phone: session.phone,
+            memberId: '-',
+            status: 'ACTIVE',
+            joinedAt: DateTime.tryParse(session.membershipJoinedAt ?? '') ??
+                DateTime.now(),
+          );
+          final profile = snapshot.data ?? fallback;
+          final isLoading = snapshot.connectionState != ConnectionState.done;
+          final hasError = snapshot.hasError;
+          final statusLabel = profile.status.toUpperCase() == 'ACTIVE'
+              ? 'Aktif'
+              : 'Tidak aktif';
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+            children: [
+              _AccountHero(
+                session: session.copyWith(
+                  userName: profile.displayName,
+                  activePackageName: 'Basic',
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (isLoading)
+                const _StatusSurface(
+                  icon: Icons.sync_rounded,
+                  title: 'Memuat profil',
+                  subtitle: 'Data profil sedang disiapkan.',
+                )
+              else if (hasError)
+                const _StatusSurface(
+                  icon: Icons.info_outline_rounded,
+                  title: 'Sebagian data belum tersedia',
+                  subtitle:
+                      'Profil tetap dapat digunakan dengan data akun yang aman.',
+                ),
+              if (isLoading || hasError) const SizedBox(height: 12),
+              const _SectionLabel('Identitas'),
+              const SizedBox(height: 10),
+              _ProfileInfoPanel(
+                children: [
+                  _ProfileDetailRow(
+                    label: 'Nama lengkap',
+                    value: profile.displayName,
+                  ),
+                  _ProfileDetailRow(
+                    label: 'Nomor HP',
+                    value: _maskProfilePhone(
+                      profile.phone.isEmpty ? session.phone : profile.phone,
+                    ),
+                  ),
+                  _ProfileDetailRow(
+                    label: 'Public Member ID',
+                    value: profile.memberId.isEmpty ? '-' : profile.memberId,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const _SectionLabel('Keanggotaan'),
+              const SizedBox(height: 10),
+              _ProfileInfoPanel(
+                children: [
+                  const _ProfileDetailRow(label: 'Paket', value: 'Basic'),
+                  _ProfileDetailRow(label: 'Status', value: statusLabel),
+                  _ProfileDetailRow(
+                    label: 'Tanggal bergabung',
+                    value: _formatMemberDate(profile.joinedAt),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: TextStyle(
+        color: _tapGoTextPrimary(context),
+        fontSize: 14,
+        fontWeight: FontWeight.w900,
+        decoration: TextDecoration.none,
+      ),
+    );
+  }
+}
+
+class _ProfileInfoPanel extends StatelessWidget {
+  const _ProfileInfoPanel({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      key: const ValueKey('profile_details_info_panel'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Column(children: children),
+    );
+  }
+}
+
+class _ProfileDetailRow extends StatelessWidget {
+  const _ProfileDetailRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 5,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
+                fontSize: 12,
+                height: 1.2,
+                fontWeight: FontWeight.w800,
+                decoration: TextDecoration.none,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 6,
+            child: Text(
+              value.isEmpty ? '-' : value,
+              textAlign: TextAlign.right,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: colorScheme.onSurface,
+                fontSize: 13.5,
+                height: 1.2,
+                fontWeight: FontWeight.w900,
+                decoration: TextDecoration.none,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _maskProfilePhone(String phone) {
+  final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.isEmpty) return '-';
+  final local = digits.startsWith('62') ? '0${digits.substring(2)}' : digits;
+  if (local.length <= 6) return local;
+  final prefix = local.substring(0, local.length >= 4 ? 4 : local.length);
+  final suffix = local.substring(local.length - 4);
+  return '$prefix••••$suffix';
 }
 
 class HelpCenterScreen extends StatelessWidget {
@@ -2272,30 +3212,36 @@ class HelpCenterScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const helpItems = [
+    final helpItems = [
       (
         'Cara daftar',
-        'Isi nama, nomor HP, password, lalu gunakan kode referral jika ada.'
+        tapGoIsPlayDistribution
+            ? 'Isi nama, nomor HP, dan password untuk membuat akun Basic.'
+            : 'Isi nama, nomor HP, password, lalu gunakan kode referral jika ada.',
       ),
       (
-        'Kode referral',
-        'Bagikan kode referral Anda agar downline dan bonus tercatat otomatis.'
+        'Membership',
+        tapGoIsPlayDistribution
+            ? 'Akun baru aktif otomatis sebagai Basic setelah registrasi.'
+            : 'Pilih paket Silver, Gold, atau Platinum lalu selesaikan invoice.',
       ),
-      (
-        'Upgrade membership',
-        'Pilih paket Silver, Gold, atau Platinum lalu selesaikan invoice.'
-      ),
-      (
-        'Saldo TapGoPay',
-        'Saldo berasal dari bonus registrasi, sponsor, komisi, dan reward real.'
-      ),
-      (
-        'Ajukan withdraw',
-        'Lengkapi rekening bank lalu ajukan penarikan dari halaman Wallet.'
-      ),
+      if (tapGoIsDirectDistribution) ...[
+        (
+          'Kode referral',
+          'Bagikan kode referral Anda agar downline dan bonus tercatat otomatis.',
+        ),
+        (
+          'Saldo TapGoPay',
+          'Saldo berasal dari bonus registrasi, sponsor, komisi, dan reward real.',
+        ),
+        (
+          'Ajukan withdraw',
+          'Lengkapi rekening bank lalu ajukan penarikan dari halaman Wallet.',
+        ),
+      ],
       (
         'FAQ singkat',
-        'Jika data belum tampil, pastikan koneksi internet dan coba muat ulang.'
+        'Jika data belum tampil, pastikan koneksi internet dan coba muat ulang.',
       ),
     ];
     return Scaffold(
@@ -2334,6 +3280,368 @@ class HelpCenterScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PlayProfileMembershipSummary extends StatelessWidget {
+  const _PlayProfileMembershipSummary({required this.session});
+
+  final DemoClientSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          const PremiumTapGoIcon(
+            label: 'Kartu Anggota',
+            fallbackIcon: Icons.badge_rounded,
+            size: 58,
+            padding: 3,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Membership Basic',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: colorScheme.onSurface,
+                    fontSize: 16,
+                    height: 1.12,
+                    fontWeight: FontWeight.w900,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  'Status akun ${session.activePackageName} sudah aktif.',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 12.5,
+                    height: 1.28,
+                    fontWeight: FontWeight.w700,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class BasicMemberCardScreen extends ConsumerWidget {
+  const BasicMemberCardScreen({super.key});
+
+  Future<_BasicMemberCardData> _load(DemoClientSession session) async {
+    final loader = tapGoMemberIdentityLoaderForTests;
+    if (loader != null) {
+      return _BasicMemberCardData.fromMap(await loader());
+    }
+    if (tapGoDisablePersistenceForTests) {
+      return _BasicMemberCardData(
+        displayName: session.userName,
+        phone: session.phone,
+        memberId: 'TGM-TESTCARD',
+        status: 'ACTIVE',
+        joinedAt: DateTime(2026, 7, 14),
+      );
+    }
+    final data = await _apiClient.memberIdentity();
+    return _BasicMemberCardData.fromMap(data);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final session = ref.watch(_demoSessionProvider);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Kartu Anggota')),
+      body: FutureBuilder<_BasicMemberCardData>(
+        future: _load(session),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: _TapGoLoading());
+          }
+          if (snapshot.hasError || !snapshot.hasData) {
+            return ListView(
+              padding: const EdgeInsets.all(20),
+              children: const [
+                _StatusSurface(
+                  icon: Icons.badge_rounded,
+                  title: 'Kartu anggota belum dapat dimuat',
+                  subtitle:
+                      'Pastikan koneksi internet aktif, lalu coba buka kembali halaman ini.',
+                ),
+              ],
+            );
+          }
+          final card = snapshot.data!;
+          final isActive = card.status.toUpperCase() == 'ACTIVE';
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+            children: [
+              Container(
+                key: const ValueKey('basic_member_card_surface'),
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF061A2E),
+                      Color(0xFF0B315F),
+                      Color(0xFF0569E8),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0x3322D3EE)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x330569E8),
+                      blurRadius: 24,
+                      offset: Offset(0, 14),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.asset(
+                            'assets/images/tapgo_logo.jpeg',
+                            width: 36,
+                            height: 36,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text(
+                            'TapGo Member Card',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              height: 1.1,
+                              fontWeight: FontWeight.w900,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                        ),
+                        _MemberStatusChip(
+                          label: isActive ? 'Aktif' : 'Tidak aktif',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      card.displayName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        height: 1.12,
+                        fontWeight: FontWeight.w900,
+                        decoration: TextDecoration.none,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const _MemberStatusChip(label: 'Basic', subtle: true),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF4F8FB),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFFE5EDF6)),
+                      ),
+                      child: Column(
+                        children: [
+                          _MemberCardLine(
+                            label: 'Member ID',
+                            value: card.memberId,
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Expanded(
+                                child: _MemberCardLine(
+                                  label: 'Paket',
+                                  value: 'Basic',
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _MemberCardLine(
+                                  label: 'Bergabung',
+                                  value: _formatMemberDate(card.joinedAt),
+                                  alignEnd: true,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              const _StatusSurface(
+                key: ValueKey('member_card_safe_info_panel'),
+                icon: Icons.info_outline_rounded,
+                title: 'Informasi aman',
+                subtitle:
+                    'Kartu ini hanya menampilkan nama, Member ID, status Basic, dan tanggal bergabung.',
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _BasicMemberCardData {
+  const _BasicMemberCardData({
+    required this.displayName,
+    required this.phone,
+    required this.memberId,
+    required this.status,
+    required this.joinedAt,
+  });
+
+  final String displayName;
+  final String phone;
+  final String memberId;
+  final String status;
+  final DateTime joinedAt;
+
+  factory _BasicMemberCardData.fromMap(Map<String, dynamic> map) {
+    return _BasicMemberCardData(
+      displayName: map['displayName']?.toString() ?? 'Member TapGo',
+      phone: map['phone']?.toString() ?? '',
+      memberId: map['memberId']?.toString() ?? '',
+      status: map['status']?.toString() ?? 'ACTIVE',
+      joinedAt: DateTime.tryParse(map['joinedAt']?.toString() ?? '') ??
+          DateTime.now(),
+    );
+  }
+}
+
+class _MemberCardLine extends StatelessWidget {
+  const _MemberCardLine({
+    required this.label,
+    required this.value,
+    this.alignEnd = false,
+  });
+
+  final String label;
+  final String value;
+  final bool alignEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment:
+          alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          textAlign: alignEnd ? TextAlign.right : TextAlign.left,
+          style: const TextStyle(
+            color: Color(0xFF64748B),
+            fontSize: 11.5,
+            fontWeight: FontWeight.w800,
+            decoration: TextDecoration.none,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: alignEnd ? TextAlign.right : TextAlign.left,
+          style: const TextStyle(
+            color: Color(0xFF0A2A43),
+            fontSize: 15,
+            height: 1.16,
+            fontWeight: FontWeight.w900,
+            decoration: TextDecoration.none,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MemberStatusChip extends StatelessWidget {
+  const _MemberStatusChip({required this.label, this.subtle = false});
+
+  final String label;
+  final bool subtle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: subtle ? const Color(0xFFFFF3D1) : const Color(0xFFFFC857),
+        borderRadius: BorderRadius.circular(999),
+        border: subtle ? Border.all(color: const Color(0xFFFFD166)) : null,
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Color(0xFF06284A),
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+          decoration: TextDecoration.none,
+        ),
+      ),
+    );
+  }
+}
+
+String _formatMemberDate(DateTime value) {
+  const months = [
+    'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember',
+  ];
+  return '${value.day} ${months[value.month - 1]} ${value.year}';
 }
 
 class SettingsScreen extends ConsumerWidget {
@@ -2400,7 +3708,7 @@ class SettingsScreen extends ConsumerWidget {
           const _SettingsTile(
             icon: Icons.verified_rounded,
             title: 'Versi aplikasi',
-            subtitle: 'UAT Production',
+            subtitle: '1.0.9+11',
           ),
           _SettingsTile(
             icon: Icons.logout_rounded,
@@ -2460,10 +3768,7 @@ class _InfoCard extends StatelessWidget {
                     height: 1.35,
                   ),
                 ),
-                if (action != null) ...[
-                  const SizedBox(height: 12),
-                  action!,
-                ],
+                if (action != null) ...[const SizedBox(height: 12), action!],
               ],
             ),
           ),
@@ -2491,10 +3796,7 @@ class _SettingsTile extends StatelessWidget {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4),
       leading: Icon(icon, color: _brandBlue),
-      title: Text(
-        title,
-        style: const TextStyle(fontWeight: FontWeight.w800),
-      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
       subtitle: subtitle == null ? null : Text(subtitle!),
       trailing: onTap == null ? null : const Icon(Icons.chevron_right_rounded),
       onTap: onTap,
@@ -2502,15 +3804,52 @@ class _SettingsTile extends StatelessWidget {
   }
 }
 
+/// Ukuran tetap kartu layanan. Dikumpulkan di satu tempat supaya tinggi sel
+/// grid dihitung dari angka yang sama dengan yang dipakai merender kartunya.
+const double _serviceTileIconSize = 64;
+const double _serviceTileIconGap = 8;
+const double _serviceTileLabelWidth = 82;
+const double _serviceTileLabelFontSize = 11.2;
+const double _serviceTileLabelLineHeight = 1.05;
+const double _serviceTileLabelMinHeight = 32;
+
+/// Tinggi label untuk dua baris teks pada skala teks yang sedang berlaku.
+///
+/// Ikut text scaler supaya kartu tetap muat saat pengguna memperbesar teks —
+/// tinggi tetap 32 dp dulu membuat teks besar terpotong.
+double _serviceTileLabelHeight(BuildContext context) {
+  final scaled = MediaQuery.textScalerOf(context).scale(
+    _serviceTileLabelFontSize,
+  );
+  return max(
+    _serviceTileLabelMinHeight,
+    scaled * _serviceTileLabelLineHeight * 2,
+  );
+}
+
+double _serviceTileContentHeight(BuildContext context) {
+  return _serviceTileIconSize +
+      _serviceTileIconGap +
+      _serviceTileLabelHeight(context);
+}
+
 class _ServiceTile extends StatelessWidget {
-  const _ServiceTile({required this.item});
+  const _ServiceTile({
+    required this.item,
+    this.onTap,
+    this.maxLabelWidth = _serviceTileLabelWidth,
+  });
 
   final _ServiceItem item;
+  final VoidCallback? onTap;
+  final double maxLabelWidth;
 
   @override
   Widget build(BuildContext context) {
     final style = _serviceIconStyle(item.label);
-    return Stack(
+    final isUnavailable = item.badge != null;
+    final isActionable = onTap != null && !isUnavailable;
+    final content = Stack(
       clipBehavior: Clip.none,
       alignment: Alignment.topCenter,
       children: [
@@ -2524,12 +3863,12 @@ class _ServiceTile extends StatelessWidget {
                 secondary: style.secondary,
                 background: style.background,
               ),
-              size: 68,
+              size: _serviceTileIconSize,
             ),
-            const SizedBox(height: 9),
+            const SizedBox(height: _serviceTileIconGap),
             SizedBox(
-              width: 82,
-              height: 32,
+              width: maxLabelWidth,
+              height: _serviceTileLabelHeight(context),
               child: Center(
                 child: Text(
                   item.label,
@@ -2539,8 +3878,8 @@ class _ServiceTile extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Color(0xFF263241),
-                    fontSize: 11.2,
-                    height: 1.05,
+                    fontSize: _serviceTileLabelFontSize,
+                    height: _serviceTileLabelLineHeight,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -2548,77 +3887,55 @@ class _ServiceTile extends StatelessWidget {
             ),
           ],
         ),
-        if (item.badge != null)
-          Positioned(
-            top: -8,
-            child: _FloatingServiceBadge(label: item.badge!),
-          ),
+        if (isUnavailable)
+          const Positioned(top: -4, right: 8, child: _ServiceSoonBadge()),
       ],
     );
+    return Semantics(
+      button: isActionable,
+      enabled: isActionable,
+      label: isUnavailable
+          ? '${item.label}, segera hadir'
+          : 'Buka layanan ${item.label}',
+      child: ExcludeSemantics(
+        child: isActionable
+            ? InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: onTap,
+                child: content,
+              )
+            : content,
+      ),
+    );
   }
 }
 
-class _FloatingServiceBadge extends StatefulWidget {
-  const _FloatingServiceBadge({required this.label});
-
-  final String label;
-
-  @override
-  State<_FloatingServiceBadge> createState() => _FloatingServiceBadgeState();
-}
-
-class _FloatingServiceBadgeState extends State<_FloatingServiceBadge>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1900),
-    );
-    _scale = Tween<double>(begin: 1, end: 1.08).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-    if (_dashboardLiveAnimationsEnabled) {
-      _controller.repeat(reverse: true);
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+class _ServiceSoonBadge extends StatelessWidget {
+  const _ServiceSoonBadge();
 
   @override
   Widget build(BuildContext context) {
-    return ScaleTransition(
-      scale: _scale,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFF3B30), Color(0xFFFFB000)],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFF8A00),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white, width: 1.4),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33FF8A00),
+            blurRadius: 8,
+            offset: Offset(0, 3),
           ),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x55FF3B30),
-              blurRadius: 14,
-              offset: Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Text(
-          widget.label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 10,
-            fontWeight: FontWeight.w900,
-          ),
+        ],
+      ),
+      child: const Text(
+        'Segera',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 8.5,
+          height: 1,
+          fontWeight: FontWeight.w900,
         ),
       ),
     );
@@ -2649,51 +3966,6 @@ class _WalletAction extends StatelessWidget {
   }
 }
 
-class _Badge extends StatelessWidget {
-  const _Badge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 18,
-      height: 18,
-      alignment: Alignment.center,
-      decoration: const BoxDecoration(
-        color: Color(0xFFFF3434),
-        shape: BoxShape.circle,
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 10,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-    );
-  }
-}
-
-class _PulseBadge extends StatelessWidget {
-  const _PulseBadge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.95, end: 1.05),
-      duration: const Duration(milliseconds: 650),
-      curve: Curves.easeOutBack,
-      builder: (context, scale, child) =>
-          Transform.scale(scale: scale, child: child),
-      child: _Badge(label: label),
-    );
-  }
-}
-
 class _ServiceItem {
   const _ServiceItem(this.label, this.icon, this.color, this.badge);
 
@@ -2715,30 +3987,6 @@ class _ServiceIconStyle {
   final Color background;
 }
 
-const _serviceIconAssets = {
-  'TapGo Ride': 'assets/icons/coride.png',
-  'TapGo Car': 'assets/icons/cocar.png',
-  'TapGo Food': 'assets/icons/cofood.png',
-  'TapGo Jasa': 'assets/icons/cojasa.png',
-  'TapGo Bantu': 'assets/icons/cobantu.png',
-  'TapGo Mart': 'assets/icons/tapgo_mart.png',
-  'Pulsa': 'assets/icons/pulsa.png',
-  'PPOB': 'assets/icons/ppob.png',
-  'BPJS': 'assets/icons/bpjs.png',
-  'Tagihan': 'assets/icons/tagihan.png',
-  'Lainnya': 'assets/icons/lainnya.png',
-  'Membership': 'assets/icons/membership.png',
-  'Referral': 'assets/icons/referral.png',
-  'Marketing Plan': 'assets/icons/marketing_plan.png',
-  'Reward': 'assets/icons/reward.png',
-  'Kelas Online': 'assets/icons/kelas_online.png',
-  'Webinar': 'assets/icons/webinar.png',
-  'Event': 'assets/icons/event.png',
-  'Support': 'assets/icons/support.png',
-};
-
-String? _serviceIconAssetFor(String label) => _serviceIconAssets[label];
-
 class _ServiceAssetIcon extends StatelessWidget {
   const _ServiceAssetIcon({
     required this.label,
@@ -2754,81 +4002,57 @@ class _ServiceAssetIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final asset = _serviceIconAssetFor(label);
-    if (asset == null) {
-      return _ServiceIcon3D(icon: icon, style: style, size: size);
-    }
-    return Container(
+    return SizedBox(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.white.withValues(alpha: 0.98),
-            style.background.withValues(alpha: 0.92),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(size * 0.31),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.85)),
-        boxShadow: [
-          BoxShadow(
-            color: style.primary.withValues(alpha: 0.26),
-            blurRadius: size * 0.24,
-            offset: Offset(0, size * 0.12),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        children: [
-          Positioned(
-            left: size * 0.14,
-            top: size * 0.10,
-            child: Container(
-              width: size * 0.36,
-              height: size * 0.10,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.76),
-                borderRadius: BorderRadius.circular(size),
-              ),
+      child: PremiumTapGoIcon.assetFor(label) != null
+          ? PremiumTapGoIcon(
+              label: label,
+              fallbackIcon: icon,
+              size: size,
+              padding: size * 0.06,
+            )
+          : Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                Positioned(
+                  bottom: size * 0.02,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      boxShadow: [
+                        BoxShadow(
+                          color: style.primary.withValues(alpha: 0.18),
+                          blurRadius: size * 0.22,
+                          spreadRadius: size * 0.02,
+                        ),
+                      ],
+                    ),
+                    child: SizedBox(width: size * 0.62, height: size * 0.12),
+                  ),
+                ),
+                _TapGoServiceIllustration(
+                  label: label,
+                  fallbackIcon: icon,
+                  fallbackStyle: style,
+                  size: size,
+                ),
+              ],
             ),
-          ),
-          Positioned(
-            right: -size * 0.14,
-            bottom: -size * 0.16,
-            child: Container(
-              width: size * 0.52,
-              height: size * 0.52,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: style.primary.withValues(alpha: 0.10),
-              ),
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.all(size * 0.03),
-            child: Image.asset(
-              asset,
-              fit: BoxFit.contain,
-              filterQuality: FilterQuality.high,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
 
 _ServiceIconStyle _serviceIconStyle(String label) {
   return switch (label) {
-    'TapGo Ride' => const _ServiceIconStyle(
+    // 'Motor'/'Mobil' adalah alias label yang memakai gaya ikon yang sama,
+    // mengikuti pola alias yang sudah dipakai sistem ikon.
+    'TapGo Ride' || 'Motor' => const _ServiceIconStyle(
         primary: Color(0xFF006AF5),
         secondary: Color(0xFF1FA2FF),
         background: Color(0xFFEAF5FF),
       ),
-    'TapGo Car' => const _ServiceIconStyle(
+    'TapGo Car' || 'Mobil' => const _ServiceIconStyle(
         primary: Color(0xFF006AF5),
         secondary: Color(0xFF2BB8FF),
         background: Color(0xFFEAF3FF),
@@ -2843,7 +4067,7 @@ _ServiceIconStyle _serviceIconStyle(String label) {
         secondary: Color(0xFF13C2C2),
         background: Color(0xFFE8FAFF),
       ),
-    'TapGo Jasa' => const _ServiceIconStyle(
+    'Jasa' || 'TapGo Jasa' || 'Toko & Jasa' => const _ServiceIconStyle(
         primary: Color(0xFF1565D8),
         secondary: Color(0xFF4D96FF),
         background: Color(0xFFEAF3FF),
@@ -2990,11 +4214,7 @@ class _ServiceIcon3D extends StatelessWidget {
                   ),
                 ],
               ),
-              child: Icon(
-                icon,
-                color: Colors.white,
-                size: size * 0.34,
-              ),
+              child: Icon(icon, color: Colors.white, size: size * 0.34),
             ),
           ),
           Positioned(

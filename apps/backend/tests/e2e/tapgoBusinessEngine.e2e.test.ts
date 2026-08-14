@@ -19,6 +19,8 @@ type SignAccessToken = (payload: { sub: string; role: UserRole; sessionId: strin
 let server: Server | undefined;
 let baseUrl = "";
 let signAccessToken: SignAccessToken;
+let backendEnv: typeof import("../../src/config/env.js").env;
+let originalExternalPaymentGateEnv: string | undefined;
 
 describe.skipIf(!runIntegration)("TapGo business engine E2E", () => {
   beforeAll(async () => {
@@ -32,11 +34,21 @@ describe.skipIf(!runIntegration)("TapGo business engine E2E", () => {
     process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? "test-refresh-secret-for-tapgo-e2e-api";
     process.env.JWT_ACCESS_TTL = process.env.JWT_ACCESS_TTL ?? "15m";
     process.env.JWT_REFRESH_TTL_DAYS = process.env.JWT_REFRESH_TTL_DAYS ?? "30";
+    originalExternalPaymentGateEnv =
+      process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
+    process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = "true";
+    process.env.MEMBERSHIP_PURCHASE_APP_ENABLED = "true";
 
-    const [{ createApp }, tokenService] = await Promise.all([
+    const [{ createApp }, tokenService, envModule] = await Promise.all([
       import("../../src/app.js"),
-      import("../../src/core/security/tokenService.js")
+      import("../../src/core/security/tokenService.js"),
+      import("../../src/config/env.js")
     ]);
+    backendEnv = envModule.env;
+    // Stage R2.6 memisahkan kanal pembelian. Test ini menguji perilaku
+    // distribusi direct, di mana pembelian dari dalam aplikasi diizinkan.
+    backendEnv.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = true;
+    backendEnv.MEMBERSHIP_PURCHASE_APP_ENABLED = true;
     signAccessToken = tokenService.signAccessToken;
 
     server = http.createServer(createApp());
@@ -51,6 +63,16 @@ describe.skipIf(!runIntegration)("TapGo business engine E2E", () => {
   });
 
   afterAll(async () => {
+    if (backendEnv) {
+      backendEnv.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED =
+        originalExternalPaymentGateEnv?.trim().toLowerCase() === "true";
+    }
+    if (originalExternalPaymentGateEnv == null) {
+      delete process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
+    } else {
+      process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED =
+        originalExternalPaymentGateEnv;
+    }
     await new Promise<void>((resolve, reject) => {
       if (!server) {
         resolve();

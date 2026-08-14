@@ -12,6 +12,13 @@ enum UserRole {
   DRIVER
   ADMIN
   SUPER_ADMIN
+  /// Role puncak pemilik sistem. Memenuhi seluruh penjaga SUPER_ADMIN lewat
+  /// tangga role di core/security/roleHierarchy.ts, dan hanya dapat dibuat
+  /// lewat CLI bootstrap — tidak pernah lewat API, migration, atau seed.
+  ///
+  /// Tetap BUKAN kewenangan: pengelolaan scope masih menuntut grant
+  /// ADMIN_SCOPE_MANAGE aktif, dan tidak ada bypass ke jalur driver.
+  SUPER_ADMIN_VIP
 }
 
 enum AccountStatus {
@@ -68,6 +75,18 @@ enum MembershipOrderStatus {
   FAILED
   EXPIRED
   CANCELLED
+}
+
+/// Kanal asal order membership (Stage R2.6 jalur A).
+///
+/// Dipakai untuk audit: pembelian mana yang datang dari web, dari aplikasi
+/// mobile, atau dari konfirmasi manual admin. Kolomnya nullable karena order
+/// yang dibuat sebelum stage ini memang tidak diketahui kanalnya — memberi
+/// nilai tebakan pada baris lama berarti mengarang riwayat.
+enum MembershipOrderChannel {
+  WEB
+  APP
+  ADMIN
 }
 
 enum UserMembershipStatus {
@@ -185,6 +204,26 @@ enum ContactMessageStatus {
   CLOSED
 }
 
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum SupportTicketCategory {
+  ACCOUNT
+  MEMBERSHIP
+  TECHNICAL
+  PRIVACY
+  OTHER
+}
+
+enum SupportTicketMessageAuthorRole {
+  USER
+  ADMIN
+}
+
 enum AbuseFlagStatus {
   OPEN
   REVIEWED
@@ -199,77 +238,240 @@ enum AbuseFlagSeverity {
 }
 
 enum FounderRole {
+  FOUNDER_CHAIRMAN
   FOUNDER_PLATINUM
 }
 
 model User {
-  id              String        @id @default(uuid()) @db.Uuid
-  role            UserRole      @default(USER)
-  status          AccountStatus @default(ACTIVE)
-  membershipId    String?       @map("membership_id") @db.Uuid
-  fullName        String        @db.VarChar(120)
-  email           String?       @unique @db.VarChar(180)
-  phone           String        @unique @db.VarChar(32)
-  passwordHash    String?       @map("password_hash")
-  avatarUrl       String?       @map("avatar_url")
-  bankAccount     Json?         @map("bank_account")
-  referralCode    String        @unique @map("referral_code") @db.VarChar(24)
-  lastLoginAt     DateTime?     @map("last_login_at")
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
+  id           String        @id @default(uuid()) @db.Uuid
+  role         UserRole      @default(USER)
+  status       AccountStatus @default(ACTIVE)
+  membershipId String?       @map("membership_id") @db.Uuid
+  fullName     String        @db.VarChar(120)
+  email        String?       @unique @db.VarChar(180)
+  phone        String        @unique @db.VarChar(32)
+  passwordHash String?       @map("password_hash")
+  avatarUrl    String?       @map("avatar_url")
+  bankAccount  Json?         @map("bank_account")
+  referralCode String        @unique @map("referral_code") @db.VarChar(24)
+  lastLoginAt  DateTime?     @map("last_login_at")
 
-  membership      Membership?   @relation(fields: [membershipId], references: [id])
-  driver          Driver?
-  sessions        Session[]
-  pushTokens      PushToken[]
-  rides           Ride[]        @relation("RideCustomer")
-  wallet          Wallet?
-  reviewsGiven    Review[]      @relation("ReviewsGiven")
-  auditLogs       AuditLog[]
-  sponsoredReferrals Referral[] @relation("ReferralSponsor")
-  referralRecord     Referral?  @relation("ReferralUser")
-  referralAncestors  ReferralLevel[] @relation("ReferralAncestor")
-  referralDescendants ReferralLevel[] @relation("ReferralDescendant")
-  commissions        Commission[] @relation("CommissionBeneficiary")
-  withdrawals        Withdrawal[]
-  userMemberships    UserMembership[]
-  membershipOrders   MembershipOrder[]
-  invoices           Invoice[]
-  membershipPayments MembershipPayment[]
-  membershipDocuments MembershipDocument[]
+  /// Kepemilikan nomor telepon terbukti lewat OTP. NULL berarti belum
+  /// terbukti — termasuk untuk akun legacy, yang SENGAJA tidak di-backfill.
+  phoneVerifiedAt   DateTime? @map("phone_verified_at")
+  /// Kepemilikan email terbukti lewat OTP. Email bersifat opsional; bila
+  /// diisi tetapi NULL di sini, email tidak boleh dipakai sebagai recovery
+  /// channel. Mengubah email mengosongkan kolom ini kembali.
+  emailVerifiedAt   DateTime? @map("email_verified_at")
+  /// Versi otorisasi akun. Setiap pencabutan sesi menaikkannya tepat satu.
+  ///
+  /// Inilah penentu otoritatif keabsahan token — BUKAN perbandingan waktu.
+  /// Token membawa claim versi, dan requireAuth menuntut kesamaan persis.
+  /// Pendekatan berbasis waktu tidak dapat memutuskan token yang diterbitkan
+  /// pada detik yang sama dengan pencabutan, dan token semacam itu tetap sah
+  /// sampai TTL-nya habis. Bilangan bulat tidak punya ambiguitas itu.
+  authVersion       Int       @default(0) @map("auth_version")
+  /// Epoch pencabutan sesi. Dipertahankan sebagai AUDIT TIMESTAMP saja —
+  /// tidak lagi dipakai untuk keputusan otorisasi apa pun sejak Stage R2.1A.
+  /// Keputusan otorisasi memakai authVersion.
+  sessionsRevokedAt DateTime? @map("sessions_revoked_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  membership                 Membership?                 @relation(fields: [membershipId], references: [id])
+  driver                     Driver?
+  sessions                   Session[]
+  pushTokens                 PushToken[]
+  rides                      Ride[]                      @relation("RideCustomer")
+  wallet                     Wallet?
+  reviewsGiven               Review[]                    @relation("ReviewsGiven")
+  auditLogs                  AuditLog[]
+  sponsoredReferrals         Referral[]                  @relation("ReferralSponsor")
+  referralRecord             Referral?                   @relation("ReferralUser")
+  referralAncestors          ReferralLevel[]             @relation("ReferralAncestor")
+  referralDescendants        ReferralLevel[]             @relation("ReferralDescendant")
+  commissions                Commission[]                @relation("CommissionBeneficiary")
+  withdrawals                Withdrawal[]
+  userMemberships            UserMembership[]
+  membershipOrders           MembershipOrder[]
+  invoices                   Invoice[]
+  membershipPayments         MembershipPayment[]
+  membershipDocuments        MembershipDocument[]
   profitSharingDistributions ProfitSharingDistribution[]
-  rewardTransactions RewardTransaction[]
-  accountDeletionRequests AccountDeletionRequest[]
-  contactMessages ContactMessage[]
-  registrationEvents RegistrationEvent[] @relation("RegistrationEventUser")
-  abuseFlags AbuseFlag[] @relation("AbuseFlagUser")
-  founderProgramGrants FounderProgramGrant[] @relation("FounderGrantUser")
-  founderProgramGrantActions FounderProgramGrant[] @relation("FounderGrantActor")
+  rewardTransactions         RewardTransaction[]
+  accountDeletionRequests    AccountDeletionRequest[]
+  contactMessages            ContactMessage[]
+  memberIdentity             MemberIdentity?
+  supportTickets             SupportTicket[]
+  supportTicketMessages      SupportTicketMessage[]
+  registrationEvents         RegistrationEvent[]         @relation("RegistrationEventUser")
+  abuseFlags                 AbuseFlag[]                 @relation("AbuseFlagUser")
+  founderProgramGrants       FounderProgramGrant[]       @relation("FounderGrantUser")
+  founderProgramGrantActions FounderProgramGrant[]       @relation("FounderGrantActor")
+  authChallenges             AuthChallenge[]
+  adminScopeGrants           AdminScopeGrant[]           @relation("AdminScopeSubject")
+  adminScopeGrantsIssued     AdminScopeGrant[]           @relation("AdminScopeGrantor")
+  adminScopeGrantsRevoked    AdminScopeGrant[]           @relation("AdminScopeRevoker")
+  driverApplicationsClaimed  RideDriverApplication[]     @relation("DriverApplicationClaimant")
+  driverApplicationsReviewed RideDriverApplication[]     @relation("DriverApplicationReviewer")
+
+  // Release 2 — domain Ride (additive, terpisah dari model Ride legacy).
+  rideDriverProfile      RideDriverProfile?
+  rideQuotes             RideQuote[]
+  ridePassengerOrders    RideOrder[]             @relation("RideOrderPassenger")
+  rideEventsActed        RideEvent[]             @relation("RideEventActor")
+  rideIdempotencyKeys    RideIdempotencyRecord[]
+  rideDriverApplications RideDriverApplication[]
 
   @@index([role, status])
   @@index([membershipId])
   @@map("users")
 }
 
-model Membership {
-  id              String         @id @default(uuid()) @db.Uuid
-  tier            MembershipTier @unique
-  name            String         @db.VarChar(80)
-  price           Decimal        @default(0) @db.Decimal(14, 2)
-  directBonus     Decimal        @default(0) @map("direct_bonus") @db.Decimal(14, 2)
-  activeLevels    Int            @default(1) @map("active_levels")
-  ppobBalance     Decimal        @default(0) @map("ppob_balance") @db.Decimal(14, 2)
-  bpjsBenefit     String?        @map("bpjs_benefit")
-  merchandise     Json?
-  businessRight   String?        @map("business_right")
-  isActive        Boolean        @default(true) @map("is_active")
-  createdAt       DateTime       @default(now()) @map("created_at")
-  updatedAt       DateTime       @updatedAt @map("updated_at")
+/// Scope admin yang dibatasi. Sengaja berupa enum, BUKAN string bebas:
+/// scope tak dikenal tidak akan pernah dapat tersimpan, dan wildcard tidak
+/// dapat direpresentasikan sama sekali.
+enum AdminScope {
+  DRIVER_APPLICATION_QUEUE_READ
+  DRIVER_APPLICATION_CLAIM
+  DRIVER_APPLICATION_RENEW
+  DRIVER_APPLICATION_RELEASE
+  DRIVER_APPLICATION_REASSIGN
+  /// Kewenangan mengelola scope lain. TIDAK pernah diberikan otomatis
+  /// berdasarkan role, tidak pernah dibuat saat startup, migration, maupun
+  /// seed. Pemegang pertama hanya dapat dibuat lewat CLI bootstrap sekali
+  /// pakai; sesudahnya hanya SUPER_ADMIN aktif yang sudah memegangnya.
+  ADMIN_SCOPE_MANAGE
+}
 
-  users           User[]
-  benefits        MembershipBenefit[]
-  userMemberships UserMembership[]
-  orders          MembershipOrder[]
+enum AdminScopeGrantStatus {
+  ACTIVE
+  REVOKED
+}
+
+/// Pemberian scope admin yang otoritatif dari database.
+///
+/// Role saja TIDAK memberi kewenangan review. ADMIN maupun SUPER_ADMIN tetap
+/// memerlukan grant aktif di tabel ini; tidak ada bypass berbasis role.
+///
+/// Riwayat dipertahankan penuh: pencabutan menandai baris REVOKED, tidak
+/// pernah menghapusnya.
+///
+/// Objek raw SQL pada migration yang tidak boleh hilang:
+///   - admin_scope_grants_one_active_per_scope_key (partial unique,
+///     WHERE status = 'ACTIVE')
+///   - admin_scope_grants_revocation_pair_check
+model AdminScopeGrant {
+  id     String                @id @default(uuid()) @db.Uuid
+  userId String                @map("user_id") @db.Uuid
+  scope  AdminScope
+  status AdminScopeGrantStatus @default(ACTIVE)
+
+  grantedById String   @map("granted_by_id") @db.Uuid
+  grantedAt   DateTime @default(now()) @map("granted_at")
+
+  revokedById String?   @map("revoked_by_id") @db.Uuid
+  revokedAt   DateTime? @map("revoked_at")
+
+  /// Kode alasan terbatas, BUKAN teks bebas dan bukan pesan exception.
+  reasonCode String? @map("reason_code") @db.VarChar(60)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user      User  @relation("AdminScopeSubject", fields: [userId], references: [id], onDelete: Restrict)
+  grantedBy User  @relation("AdminScopeGrantor", fields: [grantedById], references: [id], onDelete: Restrict)
+  revokedBy User? @relation("AdminScopeRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
+
+  @@index([userId, scope, status])
+  @@index([scope, status])
+  @@map("admin_scope_grants")
+}
+
+enum AuthChallengePurpose {
+  PASSWORD_RECOVERY
+  PHONE_VERIFICATION
+  EMAIL_VERIFICATION
+}
+
+enum AuthChallengeChannel {
+  PHONE
+  EMAIL
+}
+
+/// Satu tantangan OTP aktif per (user, purpose).
+///
+/// Berbeda dari OtpChallenge legacy yang masih ada di schema ini:
+///   - terikat ke User, bukan ke string nomor telepon lepas;
+///   - kode disimpan sebagai keyed HMAC dengan secret backend khusus, bukan
+///     hash tanpa kunci — OTP hanya 10^6 kemungkinan sehingga hash tanpa
+///     kunci dapat di-brute-force offline dari salinan database;
+///   - destination ikut di-digest, jadi tabel ini tidak menyimpan PII;
+///   - punya batas percobaan, cooldown kirim ulang, dan konsumsi atomik.
+///
+/// Objek yang dibuat lewat raw SQL pada migration dan tidak boleh hilang:
+///   - auth_challenges_one_active_per_purpose_key (partial unique index,
+///     WHERE consumed_at IS NULL)
+///   - auth_challenges_attempts_check
+///   - auth_challenges_max_attempts_check
+///   - auth_challenges_resend_count_check
+model AuthChallenge {
+  id      String               @id @default(uuid()) @db.Uuid
+  userId  String               @map("user_id") @db.Uuid
+  purpose AuthChallengePurpose
+  channel AuthChallengeChannel
+
+  /// HMAC tujuan pengiriman. Nomor/email mentah TIDAK disimpan di sini.
+  destinationDigest String @map("destination_digest")
+  /// HMAC kode OTP. Kode mentah tidak pernah disimpan.
+  codeDigest        String @map("code_digest")
+  /// Versi kunci HMAC yang dipakai, agar rotasi secret dimungkinkan.
+  keyVersion        Int    @default(1) @map("key_version")
+
+  attempts    Int @default(0)
+  maxAttempts Int @default(5) @map("max_attempts")
+  resendCount Int @default(0) @map("resend_count")
+
+  /// Diisi setelah OTP terbukti benar. Reset token hanya diterbitkan untuk
+  /// purpose PASSWORD_RECOVERY.
+  verifiedAt       DateTime? @map("verified_at")
+  resetTokenDigest String?   @map("reset_token_digest")
+  resetExpiresAt   DateTime? @map("reset_expires_at")
+
+  lastSentAt DateTime  @default(now()) @map("last_sent_at")
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, consumedAt])
+  @@index([expiresAt])
+  @@map("auth_challenges")
+}
+
+model Membership {
+  id            String         @id @default(uuid()) @db.Uuid
+  tier          MembershipTier @unique
+  name          String         @db.VarChar(80)
+  price         Decimal        @default(0) @db.Decimal(14, 2)
+  directBonus   Decimal        @default(0) @map("direct_bonus") @db.Decimal(14, 2)
+  activeLevels  Int            @default(1) @map("active_levels")
+  ppobBalance   Decimal        @default(0) @map("ppob_balance") @db.Decimal(14, 2)
+  bpjsBenefit   String?        @map("bpjs_benefit")
+  merchandise   Json?
+  businessRight String?        @map("business_right")
+  isActive      Boolean        @default(true) @map("is_active")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  users                User[]
+  benefits             MembershipBenefit[]
+  userMemberships      UserMembership[]
+  orders               MembershipOrder[]
   founderProgramGrants FounderProgramGrant[]
 
   @@index([tier, isActive])
@@ -277,21 +479,21 @@ model Membership {
 }
 
 model UserMembership {
-  id              String               @id @default(uuid()) @db.Uuid
-  userId          String               @map("user_id") @db.Uuid
-  membershipId    String               @map("membership_id") @db.Uuid
-  orderId         String?              @unique @map("order_id") @db.Uuid
-  status          UserMembershipStatus @default(ACTIVE)
-  founderRole     FounderRole?         @map("founder_role")
-  activeAt        DateTime             @default(now()) @map("active_at")
-  expiresAt       DateTime?            @map("expires_at")
-  metadata        Json?
-  createdAt       DateTime             @default(now()) @map("created_at")
-  updatedAt       DateTime             @updatedAt @map("updated_at")
+  id           String               @id @default(uuid()) @db.Uuid
+  userId       String               @map("user_id") @db.Uuid
+  membershipId String               @map("membership_id") @db.Uuid
+  orderId      String?              @unique @map("order_id") @db.Uuid
+  status       UserMembershipStatus @default(ACTIVE)
+  founderRole  FounderRole?         @map("founder_role")
+  activeAt     DateTime             @default(now()) @map("active_at")
+  expiresAt    DateTime?            @map("expires_at")
+  metadata     Json?
+  createdAt    DateTime             @default(now()) @map("created_at")
+  updatedAt    DateTime             @updatedAt @map("updated_at")
 
-  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  membership      Membership           @relation(fields: [membershipId], references: [id])
-  order           MembershipOrder?     @relation(fields: [orderId], references: [id])
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  membership          Membership           @relation(fields: [membershipId], references: [id])
+  order               MembershipOrder?     @relation(fields: [orderId], references: [id])
   founderProgramGrant FounderProgramGrant?
 
   @@index([userId, status])
@@ -301,23 +503,23 @@ model UserMembership {
 }
 
 model FounderProgramGrant {
-  id               String       @id @default(uuid()) @db.Uuid
-  userId           String       @map("user_id") @db.Uuid
-  membershipId     String       @map("membership_id") @db.Uuid
-  userMembershipId String       @unique @map("user_membership_id") @db.Uuid
-  founderRole      FounderRole  @map("founder_role")
-  grantedBy        String?      @map("granted_by") @db.Uuid
+  id               String      @id @default(uuid()) @db.Uuid
+  userId           String      @map("user_id") @db.Uuid
+  membershipId     String      @map("membership_id") @db.Uuid
+  userMembershipId String      @unique @map("user_membership_id") @db.Uuid
+  founderRole      FounderRole @map("founder_role")
+  grantedBy        String?     @map("granted_by") @db.Uuid
   reason           String?
-  revokedAt        DateTime?    @map("revoked_at")
-  revokedBy        String?      @map("revoked_by") @db.Uuid
+  revokedAt        DateTime?   @map("revoked_at")
+  revokedBy        String?     @map("revoked_by") @db.Uuid
   metadata         Json?
-  createdAt        DateTime     @default(now()) @map("created_at")
-  updatedAt        DateTime     @updatedAt @map("updated_at")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
 
-  user             User         @relation("FounderGrantUser", fields: [userId], references: [id], onDelete: Cascade)
-  actor            User?        @relation("FounderGrantActor", fields: [grantedBy], references: [id], onDelete: SetNull)
-  membership       Membership   @relation(fields: [membershipId], references: [id])
-  userMembership   UserMembership @relation(fields: [userMembershipId], references: [id], onDelete: Cascade)
+  user           User           @relation("FounderGrantUser", fields: [userId], references: [id], onDelete: Cascade)
+  actor          User?          @relation("FounderGrantActor", fields: [grantedBy], references: [id], onDelete: SetNull)
+  membership     Membership     @relation(fields: [membershipId], references: [id])
+  userMembership UserMembership @relation(fields: [userMembershipId], references: [id], onDelete: Cascade)
 
   @@index([founderRole, revokedAt])
   @@index([userId, founderRole])
@@ -326,47 +528,50 @@ model FounderProgramGrant {
 }
 
 model MembershipOrder {
-  id              String                @id @default(uuid()) @db.Uuid
-  userId          String                @map("user_id") @db.Uuid
-  membershipId    String                @map("membership_id") @db.Uuid
-  status          MembershipOrderStatus @default(PENDING)
-  totalAmount     Decimal               @map("total_amount") @db.Decimal(14, 2)
-  packageSnapshot Json                  @map("package_snapshot")
-  registrationData Json?                @map("registration_data")
-  expiresAt       DateTime?             @map("expires_at")
-  paidAt          DateTime?             @map("paid_at")
-  createdAt       DateTime              @default(now()) @map("created_at")
-  updatedAt       DateTime              @updatedAt @map("updated_at")
+  id               String                @id @default(uuid()) @db.Uuid
+  userId           String                @map("user_id") @db.Uuid
+  membershipId     String                @map("membership_id") @db.Uuid
+  status           MembershipOrderStatus @default(PENDING)
+  /// Null berarti order dibuat sebelum pelacakan kanal ada.
+  channel          MembershipOrderChannel?
+  totalAmount      Decimal               @map("total_amount") @db.Decimal(14, 2)
+  packageSnapshot  Json                  @map("package_snapshot")
+  registrationData Json?                 @map("registration_data")
+  expiresAt        DateTime?             @map("expires_at")
+  paidAt           DateTime?             @map("paid_at")
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
 
-  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  membership      Membership            @relation(fields: [membershipId], references: [id])
-  invoice         Invoice?
-  payments        MembershipPayment[]
-  documents       MembershipDocument[]
-  userMembership  UserMembership?
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  membership     Membership           @relation(fields: [membershipId], references: [id])
+  invoice        Invoice?
+  payments       MembershipPayment[]
+  documents      MembershipDocument[]
+  userMembership UserMembership?
 
   @@index([userId, status])
   @@index([membershipId, status])
+  @@index([channel, status])
   @@map("membership_orders")
 }
 
 model Invoice {
-  id              String        @id @default(uuid()) @db.Uuid
-  orderId         String        @unique @map("order_id") @db.Uuid
-  userId          String        @map("user_id") @db.Uuid
-  number          String        @unique @db.VarChar(40)
-  status          PaymentStatus @default(PENDING)
-  amount          Decimal       @db.Decimal(14, 2)
-  currency        String        @default("IDR") @db.VarChar(8)
-  dueAt           DateTime?     @map("due_at")
-  paidAt          DateTime?     @map("paid_at")
-  metadata        Json?
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
+  id        String        @id @default(uuid()) @db.Uuid
+  orderId   String        @unique @map("order_id") @db.Uuid
+  userId    String        @map("user_id") @db.Uuid
+  number    String        @unique @db.VarChar(40)
+  status    PaymentStatus @default(PENDING)
+  amount    Decimal       @db.Decimal(14, 2)
+  currency  String        @default("IDR") @db.VarChar(8)
+  dueAt     DateTime?     @map("due_at")
+  paidAt    DateTime?     @map("paid_at")
+  metadata  Json?
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
 
-  order           MembershipOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  payments        MembershipPayment[]
+  order    MembershipOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments MembershipPayment[]
 
   @@index([userId, status])
   @@index([status, createdAt])
@@ -374,23 +579,23 @@ model Invoice {
 }
 
 model MembershipPayment {
-  id              String        @id @default(uuid()) @db.Uuid
-  orderId         String        @map("order_id") @db.Uuid
-  invoiceId       String        @map("invoice_id") @db.Uuid
-  userId          String        @map("user_id") @db.Uuid
-  status          PaymentStatus @default(PENDING)
-  amount          Decimal       @db.Decimal(14, 2)
-  method          String        @default("DEVELOPMENT_SIMULATOR") @db.VarChar(60)
-  provider        String?       @db.VarChar(60)
-  providerReference String?     @map("provider_reference") @db.VarChar(120)
-  paidAt          DateTime?     @map("paid_at")
-  metadata        Json?
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
+  id                String        @id @default(uuid()) @db.Uuid
+  orderId           String        @map("order_id") @db.Uuid
+  invoiceId         String        @map("invoice_id") @db.Uuid
+  userId            String        @map("user_id") @db.Uuid
+  status            PaymentStatus @default(PENDING)
+  amount            Decimal       @db.Decimal(14, 2)
+  method            String        @default("DEVELOPMENT_SIMULATOR") @db.VarChar(60)
+  provider          String?       @db.VarChar(60)
+  providerReference String?       @map("provider_reference") @db.VarChar(120)
+  paidAt            DateTime?     @map("paid_at")
+  metadata          Json?
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
 
-  order           MembershipOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  invoice         Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order   MembershipOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  invoice Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, status])
   @@index([orderId, status])
@@ -398,36 +603,63 @@ model MembershipPayment {
   @@map("membership_payments")
 }
 
+/// Dokumen identitas untuk verifikasi keanggotaan.
+///
+/// Keputusan Owner (Stage R2.6 jalur A): berkasnya disimpan di database
+/// aplikasi maksimal 24 jam. Dalam rentang itu admin mencetaknya menjadi
+/// berkas administrasi, lalu isinya dihapus dari database.
+///
+/// Isi berkas TIDAK disimpan mentah. Yang tersimpan adalah ciphertext
+/// AES-256-GCM; kuncinya berada di environment, bukan di database, supaya
+/// salinan backup database saja tidak cukup untuk membukanya. Baris tetap
+/// bertahan setelah isinya dihapus karena status dan jejak waktunya masih
+/// dibutuhkan untuk audit.
 model MembershipDocument {
-  id              String                   @id @default(uuid()) @db.Uuid
-  orderId         String                   @map("order_id") @db.Uuid
-  userId          String                   @map("user_id") @db.Uuid
-  type            MembershipDocumentType
-  status          MembershipDocumentStatus @default(PENDING)
-  url             String?
-  localPath       String?                  @map("local_path")
-  metadata        Json?
-  createdAt       DateTime                 @default(now()) @map("created_at")
-  updatedAt       DateTime                 @updatedAt @map("updated_at")
+  id          String                   @id @default(uuid()) @db.Uuid
+  orderId     String                   @map("order_id") @db.Uuid
+  userId      String                   @map("user_id") @db.Uuid
+  type        MembershipDocumentType
+  status      MembershipDocumentStatus @default(PENDING)
+  url         String?
+  localPath   String?                  @map("local_path")
+  /// Ciphertext AES-256-GCM. Null berarti belum diunggah atau sudah dihapus.
+  cipherText  Bytes?                   @map("cipher_text")
+  cipherIv    Bytes?                   @map("cipher_iv")
+  cipherTag   Bytes?                   @map("cipher_tag")
+  /// Versi kunci aktif, disimpan bersama ciphertext agar rotasi mungkin.
+  keyVersion  Int?                     @map("key_version")
+  contentType String?                  @map("content_type") @db.VarChar(40)
+  sizeBytes   Int?                     @map("size_bytes")
+  /// SHA-256 isi asli. Dipakai membuktikan hasil cetak sama dengan yang diunggah.
+  checksum    String?                  @db.VarChar(64)
+  uploadedAt  DateTime?                @map("uploaded_at")
+  /// Batas simpan. Setelah lewat, isi berkas tidak pernah disajikan lagi.
+  expiresAt   DateTime?                @map("expires_at")
+  purgedAt    DateTime?                @map("purged_at")
+  metadata    Json?
+  createdAt   DateTime                 @default(now()) @map("created_at")
+  updatedAt   DateTime                 @updatedAt @map("updated_at")
 
-  order           MembershipOrder          @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  user            User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order MembershipOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([orderId, type])
   @@index([userId, type])
+  /// Dipakai penyapu berkala untuk menemukan dokumen yang sudah lewat masa simpan.
+  @@index([expiresAt])
   @@map("membership_documents")
 }
 
 model MembershipBenefit {
-  id              String         @id @default(uuid()) @db.Uuid
-  membershipId    String         @map("membership_id") @db.Uuid
-  level           Int
-  commissionRate  Decimal        @map("commission_rate") @db.Decimal(5, 2)
-  fixedBonus      Decimal        @default(0) @map("fixed_bonus") @db.Decimal(14, 2)
-  isActive        Boolean        @default(true) @map("is_active")
-  createdAt       DateTime       @default(now()) @map("created_at")
+  id             String   @id @default(uuid()) @db.Uuid
+  membershipId   String   @map("membership_id") @db.Uuid
+  level          Int
+  commissionRate Decimal  @map("commission_rate") @db.Decimal(5, 2)
+  fixedBonus     Decimal  @default(0) @map("fixed_bonus") @db.Decimal(14, 2)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
 
-  membership      Membership     @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
 
   @@unique([membershipId, level])
   @@index([level, isActive])
@@ -435,17 +667,17 @@ model MembershipBenefit {
 }
 
 model Referral {
-  id              String         @id @default(uuid()) @db.Uuid
-  sponsorId       String         @map("sponsor_id") @db.Uuid
-  userId          String         @unique @map("user_id") @db.Uuid
-  status          ReferralStatus @default(ACTIVE)
-  joinedAt        DateTime       @default(now()) @map("joined_at")
-  blockedAt       DateTime?      @map("blocked_at")
-  metadata        Json?
+  id        String         @id @default(uuid()) @db.Uuid
+  sponsorId String         @map("sponsor_id") @db.Uuid
+  userId    String         @unique @map("user_id") @db.Uuid
+  status    ReferralStatus @default(ACTIVE)
+  joinedAt  DateTime       @default(now()) @map("joined_at")
+  blockedAt DateTime?      @map("blocked_at")
+  metadata  Json?
 
-  sponsor         User           @relation("ReferralSponsor", fields: [sponsorId], references: [id])
-  user            User           @relation("ReferralUser", fields: [userId], references: [id], onDelete: Cascade)
-  commissions     Commission[]
+  sponsor     User         @relation("ReferralSponsor", fields: [sponsorId], references: [id])
+  user        User         @relation("ReferralUser", fields: [userId], references: [id], onDelete: Cascade)
+  commissions Commission[]
 
   @@index([sponsorId, joinedAt])
   @@index([status])
@@ -453,14 +685,14 @@ model Referral {
 }
 
 model ReferralLevel {
-  id              String   @id @default(uuid()) @db.Uuid
-  ancestorId      String   @map("ancestor_id") @db.Uuid
-  descendantId    String   @map("descendant_id") @db.Uuid
-  level           Int
-  createdAt       DateTime @default(now()) @map("created_at")
+  id           String   @id @default(uuid()) @db.Uuid
+  ancestorId   String   @map("ancestor_id") @db.Uuid
+  descendantId String   @map("descendant_id") @db.Uuid
+  level        Int
+  createdAt    DateTime @default(now()) @map("created_at")
 
-  ancestor        User     @relation("ReferralAncestor", fields: [ancestorId], references: [id], onDelete: Cascade)
-  descendant      User     @relation("ReferralDescendant", fields: [descendantId], references: [id], onDelete: Cascade)
+  ancestor   User @relation("ReferralAncestor", fields: [ancestorId], references: [id], onDelete: Cascade)
+  descendant User @relation("ReferralDescendant", fields: [descendantId], references: [id], onDelete: Cascade)
 
   @@unique([ancestorId, descendantId])
   @@index([ancestorId, level])
@@ -486,9 +718,9 @@ model Commission {
   reversedAt          DateTime?        @map("reversed_at")
   createdAt           DateTime         @default(now()) @map("created_at")
 
-  beneficiary         User             @relation("CommissionBeneficiary", fields: [beneficiaryId], references: [id])
-  referral            Referral?        @relation(fields: [referralId], references: [id])
-  walletTransaction   WalletTransaction? @relation(fields: [walletTransactionId], references: [id])
+  beneficiary               User                       @relation("CommissionBeneficiary", fields: [beneficiaryId], references: [id])
+  referral                  Referral?                  @relation(fields: [referralId], references: [id])
+  walletTransaction         WalletTransaction?         @relation(fields: [walletTransactionId], references: [id])
   profitSharingDistribution ProfitSharingDistribution?
 
   @@unique([beneficiaryId, triggerType, triggerId, type, level])
@@ -499,21 +731,21 @@ model Commission {
 }
 
 model ProfitSharingPeriod {
-  id              String                    @id @default(uuid()) @db.Uuid
-  periodMonth     Int                       @map("period_month")
-  periodYear      Int                       @map("period_year")
-  netProfitAmount Decimal                   @default(0) @map("net_profit_amount") @db.Decimal(14, 2)
-  totalPoolAmount Decimal                   @map("total_pool_amount") @db.Decimal(14, 2)
-  silverAllocation Decimal                  @default(0) @map("silver_allocation") @db.Decimal(14, 2)
-  goldAllocation   Decimal                  @default(0) @map("gold_allocation") @db.Decimal(14, 2)
-  platinumAllocation Decimal                @default(0) @map("platinum_allocation") @db.Decimal(14, 2)
-  retainedAmount Decimal                    @default(0) @map("retained_amount") @db.Decimal(14, 2)
-  status          ProfitSharingPeriodStatus @default(DRAFT)
-  createdAt       DateTime                  @default(now()) @map("created_at")
-  approvedAt      DateTime?                 @map("approved_at")
-  distributedAt   DateTime?                 @map("distributed_at")
+  id                 String                    @id @default(uuid()) @db.Uuid
+  periodMonth        Int                       @map("period_month")
+  periodYear         Int                       @map("period_year")
+  netProfitAmount    Decimal                   @default(0) @map("net_profit_amount") @db.Decimal(14, 2)
+  totalPoolAmount    Decimal                   @map("total_pool_amount") @db.Decimal(14, 2)
+  silverAllocation   Decimal                   @default(0) @map("silver_allocation") @db.Decimal(14, 2)
+  goldAllocation     Decimal                   @default(0) @map("gold_allocation") @db.Decimal(14, 2)
+  platinumAllocation Decimal                   @default(0) @map("platinum_allocation") @db.Decimal(14, 2)
+  retainedAmount     Decimal                   @default(0) @map("retained_amount") @db.Decimal(14, 2)
+  status             ProfitSharingPeriodStatus @default(DRAFT)
+  createdAt          DateTime                  @default(now()) @map("created_at")
+  approvedAt         DateTime?                 @map("approved_at")
+  distributedAt      DateTime?                 @map("distributed_at")
 
-  distributions   ProfitSharingDistribution[]
+  distributions ProfitSharingDistribution[]
 
   @@unique([periodMonth, periodYear])
   @@index([status, periodYear, periodMonth])
@@ -531,10 +763,10 @@ model ProfitSharingDistribution {
   createdAt           DateTime                        @default(now()) @map("created_at")
   postedAt            DateTime?                       @map("posted_at")
 
-  period              ProfitSharingPeriod             @relation(fields: [periodId], references: [id], onDelete: Cascade)
-  user                User                            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  walletTransaction   WalletTransaction?              @relation(fields: [walletTransactionId], references: [id], onDelete: SetNull)
-  commission          Commission?                     @relation(fields: [commissionId], references: [id], onDelete: SetNull)
+  period            ProfitSharingPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletTransaction WalletTransaction?  @relation(fields: [walletTransactionId], references: [id], onDelete: SetNull)
+  commission        Commission?         @relation(fields: [commissionId], references: [id], onDelete: SetNull)
 
   @@unique([periodId, userId])
   @@index([userId, status])
@@ -552,98 +784,123 @@ model Session {
   revokedAt        DateTime? @map("revoked_at")
   createdAt        DateTime  @default(now()) @map("created_at")
 
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, revokedAt])
   @@map("sessions")
 }
 
 model OtpChallenge {
-  id          String    @id @default(uuid()) @db.Uuid
-  phone       String    @db.VarChar(32)
-  codeHash    String    @map("code_hash")
-  purpose     String    @db.VarChar(40)
-  attempts    Int       @default(0)
-  expiresAt   DateTime  @map("expires_at")
-  consumedAt  DateTime? @map("consumed_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  id         String    @id @default(uuid()) @db.Uuid
+  phone      String    @db.VarChar(32)
+  codeHash   String    @map("code_hash")
+  purpose    String    @db.VarChar(40)
+  attempts   Int       @default(0)
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
 
   @@index([phone, purpose, expiresAt])
   @@map("otp_challenges")
 }
 
 model Driver {
-  id              String       @id @default(uuid()) @db.Uuid
-  userId          String       @unique @map("user_id") @db.Uuid
-  status          DriverStatus @default(OFFLINE)
-  kycStatus       KycStatus    @default(NOT_SUBMITTED) @map("kyc_status")
-  licenseNumber   String?      @unique @map("license_number") @db.VarChar(80)
-  vehicleType     String       @default("BIKE") @map("vehicle_type") @db.VarChar(40)
-  vehiclePlate    String?      @map("vehicle_plate") @db.VarChar(24)
-  ratingAverage   Decimal      @default(5.0) @map("rating_average") @db.Decimal(3, 2)
-  ratingCount     Int          @default(0) @map("rating_count")
-  currentLat      Decimal?     @map("current_lat") @db.Decimal(10, 7)
-  currentLng      Decimal?     @map("current_lng") @db.Decimal(10, 7)
-  lastLocationAt  DateTime?    @map("last_location_at")
-  createdAt       DateTime     @default(now()) @map("created_at")
-  updatedAt       DateTime     @updatedAt @map("updated_at")
+  id             String       @id @default(uuid()) @db.Uuid
+  userId         String       @unique @map("user_id") @db.Uuid
+  status         DriverStatus @default(OFFLINE)
+  kycStatus      KycStatus    @default(NOT_SUBMITTED) @map("kyc_status")
+  licenseNumber  String?      @unique @map("license_number") @db.VarChar(80)
+  vehicleType    String       @default("BIKE") @map("vehicle_type") @db.VarChar(40)
+  vehiclePlate   String?      @map("vehicle_plate") @db.VarChar(24)
+  ratingAverage  Decimal      @default(5.0) @map("rating_average") @db.Decimal(3, 2)
+  ratingCount    Int          @default(0) @map("rating_count")
+  currentLat     Decimal?     @map("current_lat") @db.Decimal(10, 7)
+  currentLng     Decimal?     @map("current_lng") @db.Decimal(10, 7)
+  lastLocationAt DateTime?    @map("last_location_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
 
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  rides           Ride[]       @relation("RideDriver")
-  documents       DriverDocument[]
-  earnings        DriverEarning[]
-  withdrawals     WithdrawalRequest[]
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rides       Ride[]              @relation("RideDriver")
+  documents   DriverDocument[]
+  earnings    DriverEarning[]
+  withdrawals WithdrawalRequest[]
 
   @@index([status, vehicleType])
   @@index([currentLat, currentLng])
   @@map("drivers")
 }
 
+/// Dokumen identitas dan kendaraan mitra driver.
+///
+/// Keputusan Owner: kebijakan 24 jam untuk dokumen membership berlaku juga di
+/// sini. Isi berkas disimpan sebagai ciphertext dan dihapus setelah masa simpan
+/// berakhir, sedangkan barisnya tetap ada karena status dan jejak waktunya masih
+/// dibutuhkan untuk audit.
 model DriverDocument {
-  id          String    @id @default(uuid()) @db.Uuid
-  driverId    String    @map("driver_id") @db.Uuid
-  type        String    @db.VarChar(60)
-  url         String
-  status      KycStatus @default(PENDING)
-  reviewedBy  String?   @map("reviewed_by") @db.Uuid
-  reviewedAt  DateTime? @map("reviewed_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  id         String    @id @default(uuid()) @db.Uuid
+  driverId   String    @map("driver_id") @db.Uuid
+  type       String    @db.VarChar(60)
+  /// Penyimpanan eksternal warisan. Isi dokumen kini berada di kolom ciphertext.
+  url        String?
+  status     KycStatus @default(PENDING)
+  reviewedBy String?   @map("reviewed_by") @db.Uuid
+  reviewedAt DateTime? @map("reviewed_at")
 
-  driver      Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  /// Ciphertext AES-256-GCM. Null berarti belum diunggah atau sudah dihapus.
+  cipherText  Bytes?    @map("cipher_text")
+  cipherIv    Bytes?    @map("cipher_iv")
+  cipherTag   Bytes?    @map("cipher_tag")
+  /// Versi kunci aktif, disimpan bersama ciphertext agar rotasi mungkin.
+  keyVersion  Int?      @map("key_version")
+  contentType String?   @map("content_type") @db.VarChar(40)
+  sizeBytes   Int?      @map("size_bytes")
+  /// SHA-256 isi asli. Dipakai membuktikan hasil cetak sama dengan yang diunggah.
+  checksum    String?   @db.VarChar(64)
+  uploadedAt  DateTime? @map("uploaded_at")
+  /// Batas simpan. Setelah lewat, isi berkas tidak pernah disajikan lagi.
+  expiresAt   DateTime? @map("expires_at")
+  purgedAt    DateTime? @map("purged_at")
 
-  @@index([driverId, type])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@unique([driverId, type])
+  @@index([expiresAt])
   @@map("driver_documents")
 }
 
 model Ride {
-  id                String        @id @default(uuid()) @db.Uuid
-  customerId        String        @map("customer_id") @db.Uuid
-  driverId          String?       @map("driver_id") @db.Uuid
-  status            RideStatus    @default(REQUESTED)
-  serviceType       String        @map("service_type") @db.VarChar(40)
-  pickupAddress     String        @map("pickup_address")
-  pickupLat         Decimal       @map("pickup_lat") @db.Decimal(10, 7)
-  pickupLng         Decimal       @map("pickup_lng") @db.Decimal(10, 7)
-  destinationAddress String       @map("destination_address")
-  destinationLat     Decimal      @map("destination_lat") @db.Decimal(10, 7)
-  destinationLng     Decimal      @map("destination_lng") @db.Decimal(10, 7)
-  distanceKm        Decimal       @map("distance_km") @db.Decimal(8, 2)
-  estimatedFare     Decimal       @map("estimated_fare") @db.Decimal(12, 2)
-  finalFare         Decimal?      @map("final_fare") @db.Decimal(12, 2)
-  promoCode         String?       @map("promo_code") @db.VarChar(40)
-  requestedAt       DateTime      @default(now()) @map("requested_at")
-  acceptedAt        DateTime?     @map("accepted_at")
-  startedAt         DateTime?     @map("started_at")
-  completedAt       DateTime?     @map("completed_at")
-  cancelledAt       DateTime?     @map("cancelled_at")
-  cancellationReason String?      @map("cancellation_reason")
+  id                 String     @id @default(uuid()) @db.Uuid
+  customerId         String     @map("customer_id") @db.Uuid
+  driverId           String?    @map("driver_id") @db.Uuid
+  status             RideStatus @default(REQUESTED)
+  serviceType        String     @map("service_type") @db.VarChar(40)
+  pickupAddress      String     @map("pickup_address")
+  pickupLat          Decimal    @map("pickup_lat") @db.Decimal(10, 7)
+  pickupLng          Decimal    @map("pickup_lng") @db.Decimal(10, 7)
+  destinationAddress String     @map("destination_address")
+  destinationLat     Decimal    @map("destination_lat") @db.Decimal(10, 7)
+  destinationLng     Decimal    @map("destination_lng") @db.Decimal(10, 7)
+  distanceKm         Decimal    @map("distance_km") @db.Decimal(8, 2)
+  estimatedFare      Decimal    @map("estimated_fare") @db.Decimal(12, 2)
+  finalFare          Decimal?   @map("final_fare") @db.Decimal(12, 2)
+  promoCode          String?    @map("promo_code") @db.VarChar(40)
+  requestedAt        DateTime   @default(now()) @map("requested_at")
+  acceptedAt         DateTime?  @map("accepted_at")
+  startedAt          DateTime?  @map("started_at")
+  completedAt        DateTime?  @map("completed_at")
+  cancelledAt        DateTime?  @map("cancelled_at")
+  cancellationReason String?    @map("cancellation_reason")
 
-  customer          User          @relation("RideCustomer", fields: [customerId], references: [id])
-  driver            Driver?       @relation("RideDriver", fields: [driverId], references: [id])
-  payment           Payment?
-  messages          ChatMessage[]
-  reviews           Review[]
-  statusEvents      RideStatusEvent[]
+  customer     User              @relation("RideCustomer", fields: [customerId], references: [id])
+  driver       Driver?           @relation("RideDriver", fields: [driverId], references: [id])
+  payment      Payment?
+  messages     ChatMessage[]
+  reviews      Review[]
+  statusEvents RideStatusEvent[]
 
   @@index([customerId, requestedAt])
   @@index([driverId, requestedAt])
@@ -659,43 +916,43 @@ model RideStatusEvent {
   metadata  Json?
   createdAt DateTime   @default(now()) @map("created_at")
 
-  ride      Ride       @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  ride Ride @relation(fields: [rideId], references: [id], onDelete: Cascade)
 
   @@index([rideId, createdAt])
   @@map("ride_status_events")
 }
 
 model Payment {
-  id                   String        @id @default(uuid()) @db.Uuid
-  rideId               String        @unique @map("ride_id") @db.Uuid
-  method               PaymentMethod
-  status               PaymentStatus @default(PENDING)
-  amount               Decimal       @db.Decimal(12, 2)
-  provider             String?       @db.VarChar(40)
-  providerReference    String?       @map("provider_reference") @db.VarChar(120)
-  paidAt               DateTime?     @map("paid_at")
-  createdAt            DateTime      @default(now()) @map("created_at")
-  updatedAt            DateTime      @updatedAt @map("updated_at")
+  id                String        @id @default(uuid()) @db.Uuid
+  rideId            String        @unique @map("ride_id") @db.Uuid
+  method            PaymentMethod
+  status            PaymentStatus @default(PENDING)
+  amount            Decimal       @db.Decimal(12, 2)
+  provider          String?       @db.VarChar(40)
+  providerReference String?       @map("provider_reference") @db.VarChar(120)
+  paidAt            DateTime?     @map("paid_at")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
 
-  ride                 Ride          @relation(fields: [rideId], references: [id])
+  ride Ride @relation(fields: [rideId], references: [id])
 
   @@index([status, method])
   @@map("payments")
 }
 
 model Wallet {
-  id          String              @id @default(uuid()) @db.Uuid
-  userId      String              @unique @map("user_id") @db.Uuid
-  balance     Decimal             @default(0) @db.Decimal(14, 2)
-  cashBalance Decimal             @default(0) @map("cash_balance") @db.Decimal(14, 2)
-  ppobBalance Decimal             @default(0) @map("ppob_balance") @db.Decimal(14, 2)
-  currency    String              @default("IDR") @db.VarChar(8)
-  createdAt   DateTime            @default(now()) @map("created_at")
-  updatedAt   DateTime            @updatedAt @map("updated_at")
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @unique @map("user_id") @db.Uuid
+  balance     Decimal  @default(0) @db.Decimal(14, 2)
+  cashBalance Decimal  @default(0) @map("cash_balance") @db.Decimal(14, 2)
+  ppobBalance Decimal  @default(0) @map("ppob_balance") @db.Decimal(14, 2)
+  currency    String   @default("IDR") @db.VarChar(8)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  ledger      WalletTransaction[]
-  withdrawals Withdrawal[]
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ledger             WalletTransaction[]
+  withdrawals        Withdrawal[]
   rewardTransactions RewardTransaction[]
 
   @@map("wallets")
@@ -711,10 +968,10 @@ model WalletTransaction {
   metadata      Json?
   createdAt     DateTime              @default(now()) @map("created_at")
 
-  wallet        Wallet                @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  commission    Commission?
+  wallet                    Wallet                     @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  commission                Commission?
   profitSharingDistribution ProfitSharingDistribution?
-  rewardTransaction RewardTransaction?
+  rewardTransaction         RewardTransaction?
 
   @@index([walletId, createdAt])
   @@index([referenceType, referenceId])
@@ -738,9 +995,9 @@ model RewardTransaction {
   rejectedAt          DateTime?               @map("rejected_at")
   createdAt           DateTime                @default(now()) @map("created_at")
 
-  user                User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  wallet              Wallet?                 @relation(fields: [walletId], references: [id], onDelete: SetNull)
-  walletTransaction   WalletTransaction?      @relation(fields: [walletTransactionId], references: [id], onDelete: SetNull)
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet            Wallet?            @relation(fields: [walletId], references: [id], onDelete: SetNull)
+  walletTransaction WalletTransaction? @relation(fields: [walletTransactionId], references: [id], onDelete: SetNull)
 
   @@unique([userId, referenceType, referenceId])
   @@index([userId, status])
@@ -768,31 +1025,31 @@ model PromoCode {
 }
 
 model ChatMessage {
-  id          String         @id @default(uuid()) @db.Uuid
-  rideId      String         @map("ride_id") @db.Uuid
-  senderId    String         @map("sender_id") @db.Uuid
-  senderType  ChatSenderType @map("sender_type")
-  message     String
-  readAt      DateTime?      @map("read_at")
-  createdAt   DateTime       @default(now()) @map("created_at")
+  id         String         @id @default(uuid()) @db.Uuid
+  rideId     String         @map("ride_id") @db.Uuid
+  senderId   String         @map("sender_id") @db.Uuid
+  senderType ChatSenderType @map("sender_type")
+  message    String
+  readAt     DateTime?      @map("read_at")
+  createdAt  DateTime       @default(now()) @map("created_at")
 
-  ride        Ride           @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  ride Ride @relation(fields: [rideId], references: [id], onDelete: Cascade)
 
   @@index([rideId, createdAt])
   @@map("chat_messages")
 }
 
 model Review {
-  id          String   @id @default(uuid()) @db.Uuid
-  rideId      String   @map("ride_id") @db.Uuid
-  reviewerId  String   @map("reviewer_id") @db.Uuid
-  driverId    String?  @map("driver_id") @db.Uuid
-  rating      Int
-  comment     String?
-  createdAt   DateTime @default(now()) @map("created_at")
+  id         String   @id @default(uuid()) @db.Uuid
+  rideId     String   @map("ride_id") @db.Uuid
+  reviewerId String   @map("reviewer_id") @db.Uuid
+  driverId   String?  @map("driver_id") @db.Uuid
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
 
-  ride        Ride     @relation(fields: [rideId], references: [id], onDelete: Cascade)
-  reviewer    User     @relation("ReviewsGiven", fields: [reviewerId], references: [id])
+  ride     Ride @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  reviewer User @relation("ReviewsGiven", fields: [reviewerId], references: [id])
 
   @@index([rideId])
   @@index([driverId])
@@ -800,15 +1057,15 @@ model Review {
 }
 
 model PushToken {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @map("user_id") @db.Uuid
-  platform    String   @db.VarChar(20)
-  token       String   @unique
-  deviceId    String?  @map("device_id") @db.VarChar(120)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  platform  String   @db.VarChar(20)
+  token     String   @unique
+  deviceId  String?  @map("device_id") @db.VarChar(120)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, platform])
   @@map("push_tokens")
@@ -823,52 +1080,52 @@ model DriverEarning {
   netAmount   Decimal  @map("net_amount") @db.Decimal(12, 2)
   createdAt   DateTime @default(now()) @map("created_at")
 
-  driver      Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
   @@index([driverId, createdAt])
   @@map("driver_earnings")
 }
 
 model WithdrawalRequest {
-  id          String   @id @default(uuid()) @db.Uuid
-  driverId    String   @map("driver_id") @db.Uuid
-  amount      Decimal  @db.Decimal(12, 2)
-  status      String   @default("PENDING") @db.VarChar(30)
-  bankAccount Json     @map("bank_account")
+  id          String    @id @default(uuid()) @db.Uuid
+  driverId    String    @map("driver_id") @db.Uuid
+  amount      Decimal   @db.Decimal(12, 2)
+  status      String    @default("PENDING") @db.VarChar(30)
+  bankAccount Json      @map("bank_account")
   processedAt DateTime? @map("processed_at")
-  createdAt   DateTime @default(now()) @map("created_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
-  driver      Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
   @@index([driverId, status])
   @@map("withdrawal_requests")
 }
 
 model Withdrawal {
-  id          String           @id @default(uuid()) @db.Uuid
-  walletId    String           @map("wallet_id") @db.Uuid
-  userId      String           @map("user_id") @db.Uuid
-  amount      Decimal          @db.Decimal(14, 2)
-  fee         Decimal          @default(0) @db.Decimal(14, 2)
-  finalAmount Decimal          @default(0) @map("final_amount") @db.Decimal(14, 2)
-  status      WithdrawalStatus @default(PENDING)
-  bankName    String?          @map("bank_name") @db.VarChar(80)
-  accountNumber String?        @map("account_number") @db.VarChar(40)
-  accountHolderName String?    @map("account_holder_name") @db.VarChar(120)
-  bankAccount Json             @map("bank_account")
-  requestedAt DateTime         @default(now()) @map("requested_at")
-  approvedBy  String?          @map("approved_by") @db.Uuid
-  approvedAt  DateTime?        @map("approved_at")
-  rejectedBy  String?          @map("rejected_by") @db.Uuid
-  rejectedAt  DateTime?        @map("rejected_at")
-  reviewedBy  String?          @map("reviewed_by") @db.Uuid
-  reviewedAt  DateTime?        @map("reviewed_at")
-  paidAt      DateTime?        @map("paid_at")
-  notes       String?
-  note        String?
+  id                String           @id @default(uuid()) @db.Uuid
+  walletId          String           @map("wallet_id") @db.Uuid
+  userId            String           @map("user_id") @db.Uuid
+  amount            Decimal          @db.Decimal(14, 2)
+  fee               Decimal          @default(0) @db.Decimal(14, 2)
+  finalAmount       Decimal          @default(0) @map("final_amount") @db.Decimal(14, 2)
+  status            WithdrawalStatus @default(PENDING)
+  bankName          String?          @map("bank_name") @db.VarChar(80)
+  accountNumber     String?          @map("account_number") @db.VarChar(40)
+  accountHolderName String?          @map("account_holder_name") @db.VarChar(120)
+  bankAccount       Json             @map("bank_account")
+  requestedAt       DateTime         @default(now()) @map("requested_at")
+  approvedBy        String?          @map("approved_by") @db.Uuid
+  approvedAt        DateTime?        @map("approved_at")
+  rejectedBy        String?          @map("rejected_by") @db.Uuid
+  rejectedAt        DateTime?        @map("rejected_at")
+  reviewedBy        String?          @map("reviewed_by") @db.Uuid
+  reviewedAt        DateTime?        @map("reviewed_at")
+  paidAt            DateTime?        @map("paid_at")
+  notes             String?
+  note              String?
 
-  wallet      Wallet           @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  user        User             @relation(fields: [userId], references: [id])
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
 
   @@index([userId, status])
   @@index([walletId, requestedAt])
@@ -886,7 +1143,7 @@ model AccountDeletionRequest {
   createdAt   DateTime                     @default(now()) @map("created_at")
   updatedAt   DateTime                     @updatedAt @map("updated_at")
 
-  user        User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, status])
   @@index([status, createdAt])
@@ -894,21 +1151,74 @@ model AccountDeletionRequest {
 }
 
 model ContactMessage {
-  id          String               @id @default(uuid()) @db.Uuid
-  userId      String?              @map("user_id") @db.Uuid
-  name        String               @db.VarChar(120)
-  contact     String               @db.VarChar(180)
-  category    String               @db.VarChar(80)
-  message     String
-  status      ContactMessageStatus @default(NEW)
-  createdAt   DateTime             @default(now()) @map("created_at")
-  updatedAt   DateTime             @updatedAt @map("updated_at")
+  id        String               @id @default(uuid()) @db.Uuid
+  userId    String?              @map("user_id") @db.Uuid
+  name      String               @db.VarChar(120)
+  contact   String               @db.VarChar(180)
+  category  String               @db.VarChar(80)
+  message   String
+  status    ContactMessageStatus @default(NEW)
+  createdAt DateTime             @default(now()) @map("created_at")
+  updatedAt DateTime             @updatedAt @map("updated_at")
 
-  user        User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
   @@map("contact_messages")
+}
+
+model MemberIdentity {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @unique @map("user_id") @db.Uuid
+  publicCode String    @unique @map("public_code") @db.VarChar(24)
+  issuedAt   DateTime  @default(now()) @map("issued_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([publicCode])
+  @@map("member_identities")
+}
+
+model SupportTicket {
+  id            String                @id @default(uuid()) @db.Uuid
+  userId        String                @map("user_id") @db.Uuid
+  reference     String                @unique @db.VarChar(32)
+  category      SupportTicketCategory @default(OTHER)
+  subject       String                @db.VarChar(140)
+  status        SupportTicketStatus   @default(OPEN)
+  lastMessageAt DateTime              @default(now()) @map("last_message_at")
+  resolvedAt    DateTime?             @map("resolved_at")
+  closedAt      DateTime?             @map("closed_at")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+
+  user     User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages SupportTicketMessage[]
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@index([lastMessageAt])
+  @@map("support_tickets")
+}
+
+model SupportTicketMessage {
+  id         String                         @id @default(uuid()) @db.Uuid
+  ticketId   String                         @map("ticket_id") @db.Uuid
+  authorId   String?                        @map("author_id") @db.Uuid
+  authorRole SupportTicketMessageAuthorRole @map("author_role")
+  body       String
+  createdAt  DateTime                       @default(now()) @map("created_at")
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User?         @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId, createdAt])
+  @@index([authorId, createdAt])
+  @@map("support_ticket_messages")
 }
 
 model RegistrationEvent {
@@ -924,8 +1234,8 @@ model RegistrationEvent {
   suspiciousReasons     Json?    @map("suspicious_reasons")
   createdAt             DateTime @default(now()) @map("created_at")
 
-  user                  User?    @relation("RegistrationEventUser", fields: [userId], references: [id], onDelete: SetNull)
-  abuseFlags            AbuseFlag[]
+  user       User?       @relation("RegistrationEventUser", fields: [userId], references: [id], onDelete: SetNull)
+  abuseFlags AbuseFlag[]
 
   @@index([userId, createdAt])
   @@index([normalizedPhone, createdAt])
@@ -938,20 +1248,20 @@ model RegistrationEvent {
 }
 
 model AbuseFlag {
-  id                  String           @id @default(uuid()) @db.Uuid
-  userId              String?          @map("user_id") @db.Uuid
-  registrationEventId String?          @map("registration_event_id") @db.Uuid
-  flagType            String           @map("flag_type") @db.VarChar(80)
+  id                  String            @id @default(uuid()) @db.Uuid
+  userId              String?           @map("user_id") @db.Uuid
+  registrationEventId String?           @map("registration_event_id") @db.Uuid
+  flagType            String            @map("flag_type") @db.VarChar(80)
   severity            AbuseFlagSeverity @default(LOW)
-  status              AbuseFlagStatus  @default(OPEN)
+  status              AbuseFlagStatus   @default(OPEN)
   reason              String
   metadata            Json?
-  reviewedBy          String?          @map("reviewed_by") @db.Uuid
-  reviewedAt          DateTime?        @map("reviewed_at")
-  createdAt           DateTime         @default(now()) @map("created_at")
+  reviewedBy          String?           @map("reviewed_by") @db.Uuid
+  reviewedAt          DateTime?         @map("reviewed_at")
+  createdAt           DateTime          @default(now()) @map("created_at")
 
-  user                User?            @relation("AbuseFlagUser", fields: [userId], references: [id], onDelete: SetNull)
-  registrationEvent   RegistrationEvent? @relation(fields: [registrationEventId], references: [id], onDelete: SetNull)
+  user              User?              @relation("AbuseFlagUser", fields: [userId], references: [id], onDelete: SetNull)
+  registrationEvent RegistrationEvent? @relation(fields: [registrationEventId], references: [id], onDelete: SetNull)
 
   @@index([userId, status])
   @@index([registrationEventId])
@@ -962,18 +1272,429 @@ model AbuseFlag {
 }
 
 model AuditLog {
-  id          String   @id @default(uuid()) @db.Uuid
-  actorId     String?  @map("actor_id") @db.Uuid
-  action      String   @db.VarChar(120)
-  entityType  String   @map("entity_type") @db.VarChar(80)
-  entityId    String?  @map("entity_id") @db.VarChar(80)
-  metadata    Json?
-  ipAddress   String?  @map("ip_address") @db.Inet
-  createdAt   DateTime @default(now()) @map("created_at")
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String   @db.VarChar(120)
+  entityType String   @map("entity_type") @db.VarChar(80)
+  entityId   String?  @map("entity_id") @db.VarChar(80)
+  metadata   Json?
+  ipAddress  String?  @map("ip_address") @db.Inet
+  createdAt  DateTime @default(now()) @map("created_at")
 
-  actor       User?    @relation(fields: [actorId], references: [id])
+  actor User? @relation(fields: [actorId], references: [id])
 
   @@index([actorId, createdAt])
   @@index([entityType, entityId])
   @@map("audit_logs")
+}
+
+// P1-4: counter atomik untuk benefit registrasi berkuota (mis. Basic PPOB
+// Rp5.000 untuk 1.000 user pertama). Slot diklaim via conditional UPDATE
+// (row lock) sehingga aman dari race. CHECK constraint di-manage pada migration.
+model RegistrationQuota {
+  key       String   @id
+  limit     Int
+  granted   Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@map("registration_quota")
+}
+
+// ===========================================================================
+// RELEASE 2 — RIDE DOMAIN (Stage 5.2)
+//
+// Seluruh model di bawah bersifat ADDITIVE dan memakai prefix `Ride` agar
+// tidak bertabrakan dengan model legacy (`Ride`, `Driver`, `Payment`, dst.
+// dari 0001_init) yang tetap dipertahankan sebagai compatibility boundary
+// read-only dan TIDAK ditulis oleh domain baru ini.
+//
+// Aturan uang: seluruh nominal tarif memakai Int = integer rupiah penuh
+// (bukan Decimal/float), sesuai keputusan Stage 5.2.
+//
+// Privasi: nomor plat TIDAK disimpan plaintext (hash + versi ter-mask).
+// Koordinat presisi disimpan hanya untuk keperluan operasional dan tidak
+// boleh ditulis ke log (lihat docs/backend/ride-domain.md).
+// ===========================================================================
+
+enum RideServiceType {
+  MOTORCYCLE
+  CAR
+}
+
+enum RideDriverStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+enum RideDriverAvailability {
+  OFFLINE
+  ONLINE
+  BUSY
+}
+
+enum RideVehicleVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum RideOrderStatus {
+  CREATED
+  SEARCHING_DRIVER
+  DRIVER_ASSIGNED
+  DRIVER_TO_PICKUP
+  DRIVER_ARRIVED
+  IN_TRIP
+  COMPLETED
+  CANCELLED_BY_PASSENGER
+  CANCELLED_BY_DRIVER
+  CANCELLED_BY_SYSTEM
+  NO_DRIVER
+  EXPIRED
+  // Dicadangkan oleh kontrak Stage 5.2. TIDAK dipakai pada tahap ini karena
+  // pembayaran digital fail-closed; status pembayaran hidup pada
+  // RideOrder.paymentState (domain terpisah).
+  PAYMENT_FAILED
+}
+
+enum RidePaymentMethod {
+  CASH
+  DIGITAL
+}
+
+/// State pembayaran ride — domain TERPISAH dari RideOrderStatus.
+enum RidePaymentState {
+  /// Pembayaran digital belum dikonfigurasi (fail-closed pada Stage 5.2).
+  NOT_CONFIGURED
+  /// Tunai diharapkan, belum ada rekonsiliasi.
+  CASH_EXPECTED
+  /// Driver melapor tunai diterima — BUKAN saldo digital.
+  CASH_REPORTED
+  FAILED
+}
+
+enum RideEventType {
+  QUOTE_CREATED
+  ORDER_CREATED
+  MATCHING_STARTED
+  DRIVER_ASSIGNED
+  DRIVER_REJECTED_OFFER
+  STATUS_CHANGED
+  CANCELLED
+  NO_DRIVER
+  EXPIRED
+  CASH_REPORTED
+  LOCATION_REJECTED
+}
+
+enum RideActorRole {
+  PASSENGER
+  DRIVER
+  SYSTEM
+  ADMIN
+}
+
+enum RideCancellationReason {
+  WAIT_TOO_LONG
+  DRIVER_NOT_MOVING
+  CHANGE_OF_PLAN
+  WRONG_PICKUP
+  FOUND_OTHER_TRANSPORT
+  PASSENGER_UNREACHABLE
+  VEHICLE_PROBLEM
+  SYSTEM_TIMEOUT
+  OTHER
+}
+
+/// Siklus pengajuan driver (Stage 5.14B). Terpisah dari RideDriverStatus:
+/// SUSPENDED BUKAN status aplikasi — itu milik RideDriverProfile.
+/// Open states: DRAFT, SUBMITTED, UNDER_REVIEW.
+/// Terminal states: APPROVED, REJECTED, WITHDRAWN.
+enum RideDriverApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+/// Satu siklus pengajuan driver. Histori dipertahankan: resubmission membuat
+/// baris baru, bukan mengubah baris lama.
+///
+/// Objek database berikut dibuat lewat raw SQL pada migration karena Prisma
+/// tidak dapat merepresentasikannya secara deklaratif — JANGAN dihapus saat
+/// mengedit model ini:
+///   - ride_driver_applications_one_open_per_user_key  (partial unique index:
+///     satu open application per user, WHERE status IN DRAFT/SUBMITTED/UNDER_REVIEW)
+///   - ride_driver_applications_cycle_number_check
+///   - ride_driver_applications_version_check
+///   - ride_driver_applications_approved_at_check
+///   - ride_driver_applications_rejected_at_check
+///   - ride_driver_applications_withdrawn_at_check
+///   - ride_driver_applications_terminal_exclusive_check
+///
+/// Stage 5.14B adalah schema foundation saja: belum ada service, endpoint,
+/// maupun penegakan transisi status. Validasi transisi menjadi tanggung jawab
+/// application service pada stage berikutnya.
+model RideDriverApplication {
+  id          String                      @id @default(uuid()) @db.Uuid
+  userId      String                      @map("user_id") @db.Uuid
+  /// Nomor siklus monotonik per user, dimulai dari 1.
+  cycleNumber Int                         @map("cycle_number")
+  status      RideDriverApplicationStatus @default(DRAFT)
+  /// Optimistic lock untuk service Stage 5.14C.
+  version     Int                         @default(0)
+
+  submittedAt        DateTime? @map("submitted_at")
+  approvedAt         DateTime? @map("approved_at")
+  rejectedAt         DateTime? @map("rejected_at")
+  withdrawnAt        DateTime? @map("withdrawn_at")
+  /// Kode alasan keputusan yang dibatasi panjangnya — BUKAN teks bebas dan
+  /// BUKAN pesan exception. Kosakata kode ditegakkan application service.
+  decisionReasonCode String?   @map("decision_reason_code") @db.VarChar(60)
+
+  // --- Review claim/lease (Stage R2.2) --------------------------------
+  /// Admin yang sedang memegang klaim review. Restrict, bukan Cascade:
+  /// menghapus akun reviewer tidak boleh menghapus jejak review.
+  claimedById       String?   @map("claimed_by_id") @db.Uuid
+  claimedAt         DateTime? @map("claimed_at")
+  /// Batas lease. SELALU dihitung database lewat now() + interval, tidak
+  /// pernah dari jam client maupun Node.
+  claimExpiresAt    DateTime? @map("claim_expires_at")
+  releasedAt        DateTime? @map("released_at")
+  /// Kode alasan pelepasan yang dibatasi, bukan teks bebas.
+  releaseReasonCode String?   @map("release_reason_code") @db.VarChar(60)
+  reviewedById      String?   @map("reviewed_by_id") @db.Uuid
+  reviewedAt        DateTime? @map("reviewed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// onDelete: Restrict (PostgreSQL ON DELETE RESTRICT) — DISENGAJA, jangan
+  /// diubah menjadi Cascade. Histori pengajuan driver harus bertahan melewati
+  /// penghapusan akun: keputusan retention dan legal hold bersifat fail-closed,
+  /// dan record tidak boleh hilang diam-diam. Konsekuensinya hard-delete User
+  /// yang memiliki application akan DITOLAK database. Itu perilaku yang
+  /// diinginkan; penghapusan akun di TapGo berupa AccountDeletionRequest,
+  /// bukan hard delete.
+  user       User  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  claimedBy  User? @relation("DriverApplicationClaimant", fields: [claimedById], references: [id], onDelete: Restrict)
+  reviewedBy User? @relation("DriverApplicationReviewer", fields: [reviewedById], references: [id], onDelete: Restrict)
+
+  @@unique([userId, cycleNumber])
+  @@index([status, createdAt])
+  /// Antrian review dan pemindaian lease kedaluwarsa.
+  @@index([status, claimExpiresAt])
+  @@index([claimedById, claimExpiresAt])
+  @@map("ride_driver_applications")
+}
+
+model RideDriverProfile {
+  id            String                 @id @default(uuid()) @db.Uuid
+  userId        String                 @unique @map("user_id") @db.Uuid
+  status        RideDriverStatus       @default(PENDING)
+  availability  RideDriverAvailability @default(OFFLINE)
+  ratingAverage Decimal                @default(5.0) @map("rating_average") @db.Decimal(3, 2)
+  ratingCount   Int                    @default(0) @map("rating_count")
+  lastSeenAt    DateTime?              @map("last_seen_at")
+  createdAt     DateTime               @default(now()) @map("created_at")
+  updatedAt     DateTime               @updatedAt @map("updated_at")
+
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicles  RideVehicle[]
+  orders    RideOrder[]          @relation("RideOrderDriver")
+  locations RideDriverLocation[]
+
+  @@index([status, availability])
+  @@map("ride_driver_profiles")
+}
+
+model RideVehicle {
+  id                 String                        @id @default(uuid()) @db.Uuid
+  driverProfileId    String                        @map("driver_profile_id") @db.Uuid
+  type               RideServiceType
+  /// SHA-256 nomor plat — plaintext TIDAK disimpan.
+  plateNumberHash    String                        @map("plate_number_hash") @db.VarChar(64)
+  /// Versi ter-mask untuk tampilan, mis. "A 1234 ***".
+  plateNumberMasked  String                        @map("plate_number_masked") @db.VarChar(32)
+  brand              String?                       @db.VarChar(60)
+  model              String?                       @db.VarChar(60)
+  color              String?                       @db.VarChar(30)
+  verificationStatus RideVehicleVerificationStatus @default(PENDING) @map("verification_status")
+  isActive           Boolean                       @default(false) @map("is_active")
+  createdAt          DateTime                      @default(now()) @map("created_at")
+  updatedAt          DateTime                      @updatedAt @map("updated_at")
+
+  driverProfile RideDriverProfile @relation(fields: [driverProfileId], references: [id], onDelete: Cascade)
+  orders        RideOrder[]       @relation("RideOrderVehicle")
+
+  @@unique([driverProfileId, plateNumberHash])
+  @@index([driverProfileId, isActive])
+  @@index([type, verificationStatus])
+  @@map("ride_vehicles")
+}
+
+model RideQuote {
+  id          String          @id @default(uuid()) @db.Uuid
+  userId      String          @map("user_id") @db.Uuid
+  serviceType RideServiceType @map("service_type")
+
+  pickupLat      Decimal @map("pickup_lat") @db.Decimal(10, 7)
+  pickupLng      Decimal @map("pickup_lng") @db.Decimal(10, 7)
+  pickupAddress  String  @map("pickup_address") @db.VarChar(255)
+  dropoffLat     Decimal @map("dropoff_lat") @db.Decimal(10, 7)
+  dropoffLng     Decimal @map("dropoff_lng") @db.Decimal(10, 7)
+  dropoffAddress String  @map("dropoff_address") @db.VarChar(255)
+
+  distanceMeters  Int @map("distance_meters")
+  durationSeconds Int @map("duration_seconds")
+  etaSeconds      Int @map("eta_seconds")
+
+  // Komponen tarif — integer rupiah penuh.
+  baseFare     Int @map("base_fare")
+  distanceFare Int @map("distance_fare")
+  serviceFee   Int @map("service_fee")
+  subtotalFare Int @map("subtotal_fare")
+  totalFare    Int @map("total_fare")
+
+  fareRuleVersion String   @map("fare_rule_version") @db.VarChar(60)
+  roundingRule    String   @map("rounding_rule") @db.VarChar(60)
+  distanceSource  String   @map("distance_source") @db.VarChar(60)
+  quoteVersion    Int      @default(1) @map("quote_version")
+  expiresAt       DateTime @map("expires_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order RideOrder?
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("ride_quotes")
+}
+
+model RideOrder {
+  id              String          @id @default(uuid()) @db.Uuid
+  /// Referensi publik yang dipakai di API/UI (bukan UUID internal).
+  publicReference String          @unique @map("public_reference") @db.VarChar(24)
+  passengerId     String          @map("passenger_id") @db.Uuid
+  driverProfileId String?         @map("driver_profile_id") @db.Uuid
+  vehicleId       String?         @map("vehicle_id") @db.Uuid
+  /// Satu quote hanya boleh menghasilkan satu order (anti reuse).
+  quoteId         String          @unique @map("quote_id") @db.Uuid
+  serviceType     RideServiceType @map("service_type")
+  status          RideOrderStatus @default(CREATED)
+
+  // Snapshot lokasi (immutable setelah order dibuat).
+  pickupLat      Decimal @map("pickup_lat") @db.Decimal(10, 7)
+  pickupLng      Decimal @map("pickup_lng") @db.Decimal(10, 7)
+  pickupAddress  String  @map("pickup_address") @db.VarChar(255)
+  dropoffLat     Decimal @map("dropoff_lat") @db.Decimal(10, 7)
+  dropoffLng     Decimal @map("dropoff_lng") @db.Decimal(10, 7)
+  dropoffAddress String  @map("dropoff_address") @db.VarChar(255)
+
+  // Snapshot tarif authoritative (integer rupiah) — dikunci dari quote.
+  distanceMeters  Int    @map("distance_meters")
+  durationSeconds Int    @map("duration_seconds")
+  baseFare        Int    @map("base_fare")
+  distanceFare    Int    @map("distance_fare")
+  serviceFee      Int    @map("service_fee")
+  subtotalFare    Int    @map("subtotal_fare")
+  totalFare       Int    @map("total_fare")
+  fareRuleVersion String @map("fare_rule_version") @db.VarChar(60)
+
+  paymentMethod RidePaymentMethod @default(CASH) @map("payment_method")
+  paymentState  RidePaymentState  @default(CASH_EXPECTED) @map("payment_state")
+
+  // Metadata pembatalan.
+  cancelledByUserId  String?                 @map("cancelled_by_user_id") @db.Uuid
+  cancelledByRole    RideActorRole?          @map("cancelled_by_role")
+  cancellationReason RideCancellationReason? @map("cancellation_reason")
+  cancellationNote   String?                 @map("cancellation_note") @db.VarChar(500)
+  cancellationFee    Int?                    @map("cancellation_fee")
+  cancellationPolicy String?                 @map("cancellation_policy") @db.VarChar(60)
+  cancelledAt        DateTime?               @map("cancelled_at")
+
+  assignedAt  DateTime? @map("assigned_at")
+  arrivedAt   DateTime? @map("arrived_at")
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  passenger     User                 @relation("RideOrderPassenger", fields: [passengerId], references: [id], onDelete: Cascade)
+  driverProfile RideDriverProfile?   @relation("RideOrderDriver", fields: [driverProfileId], references: [id])
+  vehicle       RideVehicle?         @relation("RideOrderVehicle", fields: [vehicleId], references: [id])
+  quote         RideQuote            @relation(fields: [quoteId], references: [id])
+  events        RideEvent[]
+  locations     RideDriverLocation[]
+
+  @@index([passengerId, createdAt])
+  @@index([driverProfileId, createdAt])
+  @@index([status, serviceType])
+  @@map("ride_orders")
+}
+
+/// Catatan audit immutable untuk setiap transisi material.
+model RideEvent {
+  id             String           @id @default(uuid()) @db.Uuid
+  rideOrderId    String           @map("ride_order_id") @db.Uuid
+  type           RideEventType
+  actorUserId    String?          @map("actor_user_id") @db.Uuid
+  actorRole      RideActorRole    @map("actor_role")
+  previousStatus RideOrderStatus? @map("previous_status")
+  newStatus      RideOrderStatus? @map("new_status")
+  /// Metadata yang sudah disanitasi (tanpa koordinat presisi / PII).
+  metadata       Json?
+  /// Identitas idempotensi event (mis. "<orderId>:<type>:<status>").
+  eventKey       String           @unique @map("event_key") @db.VarChar(160)
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  rideOrder RideOrder @relation(fields: [rideOrderId], references: [id], onDelete: Cascade)
+  actor     User?     @relation("RideEventActor", fields: [actorUserId], references: [id])
+
+  @@index([rideOrderId, createdAt])
+  @@index([type, createdAt])
+  @@map("ride_events")
+}
+
+model RideDriverLocation {
+  id              String   @id @default(uuid()) @db.Uuid
+  driverProfileId String   @map("driver_profile_id") @db.Uuid
+  rideOrderId     String?  @map("ride_order_id") @db.Uuid
+  lat             Decimal  @db.Decimal(10, 7)
+  lng             Decimal  @db.Decimal(10, 7)
+  accuracyMeters  Int      @map("accuracy_meters")
+  /// Nomor urut monotonik per driver untuk menolak update mundur.
+  sequence        Int      @default(0)
+  capturedAt      DateTime @map("captured_at")
+  receivedAt      DateTime @default(now()) @map("received_at")
+
+  driverProfile RideDriverProfile @relation(fields: [driverProfileId], references: [id], onDelete: Cascade)
+  rideOrder     RideOrder?        @relation(fields: [rideOrderId], references: [id], onDelete: SetNull)
+
+  @@index([driverProfileId, capturedAt])
+  @@index([rideOrderId, capturedAt])
+  @@map("ride_driver_locations")
+}
+
+/// Idempotency untuk operasi mutasi ride (quote/order/accept/complete).
+model RideIdempotencyRecord {
+  id             String   @id @default(uuid()) @db.Uuid
+  scope          String   @db.VarChar(60)
+  idempotencyKey String   @map("idempotency_key") @db.VarChar(120)
+  userId         String   @map("user_id") @db.Uuid
+  requestHash    String   @map("request_hash") @db.VarChar(64)
+  resourceId     String?  @map("resource_id") @db.VarChar(64)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([scope, userId, idempotencyKey])
+  @@index([createdAt])
+  @@map("ride_idempotency_records")
 }

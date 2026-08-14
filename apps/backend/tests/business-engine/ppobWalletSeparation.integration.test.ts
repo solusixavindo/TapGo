@@ -7,6 +7,7 @@ import {
   prisma,
   registerBasicUser,
   runIntegration,
+  setRegistrationQuotaGranted,
   setupReferralWalletIntegration
 } from "../helpers/referralWalletHarness.js";
 
@@ -35,16 +36,10 @@ describe.skipIf(!runIntegration)("P1 PPOB and cash wallet separation", () => {
   });
 
   it("does not credit Basic PPOB after the first 1000 users", async () => {
-    const basic = await prisma.membership.findUniqueOrThrow({ where: { tier: "BASIC" } });
-    await prisma.user.createMany({
-      data: Array.from({ length: 1000 }, (_, index) => ({
-        fullName: `Existing User ${index}`,
-        phone: `+628990${String(index).padStart(6, "0")}`,
-        referralCode: `EXIST${String(index).padStart(6, "0")}`,
-        role: "USER",
-        membershipId: basic.id
-      }))
-    });
+    // Kuota benefit Basic sudah habis (1.000 penerima). Mekanisme atomik
+    // memakai registration_quota.granted, sehingga registrasi berikutnya
+    // (user ke-1.001) tidak lagi memperoleh benefit Rp5.000.
+    await setRegistrationQuotaGranted(1000);
 
     const user1001 = await registerUser("PPOB-1001");
     const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: user1001.id } });

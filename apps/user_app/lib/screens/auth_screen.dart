@@ -1,5 +1,308 @@
 part of '../main.dart';
 
+class TapGoRuntimeActivationResult {
+  const TapGoRuntimeActivationResult({required this.authenticated});
+
+  final bool authenticated;
+}
+
+class TapGoSessionPersistenceResult {
+  const TapGoSessionPersistenceResult({
+    required this.success,
+    required this.failedSteps,
+  });
+
+  final bool success;
+  final List<String> failedSteps;
+}
+
+class TapGoSessionPersistStep {
+  const TapGoSessionPersistStep({required this.name, required this.persist});
+
+  final String name;
+  final Future<bool> Function(DemoClientSession session) persist;
+}
+
+class TapGoReferralClaimResult {
+  const TapGoReferralClaimResult({required this.success, this.warningMessage});
+
+  final bool success;
+  final String? warningMessage;
+}
+
+class TapGoSingleFlightGuard {
+  bool _isRunning = false;
+
+  bool get isRunning => _isRunning;
+
+  Future<T?> run<T>(Future<T> Function() action) async {
+    if (_isRunning) {
+      return null;
+    }
+    _isRunning = true;
+    try {
+      return await action();
+    } finally {
+      _isRunning = false;
+    }
+  }
+}
+
+final tapGoPhoneInputFormatters = <TextInputFormatter>[
+  FilteringTextInputFormatter.allow(RegExp(r'[0-9+\s-]')),
+];
+
+final tapGoDigitsOnlyInputFormatters = <TextInputFormatter>[
+  FilteringTextInputFormatter.digitsOnly,
+];
+
+final tapGoNikInputFormatters = <TextInputFormatter>[
+  FilteringTextInputFormatter.digitsOnly,
+  LengthLimitingTextInputFormatter(16),
+];
+
+final tapGoRupiahInputFormatters = <TextInputFormatter>[
+  TapGoRupiahInputFormatter(),
+];
+
+String tapGoDigitsOnly(String? value) {
+  return (value ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+}
+
+String tapGoSanitizePhoneInput(String? value) {
+  final clean = (value ?? '').trim();
+  final hasLeadingPlus = clean.startsWith('+');
+  final digits = tapGoDigitsOnly(clean);
+  return hasLeadingPlus ? '+$digits' : digits;
+}
+
+bool tapGoIsValidIndonesianPhone(String? value) {
+  final phone = tapGoSanitizePhoneInput(value);
+  final digits = tapGoDigitsOnly(phone);
+  if (digits.length < 10) {
+    return false;
+  }
+  if (phone.startsWith('+')) {
+    return phone.startsWith('+628');
+  }
+  return phone.startsWith('08') || phone.startsWith('628');
+}
+
+String? tapGoPhoneValidatorMessage(String? value) {
+  final phone = tapGoSanitizePhoneInput(value);
+  if (phone.isEmpty) {
+    return 'Nomor HP wajib diisi';
+  }
+  return tapGoIsValidIndonesianPhone(phone) ? null : 'Nomor HP tidak valid';
+}
+
+String? tapGoNikValidatorMessage(String? value) {
+  final digits = tapGoDigitsOnly(value);
+  return digits.length == 16 ? null : 'NIK harus terdiri dari 16 digit.';
+}
+
+String? tapGoBankAccountValidatorMessage(String? value) {
+  final digits = tapGoDigitsOnly(value);
+  return digits.length >= 6 ? null : 'Nomor rekening tidak valid';
+}
+
+int tapGoCanonicalRupiahValue(String? value) {
+  final digits = tapGoDigitsOnly(value);
+  if (digits.isEmpty) {
+    return 0;
+  }
+  return int.tryParse(digits) ?? 0;
+}
+
+String tapGoFormatRupiahInput(String? value) {
+  final digitsOnly = tapGoDigitsOnly(value);
+  if (digitsOnly.isEmpty) {
+    return '';
+  }
+  final amount = tapGoCanonicalRupiahValue(value);
+  if (amount == 0) {
+    return '0';
+  }
+  final digits = amount.toString();
+  final buffer = StringBuffer();
+  for (var index = 0; index < digits.length; index++) {
+    final remaining = digits.length - index;
+    buffer.write(digits[index]);
+    if (remaining > 1 && remaining % 3 == 1) {
+      buffer.write('.');
+    }
+  }
+  return buffer.toString();
+}
+
+int tapGoRupiahSelectionOffset(String formatted, int digitsBeforeCursor) {
+  if (digitsBeforeCursor <= 0) {
+    return 0;
+  }
+  var seenDigits = 0;
+  for (var index = 0; index < formatted.length; index++) {
+    if (_isAsciiDigit(formatted.codeUnitAt(index))) {
+      seenDigits++;
+    }
+    if (seenDigits >= digitsBeforeCursor) {
+      return index + 1;
+    }
+  }
+  return formatted.length;
+}
+
+bool _isAsciiDigit(int codeUnit) => codeUnit >= 48 && codeUnit <= 57;
+
+class TapGoRupiahInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final formatted = tapGoFormatRupiahInput(newValue.text);
+    final cursorEnd = newValue.selection.extentOffset.clamp(
+      0,
+      newValue.text.length,
+    );
+    final digitsBeforeCursor = tapGoDigitsOnly(
+      newValue.text.substring(0, cursorEnd),
+    ).length;
+    final selectionOffset = tapGoRupiahSelectionOffset(
+      formatted,
+      digitsBeforeCursor,
+    );
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: selectionOffset),
+    );
+  }
+}
+
+class _InvalidAuthResponseException implements Exception {
+  const _InvalidAuthResponseException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+@visibleForTesting
+TapGoRuntimeActivationResult tapGoActivateAuthenticatedRuntimeSession({
+  required DemoClientSession session,
+  required void Function(DemoClientSession session) setSession,
+  required void Function(bool authenticated) setAuthenticated,
+  VoidCallback? afterAuthenticated,
+}) {
+  setSession(session);
+  setAuthenticated(true);
+  afterAuthenticated?.call();
+  return const TapGoRuntimeActivationResult(authenticated: true);
+}
+
+@visibleForTesting
+Future<TapGoSessionPersistenceResult>
+    tapGoPersistAuthenticatedSessionBestEffort({
+  required DemoClientSession session,
+  required List<TapGoSessionPersistStep> steps,
+  Duration stepTimeout = const Duration(seconds: 1),
+}) async {
+  final failedSteps = <String>[];
+  for (final step in steps) {
+    late final Future<bool> persistFuture;
+    try {
+      persistFuture = step.persist(session);
+    } catch (error) {
+      _tapGoDebugLog('[TapGo Auth] local_persistence ${step.name}: $error');
+      failedSteps.add(step.name);
+      continue;
+    }
+    try {
+      final success = await persistFuture.timeout(
+        stepTimeout,
+        onTimeout: () => false,
+      );
+      if (!success) {
+        failedSteps.add(step.name);
+      }
+    } catch (error) {
+      _tapGoDebugLog('[TapGo Auth] local_persistence ${step.name}: $error');
+      failedSteps.add(step.name);
+    }
+  }
+  return TapGoSessionPersistenceResult(
+    success: failedSteps.isEmpty,
+    failedSteps: List.unmodifiable(failedSteps),
+  );
+}
+
+@visibleForTesting
+Future<TapGoReferralClaimResult> tapGoClaimReferralBestEffort({
+  required String referralCode,
+  required Future<Object?> Function(String referralCode) claimReferral,
+}) async {
+  if (referralCode.trim().isEmpty) {
+    return const TapGoReferralClaimResult(success: true);
+  }
+  try {
+    await claimReferral(referralCode);
+    _tapGoDebugLog('[TapGo Auth] referral_claim success.');
+    return const TapGoReferralClaimResult(success: true);
+  } on DioException catch (error) {
+    final data = _authResponseDataMap(error.response?.data);
+    final code = data?['code']?.toString();
+    if (code == 'REFERRAL_ALREADY_CLAIMED') {
+      _tapGoDebugLog('[TapGo Auth] referral already persisted by backend.');
+      return const TapGoReferralClaimResult(success: true);
+    }
+    _tapGoDebugLog('[TapGo Auth] referral_claim skipped: ${error.message}');
+    return const TapGoReferralClaimResult(
+      success: false,
+      warningMessage:
+          'Registrasi berhasil. Kode referral belum dapat diproses saat ini.',
+    );
+  } catch (error) {
+    _tapGoDebugLog('[TapGo Auth] referral_claim skipped: $error');
+    return const TapGoReferralClaimResult(
+      success: false,
+      warningMessage:
+          'Registrasi berhasil. Kode referral belum dapat diproses saat ini.',
+    );
+  }
+}
+
+Map<String, dynamic>? _authResponseDataMap(Object? data) {
+  if (data is Map<String, dynamic>) {
+    return data;
+  }
+  if (data is Map) {
+    return data.cast<String, dynamic>();
+  }
+  if (data is String && data.trim().isNotEmpty) {
+    try {
+      final decoded = jsonDecode(data);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      if (decoded is Map) {
+        return decoded.cast<String, dynamic>();
+      }
+    } catch (_) {
+      return {'message': data};
+    }
+  }
+  return null;
+}
+
+void _validateAuthResult(_TapGoAuthResult authResult) {
+  if ((authResult.accessToken ?? '').isEmpty) {
+    throw const _InvalidAuthResponseException('Missing access token.');
+  }
+  if (authResult.user.id.isEmpty) {
+    throw const _InvalidAuthResponseException('Missing user id.');
+  }
+}
+
 class AuthScreen extends ConsumerStatefulWidget {
   const AuthScreen({super.key});
 
@@ -13,41 +316,53 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _referralController = TextEditingController();
+  final _nameFocusNode = FocusNode();
+  final _phoneFocusNode = FocusNode();
+  final _passwordFocusNode = FocusNode();
+  final _referralFocusNode = FocusNode();
   bool _isRegister = false;
   bool _isSubmitting = false;
   int _logoTapCount = 0;
 
   Future<void> _continueToDashboard() async {
+    if (_isSubmitting) {
+      return;
+    }
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
     setState(() => _isSubmitting = true);
+    final authMode = _isRegister ? 'register' : 'login';
     try {
+      _tapGoDebugLog('[TapGo Auth] auth_request:$authMode');
+      final phone = tapGoSanitizePhoneInput(_phoneController.text);
       final authResult = _isRegister
           ? await _apiClient.register(
               name: _nameController.text.trim(),
-              phone: _phoneController.text.trim(),
+              phone: phone,
               password: _passwordController.text,
-              referralCode: _referralController.text.trim(),
+              referralCode: tapGoIsDirectDistribution
+                  ? _referralController.text.trim()
+                  : null,
             )
           : await _apiClient.login(
-              phone: _phoneController.text.trim(),
+              phone: phone,
               password: _passwordController.text,
             );
+      _tapGoDebugLog('[TapGo Auth] auth_response_mapping:$authMode');
+      _validateAuthResult(authResult);
       _apiClient.setAccessToken(authResult.accessToken);
-      final referralCode = _referralController.text.trim();
+      final referralCode =
+          tapGoIsDirectDistribution ? _referralController.text.trim() : '';
       if (_isRegister &&
           referralCode.isNotEmpty &&
           (authResult.accessToken ?? '').isNotEmpty) {
-        try {
-          await _apiClient.claimReferral(referralCode);
-        } on DioException catch (error) {
-          final code =
-              _dioResponseDataMap(error.response?.data)?['code']?.toString();
-          if (code != 'REFERRAL_ALREADY_CLAIMED') {
-            rethrow;
-          }
-          debugPrint('[TapGo Auth] referral already persisted by backend.');
+        final referralResult = await tapGoClaimReferralBestEffort(
+          referralCode: referralCode,
+          claimReferral: _apiClient.claimReferral,
+        );
+        if (!referralResult.success && referralResult.warningMessage != null) {
+          _showAuthWarning(referralResult.warningMessage!);
         }
       }
       var session = _sessionFromAuthUser(
@@ -57,26 +372,46 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       );
       if (authResult.user.name == 'Member TapGo' &&
           (authResult.accessToken ?? '').isNotEmpty) {
-        final user = await _apiClient.me();
-        session = _sessionFromAuthUser(
-          user,
-          accessToken: authResult.accessToken,
-          refreshToken: authResult.refreshToken,
-          fallback: session,
-        );
+        try {
+          final user = await _apiClient.me();
+          session = _sessionFromAuthUser(
+            user,
+            accessToken: authResult.accessToken,
+            refreshToken: authResult.refreshToken,
+            fallback: session,
+          );
+        } catch (error) {
+          _tapGoDebugLog('[TapGo Auth] profile refresh skipped: $error');
+        }
       }
-      session = await _persistentStore.restoreMembershipSnapshot(session);
-      debugPrint('[TapGo Auth] active user name: ${session.userName}');
-      await _saveAuthenticatedSession(session);
+      try {
+        session = await _persistentStore
+            .restoreMembershipSnapshot(session)
+            .timeout(const Duration(seconds: 1), onTimeout: () => session);
+      } catch (error) {
+        _tapGoDebugLog('[TapGo Auth] membership snapshot skipped: $error');
+      }
+      _tapGoDebugLog('[TapGo Auth] in_memory_session:$authMode');
+      _activateAuthenticatedSession(session);
     } on DioException catch (error) {
-      debugPrint('[TapGo Auth] backend auth failed: ${error.message}');
-      debugPrint('[TapGo Auth] error status: ${error.response?.statusCode}');
-      debugPrint('[TapGo Auth] error body: ${error.response?.data}');
+      _tapGoDebugLog('[TapGo Auth] backend auth failed: ${error.message}');
+      _tapGoDebugLog(
+        '[TapGo Auth] error status: ${error.response?.statusCode}',
+      );
+      _tapGoDebugLog('[TapGo Auth] error body: <redacted>');
       _showAuthError(_authErrorMessage(error, isRegister: _isRegister));
-    } catch (error) {
-      debugPrint('[TapGo Auth] auth failed: $error');
+    } on _InvalidAuthResponseException catch (error) {
+      _tapGoDebugLog('[TapGo Auth] invalid auth response: ${error.message}');
+      _apiClient.setAccessToken(null);
       _showAuthError(
-          'Login berhasil, tetapi session lokal gagal disimpan. Coba ulangi.');
+        'Autentikasi berhasil, tetapi respons sesi tidak valid. Silakan coba lagi.',
+      );
+    } catch (error) {
+      _tapGoDebugLog('[TapGo Auth] unexpected post-auth failure: $error');
+      _apiClient.setAccessToken(null);
+      _showAuthError(
+        'Terjadi kendala saat menyiapkan sesi. Silakan coba lagi.',
+      );
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -84,17 +419,94 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
-  Future<void> _saveAuthenticatedSession(DemoClientSession session) async {
-    ref.read(_demoSessionProvider.notifier).state = session;
-    await _persistentStore.saveSession(session);
-    await _persistentStore.saveMembershipSnapshot(session);
-    await _persistentStore.saveTokens(
-      accessToken: session.accessToken,
-      refreshToken: session.refreshToken,
+  void _activateAuthenticatedSession(DemoClientSession session) {
+    tapGoActivateAuthenticatedRuntimeSession(
+      session: session,
+      setSession: (value) =>
+          ref.read(_demoSessionProvider.notifier).state = value,
+      setAuthenticated: (value) =>
+          ref.read(_isAuthenticatedProvider.notifier).state = value,
+      afterAuthenticated: _openAuthenticatedDashboard,
     );
-    await _persistentStore.saveRegisteredUser(session);
-    await _persistentStore.saveAuth(true);
-    ref.read(_isAuthenticatedProvider.notifier).state = true;
+    unawaited(_persistAuthenticatedSession(session));
+  }
+
+  void _openAuthenticatedDashboard() {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        return;
+      }
+      await _runVerificationGateIfNeeded();
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+        _tapGoPageRoute((_) => _roleDashboardForContext(context)),
+        (_) => false,
+      );
+    });
+  }
+
+  /// Menampilkan gate verifikasi bila nomor telepon akun belum terbukti.
+  ///
+  /// Akun legacy dari pengujian sebelumnya masuk ke sini karena migration
+  /// sengaja tidak melakukan backfill status verifikasi.
+  ///
+  /// Kegagalan pemeriksaan status TIDAK memblokir masuk ke dashboard:
+  /// backend tetap menjadi penjaga sebenarnya untuk setiap aksi, dan
+  /// mengunci pengguna di luar aplikasi karena satu permintaan status yang
+  /// gagal akan lebih merugikan daripada melewatkan gate satu kali.
+  Future<void> _runVerificationGateIfNeeded() async {
+    try {
+      final status = await _apiClient.verificationStatus();
+      if (!mounted || status['requiresVerification'] != true) {
+        return;
+      }
+      await Navigator.of(context).push(
+        MaterialPageRoute<bool>(
+          builder: (_) => VerificationGateScreen(initialStatus: status),
+        ),
+      );
+    } catch (_) {
+      // Sengaja diabaikan: lihat doc-comment di atas.
+    }
+  }
+
+  Future<void> _persistAuthenticatedSession(DemoClientSession session) async {
+    final result = await tapGoPersistAuthenticatedSessionBestEffort(
+      session: session,
+      steps: [
+        TapGoSessionPersistStep(
+          name: 'saveSession',
+          persist: (value) => _persistentStore.saveSession(value),
+        ),
+        TapGoSessionPersistStep(
+          name: 'saveMembershipSnapshot',
+          persist: (value) => _persistentStore.saveMembershipSnapshot(value),
+        ),
+        TapGoSessionPersistStep(
+          name: 'saveTokens',
+          persist: (value) => _persistentStore.saveTokens(
+            accessToken: value.accessToken,
+            refreshToken: value.refreshToken,
+          ),
+        ),
+        TapGoSessionPersistStep(
+          name: 'saveRegisteredUser',
+          persist: (value) => _persistentStore.saveRegisteredUser(value),
+        ),
+        TapGoSessionPersistStep(
+          name: 'saveAuth',
+          persist: (_) => _persistentStore.saveAuth(true),
+        ),
+      ],
+    );
+    if (!result.success) {
+      _tapGoDebugLog(
+        '[TapGo Auth] local_persistence warning: ${result.failedSteps.join(', ')}',
+      );
+      _showAuthWarning(tapGoLocalSessionPersistenceWarning);
+    }
   }
 
   bool _isNetworkFailure(DioException error) {
@@ -124,7 +536,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       return 'Kode referral tidak bisa memakai kode sendiri.';
     }
     if (_isNetworkFailure(error)) {
-      return 'Server TapGo belum dapat dihubungi. Pastikan server UAT aktif.';
+      return 'Server TapGo belum dapat dihubungi. Silakan coba beberapa saat lagi.';
     }
     return message ??
         (isRegister
@@ -133,35 +545,29 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   }
 
   Map<String, dynamic>? _dioResponseDataMap(Object? data) {
-    if (data is Map<String, dynamic>) {
-      return data;
-    }
-    if (data is Map) {
-      return data.cast<String, dynamic>();
-    }
-    if (data is String && data.trim().isNotEmpty) {
-      try {
-        final decoded = jsonDecode(data);
-        if (decoded is Map<String, dynamic>) {
-          return decoded;
-        }
-        if (decoded is Map) {
-          return decoded.cast<String, dynamic>();
-        }
-      } catch (_) {
-        return {'message': data};
-      }
-    }
-    return null;
+    return _authResponseDataMap(data);
   }
 
   void _showAuthError(String message) {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    _TapGoSnackbar.error(context, message);
+  }
+
+  void _showAuthWarning(String message) {
+    if (mounted) {
+      _TapGoSnackbar.warning(context, message);
+      return;
+    }
+    final messenger = _tapGoScaffoldMessengerKey.currentState;
+    if (messenger != null) {
+      _TapGoSnackbar.showWithMessenger(
+        messenger,
+        message,
+        type: _TapGoFeedbackType.warning,
+      );
+    }
   }
 
   void _handleLogoTap() {
@@ -180,11 +586,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     if (!mounted) {
       return;
     }
-    await showDialog<void>(
+    await _showTapGoDialog<void>(
       context: context,
-      builder: (_) => _ServerConfigurationDialog(
-        initialUrl: saved ?? _apiClient.rootUrl,
-      ),
+      builder: (_) =>
+          _ServerConfigurationDialog(initialUrl: saved ?? _apiClient.rootUrl),
     );
   }
 
@@ -194,11 +599,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     _phoneController.dispose();
     _passwordController.dispose();
     _referralController.dispose();
+    _nameFocusNode.dispose();
+    _phoneFocusNode.dispose();
+    _passwordFocusNode.dispose();
+    _referralFocusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -222,11 +632,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 ),
               ),
               const SizedBox(height: 22),
-              const Text(
+              Text(
                 'TapGo Lion',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Color(0xFF0A2A43),
+                  color: colorScheme.onSurface,
                   fontSize: 30,
                   fontWeight: FontWeight.w900,
                 ),
@@ -237,13 +647,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     ? 'Daftar dan mulai pesan layanan TapGo.'
                     : 'Masuk untuk lanjut ke dashboard layanan.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade700, fontSize: 15),
+                style: TextStyle(
+                  color: colorScheme.onSurfaceVariant,
+                  fontSize: 15,
+                ),
               ),
               const SizedBox(height: 28),
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: colorScheme.surface,
                   borderRadius: BorderRadius.circular(18),
                   boxShadow: const [
                     BoxShadow(
@@ -276,37 +689,62 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     if (_isRegister) ...[
                       _InputField(
                         controller: _nameController,
+                        focusNode: _nameFocusNode,
                         icon: Icons.person_rounded,
                         label: 'Nama lengkap',
                         hint: 'Nama kamu',
                         validator: _nameValidator,
+                        textInputAction: TextInputAction.next,
+                        onFieldSubmitted: (_) => _phoneFocusNode.requestFocus(),
                       ),
                       const SizedBox(height: 12),
                     ],
                     _InputField(
                       controller: _phoneController,
+                      focusNode: _phoneFocusNode,
                       icon: Icons.phone_rounded,
                       label: 'Nomor HP',
                       hint: '+62 812 0000 0000',
                       keyboardType: TextInputType.phone,
+                      inputFormatters: tapGoPhoneInputFormatters,
+                      autofillHints: const [AutofillHints.telephoneNumber],
                       validator: _phoneValidator,
+                      textInputAction: TextInputAction.next,
+                      onFieldSubmitted: (_) =>
+                          _passwordFocusNode.requestFocus(),
                     ),
                     const SizedBox(height: 12),
                     _InputField(
                       controller: _passwordController,
+                      focusNode: _passwordFocusNode,
                       icon: Icons.lock_rounded,
                       label: 'Password',
                       hint: 'Minimal 8 karakter',
                       obscureText: true,
                       validator: _passwordValidator,
+                      textInputAction: _isRegister
+                          ? (tapGoIsDirectDistribution
+                              ? TextInputAction.next
+                              : TextInputAction.done)
+                          : TextInputAction.done,
+                      onFieldSubmitted: (_) {
+                        if (_isRegister && tapGoIsDirectDistribution) {
+                          _referralFocusNode.requestFocus();
+                        } else {
+                          _continueToDashboard();
+                        }
+                      },
                     ),
-                    if (_isRegister) ...[
+                    if (_isRegister && tapGoIsDirectDistribution) ...[
                       const SizedBox(height: 12),
                       _InputField(
                         controller: _referralController,
+                        focusNode: _referralFocusNode,
                         icon: Icons.badge_rounded,
                         label: 'Kode referral optional',
                         hint: 'TAPGO123',
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) => _continueToDashboard(),
                       ),
                     ],
                   ],
@@ -324,14 +762,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   ),
                 ),
                 child: _isSubmitting
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.4,
-                          color: Colors.white,
-                        ),
-                      )
+                    ? const _TapGoLoading(color: Colors.white)
                     : Text(
                         _isRegister ? 'Register & Masuk' : 'Login',
                         style: const TextStyle(
@@ -340,10 +771,28 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                         ),
                       ),
               ),
+              // Hanya muncul pada mode Login. Dinonaktifkan selama submit
+              // berjalan agar tidak ada navigasi di tengah permintaan.
+              if (!_isRegister) ...[
+                const SizedBox(height: 4),
+                TextButton(
+                  onPressed: _isSubmitting ? null : _openPasswordRecovery,
+                  child: const Text(
+                    'Lupa Password?',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
       ),
+    );
+  }
+
+  void _openPasswordRecovery() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const PasswordRecoveryScreen()),
     );
   }
 
@@ -355,16 +804,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   }
 
   String? _phoneValidator(String? value) {
-    final phone = value?.trim() ?? '';
-    if (phone.isEmpty) {
-      return 'Nomor HP wajib diisi';
-    }
-    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.length < 10 ||
-        !(phone.startsWith('08') || phone.startsWith('+62'))) {
-      return 'Nomor HP tidak valid';
-    }
-    return null;
+    return tapGoPhoneValidatorMessage(value);
   }
 
   String? _passwordValidator(String? value) {
@@ -412,7 +852,7 @@ class _ServerConfigurationDialogState
     if (!_isValidServerUrl(value)) {
       setState(() {
         _isSuccess = false;
-        _statusMessage = 'API Base URL tidak valid.';
+        _statusMessage = 'Alamat server TapGo tidak valid.';
       });
       return;
     }
@@ -427,9 +867,7 @@ class _ServerConfigurationDialogState
       _statusMessage = 'Server URL berhasil disimpan';
       _urlController.text = rootUrl;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Server URL berhasil disimpan')),
-    );
+    _TapGoSnackbar.success(context, 'Server URL berhasil disimpan');
   }
 
   Future<void> _resetDefault() async {
@@ -441,7 +879,7 @@ class _ServerConfigurationDialogState
     }
     setState(() {
       _isSuccess = true;
-      _statusMessage = 'Server configuration dikembalikan ke default.';
+      _statusMessage = 'Pengaturan server dikembalikan ke default.';
       _urlController.text = rootUrl;
     });
   }
@@ -451,7 +889,7 @@ class _ServerConfigurationDialogState
     if (!_isValidServerUrl(value)) {
       setState(() {
         _isSuccess = false;
-        _statusMessage = 'API Base URL tidak valid.';
+        _statusMessage = 'Alamat server TapGo tidak valid.';
       });
       return;
     }
@@ -467,7 +905,7 @@ class _ServerConfigurationDialogState
       setState(() {
         _isSuccess = true;
         _statusMessage =
-            'Connection OK\nURL: ${result.url}\nStatus: ${result.statusCode}\nMessage: ${result.message}';
+            'Koneksi berhasil\nURL: ${result.url}\nStatus: ${result.statusCode}\nPesan: ${result.message}';
       });
     } on DioException catch (error) {
       if (!mounted) {
@@ -512,7 +950,7 @@ class _ServerConfigurationDialogState
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Server Configuration'),
+      title: const Text('Pengaturan Server TapGo'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -522,14 +960,14 @@ class _ServerConfigurationDialogState
               controller: _urlController,
               keyboardType: TextInputType.url,
               decoration: const InputDecoration(
-                labelText: 'API Base URL',
+                labelText: 'Alamat Server TapGo',
                 hintText: 'https://api.tapgolion.id',
                 border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 10),
             Text(
-              'Boleh isi root URL tunnel atau URL lengkap sampai /api/v1.',
+              'Masukkan alamat server resmi TapGo.',
               style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
             ),
             if (_statusMessage != null) ...[
@@ -557,11 +995,7 @@ class _ServerConfigurationDialogState
         OutlinedButton(
           onPressed: _isTesting ? null : _testConnection,
           child: _isTesting
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const _TapGoLoading(size: 16, strokeWidth: 2)
               : const Text('Test Connection'),
         ),
         FilledButton(
@@ -586,11 +1020,13 @@ class _AuthModeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
+          duration: _TapGoMotion.duration(context, _TapGoMotion.quick),
+          curve: _TapGoMotion.standardCurve,
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(vertical: 13),
           decoration: BoxDecoration(
@@ -600,7 +1036,7 @@ class _AuthModeButton extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color: selected ? Colors.white : const Color(0xFF536273),
+              color: selected ? Colors.white : colorScheme.onSurfaceVariant,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -622,14 +1058,24 @@ class _InputField extends StatelessWidget {
     this.suffixIcon,
     this.readOnly = false,
     this.onTap,
+    this.focusNode,
+    this.textInputAction,
+    this.onFieldSubmitted,
+    this.inputFormatters,
+    this.autofillHints,
   });
 
   final TextEditingController? controller;
+  final FocusNode? focusNode;
   final IconData icon;
   final String label;
   final String hint;
   final bool obscureText;
   final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onFieldSubmitted;
+  final List<TextInputFormatter>? inputFormatters;
+  final Iterable<String>? autofillHints;
   final String? Function(String?)? validator;
   final Widget? suffixIcon;
   final bool readOnly;
@@ -637,15 +1083,21 @@ class _InputField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return TextFormField(
       controller: controller,
+      focusNode: focusNode,
       obscureText: obscureText,
       keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      onFieldSubmitted: onFieldSubmitted,
+      inputFormatters: inputFormatters,
+      autofillHints: autofillHints,
       validator: validator,
       readOnly: readOnly,
       onTap: onTap,
-      style: const TextStyle(
-        color: Color(0xFF172033),
+      style: TextStyle(
+        color: colorScheme.onSurface,
         fontWeight: FontWeight.w700,
       ),
       cursorColor: _brandBlue,
@@ -654,10 +1106,10 @@ class _InputField extends StatelessWidget {
         suffixIcon: suffixIcon,
         labelText: label,
         hintText: hint,
-        labelStyle: const TextStyle(color: Color(0xFF536273)),
-        hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+        labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+        hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
         filled: true,
-        fillColor: Colors.white,
+        fillColor: colorScheme.surface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide.none,

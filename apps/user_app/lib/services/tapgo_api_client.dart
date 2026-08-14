@@ -24,7 +24,7 @@ class _TapGoApiClient {
                 );
             options.headers.addAll(context.headers);
           } catch (error) {
-            debugPrint('[TapGo Device] fingerprint skipped: $error');
+            _tapGoDebugLog('[TapGo Device] fingerprint skipped: $error');
             options.headers.addAll(_TapGoDeviceContextStore.fallbackHeaders);
           }
           handler.next(options);
@@ -56,8 +56,10 @@ class _TapGoApiClient {
     String path, {
     Map<String, dynamic>? body,
   }) async {
-    final response =
-        await _dio.post<Map<String, dynamic>>(_apiPath(path), data: body);
+    final response = await _dio.post<Map<String, dynamic>>(
+      _apiPath(path),
+      data: body,
+    );
     return _unwrap(response.data);
   }
 
@@ -76,8 +78,10 @@ class _TapGoApiClient {
     String path, {
     Map<String, dynamic>? body,
   }) async {
-    final response =
-        await _dio.put<Map<String, dynamic>>(_apiPath(path), data: body);
+    final response = await _dio.put<Map<String, dynamic>>(
+      _apiPath(path),
+      data: body,
+    );
     return _unwrap(response.data);
   }
 
@@ -85,8 +89,10 @@ class _TapGoApiClient {
     String path, {
     Map<String, dynamic>? body,
   }) async {
-    final response =
-        await _dio.patch<Map<String, dynamic>>(_apiPath(path), data: body);
+    final response = await _dio.patch<Map<String, dynamic>>(
+      _apiPath(path),
+      data: body,
+    );
     return _unwrap(response.data);
   }
 
@@ -112,19 +118,21 @@ class _TapGoApiClient {
     };
     final safeBody = {...body, 'password': '***'};
     final registerUrl = _fullApiUrl('auth/register');
-    debugPrint('ACTIVE ROOT URL: $rootUrl');
-    debugPrint('REGISTER URL: $registerUrl');
-    debugPrint('REGISTER PAYLOAD: $safeBody');
+    _tapGoDebugLog('ACTIVE ROOT URL: $rootUrl');
+    _tapGoDebugLog('REGISTER URL: $registerUrl');
+    _tapGoDebugLog('REGISTER PAYLOAD: $safeBody');
     try {
-      final response =
-          await _dio.post<dynamic>(_apiPath('auth/register'), data: body);
-      debugPrint('REGISTER RESPONSE STATUS: ${response.statusCode}');
-      debugPrint('REGISTER RESPONSE: ${response.data}');
+      final response = await _dio.post<dynamic>(
+        _apiPath('auth/register'),
+        data: body,
+      );
+      _tapGoDebugLog('REGISTER RESPONSE STATUS: ${response.statusCode}');
+      _tapGoDebugLog('REGISTER RESPONSE: <redacted>');
       return _TapGoAuthResult.fromMap(_unwrapDynamic(response.data));
     } on DioException catch (error) {
-      debugPrint('REGISTER ERROR: ${error.message}');
-      debugPrint('REGISTER ERROR STATUS: ${error.response?.statusCode}');
-      debugPrint('REGISTER ERROR BODY: ${error.response?.data}');
+      _tapGoDebugLog('REGISTER ERROR: ${error.message}');
+      _tapGoDebugLog('REGISTER ERROR STATUS: ${error.response?.statusCode}');
+      _tapGoDebugLog('REGISTER ERROR BODY: <redacted>');
       rethrow;
     }
   }
@@ -133,43 +141,190 @@ class _TapGoApiClient {
     required String phone,
     required String password,
   }) async {
-    final body = {
-      'phone': _normalizePhone(phone),
-      'password': password,
-    };
+    final body = {'phone': _normalizePhone(phone), 'password': password};
     final safeBody = {...body, 'password': '***'};
     final loginUrl = _fullApiUrl('auth/login');
-    debugPrint('ACTIVE ROOT URL: $rootUrl');
-    debugPrint('LOGIN URL: $loginUrl');
-    debugPrint('LOGIN PAYLOAD: $safeBody');
+    _tapGoDebugLog('ACTIVE ROOT URL: $rootUrl');
+    _tapGoDebugLog('LOGIN URL: $loginUrl');
+    _tapGoDebugLog('LOGIN PAYLOAD: $safeBody');
     try {
-      final response =
-          await _dio.post<dynamic>(_apiPath('auth/login'), data: body);
-      debugPrint('LOGIN RESPONSE STATUS: ${response.statusCode}');
-      debugPrint('LOGIN RESPONSE: ${response.data}');
+      final response = await _dio.post<dynamic>(
+        _apiPath('auth/login'),
+        data: body,
+      );
+      _tapGoDebugLog('LOGIN RESPONSE STATUS: ${response.statusCode}');
+      _tapGoDebugLog('LOGIN RESPONSE: <redacted>');
       return _TapGoAuthResult.fromMap(_unwrapDynamic(response.data));
     } on DioException catch (error) {
-      debugPrint('LOGIN ERROR: ${error.message}');
-      debugPrint('LOGIN ERROR STATUS: ${error.response?.statusCode}');
-      debugPrint('LOGIN ERROR BODY: ${error.response?.data}');
+      _tapGoDebugLog('LOGIN ERROR: ${error.message}');
+      _tapGoDebugLog('LOGIN ERROR STATUS: ${error.response?.statusCode}');
+      _tapGoDebugLog('LOGIN ERROR BODY: <redacted>');
       rethrow;
     }
   }
 
-  Future<_TapGoHealthCheckResult> testConnection(
-      {String? baseUrlOverride}) async {
+  // --- Ojek Online penumpang ------------------------------------------------
+  // Memakai kontrak backend yang sudah ada tanpa menambah endpoint maupun
+  // field. Idempotency-Key dikirim sebagai header sesuai kontrak, dan nilainya
+  // dibuat pemanggil agar tetap stabil saat percobaan ulang.
+
+  Future<Map<String, dynamic>> createRideQuote({
+    required String serviceType,
+    required Map<String, dynamic> pickup,
+    required Map<String, dynamic> dropoff,
+    String? idempotencyKey,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      _apiPath('rides/quotes'),
+      data: {
+        'serviceType': serviceType,
+        'pickup': pickup,
+        'dropoff': dropoff,
+      },
+      options: idempotencyKey == null
+          ? null
+          : Options(headers: {'Idempotency-Key': idempotencyKey}),
+    );
+    return _unwrap(response.data);
+  }
+
+  Future<Map<String, dynamic>> createRideOrder({
+    required String quoteId,
+    String? idempotencyKey,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      _apiPath('rides'),
+      // CASH sesuai kontrak tahap ini. DIGITAL tidak pernah dikirim.
+      data: {'quoteId': quoteId, 'paymentMethod': 'CASH'},
+      options: idempotencyKey == null
+          ? null
+          : Options(headers: {'Idempotency-Key': idempotencyKey}),
+    );
+    return _unwrap(response.data);
+  }
+
+  Future<Map<String, dynamic>> rideDetail(String reference) {
+    return get('rides/$reference');
+  }
+
+  Future<List<Map<String, dynamic>>> rideHistory({int limit = 20}) async {
+    final response = await _dio.get<dynamic>(
+      _apiPath('rides'),
+      queryParameters: {'limit': limit},
+    );
+    // Backend menjawab { success, data: [...] }. _unwrap membungkus payload
+    // non-map menjadi {'items': payload}, jadi daftar berada di 'items'.
+    final payload = _unwrapDynamic(response.data)['items'];
+    if (payload is! List) {
+      return const [];
+    }
+    return payload
+        .whereType<Map>()
+        .map((row) => row.cast<String, dynamic>())
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> cancelRide({
+    required String reference,
+    required String reasonCode,
+    String? note,
+  }) {
+    return post('rides/$reference/cancel', body: {
+      'reason': reasonCode,
+      if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+    });
+  }
+
+  // --- Pemulihan password ---------------------------------------------------
+  // Tidak ada satu pun method di bawah yang menulis identifier, OTP, reset
+  // token, atau password ke log. Backend selalu menjawab permintaan pemulihan
+  // dengan pesan generik yang sama, sehingga aplikasi tidak pernah mengetahui
+  // apakah sebuah akun terdaftar.
+
+  Future<String> requestPasswordRecovery(String identifier) async {
+    final data = await post(
+      'auth/recovery/request',
+      body: {'identifier': _normalizeRecoveryIdentifier(identifier)},
+    );
+    return (data['message'] as String?) ??
+        'Jika akun ditemukan, instruksi pemulihan telah dikirim.';
+  }
+
+  /// Mengembalikan reset token sekali pakai beserta tujuan tersamarkan.
+  Future<Map<String, String>> verifyPasswordRecovery({
+    required String identifier,
+    required String code,
+  }) async {
+    final data = await post(
+      'auth/recovery/verify',
+      body: {
+        'identifier': _normalizeRecoveryIdentifier(identifier),
+        'code': code,
+      },
+    );
+    return {
+      'resetToken': (data['resetToken'] as String?) ?? '',
+      'maskedDestination': (data['maskedDestination'] as String?) ?? '',
+    };
+  }
+
+  Future<void> resetPassword({
+    required String resetToken,
+    required String newPassword,
+  }) async {
+    await post(
+      'auth/recovery/reset',
+      body: {'resetToken': resetToken, 'newPassword': newPassword},
+    );
+  }
+
+  // --- Verifikasi kontak ------------------------------------------------------
+
+  Future<Map<String, dynamic>> verificationStatus() {
+    return get('auth/verification/status');
+  }
+
+  Future<Map<String, dynamic>> requestContactVerification(String channel) {
+    return post('auth/verification/request', body: {'channel': channel});
+  }
+
+  Future<Map<String, dynamic>> confirmContactVerification({
+    required String channel,
+    required String code,
+  }) {
+    return post(
+      'auth/verification/confirm',
+      body: {'channel': channel, 'code': code},
+    );
+  }
+
+  /// Email dibiarkan apa adanya (hanya di-trim/lowercase); nomor telepon
+  /// dinormalisasi memakai aturan yang sama dengan login.
+  String _normalizeRecoveryIdentifier(String value) {
+    final trimmed = value.trim();
+    if (trimmed.contains('@')) {
+      return trimmed.toLowerCase();
+    }
+    return _normalizePhone(trimmed);
+  }
+
+  Future<_TapGoHealthCheckResult> testConnection({
+    String? baseUrlOverride,
+  }) async {
     final normalized = _normalizeApiBaseUrl(baseUrlOverride ?? baseUrl);
     final healthUrl = _healthUrlFromApiBaseUrl(normalized);
-    debugPrint('ACTIVE ROOT URL: ${_rootUrlFromApiBaseUrl(normalized)}');
-    debugPrint('HEALTH URL: $healthUrl');
-    final response = await Dio(BaseOptions(
-      connectTimeout: const Duration(seconds: 8),
-      receiveTimeout: const Duration(seconds: 10),
-      headers: {'Accept': 'application/json'},
-    )).get<Map<String, dynamic>>(healthUrl);
+    _tapGoDebugLog('ACTIVE ROOT URL: ${_rootUrlFromApiBaseUrl(normalized)}');
+    _tapGoDebugLog('HEALTH URL: $healthUrl');
+    final response = await Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 8),
+        receiveTimeout: const Duration(seconds: 10),
+        headers: {'Accept': 'application/json'},
+      ),
+    ).get<Map<String, dynamic>>(healthUrl);
     final data = response.data;
-    debugPrint('HEALTH RESPONSE STATUS: ${response.statusCode}');
-    debugPrint('HEALTH RESPONSE BODY: $data');
+    _tapGoDebugLog('HEALTH RESPONSE STATUS: ${response.statusCode}');
+    _tapGoDebugLog('HEALTH RESPONSE BODY: <redacted>');
     if (response.statusCode != 200 ||
         data?['success'] != true ||
         data?['status'] != 'ok') {
@@ -201,11 +356,28 @@ class _TapGoApiClient {
 
   Future<_TapGoAuthUser> me() async {
     final response = await _dio.get<Map<String, dynamic>>(_apiPath('auth/me'));
-    debugPrint('[TapGo Auth] auth/me response status: ${response.statusCode}');
+    _tapGoDebugLog(
+      '[TapGo Auth] auth/me response status: ${response.statusCode}',
+    );
     return _TapGoAuthUser.fromMap(_unwrap(response.data));
   }
 
   Future<_TapGoProductionSnapshot> productionSnapshot() async {
+    if (tapGoIsPlayDistribution) {
+      final membership = await _productionSnapshotPart(
+        'membership',
+        () => get('/membership/me'),
+      );
+      return _TapGoProductionSnapshot.fromMaps(
+        membership: membership,
+        wallet: const {},
+        transactions: const {'items': []},
+        referralSummary: const {},
+        referralTree: const {},
+        commissions: const {'items': []},
+      );
+    }
+
     final responses = await Future.wait([
       _productionSnapshotPart('membership', () => get('/membership/me')),
       _productionSnapshotPart('wallet', _walletForSnapshot, requiredPart: true),
@@ -214,11 +386,15 @@ class _TapGoApiClient {
         () => get('/wallet/transactions', query: {'page': 1, 'pageSize': 20}),
       ),
       _productionSnapshotPart(
-          'referral summary', () => get('/referrals/summary')),
+        'referral summary',
+        () => get('/referrals/summary'),
+      ),
       _productionSnapshotPart(
         'referral tree',
-        () => get('/referrals/downlines',
-            query: {'maxLevel': 10, 'page': 1, 'pageSize': 100}),
+        () => get(
+          '/referrals/downlines',
+          query: {'maxLevel': 10, 'page': 1, 'pageSize': 100},
+        ),
       ),
       _productionSnapshotPart(
         'referral commissions',
@@ -238,20 +414,20 @@ class _TapGoApiClient {
 
   Future<Map<String, dynamic>> _walletForSnapshot() async {
     final walletUrl = _fullApiUrl('wallet');
-    debugPrint('ACTIVE API BASE URL: $baseUrl');
-    debugPrint('WALLET URL: $walletUrl');
-    debugPrint(
+    _tapGoDebugLog('ACTIVE API BASE URL: $baseUrl');
+    _tapGoDebugLog('WALLET URL: $walletUrl');
+    _tapGoDebugLog(
       'AUTH TOKEN EXISTS: ${_dio.options.headers['Authorization'] != null}',
     );
     try {
       final response = await _dio.get<dynamic>(_apiPath('wallet'));
-      debugPrint('WALLET RESPONSE STATUS: ${response.statusCode}');
-      debugPrint('WALLET RESPONSE BODY: ${response.data}');
+      _tapGoDebugLog('WALLET RESPONSE STATUS: ${response.statusCode}');
+      _tapGoDebugLog('WALLET RESPONSE BODY: <redacted>');
       return _unwrapDynamic(response.data);
     } on DioException catch (error) {
-      debugPrint('WALLET ERROR: ${error.message}');
-      debugPrint('WALLET ERROR STATUS: ${error.response?.statusCode}');
-      debugPrint('WALLET ERROR BODY: ${error.response?.data}');
+      _tapGoDebugLog('WALLET ERROR: ${error.message}');
+      _tapGoDebugLog('WALLET ERROR STATUS: ${error.response?.statusCode}');
+      _tapGoDebugLog('WALLET ERROR BODY: <redacted>');
       rethrow;
     }
   }
@@ -267,10 +443,7 @@ class _TapGoApiClient {
   }) {
     return post(
       '/membership/orders',
-      body: {
-        'packageId': packageId,
-        'registrationData': registrationData,
-      },
+      body: {'packageId': packageId, 'registrationData': registrationData},
     );
   }
 
@@ -293,14 +466,18 @@ class _TapGoApiClient {
   }
 
   Future<List<Map<String, dynamic>>> adminWithdrawals() async {
-    final data =
-        await get('/admin/withdrawals', query: {'page': 1, 'pageSize': 50});
+    final data = await get(
+      '/admin/withdrawals',
+      query: {'page': 1, 'pageSize': 50},
+    );
     return _items(data);
   }
 
   Future<List<Map<String, dynamic>>> withdrawals() async {
-    final data =
-        await get('/wallet/withdrawals', query: {'page': 1, 'pageSize': 50});
+    final data = await get(
+      '/wallet/withdrawals',
+      query: {'page': 1, 'pageSize': 50},
+    );
     return _items(data);
   }
 
@@ -314,12 +491,15 @@ class _TapGoApiClient {
     required String accountNumber,
     required String accountHolderName,
   }) {
-    return put('/wallet/bank-account', body: {
-      'bankName': bankName,
-      if (bankCode != null && bankCode.isNotEmpty) 'bankCode': bankCode,
-      'accountNumber': accountNumber,
-      'accountHolderName': accountHolderName,
-    });
+    return put(
+      '/wallet/bank-account',
+      body: {
+        'bankName': bankName,
+        if (bankCode != null && bankCode.isNotEmpty) 'bankCode': bankCode,
+        'accountNumber': accountNumber,
+        'accountHolderName': accountHolderName,
+      },
+    );
   }
 
   Future<Map<String, dynamic>> requestWithdrawal({
@@ -329,25 +509,29 @@ class _TapGoApiClient {
     required String accountNumber,
     required String accountHolderName,
   }) {
-    return post('/wallet/withdrawals', body: {
-      'amount': amount,
-      'bankName': bankName,
-      if (bankCode != null && bankCode.isNotEmpty) 'bankCode': bankCode,
-      'accountNumber': accountNumber,
-      'accountHolderName': accountHolderName,
-    });
+    return post(
+      '/wallet/withdrawals',
+      body: {
+        'amount': amount,
+        'bankName': bankName,
+        if (bankCode != null && bankCode.isNotEmpty) 'bankCode': bankCode,
+        'accountNumber': accountNumber,
+        'accountHolderName': accountHolderName,
+      },
+    );
   }
 
   Future<Map<String, dynamic>> accountDeletionRequest() {
     return get('/account/delete-request');
   }
 
-  Future<Map<String, dynamic>> submitAccountDeletionRequest({
-    String? reason,
-  }) {
-    return post('/account/delete-request', body: {
-      if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
-    });
+  Future<Map<String, dynamic>> submitAccountDeletionRequest({String? reason}) {
+    return post(
+      '/account/delete-request',
+      body: {
+        if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+      },
+    );
   }
 
   Future<Map<String, dynamic>> submitContactMessage({
@@ -356,12 +540,39 @@ class _TapGoApiClient {
     required String category,
     required String message,
   }) {
-    return post('/contact', body: {
-      'name': name,
-      'contact': contact,
-      'category': category,
-      'message': message,
-    });
+    return post(
+      '/contact',
+      body: {
+        'name': name,
+        'contact': contact,
+        'category': category,
+        'message': message,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> memberIdentity() {
+    return get('/member-identity/me');
+  }
+
+  Future<List<Map<String, dynamic>>> supportTickets() async {
+    final data = await get('/support/tickets');
+    return _items(data);
+  }
+
+  Future<Map<String, dynamic>> supportTicketDetail(String ticketId) {
+    return get('/support/tickets/$ticketId');
+  }
+
+  Future<Map<String, dynamic>> createSupportTicket({
+    required String category,
+    required String subject,
+    required String message,
+  }) {
+    return post(
+      '/support/tickets',
+      body: {'category': category, 'subject': subject, 'message': message},
+    );
   }
 
   Future<List<Map<String, dynamic>>> adminProfitSharingPeriods() async {
@@ -384,26 +595,34 @@ class _TapGoApiClient {
   }
 
   Future<List<Map<String, dynamic>>> adminMembers() async {
-    final data =
-        await get('/admin/members', query: {'page': 1, 'pageSize': 50});
+    final data = await get(
+      '/admin/members',
+      query: {'page': 1, 'pageSize': 50},
+    );
     return _items(data);
   }
 
   Future<List<Map<String, dynamic>>> adminPayments() async {
-    final data =
-        await get('/admin/payments', query: {'page': 1, 'pageSize': 50});
+    final data = await get(
+      '/admin/payments',
+      query: {'page': 1, 'pageSize': 50},
+    );
     return _items(data);
   }
 
   Future<List<Map<String, dynamic>>> adminInvoices() async {
-    final data =
-        await get('/admin/invoices', query: {'page': 1, 'pageSize': 50});
+    final data = await get(
+      '/admin/invoices',
+      query: {'page': 1, 'pageSize': 50},
+    );
     return _items(data);
   }
 
   Future<List<Map<String, dynamic>>> adminCommissions() async {
-    final data =
-        await get('/admin/commissions', query: {'page': 1, 'pageSize': 50});
+    final data = await get(
+      '/admin/commissions',
+      query: {'page': 1, 'pageSize': 50},
+    );
     return _items(data);
   }
 
@@ -411,8 +630,16 @@ class _TapGoApiClient {
     return get('/admin/founder-platinum');
   }
 
+  Future<Map<String, dynamic>> adminFounderChairman() {
+    return get('/admin/founder-chairman');
+  }
+
   Future<Map<String, dynamic>> adminFounderPlatinumDetail(String founderId) {
     return get('/admin/founder-platinum/$founderId');
+  }
+
+  Future<Map<String, dynamic>> adminFounderChairmanDetail(String founderId) {
+    return get('/admin/founder-chairman/$founderId');
   }
 
   Future<Map<String, dynamic>> updateFounderPlatinumStatus({
@@ -420,15 +647,34 @@ class _TapGoApiClient {
     required String status,
     String? reason,
   }) {
-    return patch('/admin/founder-platinum/$founderId/status', body: {
-      'status': status,
-      if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
-    });
+    return patch(
+      '/admin/founder-platinum/$founderId/status',
+      body: {
+        'status': status,
+        if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> updateFounderChairmanStatus({
+    required String founderId,
+    required String status,
+    String? reason,
+  }) {
+    return patch(
+      '/admin/founder-chairman/$founderId/status',
+      body: {
+        'status': status,
+        if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+      },
+    );
   }
 
   Future<List<Map<String, dynamic>>> adminMemberRequests() async {
-    final data =
-        await get('/admin/member-requests', query: {'page': 1, 'pageSize': 50});
+    final data = await get(
+      '/admin/member-requests',
+      query: {'page': 1, 'pageSize': 50},
+    );
     return _items(data);
   }
 
@@ -440,56 +686,58 @@ class _TapGoApiClient {
     String id, {
     String? reason,
   }) {
-    return post('/admin/member-requests/$id/reject', body: {
-      if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
-    });
+    return post(
+      '/admin/member-requests/$id/reject',
+      body: {
+        if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+      },
+    );
   }
 
-  Future<Map<String, dynamic>> adminBonusReport({
-    Map<String, dynamic>? query,
-  }) {
-    return get('/admin/reports/bonus', query: {
-      'page': 1,
-      'pageSize': 50,
-      ...?query,
-    });
+  Future<Map<String, dynamic>> adminBonusReport({Map<String, dynamic>? query}) {
+    return get(
+      '/admin/reports/bonus',
+      query: {'page': 1, 'pageSize': 50, ...?query},
+    );
   }
 
-  Future<Map<String, dynamic>> adminPpobReport({
-    Map<String, dynamic>? query,
-  }) {
-    return get('/admin/reports/ppob', query: {
-      'page': 1,
-      'pageSize': 50,
-      ...?query,
-    });
+  Future<Map<String, dynamic>> adminPpobReport({Map<String, dynamic>? query}) {
+    return get(
+      '/admin/reports/ppob',
+      query: {'page': 1, 'pageSize': 50, ...?query},
+    );
   }
 
   Future<Map<String, dynamic>> adminRewardReport({
     Map<String, dynamic>? query,
   }) {
-    return get('/admin/reports/reward', query: {
-      'page': 1,
-      'pageSize': 50,
-      ...?query,
-    });
+    return get(
+      '/admin/reports/reward',
+      query: {'page': 1, 'pageSize': 50, ...?query},
+    );
   }
 
   Future<List<Map<String, dynamic>>> adminDeleteRequests() async {
-    final data =
-        await get('/admin/delete-requests', query: {'page': 1, 'pageSize': 50});
+    final data = await get(
+      '/admin/delete-requests',
+      query: {'page': 1, 'pageSize': 50},
+    );
     return _items(data);
   }
 
   Future<List<Map<String, dynamic>>> adminContactMessages() async {
-    final data = await get('/admin/contact-messages',
-        query: {'page': 1, 'pageSize': 50});
+    final data = await get(
+      '/admin/contact-messages',
+      query: {'page': 1, 'pageSize': 50},
+    );
     return _items(data);
   }
 
   Future<List<Map<String, dynamic>>> adminWallets() async {
-    final data =
-        await get('/admin/wallets', query: {'page': 1, 'pageSize': 50});
+    final data = await get(
+      '/admin/wallets',
+      query: {'page': 1, 'pageSize': 50},
+    );
     return _items(data);
   }
 
@@ -568,16 +816,15 @@ class _TapGoDeviceContext {
 }
 
 class _TapGoDeviceContextStore {
-  _TapGoDeviceContextStore({
-    FlutterSecureStorage? storage,
-  }) : _storage = storage ??
+  _TapGoDeviceContextStore({FlutterSecureStorage? storage})
+      : _storage = storage ??
             const FlutterSecureStorage(
               aOptions: AndroidOptions(encryptedSharedPreferences: true),
             );
 
   static const _deviceIdKey = 'tapgo.device_id.v1';
   static const _deviceFingerprintKey = 'tapgo.device_fingerprint.v1';
-  static const _appVersion = '1.0.1+2';
+  static const _appVersion = '1.0.3+4';
 
   static _TapGoDeviceContext fallbackContext() => _TapGoDeviceContext(
         deviceId: 'tapgo-session-${DateTime.now().millisecondsSinceEpoch}',
@@ -625,11 +872,11 @@ class _TapGoDeviceContextStore {
     }
     String? saved;
     try {
-      saved = await _storage.read(key: key).timeout(
-            const Duration(milliseconds: 700),
-          );
+      saved = await _storage
+          .read(key: key)
+          .timeout(const Duration(milliseconds: 700));
     } catch (error) {
-      debugPrint('[TapGo Device] secure read skipped for $key: $error');
+      _tapGoDebugLog('[TapGo Device] secure read skipped for $key: $error');
     }
     if (saved != null && saved.trim().isNotEmpty) {
       _memoryCache[key] = saved;
@@ -638,11 +885,11 @@ class _TapGoDeviceContextStore {
     final value = create();
     _memoryCache[key] = value;
     try {
-      await _storage.write(key: key, value: value).timeout(
-            const Duration(milliseconds: 700),
-          );
+      await _storage
+          .write(key: key, value: value)
+          .timeout(const Duration(milliseconds: 700));
     } catch (error) {
-      debugPrint('[TapGo Device] secure write skipped for $key: $error');
+      _tapGoDebugLog('[TapGo Device] secure write skipped for $key: $error');
     }
     return value;
   }
@@ -686,20 +933,24 @@ class _TapGoProductionSnapshot {
     final membershipMetadata =
         (membershipData?['metadata'] as Map?)?.cast<String, dynamic>();
     final walletBalance = _intFrom(wallet['balance']);
-    final txItems = _listFromPayload(transactions)
-        .map(_walletTransactionFromApi)
-        .toList(growable: false);
+    final txItems = _listFromPayload(
+      transactions,
+    ).map(_walletTransactionFromApi).toList(growable: false);
     final commissionItems = _listFromPayload(commissions);
     final commissionLedgerItems = commissionItems
         .map(_commissionTransactionFromApi)
         .toList(growable: false);
     final directSponsor = _intFrom(
-        referralSummary['directDownlines'] ?? referralSummary['directSponsor']);
+      referralSummary['directDownlines'] ?? referralSummary['directSponsor'],
+    );
     final totalDownline = _intFrom(
-        referralSummary['totalDownlines'] ?? referralSummary['totalDownline']);
-    final activePackageName = _titleCase(packageData?['tier']?.toString() ??
-        packageData?['name']?.toString() ??
-        'Basic');
+      referralSummary['totalDownlines'] ?? referralSummary['totalDownline'],
+    );
+    final activePackageName = _titleCase(
+      packageData?['tier']?.toString() ??
+          packageData?['name']?.toString() ??
+          'Basic',
+    );
     final ppobBalance = _intFrom(packageData?['ppobBalance']);
     final todayBonus = _todayBonusFrom(commissionItems);
     final founderRole = (membershipData?['founderRole'] ??
@@ -707,11 +958,13 @@ class _TapGoProductionSnapshot {
             membershipData?['founderProgramRole'])
         ?.toString()
         .toUpperCase();
+    final isFounderChairman = founderRole == 'FOUNDER_CHAIRMAN';
     final isFounderPlatinum = founderRole == 'FOUNDER_PLATINUM';
 
     return _TapGoProductionSnapshot(
       sessionPatch: DemoClientSession.initial().copyWith(
         activePackageName: activePackageName,
+        isFounderChairman: isFounderChairman,
         isFounderPlatinum: isFounderPlatinum,
         walletBalance: walletBalance,
         ppobBalance: ppobBalance,
@@ -730,8 +983,49 @@ class _TapGoProductionSnapshot {
   }
 }
 
-final _productionSnapshotProvider =
-    FutureProvider<_TapGoProductionSnapshot>((ref) async {
+/// Menyalakan fixture visual dashboard.
+///
+/// HANYA dipakai harness bukti visual. Nilainya default false dan tidak ada
+/// satu pun jalur produksi yang menyetelnya, sehingga aplikasi yang dirilis
+/// selalu memakai data server yang sebenarnya.
+///
+/// Tanpa fixture, tangkapan layar dashboard di lingkungan test menampilkan
+/// "Data belum tersedia" dan "Gagal memuat data" — state gagal muat yang bukan
+/// bagian dari apa yang ingin ditinjau.
+bool tapGoDashboardVisualFixtureEnabled = false;
+
+/// Label kejujuran yang wajib tampil saat fixture aktif.
+const String tapGoDashboardFixtureLabel = 'DEMO DATA';
+
+/// Snapshot tetap untuk fixture visual.
+///
+/// Dibangun lewat `fromMaps` yang sama dengan jalur produksi, sehingga yang
+/// dipalsukan hanya sumber datanya — bukan cara aplikasi mengurainya.
+_TapGoProductionSnapshot _tapGoDashboardVisualSnapshot() {
+  return _TapGoProductionSnapshot.fromMaps(
+    membership: const {
+      'membership': {
+        'membership': {'name': 'Basic', 'ppobBalance': 0},
+        'activeAt': '2026-01-15T00:00:00.000Z',
+        'order': {
+          'invoice': {'number': 'INV-DEMO-0001'},
+        },
+      },
+    },
+    wallet: const {'balance': 125000},
+    transactions: const {'items': <Map<String, dynamic>>[]},
+    referralSummary: const {'directDownlines': 3, 'totalDownlines': 8},
+    referralTree: const {},
+    commissions: const {'items': <Map<String, dynamic>>[]},
+  );
+}
+
+final _productionSnapshotProvider = FutureProvider<_TapGoProductionSnapshot>((
+  ref,
+) async {
+  if (tapGoDashboardVisualFixtureEnabled) {
+    return _tapGoDashboardVisualSnapshot();
+  }
   final session = ref.read(_demoSessionProvider);
   if (session.accessToken == null || session.accessToken!.isEmpty) {
     throw StateError('Belum ada token backend.');
@@ -743,6 +1037,7 @@ final _productionSnapshotProvider =
     walletBalance: snapshot.sessionPatch.walletBalance,
     ppobBalance: snapshot.sessionPatch.ppobBalance,
     isFounderPlatinum: snapshot.sessionPatch.isFounderPlatinum,
+    isFounderChairman: snapshot.sessionPatch.isFounderChairman,
     directSponsor: snapshot.sessionPatch.directSponsor,
     downline: snapshot.sessionPatch.downline,
     activeLevel: snapshot.sessionPatch.activeLevel,
@@ -765,7 +1060,7 @@ Future<Map<String, dynamic>> _productionSnapshotPart(
   try {
     return await loader();
   } catch (error) {
-    debugPrint('[TapGo Binding] $label unavailable: $error');
+    _tapGoDebugLog('[TapGo Binding] $label unavailable: $error');
     if (requiredPart) {
       rethrow;
     }
@@ -773,8 +1068,9 @@ Future<Map<String, dynamic>> _productionSnapshotPart(
   }
 }
 
-final _adminConsoleSnapshotProvider =
-    FutureProvider<_AdminConsoleApiSnapshot>((ref) async {
+final _adminConsoleSnapshotProvider = FutureProvider<_AdminConsoleApiSnapshot>((
+  ref,
+) async {
   final session = ref.read(_demoSessionProvider);
   if (session.accessToken == null || session.accessToken!.isEmpty) {
     throw StateError('Belum ada token admin backend.');
@@ -849,7 +1145,7 @@ Future<T> _adminSnapshotPart<T>({
   try {
     return await loader();
   } catch (error) {
-    debugPrint('[TapGo Admin] $label unavailable: $error');
+    _tapGoDebugLog('[TapGo Admin] $label unavailable: $error');
     if (!_isTapGoDevelopmentBuild) {
       rethrow;
     }
@@ -959,6 +1255,7 @@ class _TapGoAuthUser {
     required this.role,
     this.email,
     this.referralCode,
+    this.isFounderChairman = false,
     this.isFounderPlatinum = false,
   });
 
@@ -968,6 +1265,7 @@ class _TapGoAuthUser {
   final String role;
   final String? email;
   final String? referralCode;
+  final bool isFounderChairman;
   final bool isFounderPlatinum;
 
   factory _TapGoAuthUser.fromMap(Map<String, dynamic> map) {
@@ -978,6 +1276,9 @@ class _TapGoAuthUser {
       role: _normalizeUserRole(map['role']?.toString()),
       email: map['email']?.toString(),
       referralCode: map['referralCode']?.toString(),
+      isFounderChairman:
+          map['founderRole']?.toString().toUpperCase() == 'FOUNDER_CHAIRMAN' ||
+              map['isFounderChairman'] == true,
       isFounderPlatinum:
           map['founderRole']?.toString().toUpperCase() == 'FOUNDER_PLATINUM' ||
               map['isFounderPlatinum'] == true,
@@ -1097,6 +1398,8 @@ DemoClientSession _sessionFromAuthUser(
     userName: user.name,
     phone: user.phone.isEmpty ? fallback?.phone : user.phone,
     referralCode: user.referralCode ?? fallback?.referralCode ?? '-',
+    isFounderChairman:
+        user.isFounderChairman || (fallback?.isFounderChairman ?? false),
     isFounderPlatinum:
         user.isFounderPlatinum || (fallback?.isFounderPlatinum ?? false),
   );
@@ -1130,6 +1433,9 @@ class _TapGoEndpointCatalog {
   static const withdrawalHistory = 'GET /api/v1/wallet/withdrawals';
   static const accountDeleteRequest = 'POST /api/v1/account/delete-request';
   static const contactMessage = 'POST /api/v1/contact';
+  static const memberIdentity = 'GET /api/v1/member-identity/me';
+  static const supportTickets = 'GET /api/v1/support/tickets';
+  static const supportTicketCreate = 'POST /api/v1/support/tickets';
   static const adminMemberRequests = 'GET /api/v1/admin/member-requests';
   static const adminBonusReport = 'GET /api/v1/admin/reports/bonus';
   static const adminPpobReport = 'GET /api/v1/admin/reports/ppob';
@@ -1236,7 +1542,8 @@ WalletTransactionModel _walletTransactionFromApi(Map<String, dynamic> item) {
 }
 
 WalletTransactionModel _commissionTransactionFromApi(
-    Map<String, dynamic> item) {
+  Map<String, dynamic> item,
+) {
   final type = item['type']?.toString() ?? 'KOMISI';
   return WalletTransactionModel(
     title: _labelFromType(type),
@@ -1317,16 +1624,20 @@ DemoReferralNode? _referralTreeFromApi(Map<String, dynamic> payload) {
           memberMap?['fullName']?.toString() ??
           memberMap?['name']?.toString() ??
           'Member TapGo',
-      packageName: _titleCase(item['membershipTier']?.toString() ??
-          item['membership_tier']?.toString() ??
-          item['packageName']?.toString() ??
-          'Basic'),
+      packageName: _titleCase(
+        item['membershipTier']?.toString() ??
+            item['membership_tier']?.toString() ??
+            item['packageName']?.toString() ??
+            'Basic',
+      ),
       level: level == 0 ? 1 : level,
       bonus: _intFrom(item['bonus'] ?? item['totalBonus']),
-      totalDownline: _intFrom(item['totalDownline'] ??
-          item['totalDownlines'] ??
-          item['downlineCount'] ??
-          children.length),
+      totalDownline: _intFrom(
+        item['totalDownline'] ??
+            item['totalDownlines'] ??
+            item['downlineCount'] ??
+            children.length,
+      ),
       isExpanded: level <= 2,
       children: children,
     );

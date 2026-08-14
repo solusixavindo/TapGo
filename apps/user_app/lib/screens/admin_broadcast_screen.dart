@@ -8,8 +8,9 @@ class AdminBroadcastScreen extends StatefulWidget {
 }
 
 class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
-  final _titleController =
-      TextEditingController(text: 'Promo Upgrade Platinum TapGo');
+  final _titleController = TextEditingController(
+    text: 'Promo Upgrade Platinum TapGo',
+  );
   final _messageController = TextEditingController(
     text:
         'Halo member TapGo, upgrade paket Anda minggu ini dan nikmati benefit PPOB serta reward referral lebih besar.',
@@ -26,7 +27,7 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
   Widget build(BuildContext context) {
     return _DemoScaffold(
       title: 'Broadcast',
-      subtitle: 'Preview pengumuman dan WhatsApp broadcast',
+      subtitle: 'Pratinjau pengumuman dan WhatsApp broadcast',
       child: Column(
         children: [
           _InputField(
@@ -61,14 +62,10 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
             width: double.infinity,
             child: FilledButton.icon(
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Broadcast tersimpan sebagai preview.'),
-                  ),
-                );
+                _TapGoSnackbar.info(context, 'Broadcast siap ditinjau.');
               },
               icon: const Icon(Icons.send_rounded),
-              label: const Text('Preview Kirim Broadcast'),
+              label: const Text('Pratinjau Kirim Broadcast'),
             ),
           ),
         ],
@@ -96,7 +93,7 @@ class _BroadcastPreview extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Preview WhatsApp / Push Notification',
+            'Pratinjau WhatsApp / Push Notification',
             style: TextStyle(
               color: Color(0xFF00A86B),
               fontWeight: FontWeight.w900,

@@ -1,11 +1,7 @@
 part of '../main.dart';
 
 class CheckoutScreen extends StatelessWidget {
-  const CheckoutScreen({
-    required this.form,
-    required this.invoice,
-    super.key,
-  });
+  const CheckoutScreen({required this.form, required this.invoice, super.key});
 
   final RegistrationFormModel form;
   final InvoiceModel invoice;
@@ -20,46 +16,56 @@ class CheckoutScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _InvoiceCard(invoice: invoice, package: package),
+          _TapGoReveal(
+            order: 0,
+            child: _InvoiceCard(invoice: invoice, package: package),
+          ),
           const SizedBox(height: 14),
-          FilledButton.icon(
-            onPressed: () => _openDemo(
-              context,
-              PaymentMethodScreen(form: form, invoice: invoice),
-            ),
-            icon: const Icon(Icons.payment_rounded),
-            label: const Text('Bayar Sekarang'),
-            style: FilledButton.styleFrom(
-              backgroundColor: _brandBlue,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 15),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+          _TapGoReveal(
+            order: 1,
+            child: FilledButton.icon(
+              onPressed: () => _openDemo(
+                context,
+                PaymentMethodScreen(form: form, invoice: invoice),
+              ),
+              icon: const Icon(Icons.payment_rounded),
+              label: const Text('Bayar Sekarang'),
+              style: FilledButton.styleFrom(
+                backgroundColor: _brandBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
             ),
           ),
           const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed: () => _showWhatsAppPreview(context, invoice),
-            icon: const Icon(Icons.chat_rounded),
-            label: const Text('Kirim Notifikasi WhatsApp'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF00A86B),
-              padding: const EdgeInsets.symmetric(vertical: 15),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+          _TapGoReveal(
+            order: 2,
+            child: OutlinedButton.icon(
+              onPressed: () => _showWhatsAppPreview(context, invoice),
+              icon: const Icon(Icons.chat_rounded),
+              label: const Text('Kirim Notifikasi WhatsApp'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF00A86B),
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
             ),
           ),
           const SizedBox(height: 10),
-          TextButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Invoice siap diunduh.')),
-              );
-            },
-            icon: const Icon(Icons.download_rounded),
-            label: const Text('Download Invoice'),
+          _TapGoReveal(
+            order: 3,
+            child: TextButton.icon(
+              onPressed: () {
+                _TapGoSnackbar.info(context, 'Invoice siap diunduh.');
+              },
+              icon: const Icon(Icons.download_rounded),
+              label: const Text('Unduh Invoice'),
+            ),
           ),
         ],
       ),
@@ -67,7 +73,7 @@ class CheckoutScreen extends StatelessWidget {
   }
 
   void _showWhatsAppPreview(BuildContext context, InvoiceModel invoice) {
-    showModalBottomSheet<void>(
+    _showTapGoBottomSheet<void>(
       context: context,
       showDragHandle: true,
       builder: (context) => Padding(
@@ -77,7 +83,7 @@ class CheckoutScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Preview WhatsApp',
+              'Pratinjau WhatsApp',
               style: TextStyle(
                 color: Color(0xFF0A2A43),
                 fontSize: 20,

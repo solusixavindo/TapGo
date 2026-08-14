@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import {
   MembershipOrderStatus,
   PaymentStatus,
@@ -10,6 +10,7 @@ import { StatusCodes } from "http-status-codes";
 import { env } from "../../../config/env.js";
 import { AppError } from "../../../core/errors/AppError.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
+import { isAdminRole } from "../../../core/security/roleHierarchy.js";
 
 type PrismaTransaction = Prisma.TransactionClient;
 
@@ -20,10 +21,38 @@ type MidtransNotificationPayload = {
   fraud_status?: string;
   status_code?: string;
   gross_amount?: string;
+  currency?: string;
   signature_key?: string;
   payment_type?: string;
   transaction_time?: string;
 };
+
+// Kontrak Midtrans: gross_amount adalah string desimal biasa (mis. "500000.00").
+// Hanya digit dengan opsional 1-2 desimal yang diterima — menolak scientific
+// notation, hexadecimal, underscore, comma, whitespace, NaN/Infinity, dan tanda.
+const STRICT_DECIMAL_AMOUNT = /^\d+(\.\d{1,2})?$/;
+
+/**
+ * Metode bayar yang boleh ditawarkan untuk pembelian membership.
+ *
+ * Daftar ini SENGAJA tertutup, dan bukan soal selera. Alur R2.6 menjanjikan
+ * pengembalian dana PENUH bila dokumen identitas ditolak, sehingga metode yang
+ * tidak dapat dibalik lewat API tidak boleh ditawarkan sejak awal.
+ *
+ * Diuji langsung ke sandbox Midtrans 2026-08-13: permintaan refund atas
+ * transaksi bank transfer (VA) ditolak dengan "Payment Provider doesn't allow
+ * refund within this time". Menawarkannya berarti menjanjikan sesuatu yang
+ * tidak dapat kita tepati, lalu memaksa penyelesaian manual di luar sistem.
+ *
+ * Menghapus baris enabled_payments dari permintaan Snap BUKAN pilihan netral:
+ * tanpa daftar ini Midtrans menampilkan seluruh metode, termasuk VA dan gerai
+ * ritel.
+ */
+export const REFUNDABLE_PAYMENT_METHODS = [
+  "credit_card", // kartu kredit dan debit
+  "gopay",       // GoPay
+  "other_qris",  // QRIS lewat aplikasi pembayaran mana pun
+] as const;
 
 type MidtransSnapResponse = {
   token?: string;
@@ -116,6 +145,7 @@ export class MidtransPaymentService {
         order_id: order.invoice.number,
         gross_amount: Number(new Prisma.Decimal(order.totalAmount).toFixed(0)),
       },
+      enabled_payments: REFUNDABLE_PAYMENT_METHODS,
       customer_details: {
         first_name: order.user.fullName,
         email: order.user.email ?? undefined,
@@ -192,6 +222,10 @@ export class MidtransPaymentService {
     const status = this.resolveNotificationStatus(payload);
 
     if (status.kind === "SUCCESS") {
+      // P1-2: fail-closed jika nominal callback tidak sama persis dengan nominal
+      // order authoritative dari backend. Mencegah aktivasi/bonus/wallet akibat
+      // callback ber-signature valid namun nominal berbeda (under/over-payment).
+      this.assertAuthoritativeAmount(invoice.amount, payload);
       try {
         const result = await this.membershipOrderService.markPaymentSuccess({
           userId: invoice.userId,
@@ -215,6 +249,24 @@ export class MidtransPaymentService {
             idempotent: true,
             orderId: invoice.orderId,
           };
+        }
+
+        // P1-2: callback duplikat yang berjalan konkuren dapat kalah pada
+        // Serializable isolation (write conflict/deadlock). Jika invoice sudah
+        // lunas oleh callback pemenang, perlakukan sebagai idempotent agar tidak
+        // menghasilkan 5xx yang memicu retry berulang. Side effect tetap sekali.
+        if (this.isSerializationConflict(error)) {
+          const settled = await this.prisma.invoice.findUnique({
+            where: { id: invoice.id },
+            select: { status: true },
+          });
+          if (settled && settled.status !== "PENDING") {
+            return {
+              status: settled.status,
+              idempotent: true,
+              orderId: invoice.orderId,
+            };
+          }
         }
 
         throw error;
@@ -294,6 +346,72 @@ export class MidtransPaymentService {
     return body;
   }
 
+  // P1-2: deteksi serialization failure / deadlock PostgreSQL yang dibungkus
+  // Prisma, baik pada operasi biasa (P2034/P2037) maupun raw query (P2010 dengan
+  // SQLSTATE 40001/40P01).
+  private isSerializationConflict(error: unknown): boolean {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+      return false;
+    }
+    if (error.code === "P2034" || error.code === "P2037") {
+      return true;
+    }
+    if (error.code === "P2010") {
+      const pgCode = (error.meta as { code?: string } | undefined)?.code;
+      return pgCode === "40001" || pgCode === "40P01";
+    }
+    return false;
+  }
+
+  // P1-2: nominal order hanya boleh berasal dari backend (invoice.amount),
+  // bukan dari nilai callback. gross_amount yang hilang/malformed atau tidak
+  // sama persis ditolak (fail-closed) sebelum aktivasi apa pun.
+  private assertAuthoritativeAmount(
+    authoritativeAmount: Prisma.Decimal,
+    payload: MidtransNotificationPayload,
+  ) {
+    // Currency, bila disediakan callback, wajib literal IDR.
+    if (payload.currency !== undefined && payload.currency !== "IDR") {
+      throw new AppError(
+        "Midtrans currency must be IDR",
+        StatusCodes.BAD_REQUEST,
+        "MIDTRANS_CURRENCY_INVALID",
+      );
+    }
+
+    // Validasi format string yang ketat sebelum parsing numerik, menolak
+    // representasi non-standar (5e5, 0x.., 500_000, "500000,00", whitespace,
+    // NaN/Infinity, tanda minus) yang bisa lolos parser Decimal yang permisif.
+    const raw = payload.gross_amount;
+    if (typeof raw !== "string" || !STRICT_DECIMAL_AMOUNT.test(raw)) {
+      throw new AppError(
+        "Midtrans gross_amount format is invalid",
+        StatusCodes.BAD_REQUEST,
+        "MIDTRANS_AMOUNT_INVALID",
+      );
+    }
+
+    const provided = new Prisma.Decimal(raw);
+
+    // Nominal harus positif (bukan nol/negatif).
+    if (!provided.isFinite() || provided.lte(0)) {
+      throw new AppError(
+        "Midtrans gross_amount must be a positive value",
+        StatusCodes.BAD_REQUEST,
+        "MIDTRANS_AMOUNT_INVALID",
+      );
+    }
+
+    // Harus sama persis dengan nominal order authoritative dari backend.
+    if (!provided.equals(new Prisma.Decimal(authoritativeAmount))) {
+      throw new AppError(
+        "Midtrans gross_amount does not match the authoritative order amount",
+        StatusCodes.BAD_REQUEST,
+        "MIDTRANS_AMOUNT_MISMATCH",
+      );
+    }
+  }
+
   private verifySignature(payload: MidtransNotificationPayload) {
     if (!env.MIDTRANS_SERVER_KEY) {
       if (env.NODE_ENV === "production") {
@@ -334,7 +452,16 @@ export class MidtransPaymentService {
       )
       .digest("hex");
 
-    if (expected !== payload.signature_key) {
+    // P2: bandingkan signature dengan constant-time compare untuk menghindari
+    // timing side-channel. timingSafeEqual mensyaratkan panjang buffer sama,
+    // jadi panjang divalidasi lebih dulu (perbedaan panjang = pasti invalid).
+    const expectedBuffer = Buffer.from(expected, "utf8");
+    const providedBuffer = Buffer.from(payload.signature_key, "utf8");
+
+    if (
+      expectedBuffer.length !== providedBuffer.length ||
+      !timingSafeEqual(expectedBuffer, providedBuffer)
+    ) {
       throw new AppError(
         "Midtrans signature is invalid",
         StatusCodes.UNAUTHORIZED,
@@ -486,7 +613,7 @@ export class MidtransPaymentService {
 
   private canReadOrder(role: UserRole, requesterId: string, ownerId: string) {
     return (
-      requesterId === ownerId || role === "ADMIN" || role === "SUPER_ADMIN"
+      requesterId === ownerId || isAdminRole(role)
     );
   }
 

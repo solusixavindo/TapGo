@@ -27,7 +27,43 @@ export const logger = pino({
       "signature",
       "secretKey",
       "DOKU_SECRET_KEY",
-      "DOKU_API_KEY"
+      "DOKU_API_KEY",
+      // Identifier sensitif dan material blind index. Service identifierIndex
+      // sendiri tidak pernah mencatat nilai apa pun; path ini adalah lapisan
+      // pengaman kedua bila nilai terbawa lewat request body atau objek lain.
+      "nik",
+      "req.body.nik",
+      "licenseNumber",
+      "req.body.licenseNumber",
+      "plateNumber",
+      "req.body.plateNumber",
+      "blindIndex",
+      "identifierKey",
+      "IDENTIFIER_INDEX_KEY_V1",
+      "IDENTIFIER_INDEX_KEY_V2"
+      ,
+      // Material recovery akun. Service recovery sendiri tidak pernah
+      // mencatat nilai apa pun; path ini adalah lapisan pengaman kedua bila
+      // nilai terbawa lewat request body atau objek yang di-log.
+      "code",
+      "req.body.code",
+      "otp",
+      "req.body.otp",
+      "otpCode",
+      "resetToken",
+      "req.body.resetToken",
+      "newPassword",
+      "req.body.newPassword",
+      "confirmPassword",
+      "req.body.confirmPassword",
+      "identifier",
+      "req.body.identifier",
+      "destination",
+      "phone",
+      "req.body.phone",
+      "email",
+      "req.body.email",
+      "AUTH_RECOVERY_HMAC_SECRET"
     ],
     censor: "[REDACTED]"
   },

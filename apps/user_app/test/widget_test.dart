@@ -1,13 +1,41 @@
+import 'dart:async';
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import 'package:tapgo_user_app/demo/client_flow_models.dart';
 import 'package:tapgo_user_app/main.dart';
 
 void main() {
+  DemoClientSession authTestSession() {
+    return DemoClientSession.initial().copyWith(
+      userId: 'user-auth-test',
+      userName: 'Member TapGo',
+      phone: '+6281234567890',
+      accessToken: 'access-token-test',
+      refreshToken: 'refresh-token-test',
+      isDemoMode: false,
+    );
+  }
+
+  setUp(() {
+    tapGoSupportTicketsLoaderForTests = null;
+    tapGoSupportTicketDetailLoaderForTests = null;
+    tapGoCreateSupportTicketForTests = null;
+    tapGoMemberIdentityLoaderForTests = null;
+  });
+
   Future<void> openAuth(WidgetTester tester) async {
     tapGoDisablePersistenceForTests = true;
+    tapGoEnablePaymentSimulatorForTests = false;
     ImagePickerPlatform.instance = _FakeImagePickerPlatform();
     await tester.pumpWidget(const ProviderScope(child: TapGoUserApp()));
     await tester.pump();
@@ -16,21 +44,517 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Future<void> openDashboard(WidgetTester tester) async {
+  Future<void> openDashboard(
+    WidgetTester tester, {
+    bool enablePaymentSimulator = false,
+  }) async {
     tapGoDisablePersistenceForTests = true;
+    tapGoEnablePaymentSimulatorForTests = enablePaymentSimulator;
     ImagePickerPlatform.instance = _FakeImagePickerPlatform();
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
-          home: TapGoDashboard(),
-        ),
-      ),
+      const ProviderScope(child: MaterialApp(home: TapGoDashboard())),
     );
     await tester.pumpAndSettle();
   }
 
-  testWidgets('auth screen does not bypass backend login',
-      (WidgetTester tester) async {
+  testWidgets('all 3d service icon assets resolve locally', (
+    WidgetTester tester,
+  ) async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    const serviceIconAssets = [
+      'assets/illustrations/services/tg-home.svg',
+      'assets/illustrations/services/tg-wallet.svg',
+      'assets/illustrations/services/tg-top-up.svg',
+      'assets/illustrations/services/tg-upgrade.svg',
+      'assets/illustrations/services/tg-referral.svg',
+      'assets/illustrations/services/tg-membership.svg',
+      'assets/illustrations/services/tg-reward.svg',
+      'assets/illustrations/services/tg-bonus.svg',
+      'assets/illustrations/services/tg-commission.svg',
+      'assets/illustrations/services/tg-cashback.svg',
+      'assets/illustrations/services/tg-ppob.svg',
+      'assets/illustrations/services/tg-pulsa.svg',
+      'assets/illustrations/services/tg-bpjs.svg',
+      'assets/illustrations/services/tg-tagihan.svg',
+      'assets/illustrations/services/tg-merchant.svg',
+      'assets/illustrations/services/tg-marketplace.svg',
+      'assets/illustrations/services/tg-jasa.svg',
+      'assets/illustrations/services/tg-ojek-motor.svg',
+      'assets/illustrations/services/tg-ojek-mobil.svg',
+      'assets/illustrations/services/tg-activity.svg',
+      'assets/illustrations/services/tg-kelas-online.svg',
+      'assets/illustrations/services/tg-webinar.svg',
+      'assets/illustrations/services/tg-event.svg',
+      'assets/illustrations/services/tg-notification.svg',
+      'assets/illustrations/services/tg-chat.svg',
+      'assets/illustrations/services/tg-support.svg',
+      'assets/illustrations/services/tg-profile.svg',
+    ];
+    final svgBodies = <String>{};
+
+    for (final asset in serviceIconAssets) {
+      final svg = await rootBundle.loadString(asset);
+      expect(svg, contains('<svg'));
+      expect(svg, contains('viewBox="0 0 96 96"'));
+      expect(svg, isNot(contains('rect x="0"')));
+      svgBodies.add(svg);
+    }
+    expect(svgBodies.length, serviceIconAssets.length);
+  });
+
+  testWidgets('premium Basic Portal PNG assets resolve locally', (
+    WidgetTester tester,
+  ) async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    const expected = {
+      'Kartu Anggota': 'assets/icons/basic_portal/member_card.png',
+      'Profil': 'assets/icons/basic_portal/profile.png',
+      'Tiket Bantuan': 'assets/icons/basic_portal/support_ticket.png',
+      'Hapus Akun': 'assets/icons/basic_portal/delete_account.png',
+      'Kebijakan Privasi': 'assets/icons/basic_portal/privacy_policy.png',
+      'Syarat & Ketentuan': 'assets/icons/basic_portal/terms_conditions.png',
+      'Hubungi Kami': 'assets/icons/basic_portal/contact_us.png',
+      'Bantuan': 'assets/icons/basic_portal/help.png',
+      'Logout': 'assets/icons/basic_portal/logout.png',
+    };
+
+    for (final entry in expected.entries) {
+      expect(tapGoPremiumIconAssetForTests(entry.key), entry.value);
+      final bytes = await rootBundle.load(entry.value);
+      expect(bytes.getUint8(0), 0x89);
+      expect(String.fromCharCodes(bytes.buffer.asUint8List(1, 3)), 'PNG');
+      expect(String.fromCharCodes(bytes.buffer.asUint8List(12, 4)), 'IHDR');
+      expect(bytes.getUint32(16, Endian.big), 1024);
+      expect(bytes.getUint32(20, Endian.big), 1024);
+      expect(bytes.getUint8(24), 8);
+      expect(bytes.getUint8(25), 6);
+    }
+
+    expect(tapGoServiceIllustrationAssetForTests('Tiket Bantuan'), isNull);
+    for (final label in expected.keys) {
+      expect(tapGoServiceIllustrationAssetForTests(label), isNull);
+    }
+  });
+
+  testWidgets('premium Basic Portal icon falls back safely', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: PremiumTapGoIcon(
+          label: 'Tidak Ada',
+          fallbackIcon: Icons.help_outline_rounded,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byIcon(Icons.help_outline_rounded), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('service grid exposes only Play-safe core services', (
+    WidgetTester tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    try {
+      await openDashboard(tester);
+
+      expect(find.text('Segera'), findsNothing);
+      expect(find.text('Kartu Anggota'), findsWidgets);
+      expect(find.text('Referral'), findsNothing);
+      expect(find.text('Tiket Bantuan'), findsWidgets);
+      expect(find.text('Profil'), findsWidgets);
+      expect(find.bySemanticsLabel('Buka layanan TapGo Ride'), findsNothing);
+      expect(find.bySemanticsLabel('Buka layanan TapGo Mart'), findsNothing);
+      expect(find.bySemanticsLabel('Buka layanan PPOB'), findsNothing);
+      expect(
+        find.bySemanticsLabel('Buka layanan Kartu Anggota'),
+        findsOneWidget,
+      );
+    } finally {
+      semantics.dispose();
+    }
+  });
+
+  testWidgets('release-visible debug paint flags stay disabled', (
+    WidgetTester tester,
+  ) async {
+    expect(debugPaintBaselinesEnabled, isFalse);
+    expect(debugPaintSizeEnabled, isFalse);
+    expect(debugPaintPointersEnabled, isFalse);
+    expect(debugRepaintRainbowEnabled, isFalse);
+  });
+
+  test(
+    'Play service boundaries hide placeholder and referral destinations',
+    () {
+      final playLabels = tapGoSuperMenuLabelsForDistributionForTests(
+        TapGoDistributionMode.play,
+      );
+      final directLabels = tapGoSuperMenuLabelsForDistributionForTests(
+        TapGoDistributionMode.direct,
+      );
+
+      expect(playLabels, contains('Kartu Anggota'));
+      expect(playLabels, contains('Tiket Bantuan'));
+      expect(playLabels, isNot(contains('Referral')));
+      expect(playLabels, isNot(contains('TapGo Ride')));
+      expect(playLabels, isNot(contains('TapGo Car')));
+      expect(playLabels, isNot(contains('TapGo Food')));
+      expect(playLabels, isNot(contains('TapGo Mart')));
+      expect(playLabels, isNot(contains('Pulsa')));
+      expect(playLabels, isNot(contains('PPOB')));
+
+      expect(directLabels, contains('Referral'));
+      expect(directLabels, contains('TapGo Ride'));
+      expect(directLabels, contains('PPOB'));
+
+      expect(tapGoSuperMenuDestinationForLabelForTests('PPOB'), isNull);
+      expect(tapGoSuperMenuDestinationForLabelForTests('Referral'), isNull);
+      expect(
+        tapGoSuperMenuDestinationForLabelForTests('Profil'),
+        isA<ProfileDetailsScreen>(),
+      );
+    },
+  );
+
+  test('login backend succeeds and persistence succeeds', () async {
+    final session = authTestSession();
+    DemoClientSession? runtimeSession;
+    var authenticated = false;
+    var dashboardNavigationCount = 0;
+
+    final activation = tapGoActivateAuthenticatedRuntimeSession(
+      session: session,
+      setSession: (value) => runtimeSession = value,
+      setAuthenticated: (value) => authenticated = value,
+      afterAuthenticated: () => dashboardNavigationCount++,
+    );
+    final persistence = await tapGoPersistAuthenticatedSessionBestEffort(
+      session: session,
+      steps: [
+        TapGoSessionPersistStep(
+          name: 'saveSession',
+          persist: (_) async => true,
+        ),
+        TapGoSessionPersistStep(name: 'saveTokens', persist: (_) async => true),
+      ],
+    );
+
+    expect(activation.authenticated, isTrue);
+    expect(authenticated, isTrue);
+    expect(runtimeSession, session);
+    expect(dashboardNavigationCount, 1);
+    expect(persistence.success, isTrue);
+  });
+
+  test(
+    'logout followed by relogin refreshes session and reopens dashboard',
+    () async {
+      final firstSession = authTestSession().copyWith(
+        userId: 'first-session',
+        accessToken: 'first-access-token',
+        refreshToken: 'first-refresh-token',
+      );
+      final secondSession = authTestSession().copyWith(
+        userId: 'second-session',
+        accessToken: 'second-access-token',
+        refreshToken: 'second-refresh-token',
+      );
+      DemoClientSession runtimeSession = DemoClientSession.initial();
+      var authenticated = false;
+      var dashboardNavigationCount = 0;
+
+      tapGoActivateAuthenticatedRuntimeSession(
+        session: firstSession,
+        setSession: (value) => runtimeSession = value,
+        setAuthenticated: (value) => authenticated = value,
+        afterAuthenticated: () => dashboardNavigationCount++,
+      );
+      expect(authenticated, isTrue);
+      expect(runtimeSession.userId, 'first-session');
+      expect(dashboardNavigationCount, 1);
+
+      runtimeSession = DemoClientSession.initial();
+      authenticated = false;
+
+      tapGoActivateAuthenticatedRuntimeSession(
+        session: secondSession,
+        setSession: (value) => runtimeSession = value,
+        setAuthenticated: (value) => authenticated = value,
+        afterAuthenticated: () => dashboardNavigationCount++,
+      );
+
+      expect(authenticated, isTrue);
+      expect(runtimeSession.userId, 'second-session');
+      expect(runtimeSession.accessToken, 'second-access-token');
+      expect(dashboardNavigationCount, 2);
+    },
+  );
+
+  test('restart restore keeps the latest active login session fields', () {
+    final session = authTestSession().copyWith(
+      userId: 'restart-user',
+      accessToken: 'restart-access-token',
+      refreshToken: 'restart-refresh-token',
+      userName: 'Member Restart',
+      phone: '+628111222333',
+    );
+
+    final restored = tapGoSessionFromJsonForTests(
+      tapGoSessionToJsonForTests(session),
+    );
+
+    expect(restored.userId, 'restart-user');
+    expect(restored.accessToken, 'restart-access-token');
+    expect(restored.refreshToken, 'restart-refresh-token');
+    expect(restored.userName, 'Member Restart');
+    expect(restored.phone, '+628111222333');
+    expect(restored.isDemoMode, isFalse);
+  });
+
+  test('login backend succeeds and persistence throws', () async {
+    final session = authTestSession();
+    var authenticated = false;
+
+    tapGoActivateAuthenticatedRuntimeSession(
+      session: session,
+      setSession: (_) {},
+      setAuthenticated: (value) => authenticated = value,
+    );
+    final persistence = await tapGoPersistAuthenticatedSessionBestEffort(
+      session: session,
+      steps: [
+        TapGoSessionPersistStep(
+          name: 'saveSession',
+          persist: (_) {
+            throw StateError('storage unavailable');
+          },
+        ),
+      ],
+    );
+
+    expect(authenticated, isTrue);
+    expect(persistence.success, isFalse);
+    expect(persistence.failedSteps, ['saveSession']);
+  });
+
+  test('login backend succeeds and persistence times out', () async {
+    final session = authTestSession();
+    var authenticated = false;
+
+    tapGoActivateAuthenticatedRuntimeSession(
+      session: session,
+      setSession: (_) {},
+      setAuthenticated: (value) => authenticated = value,
+    );
+    final persistence = await tapGoPersistAuthenticatedSessionBestEffort(
+      session: session,
+      stepTimeout: const Duration(milliseconds: 10),
+      steps: [
+        TapGoSessionPersistStep(
+          name: 'saveTokens',
+          persist: (_) => Completer<bool>().future,
+        ),
+      ],
+    );
+
+    expect(authenticated, isTrue);
+    expect(persistence.success, isFalse);
+    expect(persistence.failedSteps, ['saveTokens']);
+  });
+
+  test('register remains authenticated when persistence fails', () async {
+    final session = authTestSession().copyWith(userId: 'registered-user');
+    var authenticated = false;
+
+    tapGoActivateAuthenticatedRuntimeSession(
+      session: session,
+      setSession: (_) {},
+      setAuthenticated: (value) => authenticated = value,
+    );
+    final persistence = await tapGoPersistAuthenticatedSessionBestEffort(
+      session: session,
+      steps: [
+        TapGoSessionPersistStep(
+          name: 'saveRegisteredUser',
+          persist: (_) async => false,
+        ),
+      ],
+    );
+
+    expect(authenticated, isTrue);
+    expect(persistence.success, isFalse);
+    expect(persistence.failedSteps, ['saveRegisteredUser']);
+  });
+
+  test('referral claim failure does not invalidate registration', () async {
+    final result = await tapGoClaimReferralBestEffort(
+      referralCode: 'TAPG123456',
+      claimReferral: (_) async => throw DioException(
+        requestOptions: RequestOptions(path: '/referrals/claim'),
+        message: 'network unavailable',
+      ),
+    );
+
+    expect(result.success, isFalse);
+    expect(result.warningMessage, isNotNull);
+    expect(result.warningMessage, contains('Registrasi berhasil'));
+  });
+
+  test('single flight guard prevents duplicate form actions', () async {
+    final guard = TapGoSingleFlightGuard();
+    final completer = Completer<bool>();
+    var runCount = 0;
+
+    final first = guard.run(() async {
+      runCount++;
+      return completer.future;
+    });
+    final second = await guard.run(() async {
+      runCount++;
+      return true;
+    });
+
+    expect(second, isNull);
+    expect(runCount, 1);
+    expect(guard.isRunning, isTrue);
+
+    completer.complete(true);
+    expect(await first, isTrue);
+    expect(guard.isRunning, isFalse);
+
+    await expectLater(
+      guard.run<bool>(() async {
+        runCount++;
+        throw StateError('network unavailable');
+      }),
+      throwsA(isA<StateError>()),
+    );
+    expect(guard.isRunning, isFalse);
+
+    final retry = await guard.run(() async {
+      runCount++;
+      return true;
+    });
+
+    expect(retry, isTrue);
+    expect(runCount, 3);
+  });
+
+  test('document upload only succeeds with a valid picked file path', () {
+    expect(tapGoIsValidPickedDocumentPathForTests(null), isFalse);
+    expect(tapGoIsValidPickedDocumentPathForTests(''), isFalse);
+    expect(tapGoIsValidPickedDocumentPathForTests('   '), isFalse);
+    expect(
+      tapGoIsValidPickedDocumentPathForTests(' /tmp/tapgo-ktp.jpg '),
+      isTrue,
+    );
+    expect(
+      tapGoUploadSuccessLabelForTests(ImageSource.gallery),
+      'Foto berhasil dipilih',
+    );
+    expect(
+      tapGoUploadSuccessLabelForTests(ImageSource.camera),
+      'Foto berhasil diambil',
+    );
+    expect(tapGoDocumentUploadFailureMessage, isNot(contains('Exception')));
+    expect(tapGoDocumentUploadFailureMessage, isNot(contains('/tmp')));
+    expect(tapGoDocumentUploadFailureMessage, isNot(contains('channel-error')));
+  });
+
+  test('Indonesian phone input accepts supported formats safely', () {
+    expect(tapGoPhoneValidatorMessage('0812 3456-7890'), isNull);
+    expect(tapGoPhoneValidatorMessage('6281234567890'), isNull);
+    expect(tapGoPhoneValidatorMessage('+6281234567890'), isNull);
+    expect(tapGoSanitizePhoneInput('+62 812-3456-7890'), '+6281234567890');
+    expect(tapGoSanitizePhoneInput('6281234567890'), '6281234567890');
+    expect(tapGoPhoneValidatorMessage('12345'), 'Nomor HP tidak valid');
+    expect(tapGoPhoneValidatorMessage(''), 'Nomor HP wajib diisi');
+  });
+
+  test(
+    'NIK input keeps digits only, caps length, and preserves leading zero',
+    () {
+      final formatted = _applyFormatters(
+        tapGoNikInputFormatters,
+        '00A1234567890123456789',
+      );
+
+      expect(formatted, '0012345678901234');
+      expect(formatted.length, 16);
+      expect(tapGoNikValidatorMessage('0012345678901234'), isNull);
+      expect(
+        tapGoNikValidatorMessage('001234567890123'),
+        'NIK harus terdiri dari 16 digit.',
+      );
+    },
+  );
+
+  test('bank account input keeps digit string and leading zero intact', () {
+    final formatted = _applyFormatters(
+      tapGoDigitsOnlyInputFormatters,
+      '0012 34-567A',
+    );
+
+    expect(formatted, '001234567');
+    expect(tapGoDigitsOnly(formatted), '001234567');
+    expect(tapGoBankAccountValidatorMessage('001234'), isNull);
+    expect(
+      tapGoBankAccountValidatorMessage('00123'),
+      'Nomor rekening tidak valid',
+    );
+  });
+
+  test('Rupiah formatter separates display from canonical integer value', () {
+    expect(_applyFormatters(tapGoRupiahInputFormatters, '1000'), '1.000');
+    expect(_applyFormatters(tapGoRupiahInputFormatters, '150000'), '150.000');
+    expect(
+      _applyFormatters(tapGoRupiahInputFormatters, 'Rp150.000'),
+      '150.000',
+    );
+    expect(tapGoCanonicalRupiahValue('150.000'), 150000);
+    expect(tapGoCanonicalRupiahValue(''), 0);
+    expect(tapGoCanonicalRupiahValue('0'), 0);
+    expect(tapGoFormatRupiahInput('150.000'), '150.000');
+    expect(tapGoFormatRupiahInput('0'), '0');
+  });
+
+  test('Rupiah formatter keeps cursor near edited digit position', () {
+    final formatter = TapGoRupiahInputFormatter();
+    final result = formatter.formatEditUpdate(
+      const TextEditingValue(
+        text: '12.345',
+        selection: TextSelection.collapsed(offset: 2),
+      ),
+      const TextEditingValue(
+        text: '120.345',
+        selection: TextSelection.collapsed(offset: 3),
+      ),
+    );
+
+    expect(result.text, '120.345');
+    expect(result.selection.extentOffset, 3);
+    expect(tapGoRupiahSelectionOffset('150.000', 3), 3);
+  });
+
+  testWidgets('startup restore without valid token safely returns login', (
+    WidgetTester tester,
+  ) async {
+    await openAuth(tester);
+
+    expect(find.text('TapGo Lion'), findsOneWidget);
+    expect(
+      find.text('Masuk untuk lanjut ke dashboard layanan.'),
+      findsOneWidget,
+    );
+    expect(find.text('TapGoPay'), findsNothing);
+  });
+
+  testWidgets('auth screen does not bypass backend login', (
+    WidgetTester tester,
+  ) async {
     await openAuth(tester);
 
     expect(find.text('TapGo Lion'), findsOneWidget);
@@ -42,8 +566,9 @@ void main() {
     expect(find.text('TapGoPay'), findsNothing);
   });
 
-  testWidgets('staging register requires real data and hides preview bypass',
-      (WidgetTester tester) async {
+  testWidgets('staging register requires real data and hides preview bypass', (
+    WidgetTester tester,
+  ) async {
     await openAuth(tester);
 
     await tester.tap(find.text('Register'));
@@ -77,24 +602,90 @@ void main() {
     expect(find.text('TapGoPay'), findsNothing);
   });
 
-  testWidgets('dashboard membership remains reachable without marketing plan',
-      (WidgetTester tester) async {
-    await openDashboard(tester);
+  testWidgets(
+    'dashboard keeps Basic status and hides paid membership purchase',
+    (WidgetTester tester) async {
+      await openDashboard(tester);
 
-    expect(find.text('Marketing Plan'), findsNothing);
-    await tester.ensureVisible(find.text('Membership').first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Membership').first);
-    await tester.pumpAndSettle();
+      // Status Basic kini ditampilkan kartu Membership biru. Kartu status
+      // kuning yang mengulang informasi yang sama dihapus pada Stage R2.4T,
+      // jadi jaminan yang diuji tetap sama: dashboard menampilkan paket aktif
+      // Basic dan tidak menawarkan pembelian berbayar.
+      expect(find.text('Membership'), findsOneWidget);
+      expect(find.text('Basic'), findsWidgets);
+      expect(find.textContaining('Paket aktif:'), findsNothing);
+      expect(find.text('Marketing Plan'), findsNothing);
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(home: MembershipPackagesScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Basic'), findsWidgets);
-    expect(find.text('Silver'), findsWidgets);
-    expect(find.text('Platinum'), findsWidgets);
+      expect(find.text('Kartu Anggota'), findsOneWidget);
+      expect(find.text('TapGo Member Card'), findsOneWidget);
+      expect(find.text('Basic'), findsWidgets);
+      expect(find.text('Gratis'), findsNothing);
+      expect(find.text('Silver'), findsNothing);
+      expect(find.text('Gold'), findsNothing);
+      expect(find.text('Platinum'), findsNothing);
+      expect(find.textContaining('Rp500.000'), findsNothing);
+      expect(find.textContaining('Rp3.000.000'), findsNothing);
+      expect(find.textContaining('Rp5.500.000'), findsNothing);
+      expect(find.text('Daftar'), findsNothing);
+
+      expect(find.text('Form Membership'), findsNothing);
+      expect(find.text('Paket Silver'), findsNothing);
+      expect(find.text('Bayar Sekarang'), findsNothing);
+    },
+  );
+
+  test('distribution mode defaults and fails closed to Play', () {
+    expect(tapGoDistributionModeFromValue(null), TapGoDistributionMode.play);
+    expect(tapGoDistributionModeFromValue(''), TapGoDistributionMode.play);
+    expect(tapGoDistributionModeFromValue('play'), TapGoDistributionMode.play);
+    expect(
+      tapGoDistributionModeFromValue('unexpected'),
+      TapGoDistributionMode.play,
+    );
+    expect(
+      tapGoDistributionModeFromValue('direct'),
+      TapGoDistributionMode.direct,
+    );
+    expect(tapGoIsPlayDistribution, isTrue);
   });
 
-  testWidgets('bottom navigation tabs and super menu are clickable',
-      (WidgetTester tester) async {
+  test('payment provider copy follows gateway with neutral fallback', () {
+    expect(
+      tapGoPaymentStatusInstructionForTests('DOKU'),
+      'Selesaikan pembayaran di halaman DOKU, lalu cek status pembayaran Anda.',
+    );
+    expect(
+      tapGoPaymentStatusInstructionForTests('MIDTRANS'),
+      'Selesaikan pembayaran di halaman Midtrans, lalu cek status pembayaran Anda.',
+    );
+    expect(
+      tapGoPaymentStatusInstructionForTests(null),
+      'Selesaikan pembayaran di halaman pembayaran, lalu cek status pembayaran Anda.',
+    );
+    expect(
+      tapGoPaymentStatusInstructionForTests('unknown'),
+      isNot(contains('DOKU')),
+    );
+    expect(tapGoPaymentUrlDialogTitleForTests('DOKU'), 'Link Pembayaran DOKU');
+    expect(
+      tapGoPaymentUrlDialogTitleForTests('MIDTRANS'),
+      'Link Pembayaran Midtrans',
+    );
+    expect(tapGoPaymentUrlDialogTitleForTests(null), 'Link Pembayaran');
+    expect(tapGoCheckoutLaunchModeForTests(), LaunchMode.externalApplication);
+  });
+
+  testWidgets('bottom navigation tabs and super menu are clickable', (
+    WidgetTester tester,
+  ) async {
     await openDashboard(tester);
+    expect(find.text('2'), findsNothing);
 
     await tester.tap(find.text('Aktivitas'));
     await tester.pumpAndSettle();
@@ -103,47 +694,303 @@ void main() {
     await tester.tap(find.text('Chat'));
     await tester.pumpAndSettle();
     expect(find.text('Belum ada pesan'), findsOneWidget);
+    expect(find.text('2'), findsNothing);
 
     await tester.tap(find.text('Akun'));
     await tester.pumpAndSettle();
-    expect(find.text('Membership Saya'), findsOneWidget);
-    expect(find.text('Copy referral link'), findsOneWidget);
+    expect(find.text('Kartu Anggota'), findsOneWidget);
+    expect(find.text('Salin link referral'), findsNothing);
+    expect(find.text('Jaringan Saya'), findsNothing);
 
     await tester.tap(find.byIcon(Icons.apps_rounded));
     await tester.pumpAndSettle();
     expect(find.text('Super Menu'), findsOneWidget);
-    expect(find.text('TapGo Ride'), findsOneWidget);
-    expect(find.text('PPOB'), findsOneWidget);
-    expect(find.text('Membership'), findsOneWidget);
-    expect(find.text('Support'), findsOneWidget);
+    expect(find.text('TapGo Ride'), findsNothing);
+    expect(find.text('PPOB'), findsNothing);
+    expect(find.text('Referral'), findsNothing);
+    expect(find.text('Kartu Anggota'), findsOneWidget);
+    expect(find.text('Reward'), findsNothing);
+    expect(find.text('BPJS'), findsNothing);
+    expect(find.text('Tiket Bantuan'), findsOneWidget);
   });
 
-  testWidgets('referral tree uses realistic names in widget test mode',
-      (WidgetTester tester) async {
+  testWidgets('Play dashboard action tiles navigate without pointer blockers', (
+    WidgetTester tester,
+  ) async {
+    await openDashboard(tester);
+
+    final memberCardTile = find.bySemanticsLabel('Buka layanan Kartu Anggota');
+    await tester.ensureVisible(memberCardTile);
+    await tester.tap(memberCardTile);
+    await tester.pumpAndSettle();
+    expect(find.text('TapGo Member Card'), findsOneWidget);
+    Navigator.of(tester.element(find.text('TapGo Member Card'))).pop();
+    await tester.pumpAndSettle();
+
+    final profileTile = find.bySemanticsLabel('Buka layanan Profil');
+    await tester.ensureVisible(profileTile);
+    await tester.tap(profileTile);
+    await tester.pumpAndSettle();
+    expect(find.text('Identitas'), findsOneWidget);
+    expect(find.text('Keanggotaan'), findsOneWidget);
+    expect(find.text('Public Member ID'), findsOneWidget);
+    expect(find.text('Kebijakan Privasi'), findsNothing);
+    expect(find.text('Membership'), findsNothing);
+    expect(find.text('Benefit'), findsNothing);
+    expect(find.textContaining('Paket aktif'), findsNothing);
+    Navigator.of(tester.element(find.text('Identitas'))).pop();
+    await tester.pumpAndSettle();
+
+    final supportTile = find.bySemanticsLabel('Buka layanan Tiket Bantuan');
+    await tester.ensureVisible(supportTile);
+    await tester.tap(supportTile);
+    await tester.pumpAndSettle();
+    expect(find.text('Bantuan TapGo'), findsOneWidget);
+    Navigator.of(tester.element(find.text('Bantuan TapGo'))).pop();
+    await tester.pumpAndSettle();
+
+    final deleteTile = find.bySemanticsLabel('Buka layanan Hapus Akun');
+    await tester.ensureVisible(deleteTile);
+    await tester.tap(deleteTile);
+    await tester.pumpAndSettle();
+    expect(find.text('Ajukan Penghapusan Akun'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Play account legal and deletion actions remain reachable', (
+    WidgetTester tester,
+  ) async {
     await openDashboard(tester);
 
     await tester.tap(find.text('Akun'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Jaringan Saya'));
+    await tester.ensureVisible(find.text('Kebijakan Privasi'));
+    await tester.tap(find.text('Kebijakan Privasi'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Jaringan Saya'));
+    expect(find.text('Kebijakan Privasi'), findsWidgets);
+    expect(find.textContaining('TapGo'), findsWidgets);
+    Navigator.of(tester.element(find.text('Kebijakan Privasi').first)).pop();
     await tester.pumpAndSettle();
 
-    expect(find.text('Solusi Digital'), findsOneWidget);
-    expect(find.text('Budi Santoso'), findsOneWidget);
-    expect(find.text('Andi Budi'), findsOneWidget);
-
-    await tester.tap(find.text('Budi Santoso'));
+    await tester.ensureVisible(find.text('Hapus Akun'));
+    await tester.tap(find.text('Hapus Akun'));
     await tester.pumpAndSettle();
-    expect(find.text('Andi Budi'), findsNothing);
-
-    await tester.tap(find.text('Budi Santoso'));
-    await tester.pumpAndSettle();
-    expect(find.text('Andi Budi'), findsOneWidget);
+    expect(find.text('Ajukan Penghapusan Akun'), findsOneWidget);
   });
 
-  testWidgets('user account does not expose admin dashboard',
-      (WidgetTester tester) async {
+  testWidgets('Play account menu routes use complete premium icon family', (
+    WidgetTester tester,
+  ) async {
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Akun'));
+    await tester.pumpAndSettle();
+
+    const labels = {
+      'Kartu Anggota': 'assets/icons/basic_portal/member_card.png',
+      'Profil': 'assets/icons/basic_portal/profile.png',
+      'Tampilan': 'assets/icons/basic_portal/help.png',
+      'Tiket Bantuan': 'assets/icons/basic_portal/support_ticket.png',
+      'Kebijakan Privasi': 'assets/icons/basic_portal/privacy_policy.png',
+      'Syarat & Ketentuan': 'assets/icons/basic_portal/terms_conditions.png',
+      'Hapus Akun': 'assets/icons/basic_portal/delete_account.png',
+      'Hubungi Kami': 'assets/icons/basic_portal/contact_us.png',
+      'Bantuan': 'assets/icons/basic_portal/help.png',
+      'Logout': 'assets/icons/basic_portal/logout.png',
+    };
+
+    for (final entry in labels.entries) {
+      await tester.ensureVisible(find.text(entry.key));
+      expect(find.text(entry.key), findsOneWidget);
+      expect(tapGoPremiumIconAssetForTests(entry.key), entry.value);
+      expect(tapGoServiceIllustrationAssetForTests(entry.key), isNull);
+    }
+
+    expect(find.byType(PremiumTapGoIcon), findsAtLeastNWidgets(9));
+
+    await tester.ensureVisible(find.text('Syarat & Ketentuan'));
+    await tester.tap(find.text('Syarat & Ketentuan'));
+    await tester.pumpAndSettle();
+    expect(find.text('Syarat & Ketentuan'), findsWidgets);
+    Navigator.of(tester.element(find.text('Syarat & Ketentuan').first)).pop();
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Hubungi Kami'));
+    await tester.tap(find.text('Hubungi Kami'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bantuan TapGo'), findsOneWidget);
+    Navigator.of(tester.element(find.text('Bantuan TapGo'))).pop();
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Bantuan'));
+    await tester.tap(find.text('Bantuan'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pusat Bantuan TapGo'), findsOneWidget);
+    Navigator.of(tester.element(find.text('Pusat Bantuan TapGo'))).pop();
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Logout'));
+    await tester.tap(find.text('Logout'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Apakah Anda yakin ingin keluar dari akun ini?'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Theme settings default to system and change immediately', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(
+      ProviderScope(
+        child: Consumer(
+          builder: (context, ref, child) {
+            final preference = ref.watch(tapGoThemePreferenceProvider);
+            return MaterialApp(
+              theme: ThemeData.light(),
+              darkTheme: ThemeData.dark(),
+              themeMode: preference.themeMode,
+              home: const ThemeSettingsScreen(),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    var app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.themeMode, ThemeMode.system);
+
+    expect(find.text('Ikuti sistem'), findsOneWidget);
+    expect(find.text('Tema terang'), findsOneWidget);
+    expect(find.text('Tema gelap'), findsOneWidget);
+    await tester.tap(find.text('Tema gelap'));
+    await tester.pumpAndSettle();
+    app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.themeMode, ThemeMode.dark);
+
+    await tester.tap(find.text('Tema terang'));
+    await tester.pumpAndSettle();
+    app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.themeMode, ThemeMode.light);
+  });
+
+  testWidgets('Theme selection persists across app rebuild and auth state', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: ThemeSettingsScreen())),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tema gelap'));
+    await tester.pumpAndSettle();
+
+    var authenticated = true;
+    await tester.pumpWidget(
+      ProviderScope(
+        child: Consumer(
+          builder: (context, ref, child) {
+            final preference = ref.watch(tapGoThemePreferenceProvider);
+            return MaterialApp(
+              theme: ThemeData.light(),
+              darkTheme: ThemeData.dark(),
+              themeMode: preference.themeMode,
+              home: Text(authenticated ? 'Dashboard' : 'Login'),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    var app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.themeMode, ThemeMode.dark);
+
+    authenticated = false;
+    await tester.pumpWidget(
+      ProviderScope(
+        child: Consumer(
+          builder: (context, ref, child) {
+            final preference = ref.watch(tapGoThemePreferenceProvider);
+            return MaterialApp(
+              theme: ThemeData.light(),
+              darkTheme: ThemeData.dark(),
+              themeMode: preference.themeMode,
+              home: Text(authenticated ? 'Dashboard' : 'Login'),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.themeMode, ThemeMode.dark);
+  });
+
+  testWidgets('Tampilan menu opens theme settings screen', (
+    WidgetTester tester,
+  ) async {
+    await openDashboard(tester);
+    await tester.tap(find.text('Akun'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Tampilan'));
+    expect(find.text('Atur tema aplikasi'), findsOneWidget);
+    await tester.tap(find.text('Tampilan'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ikuti sistem'), findsOneWidget);
+    expect(find.text('Tema terang'), findsOneWidget);
+    expect(find.text('Tema gelap'), findsOneWidget);
+  });
+
+  testWidgets('dashboard remains usable when reduced motion is enabled', (
+    WidgetTester tester,
+  ) async {
+    tapGoDisablePersistenceForTests = true;
+    tapGoEnablePaymentSimulatorForTests = false;
+    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(disableAnimations: true),
+            child: TapGoDashboard(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('TapGoPay'), findsNothing);
+    expect(find.byIcon(Icons.apps_rounded), findsOneWidget);
+    expect(find.text('Membership'), findsWidgets);
+
+    await tester.tap(find.text('Akun'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Kartu Anggota'), findsOneWidget);
+    expect(find.text('Salin link referral'), findsNothing);
+  });
+
+  testWidgets('Play mode blocks referral tree from account navigation', (
+    WidgetTester tester,
+  ) async {
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Akun'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Jaringan Saya'), findsNothing);
+    expect(find.text('Jaringan Referral'), findsNothing);
+    expect(find.text('Kode Referral'), findsNothing);
+  });
+
+  testWidgets('user account does not expose admin dashboard', (
+    WidgetTester tester,
+  ) async {
     await openDashboard(tester);
 
     await tester.tap(find.text('Akun'));
@@ -154,74 +1001,500 @@ void main() {
     expect(find.text('Super Admin Dashboard'), findsNothing);
   });
 
-  testWidgets('client membership flow reaches payment success',
-      (WidgetTester tester) async {
+  testWidgets('Play account menu hides bank and cash surfaces', (
+    WidgetTester tester,
+  ) async {
     await openDashboard(tester);
 
-    await tester.ensureVisible(find.text('Membership'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Membership').first);
+    await tester.tap(find.text('Akun'));
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('Platinum'));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Daftar').last);
-    await tester.tap(find.text('Daftar').last);
-    await tester.pumpAndSettle();
-
-    await tester.ensureVisible(find.text('Upload KTP'));
-    final registrationFields = find.byType(TextFormField);
-    await tester.enterText(registrationFields.at(0), 'UAT Member Platinum');
-    await tester.enterText(registrationFields.at(1), '081234567891');
-    await tester.enterText(registrationFields.at(2), 'member@tapgo.id');
-    await tester.enterText(
-      registrationFields.at(3),
-      'Jalan UAT TapGo No. 1',
-    );
-    await tester.enterText(registrationFields.at(4), '3174010101900001');
-    await tester.enterText(registrationFields.at(5), 'Jakarta');
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byIcon(Icons.date_range_rounded));
-    await tester.tap(find.byIcon(Icons.date_range_rounded));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('OK'));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Upload KTP'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Upload KTP'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Pilih dari Galeri'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Upload Foto Diri'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Pilih dari Galeri'));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Lanjut ke checkout'));
-    await tester.tap(find.text('Lanjut ke checkout'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Menunggu Pembayaran'), findsOneWidget);
-    expect(find.text('Bayar Sekarang'), findsOneWidget);
-
-    await tester.tap(find.text('Kirim Notifikasi WhatsApp'));
-    await tester.pumpAndSettle();
-    expect(find.text('Preview WhatsApp'), findsOneWidget);
-    await tester.tapAt(const Offset(20, 20));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Bayar Sekarang'));
-    await tester.pumpAndSettle();
-    expect(find.text('Payment Sandbox'), findsOneWidget);
-    await tester.ensureVisible(find.text('Bayar'));
-    await tester.tap(find.text('Bayar'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Pendaftaran Berhasil'), findsOneWidget);
-    await tester.tap(find.text('Kembali ke dashboard'));
-    await tester.pumpAndSettle();
-    expect(find.text('Paket aktif: Platinum'), findsOneWidget);
+    expect(find.text('Rekening Bank'), findsNothing);
+    expect(find.text('Wallet & Withdraw'), findsNothing);
+    expect(find.text('Riwayat Komisi'), findsNothing);
+    expect(find.text('TapGoPay'), findsNothing);
   });
+
+  testWidgets('bank account picker still opens directly without assertion', (
+    WidgetTester tester,
+  ) async {
+    tapGoDisablePersistenceForTests = true;
+    tapGoEnablePaymentSimulatorForTests = false;
+    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: BankAccountScreen())),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Rekening Bank'));
+
+    expect(find.text('Rekening Bank'), findsWidgets);
+    expect(find.text('Nama bank'), findsOneWidget);
+
+    final bankFieldCenter = tester.getCenter(find.text('Pilih bank').last);
+    await tester.tapAt(Offset(120, bankFieldCenter.dy));
+    await tester.pumpAndSettle();
+    expect(find.text('Pilih Bank'), findsOneWidget);
+
+    await tester.tap(find.text('Bank Mandiri'));
+    await tester.pumpAndSettle();
+    await tester.pump();
+
+    expect(find.text('Bank Mandiri'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('account deletion request requires confirmation', (
+    WidgetTester tester,
+  ) async {
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Akun'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Hapus Akun'));
+    await tester.tap(find.text('Hapus Akun'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hapus Akun'), findsWidgets);
+    expect(find.text('Ajukan Penghapusan Akun'), findsOneWidget);
+    expect(find.text('Konfirmasi hapus akun'), findsNothing);
+
+    await tester.enterText(
+      find.byType(TextField).last,
+      'Permintaan review Google Play',
+    );
+    await tester.tap(find.text('Ajukan Penghapusan Akun'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Konfirmasi hapus akun'), findsOneWidget);
+    expect(find.text('Kirim Pengajuan'), findsOneWidget);
+
+    await tester.tap(find.text('Batal'));
+    await tester.pumpAndSettle();
+    expect(find.text('Konfirmasi hapus akun'), findsNothing);
+    expect(find.text('Pengajuan hapus akun berhasil dikirim.'), findsNothing);
+  });
+
+  testWidgets('Play membership flow does not open external checkout', (
+    WidgetTester tester,
+  ) async {
+    tapGoDisablePersistenceForTests = true;
+    tapGoEnablePaymentSimulatorForTests = true;
+    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: MembershipPackagesScreen())),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('TapGo Member Card'), findsOneWidget);
+    expect(find.text('Silver'), findsNothing);
+    expect(find.text('Gold'), findsNothing);
+    expect(find.text('Platinum'), findsNothing);
+    expect(find.text('Form Membership'), findsNothing);
+    expect(find.text('Menunggu Pembayaran'), findsNothing);
+    expect(find.text('Bayar Sekarang'), findsNothing);
+    expect(find.text('Pembayaran'), findsNothing);
+    expect(find.text('Pendaftaran Berhasil'), findsNothing);
+  });
+
+  testWidgets('Basic member card exposes only safe identity fields', (
+    WidgetTester tester,
+  ) async {
+    tapGoDisablePersistenceForTests = true;
+    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: BasicMemberCardScreen())),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('TapGo Member Card'), findsOneWidget);
+    expect(find.text('TGM-TESTCARD'), findsOneWidget);
+    expect(find.text('Aktif'), findsOneWidget);
+    final cardSurface = tester.widget<Container>(
+      find.byKey(const ValueKey('basic_member_card_surface')),
+    );
+    final cardDecoration = cardSurface.decoration! as BoxDecoration;
+    expect(cardDecoration.color, isNull);
+    expect(cardDecoration.gradient, isA<LinearGradient>());
+    expect(
+      (cardDecoration.gradient! as LinearGradient).colors,
+      contains(const Color(0xFF061A2E)),
+    );
+    final infoPanel = tester.widget<Container>(
+      find
+          .ancestor(
+            of: find.text('Informasi aman'),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    final infoDecoration = infoPanel.decoration! as BoxDecoration;
+    expect(infoDecoration.color, isNotNull);
+    expect(infoDecoration.color, isNot(const Color(0xFF061A2E)));
+    expect(infoDecoration.gradient, isNull);
+    expect(find.text('NIK'), findsNothing);
+    expect(find.text('Nomor HP'), findsNothing);
+    expect(find.text('Rekening'), findsNothing);
+    expect(find.text('Wallet'), findsNothing);
+    expect(find.text('Saldo'), findsNothing);
+  });
+
+  testWidgets(
+    'Basic member card is responsive and keeps public fields visible',
+    (WidgetTester tester) async {
+      tapGoDisablePersistenceForTests = true;
+      ImagePickerPlatform.instance = _FakeImagePickerPlatform();
+      tapGoMemberIdentityLoaderForTests = () async => {
+            'displayName':
+                'Ahmad Zulhi Putra TapGo Dengan Nama Anggota Sangat Panjang',
+            'memberId': 'TGM-20260714-0001',
+            'status': 'ACTIVE',
+            'joinedAt': '2026-07-14T00:00:00.000Z',
+          };
+
+      Future<void> pumpCard(Size size, double textScale) async {
+        tester.view
+          ..physicalSize = size
+          ..devicePixelRatio = 1;
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              home: MediaQuery(
+                data: MediaQueryData(
+                  size: size,
+                  textScaler: TextScaler.linear(textScale),
+                ),
+                child: const BasicMemberCardScreen(),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      for (final scenario in [
+        (size: const Size(360, 800), textScale: 1.0),
+        (size: const Size(360, 800), textScale: 1.3),
+        (size: const Size(412, 915), textScale: 1.0),
+        (size: const Size(412, 915), textScale: 1.3),
+      ]) {
+        await pumpCard(scenario.size, scenario.textScale);
+
+        expect(find.text('TapGo Member Card'), findsOneWidget);
+        expect(find.text('Basic'), findsWidgets);
+        expect(find.text('Aktif'), findsOneWidget);
+        expect(find.text('TGM-20260714-0001'), findsOneWidget);
+        expect(find.textContaining('Ahmad Zulhi'), findsOneWidget);
+        expect(find.textContaining('00000000-0000'), findsNothing);
+        for (final text in [
+          'TapGo Member Card',
+          'Basic',
+          'Aktif',
+          'TGM-20260714-0001',
+        ]) {
+          final widget = tester.widget<Text>(find.text(text).first);
+          expect(widget.style?.decoration, TextDecoration.none);
+        }
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
+
+  testWidgets(
+    'Basic Portal navigation icons keep consistent frameless layout',
+    (WidgetTester tester) async {
+      await openDashboard(tester);
+
+      final labels = ['Kartu Anggota', 'Profil', 'Tiket Bantuan', 'Hapus Akun'];
+      final labelRects = <Rect>[];
+      for (final label in labels) {
+        final text = find.text(label);
+        expect(text, findsWidgets);
+        labelRects.add(tester.getRect(text.first));
+      }
+
+      for (final rect in labelRects) {
+        expect(rect.width, lessThanOrEqualTo(82));
+        expect(rect.height, lessThanOrEqualTo(32));
+      }
+      expect(
+        tapGoPremiumIconAssetForTests('Tiket Bantuan'),
+        'assets/icons/basic_portal/support_ticket.png',
+      );
+      expect(tapGoServiceIllustrationAssetForTests('Tiket Bantuan'), isNull);
+      expect(find.byType(PremiumTapGoIcon), findsNWidgets(4));
+    },
+  );
+
+  testWidgets('Play Profile opens dedicated details without account hub menu', (
+    WidgetTester tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(360, 800)
+      ..devicePixelRatio = 1;
+    tapGoMemberIdentityLoaderForTests = () async => {
+          'displayName': 'Sandika TapGo',
+          'phone': '+6285812348373',
+          'memberId': 'TGM-6J5W8HS3XX',
+          'status': 'ACTIVE',
+          'joinedAt': '2026-07-24T00:00:00.000Z',
+          'id': '00000000-0000-0000-0000-000000000000',
+          'nik': '3200000000000000',
+          'password': 'secret',
+          'accessToken': 'token',
+          'deviceFingerprint': 'device',
+        };
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await openDashboard(tester);
+    await tester.ensureVisible(find.bySemanticsLabel('Buka layanan Profil'));
+    await tester.tap(find.bySemanticsLabel('Buka layanan Profil'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Membership'), findsNothing);
+    expect(find.text('Benefit'), findsNothing);
+    expect(find.textContaining('Paket aktif'), findsNothing);
+    expect(find.text('Identitas'), findsOneWidget);
+    expect(find.text('Keanggotaan'), findsOneWidget);
+    expect(find.text('Nama lengkap'), findsOneWidget);
+    expect(find.text('Sandika TapGo'), findsWidgets);
+    expect(find.text('Nomor HP'), findsOneWidget);
+    expect(find.text('0858••••8373'), findsOneWidget);
+    expect(find.text('Public Member ID'), findsOneWidget);
+    expect(find.text('TGM-6J5W8HS3XX'), findsOneWidget);
+    expect(find.text('Paket'), findsOneWidget);
+    expect(find.text('Basic'), findsWidgets);
+    expect(find.text('Status'), findsOneWidget);
+    expect(find.text('Aktif'), findsWidgets);
+    expect(find.text('Tanggal bergabung'), findsOneWidget);
+    expect(find.text('24 Juli 2026'), findsOneWidget);
+    expect(find.text('Kartu Anggota'), findsNothing);
+    expect(find.text('Tiket Bantuan'), findsNothing);
+    expect(find.text('Kebijakan Privasi'), findsNothing);
+    expect(find.text('Syarat & Ketentuan'), findsNothing);
+    expect(find.text('Logout'), findsNothing);
+    expect(find.textContaining('00000000-0000'), findsNothing);
+    expect(find.text('NIK'), findsNothing);
+    expect(find.textContaining('320000'), findsNothing);
+    expect(find.text('secret'), findsNothing);
+    expect(find.text('token'), findsNothing);
+    expect(find.text('device'), findsNothing);
+    final header = tester.widget<Container>(
+      find.byKey(const ValueKey('play_profile_header')),
+    );
+    final headerDecoration = header.decoration! as BoxDecoration;
+    expect(headerDecoration.color, isNull);
+    expect(headerDecoration.gradient, isA<LinearGradient>());
+    expect(
+      (headerDecoration.gradient! as LinearGradient).colors,
+      contains(const Color(0xFF061A2E)),
+    );
+
+    for (final text in ['Sandika TapGo', 'Basic', 'Aktif']) {
+      final widget = tester.widget<Text>(find.text(text).first);
+      expect(widget.style?.decoration, TextDecoration.none);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Account hub remains a navigation menu after Profile split', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: AccountScreen())),
+    );
+    await tester.pumpAndSettle();
+
+    for (final label in [
+      'Kartu Anggota',
+      'Profil',
+      'Tiket Bantuan',
+      'Kebijakan Privasi',
+      'Syarat & Ketentuan',
+      'Hubungi Kami',
+      'Bantuan',
+      'Logout',
+      'Hapus Akun',
+    ]) {
+      await tester.scrollUntilVisible(
+        find.text(label),
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text(label), findsWidgets);
+    }
+    expect(find.text('Identitas'), findsNothing);
+    expect(find.text('Keanggotaan'), findsNothing);
+    expect(find.text('2'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('support page opens with authenticated ticket empty state', (
+    WidgetTester tester,
+  ) async {
+    tapGoDisablePersistenceForTests = true;
+    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: ContactUsScreen())),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bantuan TapGo'), findsOneWidget);
+    expect(find.text('Judul bantuan'), findsOneWidget);
+    expect(find.text('Pesan bantuan'), findsOneWidget);
+    expect(find.text('Belum ada tiket bantuan'), findsOneWidget);
+  });
+
+  testWidgets('support ticket can be created, listed, and opened', (
+    WidgetTester tester,
+  ) async {
+    tapGoDisablePersistenceForTests = false;
+    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
+    final tickets = <Map<String, dynamic>>[];
+    tapGoSupportTicketsLoaderForTests = () async => tickets;
+    tapGoCreateSupportTicketForTests = ({
+      required String category,
+      required String subject,
+      required String message,
+    }) async {
+      final ticket = {
+        'id': 'ticket-1',
+        'reference': 'SUP-0001',
+        'category': category,
+        'subject': subject.trim(),
+        'status': 'OPEN',
+        'messages': [
+          {'id': 'message-1', 'authorRole': 'USER', 'body': message.trim()},
+        ],
+      };
+      tickets.add(ticket);
+      return ticket;
+    };
+    tapGoSupportTicketDetailLoaderForTests = (ticketId) async =>
+        tickets.singleWhere((ticket) => ticket['id'] == ticketId);
+
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: ContactUsScreen())),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).at(0), 'Bantuan akun');
+    await tester.enterText(
+      find.byType(TextField).at(1),
+      'Saya membutuhkan bantuan untuk akun Basic.',
+    );
+    await tester.tap(find.text('Kirim Pesan'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bantuan akun'), findsOneWidget);
+    expect(find.textContaining('SUP-0001'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Bantuan akun'));
+    await tester.tap(find.text('Bantuan akun'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Detail Tiket'), findsOneWidget);
+    expect(find.textContaining('Terbuka'), findsOneWidget);
+    expect(find.text('Anda'), findsOneWidget);
+    expect(
+      find.text('Saya membutuhkan bantuan untuk akun Basic.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Exception'), findsNothing);
+  });
+
+  testWidgets('support errors use friendly copy and avoid raw exceptions', (
+    WidgetTester tester,
+  ) async {
+    tapGoDisablePersistenceForTests = false;
+    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
+    tapGoSupportTicketsLoaderForTests = () async => const [];
+    tapGoCreateSupportTicketForTests = ({
+      required String category,
+      required String subject,
+      required String message,
+    }) async {
+      throw DioException(
+        requestOptions: RequestOptions(path: '/support/tickets'),
+        message: 'SocketException: Connection failed',
+      );
+    };
+
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: ContactUsScreen())),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).at(0), 'Bantuan akun');
+    await tester.enterText(
+      find.byType(TextField).at(1),
+      'Saya membutuhkan bantuan untuk akun Basic.',
+    );
+    await tester.tap(find.text('Kirim Pesan'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Tiket bantuan belum dapat dibuat. Silakan coba lagi.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('SocketException'), findsNothing);
+  });
+
+  testWidgets('support form stays usable on narrow screens with keyboard', (
+    WidgetTester tester,
+  ) async {
+    tapGoDisablePersistenceForTests = true;
+    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(
+              size: Size(320, 640),
+              viewInsets: EdgeInsets.only(bottom: 280),
+            ),
+            child: ContactUsScreen(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).at(0), 'Bantuan akun');
+    await tester.enterText(
+      find.byType(TextField).at(1),
+      'Saya membutuhkan bantuan untuk akun Basic.',
+    );
+    await tester.ensureVisible(find.text('Kirim Pesan'));
+
+    expect(find.text('Kirim Pesan'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+String _applyFormatters(List<TextInputFormatter> formatters, String value) {
+  var oldValue = const TextEditingValue();
+  var newValue = TextEditingValue(
+    text: value,
+    selection: TextSelection.collapsed(offset: value.length),
+  );
+  for (final formatter in formatters) {
+    final result = formatter.formatEditUpdate(oldValue, newValue);
+    oldValue = result;
+    newValue = result;
+  }
+  return newValue.text;
 }
 
 class _FakeImagePickerPlatform extends ImagePickerPlatform {

@@ -133,7 +133,8 @@ class DemoAdminInvoice {
       packageName: _titleCase(membership['tier']?.toString() ?? 'Basic'),
       amount: _intFrom(data['amount'] ?? payment['amount']),
       status: _paymentStatusLabel(
-          data['status']?.toString() ?? payment['status']?.toString()),
+        data['status']?.toString() ?? payment['status']?.toString(),
+      ),
       method: payment['provider']?.toString() ??
           payment['method']?.toString() ??
           data['provider']?.toString() ??

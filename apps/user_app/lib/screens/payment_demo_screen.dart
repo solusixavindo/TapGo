@@ -1,5 +1,39 @@
 part of '../main.dart';
 
+String? _tapGoPaymentGatewayDisplayName(String? gateway) {
+  switch (gateway?.trim().toUpperCase()) {
+    case 'DOKU':
+      return 'DOKU';
+    case 'MIDTRANS':
+      return 'Midtrans';
+  }
+  return null;
+}
+
+String _tapGoPaymentUrlDialogTitle(String? gateway) {
+  final provider = _tapGoPaymentGatewayDisplayName(gateway);
+  return provider == null ? 'Link Pembayaran' : 'Link Pembayaran $provider';
+}
+
+String _tapGoPaymentStatusInstruction(String? gateway) {
+  final provider = _tapGoPaymentGatewayDisplayName(gateway);
+  if (provider == null) {
+    return 'Selesaikan pembayaran di halaman pembayaran, lalu cek status pembayaran Anda.';
+  }
+  return 'Selesaikan pembayaran di halaman $provider, lalu cek status pembayaran Anda.';
+}
+
+@visibleForTesting
+String tapGoPaymentStatusInstructionForTests(String? gateway) =>
+    _tapGoPaymentStatusInstruction(gateway);
+
+@visibleForTesting
+String tapGoPaymentUrlDialogTitleForTests(String? gateway) =>
+    _tapGoPaymentUrlDialogTitle(gateway);
+
+@visibleForTesting
+LaunchMode tapGoCheckoutLaunchModeForTests() => LaunchMode.externalApplication;
+
 class PaymentMethodScreen extends ConsumerStatefulWidget {
   const PaymentMethodScreen({
     required this.form,
@@ -30,43 +64,64 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
   @override
   Widget build(BuildContext context) {
     return _DemoScaffold(
-      title: 'Payment Sandbox',
-      subtitle: 'DOKU checkout / simulator pembayaran',
+      title: 'Pembayaran',
+      subtitle: 'Pilih metode pembayaran yang tersedia',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _InfoPanel(
-            color: _brandBlue,
-            title: 'Total pembayaran',
-            value: formatRupiah(widget.invoice.total),
-            subtitle:
-                '${widget.invoice.packageName} • ${widget.invoice.number}',
-            icon: Icons.payment_rounded,
-          ),
-          const SizedBox(height: 16),
-          ..._methods.map(
-            (method) => _PaymentMethodTile(
-              title: method.$1,
-              icon: method.$2,
-              selected: _selectedMethod == method.$1,
-              onTap: () => setState(() => _selectedMethod = method.$1),
+          _TapGoReveal(
+            order: 0,
+            child: _InfoPanel(
+              color: _brandBlue,
+              title: 'Total pembayaran',
+              value: formatRupiah(widget.invoice.total),
+              subtitle:
+                  '${widget.invoice.packageName} • ${widget.invoice.number}',
+              icon: Icons.payment_rounded,
             ),
           ),
           const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: _isPaying ? null : _startPayment,
-            icon: Icon(
-              _isPaying
-                  ? Icons.hourglass_top_rounded
-                  : Icons.check_circle_rounded,
-            ),
-            label: Text(_isPaying ? 'Memproses...' : 'Bayar'),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF00A86B),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 15),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+          ..._methods.toList().asMap().entries.map(
+                (entry) => _TapGoReveal(
+                  order: entry.key + 1,
+                  child: _PaymentMethodTile(
+                    title: entry.value.$1,
+                    icon: entry.value.$2,
+                    selected: _selectedMethod == entry.value.$1,
+                    onTap: () =>
+                        setState(() => _selectedMethod = entry.value.$1),
+                  ),
+                ),
+              ),
+          const SizedBox(height: 16),
+          _TapGoReveal(
+            order: _methods.length + 1,
+            child: AnimatedOpacity(
+              opacity: _isPaying ? 0.82 : 1,
+              duration: _TapGoMotion.duration(context, _TapGoMotion.fast),
+              curve: _TapGoMotion.standardCurve,
+              child: FilledButton.icon(
+                onPressed: _isPaying ? null : _startPayment,
+                icon: _TapGoFadeSwitcher(
+                  valueKey: _isPaying,
+                  child: Icon(
+                    _isPaying
+                        ? Icons.hourglass_top_rounded
+                        : Icons.check_circle_rounded,
+                  ),
+                ),
+                label: _TapGoFadeSwitcher(
+                  valueKey: _isPaying ? 'processing' : 'pay',
+                  child: Text(_isPaying ? 'Memproses...' : 'Bayar'),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF00A86B),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
               ),
             ),
           ),
@@ -101,28 +156,26 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
         return;
       }
       if (intent.redirectUrl.isEmpty) {
-        throw StateError('URL pembayaran DOKU kosong.');
+        throw StateError('URL pembayaran belum tersedia.');
       }
 
+      final gateway = intent.gateway;
       final opened = await launchUrl(
         Uri.parse(intent.redirectUrl),
-        mode: LaunchMode.externalApplication,
+        mode: tapGoCheckoutLaunchModeForTests(),
       );
       if (!opened && mounted) {
-        await _showPaymentUrlDialog(intent.redirectUrl);
+        await _showPaymentUrlDialog(intent.redirectUrl, gateway);
       }
 
-      await _showPaymentStatusDialog(orderId);
+      await _showPaymentStatusDialog(orderId, gateway);
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _isPaymentSimulatorEnabled
-                  ? 'DOKU checkout belum siap. Simulator development digunakan. $error'
-                  : 'Pembayaran belum dapat diproses. Silakan ulangi proses pembayaran.',
-            ),
-          ),
+        _TapGoSnackbar.error(
+          context,
+          _isPaymentSimulatorEnabled
+              ? 'Pembayaran belum dapat diproses melalui gateway. Silakan coba kembali.'
+              : 'Pembayaran belum dapat diproses. Silakan ulangi proses pembayaran.',
         );
       }
       if (!_isPaymentSimulatorEnabled) {
@@ -136,14 +189,17 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
     }
   }
 
-  Future<void> _showPaymentUrlDialog(String redirectUrl) async {
+  Future<void> _showPaymentUrlDialog(
+    String redirectUrl,
+    String? gateway,
+  ) async {
     if (!mounted) {
       return;
     }
-    await showDialog<void>(
+    await _showTapGoDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Link Pembayaran DOKU'),
+        title: Text(_tapGoPaymentUrlDialogTitle(gateway)),
         content: SelectableText(redirectUrl),
         actions: [
           TextButton(
@@ -155,42 +211,60 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
     );
   }
 
-  Future<void> _showPaymentStatusDialog(String orderId) async {
+  Future<void> _showPaymentStatusDialog(String orderId, String? gateway) async {
     if (!mounted) {
       return;
     }
-    await showDialog<void>(
+    final statusCheckGuard = TapGoSingleFlightGuard();
+    await _showTapGoDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Status Pembayaran'),
-        content: const Text(
-          'Selesaikan pembayaran di halaman DOKU, lalu cek status. Untuk UAT lokal tanpa callback publik, gunakan simulator development.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              final closedContext = context;
-              final paid = await _pollBackendOrderStatus(orderId);
-              if (!closedContext.mounted) {
-                return;
-              }
-              Navigator.of(closedContext).pop();
-              if (paid) {
-                await _openSuccessFromBackend();
-              }
-            },
-            child: const Text('Cek Status'),
+      builder: (context) {
+        var isChecking = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Status Pembayaran'),
+            content: Text(_tapGoPaymentStatusInstruction(gateway)),
+            actions: [
+              TextButton(
+                onPressed: isChecking
+                    ? null
+                    : () async {
+                        setDialogState(() => isChecking = true);
+                        final closedContext = context;
+                        final paid = await statusCheckGuard.run(
+                              () => _pollBackendOrderStatus(orderId),
+                            ) ??
+                            false;
+                        if (!closedContext.mounted) {
+                          return;
+                        }
+                        if (paid) {
+                          Navigator.of(closedContext).pop();
+                          await _openSuccessFromBackend();
+                          return;
+                        }
+                        if (closedContext.mounted) {
+                          setDialogState(() => isChecking = false);
+                        }
+                      },
+                child: isChecking
+                    ? const _TapGoLoading(size: 16, strokeWidth: 2)
+                    : const Text('Cek Status'),
+              ),
+              if (_isPaymentSimulatorEnabled)
+                FilledButton(
+                  onPressed: isChecking
+                      ? null
+                      : () {
+                          Navigator.of(context).pop();
+                          _completePayment();
+                        },
+                  child: const Text('Konfirmasi Pembayaran'),
+                ),
+            ],
           ),
-          if (_isPaymentSimulatorEnabled)
-            FilledButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _completePayment();
-              },
-              child: const Text('Simulator Dev'),
-            ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -198,12 +272,9 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Pembayaran belum dapat diproses. Silakan ulangi proses pembayaran.',
-        ),
-      ),
+    _TapGoSnackbar.error(
+      context,
+      'Pembayaran belum dapat diproses. Silakan ulangi proses pembayaran.',
     );
   }
 
@@ -223,14 +294,14 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
               status == 'EXPIRED' ||
               invoiceStatus == 'FAILED' ||
               invoiceStatus == 'EXPIRED'
-          ? 'Pembayaran gagal/expired. Silakan coba lagi.'
+          ? 'Pembayaran gagal atau kedaluwarsa. Silakan coba lagi.'
           : 'Pembayaran masih pending. Coba cek lagi setelah callback masuk.';
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
+      _TapGoSnackbar.warning(context, message);
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal cek status pembayaran: $error')),
+        _TapGoSnackbar.error(
+          context,
+          'Status pembayaran belum dapat diperiksa. Silakan coba lagi.',
         );
       }
     }
@@ -239,7 +310,9 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
 
   Future<void> _openSuccessFromBackend() async {
     final snapshot = await ref.refresh(_productionSnapshotProvider.future);
-    debugPrint('[TapGo Payment] snapshot refreshed at ${snapshot.loadedAt}');
+    _tapGoDebugLog(
+      '[TapGo Payment] snapshot refreshed at ${snapshot.loadedAt}',
+    );
     if (!mounted) {
       return;
     }

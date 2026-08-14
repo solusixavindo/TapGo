@@ -12,6 +12,7 @@ class PaymentSuccessScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final reduced = _TapGoMotion.reduce(context);
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -21,13 +22,11 @@ class PaymentSuccessScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0.7, end: 1),
-                duration: const Duration(milliseconds: 700),
-                curve: Curves.elasticOut,
-                builder: (context, value, child) => Transform.scale(
-                  scale: value,
-                  child: child,
-                ),
+                tween: Tween(begin: reduced ? 1 : 0.96, end: 1),
+                duration: _TapGoMotion.duration(context, _TapGoMotion.page),
+                curve: _TapGoMotion.standardCurve,
+                builder: (context, value, child) =>
+                    Transform.scale(scale: value, child: child),
                 child: Container(
                   width: 122,
                   height: 122,
@@ -76,9 +75,8 @@ class PaymentSuccessScreen extends StatelessWidget {
               ),
               const SizedBox(height: 18),
               FilledButton.icon(
-                onPressed: () => Navigator.of(context).popUntil(
-                  (route) => route.isFirst,
-                ),
+                onPressed: () =>
+                    Navigator.of(context).popUntil((route) => route.isFirst),
                 icon: const Icon(Icons.home_rounded),
                 label: const Text('Kembali ke dashboard'),
                 style: FilledButton.styleFrom(

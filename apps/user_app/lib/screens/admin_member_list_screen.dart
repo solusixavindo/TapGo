@@ -28,9 +28,8 @@ class _AdminMemberListScreenState extends ConsumerState<AdminMemberListScreen> {
         const <DemoAdminMember>[];
     return _DemoScaffold(
       title: 'Member Management',
-      subtitle: adminSnapshot.hasValue
-          ? 'Live Data member backend'
-          : 'Data member TapGo',
+      subtitle:
+          adminSnapshot.hasValue ? 'Data member TapGo' : 'Data member TapGo',
       child: FutureBuilder<List<DemoAdminMember>>(
         future: _registeredUsersFuture,
         builder: (context, snapshot) {
@@ -41,17 +40,15 @@ class _AdminMemberListScreenState extends ConsumerState<AdminMemberListScreen> {
               const _SearchBox(hint: 'Cari member, sponsor, atau paket...'),
               const SizedBox(height: 14),
               if (adminSnapshot.isLoading) ...[
-                const _AdminListSectionLabel('Memuat Admin API...'),
+                const _AdminListSectionLabel('Memuat data admin...'),
               ] else if (apiMembers.isNotEmpty) ...[
-                const _AdminListSectionLabel('Backend Members'),
+                const _AdminListSectionLabel('Member TapGo'),
                 ...apiMembers.map((member) => _AdminMemberTile(member: member)),
                 const SizedBox(height: 10),
               ],
               if (_isTapGoDevelopmentBuild && realUsers.isNotEmpty) ...[
                 const _AdminListSectionLabel('Real Registered Users'),
-                ...realUsers.map(
-                  (member) => _AdminMemberTile(member: member),
-                ),
+                ...realUsers.map((member) => _AdminMemberTile(member: member)),
                 const SizedBox(height: 10),
               ],
               if (!adminSnapshot.isLoading &&
@@ -155,8 +152,10 @@ class _AdminMemberTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded,
-                    color: Color(0xFF718096)),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFF718096),
+                ),
               ],
             ),
           ),

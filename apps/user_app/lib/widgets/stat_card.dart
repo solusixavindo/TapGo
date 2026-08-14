@@ -15,10 +15,19 @@ String _formatCompactRupiah(int value) {
 }
 
 class _MiniMetric extends StatelessWidget {
-  const _MiniMetric({required this.label, required this.value});
+  const _MiniMetric({
+    required this.label,
+    required this.value,
+    this.animatedValue,
+    this.formatter,
+    this.isLoading = false,
+  });
 
   final String label;
   final String value;
+  final int? animatedValue;
+  final String Function(int value)? formatter;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -48,16 +57,26 @@ class _MiniMetric extends StatelessWidget {
             child: FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
-              child: Text(
-                value,
-                maxLines: 1,
-                softWrap: false,
-                style: const TextStyle(
-                  color: Color(0xFF0A2A43),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
+              child: isLoading
+                  ? const _SkeletonBar(width: 84)
+                  : animatedValue == null || formatter == null
+                      ? _DashboardValueSwitcher(
+                          value: value,
+                          style: const TextStyle(
+                            color: Color(0xFF0A2A43),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        )
+                      : _DashboardAnimatedValue(
+                          value: animatedValue!,
+                          formatter: formatter!,
+                          style: const TextStyle(
+                            color: Color(0xFF0A2A43),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
             ),
           ),
         ],
@@ -123,6 +142,38 @@ class _InfoPanel extends StatelessWidget {
           ),
           Icon(icon, color: Colors.white, size: 42),
         ],
+      ),
+    );
+  }
+}
+
+class _PlayStatusPill extends StatelessWidget {
+  const _PlayStatusPill({required this.label, this.emphasized = false});
+
+  final String label;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: emphasized ? const Color(0xFFFFF3D1) : const Color(0xFFEAF5FF),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: emphasized ? const Color(0xFFFFD166) : const Color(0xFFBFE0FF),
+        ),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: emphasized ? const Color(0xFF7A5200) : _brandBlue,
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+          decoration: TextDecoration.none,
+        ),
       ),
     );
   }
@@ -320,13 +371,15 @@ class RewardScreen extends ConsumerWidget {
     final rewards = ref
         .watch(_demoSessionProvider)
         .transactions
-        .where((item) => '${item.title} ${item.description}'
-            .toLowerCase()
-            .contains('reward'))
+        .where(
+          (item) => '${item.title} ${item.description}'.toLowerCase().contains(
+                'reward',
+              ),
+        )
         .toList(growable: false);
     return _DemoScaffold(
       title: 'Reward',
-      subtitle: 'Reward real dari database',
+      subtitle: 'Reward dari aktivitas TapGo',
       child: Column(
         children: [
           _ProductionStatusTile(state: production),
@@ -399,7 +452,9 @@ class _MarketingRulesCard extends StatelessWidget {
           const _PackageRow(label: '3 sponsor', value: 'Unlock sampai level 3'),
           const _PackageRow(label: '5 sponsor', value: 'Unlock sampai level 5'),
           const _PackageRow(
-              label: '10 sponsor', value: 'Unlock sampai level 10'),
+            label: '10 sponsor',
+            value: 'Unlock sampai level 10',
+          ),
         ],
       ),
     );
@@ -457,10 +512,7 @@ class _SearchBox extends StatelessWidget {
           const Icon(Icons.search_rounded, color: _brandBlue),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              hint,
-              style: const TextStyle(color: Color(0xFF718096)),
-            ),
+            child: Text(hint, style: const TextStyle(color: Color(0xFF718096))),
           ),
         ],
       ),
@@ -532,10 +584,7 @@ class _ActivityTile extends StatelessWidget {
           if (item.amount != null)
             Text(
               item.amount!,
-              style: TextStyle(
-                color: amountColor,
-                fontWeight: FontWeight.w900,
-              ),
+              style: TextStyle(color: amountColor, fontWeight: FontWeight.w900),
             ),
         ],
       ),
@@ -550,6 +599,69 @@ class _AccountHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (tapGoIsPlayDistribution) {
+      return Container(
+        key: const ValueKey('play_profile_header'),
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF061A2E), Color(0xFF0B3A6E), Color(0xFF0569E8)],
+          ),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0x3322D3EE)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x330569E8),
+              blurRadius: 24,
+              offset: Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            const PremiumTapGoIcon(
+              label: 'Profil',
+              fallbackIcon: Icons.person_rounded,
+              size: 64,
+              padding: 3,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    session.userName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 19,
+                      height: 1.12,
+                      fontWeight: FontWeight.w900,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _PlayStatusPill(label: 'Basic', emphasized: true),
+                      _PlayStatusPill(label: 'Aktif'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -577,28 +689,38 @@ class _AccountHero extends StatelessWidget {
               fontWeight: FontWeight.w900,
             ),
           ),
-          if (session.isFounderPlatinum) ...[
+          if (session.isFounderChairman || session.isFounderPlatinum) ...[
             const SizedBox(height: 8),
-            const _FounderPlatinumBadge(),
+            _FounderPlatinumBadge(
+              label: session.isFounderChairman
+                  ? 'Founder Chairman'
+                  : 'Founder Platinum',
+              icon: session.isFounderChairman
+                  ? Icons.emoji_events_rounded
+                  : Icons.workspace_premium_rounded,
+            ),
           ],
           const SizedBox(height: 6),
           Text(
-            'Paket aktif: ${session.activePackageName} • Kode ${session.referralCode}',
+            tapGoIsPlayDistribution
+                ? 'Paket aktif: ${session.activePackageName}'
+                : 'Paket aktif: ${session.activePackageName} • Kode ${session.referralCode}',
             textAlign: TextAlign.center,
             style: const TextStyle(color: Color(0xFF718096)),
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _copyAccountReferralLink(context, session),
-                  icon: const Icon(Icons.copy_rounded),
-                  label: const Text('Copy referral link'),
+          if (tapGoIsDirectDistribution) const SizedBox(height: 12),
+          if (tapGoIsDirectDistribution)
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _copyAccountReferralLink(context, session),
+                    icon: const Icon(Icons.copy_rounded),
+                    label: const Text('Salin link referral'),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );
@@ -606,7 +728,13 @@ class _AccountHero extends StatelessWidget {
 }
 
 class _FounderPlatinumBadge extends StatelessWidget {
-  const _FounderPlatinumBadge();
+  const _FounderPlatinumBadge({
+    this.label = 'Founder Platinum',
+    this.icon = Icons.workspace_premium_rounded,
+  });
+
+  final String label;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -617,15 +745,14 @@ class _FounderPlatinumBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: const Color(0xFFE3B341)),
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.workspace_premium_rounded,
-              color: Color(0xFF9A6A00), size: 16),
-          SizedBox(width: 6),
+          Icon(icon, color: const Color(0xFF9A6A00), size: 16),
+          const SizedBox(width: 6),
           Text(
-            'Founder Platinum',
-            style: TextStyle(
+            label,
+            style: const TextStyle(
               color: Color(0xFF7A5200),
               fontWeight: FontWeight.w900,
               fontSize: 12,
@@ -637,37 +764,31 @@ class _FounderPlatinumBadge extends StatelessWidget {
   }
 }
 
-void _copyAccountReferralLink(
-  BuildContext context,
-  DemoClientSession session,
-) {
+void _copyAccountReferralLink(BuildContext context, DemoClientSession session) {
   final referralCode = session.referralCode.trim();
   if (referralCode.isEmpty || referralCode == '-') {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Kode referral belum tersedia')),
-    );
+    _TapGoSnackbar.warning(context, 'Kode referral belum tersedia');
     return;
   }
   final link = 'https://tapgolion.id/daftar?ref=$referralCode';
   Clipboard.setData(ClipboardData(text: link));
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Link referral berhasil disalin')),
-  );
+  _TapGoSnackbar.success(context, 'Link referral berhasil disalin');
 }
 
 class _AccountMenuTile extends StatelessWidget {
-  const _AccountMenuTile(this.title, this.icon, this.onTap);
+  const _AccountMenuTile(this.title, this.icon, this.onTap, {this.subtitle});
 
   final String title;
   final IconData icon;
   final VoidCallback onTap;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
     return _DemoMenuTile(
       icon: icon,
       title: title,
-      subtitle: 'Lihat detail $title',
+      subtitle: subtitle ?? 'Lihat detail $title',
       onTap: onTap,
     );
   }
@@ -843,49 +964,64 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+    final reduced = _TapGoMotion.reduce(context);
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: reduced ? 1 : 0, end: 1),
+      duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
+      curve: _TapGoMotion.standardCurve,
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, (1 - value) * 8),
+          child: child,
+        ),
       ),
-      child: Column(
-        children: [
-          Icon(icon, color: _brandBlue, size: 44),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFF0A2A43),
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Color(0xFF718096)),
-          ),
-          if (actionLabel != null && onAction != null) ...[
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: onAction,
-              style: FilledButton.styleFrom(
-                backgroundColor: _brandBlue,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: _brandBlue, size: 44),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF0A2A43),
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
               ),
-              child: Text(actionLabel!),
             ),
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Color(0xFF718096)),
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: onAction,
+                style: FilledButton.styleFrom(
+                  backgroundColor: _brandBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: Text(actionLabel!),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

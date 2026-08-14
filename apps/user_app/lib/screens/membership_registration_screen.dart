@@ -33,9 +33,7 @@ class _MembershipRegistrationScreenState
     final session = ref.read(_demoSessionProvider);
     _nameController = TextEditingController(text: session.userName);
     _phoneController = TextEditingController(text: session.phone);
-    _emailController = TextEditingController(
-      text: session.email ?? '',
-    );
+    _emailController = TextEditingController(text: session.email ?? '');
     _loadSponsorReferralCode();
   }
 
@@ -62,144 +60,201 @@ class _MembershipRegistrationScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _CheckoutSummaryCard(package: widget.package),
+            _TapGoReveal(
+              order: 0,
+              child: _CheckoutSummaryCard(package: widget.package),
+            ),
             const SizedBox(height: 14),
-            _InputField(
-              controller: _nameController,
-              icon: Icons.person_rounded,
-              label: 'Nama lengkap',
-              hint: 'Nama sesuai KTP',
-              validator: _requiredValidator,
-            ),
-            const SizedBox(height: 12),
-            _InputField(
-              controller: _phoneController,
-              icon: Icons.phone_rounded,
-              label: 'Nomor HP',
-              hint: '0812xxxx',
-              keyboardType: TextInputType.phone,
-              validator: _phoneValidator,
-            ),
-            const SizedBox(height: 12),
-            _InputField(
-              controller: _emailController,
-              icon: Icons.email_rounded,
-              label: 'Email',
-              hint: 'member@tapgo.id',
-              keyboardType: TextInputType.emailAddress,
-              validator: _requiredValidator,
-            ),
-            const SizedBox(height: 12),
-            _InputField(
-              controller: _addressController,
-              icon: Icons.location_on_rounded,
-              label: 'Alamat lengkap',
-              hint: 'Alamat domisili',
-              validator: _requiredValidator,
-            ),
-            const SizedBox(height: 12),
-            _InputField(
-              controller: _ktpController,
-              icon: Icons.badge_rounded,
-              label: 'Nomor KTP',
-              hint: '16 digit',
-              keyboardType: TextInputType.number,
-              validator: _ktpValidator,
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _InputField(
-                    controller: _birthPlaceController,
-                    icon: Icons.place_rounded,
-                    label: 'Tempat lahir',
-                    hint: 'Jakarta',
+            _TapGoReveal(
+              order: 1,
+              child: Column(
+                children: [
+                  _InputField(
+                    controller: _nameController,
+                    icon: Icons.person_rounded,
+                    label: 'Nama lengkap',
+                    hint: 'Nama sesuai KTP',
                     validator: _requiredValidator,
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _InputField(
-                    controller: _birthDateController,
-                    icon: Icons.calendar_month_rounded,
-                    label: 'Tanggal lahir',
-                    hint: 'DD-MM-YYYY',
+                  const SizedBox(height: 12),
+                  _InputField(
+                    controller: _phoneController,
+                    icon: Icons.phone_rounded,
+                    label: 'Nomor HP',
+                    hint: '0812xxxx',
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: tapGoPhoneInputFormatters,
+                    autofillHints: const [AutofillHints.telephoneNumber],
+                    validator: _phoneValidator,
+                  ),
+                  const SizedBox(height: 12),
+                  _InputField(
+                    controller: _emailController,
+                    icon: Icons.email_rounded,
+                    label: 'Email',
+                    hint: 'member@tapgo.id',
+                    keyboardType: TextInputType.emailAddress,
                     validator: _requiredValidator,
-                    readOnly: true,
-                    onTap: _pickBirthDate,
-                    suffixIcon: IconButton(
-                      onPressed: _pickBirthDate,
-                      icon: const Icon(Icons.date_range_rounded),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            _TapGoReveal(
+              order: 2,
+              child: Column(
+                children: [
+                  _InputField(
+                    controller: _addressController,
+                    icon: Icons.location_on_rounded,
+                    label: 'Alamat lengkap',
+                    hint: 'Alamat domisili',
+                    validator: _requiredValidator,
+                  ),
+                  const SizedBox(height: 12),
+                  _InputField(
+                    controller: _ktpController,
+                    icon: Icons.badge_rounded,
+                    label: 'Nomor KTP',
+                    hint: '16 digit',
+                    keyboardType: TextInputType.number,
+                    inputFormatters: tapGoNikInputFormatters,
+                    validator: _ktpValidator,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _InputField(
+                          controller: _birthPlaceController,
+                          icon: Icons.place_rounded,
+                          label: 'Tempat lahir',
+                          hint: 'Jakarta',
+                          validator: _requiredValidator,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _InputField(
+                          controller: _birthDateController,
+                          icon: Icons.calendar_month_rounded,
+                          label: 'Tanggal lahir',
+                          hint: 'DD-MM-YYYY',
+                          validator: _requiredValidator,
+                          readOnly: true,
+                          onTap: _pickBirthDate,
+                          suffixIcon: IconButton(
+                            tooltip: 'Pilih tanggal lahir',
+                            onPressed: _pickBirthDate,
+                            icon: const Icon(Icons.date_range_rounded),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _gender,
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'Laki-laki',
+                        child: Text('Laki-laki'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Perempuan',
+                        child: Text('Perempuan'),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _gender = value ?? _gender),
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(
+                        Icons.wc_rounded,
+                        color: _brandBlue,
+                      ),
+                      labelText: 'Jenis kelamin',
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        borderSide: BorderSide.none,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _gender,
-              items: const [
-                DropdownMenuItem(value: 'Laki-laki', child: Text('Laki-laki')),
-                DropdownMenuItem(value: 'Perempuan', child: Text('Perempuan')),
-              ],
-              onChanged: (value) => setState(() => _gender = value ?? _gender),
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.wc_rounded, color: _brandBlue),
-                labelText: 'Jenis kelamin',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(18),
-                  borderSide: BorderSide.none,
-                ),
+                ],
               ),
             ),
             const SizedBox(height: 12),
-            _InputField(
-              controller: _referralController,
-              icon: Icons.qr_code_rounded,
-              label: 'Kode referral optional',
-              hint: 'TAPGO123',
+            _TapGoReveal(
+              order: 3,
+              child: _InputField(
+                controller: _referralController,
+                icon: Icons.qr_code_rounded,
+                label: 'Kode referral optional',
+                hint: 'TAPGO123',
+              ),
             ),
             const SizedBox(height: 14),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: _UploadDocumentField(
-                    label: 'KTP',
-                    emptyButtonLabel: 'Upload KTP',
-                    filledButtonLabel: 'Ganti KTP',
-                    document: _ktpDocument,
-                    onTap: () => _showUploadOptions(_DocumentKind.ktp),
+            _TapGoReveal(
+              order: 4,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _UploadDocumentField(
+                      label: 'KTP',
+                      emptyButtonLabel: 'Upload KTP',
+                      filledButtonLabel: 'Ganti KTP',
+                      document: _ktpDocument,
+                      onTap: () => _showUploadOptions(_DocumentKind.ktp),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _UploadDocumentField(
-                    label: 'Foto Diri',
-                    emptyButtonLabel: 'Upload Foto Diri',
-                    filledButtonLabel: 'Ganti Foto Diri',
-                    document: _selfieDocument,
-                    onTap: () => _showUploadOptions(_DocumentKind.selfie),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _UploadDocumentField(
+                      label: 'Foto Diri',
+                      emptyButtonLabel: 'Upload Foto Diri',
+                      filledButtonLabel: 'Ganti Foto Diri',
+                      document: _selfieDocument,
+                      onTap: () => _showUploadOptions(_DocumentKind.selfie),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             const SizedBox(height: 18),
-            FilledButton.icon(
-              onPressed: _creatingOrder ? null : _continueToCheckout,
-              icon: const Icon(Icons.receipt_long_rounded),
-              label: Text(
-                _creatingOrder ? 'Menyiapkan invoice...' : 'Lanjut ke checkout',
-              ),
-              style: FilledButton.styleFrom(
-                backgroundColor: _brandBlue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 15),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+            _TapGoReveal(
+              order: 5,
+              child: AnimatedOpacity(
+                opacity: _creatingOrder ? 0.82 : 1,
+                duration: _TapGoMotion.duration(context, _TapGoMotion.fast),
+                curve: _TapGoMotion.standardCurve,
+                child: FilledButton.icon(
+                  onPressed: _creatingOrder ? null : _continueToCheckout,
+                  icon: _TapGoFadeSwitcher(
+                    valueKey: _creatingOrder,
+                    child: Icon(
+                      _creatingOrder
+                          ? Icons.hourglass_top_rounded
+                          : Icons.receipt_long_rounded,
+                    ),
+                  ),
+                  label: _TapGoFadeSwitcher(
+                    valueKey: _creatingOrder ? 'creating' : 'checkout',
+                    child: Text(
+                      _creatingOrder
+                          ? 'Menyiapkan invoice...'
+                          : 'Lanjut ke checkout',
+                    ),
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _brandBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -226,24 +281,27 @@ class _MembershipRegistrationScreenState
   }
 
   Future<void> _continueToCheckout() async {
+    if (tapGoIsPlayDistribution) {
+      _TapGoSnackbar.info(context, 'Akun Anda sudah aktif sebagai Basic.');
+      return;
+    }
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
     if (_ktpDocument == null || _selfieDocument == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Upload KTP dan foto diri wajib dipilih.'),
-        ),
+      _TapGoSnackbar.warning(
+        context,
+        'Upload KTP dan foto diri wajib dipilih.',
       );
       return;
     }
 
     final form = RegistrationFormModel(
       fullName: _nameController.text.trim(),
-      phone: _phoneController.text.trim(),
+      phone: tapGoSanitizePhoneInput(_phoneController.text),
       email: _emailController.text.trim(),
       address: _addressController.text.trim(),
-      ktpNumber: _ktpController.text.trim(),
+      ktpNumber: tapGoDigitsOnly(_ktpController.text),
       birthPlace: _birthPlaceController.text.trim(),
       birthDate: _birthDateController.text.trim(),
       gender: _gender,
@@ -319,7 +377,7 @@ class _MembershipRegistrationScreenState
       }
       final packageId = packageData?['id']?.toString();
       if (packageId == null || packageId.isEmpty) {
-        throw StateError('Paket backend tidak ditemukan.');
+        throw StateError('Paket tidak ditemukan.');
       }
 
       final order = await _apiClient.createMembershipOrder(
@@ -348,8 +406,9 @@ class _MembershipRegistrationScreenState
       final responseData = _dioResponseDataMap(error.response?.data);
       final code = responseData?['code']?.toString();
       if (code == 'MEMBERSHIP_ORDER_PENDING') {
-        final pending =
-            await _latestPendingOrderForPackage(widget.package.name);
+        final pending = await _latestPendingOrderForPackage(
+          widget.package.name,
+        );
         if (pending != null) {
           final invoice = (pending['invoice'] as Map?)?.cast<String, dynamic>();
           return fallbackInvoice.copyWith(
@@ -360,23 +419,17 @@ class _MembershipRegistrationScreenState
         }
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Backend payment belum siap. Simulator development digunakan. ${responseData?['message'] ?? error.message}',
-            ),
-          ),
+        _TapGoSnackbar.error(
+          context,
+          'Pembayaran belum dapat disiapkan. Silakan ulangi beberapa saat lagi. ${responseData?['message'] ?? error.message}',
         );
       }
       return fallbackInvoice;
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Backend payment belum siap. Simulator development digunakan. $error',
-            ),
-          ),
+        _TapGoSnackbar.error(
+          context,
+          'Pembayaran belum dapat disiapkan. Silakan ulangi beberapa saat lagi.',
         );
       }
       return fallbackInvoice;
@@ -425,25 +478,15 @@ class _MembershipRegistrationScreenState
   }
 
   String? _phoneValidator(String? value) {
-    final phone = value?.trim() ?? '';
-    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.length < 10 ||
-        !(phone.startsWith('08') || phone.startsWith('+62'))) {
-      return 'Nomor HP tidak valid';
-    }
-    return null;
+    return tapGoPhoneValidatorMessage(value);
   }
 
   String? _ktpValidator(String? value) {
-    final digits = (value ?? '').replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.length < 16) {
-      return 'Nomor KTP minimal 16 digit';
-    }
-    return null;
+    return tapGoNikValidatorMessage(value);
   }
 
   Future<void> _showUploadOptions(_DocumentKind kind) async {
-    final source = await showModalBottomSheet<ImageSource>(
+    final source = await _showTapGoBottomSheet<ImageSource>(
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
@@ -453,20 +496,26 @@ class _MembershipRegistrationScreenState
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading:
-                    const Icon(Icons.photo_library_rounded, color: _brandBlue),
+                leading: const Icon(
+                  Icons.photo_library_rounded,
+                  color: _brandBlue,
+                ),
                 title: const Text('Pilih dari Galeri'),
                 onTap: () => Navigator.of(context).pop(ImageSource.gallery),
               ),
               ListTile(
-                leading:
-                    const Icon(Icons.photo_camera_rounded, color: _brandOrange),
+                leading: const Icon(
+                  Icons.photo_camera_rounded,
+                  color: _brandOrange,
+                ),
                 title: const Text('Ambil Foto dengan Kamera'),
                 onTap: () => Navigator.of(context).pop(ImageSource.camera),
               ),
               ListTile(
-                leading:
-                    const Icon(Icons.close_rounded, color: Color(0xFF697386)),
+                leading: const Icon(
+                  Icons.close_rounded,
+                  color: Color(0xFF697386),
+                ),
                 title: const Text('Batal'),
                 onTap: () => Navigator.of(context).pop(),
               ),
@@ -486,55 +535,50 @@ class _MembershipRegistrationScreenState
         imageQuality: 82,
         maxWidth: 1400,
       );
-      if (!mounted || image == null) {
+      if (!mounted) {
+        return;
+      }
+      if (image == null) {
         _showUploadMessage('Pemilihan foto dibatalkan.');
         return;
       }
-      _setPickedDocument(
-        kind,
-        _PickedDemoDocument(
-          path: image.path,
-          fileName: image.name,
-          statusLabel: source == ImageSource.gallery
-              ? 'Foto berhasil dipilih'
-              : 'Foto berhasil diambil',
-        ),
-      );
-    } on MissingPluginException {
-      _setPickedDocument(
-        kind,
-        _PickedDemoDocument(
-          path: null,
-          fileName: source == ImageSource.gallery
-              ? 'foto-galeri.jpg'
-              : 'foto-kamera.jpg',
-          statusLabel: source == ImageSource.gallery
-              ? 'Foto berhasil dipilih'
-              : 'Foto berhasil diambil',
-        ),
-      );
-    } on PlatformException catch (error) {
-      if (error.code == 'channel-error' || error.code == 'missing_plugin') {
-        _setPickedDocument(
-          kind,
-          _PickedDemoDocument(
-            path: null,
-            fileName: source == ImageSource.gallery
-                ? 'foto-galeri.jpg'
-                : 'foto-kamera.jpg',
-            statusLabel: source == ImageSource.gallery
-                ? 'Foto berhasil dipilih'
-                : 'Foto berhasil diambil',
-          ),
-        );
+      final document = _pickedDocumentFromImage(image, source: source);
+      if (document == null) {
+        _showUploadMessage(tapGoDocumentUploadFailureMessage);
         return;
       }
-      _showUploadMessage(
-        error.message ?? 'Permission ditolak atau media tidak tersedia.',
+      _setPickedDocument(kind, document);
+    } on MissingPluginException catch (error) {
+      _tapGoDebugLog('[TapGo Upload] image picker unavailable: $error');
+      _showUploadMessage(tapGoDocumentUploadFailureMessage);
+    } on PlatformException catch (error) {
+      if (error.code == 'channel-error' || error.code == 'missing_plugin') {
+        _tapGoDebugLog('[TapGo Upload] image picker channel unavailable.');
+        _showUploadMessage(tapGoDocumentUploadFailureMessage);
+        return;
+      }
+      _tapGoDebugLog(
+        '[TapGo Upload] image picker platform error: ${error.code}',
       );
-    } catch (_) {
-      _showUploadMessage('Foto belum bisa dipilih. Silakan coba lagi.');
+      _showUploadMessage(tapGoDocumentUploadFailureMessage);
+    } catch (error) {
+      _tapGoDebugLog('[TapGo Upload] image picker failed: $error');
+      _showUploadMessage(tapGoDocumentUploadFailureMessage);
     }
+  }
+
+  _PickedDemoDocument? _pickedDocumentFromImage(
+    XFile image, {
+    required ImageSource source,
+  }) {
+    if (!tapGoIsValidPickedDocumentPathForTests(image.path)) {
+      return null;
+    }
+    return _PickedDemoDocument(
+      path: image.path.trim(),
+      fileName: image.name,
+      statusLabel: tapGoUploadSuccessLabelForTests(source),
+    );
   }
 
   void _setPickedDocument(_DocumentKind kind, _PickedDemoDocument document) {
@@ -560,13 +604,26 @@ class _MembershipRegistrationScreenState
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    _TapGoSnackbar.info(context, message);
   }
 }
 
 enum _DocumentKind { ktp, selfie }
+
+const tapGoDocumentUploadFailureMessage =
+    'Dokumen gagal dipilih atau diunggah. Silakan coba kembali.';
+
+@visibleForTesting
+bool tapGoIsValidPickedDocumentPathForTests(String? path) {
+  return path != null && path.trim().isNotEmpty;
+}
+
+@visibleForTesting
+String tapGoUploadSuccessLabelForTests(ImageSource source) {
+  return source == ImageSource.gallery
+      ? 'Foto berhasil dipilih'
+      : 'Foto berhasil diambil';
+}
 
 class _PickedDemoDocument {
   const _PickedDemoDocument({

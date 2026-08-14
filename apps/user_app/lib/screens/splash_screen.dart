@@ -22,9 +22,10 @@ class _SplashGateState extends State<SplashGate>
       duration: const Duration(milliseconds: 1800),
     )..forward();
     _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
-    _scale = Tween<double>(begin: 0.82, end: 1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
-    );
+    _scale = Tween<double>(
+      begin: 0.82,
+      end: 1,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.elasticOut));
     Future<void>.delayed(const Duration(milliseconds: 2400), () {
       if (mounted) {
         setState(() => _showAuth = true);
@@ -100,9 +101,11 @@ class _SplashGateState extends State<SplashGate>
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Ride • Membership • Referral • Wallet',
-                    style: TextStyle(
+                  Text(
+                    tapGoIsPlayDistribution
+                        ? 'Akun Basic • Membership • Bantuan'
+                        : 'Akun • Membership • Referral • Bantuan',
+                    style: const TextStyle(
                       color: Color(0xDFFFFFFF),
                       fontSize: 14,
                       fontWeight: FontWeight.w700,

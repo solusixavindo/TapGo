@@ -29,7 +29,7 @@ class AdminWalletScreen extends ConsumerWidget {
             title: 'Total Wallet Member',
             value: _formatCompactRupiah(totalWallet),
             subtitle: adminSnapshot.hasValue
-                ? 'Akumulasi saldo backend seluruh member'
+                ? 'Akumulasi saldo seluruh member'
                 : 'Data saldo belum berhasil dimuat.',
             icon: Icons.account_balance_wallet_rounded,
           ),
@@ -38,7 +38,7 @@ class AdminWalletScreen extends ConsumerWidget {
             const _StatusSurface(
               icon: Icons.sync_rounded,
               title: 'Memuat wallet',
-              subtitle: 'Mengambil saldo user backend...',
+              subtitle: 'Mengambil saldo member...',
             )
           else if (topWallets.isEmpty)
             const _StatusSurface(

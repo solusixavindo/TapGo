@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none" role="img" aria-label="TapGo Chat 3D service icon">
+  <title>Chat</title>
+  <defs>
+    <linearGradient id="blue" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#45C5FF"/><stop offset="0.54" stop-color="#1E7BFF"/><stop offset="1" stop-color="#1754D8"/></linearGradient>
+    <linearGradient id="cyan" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#5BE7DE"/><stop offset="1" stop-color="#0FA6B6"/></linearGradient>
+    <linearGradient id="green" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#72E6A4"/><stop offset="1" stop-color="#16A66A"/></linearGradient>
+    <linearGradient id="orange" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#FFD15D"/><stop offset="0.5" stop-color="#FF8A2A"/><stop offset="1" stop-color="#F05A24"/></linearGradient>
+    <linearGradient id="gold" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#FFE58A"/><stop offset="0.56" stop-color="#FFBE25"/><stop offset="1" stop-color="#D88A06"/></linearGradient>
+    <linearGradient id="purple" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#C8B5FF"/><stop offset="1" stop-color="#6D55F2"/></linearGradient>
+    <linearGradient id="red" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#FF9D8D"/><stop offset="1" stop-color="#EC3F54"/></linearGradient>
+    <linearGradient id="slate" x1="18" y1="16" x2="78" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#A8B8CC"/><stop offset="1" stop-color="#27435E"/></linearGradient>
+    <linearGradient id="white" x1="24" y1="14" x2="72" y2="76" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#E9F3FF"/></linearGradient>
+
+  </defs>
+  <ellipse cx="48" cy="82" rx="27" ry="6" fill="#07213D" opacity="0.14"/>
+
+  <path d="M20 29c0-7 5-12 12-12h32c7 0 12 5 12 12v21c0 7-5 12-12 12H48L29 76V62h3c-7 0-12-5-12-12Z" fill="url(#red)"/>
+  <circle cx="38" cy="39" r="4" fill="#FFFFFF"/>
+  <circle cx="48" cy="39" r="4" fill="#FFFFFF"/>
+  <circle cx="58" cy="39" r="4" fill="#FFFFFF"/>
+  <path d="M30 24c10-5 28-5 38 1" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity="0.25"/>
+
+</svg>

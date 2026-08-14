@@ -78,32 +78,42 @@ class _AdminDashboardBody extends ConsumerWidget {
             Row(
               children: [
                 Expanded(
-                    child: _StatCard(
-                        label: 'Total Member',
-                        value: '${adminSnapshot.hasValue ? totalMembers : 0}')),
+                  child: _StatCard(
+                    label: 'Total Member',
+                    value: '${adminSnapshot.hasValue ? totalMembers : 0}',
+                  ),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
-                    child: _StatCard(
-                        label: 'Omzet',
-                        value: _formatCompactRupiah(
-                            adminSnapshot.hasValue ? totalRevenue : 0))),
+                  child: _StatCard(
+                    label: 'Omzet',
+                    value: _formatCompactRupiah(
+                      adminSnapshot.hasValue ? totalRevenue : 0,
+                    ),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
-                    child: _StatCard(
-                        label: 'Total Komisi',
-                        value: _formatCompactRupiah(
-                            adminSnapshot.hasValue ? totalCommission : 0))),
+                  child: _StatCard(
+                    label: 'Total Komisi',
+                    value: _formatCompactRupiah(
+                      adminSnapshot.hasValue ? totalCommission : 0,
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
-                    child: _StatCard(
-                        label: 'Withdraw Pending',
-                        value: _formatCompactRupiah(adminSnapshot.hasValue
-                            ? totalWithdrawPending
-                            : 0))),
+                  child: _StatCard(
+                    label: 'Withdraw Pending',
+                    value: _formatCompactRupiah(
+                      adminSnapshot.hasValue ? totalWithdrawPending : 0,
+                    ),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 14),
@@ -190,10 +200,8 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
       icon: Icons.hub_rounded,
       title: 'Referral Analytics',
       subtitle: 'Top sponsor, level aktif, referral tree',
-      open: (context) => _openDemo(
-        context,
-        const AdminReferralAnalyticsScreen(),
-      ),
+      open: (context) =>
+          _openDemo(context, const AdminReferralAnalyticsScreen()),
     ),
     _AdminDashboardMenuItem(
       icon: Icons.assessment_rounded,
@@ -239,14 +247,16 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
       _AdminDashboardMenuItem(
         icon: Icons.campaign_rounded,
         title: 'Broadcast',
-        subtitle: 'Membutuhkan approval production',
+        subtitle: 'Memerlukan persetujuan admin utama',
         open: (context) => _openDemo(
-            context, const _AdminProductionApprovalScreen(title: 'Broadcast')),
+          context,
+          const _AdminProductionApprovalScreen(title: 'Broadcast'),
+        ),
       ),
       _AdminDashboardMenuItem(
         icon: Icons.support_agent_rounded,
         title: 'Support',
-        subtitle: 'Membutuhkan approval production',
+        subtitle: 'Memerlukan persetujuan admin utama',
         open: (context) => _openDemo(
           context,
           const _AdminProductionApprovalScreen(title: 'Support'),
@@ -261,15 +271,12 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
       icon: Icons.workspace_premium_rounded,
       title: 'Founder Program',
       subtitle: 'Slot Founder Platinum, status, komisi, dan audit ringkas',
-      open: (context) => _openDemo(
-        context,
-        const FounderProgramScreen(),
-      ),
+      open: (context) => _openDemo(context, const FounderProgramScreen()),
     ),
     _AdminDashboardMenuItem(
       icon: Icons.pie_chart_rounded,
       title: 'Profit Sharing',
-      subtitle: 'Membutuhkan approval production',
+      subtitle: 'Memerlukan persetujuan admin utama',
       open: (context) => _openDemo(
         context,
         const _AdminProductionApprovalScreen(title: 'Profit Sharing'),
@@ -278,7 +285,7 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
     _AdminDashboardMenuItem(
       icon: Icons.tune_rounded,
       title: 'Commission Settings',
-      subtitle: 'Membutuhkan approval production',
+      subtitle: 'Memerlukan persetujuan admin utama',
       open: (context) => _openDemo(
         context,
         const _AdminProductionApprovalScreen(title: 'Commission Settings'),
@@ -287,7 +294,7 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
     _AdminDashboardMenuItem(
       icon: Icons.workspace_premium_rounded,
       title: 'Membership Package Settings',
-      subtitle: 'Membutuhkan approval production',
+      subtitle: 'Memerlukan persetujuan admin utama',
       open: (context) => _openDemo(
         context,
         const _AdminProductionApprovalScreen(
@@ -298,7 +305,7 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
     _AdminDashboardMenuItem(
       icon: Icons.admin_panel_settings_rounded,
       title: 'Admin & Role Management',
-      subtitle: 'Membutuhkan approval production',
+      subtitle: 'Memerlukan persetujuan admin utama',
       open: (context) => _openDemo(
         context,
         const _AdminProductionApprovalScreen(title: 'Admin & Role Management'),
@@ -307,7 +314,7 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
     _AdminDashboardMenuItem(
       icon: Icons.fact_check_rounded,
       title: 'Audit Log',
-      subtitle: 'Membutuhkan approval production',
+      subtitle: 'Memerlukan persetujuan admin utama',
       open: (context) => _openDemo(
         context,
         const _AdminProductionApprovalScreen(title: 'Audit Log'),
@@ -316,7 +323,7 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
     _AdminDashboardMenuItem(
       icon: Icons.settings_rounded,
       title: 'App Settings',
-      subtitle: 'Membutuhkan approval production',
+      subtitle: 'Memerlukan persetujuan admin utama',
       open: (context) => _openDemo(
         context,
         const _AdminProductionApprovalScreen(title: 'App Settings'),
@@ -335,8 +342,8 @@ class _AdminApiStatusTile extends ConsumerWidget {
     if (state.isLoading) {
       return const _StatusSurface(
         icon: Icons.sync_rounded,
-        title: 'Memuat Admin API',
-        subtitle: 'Mengecek endpoint admin backend...',
+        title: 'Memuat data admin',
+        subtitle: 'Mengecek layanan admin TapGo...',
       );
     }
 
@@ -352,7 +359,7 @@ class _AdminApiStatusTile extends ConsumerWidget {
     final data = state.value!;
     return _StatusSurface(
       icon: Icons.cloud_done_rounded,
-      title: 'Live Data',
+      title: 'Data Aktif',
       subtitle:
           '${data.members.length} member, ${data.invoices.length} invoice, ${data.withdrawals.length} withdrawal.',
     );
@@ -411,11 +418,11 @@ class _AdminProductionApprovalScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return _DemoScaffold(
       title: title,
-      subtitle: 'Membutuhkan approval production',
+      subtitle: 'Memerlukan persetujuan admin utama',
       child: const _StatusSurface(
         icon: Icons.lock_clock_rounded,
-        title: 'Fitur ini membutuhkan approval production.',
-        subtitle: 'Endpoint produksi belum tersedia atau belum diaktifkan.',
+        title: 'Fitur ini memerlukan persetujuan admin utama.',
+        subtitle: 'Layanan belum aktif untuk akun ini.',
       ),
     );
   }
@@ -432,7 +439,7 @@ class AdminBusinessOverviewScreen extends ConsumerWidget {
     return _DemoScaffold(
       title: 'Business Overview',
       subtitle: adminSnapshot.hasValue
-          ? 'Ringkasan real dari backend production'
+          ? 'Ringkasan data TapGo'
           : 'Ringkasan bisnis TapGo',
       child: Column(
         children: [
@@ -440,7 +447,7 @@ class AdminBusinessOverviewScreen extends ConsumerWidget {
             const _StatusSurface(
               icon: Icons.sync_rounded,
               title: 'Memuat Business Overview',
-              subtitle: 'Mengambil ringkasan bisnis dari backend...',
+              subtitle: 'Mengambil ringkasan bisnis TapGo...',
             )
           else if (adminSnapshot.hasError)
             _RetryStatusSurface(
@@ -530,11 +537,19 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
   @override
   void initState() {
     super.initState();
-    _future = _apiClient.adminFounderPlatinum();
+    _future = _loadFounderProgram();
+  }
+
+  Future<Map<String, dynamic>> _loadFounderProgram() async {
+    final results = await Future.wait([
+      _apiClient.adminFounderChairman(),
+      _apiClient.adminFounderPlatinum(),
+    ]);
+    return {'chairman': results[0], 'platinum': results[1]};
   }
 
   void _reload() {
-    setState(() => _future = _apiClient.adminFounderPlatinum());
+    setState(() => _future = _loadFounderProgram());
   }
 
   Future<void> _changeStatus(
@@ -553,22 +568,26 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
 
     setState(() => _processing[founderId] = true);
     try {
-      await _apiClient.updateFounderPlatinumStatus(
-        founderId: founderId,
-        status: status,
-        reason: reason,
-      );
+      if (founderId.startsWith('FCH-')) {
+        await _apiClient.updateFounderChairmanStatus(
+          founderId: founderId,
+          status: status,
+          reason: reason,
+        );
+      } else {
+        await _apiClient.updateFounderPlatinumStatus(
+          founderId: founderId,
+          status: status,
+          reason: reason,
+        );
+      }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Status Founder $founderId diperbarui')),
-      );
+      _TapGoSnackbar.success(context, 'Status Founder $founderId diperbarui');
       ref.invalidate(_adminConsoleSnapshotProvider);
       _reload();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal memperbarui status Founder: $error')),
-      );
+      _TapGoSnackbar.error(context, 'Gagal memperbarui status Founder: $error');
     } finally {
       if (mounted) {
         setState(() => _processing[founderId] = false);
@@ -580,7 +599,7 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
   Widget build(BuildContext context) {
     return _DemoScaffold(
       title: 'Founder Program',
-      subtitle: 'Founder Platinum eksklusif untuk Super Admin',
+      subtitle: 'Founder Chairman dan Founder Platinum',
       child: FutureBuilder<Map<String, dynamic>>(
         future: _future,
         builder: (context, snapshot) {
@@ -588,7 +607,7 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
             return const _StatusSurface(
               icon: Icons.sync_rounded,
               title: 'Memuat Founder Program',
-              subtitle: 'Mengambil daftar Founder Platinum...',
+              subtitle: 'Mengambil data Founder Chairman dan Platinum...',
             );
           }
           if (snapshot.hasError) {
@@ -601,13 +620,27 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
           }
 
           final data = snapshot.data ?? const <String, dynamic>{};
-          final items = ((data['items'] as List?) ?? const [])
+          final chairman =
+              (data['chairman'] as Map?)?.cast<String, dynamic>() ??
+                  const <String, dynamic>{};
+          final platinum =
+              (data['platinum'] as Map?)?.cast<String, dynamic>() ??
+                  const <String, dynamic>{};
+          final chairmanItem =
+              (chairman['item'] as Map?)?.cast<String, dynamic>();
+          final items = ((platinum['items'] as List?) ?? const [])
               .whereType<Map>()
               .map((item) => item.cast<String, dynamic>())
               .toList(growable: false);
           final statusSummary =
-              (data['statusSummary'] as Map?)?.cast<String, dynamic>() ??
+              (platinum['statusSummary'] as Map?)?.cast<String, dynamic>() ??
                   const <String, dynamic>{};
+          final chairmanStatusSummary =
+              (chairman['statusSummary'] as Map?)?.cast<String, dynamic>() ??
+                  const <String, dynamic>{};
+          int combinedStatus(String status) =>
+              _intFrom(statusSummary[status]) +
+              _intFrom(chairmanStatusSummary[status]);
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -617,14 +650,16 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
                   Expanded(
                     child: _StatCard(
                       label: 'Total Slot',
-                      value: '${_intFrom(data['totalSlot'])}',
+                      value:
+                          '${_intFrom(platinum['totalSlot']) + _intFrom(chairman['totalSlot'])}',
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: _StatCard(
                       label: 'Terpakai',
-                      value: '${_intFrom(data['usedSlot'])}',
+                      value:
+                          '${_intFrom(platinum['usedSlot']) + _intFrom(chairman['usedSlot'])}',
                     ),
                   ),
                 ],
@@ -635,7 +670,8 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
                   Expanded(
                     child: _StatCard(
                       label: 'Sisa Slot',
-                      value: '${_intFrom(data['availableSlot'])}',
+                      value:
+                          '${_intFrom(platinum['availableSlot']) + _intFrom(chairman['availableSlot'])}',
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -652,8 +688,18 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
                 icon: Icons.verified_user_rounded,
                 title: 'Lifecycle Founder',
                 subtitle:
-                    'ACTIVE ${_intFrom(statusSummary['ACTIVE'])} • SUSPENDED ${_intFrom(statusSummary['SUSPENDED'])} • REVOKED ${_intFrom(statusSummary['REVOKED'])}',
+                    'ACTIVE ${combinedStatus('ACTIVE')} • SUSPENDED ${combinedStatus('SUSPENDED')} • REVOKED ${combinedStatus('REVOKED')}',
               ),
+              const SizedBox(height: 12),
+              if (chairmanItem != null) ...[
+                _founderCard(chairmanItem),
+                const SizedBox(height: 4),
+              ] else
+                const _StatusSurface(
+                  icon: Icons.emoji_events_rounded,
+                  title: 'Founder Chairman',
+                  subtitle: 'Slot FCH-001 belum diberikan.',
+                ),
               const SizedBox(height: 12),
               if (items.isEmpty)
                 const _EmptyState(
@@ -675,6 +721,7 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
     final status = item['status']?.toString() ?? 'ACTIVE';
     final busy = _processing[founderId] == true;
     final isRevoked = status == 'REVOKED';
+    final isChairman = founderId.startsWith('FCH-');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -720,6 +767,13 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
             'Sponsor ${item['totalSponsorBonus'] ?? '0.00'} • Level ${item['totalLevelBonus'] ?? '0.00'} • Total ${item['totalCommission'] ?? '0.00'}',
             style: const TextStyle(color: Color(0xFF94A3B8)),
           ),
+          if (isChairman && item['bankAccountMasked'] != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Bank Account ${item['bankAccountMasked']}',
+              style: const TextStyle(color: Color(0xFF94A3B8)),
+            ),
+          ],
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
@@ -789,13 +843,15 @@ class FounderProgramDetailScreen extends StatelessWidget {
       title: 'Detail Founder',
       subtitle: founderId,
       child: FutureBuilder<Map<String, dynamic>>(
-        future: _apiClient.adminFounderPlatinumDetail(founderId),
+        future: founderId.startsWith('FCH-')
+            ? _apiClient.adminFounderChairmanDetail(founderId)
+            : _apiClient.adminFounderPlatinumDetail(founderId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const _StatusSurface(
               icon: Icons.sync_rounded,
               title: 'Memuat detail Founder',
-              subtitle: 'Mengambil data Founder Platinum...',
+              subtitle: 'Mengambil data Founder Program...',
             );
           }
           if (snapshot.hasError) {
@@ -828,6 +884,8 @@ class FounderProgramDetailScreen extends StatelessWidget {
               _FounderDetailRow('Granted At', _dateLabel(data['grantedAt'])),
               _FounderDetailRow('Wallet Cash', data['walletCash']),
               _FounderDetailRow('Wallet PPOB', data['walletPpob']),
+              if (data['bankAccountMasked'] != null)
+                _FounderDetailRow('Bank Account', data['bankAccountMasked']),
               _FounderDetailRow('Referral Count', data['referralCount']),
               _FounderDetailRow('Sponsor Bonus', data['totalSponsorBonus']),
               _FounderDetailRow('Level Bonus', data['totalLevelBonus']),
@@ -946,7 +1004,7 @@ Future<String?> _statusReasonDialog(
   required bool requireReason,
 }) async {
   final controller = TextEditingController();
-  return showDialog<String?>(
+  return _showTapGoDialog<String?>(
     context: context,
     builder: (context) {
       return AlertDialog(
@@ -969,9 +1027,7 @@ Future<String?> _statusReasonDialog(
             onPressed: () {
               final reason = controller.text.trim();
               if (requireReason && reason.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Alasan wajib diisi')),
-                );
+                _TapGoSnackbar.warning(context, 'Alasan wajib diisi');
                 return;
               }
               Navigator.of(context).pop(reason);
@@ -985,10 +1041,7 @@ Future<String?> _statusReasonDialog(
 }
 
 class _AdminRecordDetailScreen extends StatelessWidget {
-  const _AdminRecordDetailScreen({
-    required this.title,
-    required this.rows,
-  });
+  const _AdminRecordDetailScreen({required this.title, required this.rows});
 
   final String title;
   final List<String> rows;
@@ -1067,29 +1120,36 @@ class _AdminPackageBreakdown extends StatelessWidget {
             runSpacing: 8,
             children: [
               _BenefitChip(
-                  label:
-                      'Basic ${summary == null ? 0 : _intFrom(summary!['totalBasic'])}'),
+                label:
+                    'Basic ${summary == null ? 0 : _intFrom(summary!['totalBasic'])}',
+              ),
               _BenefitChip(
-                  label:
-                      'Silver ${summary == null ? _countPackage('Silver') : _intFrom(summary!['totalSilver'])}'),
+                label:
+                    'Silver ${summary == null ? _countPackage('Silver') : _intFrom(summary!['totalSilver'])}',
+              ),
               _BenefitChip(
-                  label:
-                      'Gold ${summary == null ? _countPackage('Gold') : _intFrom(summary!['totalGold'])}'),
+                label:
+                    'Gold ${summary == null ? _countPackage('Gold') : _intFrom(summary!['totalGold'])}',
+              ),
               _BenefitChip(
-                  label:
-                      'Platinum ${summary == null ? _countPackage('Platinum') : _intFrom(summary!['totalPlatinum'])}'),
+                label:
+                    'Platinum ${summary == null ? _countPackage('Platinum') : _intFrom(summary!['totalPlatinum'])}',
+              ),
               _BenefitChip(
-                  label: summary == null
-                      ? 'Sponsor Bonus Rp0'
-                      : 'Sponsor ${_formatCompactRupiah(_intFrom(summary!['totalSponsorBonus']))}'),
+                label: summary == null
+                    ? 'Sponsor Bonus Rp0'
+                    : 'Sponsor ${_formatCompactRupiah(_intFrom(summary!['totalSponsorBonus']))}',
+              ),
               _BenefitChip(
-                  label: summary == null
-                      ? 'Level Bonus Rp0'
-                      : 'Level ${_formatCompactRupiah(_intFrom(summary!['totalLevelBonus']))}'),
+                label: summary == null
+                    ? 'Level Bonus Rp0'
+                    : 'Level ${_formatCompactRupiah(_intFrom(summary!['totalLevelBonus']))}',
+              ),
               _BenefitChip(
-                  label: summary == null
-                      ? 'Reward Rp0'
-                      : 'Reward ${_formatCompactRupiah(_intFrom(summary!['totalRewardBonus']))}'),
+                label: summary == null
+                    ? 'Reward Rp0'
+                    : 'Reward ${_formatCompactRupiah(_intFrom(summary!['totalRewardBonus']))}',
+              ),
             ],
           ),
         ],
@@ -1130,15 +1190,12 @@ class _AdminMemberRequestScreenState
     try {
       await call();
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(successMessage)));
+      _TapGoSnackbar.success(context, successMessage);
       _reload();
       ref.invalidate(_adminConsoleSnapshotProvider);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal memproses pengajuan: $error')),
-      );
+      _TapGoSnackbar.error(context, 'Gagal memproses pengajuan: $error');
     } finally {
       if (mounted) {
         setState(() => _processing[id] = false);
@@ -1150,7 +1207,7 @@ class _AdminMemberRequestScreenState
   Widget build(BuildContext context) {
     return _DemoScaffold(
       title: 'Approve Member',
-      subtitle: 'Pengajuan upgrade membership real dari backend',
+      subtitle: 'Pengajuan upgrade membership',
       child: FutureBuilder<List<Map<String, dynamic>>>(
         future: _future,
         builder: (context, snapshot) {
@@ -1177,9 +1234,7 @@ class _AdminMemberRequestScreenState
               subtitle: 'Order membership baru akan muncul di sini.',
             );
           }
-          return Column(
-            children: items.map(_requestCard).toList(),
-          );
+          return Column(children: items.map(_requestCard).toList());
         },
       ),
     );
@@ -1266,10 +1321,7 @@ class _AdminMemberRequestScreenState
 enum _AdminReportType { bonus, ppob, reward }
 
 class _AdminReportScreen extends StatefulWidget {
-  const _AdminReportScreen({
-    required this.title,
-    required this.type,
-  });
+  const _AdminReportScreen({required this.title, required this.type});
 
   final String title;
   final _AdminReportType type;
@@ -1319,7 +1371,7 @@ class _AdminReportScreenState extends State<_AdminReportScreen> {
   Widget build(BuildContext context) {
     return _DemoScaffold(
       title: widget.title,
-      subtitle: 'Laporan real dari backend',
+      subtitle: 'Laporan transaksi TapGo',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1332,7 +1384,7 @@ class _AdminReportScreenState extends State<_AdminReportScreen> {
                 return const _StatusSurface(
                   icon: Icons.sync_rounded,
                   title: 'Memuat laporan',
-                  subtitle: 'Mengambil data backend...',
+                  subtitle: 'Mengambil data laporan...',
                 );
               }
               if (snapshot.hasError) {
@@ -1353,8 +1405,7 @@ class _AdminReportScreenState extends State<_AdminReportScreen> {
                 return const _EmptyState(
                   icon: Icons.assessment_rounded,
                   title: 'Belum ada data laporan',
-                  subtitle:
-                      'Transaksi akan muncul setelah tercatat di backend.',
+                  subtitle: 'Transaksi akan muncul setelah tercatat.',
                 );
               }
               return Column(
@@ -1363,8 +1414,11 @@ class _AdminReportScreenState extends State<_AdminReportScreen> {
                   Row(
                     children: [
                       Expanded(
-                          child: _StatCard(
-                              label: 'Total', value: total.toString())),
+                        child: _StatCard(
+                          label: 'Total',
+                          value: total.toString(),
+                        ),
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: _StatCard(
@@ -1393,13 +1447,15 @@ class _AdminReportScreenState extends State<_AdminReportScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  ...items.map((item) => _WalletLedgerItem(
-                        title: _reportTitle(item),
-                        amount: formatRupiah(_intFrom(item['amount'])),
-                        note:
-                            '${item['type'] ?? item['status'] ?? '-'} • ${_dateLabel(item['createdAt']) ?? '-'}',
-                        color: _brandBlue,
-                      )),
+                  ...items.map(
+                    (item) => _WalletLedgerItem(
+                      title: _reportTitle(item),
+                      amount: formatRupiah(_intFrom(item['amount'])),
+                      note:
+                          '${item['type'] ?? item['status'] ?? '-'} • ${_dateLabel(item['createdAt']) ?? '-'}',
+                      color: _brandBlue,
+                    ),
+                  ),
                 ],
               );
             },
@@ -1479,10 +1535,12 @@ class _AdminReportScreenState extends State<_AdminReportScreen> {
           ),
           const SizedBox(height: 6),
           const Text(
-            'CSV tersedia dari endpoint backend .csv dengan filter yang sama.',
+            'CSV tersedia dengan filter laporan yang sama.',
             textAlign: TextAlign.center,
             style: TextStyle(
-                color: Color(0xFF64748B), fontWeight: FontWeight.w700),
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),

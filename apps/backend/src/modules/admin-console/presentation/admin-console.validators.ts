@@ -8,6 +8,7 @@ import {
   WithdrawalStatus
 } from "@prisma/client";
 import { z } from "zod";
+import { ROLE_REASON_CODES } from "../application/AdminRoleService.js";
 
 const paginationQuery = {
   page: z.coerce.number().int().min(1).default(1),
@@ -126,6 +127,38 @@ export const adminFounderPlatinumStatusSchema = z.object({
   })
 });
 
+export const adminFounderChairmanGrantSchema = z.object({
+  body: z.object({
+    fullName: z.string().trim().min(2).max(120),
+    phone: z.string().trim().min(8).max(32),
+    password: z.string().min(6).max(120),
+    email: z.string().trim().email().max(180).optional(),
+    reason: z.string().trim().min(3).max(500),
+    secureBankAccountReference: z.string().trim().max(120).optional(),
+    bankAccount: z.object({
+      bankName: z.string().trim().min(2).max(80),
+      accountHolderName: z.string().trim().min(2).max(120),
+      accountNumber: z.string().trim().min(4).max(40)
+    }).optional()
+  })
+});
+
+export const adminFounderChairmanDetailSchema = z.object({
+  params: z.object({
+    founderId: z.string().trim().regex(/^FCH-\d{3}$/)
+  })
+});
+
+export const adminFounderChairmanStatusSchema = z.object({
+  params: z.object({
+    founderId: z.string().trim().regex(/^FCH-\d{3}$/)
+  }),
+  body: z.object({
+    status: z.enum(["ACTIVE", "SUSPENDED", "REVOKED"]),
+    reason: z.string().trim().max(500).optional()
+  })
+});
+
 export const adminReportQuerySchema = z.object({
   query: z.object({
     ...paginationQuery,
@@ -180,5 +213,23 @@ export const adminGenericStatusQuerySchema = z.object({
   query: z.object({
     ...paginationQuery,
     status: z.string().trim().min(1).max(40).optional()
+  })
+});
+
+/// Pengelolaan role oleh pemilik sistem. SUPER_ADMIN_VIP sengaja tidak ada di
+/// daftar role yang dapat diberikan: role puncak hanya lahir dari CLI.
+export const adminRoleAssignSchema = z.object({
+  params: z.object({
+    userId: z.string().uuid()
+  }),
+  body: z.object({
+    role: z.enum(["USER", "ADMIN", "SUPER_ADMIN"]),
+    reasonCode: z.enum(ROLE_REASON_CODES)
+  })
+});
+
+export const adminRoleCandidateSchema = z.object({
+  query: z.object({
+    q: z.string().trim().min(3).max(60)
   })
 });

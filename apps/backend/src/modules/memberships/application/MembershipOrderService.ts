@@ -1,6 +1,14 @@
-import { MembershipOrderStatus, MembershipTier, Prisma, PrismaClient, UserRole } from "@prisma/client";
+import {
+  MembershipOrderChannel,
+  MembershipOrderStatus,
+  MembershipTier,
+  Prisma,
+  PrismaClient,
+  UserRole
+} from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../core/errors/AppError.js";
+import { isAdminRole } from "../../../core/security/roleHierarchy.js";
 
 type PrismaTransaction = Prisma.TransactionClient;
 
@@ -38,6 +46,17 @@ const levelLimitByTier: Record<MembershipTier, number> = {
   PLATINUM: 10
 };
 
+/// Bentuk order yang dibutuhkan tahap aktivasi. Dipisah supaya fase settle
+/// pembayaran dan fase aktivasi membaca order dengan relasi yang sama persis.
+const activationOrderInclude = {
+  membership: { include: { benefits: { orderBy: { level: "asc" as const } } } },
+  invoice: true,
+  payments: { orderBy: { createdAt: "desc" as const } },
+  userMembership: true
+} satisfies Prisma.MembershipOrderInclude;
+
+type ActivationOrder = Prisma.MembershipOrderGetPayload<{ include: typeof activationOrderInclude }>;
+
 export class MembershipOrderService {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -53,6 +72,9 @@ export class MembershipOrderService {
     userId: string;
     packageId: string;
     registrationData?: Record<string, unknown>;
+    /// Kanal asal order. Dicatat untuk audit; tidak memengaruhi tarif maupun
+    /// entitlement. Otorisasi kanal ditegakkan di lapisan presentation.
+    channel?: MembershipOrderChannel;
   }) {
     return this.prisma.$transaction(async (tx) => {
       const membershipPackage = await tx.membership.findFirst({
@@ -87,6 +109,7 @@ export class MembershipOrderService {
           userId: input.userId,
           membershipId: membershipPackage.id,
           status: "PENDING",
+          ...(input.channel ? { channel: input.channel } : {}),
           totalAmount: amount,
           packageSnapshot: packageSnapshot as Prisma.InputJsonValue,
           registrationData: (input.registrationData ?? {}) as Prisma.InputJsonValue,
@@ -150,12 +173,7 @@ export class MembershipOrderService {
     return this.prisma.$transaction(async (tx) => {
       const order = await tx.membershipOrder.findUnique({
         where: { id: input.orderId },
-        include: {
-          membership: { include: { benefits: { orderBy: { level: "asc" } } } },
-          invoice: true,
-          payments: { orderBy: { createdAt: "desc" } },
-          userMembership: true
-        }
+        include: activationOrderInclude
       });
 
       if (!order) {
@@ -225,126 +243,22 @@ export class MembershipOrderService {
       });
       }
 
-      const previousMembership = await tx.userMembership.findFirst({
-        where: {
-          userId: order.userId,
-          status: "ACTIVE",
-          orderId: { not: order.id }
-        },
-        include: { membership: true },
-        orderBy: { activeAt: "desc" }
-      });
-
-      if (previousMembership) {
-        await tx.userMembership.update({
-          where: { id: previousMembership.id },
-          data: {
-            status: "EXPIRED",
-            expiresAt: now,
-            metadata: {
-              ...(this.asObject(previousMembership.metadata)),
-              upgradedToMembershipId: order.membershipId,
-              upgradedToOrderId: order.id,
-              upgradedAt: now.toISOString()
-            }
+      // Stage R2.6 jalur A: pembelian dari web berhenti di sini. Uangnya sudah
+      // tercatat lunas, tetapi membership, benefit PPOB, bonus sponsor, bonus
+      // level, reward, dan auto-upgrade baru berjalan setelah admin
+      // memverifikasi dokumen KYC lewat activateVerifiedOrder(). Kanal lain
+      // (APP, ADMIN, dan order lama yang kanalnya null) tidak berubah.
+      if (this.requiresDocumentVerification(order.channel)) {
+        return tx.membershipOrder.findUniqueOrThrow({
+          where: { id: order.id },
+          include: {
+            ...this.orderInclude(),
+            userMembership: true
           }
         });
       }
 
-      const activeMembership = await tx.userMembership.upsert({
-        where: { orderId: order.id },
-        update: {
-          status: "ACTIVE",
-          activeAt: now,
-          expiresAt: null,
-          metadata: {
-            previousMembershipId: previousMembership?.membershipId ?? null,
-            previousPackageName: previousMembership?.membership.name ?? null,
-            packageName: order.membership.name,
-            invoiceId: order.invoice.id,
-            invoiceNumber: order.invoice.number,
-            activatedAt: now.toISOString()
-          }
-        },
-        create: {
-          userId: order.userId,
-          membershipId: order.membershipId,
-          orderId: order.id,
-          status: "ACTIVE",
-          activeAt: now,
-          metadata: {
-            previousMembershipId: previousMembership?.membershipId ?? null,
-            previousPackageName: previousMembership?.membership.name ?? null,
-            packageName: order.membership.name,
-            invoiceId: order.invoice.id,
-            invoiceNumber: order.invoice.number,
-            activatedAt: now.toISOString()
-          }
-        }
-      });
-
-      await tx.user.update({
-        where: { id: order.userId },
-        data: { membershipId: order.membershipId }
-      });
-
-      await this.creditPpobBenefit(tx, {
-        userId: order.userId,
-        orderId: order.id,
-        invoiceId: order.invoice.id,
-        membershipId: order.membershipId,
-        packageName: order.membership.name,
-        amount: order.membership.ppobBalance
-      });
-
-      await this.creditSponsorBonus(tx, {
-        userId: order.userId,
-        orderId: order.id,
-        invoiceId: order.invoice.id,
-        membershipId: order.membershipId,
-        packageName: order.membership.name,
-        packageTier: order.membership.tier,
-        packagePrice: order.membership.price
-      });
-
-      await this.creditLevelBonuses(tx, {
-        userId: order.userId,
-        orderId: order.id,
-        invoiceId: order.invoice.id,
-        membershipId: order.membershipId,
-        packageName: order.membership.name,
-        packageTier: order.membership.tier,
-        packagePrice: order.membership.price
-      });
-
-      await this.creditRewardBonus(tx, {
-        userId: order.userId,
-        sourceUserId: order.userId,
-        membershipTier: order.membership.tier
-      });
-
-      await this.evaluateAutoUpgradeForUser(tx, {
-        userId: order.userId,
-        sourceOrderId: order.id,
-        now
-      });
-
-      const directSponsor = await tx.referral.findUnique({
-        where: { userId: order.userId },
-        select: { sponsorId: true, status: true }
-      });
-      if (directSponsor?.status === "ACTIVE") {
-        await this.evaluateAutoUpgradeForUser(tx, {
-          userId: directSponsor.sponsorId,
-          sourceOrderId: order.id,
-          now
-        });
-        await this.creditRewardBonus(tx, {
-          userId: directSponsor.sponsorId,
-          sourceUserId: order.userId,
-          membershipTier: await this.getUserCurrentTier(tx, directSponsor.sponsorId)
-        });
-      }
+      await this.activateMembership(tx, order, now);
 
       return tx.membershipOrder.findUniqueOrThrow({
         where: { id: order.id },
@@ -355,8 +269,389 @@ export class MembershipOrderService {
       });
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      timeout: 15000
+      timeout: 30000
     });
+  }
+
+  /// Aktivasi membership untuk order kanal WEB yang dokumennya sudah
+  /// diverifikasi admin (Stage R2.6 jalur A, poin 5). Menjalankan rangkaian
+  /// efek Business Engine yang sama persis dengan pembelian kanal lain, hanya
+  /// waktunya yang ditunda sampai verifikasi selesai.
+  async activateVerifiedOrder(input: { orderId: string; adminId: string }) {
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.membershipOrder.findUnique({
+        where: { id: input.orderId },
+        include: activationOrderInclude
+      });
+
+      if (!order) {
+        throw new AppError("Membership order not found", StatusCodes.NOT_FOUND, "MEMBERSHIP_ORDER_NOT_FOUND");
+      }
+
+      if (!this.requiresDocumentVerification(order.channel)) {
+        throw new AppError(
+          "Membership order for this channel activates on payment and cannot be verified",
+          StatusCodes.CONFLICT,
+          "MEMBERSHIP_VERIFICATION_NOT_REQUIRED"
+        );
+      }
+
+      if (order.status !== "PAID") {
+        throw new AppError(
+          "Membership order must be paid before document verification",
+          StatusCodes.CONFLICT,
+          "MEMBERSHIP_ORDER_NOT_PAID"
+        );
+      }
+
+      if (order.userMembership) {
+        throw new AppError(
+          "Membership order has already been activated",
+          StatusCodes.CONFLICT,
+          "MEMBERSHIP_ALREADY_ACTIVATED"
+        );
+      }
+
+      if (!order.invoice) {
+        throw new AppError("Membership order invoice not found", StatusCodes.CONFLICT, "MEMBERSHIP_INVOICE_NOT_FOUND");
+      }
+
+      const currentTier = await this.getUserCurrentTier(tx, order.userId);
+      this.assertNoDowngrade(currentTier, order.membership.tier);
+
+      const now = new Date();
+
+      await tx.membershipOrder.update({
+        where: { id: order.id },
+        data: {
+          registrationData: {
+            ...(this.asObject(order.registrationData)),
+            documentVerification: {
+              verifiedBy: input.adminId,
+              verifiedAt: now.toISOString()
+            }
+          }
+        }
+      });
+
+      await tx.membershipDocument.updateMany({
+        where: { orderId: order.id, status: "PENDING" },
+        data: { status: "APPROVED" }
+      });
+
+      // Verifikasi KYC adalah tindakan yang melepas uang: begitu lolos, bonus
+      // sponsor dan bonus level langsung terbayar. Karena itu selalu dicatat
+      // siapa adminnya, order mana, dan berapa nilainya.
+      await tx.auditLog.create({
+        data: {
+          actorId: input.adminId,
+          action: "MEMBERSHIP_DOCUMENTS_VERIFIED",
+          entityType: "MEMBERSHIP_ORDER",
+          entityId: order.id,
+          metadata: {
+            targetUserId: order.userId,
+            membershipId: order.membershipId,
+            channel: order.channel,
+            invoiceId: order.invoice.id,
+            invoiceNumber: order.invoice.number,
+            totalAmount: order.totalAmount.toFixed(2)
+          }
+        }
+      });
+
+      await this.activateMembership(tx, order, now);
+
+      return tx.membershipOrder.findUniqueOrThrow({
+        where: { id: order.id },
+        include: {
+          ...this.orderInclude(),
+          userMembership: true
+        }
+      });
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      timeout: 30000
+    });
+  }
+
+  /// Penolakan dokumen KYC atas order kanal WEB yang sudah lunas (Stage R2.6
+  /// jalur A, poin 6). Keputusan Owner: pemohon menerima pengembalian dana
+  /// penuh.
+  ///
+  /// Operasi ini hanya berlaku selama order belum pernah aktif. Setelah aktif,
+  /// bonus sponsor dan bonus level sudah masuk ke wallet upline dan menariknya
+  /// kembali membutuhkan alur pembalikan tersendiri yang sengaja belum ada.
+  /// Karena order WEB tidak pernah aktif sebelum diverifikasi, penolakan di
+  /// sini selalu bersih: tidak ada satu pun catatan Business Engine yang perlu
+  /// dibatalkan.
+  async rejectOrderDocuments(input: { orderId: string; adminId: string; reason?: string }) {
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.membershipOrder.findUnique({
+        where: { id: input.orderId },
+        include: activationOrderInclude
+      });
+
+      if (!order) {
+        throw new AppError("Membership order not found", StatusCodes.NOT_FOUND, "MEMBERSHIP_ORDER_NOT_FOUND");
+      }
+
+      if (!this.requiresDocumentVerification(order.channel)) {
+        throw new AppError(
+          "Membership order for this channel activates on payment and has no document decision",
+          StatusCodes.CONFLICT,
+          "MEMBERSHIP_VERIFICATION_NOT_REQUIRED"
+        );
+      }
+
+      if (order.status !== "PAID") {
+        throw new AppError(
+          "Membership order must be paid before a document decision",
+          StatusCodes.CONFLICT,
+          "MEMBERSHIP_ORDER_NOT_PAID"
+        );
+      }
+
+      if (order.userMembership) {
+        throw new AppError(
+          "Membership order has already been activated",
+          StatusCodes.CONFLICT,
+          "MEMBERSHIP_ALREADY_ACTIVATED"
+        );
+      }
+
+      if (!order.invoice) {
+        throw new AppError("Membership order invoice not found", StatusCodes.CONFLICT, "MEMBERSHIP_INVOICE_NOT_FOUND");
+      }
+
+      const now = new Date();
+      const refundAmount = order.totalAmount.toFixed(2);
+      /// Statusnya PENDING, bukan REFUNDED. Baris ini mencatat bahwa dana WAJIB
+      /// dikembalikan penuh; perpindahan uangnya sendiri dieksekusi ke penyedia
+      /// pembayaran pada tahap berikutnya. Invoice dan payment sengaja tidak
+      /// ditandai REFUNDED lebih dulu supaya pembukuan tidak mengklaim uang
+      /// sudah kembali padahal belum.
+      const refund = {
+        status: "PENDING",
+        amount: refundAmount,
+        currency: order.invoice.currency,
+        requestedBy: input.adminId,
+        requestedAt: now.toISOString(),
+        reason: input.reason ?? null
+      };
+      const rejection = {
+        rejectedBy: input.adminId,
+        rejectedAt: now.toISOString(),
+        reason: input.reason ?? null,
+        refund
+      };
+
+      await tx.membershipDocument.updateMany({
+        where: { orderId: order.id, status: "PENDING" },
+        data: { status: "REJECTED" }
+      });
+
+      await tx.membershipOrder.update({
+        where: { id: order.id },
+        data: {
+          status: "CANCELLED",
+          registrationData: {
+            ...(this.asObject(order.registrationData)),
+            documentRejection: rejection
+          }
+        }
+      });
+
+      await tx.invoice.update({
+        where: { id: order.invoice.id },
+        data: {
+          metadata: {
+            ...(this.asObject(order.invoice.metadata)),
+            refund
+          }
+        }
+      });
+
+      for (const payment of order.payments.filter((item) => item.status === "PAID")) {
+        await tx.membershipPayment.update({
+          where: { id: payment.id },
+          data: {
+            metadata: {
+              ...(this.asObject(payment.metadata)),
+              refund
+            }
+          }
+        });
+      }
+
+      await tx.auditLog.create({
+        data: {
+          actorId: input.adminId,
+          action: "MEMBERSHIP_DOCUMENTS_REJECTED",
+          entityType: "MEMBERSHIP_ORDER",
+          entityId: order.id,
+          metadata: {
+            targetUserId: order.userId,
+            membershipId: order.membershipId,
+            channel: order.channel,
+            invoiceId: order.invoice.id,
+            invoiceNumber: order.invoice.number,
+            refundAmount,
+            reason: input.reason ?? null
+          }
+        }
+      });
+
+      return tx.membershipOrder.findUniqueOrThrow({
+        where: { id: order.id },
+        include: {
+          ...this.orderInclude(),
+          userMembership: true
+        }
+      });
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      timeout: 30000
+    });
+  }
+
+  /// Hanya pembelian kanal WEB yang menunggu verifikasi dokumen. Aturannya
+  /// ditegakkan di service, bukan di controller, supaya entry point baru tidak
+  /// bisa melewatinya tanpa sengaja.
+  private requiresDocumentVerification(channel: MembershipOrderChannel | null) {
+    return channel === "WEB";
+  }
+
+  /// Seluruh efek Business Engine dari satu pembelian membership yang sah.
+  /// Dipanggil dari markPaymentSuccess (kanal non-WEB) dan dari
+  /// activateVerifiedOrder (kanal WEB setelah verifikasi admin), sehingga
+  /// kedua jalur menghasilkan pembukuan yang identik.
+  private async activateMembership(tx: PrismaTransaction, order: ActivationOrder, now: Date) {
+    if (!order.invoice) {
+      throw new AppError("Membership order invoice not found", StatusCodes.CONFLICT, "MEMBERSHIP_INVOICE_NOT_FOUND");
+    }
+
+    const invoice = order.invoice;
+
+    const previousMembership = await tx.userMembership.findFirst({
+      where: {
+        userId: order.userId,
+        status: "ACTIVE",
+        orderId: { not: order.id }
+      },
+      include: { membership: true },
+      orderBy: { activeAt: "desc" }
+    });
+
+    if (previousMembership) {
+      await tx.userMembership.update({
+        where: { id: previousMembership.id },
+        data: {
+          status: "EXPIRED",
+          expiresAt: now,
+          metadata: {
+            ...(this.asObject(previousMembership.metadata)),
+            upgradedToMembershipId: order.membershipId,
+            upgradedToOrderId: order.id,
+            upgradedAt: now.toISOString()
+          }
+        }
+      });
+    }
+
+    await tx.userMembership.upsert({
+      where: { orderId: order.id },
+      update: {
+        status: "ACTIVE",
+        activeAt: now,
+        expiresAt: null,
+        metadata: {
+          previousMembershipId: previousMembership?.membershipId ?? null,
+          previousPackageName: previousMembership?.membership.name ?? null,
+          packageName: order.membership.name,
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.number,
+          activatedAt: now.toISOString()
+        }
+      },
+      create: {
+        userId: order.userId,
+        membershipId: order.membershipId,
+        orderId: order.id,
+        status: "ACTIVE",
+        activeAt: now,
+        metadata: {
+          previousMembershipId: previousMembership?.membershipId ?? null,
+          previousPackageName: previousMembership?.membership.name ?? null,
+          packageName: order.membership.name,
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.number,
+          activatedAt: now.toISOString()
+        }
+      }
+    });
+
+    await tx.user.update({
+      where: { id: order.userId },
+      data: { membershipId: order.membershipId }
+    });
+
+    await this.creditPpobBenefit(tx, {
+      userId: order.userId,
+      orderId: order.id,
+      invoiceId: invoice.id,
+      membershipId: order.membershipId,
+      packageName: order.membership.name,
+      amount: order.membership.ppobBalance
+    });
+
+    await this.creditSponsorBonus(tx, {
+      userId: order.userId,
+      orderId: order.id,
+      invoiceId: invoice.id,
+      membershipId: order.membershipId,
+      packageName: order.membership.name,
+      packageTier: order.membership.tier,
+      packagePrice: order.membership.price
+    });
+
+    await this.creditLevelBonuses(tx, {
+      userId: order.userId,
+      orderId: order.id,
+      invoiceId: invoice.id,
+      membershipId: order.membershipId,
+      packageName: order.membership.name,
+      packageTier: order.membership.tier,
+      packagePrice: order.membership.price
+    });
+
+    await this.creditRewardBonus(tx, {
+      userId: order.userId,
+      sourceUserId: order.userId,
+      membershipTier: order.membership.tier
+    });
+
+    await this.evaluateAutoUpgradeForUser(tx, {
+      userId: order.userId,
+      sourceOrderId: order.id,
+      now
+    });
+
+    const directSponsor = await tx.referral.findUnique({
+      where: { userId: order.userId },
+      select: { sponsorId: true, status: true }
+    });
+    if (directSponsor?.status === "ACTIVE") {
+      await this.evaluateAutoUpgradeForUser(tx, {
+        userId: directSponsor.sponsorId,
+        sourceOrderId: order.id,
+        now
+      });
+      await this.creditRewardBonus(tx, {
+        userId: directSponsor.sponsorId,
+        sourceUserId: order.userId,
+        membershipTier: await this.getUserCurrentTier(tx, directSponsor.sponsorId)
+      });
+    }
   }
 
   listMyOrders(userId: string) {
@@ -441,12 +736,16 @@ export class MembershipOrderService {
       membership: { include: { benefits: { orderBy: { level: "asc" as const } } } },
       invoice: true,
       payments: { orderBy: { createdAt: "desc" as const } },
+      // Sejak Stage R2.6 jalur A, status PAID saja tidak lagi berarti aktif.
+      // Klien perlu membedakan "sudah bayar, menunggu verifikasi" dari "aktif",
+      // dan satu-satunya penanda adalah ada tidaknya userMembership.
+      userMembership: true,
       user: { select: { id: true, fullName: true, email: true, phone: true, referralCode: true } }
     };
   }
 
   private canReadOrder(role: UserRole, requesterId: string, ownerId: string) {
-    return requesterId === ownerId || role === "ADMIN" || role === "SUPER_ADMIN";
+    return requesterId === ownerId || isAdminRole(role);
   }
 
   private async generateInvoiceNumber(tx: PrismaTransaction) {
@@ -1017,9 +1316,9 @@ export class MembershipOrderService {
   private async canReceiveNewFounderBonus(tx: PrismaTransaction, userId: string) {
     const founderGrant = await tx.founderProgramGrant.findFirst({
       where: {
-        userId,
-        founderRole: "FOUNDER_PLATINUM"
+        userId
       },
+      orderBy: { createdAt: "desc" },
       include: { user: { select: { status: true } } }
     });
 

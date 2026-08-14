@@ -17,8 +17,22 @@ type SignAccessToken = (payload: { sub: string; role: UserRole; sessionId: strin
 const midtransServerKey = "SB-Mid-server-test-key";
 let appServer: Server | undefined;
 let snapServer: Server | undefined;
+/** Muatan yang benar-benar dikirim ke Snap, untuk diperiksa uji. */
+let snapRequests: Record<string, unknown>[] = [];
 let baseUrl = "";
 let signAccessToken: SignAccessToken;
+const originalExternalMembershipPaymentsEnabled =
+  env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
+const originalExternalMembershipPaymentsEnabledEnv =
+  process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
+/**
+ * Berkas ini menguji kanal APLIKASI, sedangkan .env pengembangan menutupnya
+ * demi kepatuhan Google Play. Menyetel process.env saja tidak cukup: modul env
+ * sudah selesai dibaca sebelum beforeAll berjalan, sehingga nilainya harus
+ * ditimpa langsung pada objek env — lalu DIKEMBALIKAN di afterAll, karena
+ * seluruh berkas uji berbagi satu proses dan satu registry modul.
+ */
+const originalAppPurchaseEnabled = env.MEMBERSHIP_PURCHASE_APP_ENABLED;
 
 describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
   beforeAll(async () => {
@@ -37,7 +51,10 @@ describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
         body += chunk.toString();
       });
       req.on("end", () => {
-        const parsed = JSON.parse(body) as { transaction_details?: { order_id?: string } };
+        const parsed = JSON.parse(body) as {
+          transaction_details?: { order_id?: string };
+        } & Record<string, unknown>;
+        snapRequests.push(parsed);
         const orderId = parsed.transaction_details?.order_id ?? "UNKNOWN";
         res.writeHead(201, { "content-type": "application/json" });
         res.end(JSON.stringify({
@@ -60,12 +77,16 @@ describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
     process.env.MIDTRANS_IS_PRODUCTION = "false";
     process.env.MIDTRANS_SNAP_URL = `http://127.0.0.1:${snapAddress.port}/snap/v1/transactions`;
     process.env.DOKU_ENABLED = "false";
+    process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = "true";
+    process.env.MEMBERSHIP_PURCHASE_APP_ENABLED = "true";
     Object.assign(env, {
       MIDTRANS_SERVER_KEY: midtransServerKey,
       MIDTRANS_CLIENT_KEY: "SB-Mid-client-test-key",
       MIDTRANS_IS_PRODUCTION: false,
       MIDTRANS_SNAP_URL: `http://127.0.0.1:${snapAddress.port}/snap/v1/transactions`,
       DOKU_ENABLED: false,
+      EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED: true,
+      MEMBERSHIP_PURCHASE_APP_ENABLED: true,
     });
 
     const [{ createApp }, tokenService] = await Promise.all([
@@ -83,6 +104,7 @@ describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
   beforeEach(async () => {
     await cleanDatabase();
     await seedMemberships();
+    snapRequests = [];
   });
 
   afterAll(async () => {
@@ -100,6 +122,15 @@ describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
       }
       snapServer.close((error) => (error ? reject(error) : resolve()));
     });
+    env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED =
+      originalExternalMembershipPaymentsEnabled;
+    env.MEMBERSHIP_PURCHASE_APP_ENABLED = originalAppPurchaseEnabled;
+    if (originalExternalMembershipPaymentsEnabledEnv === undefined) {
+      delete process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
+    } else {
+      process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED =
+        originalExternalMembershipPaymentsEnabledEnv;
+    }
   });
 
   it("creates a Midtrans Snap transaction for a pending membership order", async () => {
@@ -118,6 +149,62 @@ describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
     expect(body.data.orderId).toBe(order.id);
     expect(body.data.snapToken).toContain(body.data.invoiceNumber);
     expect(body.data.redirectUrl).toContain("app.sandbox.midtrans.com");
+  });
+
+  /**
+   * Metode bayar dibatasi ke yang benar-benar dapat dikembalikan lewat API.
+   *
+   * Ini bukan soal selera: alur R2.6 menjanjikan pengembalian dana PENUH bila
+   * dokumen identitas ditolak. Diuji langsung ke sandbox Midtrans, refund atas
+   * transaksi bank transfer (VA) DITOLAK dengan "Payment Provider doesn't allow
+   * refund within this time". Menawarkan VA berarti menjanjikan sesuatu yang
+   * tidak dapat kita tepati.
+   */
+  it("hanya menawarkan metode bayar yang dapat direfund", async () => {
+    const user = await createApiUser("MIDPAY1");
+    const order = await createOrderFor(user, "SILVER");
+
+    await api(`/api/v1/membership/orders/${order.id}/pay`, {
+      method: "POST",
+      token: tokenFor(user)
+    });
+
+    expect(snapRequests).toHaveLength(1);
+    const enabled = snapRequests[0]!.enabled_payments as string[] | undefined;
+
+    // Wajib ada dan wajib merupakan daftar tertutup. Tanpa enabled_payments,
+    // Midtrans menampilkan SELURUH metode termasuk VA.
+    expect(Array.isArray(enabled)).toBe(true);
+    expect(enabled).toEqual(["credit_card", "gopay", "other_qris"]);
+  });
+
+  it("tidak pernah menawarkan bank transfer maupun gerai ritel", async () => {
+    const user = await createApiUser("MIDPAY2");
+    const order = await createOrderFor(user, "GOLD");
+
+    await api(`/api/v1/membership/orders/${order.id}/pay`, {
+      method: "POST",
+      token: tokenFor(user)
+    });
+
+    const enabled = snapRequests[0]!.enabled_payments as string[] | undefined;
+
+    // Pemeriksaan ini WAJIB lebih dulu. Tanpanya, daftar yang tidak ada sama
+    // sekali akan lolos begitu saja — padahal justru itu keadaan terburuknya:
+    // Midtrans lalu menampilkan SELURUH metode, termasuk VA.
+    expect(enabled, "enabled_payments wajib dikirim").toBeDefined();
+    expect(enabled!.length).toBeGreaterThan(0);
+
+    // Daftar terlarang ditulis eksplisit. Memeriksa "hanya tiga yang boleh"
+    // saja tidak cukup: bila suatu saat daftar diperlebar tanpa berpikir,
+    // pemeriksaan inilah yang menyalakan alarm.
+    const dilarang = [
+      "bank_transfer", "bca_va", "bni_va", "bri_va", "cimb_va", "permata_va",
+      "other_va", "echannel", "indomaret", "alfamart", "akulaku", "kredivo"
+    ];
+    for (const metode of dilarang) {
+      expect(enabled, `${metode} tidak boleh ditawarkan`).not.toContain(metode);
+    }
   });
 
   it("blocks Midtrans payment creation for an already paid order", async () => {
@@ -187,6 +274,168 @@ describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
 
     expect(response.status).toBeGreaterThanOrEqual(400);
     expect(response.status).toBeLessThan(500);
+  });
+
+  // P1-2: verifikasi gross_amount terhadap nominal order authoritative.
+  it("accepts a settlement whose gross_amount matches the order amount", async () => {
+    const user = await createApiUser("MIDAMT01");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postSettlement(order.invoiceNumber, "500000.00");
+
+    expect(response.status).toBe(200);
+    await expectPaidOrder(order.id, user.id, "SILVER");
+  });
+
+  it("rejects a settlement with a lower gross_amount without activating", async () => {
+    const user = await createApiUser("MIDAMT02");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postSettlement(order.invoiceNumber, "400000.00");
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+    await expectUnpaidNoSideEffects(order.id, user.id);
+  });
+
+  it("rejects a settlement with a higher gross_amount without activating", async () => {
+    const user = await createApiUser("MIDAMT03");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postSettlement(order.invoiceNumber, "600000.00");
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+    await expectUnpaidNoSideEffects(order.id, user.id);
+  });
+
+  it("rejects a settlement with a malformed gross_amount", async () => {
+    const user = await createApiUser("MIDAMT04");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postSettlement(order.invoiceNumber, "not-a-number");
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+    await expectUnpaidNoSideEffects(order.id, user.id);
+  });
+
+  it("processes duplicate valid callbacks idempotently", async () => {
+    const user = await createApiUser("MIDAMT05");
+    const order = await createOrderFor(user, "SILVER");
+
+    const first = await postSettlement(order.invoiceNumber, "500000.00");
+    const second = await postSettlement(order.invoiceNumber, "500000.00");
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    await expectPaidOrder(order.id, user.id, "SILVER");
+    await expectWalletTransactionCount(user.id, "PPOB_BENEFIT", 1);
+  });
+
+  it("activates only once under concurrent duplicate callbacks", async () => {
+    const user = await createApiUser("MIDAMT06");
+    const order = await createOrderFor(user, "SILVER");
+
+    const [a, b] = await Promise.all([
+      postSettlement(order.invoiceNumber, "500000.00"),
+      postSettlement(order.invoiceNumber, "500000.00")
+    ]);
+
+    expect([a.status, b.status].every((s) => s === 200)).toBe(true);
+    await expectPaidOrder(order.id, user.id, "SILVER");
+    await expectWalletTransactionCount(user.id, "PPOB_BENEFIT", 1);
+  });
+
+  it("does not activate or credit on a pending callback", async () => {
+    const user = await createApiUser("MIDAMT07");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postNotification({
+      order_id: order.invoiceNumber,
+      transaction_status: "pending",
+      transaction_id: `tx-${order.invoiceNumber}`,
+      status_code: "201",
+      gross_amount: "500000.00"
+    });
+
+    expect(response.status).toBe(200);
+    await expectUnpaidNoSideEffects(order.id, user.id);
+  });
+
+  it("does not activate or credit on a deny callback", async () => {
+    const user = await createApiUser("MIDAMT08");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postNotification({
+      order_id: order.invoiceNumber,
+      transaction_status: "deny",
+      transaction_id: `tx-${order.invoiceNumber}`,
+      status_code: "202",
+      gross_amount: "500000.00"
+    });
+
+    expect(response.status).toBe(200);
+    await expectUnpaidNoSideEffects(order.id, user.id);
+  });
+
+  // B. Strict gross_amount format — tolak seluruh representasi non-standar
+  // meski ber-signature valid.
+  it.each([
+    ["scientific notation", "5e5"],
+    ["hexadecimal", "0x7A120"],
+    ["underscore", "500_000"],
+    ["comma separator", "500000,00"],
+    ["leading/trailing whitespace", " 500000 "],
+    ["NaN", "NaN"],
+    ["Infinity", "Infinity"],
+    ["three decimals", "500000.000"],
+    ["negative", "-500000"],
+    ["zero", "0.00"]
+  ])("rejects %s gross_amount without activating", async (_label, amount) => {
+    const user = await createApiUser("FMT");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postSettlement(order.invoiceNumber, amount);
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+    await expectUnpaidNoSideEffects(order.id, user.id);
+  });
+
+  it("rejects a non-IDR currency without activating", async () => {
+    const user = await createApiUser("CUR1");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postNotificationRaw({
+      order_id: order.invoiceNumber,
+      transaction_status: "settlement",
+      transaction_id: `tx-${order.invoiceNumber}`,
+      status_code: "200",
+      gross_amount: "500000.00",
+      currency: "USD"
+    });
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+    await expectUnpaidNoSideEffects(order.id, user.id);
+  });
+
+  it("accepts an explicit IDR currency with a matching amount", async () => {
+    const user = await createApiUser("CUR2");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postNotificationRaw({
+      order_id: order.invoiceNumber,
+      transaction_status: "settlement",
+      transaction_id: `tx-${order.invoiceNumber}`,
+      status_code: "200",
+      gross_amount: "500000.00",
+      currency: "IDR"
+    });
+
+    expect(response.status).toBe(200);
+    await expectPaidOrder(order.id, user.id, "SILVER");
   });
 });
 
@@ -261,6 +510,24 @@ async function postNotification(payload: {
   });
 }
 
+async function postNotificationRaw(payload: {
+  order_id: string;
+  transaction_status: string;
+  transaction_id: string;
+  status_code: string;
+  gross_amount: string;
+  currency?: string;
+}) {
+  return api("/api/v1/payments/midtrans/notification", {
+    method: "POST",
+    body: {
+      ...payload,
+      // Signature Midtrans tidak mencakup currency.
+      signature_key: midtransSignature(payload.order_id, payload.status_code, payload.gross_amount)
+    }
+  });
+}
+
 function midtransSignature(orderId: string, statusCode: string, grossAmount: string) {
   return createHash("sha512")
     .update(`${orderId}${statusCode}${grossAmount}${midtransServerKey}`)
@@ -308,4 +575,28 @@ async function expectWalletTransactionCount(userId: string, type: "PPOB_BENEFIT"
     where: { walletId: wallet.id, type }
   });
   expect(transactions).toHaveLength(count);
+}
+
+async function expectUnpaidNoSideEffects(orderId: string, userId: string) {
+  const order = await prisma.membershipOrder.findUniqueOrThrow({
+    where: { id: orderId },
+    include: { invoice: true, userMembership: true }
+  });
+  expect(order.status).not.toBe("PAID");
+  expect(order.userMembership).toBeNull();
+
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    include: { membership: true }
+  });
+  expect(user.membership?.tier).toBe("BASIC");
+
+  const wallet = await prisma.wallet.findUnique({ where: { userId } });
+  if (wallet) {
+    expect(wallet.ppobBalance.toFixed(2)).toBe("0.00");
+    const ppobTransactions = await prisma.walletTransaction.count({
+      where: { walletId: wallet.id, type: "PPOB_BENEFIT" }
+    });
+    expect(ppobTransactions).toBe(0);
+  }
 }

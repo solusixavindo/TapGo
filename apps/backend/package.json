@@ -18,12 +18,13 @@
     "seed:admin": "tsx prisma/seed-admin.ts",
     "seed:uat": "tsx prisma/seed-uat-credentials.ts",
     "seed:founder-platinum": "tsx ../../scripts/seed-founder-platinum.ts",
+    "seed:founder-chairman": "tsx ../../scripts/seed-founder-chairman.ts",
     "promote:admin": "tsx prisma/promote-admin.ts",
-    "seed:demo": "tsx prisma/seed-demo.ts",
-    "reset:demo": "tsx prisma/reset-demo.ts",
     "audit:production-data": "tsx ../../scripts/audit-production-data.ts",
     "cleanup:prelaunch": "tsx ../../scripts/pre-launch-cleanup.ts",
-    "doku:capture-webhook": "tsx ../../scripts/capture-doku-webhook.ts"
+    "doku:capture-webhook": "tsx ../../scripts/capture-doku-webhook.ts",
+    "admin:vip-bootstrap": "tsx scripts/super-admin-vip-bootstrap.ts",
+    "admin:scope-bootstrap": "tsx scripts/admin-scope-bootstrap.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

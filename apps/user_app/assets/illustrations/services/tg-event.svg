@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none" role="img" aria-label="TapGo Event 3D service icon">
+  <title>Event</title>
+  <defs>
+    <linearGradient id="calendar" x1="20" y1="17" x2="76" y2="78" gradientUnits="userSpaceOnUse"><stop stop-color="#FF9D8D"/><stop offset="1" stop-color="#EC3F54"/></linearGradient>
+    <linearGradient id="page" x1="25" y1="31" x2="72" y2="76" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#E9F3FF"/></linearGradient>
+    <linearGradient id="gold" x1="47" y1="41" x2="70" y2="66" gradientUnits="userSpaceOnUse"><stop stop-color="#FFE58A"/><stop offset="0.56" stop-color="#FFBE25"/><stop offset="1" stop-color="#D88A06"/></linearGradient>
+  </defs>
+  <ellipse cx="48" cy="82" rx="27" ry="6" fill="#07213D" opacity="0.14"/>
+  <rect x="21" y="23" width="54" height="52" rx="15" fill="url(#calendar)"/>
+  <rect x="28" y="37" width="40" height="31" rx="9" fill="url(#page)"/>
+  <path d="M34 18v12M62 18v12" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="39" cy="50" r="4" fill="#EC3F54" opacity="0.5"/>
+  <circle cx="52" cy="50" r="4" fill="#EC3F54" opacity="0.5"/>
+  <path d="M60 48l3 6 7 1-5 4 1 7-6-4-6 4 1-7-5-4 7-1Z" fill="url(#gold)"/>
+</svg>

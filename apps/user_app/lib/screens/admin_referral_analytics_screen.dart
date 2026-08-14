@@ -18,7 +18,7 @@ class AdminReferralAnalyticsScreen extends ConsumerWidget {
     return _DemoScaffold(
       title: 'Referral Analytics',
       subtitle: adminSnapshot.hasValue
-          ? 'Top sponsor backend dan level aktif'
+          ? 'Top sponsor dan level aktif'
           : 'Analytics referral TapGo',
       child: Column(
         children: [
@@ -33,18 +33,22 @@ class AdminReferralAnalyticsScreen extends ConsumerWidget {
             Row(
               children: [
                 Expanded(
-                    child: _StatCard(
-                        label: 'Level Aktif',
-                        value: adminSnapshot.hasValue
-                            ? '${_activeLevelFromDirectSponsor(_intFrom(summary?['maxDirectSponsor']))}'
-                            : '-')),
+                  child: _StatCard(
+                    label: 'Level Aktif',
+                    value: adminSnapshot.hasValue
+                        ? '${_activeLevelFromDirectSponsor(_intFrom(summary?['maxDirectSponsor']))}'
+                        : '-',
+                  ),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
-                    child: _StatCard(
-                        label: 'Member',
-                        value: adminSnapshot.hasValue
-                            ? '${_intFrom(summary?['totalMembers'])}'
-                            : '-')),
+                  child: _StatCard(
+                    label: 'Member',
+                    value: adminSnapshot.hasValue
+                        ? '${_intFrom(summary?['totalMembers'])}'
+                        : '-',
+                  ),
+                ),
               ],
             ),
           const SizedBox(height: 14),
@@ -52,7 +56,7 @@ class AdminReferralAnalyticsScreen extends ConsumerWidget {
             icon: Icons.account_tree_rounded,
             title: 'Global Referral Analytics belum tersedia',
             subtitle:
-                'Tree admin global belum memiliki endpoint production. Data top sponsor tetap dibaca dari backend.',
+                'Tree admin global belum aktif. Data top sponsor tetap dibaca dari sistem TapGo.',
           ),
           const SizedBox(height: 6),
           if (adminSnapshot.hasError)
@@ -61,7 +65,7 @@ class AdminReferralAnalyticsScreen extends ConsumerWidget {
             const _StatusSurface(
               icon: Icons.sync_rounded,
               title: 'Memuat referral',
-              subtitle: 'Mengambil top sponsor backend...',
+              subtitle: 'Mengambil data top sponsor...',
             )
           else if (topSponsors.isEmpty)
             const _StatusSurface(

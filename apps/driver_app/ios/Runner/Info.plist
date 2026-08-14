@@ -4,6 +4,13 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<!-- iOS MEMBUNUH aplikasi seketika saat kamera atau galeri dibuka tanpa
+	     kunci ini. Bukan sekadar peringatan App Store — tanpa keduanya fitur
+	     unggah dokumen akan tampak sebagai aplikasi yang menutup sendiri. -->
+	<key>NSCameraUsageDescription</key>
+	<string>TapGo Driver memakai kamera untuk memotret dokumen verifikasi mitra Anda.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>TapGo Driver membuka galeri agar Anda dapat memilih foto dokumen verifikasi mitra.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

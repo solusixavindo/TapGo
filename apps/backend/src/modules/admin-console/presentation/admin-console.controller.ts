@@ -2,12 +2,16 @@ import { Request, Response } from "express";
 import { AdminConsoleService } from "../application/AdminConsoleService.js";
 import { WalletService } from "../../wallets/application/WalletService.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
+import { AdminRoleService } from "../application/AdminRoleService.js";
+import { MembershipRefundService } from "../../memberships/application/MembershipRefundService.js";
 
 export class AdminConsoleController {
   constructor(
     private readonly adminConsoleService: AdminConsoleService,
     private readonly walletService: WalletService,
-    private readonly membershipOrderService: MembershipOrderService
+    private readonly membershipOrderService: MembershipOrderService,
+    private readonly adminRoleService: AdminRoleService,
+    private readonly membershipRefundService: MembershipRefundService
   ) {}
 
   summary = async (_req: Request, res: Response) => {
@@ -135,11 +139,68 @@ export class AdminConsoleController {
     res.json({ success: true, data: result });
   };
 
+  /// Stage R2.6 jalur A: melepas order kanal WEB yang sudah lunas menjadi
+  /// membership aktif setelah dokumen KYC-nya diperiksa admin. Endpoint ini
+  /// terpisah dari approve, karena approve mengonfirmasi pembayaran sedangkan
+  /// endpoint ini mengonfirmasi identitas.
+  verifyMemberRequestDocuments = async (req: Request, res: Response) => {
+    const result = await this.membershipOrderService.activateVerifiedOrder({
+      orderId: String(req.params.id),
+      adminId: req.auth!.userId
+    });
+    res.json({ success: true, data: result });
+  };
+
+  /// Stage R2.6 jalur A: menolak dokumen KYC atas order kanal WEB yang sudah
+  /// lunas. Keputusan Owner untuk kasus ini adalah pengembalian dana penuh,
+  /// sehingga permintaan refund ikut dicatat di sini.
+  rejectMemberRequestDocuments = async (req: Request, res: Response) => {
+    const result = await this.membershipOrderService.rejectOrderDocuments({
+      orderId: String(req.params.id),
+      adminId: req.auth!.userId,
+      ...(typeof req.body.reason === "string" ? { reason: req.body.reason } : {})
+    });
+    res.json({ success: true, data: result });
+  };
+
+  /// Menjalankan pengembalian dana yang sudah diputuskan. Terpisah dari
+  /// penolakan dokumen supaya kegagalan penyedia tidak membatalkan keputusan
+  /// admin, dan supaya percobaannya dapat diulang.
+  executeMemberRequestRefund = async (req: Request, res: Response) => {
+    const result = await this.membershipRefundService.executeRefund({
+      orderId: String(req.params.id),
+      adminId: req.auth!.userId
+    });
+    res.json({ success: true, data: result });
+  };
+
   rejectMemberRequest = async (req: Request, res: Response) => {
     const result = await this.adminConsoleService.rejectMemberRequest({
       orderId: String(req.params.id),
       adminId: req.auth!.userId,
       ...(typeof req.body.reason === "string" ? { reason: req.body.reason } : {})
+    });
+    res.json({ success: true, data: result });
+  };
+
+  /// Pengelolaan role. Rutenya dijaga khusus SUPER_ADMIN_VIP; service tetap
+  /// memeriksa ulang role aktor dari database, bukan dari klaim token.
+  adminRoles = async (_req: Request, res: Response) => {
+    const result = await this.adminRoleService.listAdmins();
+    res.json({ success: true, data: result });
+  };
+
+  adminRoleCandidates = async (req: Request, res: Response) => {
+    const result = await this.adminRoleService.searchCandidates(String(req.query.q ?? ""));
+    res.json({ success: true, data: result });
+  };
+
+  assignAdminRole = async (req: Request, res: Response) => {
+    const result = await this.adminRoleService.assignRole({
+      actorId: req.auth!.userId,
+      targetUserId: String(req.params.userId),
+      role: req.body.role,
+      reasonCode: req.body.reasonCode
     });
     res.json({ success: true, data: result });
   };
@@ -156,6 +217,50 @@ export class AdminConsoleController {
       ...(typeof req.body.reason === "string" ? { reason: req.body.reason } : {})
     });
     res.status(201).json({ success: true, data: result });
+  };
+
+  grantFounderChairman = async (req: Request, res: Response) => {
+    const result = await this.adminConsoleService.grantFounderChairman({
+      actorId: req.auth!.userId,
+      fullName: String(req.body.fullName),
+      phone: String(req.body.phone),
+      password: String(req.body.password),
+      reason: String(req.body.reason),
+      ...(typeof req.body.email === "string" ? { email: req.body.email } : {}),
+      ...(typeof req.body.secureBankAccountReference === "string"
+        ? { secureBankAccountReference: req.body.secureBankAccountReference }
+        : {}),
+      ...(req.body.bankAccount && typeof req.body.bankAccount === "object"
+        ? {
+          bankAccount: {
+            bankName: String(req.body.bankAccount.bankName),
+            accountHolderName: String(req.body.bankAccount.accountHolderName),
+            accountNumber: String(req.body.bankAccount.accountNumber)
+          }
+        }
+        : {})
+    });
+    res.status(201).json({ success: true, data: result });
+  };
+
+  founderChairman = async (_req: Request, res: Response) => {
+    const result = await this.adminConsoleService.founderChairman();
+    res.json({ success: true, data: result });
+  };
+
+  founderChairmanDetail = async (req: Request, res: Response) => {
+    const result = await this.adminConsoleService.founderChairmanDetail(String(req.params.founderId));
+    res.json({ success: true, data: result });
+  };
+
+  updateFounderChairmanStatus = async (req: Request, res: Response) => {
+    const result = await this.adminConsoleService.updateFounderChairmanStatus({
+      actorId: req.auth!.userId,
+      founderId: String(req.params.founderId),
+      status: req.body.status,
+      ...(typeof req.body.reason === "string" ? { reason: req.body.reason } : {})
+    });
+    res.json({ success: true, data: result });
   };
 
   founderPlatinumList = async (_req: Request, res: Response) => {

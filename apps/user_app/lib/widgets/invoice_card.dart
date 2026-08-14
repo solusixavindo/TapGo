@@ -11,7 +11,9 @@ class _InvoiceCard extends StatelessWidget {
     final statusText =
         invoice.status == PaymentStatus.paid ? 'Lunas' : 'Menunggu Pembayaran';
 
-    return Container(
+    return AnimatedContainer(
+      duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
+      curve: _TapGoMotion.standardCurve,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -32,18 +34,26 @@ class _InvoiceCard extends StatelessWidget {
                   ),
                 ),
               ),
-              _LevelChip(
+              _TapGoFadeSwitcher(
+                valueKey: statusText,
+                child: _LevelChip(
                   label: statusText,
-                  active: invoice.status == PaymentStatus.paid),
+                  active: invoice.status == PaymentStatus.paid,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 14),
           _PackageRow(label: 'Nama member', value: invoice.memberName),
           _PackageRow(label: 'Paket', value: invoice.packageName),
           _PackageRow(
-              label: 'Harga paket', value: formatRupiah(invoice.packagePrice)),
+            label: 'Harga paket',
+            value: formatRupiah(invoice.packagePrice),
+          ),
           _PackageRow(
-              label: 'Admin fee', value: formatRupiah(invoice.adminFee)),
+            label: 'Admin fee',
+            value: formatRupiah(invoice.adminFee),
+          ),
           const Divider(height: 24),
           _PackageRow(label: 'Total', value: formatRupiah(invoice.total)),
           const SizedBox(height: 12),
@@ -83,11 +93,26 @@ class _PaymentMethodTile extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(18),
-          child: Padding(
+          child: AnimatedContainer(
+            duration: _TapGoMotion.duration(context, _TapGoMotion.standard),
+            curve: _TapGoMotion.standardCurve,
             padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: selected
+                    ? _brandBlue.withValues(alpha: 0.24)
+                    : Colors.transparent,
+              ),
+            ),
             child: Row(
               children: [
-                Container(
+                AnimatedContainer(
+                  duration: _TapGoMotion.duration(
+                    context,
+                    _TapGoMotion.standard,
+                  ),
+                  curve: _TapGoMotion.standardCurve,
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
@@ -108,11 +133,14 @@ class _PaymentMethodTile extends StatelessWidget {
                     ),
                   ),
                 ),
-                Icon(
-                  selected
-                      ? Icons.radio_button_checked_rounded
-                      : Icons.radio_button_off_rounded,
-                  color: selected ? _brandBlue : const Color(0xFF718096),
+                _TapGoFadeSwitcher(
+                  valueKey: selected,
+                  child: Icon(
+                    selected
+                        ? Icons.radio_button_checked_rounded
+                        : Icons.radio_button_off_rounded,
+                    color: selected ? _brandBlue : const Color(0xFF718096),
+                  ),
                 ),
               ],
             ),

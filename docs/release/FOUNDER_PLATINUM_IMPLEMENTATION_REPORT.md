@@ -114,6 +114,7 @@ Super Admin console sekarang memiliki menu `Founder Program`.
 
 Console menampilkan:
 
+- Card khusus `Founder Chairman` jika akun `FCH-001` sudah digrant.
 - Total slot: 10.
 - Used slot: jumlah Founder Platinum `ACTIVE` dan `SUSPENDED`.
 - Available slot.
@@ -135,6 +136,8 @@ User app menampilkan badge kecil premium `Founder Platinum` untuk akun Founder P
 - Account/Profile.
 - Membership Saya.
 
+Jika user adalah Founder Chairman, badge `Founder Chairman` tampil dengan prioritas di atas badge Founder Platinum.
+
 ## Bonus dan Profit Sharing
 
 Tidak ada pengecualian global berdasarkan `founderRole` di engine bonus/profit sharing.
@@ -147,6 +150,8 @@ Perbedaan yang dijaga:
 - Founder Platinum `ACTIVE` tetap boleh menerima bonus baru dari downline paid valid.
 - Founder Platinum `SUSPENDED` atau `REVOKED` tidak menerima bonus baru sampai status kembali `ACTIVE`.
 - Bonus history yang sudah posted sebelum suspend/revoke tetap disimpan dan tidak dihapus.
+
+Aturan yang sama berlaku untuk Founder Chairman: grant gratis tidak memicu bonus/revenue, tetapi akun `ACTIVE` tetap boleh menerima bonus dari downline yang membayar membership valid.
 
 ## Seed Script 10 Founder Platinum
 
