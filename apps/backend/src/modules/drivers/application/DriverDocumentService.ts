@@ -199,6 +199,77 @@ export class DriverDocumentService {
   }
 
   /**
+   * Antrian dokumen mitra untuk admin.
+   *
+   * Jembatan yang sebelumnya tidak ada: endpoint dokumen menuntut driverId,
+   * sedangkan antrian peninjauan pengajuan sengaja tidak membawa identitas
+   * maupun driverId. Tanpa ini admin tidak punya jalan sampai ke berkas yang
+   * harus dicetak.
+   *
+   * Yang dibawa hanya metadata dan identitas secukupnya untuk mencocokkan
+   * hasil cetak dengan pemiliknya. Isi berkas TIDAK PERNAH ikut — satu-satunya
+   * jalan keluarnya tetap readForAdmin, dan hanya di sanalah pembukaan dokumen
+   * dicatat.
+   */
+  async queueForAdmin(input: { page: number; pageSize: number }) {
+    // Hanya driver yang benar-benar punya dokumen. Baris tanpa dokumen berarti
+    // tidak ada pekerjaan, dan hanya membuat antrian sulit dibaca.
+    const where = { documents: { some: {} } };
+
+    const [total, drivers] = await Promise.all([
+      this.prisma.driver.count({ where }),
+      this.prisma.driver.findMany({
+        where,
+        orderBy: { updatedAt: "desc" },
+        skip: (input.page - 1) * input.pageSize,
+        take: input.pageSize,
+        select: {
+          id: true,
+          kycStatus: true,
+          vehicleType: true,
+          vehiclePlate: true,
+          user: { select: { fullName: true, phone: true } },
+          documents: {
+            orderBy: { type: "asc" },
+            select: {
+              type: true,
+              status: true,
+              contentType: true,
+              sizeBytes: true,
+              uploadedAt: true,
+              expiresAt: true,
+              purgedAt: true
+            }
+          }
+        }
+      })
+    ]);
+
+    const now = new Date();
+    const items = drivers.map((driver) => ({
+      driverId: driver.id,
+      fullName: driver.user.fullName,
+      phone: driver.user.phone,
+      kycStatus: driver.kycStatus,
+      vehicleType: driver.vehicleType,
+      vehiclePlate: driver.vehiclePlate,
+      documents: driver.documents.map(({ purgedAt, ...document }) => ({
+        ...document,
+        // Sama seperti list(): waktu yang menentukan, bukan kolom purgedAt.
+        available: this.isReadable(document.expiresAt, purgedAt, now)
+      }))
+    }));
+
+    return {
+      items,
+      total,
+      page: input.page,
+      pageSize: input.pageSize,
+      totalPages: Math.max(1, Math.ceil(total / input.pageSize))
+    };
+  }
+
+  /**
    * Isi berkas untuk dicetak admin. Satu-satunya jalan keluar isi dokumen dari
    * database, dan karena itu satu-satunya tempat yang perlu mencatat siapa yang
    * pernah melihat KTP seseorang.

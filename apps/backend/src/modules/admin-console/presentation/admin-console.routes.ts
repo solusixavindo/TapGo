@@ -93,6 +93,14 @@ adminConsoleRouter.get(
 );
 // Dokumen mitra driver. Aturannya sama persis dengan dokumen membership:
 // isinya hanya keluar lewat jalur ini, dan setiap pembukaan dicatat.
+//
+// Jalurnya sengaja /driver-documents, BUKAN /drivers/documents: yang kedua akan
+// tertangkap lebih dulu oleh pola /drivers/:driverId/documents dan membuat kata
+// "documents" diperlakukan sebagai driverId.
+adminConsoleRouter.get(
+  "/driver-documents",
+  asyncHandler(driverDocumentController.adminQueue)
+);
 adminConsoleRouter.get(
   "/drivers/:driverId/documents",
   asyncHandler(driverDocumentController.adminDocuments)

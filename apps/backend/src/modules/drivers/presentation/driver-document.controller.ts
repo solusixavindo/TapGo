@@ -64,6 +64,17 @@ export class DriverDocumentController {
     res.json({ success: true, data: result });
   };
 
+  /**
+   * Antrian mitra yang punya dokumen. Halaman dibatasi 100 baris supaya satu
+   * permintaan tidak pernah menarik seluruh tabel.
+   */
+  adminQueue = async (req: Request, res: Response) => {
+    const page = Math.max(1, Number(req.query.page ?? 1) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize ?? 20) || 20));
+    const result = await this.documentService.queueForAdmin({ page, pageSize });
+    res.json({ success: true, data: result });
+  };
+
   adminDocumentFile = async (req: Request, res: Response) => {
     const document = await this.documentService.readForAdmin({
       driverId: String(req.params.driverId),

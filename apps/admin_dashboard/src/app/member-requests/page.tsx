@@ -144,6 +144,12 @@ export default function MemberRequestsPage() {
             </p>
           </div>
           <div className="flex gap-2">
+            <Link
+              href="/driver-documents"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold"
+            >
+              Dokumen mitra driver
+            </Link>
             {role === "SUPER_ADMIN_VIP" ? (
               <Link
                 href="/roles"

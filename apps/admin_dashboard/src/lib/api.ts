@@ -151,6 +151,67 @@ export async function fetchDocumentObjectUrl(orderId: string, type: DocumentType
   };
 }
 
+// --- Dokumen mitra driver --------------------------------------------------
+
+export type DriverDocumentType = "KTP" | "SIM" | "STNK" | "SELFIE";
+
+export type DriverDocumentSummary = {
+  type: DriverDocumentType;
+  status: string;
+  contentType: string | null;
+  sizeBytes: number | null;
+  uploadedAt: string | null;
+  expiresAt: string | null;
+  /** Isi berkas masih dapat dibuka. Dihitung server dari waktu, bukan flag. */
+  available: boolean;
+};
+
+export type DriverDocumentQueueRow = {
+  driverId: string;
+  fullName: string;
+  phone: string;
+  kycStatus: string;
+  vehicleType: string | null;
+  vehiclePlate: string | null;
+  documents: DriverDocumentSummary[];
+};
+
+export function listDriverDocumentQueue() {
+  const query = new URLSearchParams({ page: "1", pageSize: "50" });
+  return request<{ items: DriverDocumentQueueRow[]; total: number }>(
+    `/admin/driver-documents?${query.toString()}`
+  );
+}
+
+/**
+ * Mengambil berkas dokumen driver sebagai object URL.
+ *
+ * Alasannya sama dengan jalur membership: endpoint menuntut header
+ * Authorization, dan menaruh token di query string membuatnya tercatat di log
+ * akses maupun riwayat browser. Pemanggil WAJIB memanggil URL.revokeObjectURL
+ * saat selesai supaya isi dokumen tidak menetap di memori tab.
+ */
+export async function fetchDriverDocumentObjectUrl(
+  driverId: string,
+  type: DriverDocumentType
+) {
+  const response = await fetch(
+    `${API_BASE}/admin/drivers/${driverId}/documents/${type.toLowerCase()}`,
+    { headers: { authorization: `Bearer ${readToken()}` }, credentials: "omit" }
+  );
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { message?: string };
+    throw new Error(payload.message ?? "Dokumen belum dapat dibuka.");
+  }
+
+  const blob = await response.blob();
+  return {
+    url: URL.createObjectURL(blob),
+    checksum: response.headers.get("x-tapgo-document-checksum") ?? ""
+  };
+}
+
 // --- Pengelolaan role (hanya SUPER_ADMIN_VIP) ------------------------------
 
 export type AdminAccount = {
