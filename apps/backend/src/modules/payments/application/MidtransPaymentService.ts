@@ -32,6 +32,28 @@ type MidtransNotificationPayload = {
 // notation, hexadecimal, underscore, comma, whitespace, NaN/Infinity, dan tanda.
 const STRICT_DECIMAL_AMOUNT = /^\d+(\.\d{1,2})?$/;
 
+/**
+ * Metode bayar yang boleh ditawarkan untuk pembelian membership.
+ *
+ * Daftar ini SENGAJA tertutup, dan bukan soal selera. Alur R2.6 menjanjikan
+ * pengembalian dana PENUH bila dokumen identitas ditolak, sehingga metode yang
+ * tidak dapat dibalik lewat API tidak boleh ditawarkan sejak awal.
+ *
+ * Diuji langsung ke sandbox Midtrans 2026-08-13: permintaan refund atas
+ * transaksi bank transfer (VA) ditolak dengan "Payment Provider doesn't allow
+ * refund within this time". Menawarkannya berarti menjanjikan sesuatu yang
+ * tidak dapat kita tepati, lalu memaksa penyelesaian manual di luar sistem.
+ *
+ * Menghapus baris enabled_payments dari permintaan Snap BUKAN pilihan netral:
+ * tanpa daftar ini Midtrans menampilkan seluruh metode, termasuk VA dan gerai
+ * ritel.
+ */
+export const REFUNDABLE_PAYMENT_METHODS = [
+  "credit_card", // kartu kredit dan debit
+  "gopay",       // GoPay
+  "other_qris",  // QRIS lewat aplikasi pembayaran mana pun
+] as const;
+
 type MidtransSnapResponse = {
   token?: string;
   redirect_url?: string;
@@ -123,6 +145,7 @@ export class MidtransPaymentService {
         order_id: order.invoice.number,
         gross_amount: Number(new Prisma.Decimal(order.totalAmount).toFixed(0)),
       },
+      enabled_payments: REFUNDABLE_PAYMENT_METHODS,
       customer_details: {
         first_name: order.user.fullName,
         email: order.user.email ?? undefined,

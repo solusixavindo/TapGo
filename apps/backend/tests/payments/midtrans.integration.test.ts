@@ -17,12 +17,22 @@ type SignAccessToken = (payload: { sub: string; role: UserRole; sessionId: strin
 const midtransServerKey = "SB-Mid-server-test-key";
 let appServer: Server | undefined;
 let snapServer: Server | undefined;
+/** Muatan yang benar-benar dikirim ke Snap, untuk diperiksa uji. */
+let snapRequests: Record<string, unknown>[] = [];
 let baseUrl = "";
 let signAccessToken: SignAccessToken;
 const originalExternalMembershipPaymentsEnabled =
   env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
 const originalExternalMembershipPaymentsEnabledEnv =
   process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
+/**
+ * Berkas ini menguji kanal APLIKASI, sedangkan .env pengembangan menutupnya
+ * demi kepatuhan Google Play. Menyetel process.env saja tidak cukup: modul env
+ * sudah selesai dibaca sebelum beforeAll berjalan, sehingga nilainya harus
+ * ditimpa langsung pada objek env — lalu DIKEMBALIKAN di afterAll, karena
+ * seluruh berkas uji berbagi satu proses dan satu registry modul.
+ */
+const originalAppPurchaseEnabled = env.MEMBERSHIP_PURCHASE_APP_ENABLED;
 
 describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
   beforeAll(async () => {
@@ -41,7 +51,10 @@ describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
         body += chunk.toString();
       });
       req.on("end", () => {
-        const parsed = JSON.parse(body) as { transaction_details?: { order_id?: string } };
+        const parsed = JSON.parse(body) as {
+          transaction_details?: { order_id?: string };
+        } & Record<string, unknown>;
+        snapRequests.push(parsed);
         const orderId = parsed.transaction_details?.order_id ?? "UNKNOWN";
         res.writeHead(201, { "content-type": "application/json" });
         res.end(JSON.stringify({
@@ -73,6 +86,7 @@ describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
       MIDTRANS_SNAP_URL: `http://127.0.0.1:${snapAddress.port}/snap/v1/transactions`,
       DOKU_ENABLED: false,
       EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED: true,
+      MEMBERSHIP_PURCHASE_APP_ENABLED: true,
     });
 
     const [{ createApp }, tokenService] = await Promise.all([
@@ -90,6 +104,7 @@ describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
   beforeEach(async () => {
     await cleanDatabase();
     await seedMemberships();
+    snapRequests = [];
   });
 
   afterAll(async () => {
@@ -109,6 +124,7 @@ describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
     });
     env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED =
       originalExternalMembershipPaymentsEnabled;
+    env.MEMBERSHIP_PURCHASE_APP_ENABLED = originalAppPurchaseEnabled;
     if (originalExternalMembershipPaymentsEnabledEnv === undefined) {
       delete process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
     } else {
@@ -133,6 +149,62 @@ describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
     expect(body.data.orderId).toBe(order.id);
     expect(body.data.snapToken).toContain(body.data.invoiceNumber);
     expect(body.data.redirectUrl).toContain("app.sandbox.midtrans.com");
+  });
+
+  /**
+   * Metode bayar dibatasi ke yang benar-benar dapat dikembalikan lewat API.
+   *
+   * Ini bukan soal selera: alur R2.6 menjanjikan pengembalian dana PENUH bila
+   * dokumen identitas ditolak. Diuji langsung ke sandbox Midtrans, refund atas
+   * transaksi bank transfer (VA) DITOLAK dengan "Payment Provider doesn't allow
+   * refund within this time". Menawarkan VA berarti menjanjikan sesuatu yang
+   * tidak dapat kita tepati.
+   */
+  it("hanya menawarkan metode bayar yang dapat direfund", async () => {
+    const user = await createApiUser("MIDPAY1");
+    const order = await createOrderFor(user, "SILVER");
+
+    await api(`/api/v1/membership/orders/${order.id}/pay`, {
+      method: "POST",
+      token: tokenFor(user)
+    });
+
+    expect(snapRequests).toHaveLength(1);
+    const enabled = snapRequests[0]!.enabled_payments as string[] | undefined;
+
+    // Wajib ada dan wajib merupakan daftar tertutup. Tanpa enabled_payments,
+    // Midtrans menampilkan SELURUH metode termasuk VA.
+    expect(Array.isArray(enabled)).toBe(true);
+    expect(enabled).toEqual(["credit_card", "gopay", "other_qris"]);
+  });
+
+  it("tidak pernah menawarkan bank transfer maupun gerai ritel", async () => {
+    const user = await createApiUser("MIDPAY2");
+    const order = await createOrderFor(user, "GOLD");
+
+    await api(`/api/v1/membership/orders/${order.id}/pay`, {
+      method: "POST",
+      token: tokenFor(user)
+    });
+
+    const enabled = snapRequests[0]!.enabled_payments as string[] | undefined;
+
+    // Pemeriksaan ini WAJIB lebih dulu. Tanpanya, daftar yang tidak ada sama
+    // sekali akan lolos begitu saja — padahal justru itu keadaan terburuknya:
+    // Midtrans lalu menampilkan SELURUH metode, termasuk VA.
+    expect(enabled, "enabled_payments wajib dikirim").toBeDefined();
+    expect(enabled!.length).toBeGreaterThan(0);
+
+    // Daftar terlarang ditulis eksplisit. Memeriksa "hanya tiga yang boleh"
+    // saja tidak cukup: bila suatu saat daftar diperlebar tanpa berpikir,
+    // pemeriksaan inilah yang menyalakan alarm.
+    const dilarang = [
+      "bank_transfer", "bca_va", "bni_va", "bri_va", "cimb_va", "permata_va",
+      "other_va", "echannel", "indomaret", "alfamart", "akulaku", "kredivo"
+    ];
+    for (const metode of dilarang) {
+      expect(enabled, `${metode} tidak boleh ditawarkan`).not.toContain(metode);
+    }
   });
 
   it("blocks Midtrans payment creation for an already paid order", async () => {
