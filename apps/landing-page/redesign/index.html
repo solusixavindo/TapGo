@@ -964,7 +964,7 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
           <li><svg><use href="#i-check"/></svg> Kartu anggota digital</li>
           <li><svg><use href="#i-check"/></svg> Akses layanan PPOB sebagai agen</li>
         </ul>
-        <a href="/upgrade/" class="btn glass btn-full" data-glass>Mulai dari Silver</a>
+        <a href="/upgrade/" class="btn glass btn-full" data-glass data-paket="SILVER">Mulai dari Silver</a>
       </article>
       <article class="card card-hover card-pad price-card featured" data-reveal>
         <span class="badge">Paling dipilih</span>
@@ -975,7 +975,7 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
           <li><svg><use href="#i-check"/></svg> Saldo PPOB awal Rp 600.000</li>
           <li><svg><use href="#i-check"/></svg> Prioritas dukungan mitra</li>
         </ul>
-        <a href="/upgrade/" class="btn btn-gold btn-full" data-glass>Ambil paket Gold</a>
+        <a href="/upgrade/" class="btn btn-gold btn-full" data-glass data-paket="GOLD">Ambil paket Gold</a>
       </article>
       <article class="card card-hover card-pad price-card" data-reveal>
         <p class="tier">Platinum</p><p class="amount">Rp&nbsp;5.500.000</p>
@@ -985,7 +985,7 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
           <li><svg><use href="#i-check"/></svg> Saldo PPOB awal Rp 1.000.000</li>
           <li><svg><use href="#i-check"/></svg> Pendampingan mitra khusus</li>
         </ul>
-        <a href="/upgrade/" class="btn glass btn-full" data-glass>Ambil paket Platinum</a>
+        <a href="/upgrade/" class="btn glass btn-full" data-glass data-paket="PLATINUM">Ambil paket Platinum</a>
       </article>
     </div>
     <p class="small muted" data-reveal style="margin-top:26px;max-width:70ch;line-height:1.8">
@@ -1407,6 +1407,18 @@ html.js [data-reveal].in{opacity:1;transform:none;transition:opacity .6s ease,tr
     }, { threshold: .4 });
     counters.forEach(function (c) { co.observe(c); });
   }
+
+  /* Paket yang ditunjuk pengunjung dititipkan untuk halaman pilih paket.
+     Alamat tautannya sengaja TIDAK diubah: bila skrip tidak berjalan,
+     pengunjung tetap sampai di /upgrade/ dan memilih sendiri di sana.
+
+     Kunci di bawah HARUS sama dengan PACKAGE_HINT_KEY pada
+     apps/landing-page/src/app/upgrade/api.ts. */
+  $$('a[data-paket]').forEach(function (a) {
+    a.addEventListener('click', function () {
+      try { sessionStorage.setItem('tapgo.upgrade.packageHint', a.dataset.paket); } catch (e) {}
+    });
+  });
 
   /* Form */
   var form = $('#form');

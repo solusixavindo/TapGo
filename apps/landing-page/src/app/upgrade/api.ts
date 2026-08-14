@@ -25,6 +25,19 @@ export const TOKEN_KEY = "tapgo.upgrade.token";
 export const PACKAGE_KEY = "tapgo.upgrade.packageId";
 export const ORDER_KEY = "tapgo.upgrade.orderId";
 
+/**
+ * Paket yang ditunjuk pengunjung dari halaman depan.
+ *
+ * Menyimpan TIER, bukan id paket: halaman depan adalah HTML statis yang tidak
+ * mengenal id dari basis data, sedangkan tier ("SILVER" / "GOLD" / "PLATINUM")
+ * stabil di kedua sisi.
+ *
+ * Nilainya hanya petunjuk awal. Pengunjung tetap bebas memilih paket lain, dan
+ * pilihan yang benar-benar dipakai tetap PACKAGE_KEY yang ditulis saat menekan
+ * lanjut.
+ */
+export const PACKAGE_HINT_KEY = "tapgo.upgrade.packageHint";
+
 export type MembershipPackage = {
   id: string;
   name: string;
@@ -32,6 +45,30 @@ export type MembershipPackage = {
   price: number;
   benefits: string[];
 };
+
+/**
+ * Menerjemahkan petunjuk tier dari halaman depan menjadi id paket yang nyata.
+ *
+ * Dipisah sebagai fungsi murni supaya dapat diperiksa tanpa merender komponen —
+ * aplikasi ini belum punya perkakas uji, dan memasangnya berisiko merusak
+ * node_modules worktree.
+ *
+ * Mengembalikan string kosong bila petunjuknya kosong atau tidak cocok dengan
+ * satu pun paket. Pemanggil WAJIB memperlakukan itu sebagai "tidak ada pilihan
+ * awal", bukan sebagai galat: daftar paket dapat berubah kapan saja di sisi
+ * server, dan petunjuk basi tidak boleh menghalangi pengunjung memilih sendiri.
+ */
+export function matchPackageByTier(
+  packages: MembershipPackage[],
+  hint: string
+): string {
+  const wanted = hint.trim().toUpperCase();
+  if (!wanted) return "";
+  const found = packages.find(
+    (item) => (item.tier ?? "").trim().toUpperCase() === wanted
+  );
+  return found ? found.id : "";
+}
 
 export type UpgradeOrderStatus =
   | "PENDING"

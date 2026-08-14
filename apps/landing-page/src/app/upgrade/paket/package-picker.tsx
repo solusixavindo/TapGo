@@ -4,11 +4,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   MembershipPackage,
+  PACKAGE_HINT_KEY,
   PACKAGE_KEY,
   PREVIEW_MODE,
   PREVIEW_PACKAGES,
   TOKEN_KEY,
   listPackages,
+  matchPackageByTier,
   readSession,
   writeSession
 } from "../api";
@@ -40,6 +42,14 @@ export default function PackagePicker() {
         if (!alive) return;
         setPackages(result);
         setError("");
+        // Paket yang ditunjuk pengunjung dari halaman depan dipakai sebagai
+        // pilihan awal. Hanya berlaku bila belum ada yang dipilih, supaya
+        // kembali ke langkah ini tidak menimpa pilihan yang sudah diubah.
+        setSelected((current) =>
+          current
+            ? current
+            : matchPackageByTier(result, readSession(PACKAGE_HINT_KEY))
+        );
       })
       .catch((caught: unknown) =>
         alive
