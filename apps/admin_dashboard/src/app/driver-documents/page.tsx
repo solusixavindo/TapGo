@@ -12,6 +12,7 @@ import {
   readToken,
   remainingRetention
 } from "../../lib/api";
+import ConsoleHeader from "../console-header";
 import DriverDocumentViewer from "./driver-document-viewer";
 
 /**
@@ -93,30 +94,22 @@ export default function DriverDocumentsPage() {
   return (
     <main className="min-h-screen bg-slate-100 p-6 text-slate-950 print:bg-white print:p-0">
       <div className="mx-auto max-w-7xl">
-        <header className="flex flex-wrap items-center justify-between gap-4 print:hidden">
-          <div>
-            <h1 className="text-2xl font-bold">Dokumen Mitra Driver</h1>
-            <p className="mt-1 text-sm text-slate-600">
-              {menungguPemeriksaan.length} mitra menunggu pemeriksaan dari{" "}
-              {rows.length} yang memiliki dokumen.
-            </p>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <Link href="/member-requests" className="text-slate-600 hover:underline">
-              Verifikasi Keanggotaan
-            </Link>
-            <span className="rounded-full bg-slate-200 px-3 py-1 font-medium">
-              {role || "ADMIN"}
-            </span>
+        <ConsoleHeader
+          title="Dokumen Mitra Driver"
+          subtitle={`${menungguPemeriksaan.length} mitra menunggu pemeriksaan dari ${rows.length} yang memiliki dokumen`}
+          role={role}
+          backHref="/member-requests"
+          backLabel="Kembali ke verifikasi keanggotaan"
+          actions={
             <button
               type="button"
-              onClick={signOut}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium hover:bg-white"
+              onClick={() => void refresh()}
+              className="rounded-lg border border-white/25 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/10"
             >
-              Keluar
+              Muat ulang
             </button>
-          </div>
-        </header>
+          }
+        />
 
         <p className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900 print:hidden">
           Isi dokumen dihapus otomatis paling lama 24 jam setelah diunggah.

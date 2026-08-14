@@ -197,6 +197,49 @@ export class AuthService {
     await this.authRepository.revokeSession(sessionId);
   }
 
+  /**
+   * Ganti password oleh pemilik akun yang sedang masuk.
+   *
+   * Password lama WAJIB dibuktikan, walaupun pemanggilnya sudah membawa token
+   * yang sah. Tanpa itu, satu token yang bocor cukup untuk mengambil alih akun
+   * secara permanen — penyerang tinggal mengganti passwordnya sendiri.
+   */
+  async changePassword(input: {
+    userId: string;
+    currentPassword: string;
+    newPassword: string;
+  }) {
+    if (input.currentPassword === input.newPassword) {
+      throw new AppError(
+        "Password baru harus berbeda dari password lama.",
+        StatusCodes.BAD_REQUEST,
+        "PASSWORD_UNCHANGED"
+      );
+    }
+
+    const user = await this.authRepository.findUserById(input.userId);
+    if (!user?.passwordHash) {
+      throw new AppError("User not found", StatusCodes.NOT_FOUND, "USER_NOT_FOUND");
+    }
+
+    const cocok = await verifyPassword(user.passwordHash, input.currentPassword);
+    if (!cocok) {
+      // Pesannya sengaja tidak membedakan "akun tidak ada" dari "password
+      // salah"; keduanya menghasilkan jawaban yang sama.
+      throw new AppError(
+        "Password lama tidak cocok.",
+        StatusCodes.UNAUTHORIZED,
+        "INVALID_CREDENTIALS"
+      );
+    }
+
+    await this.authRepository.applyPasswordChange({
+      userId: user.id,
+      passwordHash: await hashPassword(input.newPassword),
+      now: new Date()
+    });
+  }
+
   async me(userId: string) {
     const user = await this.authRepository.findUserById(userId);
     if (!user) {

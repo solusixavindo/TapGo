@@ -17,7 +17,12 @@ import { PrismaAuthRepository } from "../infrastructure/PrismaAuthRepository.js"
 import { otpDeliveryProvider } from "../infrastructure/otpProviderRegistry.js";
 import { AuthController } from "./auth.controller.js";
 import { RecoveryController } from "./recovery.controller.js";
-import { loginSchema, refreshSchema, registerSchema } from "./auth.validators.js";
+import {
+  changePasswordSchema,
+  loginSchema,
+  refreshSchema,
+  registerSchema
+} from "./auth.validators.js";
 import {
   recoveryRequestSchema,
   recoveryResetSchema,
@@ -65,6 +70,16 @@ authRouter.post("/login", authRateLimiter, validateRequest(loginSchema), asyncHa
 authRouter.post("/refresh", authRateLimiter, validateRequest(refreshSchema), asyncHandler(controller.refresh));
 authRouter.post("/logout", requireAuth, asyncHandler(controller.logout));
 authRouter.get("/me", requireAuth, asyncHandler(controller.me));
+// Dibatasi authRateLimiter walau sudah memerlukan token: endpoint ini menerima
+// password lama, sehingga tetap dapat dipakai menebak sandi bila dibiarkan
+// tanpa batas laju.
+authRouter.post(
+  "/change-password",
+  requireAuth,
+  authRateLimiter,
+  validateRequest(changePasswordSchema),
+  asyncHandler(controller.changePassword)
+);
 
 // --- Pemulihan password (tanpa autentikasi) ---------------------------------
 // Dua rate limiter dipasang berurutan: per akun target dan per IP. Keduanya

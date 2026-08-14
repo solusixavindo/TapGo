@@ -54,6 +54,20 @@ export interface AuthRepository {
   findSessionById(sessionId: string): Promise<SessionRecord | null>;
   rotateSession(sessionId: string, refreshTokenHash: string, expiresAt: Date): Promise<void>;
   revokeSession(sessionId: string): Promise<void>;
+
+  /**
+   * Menerapkan penggantian password dalam SATU transaksi.
+   *
+   * Password, kenaikan authVersion, dan pencabutan seluruh Session harus terjadi
+   * bersama-sama. Kalau dipisah, ada jendela waktu di mana password sudah
+   * berganti tetapi token lama masih sah — dan justru itulah yang ingin
+   * dihilangkan oleh penggantian password.
+   */
+  applyPasswordChange(input: {
+    userId: string;
+    passwordHash: string;
+    now: Date;
+  }): Promise<void>;
   createOtpChallenge(input: {
     phone: string;
     codeHash: string;

@@ -33,6 +33,17 @@ export class AuthController {
     res.status(StatusCodes.NO_CONTENT).send();
   };
 
+  changePassword = async (req: Request, res: Response) => {
+    await this.authService.changePassword({
+      userId: req.auth!.userId,
+      currentPassword: req.body.currentPassword,
+      newPassword: req.body.newPassword
+    });
+    // 204: tidak ada badan respons. Token pemanggil sudah mati saat ini juga,
+    // jadi tidak ada data yang pantas dikembalikan.
+    res.status(StatusCodes.NO_CONTENT).send();
+  };
+
   me = async (req: Request, res: Response) => {
     const user = await this.authService.me(req.auth!.userId);
     res.json({ success: true, data: user });

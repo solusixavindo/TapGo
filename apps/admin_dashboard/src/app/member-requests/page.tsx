@@ -16,6 +16,7 @@ import {
   rejectDocuments,
   verifyDocuments
 } from "../../lib/api";
+import ConsoleHeader from "../console-header";
 import DocumentViewer from "./document-viewer";
 
 /**
@@ -136,44 +137,37 @@ export default function MemberRequestsPage() {
   return (
     <main className="min-h-screen bg-slate-100 p-6 text-slate-950 print:bg-white print:p-0">
       <div className="mx-auto max-w-7xl">
-        <header className="flex flex-wrap items-center justify-between gap-4 print:hidden">
-          <div>
-            <h1 className="text-xl font-semibold">Verifikasi Keanggotaan</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              {awaiting.length} pengajuan menunggu keputusan · masuk sebagai {role || "admin"}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Link
-              href="/driver-documents"
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold"
-            >
-              Dokumen mitra driver
-            </Link>
-            {role === "SUPER_ADMIN_VIP" ? (
+        {/* Beranda konsol: tanpa tombol kembali, karena tidak ada layar di atasnya. */}
+        <ConsoleHeader
+          title="Verifikasi Keanggotaan"
+          subtitle={`${awaiting.length} pengajuan menunggu keputusan`}
+          role={role}
+          actions={
+            <>
               <Link
-                href="/roles"
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold"
+                href="/driver-documents"
+                className="rounded-lg border border-white/25 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/10"
               >
-                Pengelolaan role
+                Dokumen mitra driver
               </Link>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold"
-            >
-              Muat ulang
-            </button>
-            <button
-              type="button"
-              onClick={signOut}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-600"
-            >
-              Keluar
-            </button>
-          </div>
-        </header>
+              {role === "SUPER_ADMIN_VIP" ? (
+                <Link
+                  href="/roles"
+                  className="rounded-lg border border-white/25 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/10"
+                >
+                  Pengelolaan role
+                </Link>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void refresh()}
+                className="rounded-lg border border-white/25 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/10"
+              >
+                Muat ulang
+              </button>
+            </>
+          }
+        />
 
         {error ? (
           <p role="alert" className="mt-4 rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700 print:hidden">

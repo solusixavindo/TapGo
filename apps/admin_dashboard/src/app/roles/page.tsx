@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import ConsoleHeader from "../console-header";
 import {
   ASSIGNABLE_ROLES,
   AdminAccount,
@@ -144,20 +145,13 @@ export default function RolesPage() {
   return (
     <main className="min-h-screen bg-slate-100 p-6 text-slate-950">
       <div className="mx-auto max-w-5xl">
-        <header className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold">Pengelolaan Role</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Hanya Super Admin VIP yang dapat mengubah role admin dan super admin.
-            </p>
-          </div>
-          <Link
-            href="/member-requests"
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold"
-          >
-            Verifikasi keanggotaan
-          </Link>
-        </header>
+        <ConsoleHeader
+          title="Pengelolaan Role"
+          subtitle="Hanya Super Admin VIP yang dapat mengubah role admin dan super admin"
+          role={myRole}
+          backHref="/member-requests"
+          backLabel="Kembali ke verifikasi keanggotaan"
+        />
 
         {error ? (
           <p role="alert" className="mt-4 rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">

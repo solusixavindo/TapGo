@@ -58,6 +58,16 @@ export const registerSchema = z.preprocess(
   })
 );
 
+export const changePasswordSchema = z.preprocess(
+  wrapBody,
+  z.object({
+    body: z.object({
+      currentPassword: passwordSchema,
+      newPassword: passwordSchema
+    })
+  })
+);
+
 export const loginSchema = z.preprocess(
   wrapBody,
   z.object({
