@@ -53,6 +53,17 @@ const envSchema = z.object({
   /// Masa simpan dokumen identitas di database, dalam jam. Keputusan Owner:
   /// 24 jam, setelah itu admin sudah mencetaknya sebagai berkas administrasi.
   MEMBERSHIP_DOCUMENT_RETENTION_HOURS: z.coerce.number().int().positive().max(72).default(24),
+  /// Masa simpan dokumen driver. Keputusan Owner yang sama persis: 24 jam.
+  ///
+  /// Sengaja dipisah dari setelan membership supaya operasional dapat menahan
+  /// satu jenis dokumen tanpa menyentuh yang lain saat menangani insiden. Nilai
+  /// bawaannya WAJIB tetap sama — bila keduanya berbeda tanpa alasan, itu
+  /// pertanda kebijakan sudah bergeser diam-diam, dan ada uji yang menjaganya.
+  ///
+  /// Secret enkripsinya memakai MEMBERSHIP_DOCUMENT_SECRET yang sama, tetapi
+  /// kunci nyatanya diturunkan lewat label domain berbeda, sehingga dokumen
+  /// driver tidak dapat dibuka dengan kunci dokumen membership.
+  DRIVER_DOCUMENT_RETENTION_HOURS: z.coerce.number().int().positive().max(72).default(24),
   CORS_ORIGINS: z.string().default("http://localhost:3000"),
   MIDTRANS_SERVER_KEY: z.string().optional(),
   MIDTRANS_CLIENT_KEY: z.string().optional(),

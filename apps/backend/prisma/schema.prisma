@@ -831,19 +831,44 @@ model Driver {
   @@map("drivers")
 }
 
+/// Dokumen identitas dan kendaraan mitra driver.
+///
+/// Keputusan Owner: kebijakan 24 jam untuk dokumen membership berlaku juga di
+/// sini. Isi berkas disimpan sebagai ciphertext dan dihapus setelah masa simpan
+/// berakhir, sedangkan barisnya tetap ada karena status dan jejak waktunya masih
+/// dibutuhkan untuk audit.
 model DriverDocument {
   id         String    @id @default(uuid()) @db.Uuid
   driverId   String    @map("driver_id") @db.Uuid
   type       String    @db.VarChar(60)
-  url        String
+  /// Penyimpanan eksternal warisan. Isi dokumen kini berada di kolom ciphertext.
+  url        String?
   status     KycStatus @default(PENDING)
   reviewedBy String?   @map("reviewed_by") @db.Uuid
   reviewedAt DateTime? @map("reviewed_at")
-  createdAt  DateTime  @default(now()) @map("created_at")
+
+  /// Ciphertext AES-256-GCM. Null berarti belum diunggah atau sudah dihapus.
+  cipherText  Bytes?    @map("cipher_text")
+  cipherIv    Bytes?    @map("cipher_iv")
+  cipherTag   Bytes?    @map("cipher_tag")
+  /// Versi kunci aktif, disimpan bersama ciphertext agar rotasi mungkin.
+  keyVersion  Int?      @map("key_version")
+  contentType String?   @map("content_type") @db.VarChar(40)
+  sizeBytes   Int?      @map("size_bytes")
+  /// SHA-256 isi asli. Dipakai membuktikan hasil cetak sama dengan yang diunggah.
+  checksum    String?   @db.VarChar(64)
+  uploadedAt  DateTime? @map("uploaded_at")
+  /// Batas simpan. Setelah lewat, isi berkas tidak pernah disajikan lagi.
+  expiresAt   DateTime? @map("expires_at")
+  purgedAt    DateTime? @map("purged_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
-  @@index([driverId, type])
+  @@unique([driverId, type])
+  @@index([expiresAt])
   @@map("driver_documents")
 }
 

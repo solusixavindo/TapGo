@@ -31,7 +31,20 @@ export const MEMBERSHIP_DOCUMENT_KEY_VERSION = 1;
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
-const KEY_DERIVATION_INFO = "tapgo.membership.document.v1";
+/**
+ * Domain kunci. Tiap jenis dokumen menurunkan kunci sendiri dari secret yang
+ * sama, sehingga ciphertext KTP pemohon membership TIDAK dapat dibuka dengan
+ * kunci dokumen driver, dan sebaliknya.
+ *
+ * Nilainya WAJIB stabil selamanya: mengubah label berarti seluruh dokumen lama
+ * di domain itu tidak lagi dapat didekripsi.
+ */
+export const DOCUMENT_DOMAINS = {
+  membership: "tapgo.membership.document.v1",
+  driver: "tapgo.driver.document.v1"
+} as const;
+
+export type DocumentDomain = keyof typeof DOCUMENT_DOMAINS;
 
 export type EncryptedDocument = {
   cipherText: Buffer;
@@ -54,7 +67,7 @@ export function membershipDocumentSecretAvailable(): boolean {
   return typeof secret === "string" && secret.length >= MIN_MEMBERSHIP_DOCUMENT_SECRET_LENGTH;
 }
 
-function requireKey(): Buffer {
+function requireKey(domain: DocumentDomain): Buffer {
   const secret = env.MEMBERSHIP_DOCUMENT_SECRET;
   if (!secret || secret.length < MIN_MEMBERSHIP_DOCUMENT_SECRET_LENGTH) {
     throw new AppError(
@@ -68,12 +81,21 @@ function requireKey(): Buffer {
   // tepat 32 byte. Turunkan lewat HKDF dengan label domain agar kunci ini tidak
   // pernah sama dengan kunci domain lain sekalipun secret-nya kebetulan sama.
   return Buffer.from(
-    crypto.hkdfSync("sha256", Buffer.from(secret, "utf8"), Buffer.alloc(0), KEY_DERIVATION_INFO, 32)
+    crypto.hkdfSync(
+      "sha256",
+      Buffer.from(secret, "utf8"),
+      Buffer.alloc(0),
+      DOCUMENT_DOMAINS[domain],
+      32
+    )
   );
 }
 
-export function encryptDocument(plain: Buffer): EncryptedDocument {
-  const key = requireKey();
+export function encryptDocument(
+  plain: Buffer,
+  domain: DocumentDomain
+): EncryptedDocument {
+  const key = requireKey(domain);
   const cipherIv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, key, cipherIv);
   const cipherText = Buffer.concat([cipher.update(plain), cipher.final()]);
@@ -89,12 +111,15 @@ export function encryptDocument(plain: Buffer): EncryptedDocument {
   };
 }
 
-export function decryptDocument(input: {
-  cipherText: Buffer;
-  cipherIv: Buffer;
-  cipherTag: Buffer;
-  keyVersion: number | null;
-}): Buffer {
+export function decryptDocument(
+  input: {
+    cipherText: Buffer;
+    cipherIv: Buffer;
+    cipherTag: Buffer;
+    keyVersion: number | null;
+  },
+  domain: DocumentDomain
+): Buffer {
   if (input.keyVersion !== null && input.keyVersion !== MEMBERSHIP_DOCUMENT_KEY_VERSION) {
     throw new AppError(
       "Dokumen dienkripsi dengan versi kunci yang tidak dikenal.",
@@ -103,7 +128,7 @@ export function decryptDocument(input: {
     );
   }
 
-  const decipher = crypto.createDecipheriv(ALGORITHM, requireKey(), input.cipherIv);
+  const decipher = crypto.createDecipheriv(ALGORITHM, requireKey(domain), input.cipherIv);
   decipher.setAuthTag(input.cipherTag);
 
   try {

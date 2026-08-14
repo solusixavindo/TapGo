@@ -24,6 +24,7 @@ import { profitSharingRouter } from "./modules/profit-sharing/presentation/profi
 import { referralRouter } from "./modules/referrals/presentation/referral.routes.js";
 import { driverReviewRouter } from "./modules/rides/presentation/driverReview.routes.js";
 import { adminRideRouter, driverRideRouter, rideRouter } from "./modules/rides/presentation/ride.routes.js";
+import { driverDocumentRouter } from "./modules/drivers/presentation/driver-document.routes.js";
 import { adminSupportRouter, supportRouter } from "./modules/support/presentation/support.routes.js";
 import { walletRouter } from "./modules/wallets/presentation/wallet.routes.js";
 
@@ -97,6 +98,12 @@ export function createApp() {
   app.use("/api/v1/referrals", referralRouter);
   // Release 2 — domain Ride. Tidak diekspos ke aplikasi Play Release 1.
   app.use("/api/v1/rides", rideRouter);
+  // URUTAN PENTING. driverRideRouter memasang pemeriksa kapabilitas untuk
+  // SELURUH sub-jalur /api/v1/driver, dan pemeriksa itu menolak driver yang
+  // belum terverifikasi — padahal justru merekalah yang perlu mengunggah
+  // dokumen. Karena Express menjalankan router sesuai urutan pendaftaran,
+  // rute dokumen harus didaftarkan lebih dulu.
+  app.use("/api/v1/driver/documents", driverDocumentRouter);
   app.use("/api/v1/driver", driverRideRouter);
   app.use("/api/v1/support", supportRouter);
   app.use("/api/v1/wallet", walletRouter);

@@ -8,6 +8,8 @@ import { AdminConsoleController } from "./admin-console.controller.js";
 import { WalletService } from "../../wallets/application/WalletService.js";
 import { PrismaWalletRepository } from "../../wallets/infrastructure/PrismaWalletRepository.js";
 import { MembershipDocumentService } from "../../memberships/application/MembershipDocumentService.js";
+import { DriverDocumentService } from "../../drivers/application/DriverDocumentService.js";
+import { DriverDocumentController } from "../../drivers/presentation/driver-document.controller.js";
 import { AdminRoleService } from "../application/AdminRoleService.js";
 import { MembershipRefundService } from "../../memberships/application/MembershipRefundService.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
@@ -59,6 +61,9 @@ const controller = new AdminConsoleController(
 const documentController = new MembershipDocumentController(
   new MembershipDocumentService(prisma)
 );
+const driverDocumentController = new DriverDocumentController(
+  new DriverDocumentService(prisma)
+);
 
 export const adminConsoleRouter = Router();
 
@@ -85,6 +90,16 @@ adminConsoleRouter.get(
   "/member-requests/:id/documents/:type",
   validateRequest(membershipDocumentUploadSchema),
   asyncHandler(documentController.adminDocumentFile)
+);
+// Dokumen mitra driver. Aturannya sama persis dengan dokumen membership:
+// isinya hanya keluar lewat jalur ini, dan setiap pembukaan dicatat.
+adminConsoleRouter.get(
+  "/drivers/:driverId/documents",
+  asyncHandler(driverDocumentController.adminDocuments)
+);
+adminConsoleRouter.get(
+  "/drivers/:driverId/documents/:type",
+  asyncHandler(driverDocumentController.adminDocumentFile)
 );
 adminConsoleRouter.post(
   "/member-requests/:id/verify-documents",
