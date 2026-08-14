@@ -4,6 +4,7 @@ import { env } from "./config/env.js";
 import { disconnectPrisma, prisma } from "./config/prisma.js";
 import { redis } from "./config/redis.js";
 import { logger } from "./core/logger/logger.js";
+import { DriverDocumentService } from "./modules/drivers/application/DriverDocumentService.js";
 import { MembershipDocumentService } from "./modules/memberships/application/MembershipDocumentService.js";
 import { attachRealtime } from "./realtime/socket.js";
 
@@ -23,18 +24,41 @@ export const io = attachRealtime(httpServer);
  * sebenarnya ada pada pembacaan — isi dokumen yang sudah kedaluwarsa tidak
  * pernah disajikan walau penyapunya sedang tertunda atau mati.
  */
-const documentService = new MembershipDocumentService(prisma);
+const membershipDocuments = new MembershipDocumentService(prisma);
+const driverDocuments = new DriverDocumentService(prisma);
 const PURGE_INTERVAL_MS = 15 * 60 * 1000;
 
+/**
+ * Dokumen mitra driver disapu bersama dokumen membership.
+ *
+ * Kebijakan 24 jam berlaku sama untuk keduanya, jadi keduanya WAJIB punya
+ * pembersih. Sebelumnya hanya membership yang tersapu, dan baris dokumen driver
+ * menumpuk tanpa batas — isinya memang tidak pernah tersaji karena masa simpan
+ * ditegakkan saat pembacaan, tetapi menyimpan sisa yang tidak pernah dipakai
+ * bukan yang dijanjikan kepada mitra.
+ *
+ * Keduanya disapu terpisah supaya kegagalan salah satunya tidak menghentikan
+ * yang lain.
+ */
+const SWEEPERS = [
+  { nama: "membership", sapu: () => membershipDocuments.purgeExpired() },
+  { nama: "driver", sapu: () => driverDocuments.purgeExpired() }
+] as const;
+
 async function purgeExpiredDocuments() {
-  try {
-    const purged = await documentService.purgeExpired();
-    if (purged > 0) {
-      // Hanya jumlahnya. Tidak pernah id pemohon, apalagi isi dokumen.
-      logger.info({ purged }, "Expired membership documents purged");
+  for (const sweeper of SWEEPERS) {
+    try {
+      const purged = await sweeper.sapu();
+      if (purged > 0) {
+        // Hanya jumlahnya. Tidak pernah id pemilik, apalagi isi dokumen.
+        logger.info({ purged, scope: sweeper.nama }, "Expired documents purged");
+      }
+    } catch (error) {
+      logger.error(
+        { err: error, scope: sweeper.nama },
+        "Failed to purge expired documents"
+      );
     }
-  } catch (error) {
-    logger.error({ err: error }, "Failed to purge expired membership documents");
   }
 }
 

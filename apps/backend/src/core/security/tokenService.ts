@@ -1,9 +1,19 @@
-import jwt, {
-  JsonWebTokenError,
-  NotBeforeError,
-  SignOptions,
-  TokenExpiredError
-} from "jsonwebtoken";
+import jwt from "jsonwebtoken";
+import type { SignOptions } from "jsonwebtoken";
+
+/**
+ * Kelas galat diambil dari default export, BUKAN sebagai named import.
+ *
+ * jsonwebtoken adalah modul CommonJS yang menulis
+ * `module.exports = { JsonWebTokenError: require('./lib/...'), ... }`.
+ * Penganalisis statis Node tidak dapat menembus panggilan require() di dalam
+ * objek, sehingga nama-nama itu tidak pernah muncul sebagai named export ESM
+ * dan `import { JsonWebTokenError } from "jsonwebtoken"` membuat proses gagal
+ * start dengan SyntaxError — sementara vitest tetap hijau karena mem-bundle
+ * dengan cara berbeda. Menjadikannya named import berarti kegagalan itu hanya
+ * muncul di server sungguhan, bukan di pengujian.
+ */
+const { JsonWebTokenError, NotBeforeError, TokenExpiredError } = jwt;
 import { UserRole } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { env } from "../../config/env.js";
