@@ -151,6 +151,31 @@ export async function fetchDocumentObjectUrl(orderId: string, type: DocumentType
   };
 }
 
+/**
+ * Mengganti password akun yang sedang masuk.
+ *
+ * Server mencabut SELURUH sesi setelah berhasil, termasuk token yang sedang
+ * dipakai. Pemanggil karena itu WAJIB membersihkan sesi lokal dan meminta
+ * pengguna masuk kembali — kalau tidak, layar berikutnya akan dipenuhi galat
+ * 401 yang membingungkan.
+ */
+export async function changePassword(currentPassword: string, newPassword: string) {
+  const response = await fetch(`${API_BASE}/auth/change-password`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${readToken()}`
+    },
+    body: JSON.stringify({ currentPassword, newPassword }),
+    credentials: "omit"
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { message?: string };
+    throw new Error(payload.message ?? "Password belum dapat diganti.");
+  }
+}
+
 // --- Dokumen mitra driver --------------------------------------------------
 
 export type DriverDocumentType = "KTP" | "SIM" | "STNK" | "SELFIE";

@@ -469,6 +469,30 @@ export class PrismaAuthRepository implements AuthRepository {
     });
   }
 
+  async applyPasswordChange(input: {
+    userId: string;
+    passwordHash: string;
+    now: Date;
+  }) {
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: input.userId },
+        data: {
+          passwordHash: input.passwordHash,
+          // Increment relatif, bukan penetapan nilai absolut: dua penggantian
+          // yang berjalan bersamaan tetap konsisten karena database yang
+          // menambahkannya.
+          authVersion: { increment: 1 },
+          sessionsRevokedAt: input.now
+        }
+      }),
+      this.prisma.session.updateMany({
+        where: { userId: input.userId, revokedAt: null },
+        data: { revokedAt: input.now }
+      })
+    ]);
+  }
+
   async createOtpChallenge(input: {
     phone: string;
     codeHash: string;
