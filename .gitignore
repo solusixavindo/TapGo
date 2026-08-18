@@ -49,6 +49,10 @@ dist/
 build/
 .next/
 coverage/
+# Hasil static export Next. Diunggah manual ke Hostinger, bukan lewat Git —
+# lihat PROJECT_STRUCTURE.md ("safe to regenerate and keep untracked").
+apps/landing-page/out/
+apps/admin_dashboard/out/
 apps/user_app/build/
 apps/driver_app/build/
 **/.dart_tool/
