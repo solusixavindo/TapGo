@@ -263,6 +263,94 @@ describe.skipIf(!runIntegration)("DOKU checkout membership payments", () => {
     await expectPendingOrder(order.id, { provider: null, providerReference: null });
     await expectWalletTransactionCount(user.id, "PPOB_BENEFIT", 0);
   });
+
+  // -------------------------------------------------------------------------
+  // Nominal callback WAJIB sama persis dengan nominal order.
+  //
+  // Jalur DOKU sebelumnya tidak memeriksanya sama sekali, sementara jalur
+  // Midtrans sudah punya kontrol P1-2. Signature yang sah membuktikan
+  // pengirimnya DOKU; ia tidak membuktikan bahwa yang dibayar sama dengan yang
+  // ditagih. Seluruh uji di bawah memakai signature yang SAH agar yang teruji
+  // benar-benar verifikasi nominalnya, bukan verifikasi signature.
+  // -------------------------------------------------------------------------
+
+  it.each([
+    ["kurang bayar", "400000"],
+    ["lebih bayar", "600000"],
+  ])("menolak %s walau signature sah", async (_label, amount) => {
+    const user = await createApiUser("DOKUAMT");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postDokuWebhook(order.invoiceNumber, "SUCCESS", {
+      amount,
+    });
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+    const body = (await response.json()) as { code: string };
+    expect(body.code).toBe("DOKU_AMOUNT_MISMATCH");
+    await expectPendingOrder(order.id, { provider: null, providerReference: null });
+    await expectWalletTransactionCount(user.id, "PPOB_BENEFIT", 0);
+  });
+
+  // Fail-closed: klaim yang tidak dapat diperiksa tidak boleh memberi benefit.
+  it("menolak callback SUCCESS tanpa nominal", async () => {
+    const user = await createApiUser("DOKUAMT03");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postDokuWebhook(order.invoiceNumber, "SUCCESS", {
+      omitAmount: true,
+    });
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+    const body = (await response.json()) as { code: string };
+    expect(body.code).toBe("DOKU_AMOUNT_INVALID");
+    await expectPendingOrder(order.id, { provider: null, providerReference: null });
+    await expectWalletTransactionCount(user.id, "PPOB_BENEFIT", 0);
+  });
+
+  it("menolak nominal dalam bentuk non-standar", async () => {
+    const user = await createApiUser("DOKUAMT04");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postDokuWebhook(order.invoiceNumber, "SUCCESS", {
+      amount: "5e5",
+    });
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+    await expectPendingOrder(order.id, { provider: null, providerReference: null });
+    await expectWalletTransactionCount(user.id, "PPOB_BENEFIT", 0);
+  });
+
+  it("menolak mata uang selain IDR", async () => {
+    const user = await createApiUser("DOKUAMT05");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postDokuWebhook(order.invoiceNumber, "SUCCESS", {
+      currency: "USD",
+    });
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+    const body = (await response.json()) as { code: string };
+    expect(body.code).toBe("DOKU_CURRENCY_INVALID");
+    await expectPendingOrder(order.id, { provider: null, providerReference: null });
+    await expectWalletTransactionCount(user.id, "PPOB_BENEFIT", 0);
+  });
+
+  it("menerima nominal yang sama persis dengan mata uang IDR eksplisit", async () => {
+    const user = await createApiUser("DOKUAMT06");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postDokuWebhook(order.invoiceNumber, "SUCCESS", {
+      currency: "IDR",
+    });
+
+    expect(response.status).toBe(200);
+    await expectPaidOrder(order.id, user.id, "SILVER");
+  });
 });
 
 async function api(
@@ -330,11 +418,20 @@ async function postDokuWebhook(
   options: {
     signature?: string;
     omitSignatureHeaders?: boolean;
+    /** Menimpa nominal yang diklaim callback. Bawaannya cocok dengan SILVER. */
+    amount?: string | number;
+    /** Menghilangkan nominal sama sekali, untuk menguji jalur fail-closed. */
+    omitAmount?: boolean;
+    currency?: string;
   } = {},
 ) {
   const target = "/api/v1/webhooks/doku";
   const body = {
-    order: { invoice_number: invoiceNumber, amount: "500000" },
+    order: {
+      invoice_number: invoiceNumber,
+      ...(options.omitAmount ? {} : { amount: options.amount ?? "500000" }),
+      ...(options.currency !== undefined ? { currency: options.currency } : {}),
+    },
     transaction: {
       status,
       original_request_id: `doku-${invoiceNumber}`,

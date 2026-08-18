@@ -437,6 +437,154 @@ describe.skipIf(!runIntegration)("Midtrans sandbox membership payments", () => {
     expect(response.status).toBe(200);
     await expectPaidOrder(order.id, user.id, "SILVER");
   });
+
+  // -------------------------------------------------------------------------
+  // Signature WAJIB, tanpa memandang NODE_ENV.
+  //
+  // Bentuk sebelumnya menerima notifikasi TANPA signature_key begitu saja
+  // selama NODE_ENV bukan "production" — dan endpoint ini tidak memerlukan
+  // autentikasi. Cukup nomor invoice dan nominalnya untuk melunasi order orang
+  // lain beserta seluruh bonusnya. Uji ini berjalan dengan NODE_ENV=test,
+  // sehingga ia gagal pada kode lama dan lulus pada kode yang sudah diperbaiki.
+  // -------------------------------------------------------------------------
+
+  it("menolak notifikasi tanpa signature_key dan tidak mengaktifkan apa pun", async () => {
+    const user = await createApiUser("SIG001");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await api("/api/v1/payments/midtrans/notification", {
+      method: "POST",
+      body: {
+        order_id: order.invoiceNumber,
+        transaction_status: "settlement",
+        transaction_id: `tx-${order.invoiceNumber}`,
+        status_code: "200",
+        gross_amount: "500000.00"
+        // signature_key sengaja tidak dikirim
+      }
+    });
+
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+    await expectUnpaidNoSideEffects(order.id, user.id);
+  });
+
+  it.each([
+    ["status_code", "status_code"],
+    ["gross_amount", "gross_amount"]
+  ])(
+    "menolak notifikasi tanpa %s karena signature tidak dapat dihitung",
+    async (_label, field) => {
+      const user = await createApiUser("SIG");
+      const order = await createOrderFor(user, "SILVER");
+
+      const body: Record<string, unknown> = {
+        order_id: order.invoiceNumber,
+        transaction_status: "settlement",
+        transaction_id: `tx-${order.invoiceNumber}`,
+        status_code: "200",
+        gross_amount: "500000.00",
+        signature_key: midtransSignature(order.invoiceNumber, "200", "500000.00")
+      };
+      delete body[field];
+
+      const response = await api("/api/v1/payments/midtrans/notification", {
+        method: "POST",
+        body
+      });
+
+      expect(response.status).toBeGreaterThanOrEqual(400);
+      expect(response.status).toBeLessThan(500);
+      await expectUnpaidNoSideEffects(order.id, user.id);
+    }
+  );
+
+  // -------------------------------------------------------------------------
+  // Fraud screening Midtrans.
+  //
+  // "capture" dulu ada di dalam successStatuses SEKALIGUS punya cabang khusus
+  // sesudahnya, sehingga cabang fraud-nya mati total. Akibatnya transaksi kartu
+  // yang ditahan FDS Midtrans untuk peninjauan manual justru langsung diaktifkan
+  // sebagai lunas.
+  // -------------------------------------------------------------------------
+
+  it("tidak mengaktifkan capture yang ditandai fraud challenge", async () => {
+    const user = await createApiUser("FRD001");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postNotification({
+      order_id: order.invoiceNumber,
+      transaction_status: "capture",
+      transaction_id: `tx-${order.invoiceNumber}`,
+      status_code: "200",
+      gross_amount: "500000.00",
+      fraud_status: "challenge"
+    });
+
+    // Ditahan, bukan gagal: order tetap menunggu keputusan peninjauan manual.
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { status: string } };
+    expect(body.data.status).toBe("PENDING");
+    await expectUnpaidNoSideEffects(order.id, user.id);
+  });
+
+  it("tidak mengaktifkan capture yang ditolak fraud screening", async () => {
+    const user = await createApiUser("FRD002");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postNotification({
+      order_id: order.invoiceNumber,
+      transaction_status: "capture",
+      transaction_id: `tx-${order.invoiceNumber}`,
+      status_code: "202",
+      gross_amount: "500000.00",
+      fraud_status: "deny"
+    });
+
+    expect(response.status).toBe(200);
+    await expectUnpaidNoSideEffects(order.id, user.id);
+    const updated = await prisma.membershipOrder.findUniqueOrThrow({
+      where: { id: order.id },
+      include: { invoice: true }
+    });
+    expect(updated.status).toBe("FAILED");
+    expect(updated.invoice?.status).toBe("FAILED");
+  });
+
+  it("mengaktifkan capture yang lolos fraud screening", async () => {
+    const user = await createApiUser("FRD003");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postNotification({
+      order_id: order.invoiceNumber,
+      transaction_status: "capture",
+      transaction_id: `tx-${order.invoiceNumber}`,
+      status_code: "200",
+      gross_amount: "500000.00",
+      fraud_status: "accept"
+    });
+
+    expect(response.status).toBe(200);
+    await expectPaidOrder(order.id, user.id, "SILVER");
+  });
+
+  // Penandaan fraud berlaku juga untuk settlement, bukan hanya capture.
+  it("tidak mengaktifkan settlement yang ditandai fraud challenge", async () => {
+    const user = await createApiUser("FRD004");
+    const order = await createOrderFor(user, "SILVER");
+
+    const response = await postNotification({
+      order_id: order.invoiceNumber,
+      transaction_status: "settlement",
+      transaction_id: `tx-${order.invoiceNumber}`,
+      status_code: "200",
+      gross_amount: "500000.00",
+      fraud_status: "challenge"
+    });
+
+    expect(response.status).toBe(200);
+    await expectUnpaidNoSideEffects(order.id, user.id);
+  });
 });
 
 async function api(path: string, options: {
@@ -500,6 +648,8 @@ async function postNotification(payload: {
   transaction_id: string;
   status_code: string;
   gross_amount: string;
+  /** Hasil fraud screening Midtrans. Signature tidak mencakupnya. */
+  fraud_status?: string;
 }) {
   return api("/api/v1/payments/midtrans/notification", {
     method: "POST",

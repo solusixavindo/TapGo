@@ -137,37 +137,26 @@ export class MembershipOrderController {
       throw new Error("Midtrans payment service is not configured");
     }
 
-    let result;
-    try {
-      result = await this.midtransPaymentServiceFactory().createMembershipPayment({
-        userId: req.auth!.userId,
-        role: req.auth!.role,
-        orderId: String(req.params.id),
-      });
-    } catch (error) {
-      if (
-        error instanceof AppError &&
-        error.code === "MIDTRANS_NOT_CONFIGURED" &&
-        !env.MIDTRANS_IS_PRODUCTION
-      ) {
-        const paidOrder = await this.membershipOrderService.markPaymentSuccess({
-          userId: req.auth!.userId,
-          role: req.auth!.role,
-          orderId: String(req.params.id),
-          paymentReference: `uat-sandbox-${String(req.params.id)}`,
-        });
-        result = {
-          snapToken: "",
-          redirectUrl: "",
-          orderId: paidOrder.id,
-          invoiceNumber: paidOrder.invoice?.number ?? "",
-          paid: true,
-          mode: "UAT_SANDBOX_AUTO_PAID",
-        };
-      } else {
-        throw error;
-      }
-    }
+    // Tidak ada jalur "auto-paid" di sini, dan itu disengaja.
+    //
+    // Sebelumnya kegagalan MIDTRANS_NOT_CONFIGURED ditangkap dan order langsung
+    // ditandai LUNAS lewat markPaymentSuccess dengan mode UAT_SANDBOX_AUTO_PAID,
+    // digerbangi hanya oleh `!env.MIDTRANS_IS_PRODUCTION`. Flag itu bernilai
+    // false secara bawaan dan tidak wajib ada di environment, sehingga satu
+    // variabel yang terlupa saat menyalakan penjualan cukup untuk membuat
+    // SETIAP pengguna dapat melunasi paket termahal tanpa membayar sepeser pun.
+    //
+    // Gerbang berbasis flag pembayaran juga keliru tempatnya: yang membedakan
+    // simulator dari transaksi nyata adalah environment aplikasi, bukan mode
+    // gateway. Simulator pembayaran yang sah sudah ada pada `paymentSuccess` di
+    // berkas ini — menuntut token pemilik order DAN mati keras di production.
+    //
+    // Gateway yang belum dikonfigurasi kini muncul sebagai 503 yang jujur.
+    const result = await this.midtransPaymentServiceFactory().createMembershipPayment({
+      userId: req.auth!.userId,
+      role: req.auth!.role,
+      orderId: String(req.params.id),
+    });
 
     res.json({ success: true, data: result });
   };

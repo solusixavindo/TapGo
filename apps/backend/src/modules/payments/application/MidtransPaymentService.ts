@@ -11,6 +11,7 @@ import { env } from "../../../config/env.js";
 import { AppError } from "../../../core/errors/AppError.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
 import { isAdminRole } from "../../../core/security/roleHierarchy.js";
+import { assertAuthoritativeAmount } from "./authoritativeAmount.js";
 
 type PrismaTransaction = Prisma.TransactionClient;
 
@@ -26,11 +27,6 @@ type MidtransNotificationPayload = {
   payment_type?: string;
   transaction_time?: string;
 };
-
-// Kontrak Midtrans: gross_amount adalah string desimal biasa (mis. "500000.00").
-// Hanya digit dengan opsional 1-2 desimal yang diterima — menolak scientific
-// notation, hexadecimal, underscore, comma, whitespace, NaN/Infinity, dan tanda.
-const STRICT_DECIMAL_AMOUNT = /^\d+(\.\d{1,2})?$/;
 
 /**
  * Metode bayar yang boleh ditawarkan untuk pembelian membership.
@@ -60,6 +56,14 @@ type MidtransSnapResponse = {
   error_messages?: string[];
 };
 
+/**
+ * Status yang BERPELUANG lunas — belum tentu lunas.
+ *
+ * Keanggotaan di sini hanya berarti "status transaksinya mengarah ke pelunasan".
+ * Keputusan akhirnya masih melewati fraud screening di resolveNotificationStatus,
+ * karena Midtrans dapat mengirim `capture` maupun `settlement` bersama
+ * `fraud_status` "challenge" (tahan, tinjau manual) atau "deny" (tolak).
+ */
 const successStatuses = new Set(["settlement", "capture"]);
 const pendingStatuses = new Set(["pending"]);
 const failedStatuses = new Set(["deny", "failure", "cancel", "expire"]);
@@ -366,73 +370,62 @@ export class MidtransPaymentService {
   // P1-2: nominal order hanya boleh berasal dari backend (invoice.amount),
   // bukan dari nilai callback. gross_amount yang hilang/malformed atau tidak
   // sama persis ditolak (fail-closed) sebelum aktivasi apa pun.
+  //
+  // Aturannya kini dibagi dengan jalur DOKU lewat authoritativeAmount.ts, supaya
+  // gateway baru tidak dapat lupa memeriksanya. Lihat catatan di berkas itu.
   private assertAuthoritativeAmount(
     authoritativeAmount: Prisma.Decimal,
     payload: MidtransNotificationPayload,
   ) {
-    // Currency, bila disediakan callback, wajib literal IDR.
-    if (payload.currency !== undefined && payload.currency !== "IDR") {
-      throw new AppError(
-        "Midtrans currency must be IDR",
-        StatusCodes.BAD_REQUEST,
-        "MIDTRANS_CURRENCY_INVALID",
-      );
-    }
-
-    // Validasi format string yang ketat sebelum parsing numerik, menolak
-    // representasi non-standar (5e5, 0x.., 500_000, "500000,00", whitespace,
-    // NaN/Infinity, tanda minus) yang bisa lolos parser Decimal yang permisif.
-    const raw = payload.gross_amount;
-    if (typeof raw !== "string" || !STRICT_DECIMAL_AMOUNT.test(raw)) {
-      throw new AppError(
-        "Midtrans gross_amount format is invalid",
-        StatusCodes.BAD_REQUEST,
-        "MIDTRANS_AMOUNT_INVALID",
-      );
-    }
-
-    const provided = new Prisma.Decimal(raw);
-
-    // Nominal harus positif (bukan nol/negatif).
-    if (!provided.isFinite() || provided.lte(0)) {
-      throw new AppError(
-        "Midtrans gross_amount must be a positive value",
-        StatusCodes.BAD_REQUEST,
-        "MIDTRANS_AMOUNT_INVALID",
-      );
-    }
-
-    // Harus sama persis dengan nominal order authoritative dari backend.
-    if (!provided.equals(new Prisma.Decimal(authoritativeAmount))) {
-      throw new AppError(
-        "Midtrans gross_amount does not match the authoritative order amount",
-        StatusCodes.BAD_REQUEST,
-        "MIDTRANS_AMOUNT_MISMATCH",
-      );
-    }
+    assertAuthoritativeAmount({
+      gateway: "Midtrans",
+      codePrefix: "MIDTRANS",
+      authoritativeAmount,
+      providedAmount: payload.gross_amount,
+      ...(payload.currency !== undefined
+        ? { providedCurrency: payload.currency }
+        : {}),
+    });
   }
 
+  /**
+   * Verifikasi signature notifikasi Midtrans. FAIL-CLOSED, tanpa memandang
+   * NODE_ENV.
+   *
+   * Bentuk sebelumnya memiliki dua jalan keluar yang keduanya mengembalikan
+   * "diterima" begitu saja saat NODE_ENV bukan "production":
+   *
+   *   if (!env.MIDTRANS_SERVER_KEY) { if (production) throw; return; }
+   *   if (!payload.signature_key)   { if (production) throw; return; }
+   *
+   * Endpoint ini tidak memerlukan autentikasi, dan `signature_key` dulu opsional
+   * pada validator. Gabungan keduanya berarti siapa pun dapat MENGHILANGKAN
+   * signature dan melunasi invoice mana pun — cukup dengan nomor invoice dan
+   * nominalnya — selama servernya tidak berjalan dengan NODE_ENV=production.
+   * "staging" dan "development" keduanya masuk enum NODE_ENV, dan .env
+   * pengembangan repo ini memang bernilai "development" sementara kredensial
+   * gateway-nya sudah production.
+   *
+   * NODE_ENV tidak boleh menjadi penentu apakah uang diverifikasi. Karena itu
+   * sekarang: server key tidak ada -> 503; signature tidak ada -> 401; bahan
+   * signature tidak lengkap -> 400. Tidak ada cabang yang mengembalikan
+   * "diterima" tanpa perbandingan digest.
+   */
   private verifySignature(payload: MidtransNotificationPayload) {
     if (!env.MIDTRANS_SERVER_KEY) {
-      if (env.NODE_ENV === "production") {
-        throw new AppError(
-          "Midtrans server key is required in production",
-          StatusCodes.SERVICE_UNAVAILABLE,
-          "MIDTRANS_SERVER_KEY_REQUIRED",
-        );
-      }
-      return;
+      throw new AppError(
+        "Midtrans server key is not configured",
+        StatusCodes.SERVICE_UNAVAILABLE,
+        "MIDTRANS_SERVER_KEY_REQUIRED",
+      );
     }
 
     if (!payload.signature_key) {
-      if (env.NODE_ENV === "production") {
-        throw new AppError(
-          "Midtrans signature is required in production",
-          StatusCodes.UNAUTHORIZED,
-          "MIDTRANS_SIGNATURE_REQUIRED",
-        );
-      }
-      return;
+      throw new AppError(
+        "Midtrans signature is required",
+        StatusCodes.UNAUTHORIZED,
+        "MIDTRANS_SIGNATURE_REQUIRED",
+      );
     }
 
     const requiredParts =
@@ -470,6 +463,26 @@ export class MidtransPaymentService {
     }
   }
 
+  /**
+   * Memetakan status notifikasi menjadi keputusan pembukuan.
+   *
+   * Urutan pemeriksaan di sini bukan kebetulan. Bentuk sebelumnya menaruh
+   * `"capture"` di dalam `successStatuses` DAN memiliki cabang khusus untuk
+   * `"capture"` sesudahnya:
+   *
+   *   if (successStatuses.has(status)) return { kind: "SUCCESS" };   // memuat "capture"
+   *   if (status === "capture") { ... fraud_status === "challenge" ... }  // TAK TERCAPAI
+   *
+   * Cabang kedua mati total, sehingga pemeriksaan fraud tidak pernah berjalan.
+   * Akibatnya transaksi kartu yang ditandai `fraud_status: "challenge"` oleh Fraud
+   * Detection System Midtrans — yang menurut kontrak Midtrans WAJIB ditinjau
+   * manual sebelum barang/jasa diserahkan — langsung diaktifkan sebagai lunas,
+   * beserta seluruh rangkaian bonus sponsor, bonus level, dan saldo PPOB.
+   *
+   * Sekarang fraud screening diperiksa LEBIH DULU, dan berlaku untuk `settlement`
+   * maupun `capture`. Keputusannya fail-closed: "challenge" menunggu, "deny"
+   * gagal, dan hanya ketiadaan penandaan atau "accept" yang melunasi.
+   */
   private resolveNotificationStatus(
     payload: MidtransNotificationPayload,
   ):
@@ -481,15 +494,23 @@ export class MidtransPaymentService {
         orderStatus: MembershipOrderStatus;
       } {
     const transactionStatus = payload.transaction_status.toLowerCase();
+    const fraudStatus = payload.fraud_status?.toLowerCase();
 
     if (successStatuses.has(transactionStatus)) {
+      // "challenge": Midtrans menahan transaksi untuk peninjauan manual. Tidak
+      // boleh dianggap lunas — order dibiarkan menunggu.
+      if (fraudStatus === "challenge") {
+        return { kind: "PENDING" };
+      }
+      // "deny": ditolak fraud screening. Terminal, bukan menunggu.
+      if (fraudStatus === "deny") {
+        return {
+          kind: "TERMINAL",
+          paymentStatus: "FAILED",
+          orderStatus: "FAILED",
+        };
+      }
       return { kind: "SUCCESS" };
-    }
-
-    if (transactionStatus === "capture") {
-      return payload.fraud_status === "challenge"
-        ? { kind: "PENDING" }
-        : { kind: "SUCCESS" };
     }
 
     if (pendingStatuses.has(transactionStatus)) {

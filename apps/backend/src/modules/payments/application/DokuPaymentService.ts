@@ -13,6 +13,7 @@ import { DokuClient } from "../../../lib/doku/client.js";
 import { DokuNotificationPayload } from "../../../lib/doku/types.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
 import { isAdminRole } from "../../../core/security/roleHierarchy.js";
+import { assertAuthoritativeAmount } from "./authoritativeAmount.js";
 
 const successStatuses = new Set(["SUCCESS", "PAID", "SETTLEMENT", "CAPTURE"]);
 const pendingStatuses = new Set(["PENDING", "INITIATED"]);
@@ -230,6 +231,20 @@ export class DokuPaymentService {
       invoiceNumber;
 
     if (status.kind === "SUCCESS") {
+      // Nominal callback WAJIB sama persis dengan nominal order authoritative.
+      //
+      // Jalur ini sebelumnya tidak memeriksanya sama sekali, sementara jalur
+      // Midtrans sudah punya kontrol P1-2 sejak lama. Akibatnya kurang bayar,
+      // lebih bayar, atau nominal yang tidak sinkron tetap mengaktifkan
+      // membership beserta bonus sponsor, bonus level, dan saldo PPOB-nya.
+      //
+      // Signature yang sah membuktikan pengirimnya DOKU; ia tidak membuktikan
+      // bahwa yang dibayar sama dengan yang ditagih. Dua hal yang berbeda.
+      //
+      // Diperiksa SEBELUM updatePendingPayment agar callback yang nominalnya
+      // salah tidak meninggalkan jejak metadata seolah-olah sedang diproses.
+      this.assertAuthoritativeAmount(invoice.amount, input.payload);
+
       await this.updatePendingPayment({
         invoiceId: invoice.id,
         orderId: invoice.orderId,
@@ -326,6 +341,31 @@ export class DokuPaymentService {
 
   checkPaymentStatus(referenceId: string) {
     return this.dokuClient.checkPaymentStatus(referenceId);
+  }
+
+  /**
+   * Nominal order hanya boleh berasal dari backend (invoice.amount).
+   *
+   * DOKU mengirim nominalnya pada `order.amount`, dan dapat berupa string
+   * maupun number. Nominal yang TIDAK ADA juga ditolak — fail-closed, karena
+   * klaim yang tidak dapat diperiksa tidak boleh menghasilkan benefit.
+   *
+   * Aturan lengkapnya dibagi dengan jalur Midtrans; lihat authoritativeAmount.ts.
+   */
+  private assertAuthoritativeAmount(
+    authoritativeAmount: Prisma.Decimal,
+    payload: DokuNotificationPayload,
+  ) {
+    const providedCurrency =
+      payload.order?.currency ?? (payload as { currency?: unknown }).currency;
+
+    assertAuthoritativeAmount({
+      gateway: "DOKU",
+      codePrefix: "DOKU",
+      authoritativeAmount,
+      providedAmount: payload.order?.amount,
+      ...(providedCurrency !== undefined ? { providedCurrency } : {}),
+    });
   }
 
   private resolveStatus(payload: DokuNotificationPayload):

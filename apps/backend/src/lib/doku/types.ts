@@ -78,7 +78,14 @@ export type DokuCheckoutResponse = {
 export type DokuNotificationPayload = {
   order?: {
     invoice_number?: string;
+    /**
+     * Nominal yang diklaim DOKU. Diverifikasi terhadap invoice.amount sebelum
+     * aktivasi apa pun — lihat DokuPaymentService.assertAuthoritativeAmount.
+     * Tipenya dua-duanya karena DOKU mengirim number pada sebagian kanal dan
+     * string pada kanal lain.
+     */
     amount?: string | number;
+    currency?: string;
   };
   transaction?: {
     status?: string;
