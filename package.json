@@ -20,5 +20,35 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "//overrides": [
+    "Menaikkan dependensi transitif yang punya advisory keamanan tetapi dipatok",
+    "ketat oleh paket induknya, sehingga `npm audit fix` tidak dapat menyentuhnya",
+    "tanpa upgrade major.",
+    "",
+    "postcss: Next 15 memaku postcss ke 8.4.31 secara persis, dan versi itu",
+    "terdampak GHSA-qx2v-qp2m-jg93 (XSS lewat </style> yang tidak di-escape) serta",
+    "tiga advisory path-traversal sourceMappingURL. Kenaikannya minor di dalam",
+    "major yang sama, jadi kompatibel API; Next memakukannya demi reproducibility,",
+    "bukan karena ada perubahan API.",
+    "",
+    "sharp: dependensi OPSIONAL Next untuk optimisasi gambar. Kedua aplikasi Next",
+    "di repo ini memakai output export dengan images.unoptimized=true, sehingga",
+    "sharp tidak pernah dipanggil — tetapi tetap terpasang dan tetap membawa",
+    "CVE libvips, jadi lebih baik dinaikkan daripada dibiarkan.",
+    "",
+    "CATATAN PENTING: npm hanya menerapkan overrides saat pohon dependensi",
+    "di-resolve ulang dari nol. `npm install` biasa akan MENGABAIKANNYA secara",
+    "diam-diam bila node_modules sudah ada. Setelah mengubah blok ini:",
+    "  rm -rf node_modules package-lock.json && npm install",
+    "  npm --workspace apps/backend run db:generate",
+    "Lalu verifikasi:",
+    "  npm --workspace apps/backend run build && npm --workspace apps/backend test",
+    "  NEXT_PUBLIC_TAPGO_API_BASE_URL=/api/v1 npm --workspace apps/admin_dashboard run build",
+    "  npm --workspace apps/landing-page run build"
+  ],
+  "overrides": {
+    "postcss": "^8.5.26",
+    "sharp": "^0.35.3"
   }
 }
