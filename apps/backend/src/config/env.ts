@@ -31,6 +31,24 @@ const envSchema = z.object({
   API_BASE_URL: z.string().url().optional(),
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url().optional(),
+  /**
+   * Redis untuk penyimpanan rate limit. SENGAJA terpisah dari REDIS_URL.
+   *
+   * Tanpa ini, express-rate-limit memakai MemoryStore per-proses. Di deployment
+   * multi-proses (PM2 cluster / beberapa instance di belakang Nginx) setiap
+   * proses menghitung sendiri, sehingga batas efektifnya berlipat sejumlah
+   * proses — dan setiap restart mereset hitungannya. Yang terdampak justru
+   * kontrol yang paling diandalkan: 3 permintaan OTP per 15 menit, 5 registrasi
+   * per nomor per jam, dan 20 percobaan login per 15 menit.
+   *
+   * Dibuat variabel tersendiri, BUKAN mewarisi REDIS_URL, supaya menyalakan
+   * penyimpanan bersama menjadi keputusan operasional yang eksplisit. Mewarisi
+   * REDIS_URL akan membuat environment yang punya Redis untuk keperluan lain
+   * mendadak menggantungkan rate limiting padanya tanpa ada yang memutuskan —
+   * termasuk lingkungan pengujian, yang memuat .env dan akan mulai gagal ketika
+   * Redis-nya kebetulan tidak berjalan.
+   */
+  RATE_LIMIT_REDIS_URL: z.string().url().optional(),
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
   JWT_ACCESS_TTL: z.string().default("15m"),

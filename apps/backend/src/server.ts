@@ -4,6 +4,7 @@ import { env } from "./config/env.js";
 import { disconnectPrisma, prisma } from "./config/prisma.js";
 import { redis } from "./config/redis.js";
 import { logger } from "./core/logger/logger.js";
+import { disconnectRateLimitStore } from "./core/security/rateLimitStore.js";
 import { DriverDocumentService } from "./modules/drivers/application/DriverDocumentService.js";
 import { MembershipDocumentService } from "./modules/memberships/application/MembershipDocumentService.js";
 import { attachRealtime } from "./realtime/socket.js";
@@ -75,6 +76,7 @@ async function shutdown(signal: string) {
   clearInterval(purgeTimer);
   server.close(async () => {
     await redis?.quit();
+    await disconnectRateLimitStore();
     await disconnectPrisma();
     process.exit(0);
   });

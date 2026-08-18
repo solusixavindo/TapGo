@@ -1,6 +1,20 @@
 import crypto from "node:crypto";
 import rateLimit from "express-rate-limit";
 import { normalizePhoneNumber } from "./phone.js";
+import { rateLimitStore } from "./rateLimitStore.js";
+
+/**
+ * Batas laju permintaan.
+ *
+ * SETIAP limiter di berkas ini WAJIB menyebar hasil rateLimitStore(). Tanpa itu
+ * ia diam-diam kembali memakai hitungan per-proses, dan batas yang tertulis di
+ * sini bukan lagi batas yang berlaku di deployment multi-proses. Argumen kedua
+ * menentukan perilaku saat Redis bermasalah — "closed" untuk limiter yang
+ * melindungi kredensial, "open" untuk limiter lalu lintas umum. Alasannya
+ * lengkap di rateLimitStore.ts.
+ *
+ * Nama pada argumen pertama menjadi bagian kunci Redis dan harus unik.
+ */
 
 /**
  * Kunci rate limit untuk identifier pemulihan.
@@ -10,6 +24,9 @@ import { normalizePhoneNumber } from "./phone.js";
  * memadai di sini: nilainya hanya hidup di memori proses dan bukan batas
  * keamanan — batas keamanan sesungguhnya ada pada digest ber-kunci di
  * core/security/otpDigest.ts.
+ *
+ * Sejak hitungan dipindahkan ke Redis, hash ini juga yang membuat identifier
+ * tidak pernah menjadi bagian nama kunci di Redis.
  */
 function recoveryIdentifierKey(req: { body?: unknown; ip?: string | undefined }): string {
   const body = req.body as { identifier?: unknown } | undefined;
@@ -34,6 +51,7 @@ export const authRateLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  ...rateLimitStore("auth", "closed"),
   message: {
     success: false,
     code: "RATE_LIMITED",
@@ -46,6 +64,7 @@ export const registerPhoneRateLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
+  ...rateLimitStore("register-phone", "closed"),
   keyGenerator: (req) => {
     const phone = typeof req.body?.phone === "string" ? req.body.phone : "";
     return phone ? `register-phone:${normalizePhoneNumber(phone)}` : `register-ip:${req.ip ?? "unknown"}`;
@@ -66,6 +85,7 @@ export const recoveryAccountRateLimiter = rateLimit({
   max: 3,
   standardHeaders: true,
   legacyHeaders: false,
+  ...rateLimitStore("recovery-account", "closed"),
   keyGenerator: recoveryIdentifierKey,
   message: recoveryRateLimitMessage
 });
@@ -79,6 +99,7 @@ export const recoveryIpRateLimiter = rateLimit({
   max: 15,
   standardHeaders: true,
   legacyHeaders: false,
+  ...rateLimitStore("recovery-ip", "closed"),
   message: recoveryRateLimitMessage
 });
 
@@ -92,6 +113,7 @@ export const recoveryVerifyRateLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  ...rateLimitStore("recovery-verify", "closed"),
   keyGenerator: recoveryIdentifierKey,
   message: recoveryRateLimitMessage
 });
@@ -102,6 +124,7 @@ export const verificationRateLimiter = rateLimit({
   max: 6,
   standardHeaders: true,
   legacyHeaders: false,
+  ...rateLimitStore("verification", "closed"),
   keyGenerator: (req) => `verification-user:${req.auth?.userId ?? req.ip ?? "unknown"}`,
   message: recoveryRateLimitMessage
 });
@@ -110,7 +133,8 @@ export const apiRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 120,
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  ...rateLimitStore("api", "open")
 });
 
 export const adminRateLimiter = rateLimit({
@@ -118,6 +142,7 @@ export const adminRateLimiter = rateLimit({
   max: 80,
   standardHeaders: true,
   legacyHeaders: false,
+  ...rateLimitStore("admin", "open"),
   message: {
     success: false,
     code: "RATE_LIMITED",
@@ -130,6 +155,7 @@ export const paymentRateLimiter = rateLimit({
   max: 40,
   standardHeaders: true,
   legacyHeaders: false,
+  ...rateLimitStore("payment", "open"),
   message: {
     success: false,
     code: "RATE_LIMITED",
@@ -143,6 +169,7 @@ export const rideWriteRateLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  ...rateLimitStore("ride-write", "open"),
   message: {
     success: false,
     code: "RIDE_RATE_LIMITED",
@@ -156,6 +183,7 @@ export const rideLocationRateLimiter = rateLimit({
   max: 120,
   standardHeaders: true,
   legacyHeaders: false,
+  ...rateLimitStore("ride-location", "open"),
   message: {
     success: false,
     code: "RIDE_LOCATION_RATE_LIMITED",
@@ -168,6 +196,7 @@ export const supportRateLimiter = rateLimit({
   max: 12,
   standardHeaders: true,
   legacyHeaders: false,
+  ...rateLimitStore("support", "open"),
   message: {
     success: false,
     code: "SUPPORT_RATE_LIMITED",
