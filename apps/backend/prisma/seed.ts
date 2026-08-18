@@ -3,10 +3,42 @@ import { hashPassword } from "../src/core/security/passwordHasher.js";
 
 const prisma = new PrismaClient();
 
+/**
+ * Password akun demo diambil dari environment, dan seed GAGAL bila tidak ada.
+ *
+ * Sebelumnya ketiga password ditulis harfiah di berkas ini — dan berkas ini
+ * ter-track di Git, berbeda dari seed-admin.ts/seed-demo.ts/seed-uat-credentials.ts
+ * yang sudah dikecualikan .gitignore. Akibatnya `npm run db:seed`, langkah setup
+ * yang didokumentasikan di README, membuat akun SUPER_ADMIN dengan password yang
+ * dapat dibaca siapa pun yang memegang salinan repositori.
+ *
+ * Tidak ada nilai bawaan di sini, dan itu disengaja: seed yang gagal terang-terangan
+ * jauh lebih baik daripada seed yang berhasil membuat akun istimewa dengan
+ * password yang sudah bocor. Pola ini sama dengan scripts/seed-founder-chairman.ts.
+ */
+const MIN_SEED_PASSWORD_LENGTH = 12;
+
+function requireSeedPassword(variable: string): string {
+  const value = process.env[variable];
+  if (!value || value.length < MIN_SEED_PASSWORD_LENGTH) {
+    throw new Error(
+      `${variable} wajib disetel dengan minimal ${MIN_SEED_PASSWORD_LENGTH} karakter sebelum menjalankan seed. ` +
+        "Password akun seed TIDAK boleh ditanam di dalam kode."
+    );
+  }
+  return value;
+}
+
 async function main() {
-  const adminPasswordHash = await hashPassword("Admin@TapGo2026!");
-  const driverPasswordHash = await hashPassword("Driver@TapGo2026!");
-  const userPasswordHash = await hashPassword("User@TapGo2026!");
+  // Dibaca SEBELUM pekerjaan apa pun menyentuh database, supaya konfigurasi yang
+  // kurang tidak meninggalkan seed setengah jalan.
+  const adminPassword = requireSeedPassword("SEED_ADMIN_PASSWORD");
+  const driverPassword = requireSeedPassword("SEED_DRIVER_PASSWORD");
+  const userPassword = requireSeedPassword("SEED_USER_PASSWORD");
+
+  const adminPasswordHash = await hashPassword(adminPassword);
+  const driverPasswordHash = await hashPassword(driverPassword);
+  const userPasswordHash = await hashPassword(userPassword);
   const benefitRates = [
     { level: 1, commissionRate: 8 },
     { level: 2, commissionRate: 4 },

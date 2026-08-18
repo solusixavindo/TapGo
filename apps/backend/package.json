@@ -24,7 +24,8 @@
     "cleanup:prelaunch": "tsx ../../scripts/pre-launch-cleanup.ts",
     "doku:capture-webhook": "tsx ../../scripts/capture-doku-webhook.ts",
     "admin:vip-bootstrap": "tsx scripts/super-admin-vip-bootstrap.ts",
-    "admin:scope-bootstrap": "tsx scripts/admin-scope-bootstrap.ts"
+    "admin:scope-bootstrap": "tsx scripts/admin-scope-bootstrap.ts",
+    "audit:leaked-seed": "tsx scripts/leaked-seed-credential-audit.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
