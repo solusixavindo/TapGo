@@ -21,6 +21,7 @@ import { membershipRouter } from "./modules/memberships/presentation/membership.
 import { midtransRouter } from "./modules/payments/presentation/midtrans.routes.js";
 import { dokuPaymentRouter, dokuWebhookRouter } from "./modules/payments/presentation/doku.routes.js";
 import { ppobRouter } from "./modules/ppob/presentation/ppob.routes.js";
+import { digiflazzWebhookRouter } from "./modules/ppob/presentation/digiflazz-webhook.routes.js";
 import { profitSharingRouter } from "./modules/profit-sharing/presentation/profit-sharing.routes.js";
 import { referralRouter } from "./modules/referrals/presentation/referral.routes.js";
 import { driverReviewRouter } from "./modules/rides/presentation/driverReview.routes.js";
@@ -100,6 +101,10 @@ export function createApp() {
   // Release 2 — domain PPOB (Stage R2.7). Pembelian berada di bawah
   // paymentRateLimiter di dalam router, sama seperti jalur pembayaran lain.
   app.use("/api/v1/ppob", ppobRouter);
+  // Webhook provider PPOB (Stage R2.8). TANPA auth — keaslian dibuktikan
+  // HMAC X-Hub-Signature di dalam router; rate limit mengikuti jalur webhook
+  // pembayaran lain.
+  app.use("/api/v1/webhooks/ppob", paymentRateLimiter, digiflazzWebhookRouter);
   // Release 2 — domain Ride. Tidak diekspos ke aplikasi Play Release 1.
   app.use("/api/v1/rides", rideRouter);
   // URUTAN PENTING. driverRideRouter memasang pemeriksa kapabilitas untuk

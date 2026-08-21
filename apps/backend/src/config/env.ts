@@ -94,12 +94,32 @@ const envSchema = z.object({
   // Release 1 tidak memakai realtime/chat. Fail-closed: Socket.IO hanya
   // di-attach bila diaktifkan eksplisit ("true"). Nilai lain -> false.
   REALTIME_ENABLED: strictEnvBoolean(false),
-  /// Adapter provider PPOB (Stage R2.7). Default "disabled": setiap pembelian
-  /// dibatalkan dengan refund penuh dan 503 PPOB_PROVIDER_DISABLED. "stub"
-  /// menyalakan adapter sintetis deterministik untuk UAT. Nama provider nyata
-  /// (R2.8) sengaja belum diterima di sini — nilai tak dikenal menggagalkan
-  /// boot, bukan jatuh ke perilaku tak terduga.
-  PPOB_PROVIDER: z.enum(["disabled", "stub"]).default("disabled"),
+  /// Adapter provider PPOB (Stage R2.7/R2.8). Default "disabled": setiap
+  /// pembelian dibatalkan dengan refund penuh dan 503 PPOB_PROVIDER_DISABLED.
+  /// "stub" menyalakan adapter sintetis deterministik untuk UAT. "digiflazz"
+  /// (Stage R2.8) menyalakan provider nyata — WAJIB disertai kredensial di
+  /// bawah, kalau tidak resolusi provider melempar saat boot route dipakai.
+  /// Nilai tak dikenal menggagalkan boot, bukan jatuh ke perilaku tak terduga.
+  PPOB_PROVIDER: z.enum(["disabled", "stub", "digiflazz"]).default("disabled"),
+  /// Kredensial Digiflazz (Stage R2.8). Backend-only — JANGAN pernah dikirim
+  /// ke klien mana pun; sign dihitung di server.
+  DIGIFLAZZ_USERNAME: z.string().optional(),
+  DIGIFLAZZ_API_KEY: z.string().optional(),
+  /// Override base URL untuk stub server pada integration test. Default
+  /// https://api.digiflazz.com/v1.
+  DIGIFLAZZ_BASE_URL: z.string().url().optional(),
+  /// Paksa mode testing Digiflazz (testing=true). Di luar production mode
+  /// testing SELALU aktif apa pun nilainya — saldo seller nyata tidak pernah
+  /// tersentuh oleh UAT.
+  DIGIFLAZZ_TESTING: strictEnvBoolean(false),
+  /// Secret webhook Digiflazz (X-Hub-Signature = HMAC-SHA1 raw body).
+  /// SENGAJA terpisah dari API key: keduanya dikonfigurasi di tempat berbeda
+  /// pada panel Digiflazz. Endpoint webhook fail-closed (503) bila kosong.
+  DIGIFLAZZ_WEBHOOK_SECRET: z.string().min(16).optional(),
+  /// Worker rekonsiliasi PPOB (Stage R2.8). Fail-closed default mati; hanya
+  /// bermakna saat provider mendukung cek status (digiflazz).
+  PPOB_RECONCILE_ENABLED: strictEnvBoolean(false),
+  PPOB_RECONCILE_INTERVAL_MS: z.coerce.number().int().min(15000).default(60000),
   DOKU_CLIENT_ID: z.string().optional(),
   DOKU_SECRET_KEY: z.string().optional(),
   DOKU_API_KEY: z.string().optional(),

@@ -1749,6 +1749,9 @@ model PpobProduct {
   description  String?           @db.VarChar(240)
   price        Decimal           @db.Decimal(14, 2)
   adminFee     Decimal           @default(0) @map("admin_fee") @db.Decimal(14, 2)
+  /// Kode produk di sisi provider (mis. buyer_sku_code Digiflazz). Nullable:
+  /// bila kosong, adapter memakai sku internal apa adanya.
+  providerSku  String?           @map("provider_sku") @db.VarChar(60)
   isActive     Boolean           @default(true) @map("is_active")
   sortOrder    Int               @default(0) @map("sort_order")
   createdAt    DateTime          @default(now()) @map("created_at")

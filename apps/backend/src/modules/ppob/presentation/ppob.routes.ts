@@ -9,6 +9,7 @@ import { paymentRateLimiter } from "../../../core/security/rateLimit.js";
 import { PpobService } from "../application/PpobService.js";
 import { PpobProviderGateway } from "../domain/ppobProvider.js";
 import { PrismaPpobRepository } from "../infrastructure/PrismaPpobRepository.js";
+import { DigiflazzPpobProvider } from "../infrastructure/DigiflazzPpobProvider.js";
 import { DisabledPpobProvider } from "../infrastructure/DisabledPpobProvider.js";
 import { StubPpobProvider } from "../infrastructure/StubPpobProvider.js";
 import {
@@ -19,14 +20,18 @@ import {
 } from "./ppob.validators.js";
 
 /**
- * Pemilihan adapter provider. Fail-closed: nilai selain "stub" (termasuk nama
- * provider nyata yang belum diimplementasikan pada R2.8) jatuh ke adapter
- * disabled yang selalu membatalkan pembelian dengan refund penuh — tidak ada
- * konfigurasi salah yang bisa membuat saldo terdebit tanpa pemenuhan.
+ * Pemilihan adapter provider. Fail-closed: nilai selain "stub"/"digiflazz"
+ * jatuh ke adapter disabled yang selalu membatalkan pembelian dengan refund
+ * penuh — tidak ada konfigurasi salah yang bisa membuat saldo terdebit tanpa
+ * pemenuhan. "digiflazz" tanpa kredensial melempar saat modul dimuat (boot
+ * gagal cepat dan jelas, bukan kegagalan sunyi pada transaksi pertama).
  */
 function resolvePpobProvider(): PpobProviderGateway {
   if (env.PPOB_PROVIDER === "stub") {
     return new StubPpobProvider();
+  }
+  if (env.PPOB_PROVIDER === "digiflazz") {
+    return DigiflazzPpobProvider.fromEnv();
   }
   return new DisabledPpobProvider();
 }

@@ -16,6 +16,12 @@ function generatePpobReference(): string {
   return `PPB-${suffix}`;
 }
 
+/**
+ * Kunci advisory lock Postgres untuk worker rekonsiliasi. Angka arbitrer
+ * dalam namespace int4 — jangan dipakai modul lain.
+ */
+const PPOB_RECONCILE_LOCK_KEY = 727008;
+
 export class PpobService {
   constructor(
     private readonly repository: PpobRepository,
@@ -122,7 +128,13 @@ export class PpobService {
       throw error;
     }
 
-    return { transaction: await this.dispatchToProvider(pending), replayed: false };
+    return {
+      transaction: await this.dispatchToProvider(
+        pending,
+        product.providerSku ?? product.sku
+      ),
+      replayed: false
+    };
   }
 
   /**
@@ -130,11 +142,15 @@ export class PpobService {
    * supaya langkah pasca-commit ini juga dapat dipakai ulang oleh worker
    * rekonsiliasi pada R2.8 tanpa menduplikasi alur.
    */
-  private async dispatchToProvider(pending: PpobTransaction): Promise<PpobTransaction> {
+  private async dispatchToProvider(
+    pending: PpobTransaction,
+    providerSku: string
+  ): Promise<PpobTransaction> {
     let outcome;
     try {
       outcome = await this.provider.purchase({
         publicReference: pending.publicReference,
+        providerSku,
         sku: pending.skuSnapshot,
         category: pending.category,
         targetNumber: pending.targetNumber,
@@ -178,6 +194,128 @@ export class PpobService {
     return this.repository.transaction((tx) =>
       this.repository.finalizePurchase({ transactionId: pending.id, outcome }, tx)
     );
+  }
+
+  /**
+   * Finalisasi dari notifikasi provider (Stage R2.8).
+   *
+   * Keaslian payload sudah diverifikasi lapisan route (HMAC). Metode ini
+   * idempoten by construction: transaksi final (SUCCESS/FAILED) dijawab apa
+   * adanya, transaksi PENDING tanpa jejak provider ditolak lunak (webhook
+   * "create" yang mendahului jawaban API), dan seluruh kompensasi refund
+   * diwarisi dari finalizePurchase — tidak akan pernah terjadi dua kali.
+   */
+  async finalizeFromProviderNotification(input: {
+    publicReference: string;
+    outcome:
+      | { kind: "SUCCESS"; providerReference: string; serialNumber: string | null }
+      | {
+          kind: "FAILED";
+          providerReference: string | null;
+          failureCode: string;
+          failureReason: string;
+        };
+  }): Promise<{ state: "finalized" | "already-final" | "deferred" | "ignored" }> {
+    const transaction = await this.repository.findByPublicReference(input.publicReference);
+    if (!transaction) {
+      // Referensi tak dikenal: jawab ignored (route tetap 200 agar provider
+      // tidak retry selamanya — bisa jadi transaksi sistem lain yang berbagi
+      // webhook URL yang sama).
+      return { state: "ignored" };
+    }
+    if (transaction.status === "SUCCESS" || transaction.status === "FAILED") {
+      return { state: "already-final" };
+    }
+    if (transaction.status === "PENDING" && !transaction.providerReference) {
+      // Jawaban API belum selesai ditulis (webhook "create" tiba lebih dulu).
+      // Provider akan mengirim event "update" / retry; men-finalkan sekarang
+      // berisiko menimpa outcome otoritatif dari jawaban API.
+      return { state: "deferred" };
+    }
+    await this.repository.transaction((tx) =>
+      this.repository.finalizePurchase(
+        { transactionId: transaction.id, outcome: input.outcome },
+        tx
+      )
+    );
+    return { state: "finalized" };
+  }
+
+  /**
+   * Satu siklus rekonsiliasi (Stage R2.8).
+   *
+   * 1. Eskalasi PENDING basi (tanpa jawaban provider) menjadi PROCESSING.
+   * 2. Cek status tiap transaksi non-final ke provider, finalkan hasilnya.
+   *
+   * Aman dijalankan banyak instance: pg advisory lock memastikan hanya satu
+   * siklus berjalan pada satu waktu; finalizePurchase tetap idempoten bila
+   * webhook dan worker menyentuh transaksi yang sama.
+   */
+  async reconcileOpenTransactions(options?: {
+    olderThanMinutes?: number;
+    batchSize?: number;
+    lockKey?: number;
+  }): Promise<{ skipped: boolean; escalated: number; finalized: number; errors: number }> {
+    if (!this.provider.checkStatus) {
+      return { skipped: true, escalated: 0, finalized: 0, errors: 0 };
+    }
+    const olderThanMinutes = options?.olderThanMinutes ?? 5;
+    const batchSize = options?.batchSize ?? 50;
+    const lockKey = options?.lockKey ?? PPOB_RECONCILE_LOCK_KEY;
+    const olderThan = new Date(Date.now() - olderThanMinutes * 60 * 1000);
+
+    const lockHeld = await this.repository.transaction((tx) =>
+      this.repository.tryAcquireReconcileLock(lockKey, tx)
+    );
+    if (!lockHeld) {
+      return { skipped: true, escalated: 0, finalized: 0, errors: 0 };
+    }
+
+    const escalated = await this.repository.transaction((tx) =>
+      this.repository.escalateStalePending(
+        {
+          olderThan,
+          provider: this.provider.name,
+          providerReference: `reconcile:${this.provider.name}`,
+          limit: batchSize
+        },
+        tx
+      )
+    );
+
+    const open = await this.repository.listOpenTransactions(olderThan, batchSize);
+    let finalized = 0;
+    let errors = 0;
+    for (const item of open) {
+      if (item.provider !== this.provider.name) {
+        continue;
+      }
+      try {
+        const outcome = await this.provider.checkStatus({
+          publicReference: item.publicReference,
+          providerSku: item.providerSku,
+          sku: item.skuSnapshot,
+          category: item.category,
+          targetNumber: item.targetNumber
+        });
+        if (outcome.kind === "PROCESSING") {
+          continue;
+        }
+        await this.repository.transaction((tx) =>
+          this.repository.finalizePurchase({ transactionId: item.id, outcome }, tx)
+        );
+        finalized += 1;
+      } catch (error) {
+        // Kegagalan inquiry TIDAK pernah mengubah status — siklus berikutnya
+        // mencoba lagi. Hanya jawaban FAILED eksplisit yang memicu refund.
+        errors += 1;
+        logger.warn(
+          { err: error, reference: item.publicReference },
+          "PPOB reconciliation inquiry failed"
+        );
+      }
+    }
+    return { skipped: false, escalated, finalized, errors };
   }
 
   listMyTransactions(userId: string, limit: number) {

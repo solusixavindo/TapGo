@@ -2,6 +2,7 @@ import { PpobCategory, Prisma, PrismaClient } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../core/errors/AppError.js";
 import {
+  PpobOpenTransaction,
   PpobProductRecord,
   PpobProductView,
   PpobRepository,
@@ -16,7 +17,8 @@ const PRODUCT_SELECT = {
   name: true,
   description: true,
   price: true,
-  adminFee: true
+  adminFee: true,
+  providerSku: true
 } satisfies Prisma.PpobProductSelect;
 
 export class PrismaPpobRepository implements PpobRepository {
@@ -251,5 +253,92 @@ export class PrismaPpobRepository implements PpobRepository {
     return this.prisma.ppobTransaction.findFirst({
       where: { userId, publicReference }
     });
+  }
+
+  findByPublicReference(publicReference: string): Promise<PpobTransactionRecord | null> {
+    return this.prisma.ppobTransaction.findUnique({
+      where: { publicReference }
+    });
+  }
+
+  async listOpenTransactions(olderThan: Date, limit: number): Promise<PpobOpenTransaction[]> {
+    const rows = await this.prisma.ppobTransaction.findMany({
+      where: {
+        status: { in: ["PENDING", "PROCESSING"] },
+        createdAt: { lt: olderThan }
+      },
+      select: {
+        id: true,
+        publicReference: true,
+        userId: true,
+        skuSnapshot: true,
+        category: true,
+        targetNumber: true,
+        provider: true,
+        product: { select: { providerSku: true } }
+      },
+      orderBy: { createdAt: "asc" },
+      take: limit
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      publicReference: row.publicReference,
+      userId: row.userId,
+      skuSnapshot: row.skuSnapshot,
+      category: row.category,
+      targetNumber: row.targetNumber,
+      provider: row.provider,
+      providerSku: row.product.providerSku ?? row.skuSnapshot
+    }));
+  }
+
+  async escalateStalePending(
+    input: {
+      olderThan: Date;
+      provider: string;
+      providerReference: string;
+      limit: number;
+    },
+    tx: Prisma.TransactionClient
+  ): Promise<number> {
+    // Ambil kandidat dulu supaya `take` dapat diterapkan; updateMany tidak
+    // mendukung LIMIT. Klausa status pada update tetap dijaga agar finalisasi
+    // yang menyelip di antara findMany dan updateMany tidak ditimpa.
+    const candidates = await tx.ppobTransaction.findMany({
+      where: {
+        status: "PENDING",
+        provider: input.provider,
+        createdAt: { lt: input.olderThan }
+      },
+      select: { id: true },
+      orderBy: { createdAt: "asc" },
+      take: input.limit
+    });
+    if (candidates.length === 0) {
+      return 0;
+    }
+    const updated = await tx.ppobTransaction.updateMany({
+      where: {
+        id: { in: candidates.map((row) => row.id) },
+        status: "PENDING"
+      },
+      data: {
+        status: "PROCESSING",
+        providerReference: input.providerReference
+      }
+    });
+    return updated.count;
+  }
+
+  async tryAcquireReconcileLock(
+    key: number,
+    tx: Prisma.TransactionClient
+  ): Promise<boolean> {
+    // pg_advisory_xact_lock lepas otomatis saat transaksi berakhir — tidak ada
+    // kunci yang tertinggal bila proses mati, dan tidak bergantung pada Redis.
+    const rows = await tx.$queryRaw<Array<{ acquired: boolean }>>`
+      SELECT pg_try_advisory_xact_lock(${key}) AS acquired
+    `;
+    return rows[0]?.acquired === true;
   }
 }

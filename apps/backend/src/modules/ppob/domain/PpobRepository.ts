@@ -11,9 +11,25 @@ export type PpobProductView = {
 };
 
 /// Produk lengkap dengan id internal — hanya dipakai di dalam service.
-export type PpobProductRecord = PpobProductView & { id: string };
+export type PpobProductRecord = PpobProductView & {
+  id: string;
+  /// Kode produk di sisi provider; null berarti sku internal dipakai apa adanya.
+  providerSku: string | null;
+};
 
 export type PpobTransactionRecord = PpobTransaction;
+
+/// Transaksi non-final yang menunggu kepastian provider (Stage R2.8).
+export type PpobOpenTransaction = {
+  id: string;
+  publicReference: string;
+  userId: string;
+  skuSnapshot: string;
+  category: PpobCategory;
+  targetNumber: string;
+  provider: string;
+  providerSku: string;
+};
 
 export interface PpobRepository {
   transaction<T>(handler: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T>;
@@ -73,4 +89,31 @@ export interface PpobRepository {
     userId: string,
     publicReference: string
   ): Promise<PpobTransactionRecord | null>;
+
+  /// Pencarian untuk webhook: transaksi berdasar referensi publik (tanpa user).
+  findByPublicReference(publicReference: string): Promise<PpobTransactionRecord | null>;
+
+  /// Transaksi non-final yang lebih tua dari ambang, untuk worker rekonsiliasi.
+  listOpenTransactions(olderThan: Date, limit: number): Promise<PpobOpenTransaction[]>;
+
+  /**
+   * Eskalasi PENDING → PROCESSING untuk transaksi yang sudah terlalu lama
+   * menunggu tanpa jawaban provider apa pun (mis. proses mati sebelum dispatch,
+   * atau timeout di tengah). Mengembalikan jumlah yang dieskalasi.
+   */
+  escalateStalePending(
+    input: {
+      olderThan: Date;
+      provider: string;
+      providerReference: string;
+      limit: number;
+    },
+    tx: Prisma.TransactionClient
+  ): Promise<number>;
+
+  /**
+   * Kunci rekonsiliasi antar-instance lewat pg_advisory_xact_lock. Mengembalikan
+   * false bila instance lain sedang memegang kunci — aman tanpa Redis.
+   */
+  tryAcquireReconcileLock(key: number, tx: Prisma.TransactionClient): Promise<boolean>;
 }
