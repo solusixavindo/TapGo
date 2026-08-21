@@ -7,6 +7,9 @@ import { logger } from "./core/logger/logger.js";
 import { disconnectRateLimitStore } from "./core/security/rateLimitStore.js";
 import { DriverDocumentService } from "./modules/drivers/application/DriverDocumentService.js";
 import { MembershipDocumentService } from "./modules/memberships/application/MembershipDocumentService.js";
+import { PpobService } from "./modules/ppob/application/PpobService.js";
+import { PrismaPpobRepository } from "./modules/ppob/infrastructure/PrismaPpobRepository.js";
+import { DigiflazzPpobProvider } from "./modules/ppob/infrastructure/DigiflazzPpobProvider.js";
 import { attachRealtime } from "./realtime/socket.js";
 
 const app = createApp();
@@ -67,6 +70,40 @@ const purgeTimer = setInterval(() => void purgeExpiredDocuments(), PURGE_INTERVA
 purgeTimer.unref();
 void purgeExpiredDocuments();
 
+/**
+ * Worker rekonsiliasi PPOB (Stage R2.8).
+ *
+ * Fail-closed: hanya berjalan bila PPOB_RECONCILE_ENABLED=true DAN provider
+ * mendukung cek status (digiflazz). Advisory lock Postgres memastikan hanya
+ * satu instance yang menjalankan siklus pada satu waktu, dan finalisasi tetap
+ * idempoten bila webhook dan worker menyentuh transaksi yang sama.
+ *
+ * Dipasang di server.ts (bukan createApp) dengan alasan yang sama seperti
+ * penyapu dokumen: test mengimpor createApp puluhan kali dan tidak boleh ikut
+ * menyalakan timer latar.
+ */
+let ppobReconcileTimer: NodeJS.Timeout | undefined;
+if (env.PPOB_RECONCILE_ENABLED && env.PPOB_PROVIDER === "digiflazz") {
+  const ppobService = new PpobService(
+    new PrismaPpobRepository(prisma),
+    DigiflazzPpobProvider.fromEnv()
+  );
+  const runReconcileCycle = async () => {
+    try {
+      const result = await ppobService.reconcileOpenTransactions();
+      if (!result.skipped && (result.escalated > 0 || result.finalized > 0 || result.errors > 0)) {
+        // Hanya jumlah — tidak pernah referensi maupun nomor tujuan.
+        logger.info(result, "PPOB reconciliation cycle completed");
+      }
+    } catch (error) {
+      logger.error({ err: error }, "PPOB reconciliation cycle failed");
+    }
+  };
+  ppobReconcileTimer = setInterval(() => void runReconcileCycle(), env.PPOB_RECONCILE_INTERVAL_MS);
+  ppobReconcileTimer.unref();
+  void runReconcileCycle();
+}
+
 const server = httpServer.listen(env.PORT, env.HOST, () => {
   logger.info({ host: env.HOST, port: env.PORT }, "TapGo backend is running");
 });
@@ -74,6 +111,9 @@ const server = httpServer.listen(env.PORT, env.HOST, () => {
 async function shutdown(signal: string) {
   logger.info({ signal }, "Shutting down server");
   clearInterval(purgeTimer);
+  if (ppobReconcileTimer) {
+    clearInterval(ppobReconcileTimer);
+  }
   server.close(async () => {
     await redis?.quit();
     await disconnectRateLimitStore();

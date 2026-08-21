@@ -1,34 +1,144 @@
+import { PpobTransaction, Prisma } from "@prisma/client";
 import { Router } from "express";
 import { prisma } from "../../../config/prisma.js";
+import { env } from "../../../config/env.js";
 import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
 import { requireAuth } from "../../../core/security/authContext.js";
 import { paymentRateLimiter } from "../../../core/security/rateLimit.js";
-import { PpobCatalogService } from "../application/PpobCatalogService.js";
-import { PpobOrderService } from "../application/PpobOrderService.js";
-import { NoPpobProviderGateway } from "../infrastructure/NoPpobProviderGateway.js";
+import { PpobService } from "../application/PpobService.js";
+import { PpobProviderGateway } from "../domain/ppobProvider.js";
 import { PrismaPpobRepository } from "../infrastructure/PrismaPpobRepository.js";
-import { PpobController } from "./ppob.controller.js";
+import { DigiflazzPpobProvider } from "../infrastructure/DigiflazzPpobProvider.js";
+import { DisabledPpobProvider } from "../infrastructure/DisabledPpobProvider.js";
+import { StubPpobProvider } from "../infrastructure/StubPpobProvider.js";
 import {
-  ppobCreateOrderSchema,
-  ppobInquirySchema,
-  ppobOrderDetailSchema,
-  ppobOrderListSchema
+  ppobHistoryQuerySchema,
+  ppobProductsQuerySchema,
+  ppobPurchaseSchema,
+  ppobReferenceSchema
 } from "./ppob.validators.js";
 
-// Stage R2.7: provider gateway fail-closed. Stage R2.8 menukar
-// NoPpobProviderGateway dengan gateway biller nyata di titik ini saja.
-const repository = new PrismaPpobRepository(prisma);
-const providerGateway = new NoPpobProviderGateway();
-const catalogService = new PpobCatalogService(repository);
-const orderService = new PpobOrderService(repository, providerGateway);
-const controller = new PpobController(catalogService, orderService);
+/**
+ * Pemilihan adapter provider. Fail-closed: nilai selain "stub"/"digiflazz"
+ * jatuh ke adapter disabled yang selalu membatalkan pembelian dengan refund
+ * penuh — tidak ada konfigurasi salah yang bisa membuat saldo terdebit tanpa
+ * pemenuhan. "digiflazz" tanpa kredensial melempar saat modul dimuat (boot
+ * gagal cepat dan jelas, bukan kegagalan sunyi pada transaksi pertama).
+ */
+function resolvePpobProvider(): PpobProviderGateway {
+  if (env.PPOB_PROVIDER === "stub") {
+    return new StubPpobProvider();
+  }
+  if (env.PPOB_PROVIDER === "digiflazz") {
+    return DigiflazzPpobProvider.fromEnv();
+  }
+  return new DisabledPpobProvider();
+}
+
+const service = new PpobService(new PrismaPpobRepository(prisma), resolvePpobProvider());
+
+/** Rupiah disajikan sebagai number; nilai PPOB jauh di bawah batas aman. */
+function money(value: Prisma.Decimal): number {
+  return Number(value.toFixed(2));
+}
+
+function serializeTransaction(tx: PpobTransaction) {
+  return {
+    reference: tx.publicReference,
+    sku: tx.skuSnapshot,
+    productName: tx.productNameSnapshot,
+    brand: tx.brandSnapshot,
+    category: tx.category,
+    targetNumber: tx.targetNumber,
+    amount: money(tx.amount),
+    adminFee: money(tx.adminFee),
+    totalAmount: money(tx.totalAmount),
+    status: tx.status,
+    serialNumber: tx.serialNumber,
+    failureCode: tx.failureCode,
+    failureReason: tx.failureReason,
+    completedAt: tx.completedAt,
+    createdAt: tx.createdAt
+  };
+}
+
+function idempotencyKeyOf(headerValue: unknown): string | undefined {
+  if (typeof headerValue !== "string") return undefined;
+  const trimmed = headerValue.trim();
+  if (trimmed.length === 0 || trimmed.length > 120) return undefined;
+  return trimmed;
+}
 
 export const ppobRouter = Router();
 
 ppobRouter.use(requireAuth);
-ppobRouter.get("/catalog", asyncHandler(controller.catalog));
-ppobRouter.get("/orders", validateRequest(ppobOrderListSchema), asyncHandler(controller.orders));
-ppobRouter.get("/orders/:orderId", validateRequest(ppobOrderDetailSchema), asyncHandler(controller.order));
-ppobRouter.post("/orders/inquiry", paymentRateLimiter, validateRequest(ppobInquirySchema), asyncHandler(controller.inquiry));
-ppobRouter.post("/orders", paymentRateLimiter, validateRequest(ppobCreateOrderSchema), asyncHandler(controller.createOrder));
+
+ppobRouter.get(
+  "/products",
+  validateRequest(ppobProductsQuerySchema),
+  asyncHandler(async (req, res) => {
+    const category = req.query.category as
+      | "PULSA" | "DATA" | "PLN_PREPAID" | "PLN_POSTPAID" | "BPJS" | "EWALLET"
+      | undefined;
+    const products = await service.listProducts(category);
+    res.json({
+      success: true,
+      data: products.map((product) => ({
+        sku: product.sku,
+        category: product.category,
+        brand: product.brand,
+        name: product.name,
+        description: product.description,
+        price: money(product.price),
+        adminFee: money(product.adminFee)
+      }))
+    });
+  })
+);
+
+ppobRouter.post(
+  "/transactions",
+  paymentRateLimiter,
+  validateRequest(ppobPurchaseSchema),
+  asyncHandler(async (req, res) => {
+    const { transaction, replayed } = await service.purchase({
+      userId: req.auth!.userId,
+      sku: req.body.sku,
+      targetNumber: req.body.targetNumber,
+      ...(idempotencyKeyOf(req.headers["idempotency-key"])
+        ? { idempotencyKey: idempotencyKeyOf(req.headers["idempotency-key"])! }
+        : {})
+    });
+    // Replay mengembalikan 200 (permintaan sudah pernah diproses), pembelian
+    // baru 201 — klien dapat membedakan keduanya tanpa field tambahan.
+    res.status(replayed ? 200 : 201).json({
+      success: true,
+      data: serializeTransaction(transaction)
+    });
+  })
+);
+
+ppobRouter.get(
+  "/transactions",
+  validateRequest(ppobHistoryQuerySchema),
+  asyncHandler(async (req, res) => {
+    const transactions = await service.listMyTransactions(
+      req.auth!.userId,
+      Number(req.query.limit)
+    );
+    res.json({ success: true, data: transactions.map(serializeTransaction) });
+  })
+);
+
+ppobRouter.get(
+  "/transactions/:reference",
+  validateRequest(ppobReferenceSchema),
+  asyncHandler(async (req, res) => {
+    const transaction = await service.getMyTransaction(
+      req.auth!.userId,
+      String(req.params.reference)
+    );
+    res.json({ success: true, data: serializeTransaction(transaction) });
+  })
+);
