@@ -63,10 +63,10 @@ class _ReferralTreeScreenState extends ConsumerState<ReferralTreeScreen> {
         ? _root
         : _applyExpansionState(_rootFromBackendTree(backendTree, session));
     return _DemoScaffold(
-      title: 'Jaringan Referral',
+      title: 'Referal Tim',
       subtitle: production.hasValue
-          ? 'Jaringan unilevel TapGo'
-          : 'Jaringan unilevel TapGo 10 level',
+          ? 'Struktur referal tim TapGo'
+          : 'Struktur referal tim TapGo 10 level',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -91,7 +91,7 @@ class _ReferralTreeScreenState extends ConsumerState<ReferralTreeScreen> {
               icon: Icons.account_tree_rounded,
               title: 'Belum ada referral',
               subtitle:
-                  'Downline akan muncul setelah member memakai kode referral.',
+                  'Mitra akan muncul setelah member memakai kode referral.',
             ),
           ],
         ],
@@ -177,7 +177,7 @@ class _ReferralTreeSummary extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: _MiniMetric(
-                  label: 'Total Downline',
+                  label: 'Total Mitra',
                   value: '${session.downline}',
                 ),
               ),

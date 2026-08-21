@@ -159,7 +159,7 @@ class _ReferralNodeCard extends StatelessWidget {
                         ),
                         _ReferralMetaChip(
                           icon: Icons.account_tree_rounded,
-                          label: '${node.totalDownline} downline',
+                          label: '${node.totalDownline} mitra',
                           color: _brandBlue,
                         ),
                         _ReferralMetaChip(

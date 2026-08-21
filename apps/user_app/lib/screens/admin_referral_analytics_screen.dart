@@ -78,7 +78,7 @@ class AdminReferralAnalyticsScreen extends ConsumerWidget {
             ...topSponsors.take(12).map(
                   (member) => _WalletLedgerItem(
                     title: member.name,
-                    amount: '${member.totalDownline} downline',
+                    amount: '${member.totalDownline} mitra',
                     note:
                         '${member.packageName} • Sponsor ${member.sponsor} • Komisi ${formatRupiah(member.totalCommission)}',
                     color: _packageAccent(member.packageName),

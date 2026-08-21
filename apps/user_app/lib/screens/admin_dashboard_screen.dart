@@ -167,7 +167,7 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
     _AdminDashboardMenuItem(
       icon: Icons.groups_rounded,
       title: 'Member Management',
-      subtitle: 'List member, status paket, sponsor, downline',
+      subtitle: 'List member, status paket, sponsor, jaringan',
       open: (context) => _openDemo(context, const AdminMemberListScreen()),
     ),
     _AdminDashboardMenuItem(
@@ -199,7 +199,7 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
     _AdminDashboardMenuItem(
       icon: Icons.hub_rounded,
       title: 'Referral Analytics',
-      subtitle: 'Top sponsor, level aktif, referral tree',
+      subtitle: 'Top sponsor, level aktif, referal tim',
       open: (context) =>
           _openDemo(context, const AdminReferralAnalyticsScreen()),
     ),

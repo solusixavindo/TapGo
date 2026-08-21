@@ -390,7 +390,7 @@ class _TapGoApiClient {
         () => get('/referrals/summary'),
       ),
       _productionSnapshotPart(
-        'referral tree',
+        'referal tim',
         () => get(
           '/referrals/downlines',
           query: {'maxLevel': 10, 'page': 1, 'pageSize': 100},

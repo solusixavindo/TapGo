@@ -295,8 +295,8 @@ class MarketingPlanScreen extends StatelessWidget {
             icon: Icons.hub_rounded,
             title: 'Referral Dashboard',
             subtitle: tapGoIsPlayDistribution
-                ? 'Kode referral, level aktif, dan downline'
-                : 'Kode referral, level aktif, downline, bonus',
+                ? 'Kode referral, level aktif, dan jaringan'
+                : 'Kode referral, level aktif, jaringan, bonus',
             onTap: () => _openDemo(context, const ReferralDashboardScreen()),
           ),
           if (tapGoIsDirectDistribution)
@@ -308,8 +308,8 @@ class MarketingPlanScreen extends StatelessWidget {
             ),
           _DemoMenuTile(
             icon: Icons.account_tree_rounded,
-            title: 'Jaringan Referral',
-            subtitle: 'Visual struktur downline level 1 sampai 10',
+            title: 'Referal Tim',
+            subtitle: 'Visual struktur referal tim level 1 sampai 10',
             onTap: () => _openDemo(context, const ReferralTreeScreen()),
           ),
         ],
@@ -787,7 +787,7 @@ class ReferralDashboardScreen extends ConsumerWidget {
             children: [
               Expanded(
                 child: _StatCard(
-                  label: 'Total downline',
+                  label: 'Total mitra',
                   value: '${session.downline}',
                 ),
               ),

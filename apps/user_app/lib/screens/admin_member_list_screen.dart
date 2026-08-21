@@ -143,7 +143,7 @@ class _AdminMemberTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${member.packageName} • ${member.paymentStatus} • ${member.totalDownline} downline',
+                        '${member.packageName} • ${member.paymentStatus} • ${member.totalDownline} mitra',
                         style: const TextStyle(
                           color: Color(0xFF718096),
                           fontSize: 12,

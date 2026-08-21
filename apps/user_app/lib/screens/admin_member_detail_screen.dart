@@ -42,7 +42,7 @@ class AdminMemberDetailScreen extends StatelessWidget {
             children: [
               Expanded(
                 child: _StatCard(
-                  label: 'Downline',
+                  label: 'Mitra',
                   value: '${member.totalDownline}',
                 ),
               ),
@@ -83,7 +83,7 @@ class AdminMemberDetailScreen extends StatelessWidget {
           _DemoMenuTile(
             icon: Icons.account_tree_rounded,
             title: 'Lihat Jaringan',
-            subtitle: 'Buka referral tree',
+            subtitle: 'Buka referal tim',
             onTap: () => _openDemo(context, const ReferralTreeScreen()),
           ),
         ],

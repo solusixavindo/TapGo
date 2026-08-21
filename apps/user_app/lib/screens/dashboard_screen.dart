@@ -1822,7 +1822,7 @@ class _MarketingPlanCard extends StatelessWidget {
                         const SizedBox(width: 10),
                         Expanded(
                           child: _MiniMetric(
-                            label: 'Downline Saya',
+                            label: 'Mitra Saya',
                             value: '${session.downline} user',
                             animatedValue: session.downline,
                             formatter: (value) => '$value user',
@@ -2719,7 +2719,7 @@ class ChatScreen extends StatelessWidget {
         children: [
           _SectionHeader(
             title: 'Chat',
-            subtitle: 'Pesan sponsor, downline, CS, dan notifikasi',
+            subtitle: 'Pesan sponsor, jaringan, CS, dan notifikasi',
           ),
           SizedBox(height: 16),
           _SearchBox(hint: 'Cari chat atau notifikasi...'),
@@ -3238,7 +3238,7 @@ class HelpCenterScreen extends StatelessWidget {
       if (tapGoIsDirectDistribution) ...[
         (
           'Kode referral',
-          'Bagikan kode referral Anda agar downline dan bonus tercatat otomatis.',
+          'Bagikan kode referral Anda agar jaringan dan bonus tercatat otomatis.',
         ),
         (
           'Saldo TapGoPay',
