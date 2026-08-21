@@ -35,6 +35,7 @@ part 'screens/membership_registration_screen.dart';
 part 'screens/membership_screen.dart';
 part 'screens/password_recovery_screen.dart';
 part 'screens/payment_demo_screen.dart';
+part 'screens/ppob_screens.dart';
 part 'screens/referral_tree_screen.dart';
 part 'screens/ride_customer_screens.dart';
 part 'screens/splash_screen.dart';
@@ -88,6 +89,20 @@ Future<Map<String, dynamic>> Function()? tapGoMemberIdentityLoaderForTests;
 Future<List<Map<String, dynamic>>> Function()? tapGoRideHistoryLoaderForTests;
 Future<Map<String, dynamic>> Function(String reference)?
     tapGoRideDetailLoaderForTests;
+// Hook PPOB (Stage R2.7), mengikuti pola loader-for-tests di atas. Nilai
+// default null berarti produksi selalu memakai _apiClient.
+Future<List<Map<String, dynamic>>> Function({String? category})?
+    tapGoPpobCatalogLoaderForTests;
+Future<Map<String, dynamic>> Function()? tapGoPpobWalletLoaderForTests;
+Future<List<Map<String, dynamic>>> Function({int limit})?
+    tapGoPpobHistoryLoaderForTests;
+Future<Map<String, dynamic>> Function(String reference)?
+    tapGoPpobTransactionDetailLoaderForTests;
+Future<Map<String, dynamic>> Function({
+  required String sku,
+  required String targetNumber,
+  required String idempotencyKey,
+})? tapGoPpobPurchaseForTests;
 const tapGoLocalSessionPersistenceWarning =
     'Anda berhasil masuk, tetapi sesi belum tersimpan di perangkat. '
     'Anda mungkin perlu login kembali saat aplikasi dibuka ulang.';

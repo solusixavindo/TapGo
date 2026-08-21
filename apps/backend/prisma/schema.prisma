@@ -120,6 +120,9 @@ enum WalletTransactionType {
   LEVEL_BONUS
   REWARD_BONUS
   PPOB_BENEFIT
+  /// Debit pembelian PPOB dan kompensasi pengembaliannya (Stage R2.7).
+  PPOB_PURCHASE
+  PPOB_REFUND
   PROFIT_SHARING
   PROFIT_SHARING_BONUS
   ADJUSTMENT
@@ -323,6 +326,9 @@ model User {
   rideEventsActed        RideEvent[]             @relation("RideEventActor")
   rideIdempotencyKeys    RideIdempotencyRecord[]
   rideDriverApplications RideDriverApplication[]
+
+  // Release 2 — domain PPOB (Stage R2.7).
+  ppobTransactions PpobTransaction[]
 
   @@index([role, status])
   @@index([membershipId])
@@ -528,19 +534,19 @@ model FounderProgramGrant {
 }
 
 model MembershipOrder {
-  id               String                @id @default(uuid()) @db.Uuid
-  userId           String                @map("user_id") @db.Uuid
-  membershipId     String                @map("membership_id") @db.Uuid
-  status           MembershipOrderStatus @default(PENDING)
+  id               String                  @id @default(uuid()) @db.Uuid
+  userId           String                  @map("user_id") @db.Uuid
+  membershipId     String                  @map("membership_id") @db.Uuid
+  status           MembershipOrderStatus   @default(PENDING)
   /// Null berarti order dibuat sebelum pelacakan kanal ada.
   channel          MembershipOrderChannel?
-  totalAmount      Decimal               @map("total_amount") @db.Decimal(14, 2)
-  packageSnapshot  Json                  @map("package_snapshot")
-  registrationData Json?                 @map("registration_data")
-  expiresAt        DateTime?             @map("expires_at")
-  paidAt           DateTime?             @map("paid_at")
-  createdAt        DateTime              @default(now()) @map("created_at")
-  updatedAt        DateTime              @updatedAt @map("updated_at")
+  totalAmount      Decimal                 @map("total_amount") @db.Decimal(14, 2)
+  packageSnapshot  Json                    @map("package_snapshot")
+  registrationData Json?                   @map("registration_data")
+  expiresAt        DateTime?               @map("expires_at")
+  paidAt           DateTime?               @map("paid_at")
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
 
   user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   membership     Membership           @relation(fields: [membershipId], references: [id])
@@ -1697,4 +1703,106 @@ model RideIdempotencyRecord {
   @@unique([scope, userId, idempotencyKey])
   @@index([createdAt])
   @@map("ride_idempotency_records")
+}
+
+// ---------------------------------------------------------------------------
+// Release 2 — domain PPOB (Stage R2.7: Foundation & Customer UI).
+//
+// Provider nyata (Digiflazz dsb.) sengaja BELUM diintegrasikan — itu ruang
+// lingkup R2.8. Foundation ini mengunci katalog, alur pembelian, debit
+// ppobBalance, ledger, idempotency, dan kompensasi refund yang aman-uang,
+// dengan provider port yang hari ini hanya punya adapter stub.
+// ---------------------------------------------------------------------------
+
+enum PpobCategory {
+  PULSA
+  DATA
+  PLN_PREPAID
+  PLN_POSTPAID
+  BPJS
+  EWALLET
+}
+
+enum PpobTransactionStatus {
+  /// Dibuat dan saldo sudah didebit; provider belum dipanggil.
+  PENDING
+  /// Provider menerima; pemenuhan belum final (dicadangkan untuk R2.8).
+  PROCESSING
+  /// Terpenuhi; serialNumber/token tersedia bila ada.
+  SUCCESS
+  /// Gagal; saldo SUDAH dikembalikan penuh lewat ledger PPOB_REFUND.
+  FAILED
+  /// Dibatalkan setelah sukses oleh koreksi admin (dicadangkan, belum ada alur).
+  REFUNDED
+}
+
+/// Katalog produk PPOB yang dijual ke member. Harga adalah harga jual final
+/// dalam rupiah; adminFee ditambahkan di atas harga saat checkout.
+model PpobProduct {
+  id           String            @id @default(uuid()) @db.Uuid
+  /// Kode produk stabil yang dipakai klien, mis. PULSA_TSEL_10.
+  sku          String            @unique @db.VarChar(40)
+  category     PpobCategory
+  /// Operator/penyedia layanan, mis. Telkomsel, PLN, BPJS Kesehatan.
+  brand        String            @db.VarChar(40)
+  name         String            @db.VarChar(120)
+  description  String?           @db.VarChar(240)
+  price        Decimal           @db.Decimal(14, 2)
+  adminFee     Decimal           @default(0) @map("admin_fee") @db.Decimal(14, 2)
+  isActive     Boolean           @default(true) @map("is_active")
+  sortOrder    Int               @default(0) @map("sort_order")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+  transactions PpobTransaction[]
+
+  @@index([category, isActive, sortOrder])
+  @@map("ppob_products")
+}
+
+model PpobTransaction {
+  id              String @id @default(uuid()) @db.Uuid
+  /// Referensi publik di API/UI (bukan UUID internal, tidak dapat ditebak).
+  publicReference String @unique @map("public_reference") @db.VarChar(24)
+  userId          String @map("user_id") @db.Uuid
+  productId       String @map("product_id") @db.Uuid
+
+  /// Snapshot produk saat beli: katalog boleh berubah, histori tidak ikut berubah.
+  skuSnapshot         String       @map("sku_snapshot") @db.VarChar(40)
+  productNameSnapshot String       @map("product_name_snapshot") @db.VarChar(120)
+  brandSnapshot       String       @map("brand_snapshot") @db.VarChar(40)
+  category            PpobCategory
+
+  /// Nomor tujuan ternormalisasi (MSISDN 08…, IDPEL, nomor BPJS).
+  targetNumber String @map("target_number") @db.VarChar(40)
+
+  amount      Decimal @db.Decimal(14, 2)
+  adminFee    Decimal @default(0) @map("admin_fee") @db.Decimal(14, 2)
+  totalAmount Decimal @map("total_amount") @db.Decimal(14, 2)
+
+  status            PpobTransactionStatus @default(PENDING)
+  /// Nama adapter provider, hari ini selalu "stub".
+  provider          String                @db.VarChar(20)
+  providerReference String?               @map("provider_reference") @db.VarChar(64)
+  /// Token PLN / serial number pulsa. Hanya disajikan ke pemilik transaksi.
+  serialNumber      String?               @map("serial_number") @db.VarChar(120)
+  failureCode       String?               @map("failure_code") @db.VarChar(40)
+  failureReason     String?               @map("failure_reason") @db.VarChar(240)
+
+  idempotencyKey      String? @map("idempotency_key") @db.VarChar(120)
+  walletTransactionId String? @map("wallet_transaction_id") @db.Uuid
+  refundTransactionId String? @map("refund_transaction_id") @db.Uuid
+
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product PpobProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  /// NULL dianggap unik satu sama lain di Postgres, jadi transaksi tanpa key
+  /// tidak pernah bertabrakan; key yang sama per user hanya boleh satu.
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status, createdAt])
+  @@map("ppob_transactions")
 }

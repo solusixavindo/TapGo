@@ -235,6 +235,67 @@ class _TapGoApiClient {
     });
   }
 
+  // --- PPOB (Stage R2.7) -----------------------------------------------------
+  // Kontrak backend /api/v1/ppob. Idempotency-Key dibuat pemanggil dan tetap
+  // stabil saat percobaan ulang — server menjamin satu key satu debit.
+
+  Future<List<Map<String, dynamic>>> ppobProducts({String? category}) async {
+    final response = await _dio.get<dynamic>(
+      _apiPath('ppob/products'),
+      queryParameters: {
+        if (category != null && category.isNotEmpty) 'category': category,
+      },
+    );
+    // Backend menjawab { success, data: [...] }; daftar berada di 'items'
+    // setelah _unwrapDynamic membungkus payload non-map.
+    final payload = _unwrapDynamic(response.data)['items'];
+    if (payload is! List) {
+      return const [];
+    }
+    return payload
+        .whereType<Map>()
+        .map((row) => row.cast<String, dynamic>())
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> createPpobPurchase({
+    required String sku,
+    required String targetNumber,
+    required String idempotencyKey,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      _apiPath('ppob/transactions'),
+      data: {'sku': sku, 'targetNumber': targetNumber},
+      options: Options(headers: {'Idempotency-Key': idempotencyKey}),
+    );
+    return _unwrap(response.data);
+  }
+
+  Future<List<Map<String, dynamic>>> ppobHistory({int limit = 20}) async {
+    final response = await _dio.get<dynamic>(
+      _apiPath('ppob/transactions'),
+      queryParameters: {'limit': limit},
+    );
+    final payload = _unwrapDynamic(response.data)['items'];
+    if (payload is! List) {
+      return const [];
+    }
+    return payload
+        .whereType<Map>()
+        .map((row) => row.cast<String, dynamic>())
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> ppobTransactionDetail(String reference) {
+    return get('ppob/transactions/$reference');
+  }
+
+  /// Ringkasan wallet; ppobBalance dipakai layar PPOB untuk menampilkan saldo
+  /// benefit yang dapat dibelanjakan.
+  Future<Map<String, dynamic>> walletSummary() {
+    return get('wallet');
+  }
+
   // --- Pemulihan password ---------------------------------------------------
   // Tidak ada satu pun method di bawah yang menulis identifier, OTP, reset
   // token, atau password ke log. Backend selalu menjawab permintaan pemulihan

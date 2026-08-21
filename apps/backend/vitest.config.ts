@@ -16,7 +16,7 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "lcov", "html"],
       reportsDirectory: "coverage",
-      include: ["src/modules/referrals/**/*.ts", "src/modules/wallets/**/*.ts", "src/modules/memberships/**/*.ts"],
+      include: ["src/modules/referrals/**/*.ts", "src/modules/wallets/**/*.ts", "src/modules/memberships/**/*.ts", "src/modules/ppob/**/*.ts"],
       exclude: ["**/*.routes.ts", "**/*.controller.ts"]
     }
   }

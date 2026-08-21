@@ -94,6 +94,12 @@ const envSchema = z.object({
   // Release 1 tidak memakai realtime/chat. Fail-closed: Socket.IO hanya
   // di-attach bila diaktifkan eksplisit ("true"). Nilai lain -> false.
   REALTIME_ENABLED: strictEnvBoolean(false),
+  /// Adapter provider PPOB (Stage R2.7). Default "disabled": setiap pembelian
+  /// dibatalkan dengan refund penuh dan 503 PPOB_PROVIDER_DISABLED. "stub"
+  /// menyalakan adapter sintetis deterministik untuk UAT. Nama provider nyata
+  /// (R2.8) sengaja belum diterima di sini — nilai tak dikenal menggagalkan
+  /// boot, bukan jatuh ke perilaku tak terduga.
+  PPOB_PROVIDER: z.enum(["disabled", "stub"]).default("disabled"),
   DOKU_CLIENT_ID: z.string().optional(),
   DOKU_SECRET_KEY: z.string().optional(),
   DOKU_API_KEY: z.string().optional(),

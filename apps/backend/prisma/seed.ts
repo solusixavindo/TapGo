@@ -194,6 +194,51 @@ async function main() {
     }
   });
 
+  // Katalog PPOB Stage R2.7 — upsert per sku supaya seed idempotent dan aman
+  // dijalankan ulang pada environment yang sama.
+  const ppobProducts = [
+    { sku: "PULSA_TSEL_5", category: "PULSA", brand: "Telkomsel", name: "Pulsa Telkomsel 5.000", price: 6500, sortOrder: 1 },
+    { sku: "PULSA_TSEL_10", category: "PULSA", brand: "Telkomsel", name: "Pulsa Telkomsel 10.000", price: 11500, sortOrder: 2 },
+    { sku: "PULSA_TSEL_25", category: "PULSA", brand: "Telkomsel", name: "Pulsa Telkomsel 25.000", price: 26500, sortOrder: 3 },
+    { sku: "PULSA_TSEL_50", category: "PULSA", brand: "Telkomsel", name: "Pulsa Telkomsel 50.000", price: 51500, sortOrder: 4 },
+    { sku: "PULSA_TSEL_100", category: "PULSA", brand: "Telkomsel", name: "Pulsa Telkomsel 100.000", price: 101000, sortOrder: 5 },
+    { sku: "PULSA_XL_10", category: "PULSA", brand: "XL", name: "Pulsa XL 10.000", price: 11400, sortOrder: 6 },
+    { sku: "PULSA_XL_50", category: "PULSA", brand: "XL", name: "Pulsa XL 50.000", price: 50900, sortOrder: 7 },
+    { sku: "DATA_TSEL_1GB", category: "DATA", brand: "Telkomsel", name: "Data Telkomsel 1 GB / 7 hari", price: 12000, sortOrder: 10 },
+    { sku: "DATA_TSEL_5GB", category: "DATA", brand: "Telkomsel", name: "Data Telkomsel 5 GB / 30 hari", price: 48000, sortOrder: 11 },
+    { sku: "PLN_TOKEN_20", category: "PLN_PREPAID", brand: "PLN", name: "Token PLN 20.000", price: 20500, sortOrder: 20 },
+    { sku: "PLN_TOKEN_50", category: "PLN_PREPAID", brand: "PLN", name: "Token PLN 50.000", price: 50500, sortOrder: 21 },
+    { sku: "PLN_TOKEN_100", category: "PLN_PREPAID", brand: "PLN", name: "Token PLN 100.000", price: 100500, sortOrder: 22 },
+    { sku: "PLN_TAGIHAN", category: "PLN_POSTPAID", brand: "PLN", name: "Tagihan PLN Pascabayar", price: 0, adminFee: 2500, isActive: false, sortOrder: 30 },
+    { sku: "BPJS_KESEHATAN", category: "BPJS", brand: "BPJS", name: "BPJS Kesehatan", price: 0, adminFee: 2500, isActive: false, sortOrder: 40 },
+    { sku: "EWALLET_GOPAY_25", category: "EWALLET", brand: "GoPay", name: "Top Up GoPay 25.000", price: 26000, sortOrder: 50 },
+    { sku: "EWALLET_OVO_50", category: "EWALLET", brand: "OVO", name: "Top Up OVO 50.000", price: 51500, sortOrder: 51 }
+  ] as const;
+
+  for (const product of ppobProducts) {
+    await prisma.ppobProduct.upsert({
+      where: { sku: product.sku },
+      update: {
+        brand: product.brand,
+        name: product.name,
+        price: product.price,
+        ...("adminFee" in product ? { adminFee: product.adminFee } : {}),
+        ...("isActive" in product ? { isActive: product.isActive } : {}),
+        sortOrder: product.sortOrder
+      },
+      create: {
+        sku: product.sku,
+        category: product.category,
+        brand: product.brand,
+        name: product.name,
+        price: product.price,
+        ...("adminFee" in product ? { adminFee: product.adminFee } : {}),
+        ...("isActive" in product ? { isActive: product.isActive } : {}),
+        sortOrder: product.sortOrder
+      }
+    });
+  }
+
   console.log(`Seed completed. Driver user: ${driverUser.id}`);
 }
 

@@ -2110,6 +2110,15 @@ VoidCallback? _tapGoServiceActionFor(BuildContext context, _ServiceItem item) {
       _ => null,
     };
   }
+  // PPOB (Stage R2.7) dibuka pada distribusi direct. Surface aplikasi Play
+  // sengaja TIDAK diubah di stage ini — penambahan menu pada build Play adalah
+  // keputusan Stage R2.9 (Unified Admin, QA & Play Store Release), sama seperti
+  // pembelian membership yang juga ditahan dari kanal app.
+  if (item.label == 'Pulsa') {
+    return () => Navigator.of(context).push(
+          _tapGoPageRoute((_) => const PpobHomeScreen()),
+        );
+  }
   // Layanan lain belum tersedia dan tetap memakai pesan "belum dapat dibuka"
   // yang jujur.
   return () => _showSoon(context);
