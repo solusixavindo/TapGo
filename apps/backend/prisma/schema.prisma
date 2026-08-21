@@ -120,6 +120,8 @@ enum WalletTransactionType {
   LEVEL_BONUS
   REWARD_BONUS
   PPOB_BENEFIT
+  PPOB_PURCHASE
+  PPOB_REFUND
   PROFIT_SHARING
   PROFIT_SHARING_BONUS
   ADJUSTMENT
@@ -323,6 +325,9 @@ model User {
   rideEventsActed        RideEvent[]             @relation("RideEventActor")
   rideIdempotencyKeys    RideIdempotencyRecord[]
   rideDriverApplications RideDriverApplication[]
+
+  // Release 2.7 — domain PPOB (additive).
+  ppobOrders             PpobOrder[]
 
   @@index([role, status])
   @@index([membershipId])
@@ -972,6 +977,7 @@ model WalletTransaction {
   commission                Commission?
   profitSharingDistribution ProfitSharingDistribution?
   rewardTransaction         RewardTransaction?
+  ppobOrder                 PpobOrder?
 
   @@index([walletId, createdAt])
   @@index([referenceType, referenceId])
@@ -1697,4 +1703,91 @@ model RideIdempotencyRecord {
   @@unique([scope, userId, idempotencyKey])
   @@index([createdAt])
   @@map("ride_idempotency_records")
+}
+
+/// Release 2.7 — PPOB: status lifecycle order.
+/// PENDING/PROCESSING disiapkan untuk provider asynchronous pada Stage R2.8;
+/// dengan provider fail-closed saat ini order tidak pernah tertinggal di
+/// status non-terminal.
+enum PpobOrderStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+/// Release 2.7 — katalog kategori PPOB (Pulsa, Paket Data, Token PLN, BPJS,
+/// PDAM, E-Money). Katalog di-seed idempotent via migration, bukan hardcode.
+model PpobCategory {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique @db.VarChar(40)
+  name        String   @db.VarChar(80)
+  description String?  @db.VarChar(200)
+  icon        String?  @db.VarChar(60)
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  products PpobProduct[]
+
+  @@map("ppob_categories")
+}
+
+/// Release 2.7 — produk PPOB. targetPattern adalah regex sisi server untuk
+/// memvalidasi nomor tujuan sebelum order dibuat (fail-fast sebelum debit).
+model PpobProduct {
+  id            String       @id @default(uuid()) @db.Uuid
+  categoryId    String       @map("category_id") @db.Uuid
+  sku           String       @unique @db.VarChar(60)
+  name          String       @db.VarChar(120)
+  description   String?      @db.VarChar(300)
+  price         Decimal      @db.Decimal(14, 2)
+  adminFee      Decimal      @default(0) @map("admin_fee") @db.Decimal(14, 2)
+  targetLabel   String       @map("target_label") @db.VarChar(80)
+  targetPattern String?      @map("target_pattern") @db.VarChar(160)
+  sortOrder     Int          @default(0) @map("sort_order")
+  isActive      Boolean      @default(true) @map("is_active")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  category PpobCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  orders   PpobOrder[]
+
+  @@index([categoryId, isActive, sortOrder])
+  @@map("ppob_products")
+}
+
+/// Release 2.7 — order PPOB. Saldo gabungan: benefitAmount didebit dari
+/// ppobBalance (saldo benefit earmarked), sisanya dari saldo utama; kolom
+/// breakdown disimpan agar reversal REFUNDED mengembalikan ke sumber yang
+/// sama persis.
+model PpobOrder {
+  id                  String          @id @default(uuid()) @db.Uuid
+  userId              String          @map("user_id") @db.Uuid
+  productId           String          @map("product_id") @db.Uuid
+  targetNumber        String          @map("target_number") @db.VarChar(60)
+  amount              Decimal         @db.Decimal(14, 2)
+  benefitAmount       Decimal         @default(0) @map("benefit_amount") @db.Decimal(14, 2)
+  balanceAmount       Decimal         @default(0) @map("balance_amount") @db.Decimal(14, 2)
+  status              PpobOrderStatus @default(PENDING)
+  failureReason       String?         @map("failure_reason") @db.VarChar(200)
+  providerRef         String?         @map("provider_ref") @db.VarChar(120)
+  idempotencyKey      String          @map("idempotency_key") @db.VarChar(120)
+  walletTransactionId String?         @unique @map("wallet_transaction_id") @db.Uuid
+  paidAt              DateTime?       @map("paid_at")
+  completedAt         DateTime?       @map("completed_at")
+  refundedAt          DateTime?       @map("refunded_at")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product           PpobProduct        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  walletTransaction WalletTransaction? @relation(fields: [walletTransactionId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("ppob_orders")
 }

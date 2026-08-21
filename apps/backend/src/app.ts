@@ -20,6 +20,7 @@ import { webMembershipRouter } from "./modules/memberships/presentation/web-memb
 import { membershipRouter } from "./modules/memberships/presentation/membership.routes.js";
 import { midtransRouter } from "./modules/payments/presentation/midtrans.routes.js";
 import { dokuPaymentRouter, dokuWebhookRouter } from "./modules/payments/presentation/doku.routes.js";
+import { ppobRouter } from "./modules/ppob/presentation/ppob.routes.js";
 import { profitSharingRouter } from "./modules/profit-sharing/presentation/profit-sharing.routes.js";
 import { referralRouter } from "./modules/referrals/presentation/referral.routes.js";
 import { driverReviewRouter } from "./modules/rides/presentation/driverReview.routes.js";
@@ -107,6 +108,7 @@ export function createApp() {
   app.use("/api/v1/driver", driverRideRouter);
   app.use("/api/v1/support", supportRouter);
   app.use("/api/v1/wallet", walletRouter);
+  app.use("/api/v1/ppob", ppobRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

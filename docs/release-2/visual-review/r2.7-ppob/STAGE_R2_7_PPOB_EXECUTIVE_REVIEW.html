@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TapGo R2.7 PPOB Foundation & Customer UI — Executive Visual Review</title>
+<style>
+:root{
+  --bg:#0f1117; --surface:#171a23; --surface2:#1e222d; --line:#2a2f3d;
+  --tx:#e6e9f0; --tx2:#a5adbf; --tx3:#727b90;
+  --imp:#22c55e; --blocked:#ef4444; --prop:#f59e0b; --accent:#38bdf8;
+}
+@media (prefers-color-scheme: light){
+  :root{ --bg:#f6f7fa; --surface:#ffffff; --surface2:#f0f2f7; --line:#d9dee8;
+         --tx:#12151c; --tx2:#4a5262; --tx3:#6b7280; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.6;font-size:15px;-webkit-text-size-adjust:100%}
+header{background:linear-gradient(135deg,#1e293b,#0f172a);color:#f1f5f9;padding:28px 20px;border-bottom:3px solid var(--accent)}
+header h1{margin:0 0 6px;font-size:1.5rem;letter-spacing:-.02em}
+header .sub{color:#94a3b8;font-size:.9rem}
+.wrap{max-width:1180px;margin:0 auto;padding:0 16px}
+section{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:20px;margin:20px 0}
+section>h2{margin:0 0 4px;font-size:1.15rem;letter-spacing:-.01em}
+section>p.lead{color:var(--tx2);margin:.3rem 0 1rem;font-size:.92rem}
+.badge{display:inline-block;font-size:.68rem;font-weight:700;letter-spacing:.04em;
+  padding:3px 8px;border-radius:999px;white-space:nowrap;border:1px solid transparent;text-transform:uppercase}
+.b-pass{background:rgba(34,197,94,.15);color:var(--imp);border-color:rgba(34,197,94,.4)}
+.b-warn{background:rgba(245,158,11,.15);color:var(--prop);border-color:rgba(245,158,11,.4)}
+.b-info{background:rgba(56,189,248,.15);color:var(--accent);border-color:rgba(56,189,248,.4)}
+.tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:.6rem 0;
+  border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:520px;font-size:.85rem}
+th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--surface2);font-weight:600;color:var(--tx2);font-size:.76rem;
+  text-transform:uppercase;letter-spacing:.04em}
+tr:last-child td{border-bottom:none}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.82em;
+  background:var(--surface2);padding:1px 5px;border-radius:4px;border:1px solid var(--line);
+  word-break:break-all}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.card{background:var(--surface2);border:1px solid var(--line);border-radius:9px;padding:14px}
+.card .k{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--tx3)}
+.card .v{font-size:1.3rem;font-weight:700;margin-top:3px;letter-spacing:-.02em}
+.card .n{font-size:.78rem;color:var(--tx2);margin-top:3px}
+.shots{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.shot{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface2)}
+.shot img{display:block;width:100%;height:auto}
+.shot .cap{padding:9px 12px;font-size:.78rem;color:var(--tx2);border-top:1px solid var(--line)}
+.note{border-left:3px solid var(--accent);background:var(--surface2);padding:11px 14px;
+  border-radius:0 8px 8px 0;margin:.8rem 0;font-size:.87rem;color:var(--tx2)}
+.note.stop{border-left-color:var(--blocked)}
+.note.warn{border-left-color:var(--prop)}
+ul{margin:.4rem 0;padding-left:1.15rem}
+li{margin:.22rem 0}
+.yes{color:var(--imp);font-weight:700}
+footer{color:var(--tx3);font-size:.78rem;text-align:center;padding:22px 0 34px}
+</style>
+</head>
+<body>
+<header>
+  <h1>TapGo R2.7 — PPOB Foundation &amp; Customer UI</h1>
+  <div class="sub">Executive Visual Review · 21 Agustus 2026 · Backend + Customer App + Bukti Visual</div>
+</header>
+<div class="wrap">
+
+<section>
+  <h2>Ringkasan Eksekutif</h2>
+  <p class="lead">Stage R2.7 membangun fondasi PPOB end-to-end: skema database, modul backend Clean Architecture, REST API customer, dan antarmuka customer — dengan provider biller yang sengaja <strong>fail-closed</strong> karena integrasi nyata adalah scope R2.8.</p>
+  <div class="grid">
+    <div class="card"><div class="k">Backend Test</div><div class="v">25/25</div><div class="n">14 unit + 11 integrasi HTTP PPOB</div></div>
+    <div class="card"><div class="k">Full Suite Backend</div><div class="v">758/758</div><div class="n">63 file — nol regresi</div></div>
+    <div class="card"><div class="k">Widget Test Flutter</div><div class="v">14/14</div><div class="n">Full suite user_app 177 pass</div></div>
+    <div class="card"><div class="k">Tangkapan Layar</div><div class="v">14</div><div class="n">Termasuk contact sheet</div></div>
+    <div class="card"><div class="k">Kategori PPOB</div><div class="v">6</div><div class="n">Pulsa, Data, Token PLN, BPJS, PDAM, E-Money — 18 produk</div></div>
+    <div class="card"><div class="k">flutter analyze</div><div class="v">0 issue</div><div class="n">Termasuk perbaikan kompatibilitas lama</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>Keputusan Scope (disetujui Owner)</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Keputusan</th><th>Pilihan</th><th>Konsekuensi</th></tr>
+    <tr><td>Sumber dana PPOB</td><td><strong>Saldo gabungan</strong></td><td>Serap <code>Wallet.ppobBalance</code> (benefit) dulu, sisanya dari <code>balance</code> utama — atomik dalam satu transaksi Prisma, tercatat di ledger.</td></tr>
+    <tr><td>Cakupan kategori</td><td><strong>Langsung luas</strong></td><td>6 kategori di-seed sejak fondasi, bukan hanya pulsa/data/PLN.</td></tr>
+    <tr><td>Provider biller</td><td><span class="badge b-warn">fail-closed</span></td><td><code>NoPpobProviderGateway</code> selalu menolak → order <code>REFUNDED</code> dengan kompensasi penuh. Provider nyata (Digiflazz dsb.) masuk di R2.8 lewat port <code>PpobProviderGateway</code> tanpa mengubah service.</td></tr>
+    <tr><td>Kepatuhan Play</td><td><span class="badge b-pass">aman</span></td><td>Pembayaran via saldo internal; nol tautan eksternal/WebView/CTA keluar. Tile PPOB sah pada grid distribusi Play.</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <h2>Arsitektur</h2>
+  <p class="lead">Backend mengikuti Clean Architecture 4-layer per modul; customer UI adalah modul fitur berdiri sendiri pertama di <code>user_app</code> (bukan <code>part of</code>) — blueprint modernisasi mengikuti pola driver_app.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Lapisan</th><th>Isi</th></tr>
+    <tr><td><code>domain</code></td><td><code>ppobModels.ts</code>, kontrak <code>PpobRepository</code>, port <code>PpobProviderGateway</code> (batas R2.8)</td></tr>
+    <tr><td><code>application</code></td><td><code>PpobCatalogService</code>, <code>PpobOrderService</code> — inquiry, create atomik, idempotency, kompensasi refund</td></tr>
+    <tr><td><code>infrastructure</code></td><td><code>PrismaPpobRepository</code> (row lock + ledger dalam <code>$transaction</code>), <code>NoPpobProviderGateway</code></td></tr>
+    <tr><td><code>presentation</code></td><td>Routes <code>/api/v1/ppob/*</code> + validator zod + controller; semua <code>requireAuth</code></td></tr>
+    <tr><td>Flutter <code>features/ppob</code></td><td><code>domain</code> (model + <code>PpobApiException</code>), <code>data</code> (repository typedef-wire + demo repository nol-network), <code>application</code> (Riverpod providers), <code>presentation</code> (4 layar + shared widgets)</td></tr>
+  </table></div>
+  <div class="note">Alur dana: inquiry (read-only) → create order: <em>debit saldo gabungan + ledger → panggil provider → provider menolak → kompensasi kredit penuh + ledger refund → status REFUNDED</em>. Saldo tidak pernah hilang; tidak ada status menggantung.</div>
+</section>
+
+<section>
+  <h2>Bukti Visual — Alur Utama</h2>
+  <div class="shots">
+    <div class="shot"><img src="01_ppob_home_catalog.png" alt="Beranda PPOB"><div class="cap">01 · Beranda PPOB — grid 6 kategori</div></div>
+    <div class="shot"><img src="02_ppob_category_pulsa.png" alt="Kategori Pulsa"><div class="cap">02 · Kategori Pulsa — daftar nominal</div></div>
+    <div class="shot"><img src="03_ppob_checkout_form.png" alt="Form checkout"><div class="cap">03 · Checkout — form nomor tujuan</div></div>
+    <div class="shot"><img src="04_ppob_checkout_breakdown.png" alt="Rincian saldo gabungan"><div class="cap">04 · Rincian saldo gabungan (benefit + utama)</div></div>
+    <div class="shot"><img src="05_ppob_checkout_result_refunded.png" alt="Hasil refunded"><div class="cap">05 · Hasil fail-closed: REFUNDED — dana kembali penuh</div></div>
+    <div class="shot"><img src="06_ppob_checkout_insufficient.png" alt="Saldo tidak cukup"><div class="cap">06 · Saldo tidak cukup — tombol bayar nonaktif</div></div>
+    <div class="shot"><img src="07_ppob_history.png" alt="Riwayat"><div class="cap">07 · Riwayat transaksi dengan chip status</div></div>
+    <div class="shot"><img src="08_ppob_history_empty.png" alt="Riwayat kosong"><div class="cap">08 · Riwayat kosong</div></div>
+    <div class="shot"><img src="13_ppob_home_error.png" alt="Error katalog"><div class="cap">13 · Kegagalan katalog + coba lagi</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>Bukti Visual — Dark Mode &amp; Viewport Sempit</h2>
+  <div class="shots">
+    <div class="shot"><img src="09_ppob_home_dark.png" alt="Dark beranda"><div class="cap">09 · Tema gelap — beranda</div></div>
+    <div class="shot"><img src="10_ppob_checkout_breakdown_dark.png" alt="Dark rincian"><div class="cap">10 · Tema gelap — rincian saldo gabungan</div></div>
+    <div class="shot"><img src="11_ppob_home_320dp.png" alt="320dp beranda"><div class="cap">11 · Lebar 320 dp — beranda (bebas overflow)</div></div>
+    <div class="shot"><img src="12_ppob_checkout_320dp.png" alt="320dp checkout"><div class="cap">12 · Lebar 320 dp — checkout dengan rincian</div></div>
+  </div>
+  <div class="note">Setiap shot melewati penjaga anti-overflow otomatis di harness; dua overflow nyata (grid tile &amp; header kartu hasil) ditemukan dan DIPERBAIKI selama stage ini berkat penjaga tersebut.</div>
+  <p class="lead">Contact sheet lengkap: <a href="R2_7_PPOB_CONTACT_SHEET.png" style="color:var(--accent)">R2_7_PPOB_CONTACT_SHEET.png</a></p>
+</section>
+
+<section>
+  <h2>Matriks Acceptance</h2>
+  <div class="tablewrap"><table>
+    <tr><th>#</th><th>Item</th><th>Bukti</th><th>Status</th></tr>
+    <tr><td>1</td><td>Katalog 6 kategori luas dari backend</td><td>Integrasi (6 kategori, 18 produk) · shot 01</td><td><span class="badge b-pass">pass</span></td></tr>
+    <tr><td>2</td><td>Saldo gabungan: benefit dulu, fallback utama</td><td>Unit debit gabungan · shot 04</td><td><span class="badge b-pass">pass</span></td></tr>
+    <tr><td>3</td><td>Inquiry read-only (tidak menggerakkan dana)</td><td>Integrasi inquiry</td><td><span class="badge b-pass">pass</span></td></tr>
+    <tr><td>4</td><td>Validasi pola nomor tujuan per produk</td><td>Unit + integrasi <code>PPOB_TARGET_INVALID</code></td><td><span class="badge b-pass">pass</span></td></tr>
+    <tr><td>5</td><td>Idempotency: replay tanpa debit ganda (200)</td><td>Unit + integrasi replay</td><td><span class="badge b-pass">pass</span></td></tr>
+    <tr><td>6</td><td>Konflik idempotency → 409</td><td>Unit + integrasi</td><td><span class="badge b-pass">pass</span></td></tr>
+    <tr><td>7</td><td>Fail-closed: REFUNDED + saldo kembali penuh + ledger konsisten</td><td>Integrasi fail-closed · shot 05</td><td><span class="badge b-pass">pass</span></td></tr>
+    <tr><td>8</td><td>Saldo tidak cukup → 402 tanpa order</td><td>Integrasi · shot 06</td><td><span class="badge b-pass">pass</span></td></tr>
+    <tr><td>9</td><td>Privasi: order orang lain 404</td><td>Integrasi isolasi antar-user</td><td><span class="badge b-pass">pass</span></td></tr>
+    <tr><td>10</td><td>Anti-steering: nol tautan eksternal/WebView</td><td>Widget test + copy layar</td><td><span class="badge b-pass">pass</span></td></tr>
+    <tr><td>11</td><td>Single-flight UI (double-tap = 1 order)</td><td>Widget test single-flight</td><td><span class="badge b-pass">pass</span></td></tr>
+    <tr><td>12</td><td>Dark mode + 320 dp tanpa overflow</td><td>Widget test + shot 09–12</td><td><span class="badge b-pass">pass</span></td></tr>
+    <tr><td>13</td><td>Privacy UI: nol token/PII ter-render</td><td>Widget test privacy</td><td><span class="badge b-pass">pass</span></td></tr>
+    <tr><td>14</td><td>Entry point Play-safe di dashboard</td><td><code>widget_test.dart</code> semantics <code>Buka layanan PPOB</code></td><td><span class="badge b-pass">pass</span></td></tr>
+  </table></div>
+</section>
+
+<section>
+  <h2>Batasan yang Disengaja → Handoff R2.8</h2>
+  <div class="note stop"><strong>Provider nyata belum terhubung.</strong> Setiap order produksi pada R2.7 berakhir <code>REFUNDED</code> — ini perilaku yang benar: lebih baik gagal jujur dengan dana kembali penuh daripada menggantung dana pengguna. R2.8 mengganti <code>NoPpobProviderGateway</code> dengan provider asinkron (Digiflazz dsb.) + settlement via webhook/polling; status <code>PENDING</code>/<code>PROCESSING</code>/<code>SUCCESS</code> sudah dimodelkan dan diuji di domain.</div>
+  <ul>
+    <li>Katalog masih seed statis; manajemen katalog via admin console → kandidat R2.9.</li>
+    <li>Mode demo Flutter (<code>TAPGO_PPOB_DEMO_MODE=true</code>) melayani katalog mini nol-network dan jujur mensimulasikan fail-closed.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Reproduksi</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Lapisan</th><th>Perintah</th></tr>
+    <tr><td>Backend (unit + integrasi)</td><td><code>cd apps/backend &amp;&amp; TAPGO_TEST_DATABASE_URL=... npx vitest run tests/ppob/</code></td></tr>
+    <tr><td>Widget test</td><td><code>cd apps/user_app &amp;&amp; flutter test test/ppob_customer_test.dart</code></td></tr>
+    <tr><td>Bukti visual</td><td><code>flutter test test/ppob_visual_evidence_test.dart --dart-define=TAPGO_PPOB_VISUAL=true --update-goldens</code></td></tr>
+  </table></div>
+  <p class="lead">Dokumen pendamping: <code>docs/release-2/R2_7_PPOB_ACCEPTANCE_CLOSURE.md</code></p>
+</section>
+
+</div>
+<footer>Dibuat oleh AI agent (OpenHands) untuk review Owner · TapGo Release 2 · Stage R2.7</footer>
+</body>
+</html>

@@ -54,7 +54,9 @@ class _ReferralTreeNodeWidget extends StatelessWidget {
                   switchOutCurve: _TapGoMotion.exitCurve,
                   transitionBuilder: (child, animation) => SizeTransition(
                     sizeFactor: animation,
-                    alignment: Alignment.topCenter,
+                    // Flutter 3.35 belum memiliki parameter `alignment` pada
+                    // SizeTransition; axisAlignment -1 setara top-center.
+                    axisAlignment: -1.0,
                     child: FadeTransition(opacity: animation, child: child),
                   ),
                   child: node.isExpanded

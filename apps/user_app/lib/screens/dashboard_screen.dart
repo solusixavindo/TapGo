@@ -2017,6 +2017,10 @@ class _ServiceGrid extends StatelessWidget {
     // fail closed adalah penyedia lokasi di dalam alurnya.
     _ServiceItem('Motor', Icons.two_wheeler_rounded, Color(0xFF0569E8), null),
     _ServiceItem('Mobil', Icons.local_taxi_rounded, Color(0xFF0B7A75), null),
+    // Stage R2.7: PPOB (pulsa/data/token/BPJS/PDAM/e-money) masuk grid Play;
+    // pembayaran via saldo internal sehingga tidak melanggar kebijakan
+    // pembayaran Play.
+    _ServiceItem('PPOB', Icons.payments_rounded, Color(0xFF1486B8), null),
     _ServiceItem('Kartu Anggota', Icons.badge_rounded, Color(0xFFF59E0B), null),
     _ServiceItem('Profil', Icons.person_rounded, Color(0xFF697386), null),
     _ServiceItem(
@@ -2094,6 +2098,12 @@ VoidCallback? _tapGoServiceActionFor(BuildContext context, _ServiceItem item) {
   final rideService = tapGoRideEntryServiceFor(item.label);
   if (rideService != null) {
     return () => tapGoOpenRideEntry(context, rideService);
+  }
+  // PPOB (Stage R2.7) berlaku pada kedua distribusi: pembelian pulsa/data/
+  // token memakai saldo internal TapGo, bukan pembayaran eksternal, sehingga
+  // sah pada build Play. 'Pulsa' adalah label lama grid direct.
+  if (item.label == 'PPOB' || item.label == 'Pulsa') {
+    return () => tapGoOpenPpobHome(context);
   }
   if (tapGoIsPlayDistribution) {
     return switch (item.label) {

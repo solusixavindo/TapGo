@@ -14,6 +14,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'demo/client_flow_models.dart';
+import 'features/ppob/application/ppob_providers.dart';
+import 'features/ppob/data/ppob_demo_repository.dart';
+import 'features/ppob/data/ppob_repository.dart';
+import 'features/ppob/domain/ppob_models.dart';
+import 'features/ppob/presentation/ppob_home_screen.dart';
 
 part 'data/demo_membership_data.dart';
 part 'data/demo_admin_data.dart';
@@ -109,6 +114,90 @@ bool get tapGoIsPlayDistribution =>
 
 bool get tapGoIsDirectDistribution =>
     _tapGoDistributionMode == TapGoDistributionMode.direct;
+
+/// Stage R2.7 — mode demo PPOB (UAT tanpa backend): katalog mini lokal dan
+/// order yang jujur mencerminkan fail-closed provider (REFUNDED).
+const tapGoPpobDemoMode = bool.fromEnvironment('TAPGO_PPOB_DEMO_MODE');
+
+/// Menjembatani fitur PPOB (library berdiri sendiri di lib/features/ppob/)
+/// dengan _apiClient privat milik library ini. Error Dio dinormalisasi
+/// menjadi PpobApiException agar lapisan UI tidak bergantung pada Dio.
+PpobRepository _buildPpobRepository() {
+  PpobApiException mapError(Object error) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      if (data is Map<String, dynamic>) {
+        return PpobApiException(
+          code: data['code'] is String ? data['code'] as String : 'UNKNOWN',
+          message: data['message'] is String
+              ? data['message'] as String
+              : 'Terjadi kesalahan pada server.',
+          statusCode: error.response?.statusCode,
+        );
+      }
+      return PpobApiException(
+        code: 'NETWORK_ERROR',
+        message: 'Koneksi ke server gagal.',
+        statusCode: error.response?.statusCode,
+      );
+    }
+    if (error is PpobApiException) {
+      return error;
+    }
+    return const PpobApiException(
+      code: 'UNKNOWN',
+      message: 'Terjadi kesalahan yang tidak dikenal.',
+    );
+  }
+
+  Future<T> guard<T>(Future<T> Function() call) async {
+    try {
+      return await call();
+    } catch (error) {
+      throw mapError(error);
+    }
+  }
+
+  return PpobRepository(
+    catalogRequest: () => guard(() async {
+      final payload = await _apiClient.get('ppob/catalog');
+      return payload['items'] is List ? payload['items'] as List<dynamic> : const [];
+    }),
+    inquiryRequest: ({required sku, required targetNumber}) => guard(
+      () => _apiClient.post(
+        'ppob/orders/inquiry',
+        body: {'sku': sku, 'targetNumber': targetNumber},
+      ),
+    ),
+    createOrderRequest: ({
+      required sku,
+      required targetNumber,
+      required idempotencyKey,
+    }) =>
+        guard(
+      () => _apiClient.post(
+        'ppob/orders',
+        body: {
+          'sku': sku,
+          'targetNumber': targetNumber,
+          'idempotencyKey': idempotencyKey,
+        },
+      ),
+    ),
+    ordersRequest: () => guard(() async {
+      final payload = await _apiClient.get('ppob/orders');
+      return payload['items'] is List ? payload['items'] as List<dynamic> : const [];
+    }),
+  );
+}
+
+/// Membuka beranda PPOB dari dashboard (kedua distribusi; pembelian memakai
+/// saldo internal sehingga sah pada distribusi Play).
+void tapGoOpenPpobHome(BuildContext context) {
+  Navigator.of(context).push(
+    _tapGoPageRoute((_) => const PpobHomeScreen()),
+  );
+}
 
 bool get _isPaymentSimulatorEnabled =>
     tapGoEnablePaymentSimulatorForTests ||
@@ -272,7 +361,16 @@ Future<void> main() async {
       _apiClient.setBaseUrl(_productionApiRootUrl);
     }
   }
-  runApp(const ProviderScope(child: TapGoUserApp()));
+  runApp(
+    ProviderScope(
+      overrides: [
+        ppobRepositoryProvider.overrideWithValue(
+          tapGoPpobDemoMode ? createDemoPpobRepository() : _buildPpobRepository(),
+        ),
+      ],
+      child: const TapGoUserApp(),
+    ),
+  );
 }
 
 Future<void> _prepareProductionFinalSync() async {

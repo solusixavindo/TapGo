@@ -167,7 +167,11 @@ void main() {
       expect(find.text('Profil'), findsWidgets);
       expect(find.bySemanticsLabel('Buka layanan TapGo Ride'), findsNothing);
       expect(find.bySemanticsLabel('Buka layanan TapGo Mart'), findsNothing);
-      expect(find.bySemanticsLabel('Buka layanan PPOB'), findsNothing);
+      // Stage R2.7: PPOB kini SAH pada distribusi Play — pembelian pulsa/
+      // data/token/BPJS/PDAM/e-money adalah pembayaran layanan dunia nyata
+      // memakai saldo internal (kategori yang dikecualikan dari Play Billing,
+      // sama seperti Gojek/Grab). Tanpa tautan eksternal maupun WebView.
+      expect(find.bySemanticsLabel('Buka layanan PPOB'), findsOneWidget);
       expect(
         find.bySemanticsLabel('Buka layanan Kartu Anggota'),
         findsOneWidget,
