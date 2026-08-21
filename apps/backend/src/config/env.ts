@@ -31,6 +31,10 @@ const envSchema = z.object({
   API_BASE_URL: z.string().url().optional(),
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url().optional(),
+  /* Kembali dimiliki: commit security "bagikan hitungan rate limit lewat Redis".
+   * Opsional; tanpa nilai, rate limiter memakai penyimpanan dalam-memori
+   * per-proses (hanya aman untuk deployment satu proses). */
+  RATE_LIMIT_REDIS_URL: z.string().url().optional(),
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
   JWT_ACCESS_TTL: z.string().default("15m"),

@@ -36,7 +36,28 @@ function resolvePpobProvider(): PpobProviderGateway {
   return new DisabledPpobProvider();
 }
 
-const service = new PpobService(new PrismaPpobRepository(prisma), resolvePpobProvider());
+/**
+ * Service dibuat lazily dan di-cache per nilai PPOB_PROVIDER.
+ *
+ * Kenapa lazy: env di-parse sekali saat modul dimuat, tetapi suite integration
+ * (singleFork) menjalankan beberapa file test dalam satu proses dan tiap file
+ * menset PPOB_PROVIDER berbeda ("stub" vs "digiflazz") SEBELUM mengimpor app.
+ * Bila service dibuat saat modul dimuat, adapter yang menang adalah milik file
+ * test yang lebih dulu mengimpor — race antar test. Dengan resolve per-request
+ * (cache di-invalidate saat env berubah), tiap konfigurasi mendapat adapter
+ * yang benar, dan produksi (env tidak berubah) tetap memakai satu instance.
+ */
+let cachedService: { provider: string; service: PpobService } | null = null;
+function getService(): PpobService {
+  const current = env.PPOB_PROVIDER;
+  if (!cachedService || cachedService.provider !== current) {
+    cachedService = {
+      provider: current,
+      service: new PpobService(new PrismaPpobRepository(prisma), resolvePpobProvider())
+    };
+  }
+  return cachedService.service;
+}
 
 /** Rupiah disajikan sebagai number; nilai PPOB jauh di bawah batas aman. */
 function money(value: Prisma.Decimal): number {
@@ -81,7 +102,7 @@ ppobRouter.get(
     const category = req.query.category as
       | "PULSA" | "DATA" | "PLN_PREPAID" | "PLN_POSTPAID" | "BPJS" | "EWALLET"
       | undefined;
-    const products = await service.listProducts(category);
+    const products = await getService().listProducts(category);
     res.json({
       success: true,
       data: products.map((product) => ({
@@ -102,7 +123,7 @@ ppobRouter.post(
   paymentRateLimiter,
   validateRequest(ppobPurchaseSchema),
   asyncHandler(async (req, res) => {
-    const { transaction, replayed } = await service.purchase({
+    const { transaction, replayed } = await getService().purchase({
       userId: req.auth!.userId,
       sku: req.body.sku,
       targetNumber: req.body.targetNumber,
@@ -123,7 +144,7 @@ ppobRouter.get(
   "/transactions",
   validateRequest(ppobHistoryQuerySchema),
   asyncHandler(async (req, res) => {
-    const transactions = await service.listMyTransactions(
+    const transactions = await getService().listMyTransactions(
       req.auth!.userId,
       Number(req.query.limit)
     );
@@ -135,7 +156,7 @@ ppobRouter.get(
   "/transactions/:reference",
   validateRequest(ppobReferenceSchema),
   asyncHandler(async (req, res) => {
-    const transaction = await service.getMyTransaction(
+    const transaction = await getService().getMyTransaction(
       req.auth!.userId,
       String(req.params.reference)
     );

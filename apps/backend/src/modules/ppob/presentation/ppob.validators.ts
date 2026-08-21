@@ -1,36 +1,34 @@
 import { z } from "zod";
 
-const targetNumberSchema = z
-  .string()
-  .min(5)
-  .max(60)
-  .regex(/^[0-9+\-\s]+$/, "Target number may only contain digits, spaces, '+', or '-'")
-  .transform((value) => value.replace(/[\s-]+/g, ""));
+const ppobCategory = z.enum(["PULSA", "DATA", "PLN_PREPAID", "PLN_POSTPAID", "BPJS", "EWALLET"]);
 
-export const ppobInquirySchema = z.object({
-  body: z.object({
-    sku: z.string().min(3).max(60),
-    targetNumber: targetNumberSchema
-  })
-});
-
-export const ppobCreateOrderSchema = z.object({
-  body: z.object({
-    sku: z.string().min(3).max(60),
-    targetNumber: targetNumberSchema,
-    idempotencyKey: z.string().min(8).max(120)
-  })
-});
-
-export const ppobOrderListSchema = z.object({
+export const ppobProductsQuerySchema = z.object({
   query: z.object({
-    page: z.coerce.number().int().min(1).default(1),
-    pageSize: z.coerce.number().int().min(1).max(100).default(20)
+    category: ppobCategory.optional()
   })
 });
 
-export const ppobOrderDetailSchema = z.object({
+export const ppobPurchaseSchema = z.object({
+  body: z.object({
+    sku: z
+      .string()
+      .trim()
+      .min(3)
+      .max(40)
+      .regex(/^[A-Z0-9_]+$/, "sku harus huruf besar/angka/underscore"),
+    targetNumber: z.string().trim().min(4).max(40)
+  }),
+  headers: z.object({}).passthrough()
+});
+
+export const ppobHistoryQuerySchema = z.object({
+  query: z.object({
+    limit: z.coerce.number().int().min(1).max(50).default(20)
+  })
+});
+
+export const ppobReferenceSchema = z.object({
   params: z.object({
-    orderId: z.string().uuid()
+    reference: z.string().regex(/^PPB-[A-Z2-9]{10}$/)
   })
 });

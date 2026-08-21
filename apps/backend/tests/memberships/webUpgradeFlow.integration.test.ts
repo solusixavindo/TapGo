@@ -169,16 +169,25 @@ describe.skipIf(!runIntegration)("Web upgrade flow contract", () => {
     expect(order.user.fullName).toBe("Demo Upgrade");
     expect(order.channel).toBe("WEB");
 
-    // Langkah 4: pembayaran. Tanpa kredensial penyedia, jalur sandbox menandai
-    // lunas — dan justru itu yang membuktikan aturan barunya bekerja.
-    const paid = await api(`/web/membership/orders/${order.id}/pay`, token, {
+    // Langkah 4: pembayaran. Kontrak security baru (fail-closed): TANPA
+    // kredensial penyedia, /pay menolak jujur dengan 503 — tidak ada lagi jalur
+    // "auto-paid" yang bisa menandai lunas tanpa membayar. Pelunasan pada
+    // environment test memakai simulator yang SAH: /payment-success, yang
+    // menuntut token pemilik order dan mati keras di production.
+    const payAttempt = await api(`/web/membership/orders/${order.id}/pay`, token, {
+      method: "POST",
+      body: JSON.stringify({})
+    });
+    expect(payAttempt.status).toBe(503);
+
+    // Simulator pembayaran SENGAJA hanya diekspos di kanal app
+    // (/api/v1/membership), bukan kanal web — aktivasi tidak boleh berasal dari
+    // klien web (lihat komentar web-membership.routes.ts).
+    const paid = await api(`/membership/orders/${order.id}/payment-success`, token, {
       method: "POST",
       body: JSON.stringify({})
     });
     expect(paid.status).toBe(200);
-    const handoff = paid.body.data as Record<string, unknown>;
-    expect(handoff).toHaveProperty("redirectUrl");
-    expect(handoff).toHaveProperty("orderId");
 
     // Langkah 5: lunas, tetapi BELUM aktif.
     const awaiting = await api(`/web/membership/orders/${order.id}`, token);
@@ -221,7 +230,13 @@ describe.skipIf(!runIntegration)("Web upgrade flow contract", () => {
       body: JSON.stringify({ packageId: silver.id, registrationData: { fullName: "Demo Upgrade" } })
     });
     const orderId = (created.body.data as { id: string }).id;
-    await api(`/web/membership/orders/${orderId}/pay`, token, { method: "POST", body: "{}" });
+    // Tandai lunas lewat simulator sah di kanal app (fail-closed: /pay tanpa
+    // kredensial menolak 503; lihat test "menjalankan seluruh langkah").
+    const paidRes = await api(`/membership/orders/${orderId}/payment-success`, token, {
+      method: "POST",
+      body: "{}"
+    });
+    expect(paidRes.status).toBe(200);
 
     const admin = await createUser("FLOWREJECT", "ADMIN");
     const rejected = await fetch(

@@ -2,7 +2,6 @@ import { Redis } from "ioredis";
 import type { Store } from "express-rate-limit";
 import RedisStore from "rate-limit-redis";
 import type { RedisReply } from "rate-limit-redis";
-import { env } from "../../config/env.js";
 import { logger } from "../logger/logger.js";
 
 /**
@@ -53,51 +52,84 @@ const KEY_PREFIX = "tapgo:rl:";
 /**
  * Klien Redis khusus rate limit.
  *
- * Dibuat sekali dan dibagi seluruh limiter. `null` bila RATE_LIMIT_REDIS_URL
- * tidak disetel — dan dalam keadaan itu limiter kembali memakai MemoryStore,
- * yang hanya benar untuk deployment satu proses.
+ * Dibuat lazily pada pemakaian pertama dan dibagi seluruh limiter. `null` bila
+ * RATE_LIMIT_REDIS_URL tidak disetel — dan dalam keadaan itu limiter kembali
+ * memakai MemoryStore, yang hanya benar untuk deployment satu proses.
+ *
+ * Kenapa lazy (bukan saat modul dimuat): `env` dari config/env.ts di-parse saat
+ * pertama kali dibaca. Membaca `env` di tingkat modul memaksa parse itu terjadi
+ * begitu file ini diimpor — dan file ini diimpor oleh rateLimit.ts yang dipakai
+ * test integration SEBELUM sempat menyetel DATABASE_URL/JWT di beforeAll, hingga
+ * modul gagal dimuat dengan ZodError. Dengan membaca env di dalam fungsi,
+ * parse baru terjadi saat limiter benar-benar dipakai (setelah env siap).
  */
-const rateLimitRedis: Redis | null = env.RATE_LIMIT_REDIS_URL
-  ? new Redis(env.RATE_LIMIT_REDIS_URL, {
-      // Rate limiting adalah jalur panas pada setiap permintaan. Menahan
-      // permintaan lama-lama demi menghitung kuota justru memindahkan gangguan
-      // Redis menjadi latensi API, jadi batasi percobaannya. Setelah batas ini
-      // tercapai, perintah yang masih menggantung ditolak — dan penolakan itulah
-      // yang membuat kebijakan open/closed di bawah sempat berlaku.
-      maxRetriesPerRequest: 3,
-      enableReadyCheck: true
-      // enableOfflineQueue SENGAJA dibiarkan pada nilai bawaannya (true).
-      //
-      // Mematikannya terlihat lebih tegas, tetapi salah di sini: constructor
-      // RedisStore langsung mengirim dua perintah SCRIPT LOAD untuk memuat skrip
-      // Lua-nya, dan store dibentuk saat modul dimuat — jauh sebelum socket
-      // Redis siap. Tanpa antrean offline, kedua perintah itu gagal seketika
-      // dengan "Stream isn't writeable" pada setiap boot yang sehat sekalipun,
-      // dan store berjalan tanpa script hash.
-    })
-  : null;
+let rateLimitRedis: Redis | null | undefined;
+let redisLogged = false;
 
-// ioredis melempar 'error' sebagai event. EventEmitter tanpa listener 'error'
-// akan MENJATUHKAN proses, jadi handler ini wajib ada — bukan sekadar demi log.
-rateLimitRedis?.on("error", (error: Error) => {
-  logger.error({ err: error, scope: "rate-limit-redis" }, "Rate limit Redis error");
-});
+function getRateLimitRedis(): Redis | null {
+  if (rateLimitRedis !== undefined) {
+    return rateLimitRedis;
+  }
+  // Baca dua nilai ini langsung dari process.env, BUKAN dari config/env.ts:
+  // mengimpor env.ts akan mem-parse seluruh skema (mewajibkan DATABASE_URL,
+  // JWT, dsb.) begitu modul ini diimpor — padahal modul ini diimpor oleh
+  // rateLimit.ts sebelum test integration menyetel env tersebut. RATE_LIMIT_REDIS_URL
+  // dan NODE_ENV keduanya opsional untuk jalur ini, jadi aman dibaca mentah.
+  const redisUrl = process.env.RATE_LIMIT_REDIS_URL;
+  const nodeEnv = process.env.NODE_ENV;
 
-if (env.RATE_LIMIT_REDIS_URL) {
-  logger.info({ rateLimitStore: "redis" }, "Rate limit counters are shared through Redis");
-} else if (env.NODE_ENV === "production") {
-  // Sengaja level error, bukan warn: pada deployment multi-proses ini berarti
-  // batas yang berlaku tidak sama dengan batas yang tertulis di kode.
-  logger.error(
-    { rateLimitStore: "memory" },
-    "RATE_LIMIT_REDIS_URL is not set — rate limits are per-process and reset on restart. " +
-      "Set it unless this deployment runs exactly one process."
-  );
-} else {
-  logger.info(
-    { rateLimitStore: "memory" },
-    "Rate limit counters are per-process (RATE_LIMIT_REDIS_URL not set)"
-  );
+  if (!redisUrl) {
+    rateLimitRedis = null;
+    if (!redisLogged) {
+      redisLogged = true;
+      if (nodeEnv === "production") {
+        // Sengaja level error, bukan warn: pada deployment multi-proses ini
+        // berarti batas yang berlaku tidak sama dengan batas yang tertulis di kode.
+        logger.error(
+          { rateLimitStore: "memory" },
+          "RATE_LIMIT_REDIS_URL is not set — rate limits are per-process and reset on restart. " +
+            "Set it unless this deployment runs exactly one process."
+        );
+      } else {
+        logger.info(
+          { rateLimitStore: "memory" },
+          "Rate limit counters are per-process (RATE_LIMIT_REDIS_URL not set)"
+        );
+      }
+    }
+    return rateLimitRedis;
+  }
+
+  rateLimitRedis = new Redis(redisUrl, {
+    // Rate limiting adalah jalur panas pada setiap permintaan. Menahan
+    // permintaan lama-lama demi menghitung kuota justru memindahkan gangguan
+    // Redis menjadi latensi API, jadi batasi percobaannya. Setelah batas ini
+    // tercapai, perintah yang masih menggantung ditolak — dan penolakan itulah
+    // yang membuat kebijakan open/closed di bawah sempat berlaku.
+    maxRetriesPerRequest: 3,
+    enableReadyCheck: true
+    // enableOfflineQueue SENGAJA dibiarkan pada nilai bawaannya (true).
+    //
+    // Mematikannya terlihat lebih tegas, tetapi salah di sini: constructor
+    // RedisStore langsung mengirim dua perintah SCRIPT LOAD untuk memuat skrip
+    // Lua-nya, dan store dibentuk saat modul dimuat — jauh sebelum socket
+    // Redis siap. Tanpa antrean offline, kedua perintah itu gagal seketika
+    // dengan "Stream isn't writeable" pada setiap boot yang sehat sekalipun,
+    // dan store berjalan tanpa script hash.
+  });
+
+  // ioredis melempar 'error' sebagai event. EventEmitter tanpa listener 'error'
+  // akan MENJATUHKAN proses, jadi handler ini wajib ada — bukan sekadar demi log.
+  rateLimitRedis.on("error", (error: Error) => {
+    logger.error({ err: error, scope: "rate-limit-redis" }, "Rate limit Redis error");
+  });
+
+  if (!redisLogged) {
+    redisLogged = true;
+    logger.info({ rateLimitStore: "redis" }, "Rate limit counters are shared through Redis");
+  }
+
+  return rateLimitRedis;
 }
 
 /**
@@ -118,7 +150,8 @@ export function rateLimitStore(
 ): { store?: Store; passOnStoreError: boolean } {
   const passOnStoreError = failureMode === "open";
 
-  if (!rateLimitRedis) {
+  const redis = getRateLimitRedis();
+  if (!redis) {
     // MemoryStore tidak pernah gagal, jadi passOnStoreError tidak berpengaruh.
     return { passOnStoreError };
   }
@@ -130,7 +163,7 @@ export function rateLimitStore(
     // menerima array dengan panjang yang tidak diketahui saat kompilasi.
     sendCommand: (...args: string[]) => {
       const [command, ...commandArgs] = args;
-      return rateLimitRedis.call(
+      return redis.call(
         command as string,
         commandArgs
       ) as Promise<RedisReply>;

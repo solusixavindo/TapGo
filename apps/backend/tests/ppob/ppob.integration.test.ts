@@ -1,26 +1,17 @@
-import { Prisma, User, UserRole } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
 import http, { Server } from "node:http";
 import { AddressInfo } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import {
-  cleanDatabase,
-  prisma,
-  runIntegration,
-  seedMemberships,
-  seedPpobCatalog,
-  testDatabaseUrl
-} from "../helpers/referralWalletHarness.js";
+import { prisma, runIntegration, testDatabaseUrl } from "../helpers/referralWalletHarness.js";
+import { apiRateLimiter, paymentRateLimiter } from "../../src/core/security/rateLimit.js";
+import { STUB_FAILURE_TARGET_SUFFIX } from "../../src/modules/ppob/infrastructure/StubPpobProvider.js";
 
-/**
- * Stage R2.7 — permukaan HTTP modul PPOB end-to-end (database nyata, app
- * nyata, tanpa mock). Yang dijaga di sini adalah kontrak transport: status
- * code, bentuk respons, isolasi antar-akun, dan fail-closed provider.
- *
- * Logika settlement provider (SUCCESS/FAILED/refund) tidak dapat dicapai via
- * HTTP pada stage ini karena gateway fail-closed; ia diuji di
- * ppobOrderService.unit.test.ts lewat port boundary yang memang dirancang
- * untuk ditukar pada Stage R2.8.
- */
+function resetRateLimits() {
+  for (const key of ["127.0.0.1", "::1", "::ffff:127.0.0.1"]) {
+    apiRateLimiter.resetKey(key);
+    paymentRateLimiter.resetKey(key);
+  }
+}
 
 type SignAccessToken = (payload: {
   sub: string;
@@ -28,81 +19,24 @@ type SignAccessToken = (payload: {
   sessionId: string;
 }) => string;
 
-let server: Server | undefined;
+let appServer: Server | undefined;
 let baseUrl = "";
 let signAccessToken: SignAccessToken;
+let sequence = 0;
 
-async function createPpobUser(
-  referralCode: string,
-  balance: string,
-  ppobBalance: string
-): Promise<User> {
-  const basic = await prisma.membership.findUniqueOrThrow({
-    where: { tier: "BASIC" }
-  });
-  const user = await prisma.user.create({
-    data: {
-      fullName: `User ${referralCode}`,
-      phone: `+628${referralCode.padStart(9, "0")}`,
-      referralCode,
-      role: "USER",
-      membershipId: basic.id
-    }
-  });
-  await prisma.wallet.create({
-    data: {
-      userId: user.id,
-      balance: new Prisma.Decimal(balance),
-      cashBalance: new Prisma.Decimal(balance),
-      ppobBalance: new Prisma.Decimal(ppobBalance),
-      currency: "IDR"
-    }
-  });
-  return user;
-}
-
-function tokenFor(user: User): string {
-  return signAccessToken({
-    sub: user.id,
-    role: user.role,
-    sessionId: `session-${user.id}`
-  });
-}
-
-async function callApi(
-  method: string,
-  path: string,
-  user?: User,
-  body?: Record<string, unknown>
-): Promise<{ status: number; json: Record<string, unknown> }> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    method,
-    headers: {
-      "content-type": "application/json",
-      ...(user ? { authorization: `Bearer ${tokenFor(user)}` } : {})
-    },
-    ...(body ? { body: JSON.stringify(body) } : {})
-  });
-  return { status: response.status, json: (await response.json()) as Record<string, unknown> };
-}
-
-describe.skipIf(!runIntegration)("PPOB HTTP surface (Stage R2.7)", () => {
+describe.skipIf(!runIntegration)("Stage R2.7 — PPOB foundation", () => {
   beforeAll(async () => {
     if (!testDatabaseUrl?.toLowerCase().includes("test")) {
-      throw new Error(
-        "TAPGO_TEST_DATABASE_URL must point to a dedicated test database."
-      );
+      throw new Error("TAPGO_TEST_DATABASE_URL must point to a dedicated test database.");
     }
-
     process.env.NODE_ENV = "test";
     process.env.DATABASE_URL = testDatabaseUrl;
     process.env.JWT_ACCESS_SECRET =
-      process.env.JWT_ACCESS_SECRET ?? "test-access-secret-for-ppob-surface";
+      process.env.JWT_ACCESS_SECRET ?? "ppob-foundation-access-secret-000000000";
     process.env.JWT_REFRESH_SECRET =
-      process.env.JWT_REFRESH_SECRET ??
-      "test-refresh-secret-for-ppob-surface";
-    process.env.JWT_ACCESS_TTL = process.env.JWT_ACCESS_TTL ?? "15m";
-    process.env.JWT_REFRESH_TTL_DAYS = process.env.JWT_REFRESH_TTL_DAYS ?? "30";
+      process.env.JWT_REFRESH_SECRET ?? "ppob-foundation-refresh-secret-00000000";
+    // Adapter stub deterministik: kegagalan hanya lewat nomor sentinel.
+    process.env.PPOB_PROVIDER = "stub";
 
     const [{ createApp }, tokenService] = await Promise.all([
       import("../../src/app.js"),
@@ -110,231 +44,429 @@ describe.skipIf(!runIntegration)("PPOB HTTP surface (Stage R2.7)", () => {
     ]);
     signAccessToken = tokenService.signAccessToken;
 
-    server = http.createServer(createApp());
-    await new Promise<void>((resolve) =>
-      server!.listen(0, "127.0.0.1", resolve)
-    );
-    const address = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${address.port}`;
+    appServer = http.createServer(createApp());
+    await new Promise<void>((resolve) => appServer!.listen(0, "127.0.0.1", resolve));
+    baseUrl = `http://127.0.0.1:${(appServer.address() as AddressInfo).port}`;
   });
 
   beforeEach(async () => {
-    await cleanDatabase();
-    await seedMemberships();
-    await seedPpobCatalog();
+    resetRateLimits();
+    await cleanPpobTables();
+    await seedCatalog();
   });
 
   afterAll(async () => {
-    await cleanDatabase();
     await new Promise<void>((resolve, reject) => {
-      if (!server) {
-        resolve();
-        return;
-      }
-      server.close((error) => (error ? reject(error) : resolve()));
+      if (!appServer) return resolve();
+      appServer.close((e) => (e ? reject(e) : resolve()));
     });
   });
 
-  it("menolak seluruh endpoint PPOB tanpa token", async () => {
-    const endpoints: Array<{ method: string; path: string }> = [
-      { method: "GET", path: "/api/v1/ppob/catalog" },
-      { method: "GET", path: "/api/v1/ppob/orders" },
-      { method: "POST", path: "/api/v1/ppob/orders/inquiry" },
-      { method: "POST", path: "/api/v1/ppob/orders" }
-    ];
-    for (const endpoint of endpoints) {
-      const { status } = await callApi(endpoint.method, endpoint.path);
-      expect(status, `${endpoint.method} ${endpoint.path} harus menolak tanpa token`).toBe(401);
+  // --- Katalog ---------------------------------------------------------------
+
+  it("katalog hanya menyajikan produk aktif, terurut, dan dapat difilter kategori", async () => {
+    const user = await createUser("USER");
+
+    const all = await api("/api/v1/ppob/products", { token: tokenFor(user) });
+    expect(all.status).toBe(200);
+    const allBody = (await all.json()) as { data: any[] };
+    const skus = allBody.data.map((p) => p.sku);
+    expect(skus).toContain("PULSA_TSEL_10");
+    expect(skus).not.toContain("PULSA_INACTIVE");
+    // Tidak ada field internal (id, isActive, sortOrder) yang bocor.
+    expect(allBody.data[0]).not.toHaveProperty("id");
+    expect(allBody.data[0]).not.toHaveProperty("isActive");
+
+    const pulsaOnly = await api("/api/v1/ppob/products?category=PULSA", {
+      token: tokenFor(user)
+    });
+    const pulsaBody = (await pulsaOnly.json()) as { data: any[] };
+    expect(pulsaBody.data.every((p) => p.category === "PULSA")).toBe(true);
+  });
+
+  it("menolak kategori tak dikenal dan permintaan tanpa token", async () => {
+    const user = await createUser("USER");
+    const badCategory = await api("/api/v1/ppob/products?category=STREAMING", {
+      token: tokenFor(user)
+    });
+    expect(badCategory.status).toBe(400);
+
+    const anonymous = await api("/api/v1/ppob/products");
+    expect(anonymous.status).toBe(401);
+  });
+
+  // --- Pembelian sukses --------------------------------------------------------
+
+  it("pembelian sukses: debit ppobBalance sekali, ledger lengkap, serial terbit", async () => {
+    const user = await createUserWithPpobBalance("100000");
+
+    const res = await api("/api/v1/ppob/transactions", {
+      method: "POST",
+      token: tokenFor(user),
+      idempotencyKey: "purchase-success-1",
+      body: { sku: "PULSA_TSEL_10", targetNumber: "+6285612345678" }
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { data: any };
+
+    expect(body.data.reference).toMatch(/^PPB-[A-Z2-9]{10}$/);
+    expect(body.data.status).toBe("SUCCESS");
+    expect(body.data.targetNumber).toBe("085612345678");
+    expect(body.data.totalAmount).toBe(11500);
+    expect(body.data.serialNumber).toBe(`STUB-SN-${body.data.reference.slice(4)}`);
+    // Field internal tidak pernah disajikan.
+    for (const internal of ["userId", "productId", "provider", "providerReference", "idempotencyKey", "walletTransactionId"]) {
+      expect(body.data).not.toHaveProperty(internal);
     }
-  });
-
-  it("mengembalikan katalog berisi kategori dan produk aktif saja", async () => {
-    const user = await createPpobUser("PPOBCAT01", "500000.00", "100000.00");
-    const { status, json } = await callApi("GET", "/api/v1/ppob/catalog", user);
-
-    expect(status).toBe(200);
-    expect(json.success).toBe(true);
-    const categories = json.data as Array<{
-      code: string;
-      name: string;
-      products: Array<{ sku: string; price: string }>;
-    }>;
-    expect(categories.length).toBeGreaterThanOrEqual(1);
-    const pulsa = categories.find((category) => category.code === "PULSA");
-    expect(pulsa).toBeDefined();
-    const skus = pulsa!.products.map((product) => product.sku);
-    expect(skus).toContain("PULSA_10K");
-    // Produk nonaktif tidak boleh bocor ke katalog customer.
-    expect(skus).not.toContain("PULSA_100K_INACTIVE");
-  });
-
-  it("inquiry menghitung total dan rincian saldo gabungan", async () => {
-    const user = await createPpobUser("PPOBINQ01", "500000.00", "5000.00");
-    const { status, json } = await callApi("POST", "/api/v1/ppob/orders/inquiry", user, {
-      sku: "PULSA_10K",
-      targetNumber: "081234567890"
-    });
-
-    expect(status).toBe(200);
-    const data = json.data as {
-      amount: string;
-      payment: { benefitAmount: string; balanceAmount: string; sufficient: boolean };
-      wallet: { balance: string; ppobBalance: string };
-    };
-    expect(Number(data.amount)).toBe(11500);
-    // Benefit Rp5.000 habis lebih dulu, sisanya dari saldo utama.
-    expect(Number(data.payment.benefitAmount)).toBe(5000);
-    expect(Number(data.payment.balanceAmount)).toBe(6500);
-    expect(data.payment.sufficient).toBe(true);
-    expect(Number(data.wallet.balance)).toBe(500000);
-  });
-
-  it("inquiry menandai saldo tidak cukup tanpa melempar error", async () => {
-    const user = await createPpobUser("PPOBINQ02", "1000.00", "0.00");
-    const { status, json } = await callApi("POST", "/api/v1/ppob/orders/inquiry", user, {
-      sku: "PULSA_10K",
-      targetNumber: "081234567890"
-    });
-
-    expect(status).toBe(200);
-    const data = json.data as { payment: { sufficient: boolean } };
-    expect(data.payment.sufficient).toBe(false);
-  });
-
-  it("inquiry menolak nomor tujuan yang tidak cocok pola produk", async () => {
-    const user = await createPpobUser("PPOBINQ03", "500000.00", "0.00");
-    // "12345" lolos sanitasi zod tetapi tidak memenuhi pola PULSA (10-15 digit).
-    const { status, json } = await callApi("POST", "/api/v1/ppob/orders/inquiry", user, {
-      sku: "PULSA_10K",
-      targetNumber: "12345"
-    });
-
-    expect(status).toBe(400);
-    expect(json.code).toBe("PPOB_TARGET_INVALID");
-  });
-
-  it("inquiry menolak SKU yang tidak dikenal dan produk nonaktif", async () => {
-    const user = await createPpobUser("PPOBINQ04", "500000.00", "0.00");
-
-    const unknown = await callApi("POST", "/api/v1/ppob/orders/inquiry", user, {
-      sku: "TIDAK_ADA",
-      targetNumber: "081234567890"
-    });
-    expect(unknown.status).toBe(404);
-    expect(unknown.json.code).toBe("PPOB_PRODUCT_NOT_FOUND");
-
-    const inactive = await callApi("POST", "/api/v1/ppob/orders/inquiry", user, {
-      sku: "PULSA_100K_INACTIVE",
-      targetNumber: "081234567890"
-    });
-    expect(inactive.status).toBe(400);
-    expect(inactive.json.code).toBe("PPOB_PRODUCT_INACTIVE");
-  });
-
-  it("create order fail-closed: 503, tanpa record order, saldo tidak tersentuh", async () => {
-    const user = await createPpobUser("PPOBCRT01", "500000.00", "100000.00");
-    const { status, json } = await callApi("POST", "/api/v1/ppob/orders", user, {
-      sku: "PULSA_10K",
-      targetNumber: "081234567890",
-      idempotencyKey: "ppob-test-key-0001"
-    });
-
-    expect(status).toBe(503);
-    expect(json.code).toBe("PPOB_PROVIDER_UNAVAILABLE");
-
-    const orders = await prisma.ppobOrder.findMany({ where: { userId: user.id } });
-    expect(orders).toHaveLength(0);
 
     const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
-    expect(wallet.balance.toString()).toBe("500000");
-    expect(wallet.ppobBalance.toString()).toBe("100000");
+    expect(wallet.ppobBalance.toFixed(2)).toBe("88500.00");
+    // ppobBalance adalah bucket non-withdrawable: balance TIDAK ikut terdebit.
+    expect(wallet.balance.toFixed(2)).toBe("0.00");
 
     const ledger = await prisma.walletTransaction.findMany({
       where: { walletId: wallet.id }
     });
-    expect(ledger).toHaveLength(0);
+    expect(ledger).toHaveLength(1);
+    expect(ledger[0]!.type).toBe("PPOB_PURCHASE");
+    expect(ledger[0]!.amount.toFixed(2)).toBe("-11500.00");
+    expect(ledger[0]!.referenceId).toBe(body.data.reference);
   });
 
-  it("retry dengan idempotency key yang sama juga fail-closed tanpa duplikasi", async () => {
-    const user = await createPpobUser("PPOBCRT02", "500000.00", "0.00");
-    const payload = {
-      sku: "PULSA_10K",
-      targetNumber: "081234567890",
-      idempotencyKey: "ppob-test-key-0002"
-    };
-    const first = await callApi("POST", "/api/v1/ppob/orders", user, payload);
-    const second = await callApi("POST", "/api/v1/ppob/orders", user, payload);
+  it("replay Idempotency-Key mengembalikan transaksi yang sama tanpa debit kedua", async () => {
+    const user = await createUserWithPpobBalance("100000");
+    const payload = { sku: "PULSA_TSEL_10", targetNumber: "6285612345678" };
 
-    expect(first.status).toBe(503);
-    expect(second.status).toBe(503);
-    const orders = await prisma.ppobOrder.findMany({ where: { userId: user.id } });
-    expect(orders).toHaveLength(0);
+    const first = await api("/api/v1/ppob/transactions", {
+      method: "POST",
+      token: tokenFor(user),
+      idempotencyKey: "purchase-replay-1",
+      body: payload
+    });
+    expect(first.status).toBe(201);
+    const firstBody = (await first.json()) as { data: any };
+
+    // Bentuk nomor berbeda ("0856…"), nomor ternormalisasi sama -> replay.
+    const second = await api("/api/v1/ppob/transactions", {
+      method: "POST",
+      token: tokenFor(user),
+      idempotencyKey: "purchase-replay-1",
+      body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" }
+    });
+    expect(second.status).toBe(200);
+    const secondBody = (await second.json()) as { data: any };
+    expect(secondBody.data.reference).toBe(firstBody.data.reference);
+    expect(secondBody.data.serialNumber).toBe(firstBody.data.serialNumber);
+
+    const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
+    expect(wallet.ppobBalance.toFixed(2)).toBe("88500.00");
+    const ledgerCount = await prisma.walletTransaction.count({
+      where: { walletId: wallet.id }
+    });
+    expect(ledgerCount).toBe(1);
   });
 
-  it("riwayat order kosong mengembalikan array kosong", async () => {
-    const user = await createPpobUser("PPOBHIS01", "500000.00", "0.00");
-    const { status, json } = await callApi("GET", "/api/v1/ppob/orders", user);
+  it("Idempotency-Key sama dengan payload berbeda ditolak 409", async () => {
+    const user = await createUserWithPpobBalance("100000");
 
-    expect(status).toBe(200);
-    expect(json.data).toEqual([]);
-  });
-
-  it("detail order milik akun lain dijawab 404 (anti-enumerasi)", async () => {
-    const alice = await createPpobUser("PPOBOWN01", "500000.00", "0.00");
-    const bob = await createPpobUser("PPOBOWN02", "500000.00", "0.00");
-
-    const product = await prisma.ppobProduct.findUniqueOrThrow({ where: { sku: "PULSA_10K" } });
-    const order = await prisma.ppobOrder.create({
-      data: {
-        userId: alice.id,
-        productId: product.id,
-        targetNumber: "081234567890",
-        amount: new Prisma.Decimal(11500),
-        benefitAmount: new Prisma.Decimal(0),
-        balanceAmount: new Prisma.Decimal(11500),
-        status: "SUCCESS",
-        idempotencyKey: "ppob-seeded-order-1"
-      }
+    await api("/api/v1/ppob/transactions", {
+      method: "POST",
+      token: tokenFor(user),
+      idempotencyKey: "purchase-conflict-1",
+      body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" }
     });
 
-    const asBob = await callApi("GET", `/api/v1/ppob/orders/${order.id}`, bob);
-    expect(asBob.status).toBe(404);
-    expect(asBob.json.code).toBe("PPOB_ORDER_NOT_FOUND");
+    const conflict = await api("/api/v1/ppob/transactions", {
+      method: "POST",
+      token: tokenFor(user),
+      idempotencyKey: "purchase-conflict-1",
+      body: { sku: "PULSA_TSEL_25", targetNumber: "085612345678" }
+    });
+    expect(conflict.status).toBe(409);
+    const body = (await conflict.json()) as { code?: string };
+    expect(body.code).toBe("PPOB_IDEMPOTENCY_CONFLICT");
 
-    const asAlice = await callApi("GET", `/api/v1/ppob/orders/${order.id}`, alice);
-    expect(asAlice.status).toBe(200);
-    const detail = asAlice.json.data as { sku: string; status: string; amount: string };
-    expect(detail.sku).toBe("PULSA_10K");
-    expect(detail.status).toBe("SUCCESS");
-    expect(Number(detail.amount)).toBe(11500);
-
-    // Dan order Alice muncul di riwayat Alice, bukan di riwayat Bob.
-    const aliceHistory = await callApi("GET", "/api/v1/ppob/orders", alice);
-    expect((aliceHistory.json.data as unknown[]).length).toBe(1);
-    const bobHistory = await callApi("GET", "/api/v1/ppob/orders", bob);
-    expect(bobHistory.json.data).toEqual([]);
+    const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
+    expect(wallet.ppobBalance.toFixed(2)).toBe("88500.00");
   });
 
-  it("validasi input menolak target berisi huruf dan idempotency key pendek", async () => {
-    const user = await createPpobUser("PPOBVAL01", "500000.00", "0.00");
+  // --- Penolakan yang aman ----------------------------------------------------
 
-    const badTarget = await callApi("POST", "/api/v1/ppob/orders", user, {
-      sku: "PULSA_10K",
-      targetNumber: "08ABC",
-      idempotencyKey: "ppob-test-key-0003"
+  it("saldo tidak cukup: 400 tanpa transaksi dan tanpa ledger tersisa", async () => {
+    const user = await createUserWithPpobBalance("5000");
+
+    const res = await api("/api/v1/ppob/transactions", {
+      method: "POST",
+      token: tokenFor(user),
+      body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" }
+    });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { code?: string }).code).toBe("INSUFFICIENT_PPOB_BALANCE");
+
+    expect(await prisma.ppobTransaction.count({ where: { userId: user.id } })).toBe(0);
+    const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
+    expect(wallet.ppobBalance.toFixed(2)).toBe("5000.00");
+    expect(await prisma.walletTransaction.count({ where: { walletId: wallet.id } })).toBe(0);
+  });
+
+  it("sku tidak dikenal -> 404, target tidak valid -> 400, tanpa menyentuh saldo", async () => {
+    const user = await createUserWithPpobBalance("100000");
+
+    const unknownSku = await api("/api/v1/ppob/transactions", {
+      method: "POST",
+      token: tokenFor(user),
+      body: { sku: "PULSA_HANTU_10", targetNumber: "085612345678" }
+    });
+    expect(unknownSku.status).toBe(404);
+    expect(((await unknownSku.json()) as { code?: string }).code).toBe("PPOB_PRODUCT_NOT_FOUND");
+
+    const badTarget = await api("/api/v1/ppob/transactions", {
+      method: "POST",
+      token: tokenFor(user),
+      body: { sku: "PULSA_TSEL_10", targetNumber: "0712345678" }
     });
     expect(badTarget.status).toBe(400);
-    expect(badTarget.json.code).toBe("VALIDATION_ERROR");
+    expect(((await badTarget.json()) as { code?: string }).code).toBe("PPOB_TARGET_INVALID");
 
-    const badKey = await callApi("POST", "/api/v1/ppob/orders", user, {
-      sku: "PULSA_10K",
-      targetNumber: "081234567890",
-      idempotencyKey: "abc"
+    const badPln = await api("/api/v1/ppob/transactions", {
+      method: "POST",
+      token: tokenFor(user),
+      body: { sku: "PLN_TOKEN_20", targetNumber: "12345" }
     });
-    expect(badKey.status).toBe(400);
-    expect(badKey.json.code).toBe("VALIDATION_ERROR");
+    expect(badPln.status).toBe(400);
 
-    const orders = await prisma.ppobOrder.findMany({ where: { userId: user.id } });
-    expect(orders).toHaveLength(0);
+    const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
+    expect(wallet.ppobBalance.toFixed(2)).toBe("100000.00");
+    expect(await prisma.ppobTransaction.count({ where: { userId: user.id } })).toBe(0);
+  });
+
+  // --- Jalur kegagalan & refund -------------------------------------------------
+
+  it("kegagalan provider (nomor sentinel): FAILED + refund penuh + ledger PPOB_REFUND", async () => {
+    const user = await createUserWithPpobBalance("100000");
+    const sentinelTarget = `085612${STUB_FAILURE_TARGET_SUFFIX}`;
+
+    const res = await api("/api/v1/ppob/transactions", {
+      method: "POST",
+      token: tokenFor(user),
+      idempotencyKey: "purchase-fail-1",
+      body: { sku: "PULSA_TSEL_10", targetNumber: sentinelTarget }
+    });
+    // Pembelian DITERIMA (201) tetapi hasil akhirnya FAILED dengan refund.
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { data: any };
+    expect(body.data.status).toBe("FAILED");
+    expect(body.data.failureCode).toBe("STUB_FORCED_FAILURE");
+    expect(body.data.serialNumber).toBeNull();
+
+    const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
+    expect(wallet.ppobBalance.toFixed(2)).toBe("100000.00");
+
+    const ledger = await prisma.walletTransaction.findMany({
+      where: { walletId: wallet.id },
+      orderBy: { createdAt: "asc" }
+    });
+    expect(ledger.map((row) => row.type)).toEqual(["PPOB_PURCHASE", "PPOB_REFUND"]);
+    expect(ledger[1]!.amount.toFixed(2)).toBe("11500.00");
+
+    // Replay idempotency pada transaksi FAILED mengembalikan hasil yang sama,
+    // BUKAN mencoba pembelian ulang.
+    const replay = await api("/api/v1/ppob/transactions", {
+      method: "POST",
+      token: tokenFor(user),
+      idempotencyKey: "purchase-fail-1",
+      body: { sku: "PULSA_TSEL_10", targetNumber: sentinelTarget }
+    });
+    expect(replay.status).toBe(200);
+    expect(((await replay.json()) as { data: any }).data.status).toBe("FAILED");
+
+    const refundCount = await prisma.walletTransaction.count({
+      where: { walletId: wallet.id, type: "PPOB_REFUND" }
+    });
+    expect(refundCount).toBe(1);
+  });
+
+  it("provider disabled (service-level): 503, refund penuh, transaksi FAILED", async () => {
+    // Adapter disabled tidak dapat dipasang lewat HTTP karena env dibaca sekali
+    // saat boot; jalurnya diuji pada service NYATA dengan repository NYATA
+    // (tanpa mock) — sama seperti yang dipakai resolvePpobProvider() default.
+    const { PpobService } = await import("../../src/modules/ppob/application/PpobService.js");
+    const { PrismaPpobRepository } = await import(
+      "../../src/modules/ppob/infrastructure/PrismaPpobRepository.js"
+    );
+    const { DisabledPpobProvider } = await import(
+      "../../src/modules/ppob/infrastructure/DisabledPpobProvider.js"
+    );
+
+    const service = new PpobService(new PrismaPpobRepository(prisma), new DisabledPpobProvider());
+    const user = await createUserWithPpobBalance("100000");
+
+    await expect(
+      service.purchase({
+        userId: user.id,
+        sku: "PULSA_TSEL_10",
+        targetNumber: "085612345678"
+      })
+    ).rejects.toMatchObject({ statusCode: 503, code: "PPOB_PROVIDER_DISABLED" });
+
+    const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
+    expect(wallet.ppobBalance.toFixed(2)).toBe("100000.00");
+
+    const transaction = await prisma.ppobTransaction.findFirstOrThrow({
+      where: { userId: user.id }
+    });
+    expect(transaction.status).toBe("FAILED");
+    expect(transaction.failureCode).toBe("PROVIDER_DISABLED");
+  });
+
+  // --- Histori & isolasi ---------------------------------------------------------
+
+  it("histori terurut terbaru dulu dan detail milik orang lain menjawab 404", async () => {
+    const user = await createUserWithPpobBalance("500000");
+    const other = await createUser("USER");
+
+    for (const [index, sku] of ["PULSA_TSEL_10", "PLN_TOKEN_20"].entries()) {
+      await api("/api/v1/ppob/transactions", {
+        method: "POST",
+        token: tokenFor(user),
+        idempotencyKey: `history-${index}`,
+        body: {
+          sku,
+          targetNumber: sku.startsWith("PLN") ? "12345678901" : "085612345678"
+        }
+      });
+    }
+
+    const history = await api("/api/v1/ppob/transactions", { token: tokenFor(user) });
+    expect(history.status).toBe(200);
+    const historyBody = (await history.json()) as { data: any[] };
+    expect(historyBody.data).toHaveLength(2);
+    expect(historyBody.data[0]!.sku).toBe("PLN_TOKEN_20");
+    expect(historyBody.data[1]!.sku).toBe("PULSA_TSEL_10");
+
+    const reference = historyBody.data[1]!.reference;
+    const detail = await api(`/api/v1/ppob/transactions/${reference}`, {
+      token: tokenFor(user)
+    });
+    expect(detail.status).toBe(200);
+    expect(((await detail.json()) as { data: any }).data.reference).toBe(reference);
+
+    const stolen = await api(`/api/v1/ppob/transactions/${reference}`, {
+      token: tokenFor(other)
+    });
+    expect(stolen.status).toBe(404);
+    expect(((await stolen.json()) as { code?: string }).code).toBe(
+      "PPOB_TRANSACTION_NOT_FOUND"
+    );
+
+    const malformed = await api("/api/v1/ppob/transactions/BUKAN-REFERENSI", {
+      token: tokenFor(user)
+    });
+    expect(malformed.status).toBe(400);
+  });
+
+  it("pembelian tanpa token ditolak 401", async () => {
+    const res = await api("/api/v1/ppob/transactions", {
+      method: "POST",
+      body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" }
+    });
+    expect(res.status).toBe(401);
   });
 });
+
+// --- Helpers -------------------------------------------------------------------
+
+async function cleanPpobTables() {
+  await prisma.ppobTransaction.deleteMany();
+  await prisma.ppobProduct.deleteMany();
+  await prisma.walletTransaction.deleteMany();
+  await prisma.wallet.deleteMany();
+  await prisma.user.deleteMany();
+}
+
+async function seedCatalog() {
+  const products: Array<{
+    sku: string;
+    category: "PULSA" | "DATA" | "PLN_PREPAID" | "PLN_POSTPAID" | "BPJS" | "EWALLET";
+    brand: string;
+    name: string;
+    price: string;
+    adminFee?: string;
+    isActive?: boolean;
+    sortOrder?: number;
+  }> = [
+    { sku: "PULSA_TSEL_10", category: "PULSA", brand: "Telkomsel", name: "Pulsa Telkomsel 10.000", price: "11500", sortOrder: 1 },
+    { sku: "PULSA_TSEL_25", category: "PULSA", brand: "Telkomsel", name: "Pulsa Telkomsel 25.000", price: "26500", sortOrder: 2 },
+    { sku: "PLN_TOKEN_20", category: "PLN_PREPAID", brand: "PLN", name: "Token PLN 20.000", price: "20500", sortOrder: 3 },
+    { sku: "PULSA_INACTIVE", category: "PULSA", brand: "Telkomsel", name: "Produk nonaktif", price: "1", isActive: false, sortOrder: 99 }
+  ];
+
+  for (const product of products) {
+    await prisma.ppobProduct.create({
+      data: {
+        sku: product.sku,
+        category: product.category,
+        brand: product.brand,
+        name: product.name,
+        price: new Prisma.Decimal(product.price),
+        adminFee: new Prisma.Decimal(product.adminFee ?? "0"),
+        isActive: product.isActive ?? true,
+        sortOrder: product.sortOrder ?? 0
+      }
+    });
+  }
+}
+
+async function createUser(role: UserRole) {
+  sequence += 1;
+  return prisma.user.create({
+    data: {
+      fullName: `PPOB User ${sequence}`,
+      phone: `+6287${String(sequence).padStart(9, "0")}`,
+      referralCode: `PPOB${String(sequence).padStart(6, "0")}`,
+      role
+    }
+  });
+}
+
+async function createUserWithPpobBalance(amount: string) {
+  const user = await createUser("USER");
+  await prisma.wallet.create({
+    data: {
+      userId: user.id,
+      balance: new Prisma.Decimal(0),
+      cashBalance: new Prisma.Decimal(0),
+      ppobBalance: new Prisma.Decimal(amount),
+      currency: "IDR"
+    }
+  });
+  return user;
+}
+
+async function api(
+  path: string,
+  options: {
+    method?: string;
+    token?: string;
+    body?: unknown;
+    idempotencyKey?: string;
+  } = {}
+) {
+  return fetch(`${baseUrl}${path}`, {
+    method: options.method ?? "GET",
+    headers: {
+      ...(options.token ? { authorization: `Bearer ${options.token}` } : {}),
+      ...(options.body ? { "content-type": "application/json" } : {}),
+      ...(options.idempotencyKey ? { "idempotency-key": options.idempotencyKey } : {})
+    },
+    ...(options.body ? { body: JSON.stringify(options.body) } : {})
+  });
+}
+
+function tokenFor(user: { id: string; role: UserRole }) {
+  return signAccessToken({
+    sub: user.id,
+    role: user.role,
+    sessionId: `session-${user.id}`
+  });
+}

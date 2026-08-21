@@ -89,11 +89,10 @@ export async function cleanDatabase() {
   // ditolak database.
   await prisma.adminScopeGrant.deleteMany();
   await prisma.user.deleteMany();
-  // PpobOrder cascade-delete mengikuti user; product RESTRICT dari order,
-  // jadi katalog baru bisa dibersihkan setelah user (dan ordernya) hilang.
-  await prisma.ppobOrder.deleteMany();
+  // User dihapus dulu; PpobTransaction cascade-delete mengikuti user. Produk
+  // dibersihkan setelah transaksinya hilang (relation RESTRICT pada produk).
+  await prisma.ppobTransaction.deleteMany();
   await prisma.ppobProduct.deleteMany();
-  await prisma.ppobCategory.deleteMany();
   await prisma.membershipBenefit.deleteMany();
   await prisma.membership.deleteMany();
 }
@@ -189,47 +188,37 @@ export async function createUser(referralCode: string, tier: MembershipTier = "B
   });
 }
 
-// Release 2.7 — katalog PPOB minimal untuk test: satu kategori aktif + produk
-// aktif/nonaktif, selaras kontraknya dengan seed produksi (lihat migration
-// 20260821130000_ppob_foundation).
+// Release 2.8 — katalog PPOB minimal untuk test: produk aktif/nonaktif memakai
+// enum kategori + field brand (skema PpobTransaction), selaras kontraknya
+// dengan seed produksi (migration 20260821013849_ppob_foundation).
 export async function seedPpobCatalog(): Promise<void> {
-  const pulsa = await prisma.ppobCategory.upsert({
-    where: { code: "PULSA" },
+  await prisma.ppobProduct.upsert({
+    where: { sku: "PULSA_10K" },
     update: {},
     create: {
-      code: "PULSA",
-      name: "Pulsa",
-      description: "Isi ulang pulsa reguler semua operator.",
-      icon: "phone_iphone",
-      sortOrder: 1,
-      products: {
-        create: [
-          {
-            sku: "PULSA_10K",
-            name: "Pulsa Rp10.000",
-            price: new Prisma.Decimal(11500),
-            adminFee: new Prisma.Decimal(0),
-            targetLabel: "Nomor HP",
-            targetPattern: "^[0-9]{10,15}$",
-            sortOrder: 1
-          },
-          {
-            sku: "PULSA_100K_INACTIVE",
-            name: "Pulsa Rp100.000 (Nonaktif)",
-            price: new Prisma.Decimal(101000),
-            adminFee: new Prisma.Decimal(0),
-            targetLabel: "Nomor HP",
-            targetPattern: "^[0-9]{10,15}$",
-            sortOrder: 2,
-            isActive: false
-          }
-        ]
-      }
+      sku: "PULSA_10K",
+      category: "PULSA",
+      brand: "Telkomsel",
+      name: "Pulsa Rp10.000",
+      price: new Prisma.Decimal(11500),
+      adminFee: new Prisma.Decimal(0),
+      sortOrder: 1
     }
   });
-  if (!pulsa) {
-    throw new Error("seedPpobCatalog failed");
-  }
+  await prisma.ppobProduct.upsert({
+    where: { sku: "PULSA_100K_INACTIVE" },
+    update: {},
+    create: {
+      sku: "PULSA_100K_INACTIVE",
+      category: "PULSA",
+      brand: "Telkomsel",
+      name: "Pulsa Rp100.000 (Nonaktif)",
+      price: new Prisma.Decimal(101000),
+      adminFee: new Prisma.Decimal(0),
+      sortOrder: 2,
+      isActive: false
+    }
+  });
 }
 
 // P1-4: pastikan baris kuota registrasi selalu ada dan granted=0 di awal tiap

@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole } from "@prisma/client";
+import { PrismaClient, UserRole, PpobCategory } from "@prisma/client";
 import { hashPassword } from "../src/core/security/passwordHasher.js";
 
 const prisma = new PrismaClient();
@@ -210,70 +210,51 @@ async function main() {
     }
   });
 
-  // Release 2.7 — katalog PPOB (selaras dengan seed di migration
-  // 20260821130000_ppob_foundation; dipertahankan di sini agar environment dev
+  // Release 2.8 — katalog PPOB (enum kategori + brand; selaras migration
+  // 20260821013849_ppob_foundation; dipertahankan di sini agar environment dev
   // yang hanya menjalankan db:seed tetap memiliki katalog).
-  const ppobCategories = [
-    { code: "PULSA", name: "Pulsa", description: "Isi ulang pulsa reguler semua operator.", icon: "phone_iphone", sortOrder: 1 },
-    { code: "DATA", name: "Paket Data", description: "Paket internet semua operator.", icon: "wifi", sortOrder: 2 },
-    { code: "PLN_TOKEN", name: "Token PLN", description: "Token listrik prabayar PLN.", icon: "bolt", sortOrder: 3 },
-    { code: "BPJS", name: "BPJS", description: "Iuran BPJS Kesehatan dan Ketenagakerjaan.", icon: "health_and_safety", sortOrder: 4 },
-    { code: "PDAM", name: "PDAM", description: "Tagihan air PDAM.", icon: "water_drop", sortOrder: 5 },
-    { code: "EMONEY", name: "E-Money", description: "Top up dompet elektronik.", icon: "account_balance_wallet", sortOrder: 6 }
-  ];
-  const ppobCategoryIds = new Map<string, string>();
-  for (const category of ppobCategories) {
-    const saved = await prisma.ppobCategory.upsert({
-      where: { code: category.code },
-      update: {
-        name: category.name,
-        description: category.description,
-        icon: category.icon,
-        sortOrder: category.sortOrder
-      },
-      create: category
-    });
-    ppobCategoryIds.set(saved.code, saved.id);
-  }
-  const ppobProducts = [
-    { cat: "PULSA", sku: "PULSA_5K", name: "Pulsa Rp5.000", description: "Pulsa reguler Rp5.000 semua operator.", price: 6500, adminFee: 0, targetLabel: "Nomor HP", targetPattern: "^[0-9]{10,15}$", sortOrder: 1 },
-    { cat: "PULSA", sku: "PULSA_10K", name: "Pulsa Rp10.000", description: "Pulsa reguler Rp10.000 semua operator.", price: 11500, adminFee: 0, targetLabel: "Nomor HP", targetPattern: "^[0-9]{10,15}$", sortOrder: 2 },
-    { cat: "PULSA", sku: "PULSA_20K", name: "Pulsa Rp20.000", description: "Pulsa reguler Rp20.000 semua operator.", price: 21500, adminFee: 0, targetLabel: "Nomor HP", targetPattern: "^[0-9]{10,15}$", sortOrder: 3 },
-    { cat: "PULSA", sku: "PULSA_50K", name: "Pulsa Rp50.000", description: "Pulsa reguler Rp50.000 semua operator.", price: 51000, adminFee: 0, targetLabel: "Nomor HP", targetPattern: "^[0-9]{10,15}$", sortOrder: 4 },
-    { cat: "PULSA", sku: "PULSA_100K", name: "Pulsa Rp100.000", description: "Pulsa reguler Rp100.000 semua operator.", price: 101000, adminFee: 0, targetLabel: "Nomor HP", targetPattern: "^[0-9]{10,15}$", sortOrder: 5 },
-    { cat: "DATA", sku: "DATA_1GB", name: "Paket Data 1 GB", description: "Paket internet 1 GB semua operator.", price: 12000, adminFee: 0, targetLabel: "Nomor HP", targetPattern: "^[0-9]{10,15}$", sortOrder: 1 },
-    { cat: "DATA", sku: "DATA_5GB", name: "Paket Data 5 GB", description: "Paket internet 5 GB semua operator.", price: 43000, adminFee: 0, targetLabel: "Nomor HP", targetPattern: "^[0-9]{10,15}$", sortOrder: 2 },
-    { cat: "DATA", sku: "DATA_10GB", name: "Paket Data 10 GB", description: "Paket internet 10 GB semua operator.", price: 78000, adminFee: 0, targetLabel: "Nomor HP", targetPattern: "^[0-9]{10,15}$", sortOrder: 3 },
-    { cat: "PLN_TOKEN", sku: "PLN_20K", name: "Token PLN Rp20.000", description: "Token listrik prabayar Rp20.000.", price: 21500, adminFee: 0, targetLabel: "ID Pelanggan / Nomor Meter", targetPattern: "^[0-9]{11,12}$", sortOrder: 1 },
-    { cat: "PLN_TOKEN", sku: "PLN_50K", name: "Token PLN Rp50.000", description: "Token listrik prabayar Rp50.000.", price: 51500, adminFee: 0, targetLabel: "ID Pelanggan / Nomor Meter", targetPattern: "^[0-9]{11,12}$", sortOrder: 2 },
-    { cat: "PLN_TOKEN", sku: "PLN_100K", name: "Token PLN Rp100.000", description: "Token listrik prabayar Rp100.000.", price: 101500, adminFee: 0, targetLabel: "ID Pelanggan / Nomor Meter", targetPattern: "^[0-9]{11,12}$", sortOrder: 3 },
-    { cat: "PLN_TOKEN", sku: "PLN_200K", name: "Token PLN Rp200.000", description: "Token listrik prabayar Rp200.000.", price: 201500, adminFee: 0, targetLabel: "ID Pelanggan / Nomor Meter", targetPattern: "^[0-9]{11,12}$", sortOrder: 4 },
-    { cat: "BPJS", sku: "BPJS_IURAN_1BULAN", name: "Iuran BPJS Kesehatan 1 Bulan", description: "Iuran BPJS Kesehatan 1 bulan per orang.", price: 42000, adminFee: 2500, targetLabel: "Nomor VA BPJS", targetPattern: "^[0-9]{8,20}$", sortOrder: 1 },
-    { cat: "PDAM", sku: "PDAM_50K", name: "Tagihan PDAM Rp50.000", description: "Pembayaran tagihan air PDAM nominal Rp50.000.", price: 50000, adminFee: 3000, targetLabel: "ID Pelanggan PDAM", targetPattern: "^[0-9]{6,20}$", sortOrder: 1 },
-    { cat: "PDAM", sku: "PDAM_100K", name: "Tagihan PDAM Rp100.000", description: "Pembayaran tagihan air PDAM nominal Rp100.000.", price: 100000, adminFee: 3000, targetLabel: "ID Pelanggan PDAM", targetPattern: "^[0-9]{6,20}$", sortOrder: 2 },
-    { cat: "EMONEY", sku: "EMONEY_20K", name: "E-Money Rp20.000", description: "Top up e-money Rp20.000.", price: 21500, adminFee: 0, targetLabel: "Nomor HP / ID Dompet", targetPattern: "^[0-9]{8,16}$", sortOrder: 1 },
-    { cat: "EMONEY", sku: "EMONEY_50K", name: "E-Money Rp50.000", description: "Top up e-money Rp50.000.", price: 51500, adminFee: 0, targetLabel: "Nomor HP / ID Dompet", targetPattern: "^[0-9]{8,16}$", sortOrder: 2 },
-    { cat: "EMONEY", sku: "EMONEY_100K", name: "E-Money Rp100.000", description: "Top up e-money Rp100.000.", price: 101500, adminFee: 0, targetLabel: "Nomor HP / ID Dompet", targetPattern: "^[0-9]{8,16}$", sortOrder: 3 }
+  const ppobProducts: Array<{
+    category: PpobCategory;
+    brand: string;
+    sku: string;
+    name: string;
+    description: string;
+    price: number;
+    adminFee: number;
+    sortOrder: number;
+  }> = [
+    { category: "PULSA", brand: "Telkomsel", sku: "PULSA_5K", name: "Pulsa Rp5.000", description: "Pulsa reguler Rp5.000 semua operator.", price: 6500, adminFee: 0, sortOrder: 1 },
+    { category: "PULSA", brand: "Telkomsel", sku: "PULSA_10K", name: "Pulsa Rp10.000", description: "Pulsa reguler Rp10.000 semua operator.", price: 11500, adminFee: 0, sortOrder: 2 },
+    { category: "PULSA", brand: "Telkomsel", sku: "PULSA_20K", name: "Pulsa Rp20.000", description: "Pulsa reguler Rp20.000 semua operator.", price: 21500, adminFee: 0, sortOrder: 3 },
+    { category: "PULSA", brand: "Telkomsel", sku: "PULSA_50K", name: "Pulsa Rp50.000", description: "Pulsa reguler Rp50.000 semua operator.", price: 51000, adminFee: 0, sortOrder: 4 },
+    { category: "PULSA", brand: "Telkomsel", sku: "PULSA_100K", name: "Pulsa Rp100.000", description: "Pulsa reguler Rp100.000 semua operator.", price: 101000, adminFee: 0, sortOrder: 5 },
+    { category: "DATA", brand: "Telkomsel", sku: "DATA_1GB", name: "Paket Data 1 GB", description: "Paket internet 1 GB semua operator.", price: 12000, adminFee: 0, sortOrder: 1 },
+    { category: "DATA", brand: "Telkomsel", sku: "DATA_5GB", name: "Paket Data 5 GB", description: "Paket internet 5 GB semua operator.", price: 43000, adminFee: 0, sortOrder: 2 },
+    { category: "DATA", brand: "Telkomsel", sku: "DATA_10GB", name: "Paket Data 10 GB", description: "Paket internet 10 GB semua operator.", price: 78000, adminFee: 0, sortOrder: 3 },
+    { category: "PLN_PREPAID", brand: "PLN", sku: "PLN_20K", name: "Token PLN Rp20.000", description: "Token listrik prabayar Rp20.000.", price: 21500, adminFee: 0, sortOrder: 1 },
+    { category: "PLN_PREPAID", brand: "PLN", sku: "PLN_50K", name: "Token PLN Rp50.000", description: "Token listrik prabayar Rp50.000.", price: 51500, adminFee: 0, sortOrder: 2 },
+    { category: "PLN_PREPAID", brand: "PLN", sku: "PLN_100K", name: "Token PLN Rp100.000", description: "Token listrik prabayar Rp100.000.", price: 101500, adminFee: 0, sortOrder: 3 },
+    { category: "PLN_PREPAID", brand: "PLN", sku: "PLN_200K", name: "Token PLN Rp200.000", description: "Token listrik prabayar Rp200.000.", price: 201500, adminFee: 0, sortOrder: 4 },
+    { category: "BPJS", brand: "BPJS Kesehatan", sku: "BPJS_IURAN_1BULAN", name: "Iuran BPJS Kesehatan 1 Bulan", description: "Iuran BPJS Kesehatan 1 bulan per orang.", price: 42000, adminFee: 2500, sortOrder: 1 },
+    { category: "PDAM", brand: "PDAM", sku: "PDAM_50K", name: "Tagihan PDAM Rp50.000", description: "Pembayaran tagihan air PDAM nominal Rp50.000.", price: 50000, adminFee: 3000, sortOrder: 1 },
+    { category: "PDAM", brand: "PDAM", sku: "PDAM_100K", name: "Tagihan PDAM Rp100.000", description: "Pembayaran tagihan air PDAM nominal Rp100.000.", price: 100000, adminFee: 3000, sortOrder: 2 },
+    { category: "EWALLET", brand: "E-Money", sku: "EMONEY_20K", name: "E-Money Rp20.000", description: "Top up e-money Rp20.000.", price: 21500, adminFee: 0, sortOrder: 1 },
+    { category: "EWALLET", brand: "E-Money", sku: "EMONEY_50K", name: "E-Money Rp50.000", description: "Top up e-money Rp50.000.", price: 51500, adminFee: 0, sortOrder: 2 },
+    { category: "EWALLET", brand: "E-Money", sku: "EMONEY_100K", name: "E-Money Rp100.000", description: "Top up e-money Rp100.000.", price: 101500, adminFee: 0, sortOrder: 3 }
   ];
   for (const product of ppobProducts) {
-    const categoryId = ppobCategoryIds.get(product.cat);
-    if (!categoryId) {
-      throw new Error(`PPOB category ${product.cat} missing`);
-    }
-    const { cat: _cat, ...data } = product;
     await prisma.ppobProduct.upsert({
       where: { sku: product.sku },
       update: {
-        categoryId,
-        name: data.name,
-        description: data.description,
-        price: data.price,
-        adminFee: data.adminFee,
-        targetLabel: data.targetLabel,
-        targetPattern: data.targetPattern,
-        sortOrder: data.sortOrder
+        category: product.category,
+        brand: product.brand,
+        name: product.name,
+        description: product.description,
+        price: product.price,
+        adminFee: product.adminFee,
+        sortOrder: product.sortOrder
       },
-      create: { ...data, categoryId }
+      create: product
     });
   }
 

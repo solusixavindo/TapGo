@@ -1721,6 +1721,7 @@ enum PpobCategory {
   PLN_POSTPAID
   BPJS
   EWALLET
+  PDAM
 }
 
 enum PpobTransactionStatus {

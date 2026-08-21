@@ -1,8 +1,17 @@
 import pino from "pino";
-import { env } from "../../config/env.js";
 
+/**
+ * Logger sengaja TIDAK bergantung pada config/env.ts.
+ *
+ * env.ts di-parse eager saat diimpor dan mewajibkan DATABASE_URL, JWT secrets,
+ * dsb. Logger diimpor hampir oleh semua modul — bila ia membaca env di tingkat
+ * modul, maka setiap test/ tooling yang mengimpor logger (langsung maupun
+ * transitif, mis. lewat rateLimitStore) ikut memaksa parse env sebelum env test
+ * sempat disetel, dan gagal dimuat dengan ZodError. NODE_ENV adalah konvensi
+ * Node yang aman dibaca langsung; tidak perlu lewat skema validasi penuh.
+ */
 export const logger = pino({
-  level: env.NODE_ENV === "production" ? "info" : "debug",
+  level: process.env.NODE_ENV === "production" ? "info" : "debug",
   redact: {
     paths: [
       "req.headers.authorization",
