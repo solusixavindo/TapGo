@@ -173,7 +173,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function login(phone: string, password: string) {
-  const result = await request<{ accessToken: string }>("/auth/login", {
+  // Login lewat kanal WEB (R2.9/K1c): token yang diterbitkan distempel
+  // channel="WEB" oleh server, sehingga sah untuk rute /web/membership dan
+  // tidak dapat dipakai menembak fitur app (ojek/PPOB).
+  const result = await request<{ accessToken: string }>("/web/auth/login", {
     method: "POST",
     body: JSON.stringify({ phone, password })
   });

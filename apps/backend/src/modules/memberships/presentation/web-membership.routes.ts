@@ -2,7 +2,7 @@ import express, { Router } from "express";
 import { prisma } from "../../../config/prisma.js";
 import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
-import { requireAuth } from "../../../core/security/authContext.js";
+import { requireAuth, requireChannel } from "../../../core/security/authContext.js";
 import { DokuPaymentService } from "../../payments/application/DokuPaymentService.js";
 import { MidtransPaymentService } from "../../payments/application/MidtransPaymentService.js";
 import { MembershipDocumentService } from "../application/MembershipDocumentService.js";
@@ -66,7 +66,11 @@ export const webMembershipRouter = Router();
 // publik. Visibilitas paket berbayar tetap mengikuti kebijakan kanal.
 webMembershipRouter.get("/packages", asyncHandler(controller.packages));
 
-webMembershipRouter.use(requireAuth);
+// Penegakan kanal (R2.9): rute-rute di bawah ini hanya boleh dipanggil dengan
+// token ber-klaim "WEB". Token app Play Store ditolak 403 — pembelian
+// membership dari dalam app bukan hanya disembunyikan di UI, melainkan ditutup
+// di batas keamanan, sesuai catatan anti-steering di atas.
+webMembershipRouter.use(requireAuth, requireChannel("WEB"));
 webMembershipRouter.get("/me", asyncHandler(controller.me));
 webMembershipRouter.get("/orders/me", asyncHandler(controller.myOrders));
 webMembershipRouter.post(

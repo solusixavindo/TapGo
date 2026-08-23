@@ -33,7 +33,11 @@ import {
 
 const repository = new PrismaAuthRepository(prisma);
 const service = new AuthService(repository);
-const controller = new AuthController(service);
+// Router app (Play Store) men-stamp kanal "APP" pada token yang diterbitkannya.
+const controller = new AuthController(service, "APP");
+// Router web (halaman /upgrade) men-stamp kanal "WEB". Token WEB hanya sah
+// untuk rute upgrade membership; token APP hanya sah untuk fitur app (R2.9/K1c).
+const webController = new AuthController(service, "WEB");
 
 /**
  * Provider pengiriman OTP.
@@ -126,3 +130,18 @@ authRouter.post(
   validateRequest(verificationConfirmSchema),
   asyncHandler(recoveryController.confirmVerification)
 );
+
+/**
+ * Router auth kanal WEB (R2.9 / K1c).
+ *
+ * Dipasang terpisah di `/api/v1/web/auth` dan SENGAJA hanya mengekspos
+ * `/login` dan `/refresh` — TIDAK ada `/register`. Kontrak produk: akun dibuat
+ * lewat app Play Store; web (`/upgrade`) hanyalah pintu upgrade membership
+ * untuk akun yang SUDAH ada. Token yang diterbitkan di sini distempel
+ * channel="WEB" sehingga tidak dapat dipakai menembak fitur app (ojek/PPOB),
+ * dan penegakan `requireChannel` pada rute membership menolak token lintas
+ * kanal dengan 403.
+ */
+export const webAuthRouter = Router();
+webAuthRouter.post("/login", authRateLimiter, validateRequest(loginSchema), asyncHandler(webController.login));
+webAuthRouter.post("/refresh", authRateLimiter, validateRequest(refreshSchema), asyncHandler(webController.refresh));

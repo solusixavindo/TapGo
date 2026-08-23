@@ -2,7 +2,7 @@ import { Router } from "express";
 import { prisma } from "../../../config/prisma.js";
 import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
-import { requireAuth } from "../../../core/security/authContext.js";
+import { requireAuth, requireChannel } from "../../../core/security/authContext.js";
 import { MembershipOrderService } from "../application/MembershipOrderService.js";
 import { MidtransPaymentService } from "../../payments/application/MidtransPaymentService.js";
 import { DokuPaymentService } from "../../payments/application/DokuPaymentService.js";
@@ -25,7 +25,10 @@ export const membershipOrderRouter = Router();
 
 membershipOrderRouter.get("/packages", asyncHandler(controller.packages));
 
-membershipOrderRouter.use(requireAuth);
+// Penegakan kanal (R2.9): rute-rute di bawah ini hanya boleh dipanggil dengan
+// token ber-klaim "APP". Token web ditolak 403 — token dari halaman /upgrade
+// tidak dapat dipakai menembak fitur kanal app.
+membershipOrderRouter.use(requireAuth, requireChannel("APP"));
 membershipOrderRouter.get("/me", asyncHandler(controller.me));
 membershipOrderRouter.get("/orders/me", asyncHandler(controller.myOrders));
 membershipOrderRouter.post("/orders", validateRequest(createMembershipOrderSchema), asyncHandler(controller.createOrder));

@@ -7,7 +7,7 @@ import { corsOrigins } from "./config/env.js";
 import { errorHandler, notFoundHandler } from "./core/errors/errorHandler.js";
 import { logger } from "./core/logger/logger.js";
 import { adminRateLimiter, apiRateLimiter, paymentRateLimiter } from "./core/security/rateLimit.js";
-import { authRouter } from "./modules/auth/presentation/auth.routes.js";
+import { authRouter, webAuthRouter } from "./modules/auth/presentation/auth.routes.js";
 import { accountRouter } from "./modules/account/presentation/account.routes.js";
 import { adminConsoleRouter } from "./modules/admin-console/presentation/admin-console.routes.js";
 import { adminScopeRouter } from "./modules/admin-console/presentation/admin-scope.routes.js";
@@ -75,6 +75,7 @@ export function createApp() {
   app.use("/", legalRouter);
 
   app.use("/api/v1/auth", authRouter);
+  app.use("/api/v1/web/auth", webAuthRouter);
   app.use("/api/v1/account", accountRouter);
   app.use("/api/v1/contact", contactRouter);
   app.use("/api/v1/invoices", invoiceRouter);

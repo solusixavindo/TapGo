@@ -1,9 +1,18 @@
 import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
+import type { TokenChannel } from "../../../core/security/tokenService.js";
 import { AuthService } from "../application/AuthService.js";
 
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  /**
+   * `channel` adalah kanal yang distempel ke token yang diterbitkan controller
+   * ini (K1c). Router app memakai "APP", router web memakai "WEB". Kanal
+   * ditentukan server saat konstruksi — bukan dari header yang dapat dipalsukan.
+   */
+  constructor(
+    private readonly authService: AuthService,
+    private readonly channel?: TokenChannel
+  ) {}
 
   register = async (req: Request, res: Response) => {
     const result = await this.authService.register({
@@ -56,7 +65,8 @@ export class AuthController {
 	      ...(typeof req.headers["user-agent"] === "string" ? { userAgent: req.headers["user-agent"] } : {}),
 	      ...(typeof req.ip === "string" ? { ipAddress: req.ip } : {}),
 	      ...(typeof headerDeviceId === "string" ? { deviceIdentifier: headerDeviceId } : {}),
-	      ...(typeof headerDeviceFingerprint === "string" ? { deviceIdentifier: headerDeviceFingerprint } : {})
+	      ...(typeof headerDeviceFingerprint === "string" ? { deviceIdentifier: headerDeviceFingerprint } : {}),
+              ...(this.channel !== undefined ? { channel: this.channel } : {})
 	    };
 	  }
 	}

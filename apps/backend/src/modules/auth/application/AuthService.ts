@@ -8,6 +8,7 @@ import {
   signRefreshToken,
   verifyRefreshToken
 } from "../../../core/security/tokenService.js";
+import type { TokenChannel } from "../../../core/security/tokenService.js";
 import { env } from "../../../config/env.js";
 import { AuthRepository, toPublicUser } from "../domain/AuthRepository.js";
 
@@ -15,6 +16,12 @@ export type AuthClientContext = {
   userAgent?: string;
   ipAddress?: string;
   deviceIdentifier?: string;
+  /**
+   * Kanal yang menerbitkan token, di-stamp oleh controller berdasarkan
+   * endpoint login yang dipanggil (K1c). Bila tidak diisi, token terbit tanpa
+   * klaim kanal — perilaku lama yang masih diterima bertahap (K2a).
+   */
+  channel?: TokenChannel;
 };
 
 export class AuthService {
@@ -174,11 +181,16 @@ export class AuthService {
       );
     }
 
+    // Kanal token baru mengikuti kanal token lama (bila ada): refresh tidak
+    // boleh memindahkan token dari satu kanal ke kanal lain.
+    const channel = payload.channel ?? context.channel;
     const accessToken = signAccessToken({
-      sub: user.id, role: user.role, sessionId: session.id, authVersion: user.authVersion
+      sub: user.id, role: user.role, sessionId: session.id, authVersion: user.authVersion,
+      ...(channel !== undefined ? { channel } : {})
     });
     const newRefreshToken = signRefreshToken({
-      sub: user.id, role: user.role, sessionId: session.id, authVersion: user.authVersion
+      sub: user.id, role: user.role, sessionId: session.id, authVersion: user.authVersion,
+      ...(channel !== undefined ? { channel } : {})
     });
     const expiresAt = this.refreshExpiryDate();
 
@@ -254,9 +266,12 @@ export class AuthService {
     // Token yang lahir setelah pencabutan otomatis membawa versi baru dan
     // langsung sah — termasuk bila diterbitkan pada detik yang sama.
     const authVersion = await this.authRepository.getAuthVersion(userId);
+    // Kanal distempel dari konteks login (server-stamped per endpoint, K1c).
+    const channel = context.channel;
+    const channelClaim = channel !== undefined ? { channel } : {};
     const provisionalSessionId = crypto.randomUUID();
-    const accessToken = signAccessToken({ sub: userId, role, sessionId: provisionalSessionId, authVersion });
-    const refreshToken = signRefreshToken({ sub: userId, role, sessionId: provisionalSessionId, authVersion });
+    const accessToken = signAccessToken({ sub: userId, role, sessionId: provisionalSessionId, authVersion, ...channelClaim });
+    const refreshToken = signRefreshToken({ sub: userId, role, sessionId: provisionalSessionId, authVersion, ...channelClaim });
     const expiresAt = this.refreshExpiryDate();
 
     const session = await this.authRepository.createSession({
@@ -267,8 +282,8 @@ export class AuthService {
       expiresAt
     });
 
-    const finalAccessToken = signAccessToken({ sub: userId, role, sessionId: session.id, authVersion });
-    const finalRefreshToken = signRefreshToken({ sub: userId, role, sessionId: session.id, authVersion });
+    const finalAccessToken = signAccessToken({ sub: userId, role, sessionId: session.id, authVersion, ...channelClaim });
+    const finalRefreshToken = signRefreshToken({ sub: userId, role, sessionId: session.id, authVersion, ...channelClaim });
 
     await this.authRepository.rotateSession(session.id, this.hashToken(finalRefreshToken), expiresAt);
 

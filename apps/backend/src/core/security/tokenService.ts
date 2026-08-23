@@ -21,6 +21,18 @@ import { AppError } from "../errors/AppError.js";
 
 export type JwtRole = UserRole;
 
+/**
+ * Kanal klien yang menerbitkan token ini.
+ *
+ * R2.9: token distempel kanalnya SAAT LOGIN berdasarkan endpoint yang
+ * dipanggil — `/api/v1/auth/login` menghasilkan "APP", `/api/v1/web/auth/login`
+ * menghasilkan "WEB". Kanal di-stamp oleh SERVER dari path, bukan dari header
+ * yang dapat dipalsukan klien, sehingga token web tidak dapat dipakai menembak
+ * fitur app (ojek/PPOB) dan token app tidak dapat dipakai menembak pembelian
+ * membership di web.
+ */
+export type TokenChannel = "WEB" | "APP" | "ADMIN";
+
 export type AccessTokenPayload = {
   sub: string;
   role: JwtRole;
@@ -33,6 +45,12 @@ export type AccessTokenPayload = {
    * tanpa versi begitu authVersion akun melewati 0.
    */
   authVersion?: number;
+  /**
+   * Kanal penerbit token. Opsional demi kompatibilitas token lama yang masih
+   * beredar (K2a): token tanpa klaim kanal masih diterima di rute yang tidak
+   * dibatasi kanal, dan hanya ditolak di rute yang menuntut kanal tertentu.
+   */
+  channel?: TokenChannel;
 };
 
 /**

@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../errors/AppError.js";
-import { INITIAL_AUTH_VERSION, JwtRole, verifyAccessToken } from "./tokenService.js";
+import { INITIAL_AUTH_VERSION, JwtRole, TokenChannel, verifyAccessToken } from "./tokenService.js";
 import { roleSatisfiesAny } from "./roleHierarchy.js";
 
 declare global {
@@ -12,6 +12,8 @@ declare global {
         userId: string;
         role: JwtRole;
         sessionId: string;
+        /** Kanal penerbit token (R2.9). Boleh undefined untuk token lama (K2a). */
+        channel?: TokenChannel;
       };
     }
   }
@@ -80,7 +82,8 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
         req.auth = {
           userId: payload.sub,
           role: payload.role,
-          sessionId: payload.sessionId
+          sessionId: payload.sessionId,
+        ...(payload.channel !== undefined ? { channel: payload.channel } : {})
         };
         next();
         return;
@@ -120,7 +123,8 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
       req.auth = {
         userId: payload.sub,
         role: payload.role,
-        sessionId: payload.sessionId
+        sessionId: payload.sessionId,
+      ...(payload.channel !== undefined ? { channel: payload.channel } : {})
       };
       next();
     })
@@ -138,6 +142,40 @@ export function requireRoles(...roles: JwtRole[]) {
     // ditolak oleh puluhan penjaga yang menuliskan "SUPER_ADMIN" harfiah.
     if (!roleSatisfiesAny(req.auth.role, roles)) {
       throw new AppError("Insufficient permissions", StatusCodes.FORBIDDEN, "FORBIDDEN");
+    }
+
+    next();
+  };
+}
+
+/**
+ * Penegakan klaim kanal token (R2.9 / K3a).
+ *
+ * Dipasang SETELAH requireAuth pada rute yang hanya boleh dipanggil dari satu
+ * kanal — mis. `/api/v1/web/membership` menuntut "WEB", `/api/v1/membership`
+ * menuntut "APP". Token yang membawa klaim kanal BERBEDA ditolak 403: token
+ * web tidak bisa menembak fitur app, token app tidak bisa menembak pembelian
+ * membership di web.
+ *
+ * Kompatibilitas token lama (K2a): token tanpa klaim kanal (diterbitkan
+ * sebelum R2.9) DITERIMA, agar pengguna yang sedang login tidak terputus.
+ * Penolakan hanya berlaku saat token secara eksplisit membawa kanal yang salah.
+ * Seluruh token baru ber-klaim kanal, sehingga celah ini menutup sendiri begitu
+ * token lama kedaluwarsa (TTL access token 15 menit).
+ */
+export function requireChannel(...channels: TokenChannel[]) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.auth) {
+      throw new AppError("Authentication required", StatusCodes.UNAUTHORIZED, "AUTH_REQUIRED");
+    }
+
+    const channel = req.auth.channel;
+    if (channel !== undefined && !channels.includes(channel)) {
+      throw new AppError(
+        "Token ini tidak berlaku untuk kanal layanan tersebut.",
+        StatusCodes.FORBIDDEN,
+        "AUTH_CHANNEL_FORBIDDEN"
+      );
     }
 
     next();
