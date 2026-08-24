@@ -403,13 +403,46 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
               .timeout(const Duration(seconds: 2), onTimeout: () => false);
         } catch (error) {
           _tapGoDebugLog('[TapGo Auth] auth/me restore failed: $error');
-          await _persistentStore.clearSession().timeout(
-                const Duration(seconds: 2),
-                onTimeout: () {},
-              );
-          _apiClient.setAccessToken(null);
-          auth = false;
-          restoredSession = null;
+          // Access token kedaluwarsa (~15 mnt) belum berarti sesi mati: bila
+          // refresh token masih hidup, tukar jadi pasangan baru lalu coba lagi.
+          // Hanya bila refresh ikut ditolak (dicabut / ganti password) sesi
+          // dikosongkan dan user diminta login ulang.
+          var recovered = false;
+          final refreshToken = tokens.refreshToken;
+          if (refreshToken != null && refreshToken.isNotEmpty) {
+            try {
+              final refreshed = await _apiClient.refreshSession(refreshToken);
+              if (refreshed != null) {
+                _apiClient.setAccessToken(refreshed.accessToken);
+                final user = await _apiClient.me();
+                restoredSession = _sessionFromAuthUser(
+                  user,
+                  accessToken: refreshed.accessToken,
+                  refreshToken: refreshed.refreshToken,
+                  fallback: session,
+                );
+                await _persistentStore.saveTokens(
+                  accessToken: refreshed.accessToken,
+                  refreshToken: refreshed.refreshToken,
+                );
+                auth = true;
+                recovered = true;
+                _tapGoDebugLog('[TapGo Auth] session refreshed on restore.');
+              }
+            } catch (refreshError) {
+              _tapGoDebugLog('[TapGo Auth] refresh-on-restore failed: $refreshError');
+              recovered = false;
+            }
+          }
+          if (!recovered) {
+            await _persistentStore.clearSession().timeout(
+                  const Duration(seconds: 2),
+                  onTimeout: () {},
+                );
+            _apiClient.setAccessToken(null);
+            auth = false;
+            restoredSession = null;
+          }
         }
       }
       if (restoredSession != null && !_isTapGoProductionBuild) {

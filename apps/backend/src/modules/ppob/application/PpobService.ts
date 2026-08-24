@@ -181,13 +181,20 @@ export class PpobService {
       }
       logger.error(
         { err: error, reference: pending.publicReference },
-        "PPOB provider call failed; refunding"
+        "PPOB provider call failed; deferring finalization to reconciliation"
       );
+      // PENTING — jangan refund saat status provider TIDAK DIKETAHUI
+      // (timeout/jaringan putus/status asing): provider bisa saja SUDAH
+      // sukses memotong dan mengirim pulsa, sehingga refund seketika
+      // membocorkan saldo (barang terkirim + uang kembali). Perlakukan
+      // sebagai PROCESSING: saldo tetap terkunci, finalisasi diserahkan ke
+      // webhook Digiflazz / worker rekonsiliasi (ref_id cegah potong ganda
+      // saat di-inquiry ulang). Refund hanya pada jawaban FAILED eksplisit.
+      // providerReference memakai publicReference sebagai jejak sementara
+      // agar webhook tak lagi "deferred" (route butuh jejak provider).
       outcome = {
-        kind: "FAILED" as const,
-        providerReference: null,
-        failureCode: "PROVIDER_ERROR",
-        failureReason: "Penyedia PPOB gagal memproses permintaan"
+        kind: "PROCESSING" as const,
+        providerReference: pending.publicReference
       };
     }
 

@@ -32,7 +32,13 @@ let signAccessToken: SignAccessToken;
 let sequence = 0;
 
 /// Skenario stub per ref_id: respons apa yang dijawab untuk transaksi itu.
-const stubScenarios = new Map<string, Array<{ status: string; rc?: string; sn?: string; message?: string }>>();
+/// dropConnection=true mensimulasikan jaringan putus/timeout: soket dihancurkan
+/// TANPA respons, sehingga fetch di sisi app melempar (status provider tak
+/// diketahui) — persis kondisi Temuan 2 yang kini harus menjadi PROCESSING.
+const stubScenarios = new Map<
+  string,
+  Array<{ status: string; rc?: string; sn?: string; message?: string; dropConnection?: boolean }>
+>();
 const stubRequests: Array<Record<string, unknown>> = [];
 
 function resetRateLimits() {
@@ -52,7 +58,7 @@ describe.skipIf(!runIntegration)("Stage R2.8 — Digiflazz real provider integra
       throw new Error("TAPGO_TEST_DATABASE_URL must point to a dedicated test database.");
     }
 
-    digiflazzStub = http.createServer((req, res) => {
+    const digiflazzHandler = (req: http.IncomingMessage, res: http.ServerResponse) => {
       if (req.method !== "POST" || req.url !== "/v1/transaction") {
         res.writeHead(404).end();
         return;
@@ -70,6 +76,12 @@ describe.skipIf(!runIntegration)("Stage R2.8 — Digiflazz real provider integra
           stubScenarios.get(refId) ??
           stubScenarios.get("*") ?? [{ status: "Sukses", rc: "00", sn: `SN-${refId}` }];
         const step = scenario.length > 1 ? scenario.shift()! : scenario[0]!;
+        if (step.dropConnection) {
+          // Hancurkan soket TANPA respons: fetch klien melempar (status tak
+          // diketahui). Server tetap hidup untuk request berikutnya.
+          req.socket.destroy();
+          return;
+        }
         res.writeHead(200, { "content-type": "application/json" });
         res.end(
           JSON.stringify({
@@ -87,7 +99,8 @@ describe.skipIf(!runIntegration)("Stage R2.8 — Digiflazz real provider integra
           })
         );
       });
-    });
+    };
+    digiflazzStub = http.createServer(digiflazzHandler);
     await new Promise<void>((resolve) => digiflazzStub!.listen(0, "127.0.0.1", resolve));
     const stubAddress = digiflazzStub.address() as AddressInfo;
 
@@ -206,6 +219,60 @@ describe.skipIf(!runIntegration)("Stage R2.8 — Digiflazz real provider integra
     const ledger = await prisma.walletTransaction.findMany({ where: { walletId: wallet.id } });
     expect(ledger.map((row) => row.type).sort()).toEqual(["PPOB_PURCHASE", "PPOB_REFUND"]);
   });
+
+  it("jaringan/timeout ke provider TIDAK merefund: transaksi jadi PROCESSING, saldo tetap terkunci, webhook final menentukan", async () => {
+    const user = await createUserWithPpobBalance("100000");
+    // dropConnection menghancurkan soket TANPA respons — fetch klien melempar,
+    // status provider TIDAK DIKETAHUI. Server stub tetap hidup (tanpa restart).
+    stubScenarios.set("*", [{ status: "Sukses", dropConnection: true }]);
+
+    const res = await api("/api/v1/ppob/transactions", {
+      method: "POST",
+      token: tokenFor(user),
+      body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" }
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { data: any };
+    // BUKAN FAILED + bukan refund: status tidak diketahui -> PROCESSING.
+    expect(body.data.status).toBe("PROCESSING");
+    const reference = body.data.reference as string;
+
+    // Saldo tetap terdebit (tidak dikembalikan), ledger hanya punya PURCHASE.
+    const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
+    expect(wallet.ppobBalance.toFixed(2)).toBe("88500.00");
+    const ledger = await prisma.walletTransaction.findMany({ where: { walletId: wallet.id } });
+    expect(ledger.map((row) => row.type)).toEqual(["PPOB_PURCHASE"]);
+
+    // Webhook sukses (otoritatif) masih bisa men-finalkan transaksi ini.
+    const payload = JSON.stringify({
+      data: {
+        ref_id: reference,
+        customer_no: "085612345678",
+        buyer_sku_code: "tsel10",
+        message: "Transaksi Sukses",
+        status: "Sukses",
+        rc: "00",
+        sn: `SN-${reference}`,
+        buyer_last_saldo: 999000,
+        price: 11500
+      }
+    });
+    const webhook = await fetch(`${baseUrl}/api/v1/webhooks/ppob/digiflazz`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-hub-signature": signWebhook(payload) },
+      body: payload
+    });
+    expect(webhook.status).toBe(200);
+    const webhookBody = (await webhook.json()) as { data: { state: string } };
+    expect(webhookBody.data.state).toBe("finalized");
+
+    const after = await prisma.ppobTransaction.findFirstOrThrow({
+      where: { publicReference: reference }
+    });
+    expect(after.status).toBe("SUCCESS");
+    expect(after.serialNumber).toBe(`SN-${reference}`);
+  });
+
 
   // --- Webhook ------------------------------------------------------------------
 

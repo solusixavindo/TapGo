@@ -52,6 +52,32 @@ class _TapGoApiClient {
     _dio.options.headers['Authorization'] = 'Bearer $token';
   }
 
+  /// Menukar refresh token menjadi pasangan token baru (rotasi di server).
+  /// Mengembalikan null bila refresh token kosong atau ditolak (dicabut /
+  /// ganti password) — pemanggil lalu mengosongkan sesi untuk login ulang.
+  /// Header Authorization sengaja dikosongkan: endpoint refresh hanya butuh
+  /// refreshToken di body, dan mengirim access token kedaluwarsa bisa 401.
+  Future<({String accessToken, String refreshToken})?> refreshSession(
+      String refreshToken) async {
+    if (refreshToken.isEmpty) return null;
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        _apiPath('auth/refresh'),
+        data: {'refreshToken': refreshToken},
+        options: Options(headers: const {'Authorization': null}),
+      );
+      final data = _unwrap(response.data);
+      final access = '${data['accessToken'] ?? ''}';
+      final refresh = '${data['refreshToken'] ?? ''}';
+      if (access.isEmpty || refresh.isEmpty) return null;
+      return (accessToken: access, refreshToken: refresh);
+    } on DioException {
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>> post(
     String path, {
     Map<String, dynamic>? body,

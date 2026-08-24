@@ -66,6 +66,47 @@ class ApiDriverRepository implements DriverRepository {
     }
   }
 
+  /// Menukar refresh token menjadi pasangan token baru (rotasi di server).
+  /// Dipanggil otomatis oleh _request saat access token kedaluwarsa (401),
+  /// sehingga driver tidak dipaksa login ulang setiap ~15 menit. Gagal refresh
+  /// (refresh token ikut gugur/dicabut) mengosongkan sesi -> login ulang.
+  Future<bool> _refreshSession() async {
+    final refreshToken = _session?.refreshToken;
+    if (refreshToken == null || refreshToken.isEmpty) return false;
+    try {
+      final response = await _dio.post<dynamic>(
+        '/auth/refresh',
+        data: {'refreshToken': refreshToken},
+        options: Options(headers: {'Authorization': null}),
+      );
+      final body = response.data;
+      if (body is! Map) return false;
+      final data = body['data'];
+      if (data is! Map) return false;
+      final access = '${data['accessToken'] ?? ''}';
+      final refresh = '${data['refreshToken'] ?? ''}';
+      if (access.isEmpty || refresh.isEmpty) return false;
+      final next = DriverSession(
+        accessToken: access,
+        refreshToken: refresh,
+        driverName: _session?.driverName ?? 'Driver TapGo',
+      );
+      _session = next;
+      _applyToken();
+      await _storage.save(next);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Membersihkan sesi lokal + header. Dipakai saat refresh gagal total.
+  Future<void> _expireLocalSession() async {
+    _session = null;
+    _applyToken();
+    await _storage.clear();
+  }
+
   @override
   Future<DriverAvailability> setAvailability(
       DriverAvailability availability) async {
@@ -182,38 +223,63 @@ class ApiDriverRepository implements DriverRepository {
     return DriverRide.fromJson(data);
   }
 
+  /// Pembungkus request dengan retry-otomatis setelah refresh token.
+  Future<Map<String, dynamic>> _request(
+      Future<Response<dynamic>> Function() call) {
+    return _performRequest(call, retriedAfterRefresh: false);
+  }
+
+  Future<Map<String, dynamic>> _performRequest(
+      Future<Response<dynamic>> Function() call,
+      {required bool retriedAfterRefresh}) async {
+    try {
+      final response = await call();
+      final body = response.data;
+      if (body is Map<String, dynamic>) {
+        final data = body['data'];
+        if (data == null) return const {'isNull': true};
+        if (data is List) return {'items': data};
+        if (data is Map<String, dynamic>) return data;
+        if (data is Map) return Map<String, dynamic>.from(data);
+      }
+      return const {};
+    } on DioException catch (error) {
+      // Access token kedaluwarsa (401) bukan akhir sesi bila refresh token masih
+      // hidup: refresh sekali lalu ulangi permintaan aslinya. Hanya bila refresh
+      // ikut gagal (token dicabut / ganti password) sesi lokal dikosongkan.
+      final is401 = error.response?.statusCode == 401;
+      if (is401 &&
+          !retriedAfterRefresh &&
+          _session?.refreshToken.isNotEmpty == true) {
+        final refreshed = await _refreshSession();
+        if (refreshed) {
+          return _performRequest(call, retriedAfterRefresh: true);
+        }
+        await _expireLocalSession();
+        throw const DriverApiException(
+          code: 'AUTH_REQUIRED',
+          message: 'Sesi berakhir. Silakan login kembali.',
+          statusCode: 401,
+        );
+      }
+      final body = error.response?.data;
+      String code = 'NETWORK_ERROR';
+      String message = 'Koneksi belum stabil. Silakan coba lagi.';
+      if (body is Map) {
+        code = '${body['code'] ?? code}';
+        message = _friendlyMessage(code, '${body['message'] ?? message}');
+      }
+      throw DriverApiException(
+          code: code, message: message, statusCode: error.response?.statusCode);
+    }
+  }
+
   void _applyToken() {
     if (_session?.accessToken case final token?) {
       _dio.options.headers['Authorization'] = 'Bearer $token';
     } else {
       _dio.options.headers.remove('Authorization');
     }
-  }
-}
-
-Future<Map<String, dynamic>> _request(
-    Future<Response<dynamic>> Function() call) async {
-  try {
-    final response = await call();
-    final body = response.data;
-    if (body is Map<String, dynamic>) {
-      final data = body['data'];
-      if (data == null) return const {'isNull': true};
-      if (data is List) return {'items': data};
-      if (data is Map<String, dynamic>) return data;
-      if (data is Map) return Map<String, dynamic>.from(data);
-    }
-    return const {};
-  } on DioException catch (error) {
-    final body = error.response?.data;
-    String code = 'NETWORK_ERROR';
-    String message = 'Koneksi belum stabil. Silakan coba lagi.';
-    if (body is Map) {
-      code = '${body['code'] ?? code}';
-      message = _friendlyMessage(code, '${body['message'] ?? message}');
-    }
-    throw DriverApiException(
-        code: code, message: message, statusCode: error.response?.statusCode);
   }
 }
 
