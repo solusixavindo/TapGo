@@ -13,12 +13,18 @@
  * Bawaannya di src/lib/api.ts adalah http://127.0.0.1:4000/api/v1, yang di
  * peramban admin berarti localhost milik admin sendiri — dan karena halamannya
  * https, permintaan http itu akan diblokir sebagai konten campuran.
+ *
+ * basePath dapat diganti lewat env TAPGO_ADMIN_BASE_PATH (mis.
+ * "/konsol-abc123") agar URL konsol tidak mudah ditebak (obscurity). Path acak
+ * bukan pengganti autentikasi — ia pelengkap basic-auth Nginx dan penjaga role
+ * di backend. Karena konsol di-export statis, mengganti basePath WAJIB
+ * diikuti build ulang: seluruh URL aset terpanggang saat build.
  */
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   output: "export",
-  basePath: "/admin",
+  basePath: process.env.TAPGO_ADMIN_BASE_PATH ?? "/admin",
   trailingSlash: true,
   images: {
     unoptimized: true
