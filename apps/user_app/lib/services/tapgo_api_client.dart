@@ -408,6 +408,19 @@ class _TapGoApiClient {
     return _TapGoAuthUser.fromMap(_unwrap(response.data));
   }
 
+  /// Mengganti password akun yang sedang masuk. Backend menjawab 204 tanpa
+  /// badan dan mencabut SEMUA sesi — termasuk sesi pemanggil — sehingga
+  /// pemanggil wajib membersihkan sesi lokal segera setelah sukses.
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await _dio.post<void>(
+      _apiPath('auth/change-password'),
+      data: {'currentPassword': currentPassword, 'newPassword': newPassword},
+    );
+  }
+
   Future<_TapGoProductionSnapshot> productionSnapshot() async {
     if (tapGoIsPlayDistribution) {
       final membership = await _productionSnapshotPart(

@@ -157,7 +157,8 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
               // informasi wallet tetap terlihat tanpa menggantikan Membership.
               // Dinonaktifkan saat fixture visual agar test tetap memverifikasi
               // layout Membership→grid ringkas tanpa ruang kosong.
-              if (tapGoIsPlayDistribution && !tapGoDashboardVisualFixtureEnabled) ...[
+              if (tapGoIsPlayDistribution &&
+                  !tapGoDashboardVisualFixtureEnabled) ...[
                 const SizedBox(height: 14),
                 _DashboardEntrance(
                   order: 4,
@@ -322,8 +323,8 @@ class _DashboardSkeletonCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.72),
         borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-          ),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
       child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1189,8 +1190,9 @@ class _PromoHeroState extends State<_PromoHero> {
                       alpha: _index == index ? 0.95 : 0.42,
                     ),
                     borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-          ),
+                    border: Border.all(
+                        color: Theme.of(context).colorScheme.outlineVariant),
+                  ),
                 ),
               ),
             ),
@@ -1297,8 +1299,9 @@ class _PromoSlide extends StatelessWidget {
                     color: Colors.white.withValues(
                       alpha: hasImage ? 0.08 : 0.10,
                     ),
-                  border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-          ),
+                    border: Border.all(
+                        color: Theme.of(context).colorScheme.outlineVariant),
+                  ),
                 ),
               ),
               if (!hasImage)
@@ -1443,7 +1446,8 @@ class _HeroOrbit extends StatelessWidget {
                 offset: Offset(0, 10),
               ),
             ],
-          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+            border:
+                Border.all(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           child: Icon(icon, color: accent, size: 34),
         ),
@@ -1473,18 +1477,20 @@ class _HeroMiniIcon extends StatelessWidget {
             offset: Offset(0, 8),
           ),
         ],
-      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-          ),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
       child: Icon(icon, color: color, size: 27),
     );
   }
 }
 
 class _WalletCard extends ConsumerWidget {
-  const _WalletCard({required this.session, required this.state, this.forceWallet = false});
+  const _WalletCard(
+      {required this.session, required this.state, this.forceWallet = false});
 
   final DemoClientSession session;
   final AsyncValue<_TapGoProductionSnapshot> state;
+
   /// Jika true, tampilkan sebagai kartu wallet TapGoPay meskipun mode Play
   /// (kartu Membership biru tetap dirender terpisah di atasnya).
   final bool forceWallet;
@@ -1540,8 +1546,9 @@ class _WalletCard extends ConsumerWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: Colors.white.withValues(alpha: 0.08),
-                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-          ),
+                  border: Border.all(
+                      color: Theme.of(context).colorScheme.outlineVariant),
+                ),
               ),
             ),
             Positioned(
@@ -2218,8 +2225,9 @@ class _ContentCards extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-          ),
+              border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -3013,6 +3021,7 @@ class ProfileDetailsScreen extends ConsumerWidget {
         phone: session.phone,
         memberId: 'TGM-TESTCARD',
         status: 'ACTIVE',
+        membership: 'Basic',
         joinedAt: DateTime(2026, 7, 14),
       );
     }
@@ -3034,6 +3043,7 @@ class ProfileDetailsScreen extends ConsumerWidget {
             phone: session.phone,
             memberId: '-',
             status: 'ACTIVE',
+            membership: 'Basic',
             joinedAt: DateTime.tryParse(session.membershipJoinedAt ?? '') ??
                 DateTime.now(),
           );
@@ -3364,8 +3374,7 @@ class BasicMemberCardScreen extends ConsumerStatefulWidget {
       _BasicMemberCardScreenState();
 }
 
-class _BasicMemberCardScreenState
-    extends ConsumerState<BasicMemberCardScreen> {
+class _BasicMemberCardScreenState extends ConsumerState<BasicMemberCardScreen> {
   Future<_BasicMemberCardData>? _future;
 
   @override
@@ -3392,6 +3401,7 @@ class _BasicMemberCardScreenState
         phone: session.phone,
         memberId: 'TGM-TESTCARD',
         status: 'ACTIVE',
+        membership: 'Basic',
         joinedAt: DateTime(2026, 7, 14),
       );
     }
@@ -3456,11 +3466,13 @@ class _BasicMemberCardScreenState
           }
           final card = snapshot.data!;
           final isActive = card.status.toUpperCase() == 'ACTIVE';
+          final tier = card.membership.toUpperCase();
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
             children: [
               // Kartu resmi mengikuti mockup Owner: navy gelap + aksen emas,
-              // chip kontak, nama, Member ID, paket, dan tanggal bergabung.
+              // watermark logo, chip EMV, NFC, nama, Member ID, paket, dan
+              // tanggal bergabung.
               Container(
                 key: const ValueKey('basic_member_card_surface'),
                 padding: const EdgeInsets.all(20),
@@ -3475,7 +3487,8 @@ class _BasicMemberCardScreenState
                     ],
                   ),
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: const Color(0xFFD4AF37), width: 1.2),
+                  border:
+                      Border.all(color: const Color(0xFFD4AF37), width: 1.2),
                   boxShadow: const [
                     BoxShadow(
                       color: Color(0x55000000),
@@ -3484,125 +3497,152 @@ class _BasicMemberCardScreenState
                     ),
                   ],
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Stack(
                   children: [
-                    Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Image.asset(
-                            'assets/images/tapgo_logo.jpeg',
-                            width: 40,
-                            height: 40,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Text(
-                            'TAPGO MEMBER CARD',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              letterSpacing: 1.2,
-                              fontWeight: FontWeight.w900,
-                              decoration: TextDecoration.none,
+                    // Watermark logo seperti pada mockup: samar di sisi kanan,
+                    // tidak ikut memperbesar kartu dan tidak menutupi teks.
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: Opacity(
+                            opacity: 0.10,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(20),
+                              child: Image.asset(
+                                'assets/images/tapgo_logo.jpeg',
+                                width: 170,
+                                height: 170,
+                                fit: BoxFit.cover,
+                              ),
                             ),
                           ),
                         ),
-                        _MemberStatusChip(
-                          label: isActive ? 'BASIC' : 'TIDAK AKTIF',
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.nfc_rounded,
-                          color: Color(0xFFD4AF37),
-                          size: 34,
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Text(
-                            card.displayName.toUpperCase(),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              height: 1.12,
-                              letterSpacing: 1.5,
-                              fontWeight: FontWeight.w900,
-                              decoration: TextDecoration.none,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'MEMBER ID',
-                      style: TextStyle(
-                        color: Color(0xFF9FB3C8),
-                        fontSize: 11,
-                        letterSpacing: 1.6,
-                        fontWeight: FontWeight.w700,
-                        decoration: TextDecoration.none,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      card.memberId,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        letterSpacing: 2,
-                        fontWeight: FontWeight.w800,
-                        decoration: TextDecoration.none,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
+                    Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Expanded(
-                          child: _MemberCardGoldField(
-                            label: 'PAKET',
-                            value: 'BASIC',
+                        Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.asset(
+                                'assets/images/tapgo_logo.jpeg',
+                                width: 40,
+                                height: 40,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Text(
+                                'TAPGO MEMBER CARD',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  letterSpacing: 1.2,
+                                  fontWeight: FontWeight.w900,
+                                  decoration: TextDecoration.none,
+                                ),
+                              ),
+                            ),
+                            _MemberStatusChip(
+                              label: isActive ? tier : 'TIDAK AKTIF',
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          children: [
+                            const _MemberCardEmvChip(),
+                            const SizedBox(width: 12),
+                            const Icon(
+                              Icons.nfc_rounded,
+                              color: Color(0xFFD4AF37),
+                              size: 28,
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Text(
+                                card.displayName.toUpperCase(),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  height: 1.12,
+                                  letterSpacing: 1.5,
+                                  fontWeight: FontWeight.w900,
+                                  decoration: TextDecoration.none,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        const Text(
+                          'MEMBER ID',
+                          style: TextStyle(
+                            color: Color(0xFF9FB3C8),
+                            fontSize: 11,
+                            letterSpacing: 1.6,
+                            fontWeight: FontWeight.w700,
+                            decoration: TextDecoration.none,
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _MemberCardGoldField(
-                            label: 'BERGABUNG',
-                            value: _formatMemberDate(card.joinedAt)
-                                .toUpperCase(),
+                        const SizedBox(height: 4),
+                        Text(
+                          card.memberId,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            letterSpacing: 2,
+                            fontWeight: FontWeight.w800,
+                            decoration: TextDecoration.none,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: _MemberCardGoldField(
+                                label: 'PAKET',
+                                value: tier,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: _MemberCardGoldField(
+                                label: 'BERGABUNG',
+                                value: _formatMemberDate(card.joinedAt)
+                                    .toUpperCase(),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        const Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            'TAPGO\nMEMBERSHIP',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              color: Color(0xFFD4AF37),
+                              fontSize: 13,
+                              height: 1.25,
+                              letterSpacing: 1.4,
+                              fontWeight: FontWeight.w900,
+                              decoration: TextDecoration.none,
+                            ),
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 16),
-                    const Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        'TAPGO\nMEMBERSHIP',
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          color: Color(0xFFD4AF37),
-                          fontSize: 13,
-                          height: 1.25,
-                          letterSpacing: 1.4,
-                          fontWeight: FontWeight.w900,
-                          decoration: TextDecoration.none,
-                        ),
-                      ),
                     ),
                   ],
                 ),
@@ -3613,7 +3653,7 @@ class _BasicMemberCardScreenState
                 icon: Icons.info_outline_rounded,
                 title: 'Informasi aman',
                 subtitle:
-                    'Kartu ini hanya menampilkan nama, Member ID, status Basic, dan tanggal bergabung.',
+                    'Kartu ini hanya menampilkan nama, Member ID, paket, dan tanggal bergabung.',
               ),
             ],
           );
@@ -3629,6 +3669,7 @@ class _BasicMemberCardData {
     required this.phone,
     required this.memberId,
     required this.status,
+    required this.membership,
     required this.joinedAt,
   });
 
@@ -3636,6 +3677,7 @@ class _BasicMemberCardData {
   final String phone;
   final String memberId;
   final String status;
+  final String membership;
   final DateTime joinedAt;
 
   factory _BasicMemberCardData.fromMap(Map<String, dynamic> map) {
@@ -3644,10 +3686,69 @@ class _BasicMemberCardData {
       phone: map['phone']?.toString() ?? '',
       memberId: map['memberId']?.toString() ?? '',
       status: map['status']?.toString() ?? 'ACTIVE',
+      membership: map['membership']?.toString() ?? 'Basic',
       joinedAt: DateTime.tryParse(map['joinedAt']?.toString() ?? '') ??
           DateTime.now(),
     );
   }
+}
+
+/// Chip EMV emas seperti pada mockup kartu resmi: kotak membulat dengan
+/// garis kontak. Digambar, bukan ikon font, supaya tidak bergantung pada
+/// ketersediaan glyph di perangkat.
+class _MemberCardEmvChip extends StatelessWidget {
+  const _MemberCardEmvChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return const CustomPaint(
+      key: ValueKey('member_card_emv_chip'),
+      size: Size(46, 34),
+      painter: _EmvChipPainter(),
+    );
+  }
+}
+
+class _EmvChipPainter extends CustomPainter {
+  const _EmvChipPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(7));
+    final fill = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFFF6D47C), Color(0xFFD4AF37), Color(0xFF9C7C1E)],
+      ).createShader(rect);
+    canvas.drawRRect(rrect, fill);
+
+    final line = Paint()
+      ..color = const Color(0xFF6B5310)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.3;
+    final w = size.width;
+    final h = size.height;
+    canvas.drawLine(Offset(w * 0.35, 0), Offset(w * 0.35, h), line);
+    canvas.drawLine(Offset(w * 0.65, 0), Offset(w * 0.65, h), line);
+    canvas.drawLine(Offset(0, h * 0.3), Offset(w, h * 0.3), line);
+    canvas.drawLine(Offset(0, h * 0.7), Offset(w, h * 0.7), line);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: rect.center,
+          width: w * 0.3,
+          height: h * 0.4,
+        ),
+        const Radius.circular(4),
+      ),
+      line,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _EmvChipPainter oldDelegate) => false;
 }
 
 class _MemberCardGoldField extends StatelessWidget {
@@ -3766,7 +3867,7 @@ class SettingsScreen extends ConsumerWidget {
           _SettingsTile(
             icon: Icons.password_rounded,
             title: 'Ubah password',
-            onTap: () => _showSoon(context),
+            onTap: () => _openDemo(context, const ChangePasswordScreen()),
           ),
           _SettingsTile(
             icon: Icons.language_rounded,
@@ -3799,7 +3900,7 @@ class SettingsScreen extends ConsumerWidget {
           const _SettingsTile(
             icon: Icons.verified_rounded,
             title: 'Versi aplikasi',
-            subtitle: '1.0.9+11',
+            subtitle: '2.0.0+14',
           ),
           _SettingsTile(
             icon: Icons.logout_rounded,
@@ -4050,8 +4151,9 @@ class _WalletAction extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-          ),
+          border:
+              Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        ),
         child: Icon(icon, color: Colors.white, size: 31),
       ),
     );
@@ -4318,8 +4420,9 @@ class _ServiceIcon3D extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.70),
                 borderRadius: BorderRadius.circular(size),
-              border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-          ),
+                border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant),
+              ),
             ),
           ),
         ],

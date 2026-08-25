@@ -1129,6 +1129,39 @@ void main() {
     expect(find.text('Saldo'), findsNothing);
   });
 
+  testWidgets('Member card follows official mockup and shows real tier', (
+    WidgetTester tester,
+  ) async {
+    tapGoDisablePersistenceForTests = true;
+    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
+    tapGoMemberIdentityLoaderForTests = () async => {
+          'displayName': 'Ahmad Zulhi',
+          'memberId': 'TGM-Q8TE9PH575',
+          'membership': 'Gold',
+          'status': 'ACTIVE',
+          'joinedAt': '2026-06-08T00:00:00.000Z',
+        };
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: BasicMemberCardScreen())),
+    );
+    await tester.pumpAndSettle();
+
+    // Elemen mockup Owner: chip EMV, NFC, nama, Member ID, paket nyata,
+    // dan tanggal bergabung.
+    expect(
+      find.byKey(const ValueKey('member_card_emv_chip')),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.nfc_rounded), findsOneWidget);
+    expect(find.textContaining('AHMAD ZULHI'), findsOneWidget);
+    expect(find.text('TGM-Q8TE9PH575'), findsOneWidget);
+    // Tier berasal dari identitas member, bukan tulisan tetap.
+    expect(find.text('GOLD'), findsNWidgets(2));
+    expect(find.text('BASIC'), findsNothing);
+    expect(find.text('8 JUNI 2026'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'Basic member card is responsive and keeps public fields visible',
     (WidgetTester tester) async {

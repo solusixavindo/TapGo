@@ -39,6 +39,7 @@ part 'screens/admin_payment_screen.dart';
 part 'screens/admin_referral_analytics_screen.dart';
 part 'screens/admin_wallet_screen.dart';
 part 'screens/admin_withdrawal_screen.dart';
+part 'screens/change_password_screen.dart';
 part 'screens/checkout_screen.dart';
 part 'screens/dashboard_screen.dart';
 part 'screens/membership_registration_screen.dart';
@@ -93,6 +94,13 @@ Future<Map<String, dynamic>> Function({
   required String message,
 })? tapGoCreateSupportTicketForTests;
 Future<Map<String, dynamic>> Function()? tapGoMemberIdentityLoaderForTests;
+// Hook ubah password, mengikuti pola loader-for-tests di atas: test mengganti
+// batas jaringan tanpa menyentuh logika layar. Nilai default null berarti
+// produksi selalu memakai _apiClient.
+Future<void> Function({
+  required String currentPassword,
+  required String newPassword,
+})? tapGoChangePasswordSubmitterForTests;
 
 // Hook Ojek Online, mengikuti pola loader-for-tests di atas. Dipakai test yang
 // menyentuh widget dashboard nyata, supaya tap tidak pernah menembak jaringan.
@@ -168,7 +176,9 @@ PpobRepository _buildPpobRepository() {
   return PpobRepository(
     catalogRequest: () => guard(() async {
       final payload = await _apiClient.get('ppob/catalog');
-      return payload['items'] is List ? payload['items'] as List<dynamic> : const [];
+      return payload['items'] is List
+          ? payload['items'] as List<dynamic>
+          : const [];
     }),
     inquiryRequest: ({required sku, required targetNumber}) => guard(
       () => _apiClient.post(
@@ -193,7 +203,9 @@ PpobRepository _buildPpobRepository() {
     ),
     ordersRequest: () => guard(() async {
       final payload = await _apiClient.get('ppob/orders');
-      return payload['items'] is List ? payload['items'] as List<dynamic> : const [];
+      return payload['items'] is List
+          ? payload['items'] as List<dynamic>
+          : const [];
     }),
   );
 }
@@ -373,7 +385,9 @@ Future<void> main() async {
     ProviderScope(
       overrides: [
         ppobRepositoryProvider.overrideWithValue(
-          tapGoPpobDemoMode ? createDemoPpobRepository() : _buildPpobRepository(),
+          tapGoPpobDemoMode
+              ? createDemoPpobRepository()
+              : _buildPpobRepository(),
         ),
       ],
       child: const TapGoUserApp(),
