@@ -1,5 +1,8 @@
 part of '../main.dart';
 
+/// Hasil pertukaran refresh token ke server.
+enum TapGoSessionRefreshResult { refreshed, rejected, unreachable }
+
 class _TapGoApiClient {
   _TapGoApiClient({
     Dio? dio,
@@ -53,13 +56,21 @@ class _TapGoApiClient {
   }
 
   /// Menukar refresh token menjadi pasangan token baru (rotasi di server).
-  /// Mengembalikan null bila refresh token kosong atau ditolak (dicabut /
-  /// ganti password) — pemanggil lalu mengosongkan sesi untuk login ulang.
+  /// Mengembalikan null bila refresh token kosong. Hasil dibedakan tiga:
+  /// [TapGoSessionRefreshResult.refreshed] (token baru), [rejected] (server
+  /// menolak — token dicabut / ganti password → sesi boleh dikosongkan), dan
+  /// [unreachable] (gangguan jaringan/5xx — sesi HARUS dipertahankan agar
+  /// pengguna tidak dipaksa login ulang hanya karena koneksi putus).
   /// Header Authorization sengaja dikosongkan: endpoint refresh hanya butuh
   /// refreshToken di body, dan mengirim access token kedaluwarsa bisa 401.
-  Future<({String accessToken, String refreshToken})?> refreshSession(
-      String refreshToken) async {
-    if (refreshToken.isEmpty) return null;
+  Future<
+      (
+        TapGoSessionRefreshResult,
+        ({String accessToken, String refreshToken})?,
+      )> refreshSession(String refreshToken) async {
+    if (refreshToken.isEmpty) {
+      return (TapGoSessionRefreshResult.rejected, null);
+    }
     try {
       final response = await _dio.post<Map<String, dynamic>>(
         _apiPath('auth/refresh'),
@@ -69,12 +80,21 @@ class _TapGoApiClient {
       final data = _unwrap(response.data);
       final access = '${data['accessToken'] ?? ''}';
       final refresh = '${data['refreshToken'] ?? ''}';
-      if (access.isEmpty || refresh.isEmpty) return null;
-      return (accessToken: access, refreshToken: refresh);
-    } on DioException {
-      return null;
+      if (access.isEmpty || refresh.isEmpty) {
+        return (TapGoSessionRefreshResult.unreachable, null);
+      }
+      return (
+        TapGoSessionRefreshResult.refreshed,
+        (accessToken: access, refreshToken: refresh),
+      );
+    } on DioException catch (error) {
+      final status = error.response?.statusCode;
+      if (status == 401 || status == 403) {
+        return (TapGoSessionRefreshResult.rejected, null);
+      }
+      return (TapGoSessionRefreshResult.unreachable, null);
     } catch (_) {
-      return null;
+      return (TapGoSessionRefreshResult.unreachable, null);
     }
   }
 
@@ -1057,7 +1077,33 @@ final _productionSnapshotProvider = FutureProvider<_TapGoProductionSnapshot>((
     throw StateError('Belum ada token backend.');
   }
   _apiClient.setAccessToken(session.accessToken);
-  final snapshot = await _apiClient.productionSnapshot();
+  _TapGoProductionSnapshot snapshot;
+  try {
+    snapshot = await _apiClient.productionSnapshot();
+  } on DioException catch (error) {
+    final status = error.response?.statusCode;
+    if (status != 401 && status != 403) {
+      rethrow;
+    }
+    // Access token kedaluwarsa bukan akhir sesi: tukar refresh token lalu
+    // ulangi sekali, supaya beranda tidak jatuh ke state "minta refresh".
+    final (result, refreshed) =
+        await _apiClient.refreshSession(session.refreshToken ?? '');
+    if (result != TapGoSessionRefreshResult.refreshed || refreshed == null) {
+      rethrow;
+    }
+    _apiClient.setAccessToken(refreshed.accessToken);
+    final renewed = session.copyWith(
+      accessToken: refreshed.accessToken,
+      refreshToken: refreshed.refreshToken,
+    );
+    ref.read(_demoSessionProvider.notifier).state = renewed;
+    await _persistentStore.saveTokens(
+      accessToken: refreshed.accessToken,
+      refreshToken: refreshed.refreshToken,
+    );
+    snapshot = await _apiClient.productionSnapshot();
+  }
   final patched = session.copyWith(
     activePackageName: snapshot.sessionPatch.activePackageName,
     walletBalance: snapshot.sessionPatch.walletBalance,

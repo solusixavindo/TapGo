@@ -213,6 +213,39 @@ class DemoDriverRepository implements DriverRepository {
     );
     return documents();
   }
+
+  DriverApplicationInfo? _demoApplication;
+
+  @override
+  Future<DriverApplicationSnapshot> myApplication() async {
+    return DriverApplicationSnapshot(
+      application: _demoApplication,
+      documentsComplete: _demoDocuments.length == DriverDocumentKind.values.length,
+      vehiclePlateMasked: _demoApplication == null ? null : 'B 1234 ***',
+    );
+  }
+
+  @override
+  Future<DriverApplicationSnapshot> submitApplication({
+    required String serviceType,
+    required String plateNumber,
+    String? brand,
+    String? model,
+    String? color,
+  }) async {
+    _demoApplication = const DriverApplicationInfo(
+      id: 'demo-application',
+      cycleNumber: 1,
+      status: DriverApplicationStatus.submitted,
+    );
+    return myApplication();
+  }
+
+  @override
+  Future<DriverApplicationSnapshot> withdrawApplication() async {
+    _demoApplication = null;
+    return myApplication();
+  }
 }
 
 DriverRide get _demoOffer => const DriverRide(

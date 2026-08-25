@@ -11,6 +11,10 @@ import {
   REASSIGN_REASON_CODES,
   RELEASE_REASON_CODES
 } from "../application/DriverReviewLeaseService.js";
+import {
+  DriverApplicationService,
+  REJECT_REASON_CODES
+} from "../../drivers/application/DriverApplicationService.js";
 
 /**
  * Route admin untuk antrian dan claim/lease review driver.
@@ -25,11 +29,14 @@ import {
  * pemanggilan service dari jalur lain tidak dapat melewatinya. requireRoles
  * di sini hanya menutup pintu lebih awal; ia tidak pernah memberi kewenangan.
  *
- * Tidak ada endpoint approval/rejection pada stage ini.
+ * Keputusan (approve/reject) hanya dapat dilakukan admin yang SEDANG memegang
+ * klaim aktif atas pengajuan itu — divalidasi ulang di dalam transaksi oleh
+ * DriverApplicationService, bukan hanya saat endpoint dipanggil.
  */
 
 const scopeService = new DriverReviewScopeService(prisma);
 const leaseService = new DriverReviewLeaseService(prisma, scopeService);
+const applicationService = new DriverApplicationService(prisma, scopeService);
 
 const wrapBody = (value: unknown) => {
   if (value && typeof value === "object" && "body" in value) {
@@ -119,6 +126,35 @@ driverReviewRouter.post(
       actorId: req.auth!.userId,
       applicationId: req.params.id as string,
       targetUserId: req.body.targetUserId,
+      reasonCode: req.body.reasonCode
+    });
+    res.json({ success: true, data });
+  })
+);
+
+const rejectSchema = z.preprocess(
+  wrapBody,
+  z.object({ body: z.object({ reasonCode: z.enum(REJECT_REASON_CODES) }) })
+);
+
+driverReviewRouter.post(
+  "/applications/:id/approve",
+  asyncHandler(async (req, res) => {
+    const data = await applicationService.approve({
+      actorId: req.auth!.userId,
+      applicationId: req.params.id as string
+    });
+    res.json({ success: true, data });
+  })
+);
+
+driverReviewRouter.post(
+  "/applications/:id/reject",
+  validateRequest(rejectSchema),
+  asyncHandler(async (req, res) => {
+    const data = await applicationService.reject({
+      actorId: req.auth!.userId,
+      applicationId: req.params.id as string,
       reasonCode: req.body.reasonCode
     });
     res.json({ success: true, data });

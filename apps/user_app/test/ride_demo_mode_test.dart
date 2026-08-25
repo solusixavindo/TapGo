@@ -73,14 +73,17 @@ void main() {
   });
 
   group('mode demo aktif', () {
-    test('4. flag demo menyala dan port demo terpasang', () {
+    test('4. flag demo menyala dan port demo terpasang', () async {
       expect(tapGoRideDemoMode, isTrue);
       expect(tapGoRideLocationPort(), isA<DemoLocationPort>());
       expect(
         tapGoRideLocationPort().status,
         RideLocationProviderStatus.ready,
       );
-      expect(tapGoRideLocationPort().availableLocations(), hasLength(3));
+      expect(
+        await tapGoRideLocationPort().searchAddress('lokasi'),
+        hasLength(3),
+      );
       // Dilewati tanpa --dart-define=TAPGO_RIDE_DEMO_MODE=true.
     }, skip: !tapGoRideDemoMode);
 

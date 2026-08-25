@@ -68,9 +68,12 @@ class ApiDriverRepository implements DriverRepository {
 
   /// Menukar refresh token menjadi pasangan token baru (rotasi di server).
   /// Dipanggil otomatis oleh _request saat access token kedaluwarsa (401),
-  /// sehingga driver tidak dipaksa login ulang setiap ~15 menit. Gagal refresh
-  /// (refresh token ikut gugur/dicabut) mengosongkan sesi -> login ulang.
-  Future<bool> _refreshSession() async {
+  /// sehingga driver tidak dipaksa login ulang setiap ~15 menit.
+  /// Hasil: true = token baru tersimpan; false = server MENOLAK refresh token
+  /// (dicabut / ganti password) -> sesi boleh dikosongkan; null = gangguan
+  /// jaringan / 5xx -> sesi HARUS dipertahankan agar driver tidak dipaksa
+  /// login ulang hanya karena koneksi putus.
+  Future<bool?> _refreshSession() async {
     final refreshToken = _session?.refreshToken;
     if (refreshToken == null || refreshToken.isEmpty) return false;
     try {
@@ -80,12 +83,12 @@ class ApiDriverRepository implements DriverRepository {
         options: Options(headers: {'Authorization': null}),
       );
       final body = response.data;
-      if (body is! Map) return false;
+      if (body is! Map) return null;
       final data = body['data'];
-      if (data is! Map) return false;
+      if (data is! Map) return null;
       final access = '${data['accessToken'] ?? ''}';
       final refresh = '${data['refreshToken'] ?? ''}';
-      if (access.isEmpty || refresh.isEmpty) return false;
+      if (access.isEmpty || refresh.isEmpty) return null;
       final next = DriverSession(
         accessToken: access,
         refreshToken: refresh,
@@ -95,8 +98,12 @@ class ApiDriverRepository implements DriverRepository {
       _applyToken();
       await _storage.save(next);
       return true;
+    } on DioException catch (error) {
+      final status = error.response?.statusCode;
+      if (status == 401 || status == 403) return false;
+      return null;
     } catch (_) {
-      return false;
+      return null;
     }
   }
 
@@ -206,6 +213,60 @@ class ApiDriverRepository implements DriverRepository {
     return documents();
   }
 
+  @override
+  Future<DriverApplicationSnapshot> myApplication() async {
+    final data =
+        await _request(() => _dio.get<dynamic>('/driver/applications/mine'));
+    return _applicationSnapshotFrom(data);
+  }
+
+  @override
+  Future<DriverApplicationSnapshot> submitApplication({
+    required String serviceType,
+    required String plateNumber,
+    String? brand,
+    String? model,
+    String? color,
+  }) async {
+    await _request(
+      () => _dio.post<dynamic>(
+        '/driver/applications',
+        data: {
+          'serviceType': serviceType,
+          'plateNumber': plateNumber,
+          if (brand != null && brand.isNotEmpty) 'brand': brand,
+          if (model != null && model.isNotEmpty) 'model': model,
+          if (color != null && color.isNotEmpty) 'color': color,
+        },
+      ),
+    );
+    // Status dibaca ulang dari server: versi, nomor siklus, dan kelengkapan
+    // dokumen adalah keputusan backend, bukan asumsi klien.
+    return myApplication();
+  }
+
+  @override
+  Future<DriverApplicationSnapshot> withdrawApplication() async {
+    await _request(
+        () => _dio.post<dynamic>('/driver/applications/withdraw'));
+    return myApplication();
+  }
+
+  DriverApplicationSnapshot _applicationSnapshotFrom(
+      Map<String, dynamic> data) {
+    final rawApplication = data['application'];
+    final vehicle = data['vehicle'];
+    return DriverApplicationSnapshot(
+      application: rawApplication is Map
+          ? DriverApplicationInfo.fromJson(
+              Map<String, dynamic>.from(rawApplication))
+          : null,
+      documentsComplete: data['documentsComplete'] == true,
+      vehiclePlateMasked:
+          vehicle is Map ? vehicle['plateMasked'] as String? : null,
+    );
+  }
+
   List<DriverDocumentSummary> _documentsFrom(Map<String, dynamic> data) {
     final items = data['items'] is List ? data['items'] as List : const [];
     final result = <DriverDocumentSummary>[];
@@ -252,8 +313,17 @@ class ApiDriverRepository implements DriverRepository {
           !retriedAfterRefresh &&
           _session?.refreshToken.isNotEmpty == true) {
         final refreshed = await _refreshSession();
-        if (refreshed) {
+        if (refreshed == true) {
           return _performRequest(call, retriedAfterRefresh: true);
+        }
+        if (refreshed == null) {
+          // Refresh tidak dapat diverifikasi (jaringan/5xx): JANGAN kosongkan
+          // sesi. Laporkan sebagai gangguan koneksi agar driver coba lagi
+          // tanpa kehilangan login.
+          throw const DriverApiException(
+            code: 'NETWORK_ERROR',
+            message: 'Koneksi belum stabil. Silakan coba lagi.',
+          );
         }
         await _expireLocalSession();
         throw const DriverApiException(

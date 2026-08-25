@@ -54,9 +54,8 @@ class _ReferralTreeNodeWidget extends StatelessWidget {
                   switchOutCurve: _TapGoMotion.exitCurve,
                   transitionBuilder: (child, animation) => SizeTransition(
                     sizeFactor: animation,
-                    // Flutter 3.35 belum memiliki parameter `alignment` pada
-                    // SizeTransition; axisAlignment -1 setara top-center.
-                    axisAlignment: -1.0,
+                    // Top-center: sumbu Y -1, sumbu X 0 (tengah).
+                    alignment: const Alignment(0, -1),
                     child: FadeTransition(opacity: animation, child: child),
                   ),
                   child: node.isExpanded
@@ -212,7 +211,7 @@ class _TreeConnectorPainter extends CustomPainter {
       ..color = const Color(0xFFCBD5E1)
       ..strokeWidth = 1.6
       ..style = PaintingStyle.stroke;
-    final path = Path()
+    final path = ui.Path()
       ..moveTo(size.width / 2, 0)
       ..lineTo(size.width / 2, size.height / 2)
       ..lineTo(size.width, size.height / 2);

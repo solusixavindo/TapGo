@@ -7,14 +7,33 @@ part of '../../../main.dart';
 /// google-play-assets/TapGo_Logo_512x512.png.
 const String driverBrandLogoAsset = 'assets/images/tapgo_logo_512.png';
 
-class DriverShell extends ConsumerWidget {
+class DriverShell extends ConsumerStatefulWidget {
   const DriverShell({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DriverShell> createState() => _DriverShellState();
+}
+
+class _DriverShellState extends ConsumerState<DriverShell> {
+  /// Tab bawah beroperasi hanya saat workspace aktif; pada status lain
+  /// (login/capability/error) tab disembunyikan dan layar kapabilitas
+  /// ditampilkan apa pun tab yang tersisa.
+  int _tabIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(driverControllerProvider);
     final controller = ref.read(driverControllerProvider.notifier);
-    return Scaffold(
+    final showTabs = state.status == DriverWorkspaceStatus.active;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        confirmTapGoExit(context).then((exitConfirmed) {
+          if (exitConfirmed) SystemNavigator.pop();
+        });
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: const Text('TapGo Driver'),
         actions: [
@@ -35,7 +54,9 @@ class DriverShell extends ConsumerWidget {
                     EdgeInsets.only(bottom: state.isAuthenticated ? 24 : 0),
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 220),
-                  child: _bodyFor(state),
+                  child: showTabs && _tabIndex == 1
+                      ? const DriverAccountScreen(key: ValueKey('account'))
+                      : _bodyFor(state),
                 ),
               ),
             ),
@@ -44,9 +65,11 @@ class DriverShell extends ConsumerWidget {
           ],
         ),
       ),
-      bottomNavigationBar: state.isAuthenticated
+      bottomNavigationBar: state.isAuthenticated && showTabs
           ? NavigationBar(
-              selectedIndex: 0,
+              selectedIndex: _tabIndex,
+              onDestinationSelected: (value) =>
+                  setState(() => _tabIndex = value),
               destinations: const [
                 NavigationDestination(
                   icon: Icon(Icons.route_rounded),
@@ -59,6 +82,7 @@ class DriverShell extends ConsumerWidget {
               ],
             )
           : null,
+      ),
     );
   }
 
@@ -75,6 +99,9 @@ class DriverShell extends ConsumerWidget {
           message:
               state.message ?? 'Akun ini belum memiliki profil driver aktif.',
           icon: Icons.badge_rounded,
+          // H1: jalur pengajuan mandiri — calon mitra tanpa profil justru
+          // harus bisa mengunggah dokumen dan mengirim pengajuannya di sini.
+          showDocuments: true,
         );
       case DriverWorkspaceStatus.pending:
         return CapabilityScreen(
@@ -316,7 +343,7 @@ class DriverHomeScreen extends ConsumerWidget {
       child: ListView(
         padding: EdgeInsets.fromLTRB(16, topPadding, 16, 120),
         children: [
-          _DriverStatusCard(state: state),
+          _StatusHeroCard(state: state),
           const SizedBox(height: 16),
           if (state.message != null) ...[
             ErrorNotice(message: state.message!),
@@ -324,11 +351,8 @@ class DriverHomeScreen extends ConsumerWidget {
           ],
           if (state.activeRide != null)
             ActiveRideCard(ride: state.activeRide!)
-          else ...[
-            AvailabilityCard(state: state),
-            const SizedBox(height: 16),
+          else
             _OfferSection(state: state),
-          ],
           if (kDriverDemoMode) const DemoScenarioSelector(),
         ],
       ),
@@ -396,85 +420,138 @@ class _BrandHeader extends StatelessWidget {
   }
 }
 
-class _DriverStatusCard extends ConsumerWidget {
-  const _DriverStatusCard({required this.state});
-  final DriverState state;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final name = state.session?.driverName ?? 'Driver TapGo';
-    final status = switch (state.availability) {
-      DriverAvailability.online => 'Online',
-      DriverAvailability.busy => 'Dalam Perjalanan',
-      DriverAvailability.offline => 'Offline',
-    };
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                        colors: [Color(0xFF00D4FF), Color(0xFF0877E8)]),
-                  ),
-                  child: const Icon(Icons.person_rounded, color: Colors.white),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(name, style: Theme.of(context).textTheme.titleLarge),
-                      const SizedBox(height: 4),
-                      Text('Status: $status'),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            StatusPill(
-              label: status,
-              active: state.availability != DriverAvailability.offline,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class AvailabilityCard extends ConsumerWidget {
-  const AvailabilityCard({required this.state, super.key});
+/// Kartu status utama beranda: identitas driver, pill status, dan toggle
+/// ketersediaan. Judul "Ketersediaan" beserta toggle-nya hanya dirender bila
+/// tidak ada perjalanan aktif — saat trip berjalan, fokus layar beralih ke
+/// ActiveRideCard sebagaimana sebelumnya.
+class _StatusHeroCard extends ConsumerWidget {
+  const _StatusHeroCard({required this.state});
   final DriverState state;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(driverControllerProvider.notifier);
+    final name = state.session?.driverName ?? 'Driver TapGo';
     final isOnline = state.availability == DriverAvailability.online;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Ketersediaan', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
+    final status = switch (state.availability) {
+      DriverAvailability.online => 'Online',
+      DriverAvailability.busy => 'Dalam Perjalanan',
+      DriverAvailability.offline => 'Offline',
+    };
+    final hasActiveRide = state.activeRide != null;
+    // Inisial heuristik ringan — bukan parsing nama resmi, hanya label avatar.
+    final parts = name.trim().split(RegExp(r'\s+'));
+    final initials = parts.isEmpty || parts.first.isEmpty
+        ? 'TD'
+        : parts.take(2).map((p) => p[0]).join().toUpperCase();
+    final onIsland = state.availability != DriverAvailability.offline;
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF061A2F), Color(0xFF0877E8)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(28),
+      ),
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white,
+                ),
+                child: Center(
+                  child: Text(
+                    initials,
+                    style: const TextStyle(
+                      color: Color(0xFF061A2F),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Status: $status',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Pill status di baris sendiri: teks 1.8x layar sempit dapat turun
+          // baris tanpa mendesak header.
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [StatusPill(label: status, active: onIsland)],
+          ),
+          const SizedBox(height: 16),
+          // Ringkasan aktivitas hari ini. Labelnya dapat panjang, jadi
+          // gunakan Wrap — beberapa item turun ke baris baru tanpa overflow.
+          Wrap(
+            spacing: 18,
+            runSpacing: 10,
+            children: [
+              _HeroStat(
+                icon: Icons.inbox_rounded,
+                label: '${state.offers.length} tawaran',
+              ),
+              _HeroStat(
+                icon: Icons.route_rounded,
+                label: hasActiveRide ? 'Perjalanan aktif' : 'Tanpa perjalanan',
+              ),
+            ],
+          ),
+          if (!hasActiveRide) ...[
+            const SizedBox(height: 18),
+            const Text(
+              'Ketersediaan',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 6),
             Text(
               isOnline
                   ? 'Anda siap menerima perjalanan baru.'
                   : 'Aktifkan Online saat siap menerima perjalanan.',
+              style: const TextStyle(color: Colors.white70),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             FilledButton.icon(
               key: const ValueKey('availability-toggle'),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFFFC857),
+                foregroundColor: const Color(0xFF061A2F),
+                minimumSize: const Size.fromHeight(52),
+              ),
               onPressed: state.isBusy
                   ? null
                   : () => controller.setAvailability(
@@ -482,14 +559,88 @@ class AvailabilityCard extends ConsumerWidget {
                             ? DriverAvailability.offline
                             : DriverAvailability.online,
                       ),
-              icon: Icon(isOnline
-                  ? Icons.pause_circle_rounded
-                  : Icons.play_circle_rounded),
+              icon: Icon(
+                isOnline
+                    ? Icons.pause_circle_rounded
+                    : Icons.play_circle_rounded,
+              ),
               label: Text(isOnline ? 'Ubah ke Offline' : 'Online Sekarang'),
             ),
           ],
-        ),
+        ],
       ),
+    );
+  }
+}
+
+/// Alias kompatibel: widget test lama memeriksa `find.byType(AvailabilityCard)`
+/// untuk memastikan beranda tertutup saat gagal login. Identitas tipenya tetap
+/// satu — seluruh logika tinggal di _StatusHeroCard.
+typedef AvailabilityCard = _StatusHeroCard;
+
+/// Satu angka ringkasan di dalam kartu status — angka kecil, konteks besar.
+class _HeroStat extends StatelessWidget {
+  const _HeroStat({required this.icon, required this.label});
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 18, color: const Color(0xFFFFC857)),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Tab "Akun": identitas, status pengajuan mitra, dan dokumen driver.
+/// Logout tetap di AppBar supaya letaknya tidak berpindah antar tab.
+class DriverAccountScreen extends ConsumerWidget {
+  const DriverAccountScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(driverControllerProvider);
+    final topPadding = kDriverDemoMode ? 52.0 : 20.0;
+    return ListView(
+      padding: EdgeInsets.fromLTRB(16, topPadding, 16, 120),
+      children: [
+        Text('Akun Saya', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 16),
+        const DriverApplicationSection(),
+        const SizedBox(height: 16),
+        const DriverDocumentsSection(),
+        const SizedBox(height: 16),
+        if (state.vehiclePlateMasked != null)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Kendaraan',
+                      style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: 8),
+                  Text('Plat: ${state.vehiclePlateMasked}'),
+                ],
+              ),
+            ),
+          ),
+        if (kDriverDemoMode) const DemoScenarioSelector(),
+      ],
     );
   }
 }
@@ -797,6 +948,8 @@ class CapabilityScreen extends ConsumerWidget {
         const SizedBox(height: 16),
         if (showDocuments) ...[
           const DriverDocumentsSection(),
+          const SizedBox(height: 16),
+          const DriverApplicationSection(),
           const SizedBox(height: 16),
         ],
         if (showRetry)

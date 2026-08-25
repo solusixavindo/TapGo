@@ -124,6 +124,19 @@ const envSchema = z.object({
   /// bermakna saat provider mendukung cek status (digiflazz).
   PPOB_RECONCILE_ENABLED: strictEnvBoolean(false),
   PPOB_RECONCILE_INTERVAL_MS: z.coerce.number().int().min(15000).default(60000),
+  /// Pengiriman OTP lewat email SMTP (keputusan Owner G3, 24 Agustus 2026).
+  /// Semua opsional: tanpa SMTP_HOST, provider OTP tetap UnavailableOtpProvider
+  /// yang fail-closed. Konfigurasi PARSIAL (host ada tapi kredensial/from
+  /// kurang) menggagalkan boot dengan pesan jelas — bukan kegagalan sunyi
+  /// pada permintaan OTP pertama.
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  /// Alamat pengirim, mis. "TapGo <no-reply@tapgolion.id>".
+  SMTP_FROM: z.string().optional(),
+  /// true = TLS implisit (port 465); false = STARTTLS (port 587).
+  SMTP_SECURE: strictEnvBoolean(false),
   DOKU_CLIENT_ID: z.string().optional(),
   DOKU_SECRET_KEY: z.string().optional(),
   DOKU_API_KEY: z.string().optional(),

@@ -163,8 +163,14 @@ void main() {
       expect(find.text('Segera'), findsNothing);
       expect(find.text('Kartu Anggota'), findsWidgets);
       expect(find.text('Referral'), findsNothing);
-      expect(find.text('Tiket Bantuan'), findsWidgets);
-      expect(find.text('Profil'), findsWidgets);
+      // Profil, Tiket Bantuan, dan Hapus Akun dihapus dari beranda atas
+      // permintaan Owner; ketiganya tetap dapat dijangkau dari tab Akun.
+      expect(find.bySemanticsLabel('Buka layanan Profil'), findsNothing);
+      expect(
+        find.bySemanticsLabel('Buka layanan Tiket Bantuan'),
+        findsNothing,
+      );
+      expect(find.bySemanticsLabel('Buka layanan Hapus Akun'), findsNothing);
       expect(find.bySemanticsLabel('Buka layanan TapGo Ride'), findsNothing);
       expect(find.bySemanticsLabel('Buka layanan TapGo Mart'), findsNothing);
       // Stage R2.7: PPOB kini SAH pada distribusi Play — pembelian pulsa/
@@ -627,8 +633,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Kartu Anggota'), findsOneWidget);
-      expect(find.text('TapGo Member Card'), findsOneWidget);
-      expect(find.text('Basic'), findsWidgets);
+      expect(find.text('TAPGO MEMBER CARD'), findsOneWidget);
+      expect(find.text('BASIC'), findsWidgets);
       expect(find.text('Gratis'), findsNothing);
       expect(find.text('Silver'), findsNothing);
       expect(find.text('Gold'), findsNothing);
@@ -727,38 +733,18 @@ void main() {
     await tester.ensureVisible(memberCardTile);
     await tester.tap(memberCardTile);
     await tester.pumpAndSettle();
-    expect(find.text('TapGo Member Card'), findsOneWidget);
-    Navigator.of(tester.element(find.text('TapGo Member Card'))).pop();
+    expect(find.text('TAPGO MEMBER CARD'), findsOneWidget);
+    Navigator.of(tester.element(find.text('TAPGO MEMBER CARD'))).pop();
     await tester.pumpAndSettle();
 
-    final profileTile = find.bySemanticsLabel('Buka layanan Profil');
-    await tester.ensureVisible(profileTile);
-    await tester.tap(profileTile);
-    await tester.pumpAndSettle();
-    expect(find.text('Identitas'), findsOneWidget);
-    expect(find.text('Keanggotaan'), findsOneWidget);
-    expect(find.text('Public Member ID'), findsOneWidget);
-    expect(find.text('Kebijakan Privasi'), findsNothing);
-    expect(find.text('Membership'), findsNothing);
-    expect(find.text('Benefit'), findsNothing);
-    expect(find.textContaining('Paket aktif'), findsNothing);
-    Navigator.of(tester.element(find.text('Identitas'))).pop();
-    await tester.pumpAndSettle();
-
-    final supportTile = find.bySemanticsLabel('Buka layanan Tiket Bantuan');
-    await tester.ensureVisible(supportTile);
-    await tester.tap(supportTile);
-    await tester.pumpAndSettle();
-    expect(find.text('Bantuan TapGo'), findsOneWidget);
-    Navigator.of(tester.element(find.text('Bantuan TapGo'))).pop();
-    await tester.pumpAndSettle();
-
-    final deleteTile = find.bySemanticsLabel('Buka layanan Hapus Akun');
-    await tester.ensureVisible(deleteTile);
-    await tester.tap(deleteTile);
-    await tester.pumpAndSettle();
-    expect(find.text('Ajukan Penghapusan Akun'), findsOneWidget);
-    expect(tester.takeException(), isNull);
+    // Tile Profil/Tiket Bantuan/Hapus Akun sudah tidak ada di beranda;
+    // jangkauan ketiganya lewat tab Akun diuji test terpisah.
+    expect(find.bySemanticsLabel('Buka layanan Profil'), findsNothing);
+    expect(
+      find.bySemanticsLabel('Buka layanan Tiket Bantuan'),
+      findsNothing,
+    );
+    expect(find.bySemanticsLabel('Buka layanan Hapus Akun'), findsNothing);
   });
 
   testWidgets('Play account legal and deletion actions remain reachable', (
@@ -968,7 +954,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('TapGoPay'), findsNothing);
+    expect(find.text('TapGoPay'), findsOneWidget);
     expect(find.byIcon(Icons.apps_rounded), findsOneWidget);
     expect(find.text('Membership'), findsWidgets);
 
@@ -1090,7 +1076,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('TapGo Member Card'), findsOneWidget);
+    expect(find.text('TAPGO MEMBER CARD'), findsOneWidget);
     expect(find.text('Silver'), findsNothing);
     expect(find.text('Gold'), findsNothing);
     expect(find.text('Platinum'), findsNothing);
@@ -1111,9 +1097,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('TapGo Member Card'), findsOneWidget);
+    expect(find.text('TAPGO MEMBER CARD'), findsOneWidget);
     expect(find.text('TGM-TESTCARD'), findsOneWidget);
-    expect(find.text('Aktif'), findsOneWidget);
+    expect(find.text('BASIC'), findsWidgets);
     final cardSurface = tester.widget<Container>(
       find.byKey(const ValueKey('basic_member_card_surface')),
     );
@@ -1122,7 +1108,7 @@ void main() {
     expect(cardDecoration.gradient, isA<LinearGradient>());
     expect(
       (cardDecoration.gradient! as LinearGradient).colors,
-      contains(const Color(0xFF061A2E)),
+      contains(const Color(0xFF0B1F3A)),
     );
     final infoPanel = tester.widget<Container>(
       find
@@ -1189,16 +1175,14 @@ void main() {
       ]) {
         await pumpCard(scenario.size, scenario.textScale);
 
-        expect(find.text('TapGo Member Card'), findsOneWidget);
-        expect(find.text('Basic'), findsWidgets);
-        expect(find.text('Aktif'), findsOneWidget);
+        expect(find.text('TAPGO MEMBER CARD'), findsOneWidget);
+        expect(find.text('BASIC'), findsWidgets);
         expect(find.text('TGM-20260714-0001'), findsOneWidget);
-        expect(find.textContaining('Ahmad Zulhi'), findsOneWidget);
+        expect(find.textContaining('AHMAD ZULHI'), findsOneWidget);
         expect(find.textContaining('00000000-0000'), findsNothing);
         for (final text in [
-          'TapGo Member Card',
-          'Basic',
-          'Aktif',
+          'TAPGO MEMBER CARD',
+          'BASIC',
           'TGM-20260714-0001',
         ]) {
           final widget = tester.widget<Text>(find.text(text).first);
@@ -1214,7 +1198,8 @@ void main() {
     (WidgetTester tester) async {
       await openDashboard(tester);
 
-      final labels = ['Kartu Anggota', 'Profil', 'Tiket Bantuan', 'Hapus Akun'];
+      // Hanya Kartu Anggota yang tersisa di grid beranda Play.
+      final labels = ['Kartu Anggota'];
       final labelRects = <Rect>[];
       for (final label in labels) {
         final text = find.text(label);
@@ -1231,7 +1216,7 @@ void main() {
         'assets/icons/basic_portal/support_ticket.png',
       );
       expect(tapGoServiceIllustrationAssetForTests('Tiket Bantuan'), isNull);
-      expect(find.byType(PremiumTapGoIcon), findsNWidgets(4));
+      expect(find.byType(PremiumTapGoIcon), findsNWidgets(1));
     },
   );
 
@@ -1259,8 +1244,11 @@ void main() {
     });
 
     await openDashboard(tester);
-    await tester.ensureVisible(find.bySemanticsLabel('Buka layanan Profil'));
-    await tester.tap(find.bySemanticsLabel('Buka layanan Profil'));
+    // Profil tidak lagi ada di grid beranda; jangkau lewat tab Akun.
+    await tester.tap(find.text('Akun'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Profil'));
+    await tester.tap(find.text('Profil'));
     await tester.pumpAndSettle();
 
     expect(find.text('Membership'), findsNothing);

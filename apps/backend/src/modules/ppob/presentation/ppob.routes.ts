@@ -12,6 +12,7 @@ import { PrismaPpobRepository } from "../infrastructure/PrismaPpobRepository.js"
 import { DigiflazzPpobProvider } from "../infrastructure/DigiflazzPpobProvider.js";
 import { DisabledPpobProvider } from "../infrastructure/DisabledPpobProvider.js";
 import { StubPpobProvider } from "../infrastructure/StubPpobProvider.js";
+import { normalizePpobTarget } from "../domain/targetValidation.js";
 import {
   ppobHistoryQuerySchema,
   ppobProductsQuerySchema,
@@ -64,6 +65,121 @@ function money(value: Prisma.Decimal): number {
   return Number(value.toFixed(2));
 }
 
+// ---------------------------------------------------------------------------
+// Kontrak klien Release 2 (Flutter): /catalog, /orders/inquiry, /orders.
+//
+// App customer R2 ditulis lebih dulu terhadap kontrak ini; ketidakcocokan
+// kontrak inilah yang membuat PPOB 404 di HP Owner (audit 23 Agustus 2026).
+// Route di bawah ADALAH kontrak kanonik klien; /products dan /transactions
+// dipertahankan sebagai alias kompatibel untuk klien lama.
+// ---------------------------------------------------------------------------
+
+/** Label kolom target per kategori, sesuai yang dibaca model Flutter. */
+const PPOB_TARGET_LABELS: Record<string, string> = {
+  PULSA: "Nomor HP Tujuan",
+  DATA: "Nomor HP Tujuan",
+  EWALLET: "Nomor HP Dompet Digital",
+  PLN_PREPAID: "Nomor Meter PLN",
+  PLN_POSTPAID: "ID Pelanggan PLN",
+  BPJS: "Nomor VA BPJS"
+};
+
+const PPOB_CATEGORY_NAMES: Record<string, string> = {
+  PULSA: "Pulsa",
+  DATA: "Paket Data",
+  PLN_PREPAID: "Token PLN",
+  PLN_POSTPAID: "Tagihan PLN",
+  BPJS: "BPJS",
+  EWALLET: "E-Wallet"
+};
+
+interface CatalogProductRow {
+  sku: string;
+  category: string;
+  brand: string;
+  name: string;
+  description: string | null;
+  price: Prisma.Decimal;
+  adminFee: Prisma.Decimal;
+}
+
+function serializeCatalogProduct(product: CatalogProductRow) {
+  return {
+    sku: product.sku,
+    name: product.name,
+    description: product.description,
+    price: money(product.price),
+    adminFee: money(product.adminFee),
+    targetLabel: PPOB_TARGET_LABELS[product.category] ?? "Nomor Tujuan",
+    brand: product.brand
+  };
+}
+
+/**
+ * Ringkasan daya beli untuk satu SKU tanpa membuat transaksi apa pun.
+ * Semua angka dihitung server — klien menampilkan, tidak menghitung ulang.
+ */
+async function buildInquiryPayload(input: {
+  userId: string;
+  sku: string;
+  targetNumber: string;
+}) {
+  const product = await getService().getProductForPurchase(input.sku);
+  const targetNumber = normalizePpobTarget(product.category, input.targetNumber);
+  const wallet = await prisma.wallet.findUnique({
+    where: { userId: input.userId },
+    select: { balance: true, ppobBalance: true }
+  });
+  const ppobBalance = wallet?.ppobBalance ?? new Prisma.Decimal(0);
+  const totalAmount = product.price.plus(product.adminFee);
+  // Split pembayaran: saldo PPOB (manfaat membership) dipakai lebih dulu,
+  // sisanya dari saldo utama. Ini aturan server; klien hanya menampilkan.
+  const benefitAmount = Prisma.Decimal.min(ppobBalance, totalAmount);
+  const balanceAmount = totalAmount.minus(benefitAmount);
+  const sufficient = (wallet?.balance ?? new Prisma.Decimal(0)).gte(balanceAmount);
+  return {
+    product: {
+      ...serializeCatalogProduct(product),
+      id: product.sku
+    },
+    targetNumber,
+    payment: {
+      amount: money(totalAmount),
+      benefitAmount: money(benefitAmount),
+      balanceAmount: money(balanceAmount),
+      sufficient
+    },
+    wallet: {
+      balance: money(wallet?.balance ?? new Prisma.Decimal(0)),
+      ppobBalance: money(ppobBalance)
+    }
+  };
+}
+
+/** Transaksi -> bentuk PpobOrder yang dibaca model Flutter. */
+function serializeOrder(tx: PpobTransaction, replayed = false) {
+  const benefitAmount = Prisma.Decimal.min(tx.adminFee, tx.totalAmount);
+  return {
+    id: tx.publicReference,
+    status: tx.status,
+    sku: tx.skuSnapshot,
+    productName: tx.productNameSnapshot,
+    categoryCode: tx.category,
+    targetNumber: tx.targetNumber,
+    amount: money(tx.totalAmount),
+    benefitAmount: money(benefitAmount),
+    balanceAmount: money(tx.totalAmount.minus(benefitAmount)),
+    failureReason: tx.failureReason,
+    providerRef: tx.providerReference,
+    createdAt: tx.createdAt,
+    completedAt: tx.completedAt,
+    // Backend tidak punya status REFUNDED terpisah: kegagalan selalu disertai
+    // refund penuh, jadi momen refund = finalisasi FAILED.
+    refundedAt: tx.status === "FAILED" ? tx.completedAt : null,
+    replayed
+  };
+}
+
 function serializeTransaction(tx: PpobTransaction) {
   return {
     reference: tx.publicReference,
@@ -95,6 +211,92 @@ export const ppobRouter = Router();
 
 ppobRouter.use(requireAuth);
 
+// ---- Kontrak klien R2: /catalog ----
+ppobRouter.get("/catalog", asyncHandler(async (_req, res) => {
+  const products = await getService().listProducts();
+  const byCategory = new Map<string, CatalogProductRow[]>();
+  for (const product of products) {
+    const list = byCategory.get(product.category) ?? [];
+    list.push(product);
+    byCategory.set(product.category, list);
+  }
+  const items = [...byCategory.entries()].map(([code, rows], index) => ({
+    id: code,
+    code,
+    name: PPOB_CATEGORY_NAMES[code] ?? code,
+    description: null,
+    icon: null,
+    sortOrder: index,
+    // Urutan sudah dijamin repository (sortOrder, lalu harga).
+    products: rows.map((row) => ({ id: row.sku, ...serializeCatalogProduct(row) }))
+  }));
+  res.json({ success: true, data: { items } });
+}));
+
+// ---- Kontrak klien R2: /orders/inquiry ----
+ppobRouter.post(
+  "/orders/inquiry",
+  paymentRateLimiter,
+  validateRequest(ppobPurchaseSchema),
+  asyncHandler(async (req, res) => {
+    const data = await buildInquiryPayload({
+      userId: req.auth!.userId,
+      sku: req.body.sku,
+      targetNumber: req.body.targetNumber
+    });
+    res.json({ success: true, data });
+  })
+);
+
+// ---- Kontrak klien R2: /orders (buat + riwayat) ----
+ppobRouter.post(
+  "/orders",
+  paymentRateLimiter,
+  validateRequest(ppobPurchaseSchema),
+  asyncHandler(async (req, res) => {
+    const { transaction, replayed } = await getService().purchase({
+      userId: req.auth!.userId,
+      sku: req.body.sku,
+      targetNumber: req.body.targetNumber,
+      ...(idempotencyKeyOf(req.headers["idempotency-key"])
+        ? { idempotencyKey: idempotencyKeyOf(req.headers["idempotency-key"])! }
+        : {})
+    });
+    res.status(replayed ? 200 : 201).json({
+      success: true,
+      data: serializeOrder(transaction, replayed)
+    });
+  })
+);
+
+ppobRouter.get(
+  "/orders",
+  validateRequest(ppobHistoryQuerySchema),
+  asyncHandler(async (req, res) => {
+    const transactions = await getService().listMyTransactions(
+      req.auth!.userId,
+      Number(req.query.limit)
+    );
+    res.json({
+      success: true,
+      data: { items: transactions.map((tx) => serializeOrder(tx)) }
+    });
+  })
+);
+
+ppobRouter.get(
+  "/orders/:reference",
+  validateRequest(ppobReferenceSchema),
+  asyncHandler(async (req, res) => {
+    const transaction = await getService().getMyTransaction(
+      req.auth!.userId,
+      req.params.reference as string
+    );
+    res.json({ success: true, data: serializeOrder(transaction) });
+  })
+);
+
+// ---- Alias kompatibel klien lama ----
 ppobRouter.get(
   "/products",
   validateRequest(ppobProductsQuerySchema),

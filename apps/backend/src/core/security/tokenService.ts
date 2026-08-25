@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import jwt from "jsonwebtoken";
 import type { SignOptions } from "jsonwebtoken";
 
@@ -85,7 +86,13 @@ export function signAccessToken(payload: AccessTokenPayload) {
 }
 
 export function signRefreshToken(payload: AccessTokenPayload) {
-  return sign(payload, env.JWT_REFRESH_SECRET, { expiresIn: expiresIn(`${env.JWT_REFRESH_TTL_DAYS}d`) });
+  // `jwtid` unik per token: tanpa ini, dua refresh token dengan payload sama
+  // yang ditandatangani pada detik yang sama berbunyi byte-identik, sehingga
+  // rotasi tidak mengubah hash tersimpan dan reuse token lama lolos.
+  return sign(payload, env.JWT_REFRESH_SECRET, {
+    expiresIn: expiresIn(`${env.JWT_REFRESH_TTL_DAYS}d`),
+    jwtid: crypto.randomUUID()
+  });
 }
 
 /**

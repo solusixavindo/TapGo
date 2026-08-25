@@ -11,9 +11,42 @@ import { PpobService } from "./modules/ppob/application/PpobService.js";
 import { PrismaPpobRepository } from "./modules/ppob/infrastructure/PrismaPpobRepository.js";
 import { DigiflazzPpobProvider } from "./modules/ppob/infrastructure/DigiflazzPpobProvider.js";
 import { attachRealtime } from "./realtime/socket.js";
+import { setOtpDeliveryProvider } from "./modules/auth/infrastructure/otpProviderRegistry.js";
+import { SmtpOtpProvider } from "./modules/auth/infrastructure/SmtpOtpProvider.js";
 
 const app = createApp();
 const httpServer = http.createServer(app);
+
+/**
+ * Pemasangan provider OTP dari environment (keputusan Owner G3).
+ *
+ * Dipasang di server.ts, bukan createApp(): test mengimpor createApp puluhan
+ * kali dan harus tetap pada default fail-closed kecuali menyetel providernya
+ * sendiri secara eksplisit. Tanpa SMTP_HOST, default UnavailableOtpProvider
+ * tetap berlaku; konfigurasi parsial menggagalkan boot di sini.
+ */
+if (env.SMTP_HOST) {
+  const missing: string[] = [];
+  if (!env.SMTP_FROM) missing.push("SMTP_FROM");
+  if (!env.SMTP_USER) missing.push("SMTP_USER");
+  if (!env.SMTP_PASS) missing.push("SMTP_PASS");
+  if (missing.length > 0) {
+    throw new Error(
+      `SMTP_HOST di-set tetapi ${missing.join(", ")} kosong. ` +
+        "Lengkapi konfigurasi SMTP atau hapus SMTP_HOST."
+    );
+  }
+  const smtpOtpProvider = SmtpOtpProvider.fromConfig({
+    host: env.SMTP_HOST,
+    port: env.SMTP_PORT,
+    secure: env.SMTP_SECURE,
+    user: env.SMTP_USER!,
+    pass: env.SMTP_PASS!,
+    from: env.SMTP_FROM!
+  });
+  setOtpDeliveryProvider(smtpOtpProvider);
+  logger.info({ provider: smtpOtpProvider.name }, "OTP email provider aktif");
+}
 
 // Fail-closed: null saat REALTIME_ENABLED=false (Release 1 tanpa realtime).
 export const io = attachRealtime(httpServer);

@@ -210,7 +210,10 @@ describe.skipIf(!runIntegration)("Penyimpanan dokumen mitra driver", () => {
     ).toBe(0);
   });
 
-  it("pengguna tanpa profil driver tidak dapat mengunggah", async () => {
+  it("pengguna tanpa profil driver: pradataur dibuat otomatis saat mengunggah (D1)", async () => {
+    // Keputusan Owner D1: pengajuan mandiri — dokumen diunggah DULU, baris
+    // Driver dibuat sebagai pradataur (NOT_SUBMITTED→PENDING), dan profil
+    // operasional baru lahir setelah pengajuan disetujui admin.
     const bukanDriver = await createUserOnly("NODRV");
     const response = await fetch(`${baseUrl}/api/v1/driver/documents/ktp`, {
       method: "POST",
@@ -221,8 +224,13 @@ describe.skipIf(!runIntegration)("Penyimpanan dokumen mitra driver", () => {
       body: PNG
     });
 
-    expect(response.status).toBe(404);
-    expect(await prisma.driverDocument.count()).toBe(0);
+    expect(response.status).toBe(201);
+    const driver = await prisma.driver.findUniqueOrThrow({
+      where: { userId: bukanDriver.user.id }
+    });
+    expect(driver.kycStatus).toBe("PENDING");
+    expect(driver.status).toBe("OFFLINE");
+    expect(await prisma.driverDocument.count()).toBe(1);
   });
 
   it("driver hanya melihat dokumennya sendiri", async () => {

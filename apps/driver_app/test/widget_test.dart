@@ -448,6 +448,111 @@ void main() {
       expect(find.textContaining('DEMO_ACCESS'), findsNothing);
       expect(find.textContaining('TEST_ACCESS'), findsNothing);
     });
+
+    testWidgets(
+        'H1: profileRequired menampilkan jalur pengajuan (dokumen + form)',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        currentError: const DriverApiException(
+          code: 'RIDE_DRIVER_PROFILE_REQUIRED',
+          message: 'Profil driver belum tersedia. Hubungi admin TapGo.',
+          statusCode: 403,
+        ),
+      );
+      await pumpDriver(tester, repo);
+
+      expect(find.byKey(const ValueKey('profile-required')), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('driver-application-form')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(
+        find.byKey(const ValueKey('driver-application-form')),
+        findsOneWidget,
+      );
+      // Dokumen belum lengkap -> tombol kirim terkunci.
+      final submit = tester.widget<FilledButton>(
+        find.byKey(const ValueKey('driver-application-submit')),
+      );
+      expect(submit.onPressed, isNull);
+    });
+
+    testWidgets(
+        'H1: dokumen lengkap + plat valid mengirim pengajuan dan menampilkan status',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        currentError: const DriverApiException(
+          code: 'RIDE_DRIVER_NOT_ACTIVE',
+          message: 'Akun driver belum aktif untuk menerima perjalanan.',
+          statusCode: 403,
+        ),
+      );
+      // Lengkapi keempat dokumen lewat kontrak repository yang sama.
+      for (final kind in DriverDocumentKind.values) {
+        await repo.uploadDocument(
+          kind: kind,
+          bytes: Uint8List.fromList([1, 2, 3]),
+          contentType: 'image/png',
+        );
+      }
+      await pumpDriver(tester, repo);
+
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('driver-application-plate')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('driver-application-plate')),
+        'B 1234 UJI',
+      );
+      await tester.tap(find.byKey(const ValueKey('driver-application-submit')));
+      await tester.pumpAndSettle();
+
+      expect(repo.submitCalls, 1);
+      expect(repo.submittedForms.single['plateNumber'], 'B 1234 UJI');
+      expect(
+        find.byKey(const ValueKey('driver-application-open')),
+        findsOneWidget,
+      );
+      expect(find.text('Pengajuan #1'), findsOneWidget);
+    });
+
+    testWidgets('H1: pengajuan terbuka dapat ditarik lewat dialog konfirmasi',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        currentError: const DriverApiException(
+          code: 'RIDE_DRIVER_NOT_ACTIVE',
+          message: 'Akun driver belum aktif untuk menerima perjalanan.',
+          statusCode: 403,
+        ),
+        applicationInfo: const DriverApplicationInfo(
+          id: 'fake-application',
+          cycleNumber: 1,
+          status: DriverApplicationStatus.submitted,
+        ),
+      );
+      await pumpDriver(tester, repo);
+
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('driver-application-withdraw')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tapReachable(
+          tester, find.byKey(const ValueKey('driver-application-withdraw')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Tarik'));
+      await tester.pumpAndSettle();
+
+      expect(repo.withdrawCalls, 1);
+      expect(find.byKey(const ValueKey('driver-application-form')),
+          findsOneWidget);
+    });
   });
 
   group('R2.5B availability and offers', () {
@@ -813,6 +918,7 @@ class FakeDriverRepository implements DriverRepository {
     required this.session,
     this.current,
     this.offerItems = const [],
+    this.applicationInfo,
     this.availability = DriverAvailability.offline,
     this.currentError,
     this.offersError,
@@ -982,6 +1088,60 @@ class FakeDriverRepository implements DriverRepository {
       ),
     ];
     return documentItems;
+  }
+
+  DriverApplicationInfo? applicationInfo;
+  Object? applicationError;
+  Object? submitError;
+  Object? withdrawError;
+  int submitCalls = 0;
+  int withdrawCalls = 0;
+  final List<Map<String, String?>> submittedForms = [];
+
+  DriverApplicationSnapshot _snapshot() => DriverApplicationSnapshot(
+        application: applicationInfo,
+        documentsComplete:
+            documentItems.length == DriverDocumentKind.values.length,
+        vehiclePlateMasked: applicationInfo == null ? null : 'B 1234 ***',
+      );
+
+  @override
+  Future<DriverApplicationSnapshot> myApplication() async {
+    if (applicationError != null) throw applicationError!;
+    return _snapshot();
+  }
+
+  @override
+  Future<DriverApplicationSnapshot> submitApplication({
+    required String serviceType,
+    required String plateNumber,
+    String? brand,
+    String? model,
+    String? color,
+  }) async {
+    if (submitError != null) throw submitError!;
+    submitCalls += 1;
+    submittedForms.add({
+      'serviceType': serviceType,
+      'plateNumber': plateNumber,
+      'brand': brand,
+      'model': model,
+      'color': color,
+    });
+    applicationInfo = const DriverApplicationInfo(
+      id: 'fake-application',
+      cycleNumber: 1,
+      status: DriverApplicationStatus.submitted,
+    );
+    return _snapshot();
+  }
+
+  @override
+  Future<DriverApplicationSnapshot> withdrawApplication() async {
+    if (withdrawError != null) throw withdrawError!;
+    withdrawCalls += 1;
+    applicationInfo = null;
+    return _snapshot();
   }
 }
 

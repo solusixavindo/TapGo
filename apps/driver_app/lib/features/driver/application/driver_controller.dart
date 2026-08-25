@@ -189,6 +189,89 @@ class DriverController extends StateNotifier<DriverState>
     }
   }
 
+  /// Memuat status pengajuan mitra (H1). Seperti dokumen, kegagalan di sini
+  /// tidak mengubah status ruang kerja.
+  Future<void> refreshApplication() async {
+    if (!_startFlight('application')) return;
+    try {
+      final snapshot = await _repository.myApplication();
+      state = state.copyWith(
+        application: snapshot.application,
+        clearApplication: snapshot.application == null,
+        documentsComplete: snapshot.documentsComplete,
+        vehiclePlateMasked: snapshot.vehiclePlateMasked,
+        clearVehiclePlate: snapshot.vehiclePlateMasked == null,
+      );
+    } on DriverApiException catch (error) {
+      if (error.statusCode == 401) {
+        _applyCapabilityError(error);
+      } else {
+        state = state.copyWith(message: error.message);
+      }
+    } finally {
+      _endFlight('application');
+    }
+  }
+
+  Future<void> submitApplication({
+    required String serviceType,
+    required String plateNumber,
+    String? brand,
+    String? model,
+    String? color,
+  }) async {
+    if (!_startFlight('application-submit')) return;
+    state = state.copyWith(isBusy: true, clearMessage: true);
+    try {
+      final snapshot = await _repository.submitApplication(
+        serviceType: serviceType,
+        plateNumber: plateNumber,
+        brand: brand,
+        model: model,
+        color: color,
+      );
+      state = state.copyWith(
+        application: snapshot.application,
+        documentsComplete: snapshot.documentsComplete,
+        vehiclePlateMasked: snapshot.vehiclePlateMasked,
+        message: 'Pengajuan terkirim. Tim kami akan meninjaunya.',
+      );
+    } on DriverApiException catch (error) {
+      if (error.statusCode == 401) {
+        _applyCapabilityError(error);
+      } else {
+        state = state.copyWith(message: error.message);
+      }
+    } finally {
+      _endFlight('application-submit');
+      state = state.copyWith(isBusy: false);
+    }
+  }
+
+  Future<void> withdrawApplication() async {
+    if (!_startFlight('application-withdraw')) return;
+    state = state.copyWith(isBusy: true, clearMessage: true);
+    try {
+      final snapshot = await _repository.withdrawApplication();
+      state = state.copyWith(
+        clearApplication: snapshot.application == null,
+        application: snapshot.application,
+        documentsComplete: snapshot.documentsComplete,
+        clearVehiclePlate: snapshot.vehiclePlateMasked == null,
+        message: 'Pengajuan ditarik. Anda bisa mengajukan lagi kapan saja.',
+      );
+    } on DriverApiException catch (error) {
+      if (error.statusCode == 401) {
+        _applyCapabilityError(error);
+      } else {
+        state = state.copyWith(message: error.message);
+      }
+    } finally {
+      _endFlight('application-withdraw');
+      state = state.copyWith(isBusy: false);
+    }
+  }
+
   void selectOffer(DriverRide ride) {
     state = state.copyWith(selectedOffer: ride);
   }

@@ -618,12 +618,12 @@ void main() {
       );
     });
 
-    testWidgets('12 layanan lokasi belum tersedia', (tester) async {
+    testWidgets('12 pemilih lokasi tampil saat provider siap', (tester) async {
       await shoot(
         tester,
-        '12_provider_unavailable',
-        // Inilah perilaku default produksi: fail closed tanpa provider.
-        child: bookingScreen(port: const UnavailableLocationPort()),
+        '12_provider_ready',
+        // Provider produksi (OSM) siap: pemilih lokasi terbuka.
+        child: bookingScreen(port: const DemoLocationPort()),
       );
     });
 

@@ -29,4 +29,33 @@ abstract class DriverRepository {
     required Uint8List bytes,
     required String contentType,
   });
+
+  /// Status pengajuan mitra milik driver yang sedang masuk (H1).
+  Future<DriverApplicationSnapshot> myApplication();
+
+  /// Mengirim pengajuan mitra baru. Backend menolak bila dokumen belum
+  /// lengkap (K1-A) atau masih ada pengajuan terbuka.
+  Future<DriverApplicationSnapshot> submitApplication({
+    required String serviceType,
+    required String plateNumber,
+    String? brand,
+    String? model,
+    String? color,
+  });
+
+  /// Menarik pengajuan yang masih terbuka.
+  Future<DriverApplicationSnapshot> withdrawApplication();
+}
+
+/// Potret status pengajuan: pengajuan terbuka (bila ada) + kelengkapan syarat.
+class DriverApplicationSnapshot {
+  const DriverApplicationSnapshot({
+    required this.application,
+    required this.documentsComplete,
+    this.vehiclePlateMasked,
+  });
+
+  final DriverApplicationInfo? application;
+  final bool documentsComplete;
+  final String? vehiclePlateMasked;
 }

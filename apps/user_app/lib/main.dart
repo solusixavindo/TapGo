@@ -2,14 +2,19 @@ import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -42,6 +47,7 @@ part 'screens/password_recovery_screen.dart';
 part 'screens/payment_demo_screen.dart';
 part 'screens/referral_tree_screen.dart';
 part 'screens/ride_customer_screens.dart';
+part 'screens/ride_location_picker.dart';
 part 'screens/splash_screen.dart';
 part 'screens/success_screen.dart';
 part 'screens/verification_gate_screen.dart';
@@ -49,6 +55,7 @@ part 'services/persistent_demo_store.dart';
 part 'services/ride_flow_controller.dart';
 part 'services/ride_location_port.dart';
 part 'services/tapgo_api_client.dart';
+part 'tapgo_app_guards.dart';
 part 'widgets/benefit_item.dart';
 part 'widgets/invoice_card.dart';
 part 'widgets/package_card.dart';
@@ -337,6 +344,7 @@ bool tapGoDisablePersistenceForTests = false;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  installTapGoCrashGuards();
   try {
     if (_isTapGoProductionBuild) {
       await _prepareProductionFinalSync().timeout(
@@ -531,7 +539,16 @@ class _RoleDashboardGate extends ConsumerWidget {
             ? const AdminDashboardScreen()
             : const TapGoDashboard();
 
-    return PopScope(canPop: false, child: dashboard);
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        confirmTapGoExit(context).then((exitConfirmed) {
+          if (exitConfirmed) SystemNavigator.pop();
+        });
+      },
+      child: dashboard,
+    );
   }
 }
 

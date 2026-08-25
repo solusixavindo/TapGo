@@ -403,16 +403,29 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
               .timeout(const Duration(seconds: 2), onTimeout: () => false);
         } catch (error) {
           _tapGoDebugLog('[TapGo Auth] auth/me restore failed: $error');
+          // Kritis: jangan kosongkan sesi untuk gangguan sementara (koneksi
+          // putus, timeout, server 5xx). Pengguna TIDAK boleh dipaksa login
+          // ulang hanya karena HP sedang tidak ada internet — sesi hanya
+          // dikosongkan bila server dengan tegas menolak (401/403).
+          if (!_isAuthRejection(error)) {
+            _tapGoDebugLog(
+              '[TapGo Auth] restore deferred: transient failure, session kept.',
+            );
+            auth = true;
+          } else {
           // Access token kedaluwarsa (~15 mnt) belum berarti sesi mati: bila
           // refresh token masih hidup, tukar jadi pasangan baru lalu coba lagi.
           // Hanya bila refresh ikut ditolak (dicabut / ganti password) sesi
           // dikosongkan dan user diminta login ulang.
           var recovered = false;
+          var refreshUnreachable = false;
           final refreshToken = tokens.refreshToken;
           if (refreshToken != null && refreshToken.isNotEmpty) {
             try {
-              final refreshed = await _apiClient.refreshSession(refreshToken);
-              if (refreshed != null) {
+              final (refreshResult, refreshed) =
+                  await _apiClient.refreshSession(refreshToken);
+              if (refreshResult == TapGoSessionRefreshResult.refreshed &&
+                  refreshed != null) {
                 _apiClient.setAccessToken(refreshed.accessToken);
                 final user = await _apiClient.me();
                 restoredSession = _sessionFromAuthUser(
@@ -428,13 +441,23 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
                 auth = true;
                 recovered = true;
                 _tapGoDebugLog('[TapGo Auth] session refreshed on restore.');
+              } else if (refreshResult ==
+                  TapGoSessionRefreshResult.unreachable) {
+                refreshUnreachable = true;
               }
             } catch (refreshError) {
               _tapGoDebugLog('[TapGo Auth] refresh-on-restore failed: $refreshError');
-              recovered = false;
+              if (!_isAuthRejection(refreshError)) {
+                refreshUnreachable = true;
+              }
             }
           }
-          if (!recovered) {
+          if (!recovered && refreshUnreachable) {
+            // Server menolak access token TAPI refresh tidak dapat diverifikasi
+            // karena jaringan putus — pertahankan sesi, coba lagi saat app
+            // dibuka berikutnya.
+            auth = true;
+          } else if (!recovered) {
             await _persistentStore.clearSession().timeout(
                   const Duration(seconds: 2),
                   onTimeout: () {},
@@ -442,6 +465,7 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
             _apiClient.setAccessToken(null);
             auth = false;
             restoredSession = null;
+          }
           }
         }
       }
@@ -459,16 +483,25 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
       ref.read(_isAuthenticatedProvider.notifier).state = auth;
     } catch (error) {
       _tapGoDebugLog('[TapGo Startup] session bootstrap failed open: $error');
-      _apiClient.setAccessToken(null);
-      if (mounted) {
-        ref.read(_isAuthenticatedProvider.notifier).state = false;
+      // Jangan paksa logout untuk kegagalan non-otentikasi (storage sibuk,
+      // disk penuh, dsb.). Bila sesi tersimpan sempat terbaca, pertahankan.
+      if (restoredSession != null) {
+        if (mounted) {
+          ref.read(_demoSessionProvider.notifier).state = restoredSession;
+          ref.read(_isAuthenticatedProvider.notifier).state = true;
+        }
+      } else {
+        _apiClient.setAccessToken(null);
+        if (mounted) {
+          ref.read(_isAuthenticatedProvider.notifier).state = false;
+        }
+        try {
+          await _persistentStore.clearSession().timeout(
+                const Duration(seconds: 2),
+                onTimeout: () {},
+              );
+        } catch (_) {}
       }
-      try {
-        await _persistentStore.clearSession().timeout(
-              const Duration(seconds: 2),
-              onTimeout: () {},
-            );
-      } catch (_) {}
     } finally {
       if (mounted) {
         setState(() => _loaded = true);
@@ -476,6 +509,17 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
     }
   }
 }
+/// True hanya bila server dengan tegas menolak kredensial (401/403).
+/// Gangguan jaringan, timeout, dan 5xx mengembalikan false sehingga sesi
+/// pengguna dipertahankan alih-alih dipaksa login ulang.
+bool _isAuthRejection(Object error) {
+  if (error is DioException) {
+    final status = error.response?.statusCode;
+    return status == 401 || status == 403;
+  }
+  return false;
+}
+
 
 @visibleForTesting
 Map<String, dynamic> tapGoSessionToJsonForTests(DemoClientSession session) =>

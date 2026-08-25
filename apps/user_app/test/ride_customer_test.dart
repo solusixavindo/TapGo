@@ -156,10 +156,33 @@ Future<void> tapVisible(WidgetTester tester, Finder finder) async {
   await tester.pump();
 }
 
+/// Memilih satu lokasi lewat lembar pemilih: buka sheet, cari kandidat, lalu
+/// konfirmasi (port demo menjawab tanpa jaringan).
+Future<void> pickOneLocation(WidgetTester tester, String candidateLabel) async {
+  await tapVisible(tester, find.text('Pilih di peta atau cari alamat…').first);
+  await settleFrames(tester);
+  // Kandidat hanya muncul sebagai daftar hasil pencarian — sheet dibuka
+  // langsung pada peta, jadi pencarian memang langkah wajib.
+  await tester.enterText(
+      find.byType(TextField).first, candidateLabel);
+  await tester.testTextInput.receiveAction(TextInputAction.search);
+  await settleFrames(tester);
+  final candidate = find.text(candidateLabel).last;
+  await tester.ensureVisible(candidate);
+  await tester.pump();
+  await tester.tap(candidate);
+  await settleFrames(tester);
+  final useButton = find.text('Pakai lokasi ini');
+  await tester.ensureVisible(useButton);
+  await tester.pump();
+  await tester.tap(useButton);
+  await settleFrames(tester);
+}
+
 /// Memilih titik jemput dan tujuan pada layar pemesanan.
 Future<void> pickRoute(WidgetTester tester) async {
-  await tapVisible(tester, find.text('LOKASI_DEMO_A').first);
-  await tapVisible(tester, find.text('LOKASI_DEMO_B').last);
+  await pickOneLocation(tester, 'LOKASI_DEMO_A');
+  await pickOneLocation(tester, 'LOKASI_DEMO_B');
 }
 
 void main() {
@@ -257,20 +280,18 @@ void main() {
   // -------------------------------------------------------------------------
 
   group('batas provider lokasi', () {
-    test('3. default build tidak mengaktifkan demo dan fail closed', () {
-      // Inilah jaminan release: tanpa flag compile-time, port yang terpasang
-      // adalah yang tidak menyediakan lokasi apa pun.
+    test('3. default build memakai port OpenStreetMap yang siap', () {
+      // Keputusan Owner (B3): provider produksi adalah OSM + Nominatim,
+      // gratis tanpa API key. Demo tetap compile-time only.
       expect(tapGoRideDemoMode, isFalse);
-      expect(tapGoRideLocationPort(), isA<UnavailableLocationPort>());
+      expect(tapGoRideLocationPort(), isA<OsmLocationPort>());
       expect(
         tapGoRideLocationPort().status,
-        RideLocationProviderStatus.unavailable,
+        RideLocationProviderStatus.ready,
       );
-      expect(tapGoRideLocationPort().availableLocations(), isEmpty);
-      // Pernyataan ini khusus build default; dilewati bila demo dinyalakan.
     }, skip: tapGoRideDemoMode);
 
-    testWidgets('3b. tanpa provider, pemesanan tidak dapat dilanjutkan', (
+    testWidgets('3b. port ready menampilkan pemilih lokasi, bukan penolakan', (
       tester,
     ) async {
       useTallView(tester);
@@ -278,16 +299,14 @@ void main() {
         wrapRide(
           const RideBookingScreen(
             initialService: RideServiceKind.motorcycle,
-            locationPort: UnavailableLocationPort(),
+            locationPort: DemoLocationPort(),
           ),
         ),
       );
       await settleFrames(tester);
 
-      expect(find.text(tapGoRideLocationUnavailableMessage), findsOneWidget);
-      // Tidak ada jalan menuju harga maupun pemesanan.
-      expect(find.text('Cek Harga'), findsNothing);
-      expect(find.text('Pesan Sekarang'), findsNothing);
+      expect(find.text(tapGoRideLocationUnavailableMessage), findsNothing);
+      expect(find.text('Cek Harga'), findsOneWidget);
     });
 
     testWidgets('4. label DEMO DATA tidak muncul pada build default', (
@@ -300,18 +319,16 @@ void main() {
       expect(find.byType(SizedBox), findsWidgets);
     }, skip: tapGoRideDemoMode);
 
-    test('4b. flag demo hanya menyala untuk string literal true', () {
-      // Nilai yang mirip tidak boleh menyalakan demo; ini diuji lewat port
-      // demo yang tersedia dan default yang tetap fail closed.
-      expect(const DemoLocationPort().availableLocations(), hasLength(3));
+    test('4b. flag demo hanya menyala untuk string literal true', () async {
+      // Port demo menyediakan kandidat sintetis tanpa jaringan.
+      final demo = const DemoLocationPort();
+      final candidates = await demo.searchAddress('lokasi');
+      expect(candidates, hasLength(3));
       expect(
-        const DemoLocationPort()
-            .availableLocations()
-            .map((location) => location.id),
+        candidates.map((c) => c.label),
         containsAll(
             <String>['LOKASI_DEMO_A', 'LOKASI_DEMO_B', 'LOKASI_DEMO_C']),
       );
-      expect(const UnavailableLocationPort().availableLocations(), isEmpty);
     });
   });
 

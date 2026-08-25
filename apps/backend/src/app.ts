@@ -27,6 +27,7 @@ import { referralRouter } from "./modules/referrals/presentation/referral.routes
 import { driverReviewRouter } from "./modules/rides/presentation/driverReview.routes.js";
 import { adminRideRouter, driverRideRouter, rideRouter } from "./modules/rides/presentation/ride.routes.js";
 import { driverDocumentRouter } from "./modules/drivers/presentation/driver-document.routes.js";
+import { driverApplicationRouter } from "./modules/drivers/presentation/driver-application.routes.js";
 import { adminSupportRouter, supportRouter } from "./modules/support/presentation/support.routes.js";
 import { walletRouter } from "./modules/wallets/presentation/wallet.routes.js";
 
@@ -114,6 +115,7 @@ export function createApp() {
   // dokumen. Karena Express menjalankan router sesuai urutan pendaftaran,
   // rute dokumen harus didaftarkan lebih dulu.
   app.use("/api/v1/driver/documents", driverDocumentRouter);
+  app.use("/api/v1/driver/applications", driverApplicationRouter);
   app.use("/api/v1/driver", driverRideRouter);
   app.use("/api/v1/support", supportRouter);
   app.use("/api/v1/wallet", walletRouter);

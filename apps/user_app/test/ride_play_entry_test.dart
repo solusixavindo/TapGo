@@ -179,7 +179,7 @@ void main() {
       expect(serviceTile('Mobil'), findsOneWidget);
     });
 
-    testWidgets('6. demo mode OFF membuka state provider belum tersedia', (
+    testWidgets('6. demo mode OFF membuka pemilih lokasi OSM', (
       tester,
     ) async {
       expect(tapGoRideDemoMode, isFalse);
@@ -188,11 +188,9 @@ void main() {
       await openDashboard(tester);
       await tapServiceTile(tester, 'Motor');
 
-      expect(find.text(tapGoRideLocationUnavailableMessage), findsOneWidget);
-      // Tidak ada jalan menuju harga atau pemesanan tanpa provider resmi.
-      expect(find.text('Cek Harga'), findsNothing);
-      expect(find.text('Pesan Sekarang'), findsNothing);
-      // Hanya bermakna pada build tanpa provider demo.
+      // Provider produksi (OSM) siap: pemilih lokasi tampil, bukan penolakan.
+      expect(find.text(tapGoRideLocationUnavailableMessage), findsNothing);
+      expect(find.text('Cek Harga'), findsOneWidget);
     }, skip: tapGoRideDemoMode);
 
     test('7. flag demo hanya mengendalikan port lokasi', () {
@@ -203,7 +201,7 @@ void main() {
         tapGoRideLocationPort(),
         tapGoRideDemoMode
             ? isA<DemoLocationPort>()
-            : isA<UnavailableLocationPort>(),
+            : isA<OsmLocationPort>(),
       );
       // Pemetaan entry identik pada kedua keadaan flag.
       expect(tapGoRideEntryServiceFor('Motor'), RideServiceKind.motorcycle);

@@ -59,6 +59,58 @@ enum DriverAvailability { offline, online, busy }
 /// bukan sebagai kesalahan diam-diam.
 enum DriverDocumentKind { ktp, sim, stnk, selfie }
 
+/// Status siklus pengajuan mitra (H1). Nilainya cermin langsung dari backend.
+enum DriverApplicationStatus {
+  draft,
+  submitted,
+  underReview,
+  approved,
+  rejected,
+  withdrawn;
+
+  static DriverApplicationStatus? fromApi(String? value) => switch (value) {
+        'DRAFT' => DriverApplicationStatus.draft,
+        'SUBMITTED' => DriverApplicationStatus.submitted,
+        'UNDER_REVIEW' => DriverApplicationStatus.underReview,
+        'APPROVED' => DriverApplicationStatus.approved,
+        'REJECTED' => DriverApplicationStatus.rejected,
+        'WITHDRAWN' => DriverApplicationStatus.withdrawn,
+        _ => null,
+      };
+
+  bool get isOpen =>
+      this == DriverApplicationStatus.draft ||
+      this == DriverApplicationStatus.submitted ||
+      this == DriverApplicationStatus.underReview;
+}
+
+/// Ringkasan pengajuan mitra milik driver yang sedang masuk.
+class DriverApplicationInfo {
+  const DriverApplicationInfo({
+    required this.id,
+    required this.cycleNumber,
+    required this.status,
+    this.decisionReasonCode,
+  });
+
+  final String id;
+  final int cycleNumber;
+  final DriverApplicationStatus status;
+  final String? decisionReasonCode;
+
+  static DriverApplicationInfo? fromJson(Map<String, dynamic> json) {
+    final status = DriverApplicationStatus.fromApi(json['status'] as String?);
+    final id = json['id'];
+    if (status == null || id is! String) return null;
+    return DriverApplicationInfo(
+      id: id,
+      cycleNumber: json['cycleNumber'] is int ? json['cycleNumber'] as int : 1,
+      status: status,
+      decisionReasonCode: json['decisionReasonCode'] as String?,
+    );
+  }
+}
+
 extension DriverDocumentKindX on DriverDocumentKind {
   /// Kode yang dikirim ke backend.
   String get api => name.toUpperCase();
@@ -181,6 +233,9 @@ class DriverState {
     this.demoScenario = DriverScenario.login,
     this.documents = const [],
     this.uploadingDocument,
+    this.application,
+    this.documentsComplete = false,
+    this.vehiclePlateMasked,
   });
 
   factory DriverState.initial(DriverScenario scenario) => DriverState(
@@ -205,6 +260,15 @@ class DriverState {
   /// Jenis dokumen yang sedang diunggah. Dipakai untuk menyalakan indikator
   /// HANYA pada kartu yang bersangkutan, bukan menguncikan seluruh layar.
   final DriverDocumentKind? uploadingDocument;
+
+  /// Pengajuan mitra terbuka milik driver (null bila belum pernah mengajukan).
+  final DriverApplicationInfo? application;
+
+  /// Keempat dokumen wajib sudah terunggah menurut backend (K1-A).
+  final bool documentsComplete;
+
+  /// Plat kendaraan ter-mask yang tersimpan saat pengajuan, bila ada.
+  final String? vehiclePlateMasked;
 
   DriverDocumentSummary? documentOf(DriverDocumentKind kind) {
     for (final item in documents) {
@@ -235,6 +299,11 @@ class DriverState {
     List<DriverDocumentSummary>? documents,
     DriverDocumentKind? uploadingDocument,
     bool clearUploadingDocument = false,
+    DriverApplicationInfo? application,
+    bool clearApplication = false,
+    bool? documentsComplete,
+    String? vehiclePlateMasked,
+    bool clearVehiclePlate = false,
   }) {
     return DriverState(
       status: status ?? this.status,
@@ -252,6 +321,11 @@ class DriverState {
       uploadingDocument: clearUploadingDocument
           ? null
           : uploadingDocument ?? this.uploadingDocument,
+      application: clearApplication ? null : application ?? this.application,
+      documentsComplete: documentsComplete ?? this.documentsComplete,
+      vehiclePlateMasked: clearVehiclePlate
+          ? null
+          : vehiclePlateMasked ?? this.vehiclePlateMasked,
     );
   }
 }

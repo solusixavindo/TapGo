@@ -53,9 +53,6 @@ class _ReferralTreeScreenState extends ConsumerState<ReferralTreeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (tapGoIsPlayDistribution) {
-      return const MembershipScreen();
-    }
     final production = ref.watch(_productionSnapshotProvider);
     final session = ref.watch(_demoSessionProvider);
     final backendTree = production.valueOrNull?.referralTree;

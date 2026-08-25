@@ -152,6 +152,22 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                 order: 3,
                 child: _WalletCard(session: session, state: production),
               ),
+              // Mode Play: kartu Membership biru tetap di atas (membuka detail
+              // paket), dan saldo TapGoPay diletakkan tepat di bawahnya agar
+              // informasi wallet tetap terlihat tanpa menggantikan Membership.
+              // Dinonaktifkan saat fixture visual agar test tetap memverifikasi
+              // layout Membership→grid ringkas tanpa ruang kosong.
+              if (tapGoIsPlayDistribution && !tapGoDashboardVisualFixtureEnabled) ...[
+                const SizedBox(height: 14),
+                _DashboardEntrance(
+                  order: 4,
+                  child: _WalletCard(
+                    session: session,
+                    state: production,
+                    forceWallet: true,
+                  ),
+                ),
+              ],
               // Pada distribusi Play, kartu Membership biru di atas sudah
               // menampilkan paket aktif sekaligus membuka detailnya, sehingga
               // kartu status kuning hanya mengulang informasi yang sama.
@@ -162,7 +178,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
               if (!tapGoIsPlayDistribution) ...[
                 const SizedBox(height: 16),
                 _DashboardEntrance(
-                  order: 4,
+                  order: 5,
                   child: _MarketingPlanCard(
                     session: session,
                     isLoading: production.isLoading,
@@ -306,7 +322,8 @@ class _DashboardSkeletonCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.72),
         borderRadius: BorderRadius.circular(22),
-      ),
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
       child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -778,9 +795,9 @@ class _SearchRowState extends State<_SearchRow> {
     'Cari Bantuan',
   ];
   static const _playPlaceholders = [
-    'Cari akun TapGo',
+    'Cari layanan TapGo',
     'Cari Kartu Anggota',
-    'Cari Bantuan',
+    'Cari Referal Tim',
   ];
 
   int _placeholderIndex = 0;
@@ -919,19 +936,6 @@ void _showSearchMenu(BuildContext context) {
             'Kartu Anggota',
             Icons.badge_rounded,
             Color(0xFFF59E0B),
-            null,
-          ),
-          _ServiceItem('Profil', Icons.person_rounded, Color(0xFF697386), null),
-          _ServiceItem(
-            'Tiket Bantuan',
-            Icons.volunteer_activism_rounded,
-            Color(0xFF0569E8),
-            null,
-          ),
-          _ServiceItem(
-            'Hapus Akun',
-            Icons.delete_outline_rounded,
-            Color(0xFFD97706),
             null,
           ),
         ]
@@ -1185,7 +1189,8 @@ class _PromoHeroState extends State<_PromoHero> {
                       alpha: _index == index ? 0.95 : 0.42,
                     ),
                     borderRadius: BorderRadius.circular(999),
-                  ),
+                  border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
                 ),
               ),
             ),
@@ -1292,7 +1297,8 @@ class _PromoSlide extends StatelessWidget {
                     color: Colors.white.withValues(
                       alpha: hasImage ? 0.08 : 0.10,
                     ),
-                  ),
+                  border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
                 ),
               ),
               if (!hasImage)
@@ -1437,6 +1443,7 @@ class _HeroOrbit extends StatelessWidget {
                 offset: Offset(0, 10),
               ),
             ],
+          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           child: Icon(icon, color: accent, size: 34),
         ),
@@ -1466,23 +1473,27 @@ class _HeroMiniIcon extends StatelessWidget {
             offset: Offset(0, 8),
           ),
         ],
-      ),
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
       child: Icon(icon, color: color, size: 27),
     );
   }
 }
 
 class _WalletCard extends ConsumerWidget {
-  const _WalletCard({required this.session, required this.state});
+  const _WalletCard({required this.session, required this.state, this.forceWallet = false});
 
   final DemoClientSession session;
   final AsyncValue<_TapGoProductionSnapshot> state;
+  /// Jika true, tampilkan sebagai kartu wallet TapGoPay meskipun mode Play
+  /// (kartu Membership biru tetap dirender terpisah di atasnya).
+  final bool forceWallet;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final hasError = state.hasError;
     final isLoading = state.isLoading;
-    final isPlayDistribution = tapGoIsPlayDistribution;
+    final isPlayDistribution = tapGoIsPlayDistribution && !forceWallet;
     final caption = hasError
         ? 'Muat ulang'
         : isLoading
@@ -1529,7 +1540,8 @@ class _WalletCard extends ConsumerWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: Colors.white.withValues(alpha: 0.08),
-                ),
+                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
               ),
             ),
             Positioned(
@@ -2022,19 +2034,6 @@ class _ServiceGrid extends StatelessWidget {
     // pembayaran Play.
     _ServiceItem('PPOB', Icons.payments_rounded, Color(0xFF1486B8), null),
     _ServiceItem('Kartu Anggota', Icons.badge_rounded, Color(0xFFF59E0B), null),
-    _ServiceItem('Profil', Icons.person_rounded, Color(0xFF697386), null),
-    _ServiceItem(
-      'Tiket Bantuan',
-      Icons.volunteer_activism_rounded,
-      Color(0xFF0569E8),
-      null,
-    ),
-    _ServiceItem(
-      'Hapus Akun',
-      Icons.delete_outline_rounded,
-      Color(0xFFD97706),
-      null,
-    ),
   ];
 
   @override
@@ -2111,6 +2110,7 @@ VoidCallback? _tapGoServiceActionFor(BuildContext context, _ServiceItem item) {
             context,
             const BasicMemberCardScreen(),
           ),
+      'Referral' => () => _openDemo(context, const ReferralTreeScreen()),
       'Profil' => () => _openDemo(context, const ProfileDetailsScreen()),
       'Tiket Bantuan' => () => _openDemo(context, const ContactUsScreen()),
       'Hapus Akun' => () => _openDemo(
@@ -2218,7 +2218,8 @@ class _ContentCards extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(22),
-            ),
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -3355,8 +3356,30 @@ class _PlayProfileMembershipSummary extends StatelessWidget {
   }
 }
 
-class BasicMemberCardScreen extends ConsumerWidget {
+class BasicMemberCardScreen extends ConsumerStatefulWidget {
   const BasicMemberCardScreen({super.key});
+
+  @override
+  ConsumerState<BasicMemberCardScreen> createState() =>
+      _BasicMemberCardScreenState();
+}
+
+class _BasicMemberCardScreenState
+    extends ConsumerState<BasicMemberCardScreen> {
+  Future<_BasicMemberCardData>? _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load(ref.read(_demoSessionProvider));
+  }
+
+  /// Memuat ulang kartu di tempat — pengguna tidak perlu keluar halaman.
+  void _retry() {
+    setState(() {
+      _future = _load(ref.read(_demoSessionProvider));
+    });
+  }
 
   Future<_BasicMemberCardData> _load(DemoClientSession session) async {
     final loader = tapGoMemberIdentityLoaderForTests;
@@ -3372,17 +3395,39 @@ class BasicMemberCardScreen extends ConsumerWidget {
         joinedAt: DateTime(2026, 7, 14),
       );
     }
-    final data = await _apiClient.memberIdentity();
-    return _BasicMemberCardData.fromMap(data);
+    try {
+      final data = await _apiClient.memberIdentity();
+      return _BasicMemberCardData.fromMap(data);
+    } on DioException catch (error) {
+      final status = error.response?.statusCode;
+      if (status != 401 && status != 403) {
+        rethrow;
+      }
+      // 401/403 belum berarti sesi mati: tukar refresh token dulu, lalu
+      // ulangi sekali dengan token baru.
+      final (result, refreshed) =
+          await _apiClient.refreshSession(session.refreshToken ?? '');
+      if (result != TapGoSessionRefreshResult.refreshed || refreshed == null) {
+        rethrow;
+      }
+      _apiClient.setAccessToken(refreshed.accessToken);
+      final next = session.copyWith(
+        accessToken: refreshed.accessToken,
+        refreshToken: refreshed.refreshToken,
+      );
+      ref.read(_demoSessionProvider.notifier).state = next;
+      unawaited(_persistentStore.saveSession(next));
+      final data = await _apiClient.memberIdentity();
+      return _BasicMemberCardData.fromMap(data);
+    }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final session = ref.watch(_demoSessionProvider);
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Kartu Anggota')),
       body: FutureBuilder<_BasicMemberCardData>(
-        future: _load(session),
+        future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: _TapGoLoading());
@@ -3390,12 +3435,21 @@ class BasicMemberCardScreen extends ConsumerWidget {
           if (snapshot.hasError || !snapshot.hasData) {
             return ListView(
               padding: const EdgeInsets.all(20),
-              children: const [
-                _StatusSurface(
+              children: [
+                const _StatusSurface(
                   icon: Icons.badge_rounded,
                   title: 'Kartu anggota belum dapat dimuat',
                   subtitle:
-                      'Pastikan koneksi internet aktif, lalu coba buka kembali halaman ini.',
+                      'Pastikan koneksi internet aktif, lalu tekan Coba lagi.',
+                ),
+                const SizedBox(height: 16),
+                Center(
+                  child: FilledButton.icon(
+                    key: const ValueKey('member_card_retry_button'),
+                    onPressed: _retry,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Coba lagi'),
+                  ),
                 ),
               ],
             );
@@ -3405,24 +3459,26 @@ class BasicMemberCardScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
             children: [
+              // Kartu resmi mengikuti mockup Owner: navy gelap + aksen emas,
+              // chip kontak, nama, Member ID, paket, dan tanggal bergabung.
               Container(
                 key: const ValueKey('basic_member_card_surface'),
-                padding: const EdgeInsets.all(18),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Color(0xFF061A2E),
-                      Color(0xFF0B315F),
-                      Color(0xFF0569E8),
+                      Color(0xFF0B1F3A),
+                      Color(0xFF12355E),
+                      Color(0xFF0B1F3A),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: const Color(0x3322D3EE)),
+                  border: Border.all(color: const Color(0xFFD4AF37), width: 1.2),
                   boxShadow: const [
                     BoxShadow(
-                      color: Color(0x330569E8),
+                      color: Color(0x55000000),
                       blurRadius: 24,
                       offset: Offset(0, 14),
                     ),
@@ -3434,84 +3490,118 @@ class BasicMemberCardScreen extends ConsumerWidget {
                     Row(
                       children: [
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(10),
                           child: Image.asset(
                             'assets/images/tapgo_logo.jpeg',
-                            width: 36,
-                            height: 36,
+                            width: 40,
+                            height: 40,
                             fit: BoxFit.cover,
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 12),
                         const Expanded(
                           child: Text(
-                            'TapGo Member Card',
+                            'TAPGO MEMBER CARD',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 14,
-                              height: 1.1,
+                              fontSize: 15,
+                              letterSpacing: 1.2,
                               fontWeight: FontWeight.w900,
                               decoration: TextDecoration.none,
                             ),
                           ),
                         ),
                         _MemberStatusChip(
-                          label: isActive ? 'Aktif' : 'Tidak aktif',
+                          label: isActive ? 'BASIC' : 'TIDAK AKTIF',
                         ),
                       ],
                     ),
-                    const SizedBox(height: 18),
-                    Text(
-                      card.displayName,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        height: 1.12,
-                        fontWeight: FontWeight.w900,
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.nfc_rounded,
+                          color: Color(0xFFD4AF37),
+                          size: 34,
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Text(
+                            card.displayName.toUpperCase(),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              height: 1.12,
+                              letterSpacing: 1.5,
+                              fontWeight: FontWeight.w900,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'MEMBER ID',
+                      style: TextStyle(
+                        color: Color(0xFF9FB3C8),
+                        fontSize: 11,
+                        letterSpacing: 1.6,
+                        fontWeight: FontWeight.w700,
                         decoration: TextDecoration.none,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    const _MemberStatusChip(label: 'Basic', subtle: true),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF4F8FB),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: const Color(0xFFE5EDF6)),
+                    const SizedBox(height: 4),
+                    Text(
+                      card.memberId,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        letterSpacing: 2,
+                        fontWeight: FontWeight.w800,
+                        decoration: TextDecoration.none,
                       ),
-                      child: Column(
-                        children: [
-                          _MemberCardLine(
-                            label: 'Member ID',
-                            value: card.memberId,
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Expanded(
+                          child: _MemberCardGoldField(
+                            label: 'PAKET',
+                            value: 'BASIC',
                           ),
-                          const SizedBox(height: 12),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Expanded(
-                                child: _MemberCardLine(
-                                  label: 'Paket',
-                                  value: 'Basic',
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _MemberCardLine(
-                                  label: 'Bergabung',
-                                  value: _formatMemberDate(card.joinedAt),
-                                  alignEnd: true,
-                                ),
-                              ),
-                            ],
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _MemberCardGoldField(
+                            label: 'BERGABUNG',
+                            value: _formatMemberDate(card.joinedAt)
+                                .toUpperCase(),
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        'TAPGO\nMEMBERSHIP',
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          color: Color(0xFFD4AF37),
+                          fontSize: 13,
+                          height: 1.25,
+                          letterSpacing: 1.4,
+                          fontWeight: FontWeight.w900,
+                          decoration: TextDecoration.none,
+                        ),
                       ),
                     ),
                   ],
@@ -3560,44 +3650,37 @@ class _BasicMemberCardData {
   }
 }
 
-class _MemberCardLine extends StatelessWidget {
-  const _MemberCardLine({
-    required this.label,
-    required this.value,
-    this.alignEnd = false,
-  });
+class _MemberCardGoldField extends StatelessWidget {
+  const _MemberCardGoldField({required this.label, required this.value});
 
   final String label;
   final String value;
-  final bool alignEnd;
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment:
-          alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          textAlign: alignEnd ? TextAlign.right : TextAlign.left,
           style: const TextStyle(
-            color: Color(0xFF64748B),
-            fontSize: 11.5,
-            fontWeight: FontWeight.w800,
+            color: Color(0xFF9FB3C8),
+            fontSize: 11,
+            letterSpacing: 1.6,
+            fontWeight: FontWeight.w700,
             decoration: TextDecoration.none,
           ),
         ),
-        const SizedBox(height: 3),
+        const SizedBox(height: 4),
         Text(
           value,
-          maxLines: 2,
+          maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          textAlign: alignEnd ? TextAlign.right : TextAlign.left,
           style: const TextStyle(
-            color: Color(0xFF0A2A43),
+            color: Colors.white,
             fontSize: 15,
-            height: 1.16,
-            fontWeight: FontWeight.w900,
+            letterSpacing: 1.2,
+            fontWeight: FontWeight.w800,
             decoration: TextDecoration.none,
           ),
         ),
@@ -3607,19 +3690,17 @@ class _MemberCardLine extends StatelessWidget {
 }
 
 class _MemberStatusChip extends StatelessWidget {
-  const _MemberStatusChip({required this.label, this.subtle = false});
+  const _MemberStatusChip({required this.label});
 
   final String label;
-  final bool subtle;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: subtle ? const Color(0xFFFFF3D1) : const Color(0xFFFFC857),
+        color: const Color(0xFFFFC857),
         borderRadius: BorderRadius.circular(999),
-        border: subtle ? Border.all(color: const Color(0xFFFFD166)) : null,
       ),
       child: Text(
         label,
@@ -3969,7 +4050,8 @@ class _WalletAction extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(18),
-        ),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
         child: Icon(icon, color: Colors.white, size: 31),
       ),
     );
@@ -4236,7 +4318,8 @@ class _ServiceIcon3D extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.70),
                 borderRadius: BorderRadius.circular(size),
-              ),
+              border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
             ),
           ),
         ],

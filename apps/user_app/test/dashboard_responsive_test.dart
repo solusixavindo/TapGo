@@ -171,9 +171,6 @@ void main() {
         'Motor',
         'Mobil',
         'Kartu Anggota',
-        'Profil',
-        'Tiket Bantuan',
-        'Hapus Akun',
       ]) {
         expect(serviceTile(label), findsOneWidget, reason: 'hilang: $label');
       }

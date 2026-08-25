@@ -372,6 +372,124 @@ describe.skipIf(!runIntegration)("Stage R2.7 — PPOB foundation", () => {
     });
     expect(res.status).toBe(401);
   });
+
+  // --- Kontrak klien Release 2 (Flutter): /catalog, /orders/inquiry, /orders ---
+  // App customer membaca path + bentuk payload ini; perubahan apa pun di sini
+  // adalah perubahan kontrak — lihat ppob.routes.ts.
+
+  it("catalog mengelompokkan produk per kategori dalam bentuk yang dibaca Flutter", async () => {
+    const user = await createUser("USER");
+    const res = await api("/api/v1/ppob/catalog", { token: tokenFor(user) });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { items: any[] } };
+    const pulsa = body.data.items.find((c) => c.code === "PULSA");
+    expect(pulsa).toBeDefined();
+    expect(pulsa.name).toBe("Pulsa");
+    const skus = pulsa.products.map((p: any) => p.sku);
+    expect(skus).toEqual(["PULSA_TSEL_10", "PULSA_TSEL_25"]);
+    // Produk membawa field yang dibaca model Flutter.
+    expect(pulsa.products[0]).toMatchObject({
+      id: "PULSA_TSEL_10",
+      sku: "PULSA_TSEL_10",
+      name: "Pulsa Telkomsel 10.000",
+      price: 11500,
+      adminFee: 0,
+      targetLabel: "Nomor HP Tujuan"
+    });
+    // Produk nonaktif tidak pernah tampil.
+    expect(skus).not.toContain("PULSA_INACTIVE");
+  });
+
+  it("inquiry menghitung split pembayaran tanpa membuat transaksi", async () => {
+    const user = await createUserWithPpobBalance("5000");
+    await prisma.wallet.update({
+      where: { userId: user.id },
+      data: { balance: new Prisma.Decimal("100000") }
+    });
+    const res = await api("/api/v1/ppob/orders/inquiry", {
+      method: "POST",
+      token: tokenFor(user),
+      body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" }
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: any };
+    expect(body.data.product.sku).toBe("PULSA_TSEL_10");
+    // Target dinormalisasi seperti pada purchase.
+    expect(body.data.targetNumber).toBe("085612345678");
+    // Split: saldo PPOB 5000 dipakai dulu, sisanya 6500 dari saldo utama.
+    expect(body.data.payment).toEqual({
+      amount: 11500,
+      benefitAmount: 5000,
+      balanceAmount: 6500,
+      sufficient: true
+    });
+    expect(body.data.wallet.balance).toBe(100000);
+    // Tidak ada transaksi yang tercipta dari inquiry.
+    expect(await prisma.ppobTransaction.count()).toBe(0);
+  });
+
+  it("inquiry menandai saldo tidak cukup dan menolak sku asing", async () => {
+    const user = await createUserWithPpobBalance("0");
+    const insufficient = await api("/api/v1/ppob/orders/inquiry", {
+      method: "POST",
+      token: tokenFor(user),
+      body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" }
+    });
+    expect(insufficient.status).toBe(200);
+    const body = (await insufficient.json()) as { data: any };
+    expect(body.data.payment.sufficient).toBe(false);
+    expect(body.data.payment.balanceAmount).toBe(11500);
+
+    const unknown = await api("/api/v1/ppob/orders/inquiry", {
+      method: "POST",
+      token: tokenFor(user),
+      body: { sku: "SKU_TIDAK_ADA", targetNumber: "085612345678" }
+    });
+    expect(unknown.status).toBe(404);
+  });
+
+  it("POST /orders membuat transaksi dan mengembalikan bentuk PpobOrder", async () => {
+    const user = await createUserWithPpobBalance("20000");
+    const res = await api("/api/v1/ppob/orders", {
+      method: "POST",
+      token: tokenFor(user),
+      idempotencyKey: "r2-order-contract-1",
+      body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" }
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { data: any };
+    expect(body.data.id).toMatch(/^PPB-[A-Z2-9]{10}$/);
+    expect(body.data.status).toBe("SUCCESS");
+    expect(body.data.sku).toBe("PULSA_TSEL_10");
+    expect(body.data.productName).toBe("Pulsa Telkomsel 10.000");
+    expect(body.data.categoryCode).toBe("PULSA");
+    expect(body.data.targetNumber).toBe("085612345678");
+    expect(body.data.amount).toBe(11500);
+    expect(body.data.replayed).toBe(false);
+
+    // Replay key yang sama: 200 + flag replayed.
+    const replay = await api("/api/v1/ppob/orders", {
+      method: "POST",
+      token: tokenFor(user),
+      idempotencyKey: "r2-order-contract-1",
+      body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" }
+    });
+    expect(replay.status).toBe(200);
+    const replayBody = (await replay.json()) as { data: any };
+    expect(replayBody.data.id).toBe(body.data.id);
+    expect(replayBody.data.replayed).toBe(true);
+
+    // Riwayat + detail lewat path yang sama dengan yang dipanggil Flutter.
+    const history = await api("/api/v1/ppob/orders", { token: tokenFor(user) });
+    expect(history.status).toBe(200);
+    const historyBody = (await history.json()) as { data: { items: any[] } };
+    expect(historyBody.data.items.map((o) => o.id)).toContain(body.data.id);
+
+    const detail = await api(`/api/v1/ppob/orders/${body.data.id}`, {
+      token: tokenFor(user)
+    });
+    expect(detail.status).toBe(200);
+  });
 });
 
 // --- Helpers -------------------------------------------------------------------

@@ -227,4 +227,19 @@ describeIntegration("Stage R2.1 — session revocation survives integration", ()
     // tetap berlaku sampai kedaluwarsa sendiri.
     expect((await api("GET", "/api/v1/auth/me", undefined, accessToken)).status).toBe(200);
   });
+
+  it("8. reuse refresh token lama ditolak walau rotasi terjadi pada detik yang sama", async () => {
+    const { phone } = await createAccount();
+    const { refreshToken } = await login(phone, OLD_PASSWORD);
+
+    // Tanpa jeda: refresh berikutnya mendarat pada detik yang sama dengan
+    // penerbitan token. Tanpa klaim jwtid unik, token hasil rotasi berbunyi
+    // byte-identik dengan token lama dan reuse tidak pernah terdeteksi.
+    const first = await api("POST", "/api/v1/auth/refresh", { refreshToken });
+    expect(first.status).toBe(200);
+
+    const replay = await api("POST", "/api/v1/auth/refresh", { refreshToken });
+    expect(replay.status).toBe(401);
+    expect(replay.body.code).toBe("TOKEN_REUSE_DETECTED");
+  });
 });

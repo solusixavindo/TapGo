@@ -294,7 +294,20 @@ class _RideEntryScreenState extends ConsumerState<RideEntryScreen> {
         return;
       }
       if (tapGoRideIsSessionExpired(error)) {
-        _handleRideSessionExpired(context, ref);
+        final outcome = await _resolveRideSessionExpired(context, ref);
+        if (!mounted) {
+          return;
+        }
+        if (outcome == TapGoSessionRefreshResult.refreshed) {
+          await _resolve();
+          return;
+        }
+        if (outcome == TapGoSessionRefreshResult.unreachable) {
+          setState(() {
+            _outcome = _RideEntryOutcome.failed;
+            _errorMessage = 'Koneksi belum stabil. Silakan coba lagi.';
+          });
+        }
         return;
       }
       // Kegagalan jaringan tidak menghapus apa pun dan tidak memulai pemesanan
@@ -512,8 +525,32 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         return;
       }
       if (tapGoRideIsSessionExpired(error)) {
-        // Mengikuti konvensi auth existing; tidak ada penanganan sesi sendiri.
-        _handleRideSessionExpired(context, ref);
+        // 401 dicoba dipulihkan lewat refresh token lebih dulu; logout hanya
+        // bila server menegas menolak.
+        final outcome = await _resolveRideSessionExpired(context, ref);
+        if (!mounted) {
+          return;
+        }
+        if (outcome == TapGoSessionRefreshResult.refreshed) {
+          try {
+            await action();
+          } catch (retryError) {
+            if (!mounted) {
+              return;
+            }
+            if (tapGoRideIsSessionExpired(retryError)) {
+              _handleRideSessionExpired(context, ref);
+              return;
+            }
+            setState(() => _errorMessage = tapGoRideErrorMessage(retryError));
+          }
+          return;
+        }
+        if (outcome == TapGoSessionRefreshResult.unreachable) {
+          setState(
+            () => _errorMessage = 'Koneksi belum stabil. Silakan coba lagi.',
+          );
+        }
         return;
       }
       setState(() => _errorMessage = tapGoRideErrorMessage(error));
@@ -744,7 +781,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     required RideLocation? selected,
     required ValueChanged<RideLocation> onSelected,
   }) {
-    final options = _port.availableLocations();
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -775,36 +811,49 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: options.map((option) {
-              final active = selected?.id == option.id;
-              return InkWell(
-                onTap: _isBusy ? null : () => onSelected(option),
-                borderRadius: BorderRadius.circular(999),
-                child: Container(
-                  constraints: const BoxConstraints(minHeight: 48),
-                  alignment: Alignment.center,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: active
-                        ? _brandBlue
-                        : colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    option.label,
-                    style: TextStyle(
-                      color: active ? Colors.white : colorScheme.onSurface,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
+          InkWell(
+            onTap: _isBusy
+                ? null
+                : () async {
+                    final picked = await RideLocationPickerSheet.show(
+                      context,
+                      port: _port,
+                      title: title,
+                      initial: selected,
+                    );
+                    if (picked != null) onSelected(picked);
+                  },
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 56),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: colorScheme.outlineVariant),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      selected?.label ?? 'Pilih di peta atau cari alamat…',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: selected == null
+                            ? colorScheme.onSurfaceVariant
+                            : colorScheme.onSurface,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                ),
-              );
-            }).toList(),
+                  Icon(Icons.map_outlined,
+                      size: 20, color: colorScheme.onSurfaceVariant),
+                ],
+              ),
+            ),
           ),
           if (selected != null) ...[
             const SizedBox(height: 10),
@@ -933,6 +982,37 @@ void _handleRideSessionExpired(BuildContext context, WidgetRef ref) {
   );
 }
 
+/// Gerbang pemulihan sesi untuk alur ride ketika server menjawab 401.
+///
+/// Access token hanya hidup ~15 menit, jadi 401 belum berarti sesi mati:
+/// refresh token dicoba lebih dulu. Hasil:
+/// - `refreshed`  -> token baru aktif, pemanggil BOLEH mengulang aksinya;
+/// - `unreachable`-> jaringan/5xx, sesi DIPERTAHANKAN, tampilkan pesan
+///   "koneksi belum stabil" (pengguna tidak dipaksa login ulang);
+/// - `rejected`   -> server menegas menolak (dicabut / ganti password),
+///   baru di sinilah logout dipaksa lewat [_handleRideSessionExpired].
+Future<TapGoSessionRefreshResult> _resolveRideSessionExpired(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  final refreshToken = ref.read(_demoSessionProvider).refreshToken ?? '';
+  final (result, refreshed) = await _apiClient.refreshSession(refreshToken);
+  if (result == TapGoSessionRefreshResult.refreshed && refreshed != null) {
+    _apiClient.setAccessToken(refreshed.accessToken);
+    final next = ref.read(_demoSessionProvider).copyWith(
+          accessToken: refreshed.accessToken,
+          refreshToken: refreshed.refreshToken,
+        );
+    ref.read(_demoSessionProvider.notifier).state = next;
+    unawaited(_persistentStore.saveSession(next));
+    return result;
+  }
+  if (result == TapGoSessionRefreshResult.rejected && context.mounted) {
+    _handleRideSessionExpired(context, ref);
+  }
+  return result;
+}
+
 // ===========================================================================
 // Layar 2 — status perjalanan
 // ===========================================================================
@@ -992,7 +1072,18 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
             return;
           }
           if (tapGoRideIsSessionExpired(error)) {
-            _handleRideSessionExpired(context, ref);
+            // Poller berjalan berkala: bila refresh berhasil, tick berikutnya
+            // otomatis memakai token baru; bila jaringan putus sesi dijaga;
+            // logout hanya bila server menolak refresh token.
+            unawaited(_resolveRideSessionExpired(context, ref).then((outcome) {
+              if (!mounted) {
+                return;
+              }
+              if (outcome == TapGoSessionRefreshResult.unreachable) {
+                setState(() => _errorMessage =
+                    'Koneksi belum stabil. Silakan coba lagi.');
+              }
+            }));
             return;
           }
           setState(() => _errorMessage = tapGoRideErrorMessage(error));
@@ -1055,7 +1146,18 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
         return;
       }
       if (tapGoRideIsSessionExpired(error)) {
-        _handleRideSessionExpired(context, ref);
+        final outcome = await _resolveRideSessionExpired(context, ref);
+        if (!mounted) {
+          return;
+        }
+        if (outcome == TapGoSessionRefreshResult.refreshed) {
+          await _cancel(reasonCode, note);
+          return;
+        }
+        if (outcome == TapGoSessionRefreshResult.unreachable) {
+          setState(() => _errorMessage =
+              'Koneksi belum stabil. Silakan coba lagi.');
+        }
         return;
       }
       setState(() => _errorMessage = tapGoRideErrorMessage(error));
@@ -1514,7 +1616,18 @@ class _RideHistoryScreenState extends ConsumerState<RideHistoryScreen> {
         return;
       }
       if (tapGoRideIsSessionExpired(error)) {
-        _handleRideSessionExpired(context, ref);
+        final outcome = await _resolveRideSessionExpired(context, ref);
+        if (!mounted) {
+          return;
+        }
+        if (outcome == TapGoSessionRefreshResult.refreshed) {
+          await _load();
+          return;
+        }
+        if (outcome == TapGoSessionRefreshResult.unreachable) {
+          setState(() => _errorMessage =
+              'Koneksi belum stabil. Silakan coba lagi.');
+        }
         return;
       }
       setState(() => _errorMessage = tapGoRideErrorMessage(error));

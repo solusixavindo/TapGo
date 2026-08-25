@@ -58,27 +58,25 @@ export class DriverDocumentService {
   constructor(private readonly prisma: PrismaClient) {}
 
   /**
-   * Menemukan profil driver milik pengguna yang sedang masuk.
+   * Menemukan profil driver milik pengguna yang sedang masuk, dan MEMBUATNYA
+   * bila belum ada.
+   *
+   * Keputusan Owner (D1): pengajuan mitra bersifat mandiri — orang biasa
+   * mengunggah dokumennya DULU, dan baris Driver dibuat sebagai pradataur
+   * (kycStatus NOT_SUBMITTED, status OFFLINE). Profil operasional
+   * (RideDriverProfile) baru lahir saat pengajuan disetujui admin.
    *
    * Driver dicari lewat userId, TIDAK PERNAH lewat driverId dari permintaan.
    * Menerima driverId dari klien berarti mempersilakan siapa pun mengunggah
    * dokumen atas nama driver lain hanya dengan menebak satu id.
    */
-  private async requireOwnDriver(userId: string) {
-    const driver = await this.prisma.driver.findUnique({
+  private async ensureOwnDriver(userId: string) {
+    return this.prisma.driver.upsert({
       where: { userId },
+      update: {},
+      create: { userId },
       select: { id: true, kycStatus: true }
     });
-
-    if (!driver) {
-      throw new AppError(
-        "Profil mitra driver belum terdaftar.",
-        StatusCodes.NOT_FOUND,
-        "DRIVER_PROFILE_NOT_FOUND"
-      );
-    }
-
-    return driver;
   }
 
   async upload(input: {
@@ -102,7 +100,7 @@ export class DriverDocumentService {
       );
     }
 
-    const driver = await this.requireOwnDriver(input.userId);
+    const driver = await this.ensureOwnDriver(input.userId);
 
     // Setelah KYC disetujui, berkas tidak boleh diganti lagi. Membiarkannya
     // terbuka berarti dokumen yang sudah diperiksa dapat ditukar diam-diam
@@ -194,7 +192,7 @@ export class DriverDocumentService {
 
   /** Daftar dokumen milik pengguna yang sedang masuk. */
   async listOwn(input: { userId: string }) {
-    const driver = await this.requireOwnDriver(input.userId);
+    const driver = await this.ensureOwnDriver(input.userId);
     return this.list({ driverId: driver.id });
   }
 
@@ -348,13 +346,29 @@ export class DriverDocumentService {
    * Barisnya tidak dihapus: status, checksum, dan jejak waktunya masih
    * dibutuhkan untuk audit — termasuk untuk membuktikan bahwa dokumen memang
    * pernah ada dan sudah dimusnahkan tepat waktu.
+   *
+   * PENGECUALIAN (keputusan Owner D1): dokumen milik pengemudi yang masih
+   * memiliki pengajuan mitra TERBUKA (DRAFT/SUBMITTED/UNDER_REVIEW) tidak
+   * disapu — menghapus bukti sebelum review selesai membuat admin memutuskan
+   * tanpa berkas. Begitu pengajuan mencapai status terminal (APPROVED/
+   * REJECTED/WITHDRAWN), retensi normal kembali berlaku pada penyapuan
+   * berikutnya.
    */
   async purgeExpired(now = new Date()) {
     const result = await this.prisma.driverDocument.updateMany({
       where: {
         expiresAt: { lte: now },
         purgedAt: null,
-        cipherText: { not: null }
+        cipherText: { not: null },
+        driver: {
+          user: {
+            rideDriverApplications: {
+              none: {
+                status: { in: ["DRAFT", "SUBMITTED", "UNDER_REVIEW"] }
+              }
+            }
+          }
+        }
       },
       data: {
         cipherText: null,

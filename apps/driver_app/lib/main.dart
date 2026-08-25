@@ -20,8 +20,11 @@ part 'demo/demo_driver_repository.dart';
 part 'features/driver/application/driver_controller.dart';
 part 'features/driver/presentation/driver_screens.dart';
 part 'features/driver/presentation/driver_documents.dart';
+part 'features/driver/presentation/driver_application.dart';
+part 'tapgo_app_guards.dart';
 
 void main() {
+  installTapGoCrashGuards();
   runApp(
     ProviderScope(
       overrides: [

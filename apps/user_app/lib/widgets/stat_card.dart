@@ -192,7 +192,8 @@ class _StatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-      ),
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -291,7 +292,8 @@ class _WalletLedgerItem extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-      ),
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
       child: Row(
         children: [
           Container(
@@ -430,7 +432,8 @@ class _MarketingRulesCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-      ),
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -506,7 +509,8 @@ class _SearchBox extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-      ),
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
       child: Row(
         children: [
           const Icon(Icons.search_rounded, color: _brandBlue),
@@ -537,7 +541,8 @@ class _ActivityTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-      ),
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
       child: Row(
         children: [
           Container(
@@ -668,7 +673,8 @@ class _AccountHero extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-      ),
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
       child: Column(
         children: [
           ClipRRect(
@@ -847,7 +853,8 @@ class _DemoDocumentPreview extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-      ),
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
       child: Row(
         children: [
           ClipRRect(
@@ -982,7 +989,8 @@ class _EmptyState extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(22),
-        ),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
         child: Column(
           children: [
             Icon(icon, color: _brandBlue, size: 44),
