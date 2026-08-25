@@ -54,10 +54,10 @@ class _ReferralTreeNodeWidget extends StatelessWidget {
                   switchOutCurve: _TapGoMotion.exitCurve,
                   transitionBuilder: (child, animation) => SizeTransition(
                     sizeFactor: animation,
-                    // Top-center: sumbu Y -1. `axisAlignment` dipakai, bukan
-                    // `alignment`, karena `alignment` hanya ada di SDK lebih
-                    // baru sementara hasil visualnya setara.
-                    axisAlignment: -1.0,
+                    // Top-center: sumbu Y -1, sumbu X 0 (tengah). SDK build
+                    // resmi (Mac Owner, >=3.41) mewajibkan `alignment` —
+                    // `axisAlignment` sudah deprecated di sana.
+                    alignment: const Alignment(0, -1),
                     child: FadeTransition(opacity: animation, child: child),
                   ),
                   child: node.isExpanded
