@@ -11,11 +11,13 @@ import { RideServiceType } from "@prisma/client";
  * - Konfigurasi tarif berada di server (bukan di UI/presentation).
  */
 
-export const FARE_RULE_VERSION = "RIDE_FARE_RULE_V1";
+export const FARE_RULE_VERSION = "RIDE_FARE_RULE_V2";
 export const FARE_ROUNDING_RULE = "ROUND_TO_NEAREST_100_HALF_UP";
 
 export type FareRule = {
   baseFare: number;
+  /** Kilometer pertama yang sudah termasuk dalam baseFare. */
+  includedKm: number;
   perKmFare: number;
   minimumFare: number;
   serviceFee: number;
@@ -28,16 +30,18 @@ export type FareRule = {
  */
 export const DEFAULT_FARE_RULES: Record<RideServiceType, FareRule> = {
   MOTORCYCLE: {
-    baseFare: 5_000,
-    perKmFare: 2_500,
+    baseFare: 8_500,
+    includedKm: 4,
+    perKmFare: 2_100,
     minimumFare: 9_000,
     serviceFee: 1_000,
   },
   CAR: {
-    baseFare: 10_000,
-    perKmFare: 4_200,
+    baseFare: 13_000,
+    includedKm: 3,
+    perKmFare: 4_000,
     minimumFare: 17_000,
-    serviceFee: 2_000,
+    serviceFee:  2_500,
   },
 };
 
@@ -78,9 +82,12 @@ export function calculateFare(input: {
     throw new TypeError("distanceMeters harus bilangan bulat positif");
   }
 
+  // kilometer yang ditagih hanyalah yang melebihi includedKm (tarif paket).
+  const billableMeters = Math.max(0, input.distanceMeters - rule.includedKm * 1000);
   // Tarif jarak dihitung dari meter agar tidak ada pecahan tersembunyi.
+
   const distanceFare = Math.trunc(
-    (input.distanceMeters * rule.perKmFare) / 1000,
+    (billableMeters * rule.perKmFare) / 1000,
   );
 
   const rawSubtotal = rule.baseFare + distanceFare + rule.serviceFee;

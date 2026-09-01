@@ -652,6 +652,7 @@ export class RideService {
 
       if (input.next === "COMPLETED") {
         await this.releaseDriver(tx, profile.id);
+        await this.recordRideRevenueShare(tx, order, profile.id);
       }
 
       await this.writeEvent(tx, {
@@ -1325,6 +1326,118 @@ export class RideService {
     await tx.rideDriverProfile.updateMany({
       where: { id: driverProfileId, availability: "BUSY" },
       data: { availability: "ONLINE" },
+    });
+  }
+
+  /**
+   * Mencatat bagi hasil ride 92:8 saat sesi selesai.
+   *
+   * - Driver menerima 92% dari totalFare sebagai pendapatan tunai (POSTED,
+   *   langsung menambah cashBalance — konsisten dengan CASH_REPORTED).
+   * - Perusahaan 8% dicatat sebagai komisi PENDING (belum menambah saldo
+   *   siapa pun; kas tunai fisik driver-lah yang dipegang, dan penagihan/
+   *   rekonsiliasi 8% ke perusahaan berada di luar lingkup transaksi ini).
+   *
+   * Idempoten: kunci unik [beneficiaryId, triggerType, triggerId, type, level]
+   * membuat pencatatan ganda tidak mungkin dalam satu transaksi.
+   */
+  private async recordRideRevenueShare(
+    tx: Prisma.TransactionClient,
+    order: { id: string; driverProfileId: string | null; totalFare: number },
+    driverProfileId: string | null,
+  ) {
+    if (!driverProfileId) return;
+    if (!Number.isFinite(order.totalFare) || order.totalFare <= 0) return;
+
+    const driverShare = new Prisma.Decimal(order.totalFare).mul(92).div(100);
+    const companyShare = new Prisma.Decimal(order.totalFare).mul(8).div(100);
+
+    const profile = await this.prisma.rideDriverProfile.findUniqueOrThrow({
+      where: { id: driverProfileId },
+      select: { userId: true }
+    });
+
+    const wallet = await tx.wallet.upsert({
+      where: { userId: profile.userId },
+      update: {},
+      create: {
+        userId: profile.userId,
+        balance: new Prisma.Decimal(0),
+        cashBalance: new Prisma.Decimal(0),
+        ppobBalance: new Prisma.Decimal(0),
+        currency: "IDR"
+      },
+      select: { id: true }
+    });
+
+    await tx.wallet.update({
+      where: { id: wallet.id },
+      data: {
+        cashBalance: { increment: driverShare },
+        balance: { increment: driverShare }
+      }
+    });
+
+    const ledger = await tx.walletTransaction.create({
+      data: {
+        walletId: wallet.id,
+        type: "COMMISSION",
+        amount: driverShare,
+        referenceType: "RIDE_ORDER",
+        referenceId: order.id,
+        metadata: {
+          sharePct: "92",
+          fare: order.totalFare,
+          rideServiceType: "RIDE_DRIVER_EARNING"
+        }
+      },
+      select: { id: true }
+    });
+
+    const companyAdmin = await tx.user.findFirst({
+      where: { role: { in: ["SUPER_ADMIN", "SUPER_ADMIN_VIP"] } },
+      orderBy: { createdAt: "asc" },
+      select: { id: true }
+    });
+
+    const driverCommissionRow: Prisma.CommissionCreateManyInput = {
+      beneficiaryId: profile.userId,
+      sourceUserId: profile.userId,
+      walletTransactionId: ledger.id,
+      type: "RIDE_DRIVER_EARNING",
+      status: "POSTED",
+      level: 1,
+      amount: driverShare,
+      triggerType: "RIDE_ORDER",
+      triggerId: order.id,
+      metadata: {
+        sharePct: "92",
+        fare: order.totalFare
+      },
+      postedAt: new Date()
+    };
+    const companyCommissionRow: Prisma.CommissionCreateManyInput | null = companyAdmin
+      ? {
+          beneficiaryId: companyAdmin.id,
+          sourceUserId: profile.userId,
+          type: "RIDE_COMPANY_REVENUE",
+          status: "PENDING",
+          level: null,
+          amount: companyShare,
+          triggerType: "RIDE_ORDER",
+          triggerId: order.id,
+          metadata: {
+            sharePct: "8",
+            fare: order.totalFare
+          }
+        }
+      : null;
+
+    await tx.commission.createMany({
+      data: [
+        driverCommissionRow,
+        ...(companyCommissionRow ? [companyCommissionRow] : []),
+      ]
     });
   }
 
