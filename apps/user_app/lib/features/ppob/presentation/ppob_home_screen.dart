@@ -100,7 +100,7 @@ class _PpobCategoryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final icon = ppobCategoryIcon(category.icon);
+    final icon = ppobCategoryIcon(category.icon, categoryCode: category.code);
 
     return Material(
       color: theme.cardColor,
@@ -121,10 +121,14 @@ class _PpobCategoryTile extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                  color: ppobCategoryColor(category.code).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: theme.colorScheme.primary, size: 22),
+                child: Icon(
+                  icon,
+                  color: ppobCategoryColor(category.code),
+                  size: 22,
+                ),
               ),
               const SizedBox(height: 10),
               Text(

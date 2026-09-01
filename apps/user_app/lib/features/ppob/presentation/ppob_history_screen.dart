@@ -80,12 +80,12 @@ class _PpobOrderTile extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                color: ppobCategoryColor(order.categoryCode).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
-                ppobCategoryIcon(null),
-                color: theme.colorScheme.primary,
+                ppobCategoryIcon(null, categoryCode: order.categoryCode),
+                color: ppobCategoryColor(order.categoryCode),
                 size: 20,
               ),
             ),

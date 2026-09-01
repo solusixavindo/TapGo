@@ -29,7 +29,24 @@ String ppobStatusLabel(PpobOrderStatus status) {
   };
 }
 
-IconData ppobCategoryIcon(String? iconName) {
+/// Ikon kategori PPOB.
+///
+/// Preferensi: kode kategori menentukan ikon (stabil meski backend belum
+/// mengirim `icon`); nama ikon lama tetap didukung sebagai cadangan untuk
+/// environment yang telah mengirim `icon` — dan tidak pernah membiarkan dua
+/// kategori ber-ikon sama.
+IconData ppobCategoryIcon(String? iconName, {String? categoryCode}) {
+  final byCode = switch (categoryCode) {
+    'PULSA' => Icons.phone_iphone_rounded,
+    'DATA' => Icons.wifi_rounded,
+    'PLN_PREPAID' => Icons.bolt_rounded,
+    'PLN_POSTPAID' => Icons.receipt_rounded,
+    'BPJS' => Icons.health_and_safety_rounded,
+    'EWALLET' => Icons.account_balance_wallet_rounded,
+    'PDAM' => Icons.water_drop_rounded,
+    _ => null,
+  };
+  if (byCode != null) return byCode;
   return switch (iconName) {
     'phone_iphone' => Icons.phone_iphone_rounded,
     'wifi' => Icons.wifi_rounded,
@@ -38,6 +55,21 @@ IconData ppobCategoryIcon(String? iconName) {
     'water_drop' => Icons.water_drop_rounded,
     'account_balance_wallet' => Icons.account_balance_wallet_rounded,
     _ => Icons.payments_rounded,
+  };
+}
+
+/// Warna khas per kategori PPOB, mengikuti bahasa visual dashboard
+/// (ikon tematik + aksen warna berbeda per layanan).
+Color ppobCategoryColor(String categoryCode) {
+  return switch (categoryCode) {
+    'PULSA' => const Color(0xFF1486B8),
+    'DATA' => const Color(0xFF0B7A75),
+    'PLN_PREPAID' => const Color(0xFFF59E0B),
+    'PLN_POSTPAID' => const Color(0xFFD97706),
+    'BPJS' => const Color(0xFF16A34A),
+    'EWALLET' => const Color(0xFF4F46E5),
+    'PDAM' => const Color(0xFF0284C7),
+    _ => const Color(0xFF1486B8),
   };
 }
 
