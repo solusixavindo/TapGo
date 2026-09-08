@@ -322,7 +322,10 @@ export class PrismaReferralRepository implements ReferralRepository {
 
     return {
       referralCode: user.referralCode,
-      referralLink: `https://tapgo.app/r/${user.referralCode}`,
+      // Domain resmi TapGo adalah tapgolion.id (lihat api.tapgolion.id yang
+      // dipakai user_app dan DOKU_WEBHOOK_URL di .env.example) — sebelumnya
+      // salah ketik ke domain "tapgo.app" yang bukan milik TapGo.
+      referralLink: `https://tapgolion.id/r/${user.referralCode}`,
       membershipTier: user.membership?.tier ?? "BASIC",
       directDownlines,
       totalDownlines,

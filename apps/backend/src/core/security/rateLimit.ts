@@ -191,6 +191,40 @@ export const rideLocationRateLimiter = rateLimit({
   }
 });
 
+/**
+ * Transfer P2P TapGoPay memindahkan uang sungguhan antar akun — postur
+ * "closed" yang sama dengan auth/recovery, bukan "open" seperti limiter lalu
+ * lintas umum (lihat catatan rateLimitStore.ts untuk alasan open vs closed).
+ */
+export const walletTransferRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  ...rateLimitStore("wallet-transfer", "closed"),
+  keyGenerator: (req) => `wallet-transfer-user:${req.auth?.userId ?? req.ip ?? "unknown"}`,
+  message: {
+    success: false,
+    code: "TRANSFER_RATE_LIMITED",
+    message: "Terlalu banyak permintaan transfer. Silakan coba lagi nanti."
+  }
+});
+
+/** Kirim pesan chat per-ride (Stage R2.10) — mencegah spam ke lawan bicara. */
+export const chatRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  ...rateLimitStore("chat", "open"),
+  keyGenerator: (req) => `chat-user:${req.auth?.userId ?? req.ip ?? "unknown"}`,
+  message: {
+    success: false,
+    code: "CHAT_RATE_LIMITED",
+    message: "Terlalu banyak pesan. Silakan coba lagi sebentar lagi."
+  }
+});
+
 export const supportRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 12,

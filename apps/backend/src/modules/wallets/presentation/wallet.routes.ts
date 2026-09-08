@@ -3,12 +3,15 @@ import { prisma } from "../../../config/prisma.js";
 import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
 import { requireAuth, requireRoles } from "../../../core/security/authContext.js";
+import { walletTransferRateLimiter } from "../../../core/security/rateLimit.js";
 import { WalletService } from "../application/WalletService.js";
 import { PrismaWalletRepository } from "../infrastructure/PrismaWalletRepository.js";
 import { WalletController } from "./wallet.controller.js";
 import {
   adminUserWalletSchema,
   bankAccountSchema,
+  transferListSchema,
+  transferRequestSchema,
   withdrawalDetailSchema,
   walletTransactionQuerySchema,
   withdrawalActionSchema,
@@ -31,6 +34,14 @@ walletRouter.get("/withdrawals", validateRequest(walletTransactionQuerySchema), 
 walletRouter.post("/withdrawals", validateRequest(withdrawalRequestSchema), asyncHandler(controller.requestWithdrawal));
 walletRouter.get("/withdraws", validateRequest(walletTransactionQuerySchema), asyncHandler(controller.withdrawals));
 walletRouter.post("/withdraw", validateRequest(withdrawalRequestSchema), asyncHandler(controller.requestWithdrawal));
+
+walletRouter.get("/transfers", validateRequest(transferListSchema), asyncHandler(controller.transfers));
+walletRouter.post(
+  "/transfer",
+  walletTransferRateLimiter,
+  validateRequest(transferRequestSchema),
+  asyncHandler(controller.transfer)
+);
 
 walletRouter.get(
   "/admin/users/:userId",

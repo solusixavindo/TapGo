@@ -33,6 +33,7 @@ import {
   SCOPE_GOVERNANCE_ACTIONS,
   isScopeReasonCode
 } from "../src/modules/admin-console/application/AdminScopeGovernanceService.js";
+import { isSuperAdminRole } from "../src/core/security/roleHierarchy.js";
 
 /** Kunci advisory lock yang sama dengan service, agar keduanya berurutan. */
 const MANAGE_LOCK_KEY = 918_273_645;
@@ -114,8 +115,12 @@ async function main() {
       if (target.status !== "ACTIVE") {
         throw new Error("Dihentikan: user target tidak berstatus ACTIVE.");
       }
-      if (target.role !== "SUPER_ADMIN") {
-        throw new Error("Dihentikan: user target harus berrole SUPER_ADMIN.");
+      // isSuperAdminRole, BUKAN perbandingan literal "SUPER_ADMIN": role di
+      // ATAS SUPER_ADMIN (SUPER_ADMIN_VIP) tetap memenuhi syarat — literal
+      // string di sini sebelumnya justru menolak role yang lebih tinggi,
+      // jebakan persis yang diperingatkan roleHierarchy.ts.
+      if (!isSuperAdminRole(target.role)) {
+        throw new Error("Dihentikan: user target harus berrole SUPER_ADMIN atau lebih tinggi.");
       }
 
       // Grant yang sudah ada tetapi tidak layak (mis. role sudah turun) tidak

@@ -1,4 +1,4 @@
-import { Prisma, WithdrawalStatus } from "@prisma/client";
+import { PaymentStatus, Prisma, WithdrawalStatus } from "@prisma/client";
 
 export type WalletSnapshot = {
   id: string;
@@ -52,6 +52,37 @@ export type BankAccountSnapshot = {
   updatedAt?: string;
 } | null;
 
+export type WalletTransferItem = {
+  id: string;
+  publicReference: string;
+  fromUserId: string;
+  toUserId: string;
+  amount: Prisma.Decimal;
+  note: string | null;
+  createdAt: Date;
+};
+
+export type TransferRecipient = {
+  id: string;
+  fullName: string;
+  phone: string;
+};
+
+export type WalletTopUpOrderItem = {
+  id: string;
+  userId: string;
+  reference: string;
+  status: PaymentStatus;
+  amount: Prisma.Decimal;
+  method: string | null;
+  provider: string | null;
+  providerReference: string | null;
+  metadata: Prisma.JsonValue | null;
+  paidAt: Date | null;
+  expiresAt: Date | null;
+  createdAt: Date;
+};
+
 export interface WalletRepository {
   transaction<T>(handler: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T>;
   getOrCreateWallet(userId: string, tx?: Prisma.TransactionClient): Promise<WalletSnapshot>;
@@ -97,4 +128,45 @@ export interface WalletRepository {
     adminId: string;
     note?: string;
   }, tx: Prisma.TransactionClient): Promise<WithdrawalItem>;
+
+  // --- Transfer P2P (Stage R2.10) -------------------------------------
+
+  findActiveUserByPhone(phone: string): Promise<TransferRecipient | null>;
+  findTransferByIdempotencyKey(fromUserId: string, idempotencyKey: string): Promise<WalletTransferItem | null>;
+  /** Jumlah TRANSFER_OUT hari ini (UTC) untuk wallet pengirim — dipakai penjaga limit harian. */
+  sumTodayTransferOut(walletId: string, tx: Prisma.TransactionClient): Promise<Prisma.Decimal>;
+  createTransfer(input: {
+    fromUserId: string;
+    toUserId: string;
+    amount: Prisma.Decimal;
+    note?: string;
+    idempotencyKey: string;
+  }, tx: Prisma.TransactionClient): Promise<WalletTransferItem>;
+  listTransfers(input: { userId: string; page: number; pageSize: number }): Promise<WalletTransferItem[]>;
+
+  // --- Top up via Midtrans/DOKU, kanal WEB saja (Stage R2.10) ---------
+
+  createTopUpOrder(input: {
+    userId: string;
+    amount: Prisma.Decimal;
+  }): Promise<WalletTopUpOrderItem>;
+  findTopUpOrderById(orderId: string): Promise<WalletTopUpOrderItem | null>;
+  findTopUpOrderByReference(reference: string): Promise<WalletTopUpOrderItem | null>;
+  updateTopUpOrderPaymentMetadata(input: {
+    orderId: string;
+    method: string;
+    provider: string;
+    providerReference: string;
+    metadata: Prisma.InputJsonValue;
+  }): Promise<void>;
+  /** Idempotent: mengembalikan null bila order sudah bukan PENDING (replay). */
+  markTopUpOrderPaid(input: {
+    orderId: string;
+    providerReference: string;
+  }): Promise<WalletTopUpOrderItem | null>;
+  markTopUpOrderTerminal(input: {
+    orderId: string;
+    status: PaymentStatus;
+    providerReference?: string;
+  }): Promise<void>;
 }

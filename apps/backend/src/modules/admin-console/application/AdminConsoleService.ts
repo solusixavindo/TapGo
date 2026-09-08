@@ -974,6 +974,175 @@ export class AdminConsoleService {
     };
   }
 
+  /**
+   * Tren pendaftaran member baru per hari, `days` hari terakhir (termasuk
+   * hari ini). Tidak ada pola groupBy-per-tanggal lain di codebase ini untuk
+   * dipakai ulang — Prisma.groupBy tidak bisa memotong DateTime ke tanggal,
+   * jadi dipakai raw query dengan date_trunc.
+   *
+   * Hari tanpa pendaftaran TIDAK muncul dari SQL (tidak ada barisnya sama
+   * sekali) — diisi 0 di sisi aplikasi supaya grafik tidak bolong.
+   */
+  async registrationTrend(days = 30) {
+    const bounded = Math.min(90, Math.max(1, Math.trunc(days)));
+    const since = new Date();
+    since.setUTCHours(0, 0, 0, 0);
+    since.setUTCDate(since.getUTCDate() - (bounded - 1));
+    const rows = await this.prisma.$queryRaw<Array<{ day: Date; count: bigint }>>`
+      SELECT date_trunc('day', "created_at") AS day, COUNT(*) AS count
+      FROM "users"
+      WHERE "role" = 'USER'
+        AND "created_at" >= ${since}
+      GROUP BY day
+      ORDER BY day ASC
+    `;
+    const countByDay = new Map(
+      rows.map((row) => [row.day.toISOString().slice(0, 10), Number(row.count)])
+    );
+
+    const series: Array<{ date: string; count: number }> = [];
+    for (let offset = bounded - 1; offset >= 0; offset -= 1) {
+      const date = new Date();
+      date.setUTCHours(0, 0, 0, 0);
+      date.setUTCDate(date.getUTCDate() - offset);
+      const key = date.toISOString().slice(0, 10);
+      series.push({ date: key, count: countByDay.get(key) ?? 0 });
+    }
+    return series;
+  }
+
+  /**
+   * "Aktif" = login dalam `days` hari terakhir. Definisi awal, gampang
+   * diubah — tidak ada definisi baku lain di codebase ini untuk "user aktif"
+   * (dikonfirmasi lewat riset sebelum menulis method ini).
+   */
+  async activeUsersCount(days: number) {
+    const since = new Date();
+    since.setUTCDate(since.getUTCDate() - days);
+    return this.prisma.user.count({
+      where: { role: "USER", lastLoginAt: { gte: since } }
+    });
+  }
+
+  async dashboardGrowth() {
+    const [registrationTrend, activeUsers7d, activeUsers30d, pendingApprovals] = await Promise.all([
+      this.registrationTrend(30),
+      this.activeUsersCount(7),
+      this.activeUsersCount(30),
+      this.pendingApprovalCounts()
+    ]);
+    return { registrationTrend, activeUsers7d, activeUsers30d, pendingApprovals };
+  }
+
+  /**
+   * Hitungan pekerjaan yang menunggu keputusan admin, digabung dari tiga
+   * antrean terpisah — supaya Beranda bisa menunjukkan "ada kerjaan" tanpa
+   * admin membuka satu-satu halaman.
+   *
+   * "Member request pending" di sini SENGAJA bukan status PENDING mentah
+   * (itu masih menunggu pembayaran, bukan menunggu admin) — cocok dengan
+   * isAwaitingVerification di member-requests/page.tsx: status PAID tapi
+   * belum punya UserMembership aktif.
+   */
+  private async pendingApprovalCounts() {
+    const [memberRequests, rewards, withdrawals] = await Promise.all([
+      this.prisma.membershipOrder.count({
+        where: { status: "PAID", userMembership: null }
+      }),
+      this.prisma.rewardTransaction.count({ where: { status: "PENDING" } }),
+      this.prisma.withdrawal.count({ where: { status: "PENDING" } })
+    ]);
+    return {
+      memberRequests,
+      rewards,
+      withdrawals,
+      total: memberRequests + rewards + withdrawals
+    };
+  }
+
+  /**
+   * Dokumen KYC member yang mendekati batas retensi (default: sisa <= 6 jam)
+   * — supaya admin tidak lupa mencetak sebelum berkas terhapus otomatis.
+   * Hanya order yang masih menunggu verifikasi (PAID, belum aktif) yang
+   * relevan; dokumen order yang sudah selesai diproses tidak perlu dicetak
+   * lagi.
+   */
+  async documentsNearingRetention(warningHours = 6) {
+    const now = new Date();
+    const threshold = new Date(now.getTime() + warningHours * 60 * 60 * 1000);
+    const documents = await this.prisma.membershipDocument.findMany({
+      where: {
+        purgedAt: null,
+        expiresAt: { not: null, gte: now, lte: threshold },
+        order: { status: "PAID", userMembership: null }
+      },
+      select: {
+        id: true,
+        type: true,
+        expiresAt: true,
+        order: {
+          select: {
+            id: true,
+            user: { select: { fullName: true, referralCode: true } }
+          }
+        }
+      },
+      orderBy: { expiresAt: "asc" },
+      take: 50
+    });
+    return documents.map((doc) => ({
+      orderId: doc.order.id,
+      memberName: doc.order.user?.fullName ?? "—",
+      referralCode: doc.order.user?.referralCode ?? "—",
+      documentType: doc.type,
+      expiresAt: doc.expiresAt
+    }));
+  }
+
+  /**
+   * Log aktivitas admin terbaru — dibatasi pada perubahan role dan
+   * grant/revoke scope saja (bukan seluruh AuditLog, yang juga memuat jejak
+   * transaksi non-admin). actorId ditampilkan sebagai nama, bukan UUID
+   * mentah, supaya langsung terbaca siapa melakukan apa.
+   */
+  async recentAdminActivity(limit = 20) {
+    const relevantActions = [
+      "ADMIN_ROLE_ASSIGNED",
+      "ADMIN_ROLE_ASSIGN_DENIED",
+      "SUPER_ADMIN_VIP_GRANTED",
+      "SUPER_ADMIN_VIP_REVOKED",
+      "admin.scope.bootstrap_completed",
+      "admin.scope.break_glass_completed",
+      "admin.scope.granted",
+      "admin.scope.self_granted",
+      "admin.scope.revoked",
+      "admin.scope.grant_denied",
+      "admin.scope.revoke_denied",
+      "admin.scope.last_manager_protected"
+    ];
+    const rows = await this.prisma.auditLog.findMany({
+      where: { action: { in: relevantActions } },
+      orderBy: { createdAt: "desc" },
+      take: Math.min(50, Math.max(1, limit)),
+      select: {
+        id: true,
+        action: true,
+        entityType: true,
+        entityId: true,
+        createdAt: true,
+        actor: { select: { fullName: true } }
+      }
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      action: row.action,
+      entityType: row.entityType,
+      entityId: row.entityId,
+      actorName: row.actor?.fullName ?? "Sistem (bootstrap CLI)",
+      createdAt: row.createdAt
+    }));
+  }
+
   async memberRequests(input: PageInput & { status?: MembershipOrderStatus }) {
     const where: Prisma.MembershipOrderWhereInput = {
       ...(input.status ? { status: input.status } : {})

@@ -73,6 +73,7 @@ function sign(payload: AccessTokenPayload, secret: string, options: SignOptions)
   return jwt.sign(payload, secret, {
     issuer: "tapgo-api",
     audience: "tapgo-apps",
+    algorithm: "HS256",
     ...options
   });
 }
@@ -108,7 +109,13 @@ function verifyToken(token: string, secret: string): VerifiedAccessTokenPayload 
   try {
     return jwt.verify(token, secret, {
       issuer: "tapgo-api",
-      audience: "tapgo-apps"
+      audience: "tapgo-apps",
+      // jsonwebtoken sudah membatasi diri ke algoritma HMAC saat secret berupa
+      // string (tidak rentan "alg:none"), tapi mengunci eksplisit ke HS256
+      // menutup celah bila suatu saat secret berubah jadi key object dan
+      // perilaku default library ikut berubah — jangan bergantung pada default
+      // yang implisit untuk keputusan keamanan.
+      algorithms: ["HS256"]
     }) as VerifiedAccessTokenPayload;
   } catch (error) {
     // TokenExpiredError & NotBeforeError adalah turunan JsonWebTokenError,

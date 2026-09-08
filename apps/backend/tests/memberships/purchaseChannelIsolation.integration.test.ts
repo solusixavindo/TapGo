@@ -161,7 +161,10 @@ describe.skipIf(!runIntegration)("Membership purchase channel isolation", () => 
     );
   });
 
-  it("kanal web menyala TIDAK membuka pembaruan rekening bank", async () => {
+  it("pembaruan rekening bank tidak tunduk pada flag pencairan saldo (murni data profil)", async () => {
+    // Menyimpan nomor rekening BUKAN pencairan saldo — beda dari withdraw di
+    // atas, endpoint ini sengaja TIDAK digerbang WALLET_CASH_OUT_ENABLED,
+    // sehingga tetap berhasil walau cashOut mati.
     setFlags({ master: true, web: true, app: false, cashOut: false });
     const user = await createUser("CHN00002", "0.00");
 
@@ -177,7 +180,7 @@ describe.skipIf(!runIntegration)("Membership purchase channel isolation", () => 
         accountHolderName: "Pemilik Sah"
       })
     });
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(200);
   });
 
   it("pencairan saldo menyala TIDAK membuka pembelian membership", async () => {

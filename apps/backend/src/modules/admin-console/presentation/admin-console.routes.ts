@@ -71,6 +71,19 @@ adminConsoleRouter.use(requireAuth, requireRoles("ADMIN", "SUPER_ADMIN"));
 
 adminConsoleRouter.get("/dashboard/summary", asyncHandler(controller.summary));
 adminConsoleRouter.get("/dashboard", asyncHandler(controller.summary));
+adminConsoleRouter.get("/dashboard/growth", asyncHandler(controller.growth));
+adminConsoleRouter.get(
+  "/dashboard/documents-nearing-retention",
+  asyncHandler(controller.documentsNearingRetention)
+);
+// Aktivitas ini mengungkap siapa memegang/mengubah otoritas admin — gerbang
+// yang sama dengan /roles (VIP saja), bukan ADMIN+ seperti endpoint dashboard
+// lain.
+adminConsoleRouter.get(
+  "/dashboard/activity",
+  requireRoles("SUPER_ADMIN_VIP"),
+  asyncHandler(controller.recentActivity)
+);
 adminConsoleRouter.get("/members", validateRequest(adminListQuerySchema), asyncHandler(controller.members));
 adminConsoleRouter.get("/members/:id", validateRequest(adminMemberDetailSchema), asyncHandler(controller.member));
 adminConsoleRouter.get("/member-requests", validateRequest(adminOrderQuerySchema), asyncHandler(controller.memberRequests));

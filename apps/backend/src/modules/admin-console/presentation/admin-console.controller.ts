@@ -19,6 +19,24 @@ export class AdminConsoleController {
     res.json({ success: true, data: result });
   };
 
+  growth = async (_req: Request, res: Response) => {
+    const result = await this.adminConsoleService.dashboardGrowth();
+    res.json({ success: true, data: result });
+  };
+
+  documentsNearingRetention = async (_req: Request, res: Response) => {
+    const result = await this.adminConsoleService.documentsNearingRetention();
+    res.json({ success: true, data: result });
+  };
+
+  recentActivity = async (req: Request, res: Response) => {
+    const limit = Number(req.query.limit);
+    const result = await this.adminConsoleService.recentAdminActivity(
+      Number.isFinite(limit) && limit > 0 ? limit : 20
+    );
+    res.json({ success: true, data: result });
+  };
+
   members = async (req: Request, res: Response) => {
     const result = await this.adminConsoleService.members({
       page: Number(req.query.page),
@@ -492,6 +510,15 @@ export class AdminConsoleController {
   }
 
   private csvCell(value: string) {
-    return `"${value.replaceAll("\"", "\"\"")}"`;
+    // Data di sel ini (nama, dsb.) berasal dari input pengguna yang mendaftar
+    // sendiri. Sel yang diawali =, +, -, @, tab, atau CR akan dibaca sebagai
+    // formula oleh Excel/Google Sheets saat berkas ini dibuka — bukan sebagai
+    // teks. Pembelaannya: sisipkan apostrof di depan sel semacam itu, mengikuti
+    // rekomendasi OWASP untuk CSV injection. Karakter aslinya tetap utuh untuk
+    // pembaca CSV biasa; hanya aplikasi spreadsheet yang menafsirkannya sebagai
+    // penanda "ini teks", bukan bagian dari isi.
+    const needsNeutralizing = /^[=+\-@\t\r]/.test(value);
+    const safeValue = needsNeutralizing ? `'${value}` : value;
+    return `"${safeValue.replaceAll("\"", "\"\"")}"`;
   }
 }

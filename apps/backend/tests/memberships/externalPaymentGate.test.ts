@@ -101,7 +101,8 @@ describe("External membership payment safety gate", () => {
   it("rejects DOKU create before invoking DOKU service in Play-safe mode", async () => {
     env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = false;
     const dokuPaymentService = { createMembershipPayment: vi.fn() };
-    const controller = new DokuController(dokuPaymentService as never);
+    const walletTopUpPaymentService = {};
+    const controller = new DokuController(dokuPaymentService as never, walletTopUpPaymentService as never);
     const request = {
       auth: { userId: "user-1", role: "USER" },
       body: { orderId: "order-1" },
@@ -115,7 +116,7 @@ describe("External membership payment safety gate", () => {
     expect(dokuPaymentService.createMembershipPayment).not.toHaveBeenCalled();
   });
 
-  it("rejects bank account mutation and withdrawal before wallet service execution in Play-safe mode", async () => {
+  it("rejects withdrawal before wallet service execution in Play-safe mode", async () => {
     env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = false;
     const walletService = {
       updateBankAccount: vi.fn(),
@@ -124,22 +125,6 @@ describe("External membership payment safety gate", () => {
     const controller = new WalletController(walletService as never);
     const response = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
 
-    await expect(
-      controller.updateBankAccount(
-        {
-          auth: { userId: "user-1", role: "USER" },
-          body: {
-            bankName: "Bank Mandiri",
-            accountNumber: "00123456",
-            accountHolderName: "Member TapGo",
-          },
-        } as unknown as Request,
-        response,
-      ),
-    ).rejects.toMatchObject({
-      code: "CASH_OUT_DISABLED_FOR_PLAY",
-      statusCode: 403,
-    });
     await expect(
       controller.requestWithdrawal(
         {
@@ -157,8 +142,40 @@ describe("External membership payment safety gate", () => {
       code: "CASH_OUT_DISABLED_FOR_PLAY",
       statusCode: 403,
     });
-    expect(walletService.updateBankAccount).not.toHaveBeenCalled();
     expect(walletService.requestWithdrawal).not.toHaveBeenCalled();
+  });
+
+  it("allows bank account mutation in Play-safe mode — storing an account number is not a cash-out", async () => {
+    env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = false;
+    const walletService = {
+      updateBankAccount: vi.fn().mockResolvedValue({ bankName: "Bank Mandiri" }),
+      requestWithdrawal: vi.fn(),
+    };
+    const controller = new WalletController(walletService as never);
+    const response = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
+
+    await controller.updateBankAccount(
+      {
+        auth: { userId: "user-1", role: "USER" },
+        body: {
+          bankName: "Bank Mandiri",
+          accountNumber: "00123456",
+          accountHolderName: "Member TapGo",
+        },
+      } as unknown as Request,
+      response,
+    );
+
+    expect(walletService.updateBankAccount).toHaveBeenCalledWith({
+      userId: "user-1",
+      bankName: "Bank Mandiri",
+      accountNumber: "00123456",
+      accountHolderName: "Member TapGo",
+    });
+    expect(response.json).toHaveBeenCalledWith({
+      success: true,
+      data: { bankName: "Bank Mandiri" },
+    });
   });
 
   it("preserves direct membership order creation when the gate is explicitly enabled", async () => {

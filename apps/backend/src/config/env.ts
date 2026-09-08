@@ -95,6 +95,15 @@ const envSchema = z.object({
   MEMBERSHIP_PURCHASE_APP_ENABLED: strictEnvBoolean(false),
   /// Pencairan saldo wallet. Terpisah penuh dari pembelian membership.
   WALLET_CASH_OUT_ENABLED: strictEnvBoolean(false),
+  /// Transfer P2P TapGoPay antar user (Stage R2.10). Tidak melibatkan payment
+  /// gateway eksternal (murni saldo internal), tapi tetap default mati sampai
+  /// Owner menyalakannya secara sadar — pola yang sama dengan fitur uang lain
+  /// di berkas ini.
+  WALLET_TRANSFER_ENABLED: strictEnvBoolean(false),
+  /// Top up TapGoPay via Midtrans/DOKU, kanal WEB saja (Stage R2.10) — meniru
+  /// MEMBERSHIP_PURCHASE_APP_ENABLED: tetap false untuk aplikasi Play karena
+  /// pembayaran eksternal in-app menuntut Play Billing.
+  WALLET_TOPUP_ENABLED: strictEnvBoolean(false),
   // Release 1 tidak memakai realtime/chat. Fail-closed: Socket.IO hanya
   // di-attach bila diaktifkan eksplisit ("true"). Nilai lain -> false.
   REALTIME_ENABLED: strictEnvBoolean(false),
@@ -164,6 +173,15 @@ const envSchema = z.object({
   IDENTIFIER_INDEX_KEY_CURRENT_VERSION: z.coerce.number().int().positive().optional(),
   IDENTIFIER_INDEX_KEY_V1: z.string().min(32).optional(),
   IDENTIFIER_INDEX_KEY_V2: z.string().min(32).optional(),
+  /// Sumber estimasi jarak/durasi ride. LOCAL = haversine + faktor jalan
+  /// (tanpa jaringan, dipakai default & seluruh test). OSRM = rute jalan
+  /// asli lewat instance OSRM self-host — butuh OSRM_BASE_URL. Nilai asing
+  /// menggagalkan boot (z.enum), bukan diam-diam jatuh ke LOCAL.
+  RIDE_DISTANCE_PROVIDER: z.enum(["LOCAL", "OSRM"]).default("LOCAL"),
+  /// Wajib diisi bila RIDE_DISTANCE_PROVIDER=OSRM (lihat resolveDistancePort
+  /// di ride.routes.ts) — kosong menggagalkan boot, bukan diam-diam memakai
+  /// LOCAL. Contoh lokal: http://localhost:5001
+  OSRM_BASE_URL: z.string().url().optional(),
 });
 
 const rawEnv = {

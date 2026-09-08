@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { normalizePhoneNumber } from "../../../core/security/phone.js";
 
-const phoneSchema = z
+export const phoneSchema = z
   .string()
   .min(8)
   .max(32)
   .regex(/^(\+?[1-9]\d{7,31}|0\d{7,31})$/)
   .transform(normalizePhoneNumber);
-const passwordSchema = z.string().min(6).max(128);
+export const passwordSchema = z.string().min(6).max(128);
 
 const wrapBody = (value: unknown) => {
   if (value && typeof value === "object" && "body" in value) {

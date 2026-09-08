@@ -1,4 +1,3 @@
-import { createHash, timingSafeEqual } from "node:crypto";
 import {
   MembershipOrderStatus,
   PaymentStatus,
@@ -12,6 +11,7 @@ import { AppError } from "../../../core/errors/AppError.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
 import { isAdminRole } from "../../../core/security/roleHierarchy.js";
 import { assertAuthoritativeAmount } from "./authoritativeAmount.js";
+import { verifyMidtransSignature } from "./midtransSignature.js";
 
 type PrismaTransaction = Prisma.TransactionClient;
 
@@ -412,55 +412,7 @@ export class MidtransPaymentService {
    * "diterima" tanpa perbandingan digest.
    */
   private verifySignature(payload: MidtransNotificationPayload) {
-    if (!env.MIDTRANS_SERVER_KEY) {
-      throw new AppError(
-        "Midtrans server key is not configured",
-        StatusCodes.SERVICE_UNAVAILABLE,
-        "MIDTRANS_SERVER_KEY_REQUIRED",
-      );
-    }
-
-    if (!payload.signature_key) {
-      throw new AppError(
-        "Midtrans signature is required",
-        StatusCodes.UNAUTHORIZED,
-        "MIDTRANS_SIGNATURE_REQUIRED",
-      );
-    }
-
-    const requiredParts =
-      payload.order_id && payload.status_code && payload.gross_amount;
-
-    if (!requiredParts) {
-      throw new AppError(
-        "Midtrans signature payload is incomplete",
-        StatusCodes.BAD_REQUEST,
-        "MIDTRANS_SIGNATURE_INCOMPLETE",
-      );
-    }
-
-    const expected = createHash("sha512")
-      .update(
-        `${payload.order_id}${payload.status_code}${payload.gross_amount}${env.MIDTRANS_SERVER_KEY}`,
-      )
-      .digest("hex");
-
-    // P2: bandingkan signature dengan constant-time compare untuk menghindari
-    // timing side-channel. timingSafeEqual mensyaratkan panjang buffer sama,
-    // jadi panjang divalidasi lebih dulu (perbedaan panjang = pasti invalid).
-    const expectedBuffer = Buffer.from(expected, "utf8");
-    const providedBuffer = Buffer.from(payload.signature_key, "utf8");
-
-    if (
-      expectedBuffer.length !== providedBuffer.length ||
-      !timingSafeEqual(expectedBuffer, providedBuffer)
-    ) {
-      throw new AppError(
-        "Midtrans signature is invalid",
-        StatusCodes.UNAUTHORIZED,
-        "MIDTRANS_SIGNATURE_INVALID",
-      );
-    }
+    verifyMidtransSignature(payload, env.MIDTRANS_SERVER_KEY);
   }
 
   /**

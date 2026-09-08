@@ -268,6 +268,8 @@ describe.skipIf(!runIntegration)("Wallet access isolation", () => {
     const withdrawalBody = (await withdrawal.json()) as { code?: string };
     expect(withdrawalBody.code).toBe("CASH_OUT_DISABLED_FOR_PLAY");
 
+    // Menyimpan nomor rekening BUKAN pencairan saldo — beda dari withdraw di
+    // atas, endpoint ini tetap berhasil walau gate Play OFF.
     const bankUpdate = await fetch(`${baseUrl}/api/v1/wallet/bank-account`, {
       method: "PUT",
       headers: {
@@ -280,7 +282,7 @@ describe.skipIf(!runIntegration)("Wallet access isolation", () => {
         accountHolderName: "Pemilik Sah"
       })
     });
-    expect(bankUpdate.status).toBe(403);
+    expect(bankUpdate.status).toBe(200);
 
     // Saldo tidak tersentuh oleh permintaan yang ditolak.
     const wallet = await prisma.wallet.findUniqueOrThrow({

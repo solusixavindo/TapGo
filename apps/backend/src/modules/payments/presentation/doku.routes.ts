@@ -4,6 +4,7 @@ import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
 import { requireAuth, requireRoles } from "../../../core/security/authContext.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
+import { WalletTopUpPaymentService } from "../../wallets/application/WalletTopUpPaymentService.js";
 import { DokuPaymentService } from "../application/DokuPaymentService.js";
 import { DokuController } from "./doku.controller.js";
 import {
@@ -14,7 +15,8 @@ import {
 
 const membershipOrderService = new MembershipOrderService(prisma);
 const dokuPaymentService = new DokuPaymentService(prisma, membershipOrderService);
-const controller = new DokuController(dokuPaymentService);
+const walletTopUpPaymentService = new WalletTopUpPaymentService(prisma);
+const controller = new DokuController(dokuPaymentService, walletTopUpPaymentService);
 
 export const dokuPaymentRouter = Router();
 export const dokuWebhookRouter = Router();

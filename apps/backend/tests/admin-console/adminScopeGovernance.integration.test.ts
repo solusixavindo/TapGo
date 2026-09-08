@@ -104,11 +104,14 @@ async function createManager() {
 }
 
 const activeManagers = () =>
+  // role: { in: [...] }, BUKAN literal "SUPER_ADMIN" — harus cocok dengan
+  // SCOPE_MANAGER_ROLES di AdminScopeGovernanceService.countEligibleManagers,
+  // supaya test ini tidak buta terhadap manager berrole SUPER_ADMIN_VIP.
   prisma.adminScopeGrant.count({
     where: {
       scope: MANAGE,
       status: "ACTIVE",
-      user: { status: "ACTIVE", role: "SUPER_ADMIN" }
+      user: { status: "ACTIVE", role: { in: ["SUPER_ADMIN", "SUPER_ADMIN_VIP"] } }
     }
   });
 
@@ -197,6 +200,16 @@ describeIntegration("Stage R2.3 — admin scope governance", () => {
     }
     expect(await activeManagers()).toBe(0);
     expect(await auditCount("admin.scope.bootstrap_completed")).toBe(0);
+  });
+
+  it("4b. bootstrap untuk target SUPER_ADMIN_VIP berhasil (role lebih tinggi tetap memenuhi syarat)", async () => {
+    // Sebelumnya CLI membandingkan role secara literal ("=== SUPER_ADMIN"),
+    // sehingga SUPER_ADMIN_VIP — role yang LEBIH TINGGI — justru ditolak.
+    // Ini persis jebakan yang diperingatkan roleHierarchy.ts.
+    const target = await createUser("SUPER_ADMIN_VIP");
+    const result = await runBootstrap(target.id);
+    expect(result.ok, result.output).toBe(true);
+    expect(await activeManagers()).toBe(1);
   });
 
   it("5. bootstrap kedua ditolak fail-closed", async () => {

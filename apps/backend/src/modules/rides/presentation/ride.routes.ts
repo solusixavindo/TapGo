@@ -1,6 +1,7 @@
 import { RideDriverStatus, RideOrderStatus, RideServiceType } from "@prisma/client";
 import { NextFunction, Request, Response, Router } from "express";
 import { StatusCodes } from "http-status-codes";
+import { env } from "../../../config/env.js";
 import { prisma } from "../../../config/prisma.js";
 import { AppError } from "../../../core/errors/AppError.js";
 import { asyncHandler } from "../../../core/http/asyncHandler.js";
@@ -11,9 +12,27 @@ import {
   rideWriteRateLimiter,
 } from "../../../core/security/rateLimit.js";
 import { RideService } from "../application/RideService.js";
+import { DistancePort } from "../domain/ridePorts.js";
 import { createRequireDriverCapability } from "./driverCapability.js";
 import { LocalDistanceAdapter } from "../infrastructure/LocalDistanceAdapter.js";
+import { OsrmDistanceAdapter } from "../infrastructure/OsrmDistanceAdapter.js";
 import { PrismaMatchingAdapter } from "../infrastructure/PrismaMatchingAdapter.js";
+
+/**
+ * RIDE_DISTANCE_PROVIDER=OSRM tanpa OSRM_BASE_URL gagal saat boot (fail-
+ * closed), bukan diam-diam jatuh ke LOCAL — pola sama dengan resolusi
+ * provider PPOB/pembayaran lain di codebase ini.
+ */
+function resolveDistancePort(): DistancePort {
+  const localAdapter = new LocalDistanceAdapter();
+  if (env.RIDE_DISTANCE_PROVIDER === "OSRM") {
+    if (!env.OSRM_BASE_URL) {
+      throw new Error("RIDE_DISTANCE_PROVIDER=OSRM membutuhkan OSRM_BASE_URL");
+    }
+    return new OsrmDistanceAdapter(env.OSRM_BASE_URL, localAdapter);
+  }
+  return localAdapter;
+}
 import {
   adminCorrectRideStatusSchema,
   adminDriverProfileSchema,
@@ -37,7 +56,7 @@ export const adminRideRouter = Router();
 
 const rideService = new RideService(
   prisma,
-  new LocalDistanceAdapter(),
+  resolveDistancePort(),
   new PrismaMatchingAdapter(prisma),
 );
 

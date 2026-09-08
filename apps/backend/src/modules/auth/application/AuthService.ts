@@ -12,6 +12,18 @@ import type { TokenChannel } from "../../../core/security/tokenService.js";
 import { env } from "../../../config/env.js";
 import { AuthRepository, toPublicUser } from "../domain/AuthRepository.js";
 
+/**
+ * Hash argon2id contoh, tidak berkorespondensi dengan password siapa pun.
+ *
+ * Dipakai semata untuk menyamakan waktu proses saat nomor HP tidak terdaftar
+ * dengan waktu proses saat password salah. Tanpa ini, respons untuk "nomor
+ * tidak ada" akan selalu lebih cepat daripada "password salah" (argon2 tidak
+ * pernah dijalankan), sehingga waktu respons membocorkan nomor HP mana yang
+ * terdaftar walau pesan error-nya sengaja dibuat sama persis.
+ */
+const DUMMY_PASSWORD_HASH =
+  "$argon2id$v=19$m=19456,t=2,p=1$Ob+EARyIDgJlSiKhP/zNrQ$FjdJxBLG79ZKJ6N6w2eR8qmRY0kujTlhjC9BynQSU/4";
+
 export type AuthClientContext = {
   userAgent?: string;
   ipAddress?: string;
@@ -108,6 +120,9 @@ export class AuthService {
   async login(input: { phone: string; password: string; context: AuthClientContext }) {
     const user = await this.authRepository.findUserByPhone(input.phone);
     if (!user?.passwordHash) {
+      // Jalankan verifikasi argon2 sungguhan terhadap hash contoh, supaya
+      // waktu responsnya sama dengan jalur password salah di bawah.
+      await verifyPassword(DUMMY_PASSWORD_HASH, input.password);
       throw new AppError("Invalid phone or password", StatusCodes.UNAUTHORIZED, "INVALID_CREDENTIALS");
     }
 

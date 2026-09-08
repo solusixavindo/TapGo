@@ -2,10 +2,16 @@ import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { env } from "../../../config/env.js";
 import { AppError } from "../../../core/errors/AppError.js";
+import { WalletTopUpPaymentService } from "../../wallets/application/WalletTopUpPaymentService.js";
 import { DokuPaymentService } from "../application/DokuPaymentService.js";
 
+const MEMBERSHIP_NOT_FOUND_CODES = new Set(["DOKU_INVOICE_NOT_FOUND"]);
+
 export class DokuController {
-  constructor(private readonly dokuPaymentService: DokuPaymentService) {}
+  constructor(
+    private readonly dokuPaymentService: DokuPaymentService,
+    private readonly walletTopUpPaymentService: WalletTopUpPaymentService,
+  ) {}
 
   create = async (req: Request, res: Response) => {
     if (!env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED) {
@@ -24,15 +30,29 @@ export class DokuController {
     res.json({ success: true, data: result });
   };
 
+  /**
+   * Satu URL webhook DOKU melayani dua domain (membership + wallet top up,
+   * Stage R2.10) — lihat catatan yang sama di MidtransController.
+   */
   notification = async (req: Request, res: Response) => {
-    const result = await this.dokuPaymentService.handleNotification({
+    const notificationInput = {
       payload: req.body,
       signatureBody:
         (req as Request & { rawBody?: string }).rawBody ?? req.body,
       requestTarget: req.originalUrl.split("?")[0] ?? "/api/webhooks/doku",
       headers: this.signatureHeaders(req),
-    });
-    res.json({ success: true, data: result });
+    };
+    try {
+      const result = await this.dokuPaymentService.handleNotification(notificationInput);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      if (error instanceof AppError && MEMBERSHIP_NOT_FOUND_CODES.has(error.code)) {
+        const result = await this.walletTopUpPaymentService.handleDokuNotification(notificationInput);
+        res.json({ success: true, data: result });
+        return;
+      }
+      throw error;
+    }
   };
 
   status = async (req: Request, res: Response) => {

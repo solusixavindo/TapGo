@@ -29,7 +29,12 @@ export class WalletController {
   };
 
   updateBankAccount = async (req: Request, res: Response) => {
-    this.assertCashOutEnabledForPlay();
+    // Menyimpan nomor rekening BUKAN pencairan saldo — murni data profil,
+    // aman di semua distribusi (lihat komentar sama di dashboard_screen.dart
+    // user_app yang sudah menampilkan menu ini untuk Play). Gerbang
+    // WALLET_CASH_OUT_ENABLED tetap berlaku HANYA di requestWithdrawal
+    // (aksi pencairan sungguhan), bukan di sini — sebelumnya endpoint ini
+    // ikut memblokir simpan rekening dengan 403 CASH_OUT_DISABLED_FOR_PLAY.
     const result = await this.walletService.updateBankAccount({
       userId: req.auth!.userId,
       bankName: req.body.bankName,
@@ -119,6 +124,29 @@ export class WalletController {
     res.json({ success: true, data: result });
   };
 
+  transfer = async (req: Request, res: Response) => {
+    this.assertTransferEnabled();
+    const result = await this.walletService.transfer({
+      fromUserId: req.auth!.userId,
+      recipientPhone: String(req.body.recipientPhone),
+      amount: new Prisma.Decimal(req.body.amount),
+      ...this.optionalNote(req.body.note),
+      idempotencyKey: String(req.body.idempotencyKey)
+    });
+    res
+      .status(result.replayed ? StatusCodes.OK : StatusCodes.CREATED)
+      .json({ success: true, data: result.transfer, replayed: result.replayed });
+  };
+
+  transfers = async (req: Request, res: Response) => {
+    const result = await this.walletService.listTransfers({
+      userId: req.auth!.userId,
+      page: Number(req.query.page),
+      pageSize: Number(req.query.pageSize)
+    });
+    res.json({ success: true, data: result });
+  };
+
   private optionalNote(note: unknown) {
     return typeof note === "string" ? { note } : {};
   }
@@ -145,6 +173,17 @@ export class WalletController {
         "Fitur pencairan saldo belum tersedia pada rilis Google Play.",
         StatusCodes.FORBIDDEN,
         "CASH_OUT_DISABLED_FOR_PLAY",
+      );
+    }
+  }
+
+  /** Fitur baru, default mati sampai Owner menyalakannya secara sadar. */
+  private assertTransferEnabled() {
+    if (!env.WALLET_TRANSFER_ENABLED) {
+      throw new AppError(
+        "Fitur transfer saldo belum tersedia.",
+        StatusCodes.FORBIDDEN,
+        "WALLET_TRANSFER_DISABLED",
       );
     }
   }

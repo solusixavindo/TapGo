@@ -43,6 +43,104 @@ export const AUTH_SESSION_REVOKED = "AUTH_SESSION_REVOKED";
  *
  * Biaya: satu pembacaan primary key per permintaan terautentikasi.
  */
+export type AuthContext = {
+  userId: string;
+  role: JwtRole;
+  sessionId: string;
+  channel?: TokenChannel;
+};
+
+/**
+ * Inti requireAuth, diekstrak agar dapat dipakai ulang di luar middleware
+ * Express — Socket.IO (Stage R2.10) tidak punya siklus request/response Express
+ * untuk dipasangi requireAuth langsung, tapi tetap wajib tunduk pada
+ * pencabutan sesi berbasis authVersion yang sama. Lihat dokumentasi lengkap
+ * kebijakan versi di requireAuth di bawah — logikanya TIDAK diduplikasi di
+ * sana, hanya dipanggil.
+ */
+export async function resolveAuthFromToken(token: string): Promise<AuthContext> {
+  const payload = verifyAccessToken(token);
+
+  const user = await prisma.user.findUnique({
+    where: { id: payload.sub },
+    select: { authVersion: true }
+  });
+
+  if (!user) {
+    return {
+      userId: payload.sub,
+      role: payload.role,
+      sessionId: payload.sessionId,
+      ...(payload.channel !== undefined ? { channel: payload.channel } : {})
+    };
+  }
+
+  const currentVersion = user.authVersion;
+  const tokenVersion = payload.authVersion;
+
+  if (tokenVersion === undefined) {
+    if (currentVersion !== INITIAL_AUTH_VERSION) {
+      throw new AppError(
+        "Sesi sudah tidak berlaku. Silakan login kembali.",
+        StatusCodes.UNAUTHORIZED,
+        AUTH_SESSION_REVOKED
+      );
+    }
+  } else {
+    const usable =
+      typeof tokenVersion === "number" &&
+      Number.isInteger(tokenVersion) &&
+      tokenVersion >= 0;
+
+    if (!usable || tokenVersion !== currentVersion) {
+      throw new AppError(
+        "Sesi sudah tidak berlaku. Silakan login kembali.",
+        StatusCodes.UNAUTHORIZED,
+        AUTH_SESSION_REVOKED
+      );
+    }
+  }
+
+  return {
+    userId: payload.sub,
+    role: payload.role,
+    sessionId: payload.sessionId,
+    ...(payload.channel !== undefined ? { channel: payload.channel } : {})
+  };
+}
+
+/**
+ * Pencabutan sesi berbasis VERSI, otoritatif dari database.
+ *
+ * Pendekatan sebelumnya membandingkan `iat` token dengan
+ * `users.sessions_revoked_at`. Itu tidak memadai: `iat` hanya berpresisi
+ * detik, sehingga token yang diterbitkan pada detik yang sama dengan
+ * pencabutan lolos perbandingan — dan begitu lolos, ia tetap sah sampai TTL
+ * 15 menitnya habis. Keputusan otorisasi tidak boleh bergantung pada presisi
+ * jam.
+ *
+ * Sekarang token membawa claim `authVersion`, dan setiap permintaan menuntut
+ * KESAMAAN PERSIS dengan `users.auth_version`. Pencabutan menaikkan kolom itu
+ * satu langkah, sehingga seluruh token lama gugur seketika tanpa ambiguitas.
+ *
+ * Kebijakan kompatibilitas untuk token lama yang masih beredar:
+ *   - token TANPA versi diterima hanya selama auth_version akun masih 0;
+ *   - begitu auth_version melewati 0, token tanpa versi ditolak;
+ *   - versi malformed — bukan integer, negatif, NaN, atau tak dikenal —
+ *     ditolak, tanpa fallback diam-diam.
+ *
+ * Biaya: satu pembacaan primary key per permintaan terautentikasi.
+ *
+ * Baris user tidak ditemukan (di resolveAuthFromToken): TIDAK ada keputusan
+ * otorisasi yang dibuat di sana, dan permintaan diteruskan seperti sebelumnya.
+ * Ini mempertahankan semantik yang sudah disetujui pada 59883f5 — kegagalan
+ * internal tidak boleh tersamarkan menjadi 401. Token untuk user yang tidak
+ * ada akan tetap gagal di lapisan bawah (mis. foreign key AuditLog) dan
+ * muncul sebagai 500 yang jujur. Menolaknya di sini juga akan MELEBIHI mandat
+ * Stage R2.1A, yang menyangkut perbandingan versi. Lihat laporan: kelayakan
+ * menolak token milik akun yang sudah tidak ada dicatat sebagai pertimbangan
+ * terpisah untuk Owner, bukan diputuskan diam-diam di sini.
+ */
 export function requireAuth(req: Request, _res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
@@ -52,80 +150,9 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
     return;
   }
 
-  let payload;
-  try {
-    payload = verifyAccessToken(token);
-  } catch (error) {
-    next(error);
-    return;
-  }
-
-  prisma.user
-    .findUnique({
-      where: { id: payload.sub },
-      select: { authVersion: true }
-    })
-    .then((user) => {
-      // Baris user tidak ditemukan: TIDAK ada keputusan otorisasi yang dibuat
-      // di sini, dan permintaan diteruskan seperti sebelumnya.
-      //
-      // Ini mempertahankan semantik yang sudah disetujui pada 59883f5 —
-      // kegagalan internal tidak boleh tersamarkan menjadi 401. Token untuk
-      // user yang tidak ada akan tetap gagal di lapisan bawah (mis. foreign
-      // key AuditLog) dan muncul sebagai 500 yang jujur.
-      //
-      // Menolaknya di sini juga akan MELEBIHI mandat Stage R2.1A, yang
-      // menyangkut perbandingan versi. Lihat laporan: kelayakan menolak token
-      // milik akun yang sudah tidak ada dicatat sebagai pertimbangan terpisah
-      // untuk Owner, bukan diputuskan diam-diam di sini.
-      if (!user) {
-        req.auth = {
-          userId: payload.sub,
-          role: payload.role,
-          sessionId: payload.sessionId,
-        ...(payload.channel !== undefined ? { channel: payload.channel } : {})
-        };
-        next();
-        return;
-      }
-
-      const currentVersion = user.authVersion;
-      const tokenVersion = payload.authVersion;
-
-      if (tokenVersion === undefined) {
-        // Token lama tanpa claim versi. Hanya boleh diterima selama akun
-        // belum pernah mengalami pencabutan sama sekali.
-        if (currentVersion !== INITIAL_AUTH_VERSION) {
-          throw new AppError(
-            "Sesi sudah tidak berlaku. Silakan login kembali.",
-            StatusCodes.UNAUTHORIZED,
-            AUTH_SESSION_REVOKED
-          );
-        }
-      } else {
-        // Versi yang ada wajib berupa integer non-negatif dan sama persis.
-        // Segala bentuk lain — string, pecahan, negatif, NaN, Infinity —
-        // ditolak. Tidak ada koersi, tidak ada fallback.
-        const usable =
-          typeof tokenVersion === "number" &&
-          Number.isInteger(tokenVersion) &&
-          tokenVersion >= 0;
-
-        if (!usable || tokenVersion !== currentVersion) {
-          throw new AppError(
-            "Sesi sudah tidak berlaku. Silakan login kembali.",
-            StatusCodes.UNAUTHORIZED,
-            AUTH_SESSION_REVOKED
-          );
-        }
-      }
-
-      req.auth = {
-        userId: payload.sub,
-        role: payload.role,
-        sessionId: payload.sessionId,
-      ...(payload.channel !== undefined ? { channel: payload.channel } : {})
-      };
+  resolveAuthFromToken(token)
+    .then((auth) => {
+      req.auth = auth;
       next();
     })
     .catch(next);

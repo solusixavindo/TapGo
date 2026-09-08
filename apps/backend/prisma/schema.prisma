@@ -126,6 +126,9 @@ enum WalletTransactionType {
   PROFIT_SHARING
   PROFIT_SHARING_BONUS
   ADJUSTMENT
+  /// Transfer P2P TapGoPay: sisi pengirim (debit) dan penerima (kredit).
+  TRANSFER_OUT
+  TRANSFER_IN
 }
 
 enum ChatSenderType {
@@ -331,6 +334,17 @@ model User {
 
   // Release 2 — domain PPOB (Stage R2.7).
   ppobTransactions PpobTransaction[]
+
+  // Release 2 — top up & transfer TapGoPay (Stage R2.10).
+  walletTopUpOrders       WalletTopUpOrder[]
+  walletTransfersSent     WalletTransfer[]   @relation("WalletTransferSender")
+  walletTransfersReceived WalletTransfer[]   @relation("WalletTransferRecipient")
+
+  // Release 2 — chat per-perjalanan (Stage R2.10).
+  chatMessages ChatMessage[]
+
+  // Release 2 — foto profil (Stage R2.11).
+  avatar UserAvatar?
 
   @@index([role, status])
   @@index([membershipId])
@@ -906,7 +920,6 @@ model Ride {
   customer     User              @relation("RideCustomer", fields: [customerId], references: [id])
   driver       Driver?           @relation("RideDriver", fields: [driverId], references: [id])
   payment      Payment?
-  messages     ChatMessage[]
   reviews      Review[]
   statusEvents RideStatusEvent[]
 
@@ -964,6 +977,59 @@ model Wallet {
   rewardTransactions RewardTransaction[]
 
   @@map("wallets")
+}
+
+/// Top up TapGoPay via Midtrans/DOKU (Stage R2.10 — kanal WEB saja, mengikuti
+/// kebijakan yang sama dengan pembelian membership: aplikasi Play tidak boleh
+/// memuat pembayaran eksternal in-app di luar Play Billing).
+///
+/// Sengaja bukan lewat Invoice/MembershipOrder yang sudah ada — keduanya
+/// terikat erat pada domain membership (packageSnapshot, dokumen KYC, dsb).
+/// Order ini digabung dengan "invoice"-nya sendiri (reference unik = anchor
+/// idempotency webhook, meniru Invoice.number) karena top up tidak butuh
+/// entitas order/invoice terpisah.
+model WalletTopUpOrder {
+  id                String        @id @default(uuid()) @db.Uuid
+  userId            String        @map("user_id") @db.Uuid
+  reference         String        @unique @db.VarChar(40)
+  status            PaymentStatus @default(PENDING)
+  amount            Decimal       @db.Decimal(14, 2)
+  method            String?       @db.VarChar(60)
+  provider          String?       @db.VarChar(60)
+  providerReference String?       @map("provider_reference") @db.VarChar(120)
+  metadata          Json?
+  paidAt            DateTime?     @map("paid_at")
+  expiresAt         DateTime?     @map("expires_at")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@map("wallet_topup_orders")
+}
+
+/// Transfer P2P TapGoPay antar user. idempotencyKey dipasok klien (pola sama
+/// dengan PpobTransaction) supaya tap ganda/retry jaringan tidak pernah
+/// men-debit dua kali; scoped ke fromUserId karena kunci yang sama dari dua
+/// pengirim berbeda adalah permintaan yang berbeda.
+model WalletTransfer {
+  id              String   @id @default(uuid()) @db.Uuid
+  publicReference String   @unique @map("public_reference") @db.VarChar(24)
+  idempotencyKey  String   @map("idempotency_key") @db.VarChar(120)
+  fromUserId      String   @map("from_user_id") @db.Uuid
+  toUserId        String   @map("to_user_id") @db.Uuid
+  amount          Decimal  @db.Decimal(14, 2)
+  note            String?  @db.VarChar(140)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  fromUser User @relation("WalletTransferSender", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User @relation("WalletTransferRecipient", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@unique([fromUserId, idempotencyKey])
+  @@index([fromUserId, createdAt])
+  @@index([toUserId, createdAt])
+  @@map("wallet_transfers")
 }
 
 model WalletTransaction {
@@ -1032,19 +1098,42 @@ model PromoCode {
   @@map("promo_codes")
 }
 
+/// Chat per-perjalanan (Stage R2.10). rideOrderId menunjuk RideOrder — domain
+/// ride yang aktif dipakai (bukan model Ride legacy, yang tidak lagi
+/// digunakan jalur kode manapun sejak Release 2).
 model ChatMessage {
-  id         String         @id @default(uuid()) @db.Uuid
-  rideId     String         @map("ride_id") @db.Uuid
-  senderId   String         @map("sender_id") @db.Uuid
-  senderType ChatSenderType @map("sender_type")
-  message    String
-  readAt     DateTime?      @map("read_at")
-  createdAt  DateTime       @default(now()) @map("created_at")
+  id          String         @id @default(uuid()) @db.Uuid
+  rideOrderId String         @map("ride_order_id") @db.Uuid
+  senderId    String         @map("sender_id") @db.Uuid
+  senderType  ChatSenderType @map("sender_type")
+  message     String         @db.VarChar(1000)
+  readAt      DateTime?      @map("read_at")
+  createdAt   DateTime       @default(now()) @map("created_at")
 
-  ride Ride @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  rideOrder RideOrder @relation(fields: [rideOrderId], references: [id], onDelete: Cascade)
+  sender    User      @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
-  @@index([rideId, createdAt])
+  @@index([rideOrderId, createdAt])
   @@map("chat_messages")
+}
+
+/// Foto profil (Stage R2.11). Bytes disimpan langsung di DB, pola sama dengan
+/// MembershipDocument — tidak ada object storage (S3 dsb) di infrastruktur
+/// ini, jadi konsisten dengan cara dokumen KYC sudah disimpan. `User.avatarUrl`
+/// tetap kolom URL-nya (mengarah ke endpoint penyaji `/account/avatar`);
+/// tabel ini yang menyimpan isi berkasnya.
+model UserAvatar {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @unique @map("user_id") @db.Uuid
+  bytes       Bytes
+  contentType String   @map("content_type") @db.VarChar(60)
+  checksum    String?  @db.VarChar(128)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_avatars")
 }
 
 model Review {
@@ -1640,6 +1729,7 @@ model RideOrder {
   quote         RideQuote            @relation(fields: [quoteId], references: [id])
   events        RideEvent[]
   locations     RideDriverLocation[]
+  chatMessages  ChatMessage[]
 
   @@index([passengerId, createdAt])
   @@index([driverProfileId, createdAt])

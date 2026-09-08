@@ -17,6 +17,7 @@ import { legalRouter } from "./modules/legal/presentation/legal.routes.js";
 import { memberIdentityRouter } from "./modules/member-identity/presentation/member-identity.routes.js";
 import { membershipOrderRouter } from "./modules/memberships/presentation/membership-order.routes.js";
 import { webMembershipRouter } from "./modules/memberships/presentation/web-membership.routes.js";
+import { webWalletRouter } from "./modules/wallets/presentation/web-wallet.routes.js";
 import { membershipRouter } from "./modules/memberships/presentation/membership.routes.js";
 import { midtransRouter } from "./modules/payments/presentation/midtrans.routes.js";
 import { dokuPaymentRouter, dokuWebhookRouter } from "./modules/payments/presentation/doku.routes.js";
@@ -29,6 +30,7 @@ import { adminRideRouter, driverRideRouter, rideRouter } from "./modules/rides/p
 import { driverDocumentRouter } from "./modules/drivers/presentation/driver-document.routes.js";
 import { driverApplicationRouter } from "./modules/drivers/presentation/driver-application.routes.js";
 import { adminSupportRouter, supportRouter } from "./modules/support/presentation/support.routes.js";
+import { chatRouter } from "./modules/chat/presentation/chat.routes.js";
 import { walletRouter } from "./modules/wallets/presentation/wallet.routes.js";
 
 function healthPayload() {
@@ -118,7 +120,9 @@ export function createApp() {
   app.use("/api/v1/driver/applications", driverApplicationRouter);
   app.use("/api/v1/driver", driverRideRouter);
   app.use("/api/v1/support", supportRouter);
+  app.use("/api/v1/chat/rides", chatRouter);
   app.use("/api/v1/wallet", walletRouter);
+  app.use("/api/v1/web/wallet", webWalletRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
