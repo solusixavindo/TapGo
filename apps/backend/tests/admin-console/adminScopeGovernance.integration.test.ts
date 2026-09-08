@@ -4,7 +4,13 @@ import { AddressInfo } from "node:net";
 import { promisify } from "node:util";
 import { AdminScope, UserRole } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { cleanDatabase, prisma, runIntegration, seedMemberships } from "../helpers/referralWalletHarness.js";
+import {
+  cleanDatabase,
+  prisma,
+  runIntegration,
+  seedMemberships,
+  testDatabaseUrl
+} from "../helpers/referralWalletHarness.js";
 
 /**
  * Stage R2.3 — tata kelola scope admin.
@@ -110,6 +116,20 @@ const auditCount = (action: string) => prisma.auditLog.count({ where: { action }
 
 describeIntegration("Stage R2.3 — admin scope governance", () => {
   beforeAll(async () => {
+    // Tanpa baris ini, singleton PrismaClient di src/config/prisma.ts
+    // terhubung ke DATABASE_URL apa pun yang kebetulan ada di proses (mis.
+    // database dev di .env) alih-alih database test tempat createUser() di
+    // bawah menulis — aktor yang baru dibuat lalu "tidak ditemukan" oleh
+    // server, salah dilaporkan sebagai ADMIN_SCOPE_MANAGE_REQUIRED. Berkas
+    // test lain di sekitar sini semuanya menetapkan ini di beforeAll; berkas
+    // ini sebelumnya lupa, sehingga hanya lolos ketika kebetulan dijalankan
+    // SETELAH berkas lain yang sudah menetapkan DATABASE_URL pada proses yang
+    // sama (singleFork) — dan gagal saat dijalankan sendirian.
+    if (!testDatabaseUrl?.toLowerCase().includes("test")) {
+      throw new Error("TAPGO_TEST_DATABASE_URL must point to a dedicated test database.");
+    }
+    process.env.NODE_ENV = "test";
+    process.env.DATABASE_URL = testDatabaseUrl;
     process.env.JWT_ACCESS_SECRET =
       process.env.JWT_ACCESS_SECRET ?? "test-access-secret-please-change-000000";
     process.env.JWT_REFRESH_SECRET =

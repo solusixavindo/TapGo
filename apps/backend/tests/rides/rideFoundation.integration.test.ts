@@ -94,7 +94,8 @@ describe.skipIf(!runIntegration)("Stage 5.2 — Ride backend foundation", () => 
     expect(fare.currency).toBe("IDR");
     expect(fare.totalFare % 100).toBe(0);
     expect(fare.totalFare).toBeGreaterThan(0);
-    expect(body.data.fareRuleVersion).toBe("RIDE_FARE_RULE_V1");
+    // Tarif V2 (includedKm + bagi hasil 92:8, commit 9fea2b7) menggantikan V1.
+    expect(body.data.fareRuleVersion).toBe("RIDE_FARE_RULE_V2");
     expect(body.data.roundingRule).toBe("ROUND_TO_NEAREST_100_HALF_UP");
     // Jarak berasal dari server, bukan client.
     expect(body.data.distanceSource).toBe("HAVERSINE_LOCAL_V1");
@@ -927,6 +928,10 @@ async function cleanRideTables() {
   // RideDriverApplication memakai ON DELETE RESTRICT: tanpa baris ini
   // user.deleteMany() di bawah akan gagal dengan SQLSTATE 23001.
   await prisma.rideDriverApplication.deleteMany();
+  // Commission (bagi hasil tarif V2) juga RESTRICT lewat beneficiaryId —
+  // tanpa baris ini user.deleteMany() gagal begitu ada ride yang sempat
+  // menghasilkan komisi driver/perusahaan.
+  await prisma.commission.deleteMany();
   await prisma.walletTransaction.deleteMany();
   await prisma.wallet.deleteMany();
   await prisma.user.deleteMany();

@@ -652,7 +652,17 @@ export class RideService {
 
       if (input.next === "COMPLETED") {
         await this.releaseDriver(tx, profile.id);
-        await this.recordRideRevenueShare(tx, order, profile.id);
+        // Stage 5.2 mengisolasi ride tunai dari Business Engine sepenuhnya
+        // (lihat "Isolasi Business Engine" di rideFoundation.integration.test.ts):
+        // pembayaran tunai dipegang fisik oleh driver, jadi TIDAK ada
+        // Wallet/WalletTransaction/Commission yang boleh tercipta untuknya.
+        // Bagi hasil 92:8 hanya relevan untuk pembayaran DIGITAL, yang masih
+        // fail-closed di createOrder — sehingga cabang ini saat ini tidak
+        // pernah tereksekusi, dan memang seharusnya begitu sampai pembayaran
+        // digital diaktifkan.
+        if (order.paymentMethod !== "CASH") {
+          await this.recordRideRevenueShare(tx, order, profile.id);
+        }
       }
 
       await this.writeEvent(tx, {
@@ -1332,11 +1342,18 @@ export class RideService {
   /**
    * Mencatat bagi hasil ride 92:8 saat sesi selesai.
    *
-   * - Driver menerima 92% dari totalFare sebagai pendapatan tunai (POSTED,
-   *   langsung menambah cashBalance — konsisten dengan CASH_REPORTED).
+   * HANYA untuk ride dengan pembayaran DIGITAL — pemanggil (advanceByDriver)
+   * wajib menyaring `order.paymentMethod !== "CASH"` sebelum memanggil ini.
+   * Ride tunai dikecualikan total dari Business Engine (lihat "Isolasi
+   * Business Engine" di rideFoundation.integration.test.ts): uangnya sudah
+   * berpindah tangan secara fisik di luar aplikasi, jadi mencatatnya lagi ke
+   * Wallet/Commission di sini akan menduplikasi/memalsukan saldo.
+   *
+   * - Driver menerima 92% dari totalFare sebagai pendapatan (POSTED,
+   *   langsung menambah cashBalance).
    * - Perusahaan 8% dicatat sebagai komisi PENDING (belum menambah saldo
-   *   siapa pun; kas tunai fisik driver-lah yang dipegang, dan penagihan/
-   *   rekonsiliasi 8% ke perusahaan berada di luar lingkup transaksi ini).
+   *   siapa pun; rekonsiliasi 8% ke perusahaan berada di luar lingkup
+   *   transaksi ini).
    *
    * Idempoten: kunci unik [beneficiaryId, triggerType, triggerId, type, level]
    * membuat pencatatan ganda tidak mungkin dalam satu transaksi.
