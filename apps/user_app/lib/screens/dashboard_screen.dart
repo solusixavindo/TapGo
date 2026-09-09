@@ -120,7 +120,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
             children: [
               // Hanya tampil saat harness bukti visual menyalakan fixture.
               // Tidak pernah muncul pada aplikasi yang dirilis.
-              if (tapGoDashboardVisualFixtureEnabled)
+              if (tapGoDashboardVisualFixtureEnabledForTests)
                 const _DashboardFixtureBadge(),
               _ProductionBindingBanner(state: production),
               if (production.isLoading) const SizedBox(height: 10),
@@ -148,34 +148,25 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                 ),
               ),
               const SizedBox(height: 14),
+              // Mode Play: kartu Membership biru yang dulu ada di sini dihapus
+              // (permintaan Owner) — Akun sudah menampilkan tier & status, dan
+              // kartu ini hanya mengulanginya. forceWallet:true membuatnya
+              // selalu tampil sebagai kartu saldo TapGoPay, sama seperti
+              // distribusi direct.
               _DashboardEntrance(
                 order: 3,
-                child: _WalletCard(session: session, state: production),
-              ),
-              // Mode Play: kartu Membership biru tetap di atas (membuka detail
-              // paket), dan saldo TapGoPay diletakkan tepat di bawahnya agar
-              // informasi wallet tetap terlihat tanpa menggantikan Membership.
-              // Dinonaktifkan saat fixture visual agar test tetap memverifikasi
-              // layout Membership→grid ringkas tanpa ruang kosong.
-              if (tapGoIsPlayDistribution &&
-                  !tapGoDashboardVisualFixtureEnabled) ...[
-                const SizedBox(height: 14),
-                _DashboardEntrance(
-                  order: 4,
-                  child: _WalletCard(
-                    session: session,
-                    state: production,
-                    forceWallet: true,
-                  ),
+                child: _WalletCard(
+                  session: session,
+                  state: production,
+                  forceWallet: true,
                 ),
-              ],
-              // Pada distribusi Play, kartu Membership biru di atas sudah
-              // menampilkan paket aktif sekaligus membuka detailnya, sehingga
-              // kartu status kuning hanya mengulang informasi yang sama.
-              // Kartu itu tidak dirender di sini; datanya sendiri tidak
-              // disentuh. Pada distribusi direct kartu biru adalah TapGoPay —
-              // bukan membership — jadi tidak ada duplikasi dan kartunya tetap
-              // dipertahankan sebagai satu-satunya jalan ke paket membership.
+              ),
+              // Kartu status kuning (_MarketingPlanCard) tetap tidak
+              // dirender pada distribusi Play — sesuai kebijakan R2.6 (upgrade
+              // membership hanya lewat web), bukan lagi karena kartu biru di
+              // atas dianggap sudah mewakilinya. Pada distribusi direct kartu
+              // biru adalah TapGoPay, jadi kartu kuning ini tetap satu-satunya
+              // jalan ke paket membership di app.
               if (!tapGoIsPlayDistribution) ...[
                 const SizedBox(height: 16),
                 _DashboardEntrance(
@@ -930,6 +921,18 @@ void _showInfoSnack(BuildContext context, String message) {
   _TapGoSnackbar.info(context, message);
 }
 
+/// Top up TapGoPay diproses di web (tapgolion.id), bukan di dalam app —
+/// pembayaran eksternal in-app menuntut Play Billing, sama seperti alasan
+/// upgrade membership dipindah ke web (lihat ADR R2 di docs/release-2/).
+Future<void> _openTopUpWebsite(BuildContext context) async {
+  final uri = Uri.parse('https://tapgolion.id/topup');
+  if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+    if (context.mounted) {
+      _showInfoSnack(context, 'Halaman top up belum dapat dibuka.');
+    }
+  }
+}
+
 void _showSearchMenu(BuildContext context) {
   final items = tapGoIsPlayDistribution
       ? const [
@@ -1491,8 +1494,10 @@ class _WalletCard extends ConsumerWidget {
   final DemoClientSession session;
   final AsyncValue<_TapGoProductionSnapshot> state;
 
-  /// Jika true, tampilkan sebagai kartu wallet TapGoPay meskipun mode Play
-  /// (kartu Membership biru tetap dirender terpisah di atasnya).
+  /// Jika true, tampilkan sebagai kartu wallet TapGoPay meskipun mode Play.
+  /// Beranda selalu memakai forceWallet:true sekarang — kartu Membership
+  /// (forceWallet:false, defaultnya) sudah dihapus dari Beranda karena
+  /// mengulang info yang sama dengan header Akun.
   final bool forceWallet;
 
   @override
@@ -1676,18 +1681,12 @@ class _WalletCard extends ConsumerWidget {
                   if (!isPlayDistribution) ...[
                     _WalletAction(
                       icon: Icons.add_rounded,
-                      onTap: () => _showInfoSnack(
-                        context,
-                        'Top up belum dapat diproses saat ini',
-                      ),
+                      onTap: () => _openTopUpWebsite(context),
                     ),
                     const SizedBox(width: 12),
                     _WalletAction(
                       icon: Icons.near_me_rounded,
-                      onTap: () => _showInfoSnack(
-                        context,
-                        'Transfer belum dapat diproses saat ini',
-                      ),
+                      onTap: () => _openDemo(context, const WalletTransferScreen()),
                     ),
                   ],
                 ],
@@ -2648,7 +2647,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                     labelStyle: TextStyle(
                       color: _tabIndex == index
                           ? Colors.white
-                          : const Color(0xFF263241),
+                          : Theme.of(context).colorScheme.onSurface,
                       fontWeight: FontWeight.w800,
                     ),
                     onSelected: (_) => setState(() => _tabIndex = index),
@@ -2756,10 +2755,11 @@ class AccountScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _AccountHero(session: session),
-          const SizedBox(height: 16),
-          if (tapGoIsPlayDistribution)
-            _PlayProfileMembershipSummary(session: session)
-          else
+          // _AccountHero (mode Play) sudah menampilkan nama, tier, dan status
+          // aktif — kartu "Membership Basic" yang dulu dirender di sini hanya
+          // mengulang dua fakta yang sama, jadi tidak dirender lagi di sini.
+          if (!tapGoIsPlayDistribution) ...[
+            const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
@@ -2777,6 +2777,7 @@ class AccountScreen extends ConsumerWidget {
                 ),
               ],
             ),
+          ],
           if (tapGoIsDirectDistribution) ...[
             const SizedBox(height: 12),
             Row(
@@ -2802,6 +2803,19 @@ class AccountScreen extends ConsumerWidget {
             'Kartu Anggota',
             Icons.badge_rounded,
             () => _openDemo(context, const BasicMemberCardScreen()),
+          ),
+          // Sebelumnya jalan satu-satunya menuju ReferralTreeScreen dari Akun
+          // adalah lewat 'Jaringan Saya' (khusus distribusi direct) atau lewat
+          // redirect tersembunyi dari kartu wallet Beranda → DemoWalletScreen
+          // → MembershipScreen → menu 'Referal Tim'. Tautan langsung ini
+          // dibuka untuk kedua distribusi: ini murni tampilan baca-saja dari
+          // data referral asli (tidak ada ajakan pembelian), jadi aman untuk
+          // Play (lihat juga entri grid 'Referral' di Beranda).
+          _AccountMenuTile(
+            'Referal Tim',
+            Icons.account_tree_rounded,
+            () => _openDemo(context, const ReferralTreeScreen()),
+            subtitle: 'Struktur referal tim level 1 sampai 10',
           ),
           _AccountMenuTile(
             'Profil',
@@ -2862,12 +2876,16 @@ class AccountScreen extends ConsumerWidget {
               Icons.verified_user_rounded,
               () => _openDemo(context, const FeatureDetailScreen(title: 'KYC')),
             ),
-          if (tapGoIsDirectDistribution)
-            _AccountMenuTile(
-              'Rekening Bank',
-              Icons.account_balance_rounded,
-              () => _openDemo(context, const BankAccountScreen()),
-            ),
+          // Sebelumnya hanya muncul pada distribusi direct. Menyimpan nomor
+          // rekening bukan pencairan saldo — murni data profil — jadi aman
+          // ditampilkan di semua distribusi. Aksi pencairan sungguhan (bukan
+          // penyimpanan datanya) tetap tunduk pada WALLET_CASH_OUT_ENABLED
+          // di backend, tidak berubah oleh baris ini.
+          _AccountMenuTile(
+            'Rekening Bank',
+            Icons.account_balance_rounded,
+            () => _openDemo(context, const BankAccountScreen()),
+          ),
           _AccountMenuTile(
             'Kebijakan Privasi',
             Icons.privacy_tip_rounded,
@@ -3063,6 +3081,8 @@ class ProfileDetailsScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 16),
+              const _ProfileAvatarEditor(),
+              const SizedBox(height: 16),
               if (isLoading)
                 const _StatusSurface(
                   icon: Icons.sync_rounded,
@@ -3095,9 +3115,45 @@ class ProfileDetailsScreen extends ConsumerWidget {
                     label: 'Public Member ID',
                     value: profile.memberId.isEmpty ? '-' : profile.memberId,
                   ),
+                  _ProfileDetailRow(
+                    label: 'Email',
+                    value: profile.email == null
+                        ? 'Belum diisi'
+                        : profile.emailVerified
+                            ? '${profile.email} (terverifikasi)'
+                            : '${profile.email} (belum diverifikasi)',
+                  ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => _showPhoneEditSheet(context, ref, session),
+                  icon: const Icon(Icons.edit_rounded, size: 18),
+                  label: const Text('Ubah nomor HP'),
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const VerificationGateScreen(),
+                    ),
+                  ),
+                  icon: Icon(
+                    profile.email == null
+                        ? Icons.mail_outline_rounded
+                        : Icons.verified_user_outlined,
+                    size: 18,
+                  ),
+                  label: Text(
+                    profile.email == null ? 'Tambah email' : 'Kelola email',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
               const _SectionLabel('Keanggotaan'),
               const SizedBox(height: 10),
               _ProfileInfoPanel(
@@ -3116,6 +3172,349 @@ class ProfileDetailsScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Editor foto profil untuk [ProfileDetailsScreen].
+///
+/// Berbeda dari [_TapGoProfileImage] (yang membaca berkas lokal sisa alur
+/// registrasi membership), widget ini mengambil/mengunggah foto lewat
+/// backend (`GET`/`POST /account/avatar`) sehingga foto tersimpan di server
+/// dan tampil di perangkat mana pun pengguna masuk.
+class _ProfileAvatarEditor extends StatefulWidget {
+  const _ProfileAvatarEditor();
+
+  @override
+  State<_ProfileAvatarEditor> createState() => _ProfileAvatarEditorState();
+}
+
+class _ProfileAvatarEditorState extends State<_ProfileAvatarEditor> {
+  static const int _maxAvatarBytes = 4 * 1024 * 1024;
+
+  Uint8List? _bytes;
+  bool _isLoading = true;
+  bool _isUploading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadAvatar());
+  }
+
+  Future<void> _loadAvatar() async {
+    try {
+      final bytes = await _apiClient.fetchAvatarBytes();
+      if (mounted) {
+        setState(() {
+          _bytes = bytes;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      // Gagal memuat foto tidak boleh menghalangi sisa halaman profil —
+      // cukup tampilkan placeholder, pengguna tetap bisa mengunggah ulang.
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  String _contentTypeFor(String path) {
+    return path.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+  }
+
+  Future<void> _pickAndUpload() async {
+    final source = await _showTapGoBottomSheet<ImageSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading:
+                    const Icon(Icons.photo_library_rounded, color: _brandBlue),
+                title: const Text('Pilih dari Galeri'),
+                onTap: () => Navigator.of(sheetContext).pop(ImageSource.gallery),
+              ),
+              ListTile(
+                leading:
+                    const Icon(Icons.photo_camera_rounded, color: _brandOrange),
+                title: const Text('Ambil Foto dengan Kamera'),
+                onTap: () => Navigator.of(sheetContext).pop(ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.close_rounded, color: Color(0xFF697386)),
+                title: const Text('Batal'),
+                onTap: () => Navigator.of(sheetContext).pop(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (source == null || !mounted) {
+      return;
+    }
+
+    XFile? image;
+    try {
+      image = await ImagePicker().pickImage(
+        source: source,
+        imageQuality: 82,
+        maxWidth: 1024,
+      );
+    } catch (_) {
+      if (mounted) {
+        _TapGoSnackbar.error(context, 'Gagal membuka kamera/galeri.');
+      }
+      return;
+    }
+    if (image == null || !mounted) {
+      return;
+    }
+
+    final bytes = await image.readAsBytes();
+    if (bytes.length > _maxAvatarBytes) {
+      if (mounted) {
+        _TapGoSnackbar.warning(context, 'Ukuran foto maksimal 4MB.');
+      }
+      return;
+    }
+
+    setState(() => _isUploading = true);
+    try {
+      await _apiClient.uploadAvatar(
+        bytes,
+        contentType: _contentTypeFor(image.path),
+      );
+      if (mounted) {
+        setState(() {
+          _bytes = bytes;
+          _isUploading = false;
+        });
+        _TapGoSnackbar.success(context, 'Foto profil berhasil diperbarui.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isUploading = false);
+        _TapGoSnackbar.error(context, 'Gagal mengunggah foto profil. Coba lagi.');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              width: 88,
+              height: 88,
+              color: colorScheme.surfaceContainerHighest,
+              alignment: Alignment.center,
+              child: _isLoading
+                  ? const _TapGoLoading()
+                  : _bytes != null
+                      ? Image.memory(
+                          _bytes!,
+                          width: 88,
+                          height: 88,
+                          fit: BoxFit.cover,
+                        )
+                      : Icon(
+                          Icons.person_rounded,
+                          size: 44,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+            ),
+          ),
+          Positioned(
+            right: -4,
+            bottom: -4,
+            child: Material(
+              color: _brandBlue,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: _isUploading ? null : _pickAndUpload,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: _isUploading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.camera_alt_rounded,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Bottom sheet ubah nomor HP (Stage R2.11). Nomor HP adalah identifier
+/// login utama, jadi backend mewajibkan password saat ini sebelum
+/// mengizinkan perubahan — pola sama dengan [ChangePasswordScreen].
+Future<void> _showPhoneEditSheet(
+  BuildContext context,
+  WidgetRef ref,
+  DemoClientSession session,
+) async {
+  final phoneController = TextEditingController(text: session.phone);
+  final passwordController = TextEditingController();
+  final formKey = GlobalKey<FormState>();
+  bool obscurePassword = true;
+  bool isSubmitting = false;
+  String? errorMessage;
+
+  await _showTapGoBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (sheetContext) => StatefulBuilder(
+      builder: (sheetContext, setModalState) {
+        void submit() {
+          if (isSubmitting) {
+            return;
+          }
+          if (!(formKey.currentState?.validate() ?? false)) {
+            return;
+          }
+          setModalState(() {
+            isSubmitting = true;
+            errorMessage = null;
+          });
+          () async {
+            try {
+              final newPhone = await _apiClient.updatePhone(
+                phone: tapGoSanitizePhoneInput(phoneController.text),
+                currentPassword: passwordController.text,
+              );
+              final updated = session.copyWith(phone: newPhone);
+              ref.read(_demoSessionProvider.notifier).state = updated;
+              unawaited(_persistentStore.saveSession(updated));
+              if (sheetContext.mounted) {
+                Navigator.of(sheetContext).pop();
+              }
+              if (context.mounted) {
+                _TapGoSnackbar.success(context, 'Nomor HP berhasil diperbarui.');
+              }
+            } on DioException catch (error) {
+              final code = _authResponseDataMap(error.response?.data)?['code']
+                  ?.toString();
+              setModalState(() {
+                isSubmitting = false;
+                errorMessage = switch (code) {
+                  'INVALID_CREDENTIALS' => 'Password saat ini salah.',
+                  'PHONE_ALREADY_IN_USE' => 'Nomor HP sudah dipakai akun lain.',
+                  _ => 'Gagal mengubah nomor HP. Silakan coba lagi.',
+                };
+              });
+            } catch (_) {
+              setModalState(() {
+                isSubmitting = false;
+                errorMessage = 'Gagal mengubah nomor HP. Silakan coba lagi.';
+              });
+            }
+          }();
+        }
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            8,
+            20,
+            MediaQuery.of(sheetContext).viewInsets.bottom + 20,
+          ),
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Ubah Nomor HP',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Perubahan nomor HP memerlukan password saat ini untuk '
+                  'keamanan akun.',
+                  style: TextStyle(
+                    color: Theme.of(sheetContext).colorScheme.onSurfaceVariant,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _InputField(
+                  controller: phoneController,
+                  icon: Icons.phone_iphone_rounded,
+                  label: 'Nomor HP baru',
+                  hint: '08xxxxxxxxxx',
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: tapGoPhoneInputFormatters,
+                  validator: tapGoPhoneValidatorMessage,
+                  textInputAction: TextInputAction.next,
+                ),
+                const SizedBox(height: 14),
+                _InputField(
+                  controller: passwordController,
+                  icon: Icons.lock_outline_rounded,
+                  label: 'Password saat ini',
+                  hint: 'Konfirmasi dengan password Anda',
+                  obscureText: obscurePassword,
+                  textInputAction: TextInputAction.done,
+                  autofillHints: const [AutofillHints.password],
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      obscurePassword
+                          ? Icons.visibility_off_rounded
+                          : Icons.visibility_rounded,
+                    ),
+                    onPressed: () =>
+                        setModalState(() => obscurePassword = !obscurePassword),
+                  ),
+                  validator: (value) => (value == null || value.isEmpty)
+                      ? 'Isi password saat ini.'
+                      : null,
+                  onFieldSubmitted: (_) => submit(),
+                ),
+                const SizedBox(height: 18),
+                _RecoveryPrimaryButton(
+                  label: 'Simpan nomor HP',
+                  isLoading: isSubmitting,
+                  onPressed: submit,
+                ),
+                if (errorMessage != null) ...[
+                  const SizedBox(height: 14),
+                  _RecoveryMessage(message: errorMessage!, isError: true),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    ),
+  );
+  phoneController.dispose();
+  passwordController.dispose();
 }
 
 class _SectionLabel extends StatelessWidget {
@@ -3295,69 +3694,6 @@ class HelpCenterScreen extends StatelessWidget {
               onPressed: () => _openWhatsApp(context),
               icon: const Icon(Icons.chat_rounded),
               label: const Text('WhatsApp Admin'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PlayProfileMembershipSummary extends StatelessWidget {
-  const _PlayProfileMembershipSummary({required this.session});
-
-  final DemoClientSession session;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          const PremiumTapGoIcon(
-            label: 'Kartu Anggota',
-            fallbackIcon: Icons.badge_rounded,
-            size: 58,
-            padding: 3,
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Membership Basic',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: colorScheme.onSurface,
-                    fontSize: 16,
-                    height: 1.12,
-                    fontWeight: FontWeight.w900,
-                    decoration: TextDecoration.none,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  'Status akun ${session.activePackageName} sudah aktif.',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: colorScheme.onSurfaceVariant,
-                    fontSize: 12.5,
-                    height: 1.28,
-                    fontWeight: FontWeight.w700,
-                    decoration: TextDecoration.none,
-                  ),
-                ),
-              ],
             ),
           ),
         ],
@@ -3671,6 +4007,8 @@ class _BasicMemberCardData {
     required this.status,
     required this.membership,
     required this.joinedAt,
+    this.email,
+    this.emailVerified = false,
   });
 
   final String displayName;
@@ -3679,8 +4017,11 @@ class _BasicMemberCardData {
   final String status;
   final String membership;
   final DateTime joinedAt;
+  final String? email;
+  final bool emailVerified;
 
   factory _BasicMemberCardData.fromMap(Map<String, dynamic> map) {
+    final email = map['email']?.toString();
     return _BasicMemberCardData(
       displayName: map['displayName']?.toString() ?? 'Member TapGo',
       phone: map['phone']?.toString() ?? '',
@@ -3689,6 +4030,8 @@ class _BasicMemberCardData {
       membership: map['membership']?.toString() ?? 'Basic',
       joinedAt: DateTime.tryParse(map['joinedAt']?.toString() ?? '') ??
           DateTime.now(),
+      email: (email == null || email.isEmpty) ? null : email,
+      emailVerified: map['emailVerified'] == true,
     );
   }
 }
@@ -4068,8 +4411,8 @@ class _ServiceTile extends StatelessWidget {
                   softWrap: true,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Color(0xFF263241),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontSize: _serviceTileLabelFontSize,
                     height: _serviceTileLabelLineHeight,
                     fontWeight: FontWeight.w800,

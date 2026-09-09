@@ -146,6 +146,7 @@ class _TapGoApiClient {
     required String name,
     required String phone,
     required String password,
+    String? email,
     String? referralCode,
   }) async {
     final deviceContext = await _deviceContextStore.load().timeout(
@@ -159,10 +160,17 @@ class _TapGoApiClient {
       'password': password,
       'deviceId': deviceContext.deviceId,
       'deviceFingerprint': deviceContext.deviceFingerprint,
+      if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
       if (referralCode != null && referralCode.trim().isNotEmpty)
         'referralCode': referralCode.trim().toUpperCase(),
     };
-    final safeBody = {...body, 'password': '***'};
+    final safeBody = {
+      ...body,
+      'password': '***',
+      'phone': _maskPhoneForLog(body['phone'] as String),
+      if (body['email'] is String)
+        'email': _maskEmailForLog(body['email'] as String),
+    };
     final registerUrl = _fullApiUrl('auth/register');
     _tapGoDebugLog('ACTIVE ROOT URL: $rootUrl');
     _tapGoDebugLog('REGISTER URL: $registerUrl');
@@ -188,7 +196,11 @@ class _TapGoApiClient {
     required String password,
   }) async {
     final body = {'phone': _normalizePhone(phone), 'password': password};
-    final safeBody = {...body, 'password': '***'};
+    final safeBody = {
+      ...body,
+      'password': '***',
+      'phone': _maskPhoneForLog(body['phone']!),
+    };
     final loginUrl = _fullApiUrl('auth/login');
     _tapGoDebugLog('ACTIVE ROOT URL: $rootUrl');
     _tapGoDebugLog('LOGIN URL: $loginUrl');
@@ -421,6 +433,72 @@ class _TapGoApiClient {
     );
   }
 
+  /// Mengganti nomor HP akun. Nomor HP adalah identifier login utama,
+  /// sehingga backend mewajibkan password saat ini sebagai bukti kepemilikan
+  /// — pola sama dengan [changePassword].
+  Future<String> updatePhone({
+    required String phone,
+    required String currentPassword,
+  }) async {
+    final data = await put(
+      'account/phone',
+      body: {'phone': phone, 'currentPassword': currentPassword},
+    );
+    return '${data['phone'] ?? phone}';
+  }
+
+  /// Menambah/mengubah email akun. Pola sama dengan [updatePhone]: password
+  /// saat ini wajib sebagai bukti kepemilikan. Email baru selalu berstatus
+  /// belum terverifikasi di backend — panggil [requestEmailVerification]
+  /// setelah ini untuk mengirim kode konfirmasi.
+  Future<String> updateEmail({
+    required String email,
+    required String currentPassword,
+  }) async {
+    final data = await put(
+      'account/email',
+      body: {'email': email, 'currentPassword': currentPassword},
+    );
+    return '${data['email'] ?? email}';
+  }
+
+  /// Mengunggah foto profil (JPG/PNG mentah, bukan multipart) dan
+  /// mengembalikan path relatif yang dipakai [fetchAvatarBytes].
+  Future<String> uploadAvatar(List<int> bytes, {required String contentType}) async {
+    // Dio menghitung Content-Length otomatis untuk body List<int>/Uint8List
+    // mentah. Sebelumnya kode ini membungkus bytes ke dalam Stream lalu
+    // menyetel Content-Length manual (dengan nilai int, bukan String) —
+    // kombinasi itu membuat Dio tidak bisa mengetahui panjang body di muka,
+    // sehingga permintaan gagal di server dengan "gagal mengunggah foto
+    // profil". Mengirim bytes langsung adalah pola baku Dio untuk unggahan
+    // biner mentah (non-multipart).
+    final response = await _dio.post<Map<String, dynamic>>(
+      _apiPath('account/avatar'),
+      data: Uint8List.fromList(bytes),
+      options: Options(contentType: contentType),
+    );
+    final data = _unwrap(response.data);
+    return '${data['avatarUrl'] ?? ''}';
+  }
+
+  /// Mengambil byte foto profil akun sendiri. Mengembalikan null bila
+  /// pengguna belum pernah mengunggah foto (404 ACCOUNT_AVATAR_NOT_FOUND).
+  Future<Uint8List?> fetchAvatarBytes() async {
+    try {
+      final response = await _dio.get<List<int>>(
+        _apiPath('account/avatar'),
+        options: Options(responseType: ResponseType.bytes),
+      );
+      final data = response.data;
+      return data == null ? null : Uint8List.fromList(data);
+    } on DioException catch (error) {
+      if (error.response?.statusCode == 404) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
   Future<_TapGoProductionSnapshot> productionSnapshot() async {
     if (tapGoIsPlayDistribution) {
       final membership = await _productionSnapshotPart(
@@ -542,6 +620,47 @@ class _TapGoApiClient {
 
   Future<Map<String, dynamic>> bankAccount() {
     return get('/wallet/bank-account');
+  }
+
+  Future<Map<String, dynamic>> transferWallet({
+    required String recipientPhone,
+    required int amount,
+    String? note,
+    required String idempotencyKey,
+  }) {
+    return post(
+      '/wallet/transfer',
+      body: {
+        'recipientPhone': recipientPhone,
+        'amount': amount,
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+        'idempotencyKey': idempotencyKey,
+      },
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> walletTransfers() async {
+    final data = await get(
+      '/wallet/transfers',
+      query: {'page': 1, 'pageSize': 50},
+    );
+    return _items(data);
+  }
+
+  Future<List<Map<String, dynamic>>> chatMessages(String rideRef) async {
+    final data = await get(
+      '/chat/rides/$rideRef/messages',
+      query: {'page': 1, 'pageSize': 100},
+    );
+    return _items(data);
+  }
+
+  Future<Map<String, dynamic>> sendChatMessage(String rideRef, String message) {
+    return post('/chat/rides/$rideRef/messages', body: {'message': message});
+  }
+
+  Future<Map<String, dynamic>> markChatRead(String rideRef) {
+    return post('/chat/rides/$rideRef/read');
   }
 
   Future<Map<String, dynamic>> updateBankAccount({
@@ -1051,7 +1170,8 @@ class _TapGoProductionSnapshot {
 /// Tanpa fixture, tangkapan layar dashboard di lingkungan test menampilkan
 /// "Data belum tersedia" dan "Gagal memuat data" — state gagal muat yang bukan
 /// bagian dari apa yang ingin ditinjau.
-bool tapGoDashboardVisualFixtureEnabled = false;
+@visibleForTesting
+bool tapGoDashboardVisualFixtureEnabledForTests = false;
 
 /// Label kejujuran yang wajib tampil saat fixture aktif.
 const String tapGoDashboardFixtureLabel = 'DEMO DATA';
@@ -1082,7 +1202,7 @@ _TapGoProductionSnapshot _tapGoDashboardVisualSnapshot() {
 final _productionSnapshotProvider = FutureProvider<_TapGoProductionSnapshot>((
   ref,
 ) async {
-  if (tapGoDashboardVisualFixtureEnabled) {
+  if (tapGoDashboardVisualFixtureEnabledForTests) {
     return _tapGoDashboardVisualSnapshot();
   }
   final session = ref.read(_demoSessionProvider);
@@ -1385,6 +1505,25 @@ String _normalizePhone(String phone) {
   return '+62$digits';
 }
 
+/// Masking nomor telepon untuk log development — sisakan 3 digit awal dan 3
+/// digit akhir saja, cukup untuk menelusuri kasus tanpa mencetak PII utuh.
+String _maskPhoneForLog(String phone) {
+  if (phone.length <= 6) {
+    return '***';
+  }
+  return '${phone.substring(0, 3)}***${phone.substring(phone.length - 3)}';
+}
+
+/// Masking email untuk log development — sisakan 2 karakter awal local-part
+/// dan domain apa adanya, cukup untuk menelusuri kasus tanpa mencetak PII utuh.
+String _maskEmailForLog(String email) {
+  final at = email.indexOf('@');
+  if (at <= 2) {
+    return '***';
+  }
+  return '${email.substring(0, 2)}***${email.substring(at)}';
+}
+
 String _normalizeApiBaseUrl(String value) {
   final rootUrl = _normalizeApiRootUrl(value);
   if (rootUrl.isEmpty) {
@@ -1516,6 +1655,8 @@ class _TapGoEndpointCatalog {
   static const bankAccountUpdate = 'PUT /api/v1/wallet/bank-account';
   static const withdrawalRequest = 'POST /api/v1/wallet/withdrawals';
   static const withdrawalHistory = 'GET /api/v1/wallet/withdrawals';
+  static const walletTransferRequest = 'POST /api/v1/wallet/transfer';
+  static const walletTransferHistory = 'GET /api/v1/wallet/transfers';
   static const accountDeleteRequest = 'POST /api/v1/account/delete-request';
   static const contactMessage = 'POST /api/v1/contact';
   static const memberIdentity = 'GET /api/v1/member-identity/me';

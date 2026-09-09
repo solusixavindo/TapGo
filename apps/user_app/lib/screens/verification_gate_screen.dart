@@ -22,6 +22,9 @@ class VerificationGateScreen extends ConsumerStatefulWidget {
 class _VerificationGateScreenState
     extends ConsumerState<VerificationGateScreen> {
   final _codeController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _emailPasswordController = TextEditingController();
+  final _emailCodeController = TextEditingController();
 
   bool _isLoading = true;
   bool _isSubmitting = false;
@@ -33,8 +36,17 @@ class _VerificationGateScreenState
   String? _maskedEmail;
   bool _emailVerified = false;
 
+  /// True setelah [_addEmail] berhasil pada sesi layar ini, sehingga formulir
+  /// tambah-email diganti langsung dengan kolom kode — tanpa ini pengguna
+  /// harus menutup lalu membuka ulang layar untuk melihat kolom kode.
+  bool _emailJustAdded = false;
+  bool _emailCodeSent = false;
+  bool _obscureEmailPassword = true;
+
   int _resendSeconds = 0;
   Timer? _resendTimer;
+  int _emailResendSeconds = 0;
+  Timer? _emailResendTimer;
   static const int _resendCooldownSeconds = 60;
 
   @override
@@ -61,7 +73,11 @@ class _VerificationGateScreenState
   @override
   void dispose() {
     _resendTimer?.cancel();
+    _emailResendTimer?.cancel();
     _codeController.dispose();
+    _emailController.dispose();
+    _emailPasswordController.dispose();
+    _emailCodeController.dispose();
     super.dispose();
   }
 
@@ -150,6 +166,96 @@ class _VerificationGateScreenState
     });
   }
 
+  void _startEmailResendCountdown() {
+    _emailResendTimer?.cancel();
+    setState(() => _emailResendSeconds = _resendCooldownSeconds);
+    _emailResendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        _emailResendSeconds -= 1;
+        if (_emailResendSeconds <= 0) {
+          _emailResendSeconds = 0;
+          timer.cancel();
+        }
+      });
+    });
+  }
+
+  /// Menyimpan email baru, lalu langsung meminta kode verifikasi — pengguna
+  /// tidak perlu dua kali tekan tombol untuk sampai ke langkah kode.
+  Future<void> _addEmail() {
+    return _guarded(() async {
+      final email = _emailController.text.trim();
+      final password = _emailPasswordController.text;
+      if (email.isEmpty || !email.contains('@')) {
+        setState(() => _errorMessage = 'Masukkan alamat email yang valid.');
+        return;
+      }
+      if (password.isEmpty) {
+        setState(() => _errorMessage = 'Isi password saat ini.');
+        return;
+      }
+      final saved = await _apiClient.updateEmail(
+        email: email,
+        currentPassword: password,
+      );
+      await _apiClient.requestContactVerification('EMAIL');
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _maskedEmail = _maskEmailLocal(saved);
+        _emailJustAdded = true;
+        _emailCodeSent = true;
+        _emailPasswordController.clear();
+      });
+      _startEmailResendCountdown();
+    });
+  }
+
+  Future<void> _requestEmailCode() {
+    return _guarded(() async {
+      await _apiClient.requestContactVerification('EMAIL');
+      if (mounted) {
+        setState(() => _emailCodeSent = true);
+        _startEmailResendCountdown();
+      }
+    });
+  }
+
+  Future<void> _confirmEmailCode() {
+    return _guarded(() async {
+      final code = _emailCodeController.text.trim();
+      if (code.length != 6 || int.tryParse(code) == null) {
+        setState(() => _errorMessage = 'Kode harus 6 digit angka.');
+        return;
+      }
+      await _apiClient.confirmContactVerification(channel: 'EMAIL', code: code);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _emailVerified = true;
+        _emailCodeSent = false;
+        _emailCodeController.clear();
+      });
+    });
+  }
+
+  /// Penyamaran ringan untuk tampilan lokal segera setelah email disimpan —
+  /// backend tidak mengembalikan versi tersamar pada respons PUT, hanya pada
+  /// GET verification/status.
+  String _maskEmailLocal(String email) {
+    final at = email.indexOf('@');
+    if (at <= 1) {
+      return email;
+    }
+    return '${email[0]}${'*' * (at - 1)}${email.substring(at)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -186,6 +292,10 @@ class _VerificationGateScreenState
                     if (!_phoneVerified)
                       ..._phoneVerificationSection(colorScheme),
                     if (_phoneVerified) ..._verifiedSection(colorScheme),
+                    if (!_emailVerified) ...[
+                      const SizedBox(height: 28),
+                      ..._emailManagementSection(colorScheme),
+                    ],
                     if (_errorMessage != null) ...[
                       const SizedBox(height: 16),
                       _RecoveryMessage(message: _errorMessage!, isError: true),
@@ -249,6 +359,126 @@ class _VerificationGateScreenState
           label: 'Verifikasi',
           isLoading: _isSubmitting,
           onPressed: _confirmCode,
+        ),
+      ],
+    ];
+  }
+
+  /// Email bersifat opsional, jadi bagian ini tidak pernah memblokir apa pun
+  /// — beda dari [_phoneVerificationSection] yang menahan layar sampai
+  /// terbukti. Tiga kondisi: belum ada email sama sekali, sudah ada tapi
+  /// belum terbukti, atau (ditangani di [build] lewat `if (!_emailVerified)`)
+  /// sudah terverifikasi sehingga bagian ini tidak ditampilkan sama sekali.
+  List<Widget> _emailManagementSection(ColorScheme colorScheme) {
+    final hasEmail = _maskedEmail != null && !_emailJustAdded ||
+        (_emailJustAdded && _emailCodeSent);
+
+    if (!hasEmail) {
+      return [
+        Text(
+          'Tambahkan email',
+          style: TextStyle(
+            color: colorScheme.onSurface,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Email dipakai sebagai jalur cadangan pemulihan password bila kamu '
+          'lupa. Opsional, tapi disarankan.',
+          style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14),
+        ),
+        const SizedBox(height: 20),
+        _InputField(
+          controller: _emailController,
+          icon: Icons.mail_outline_rounded,
+          label: 'Alamat email',
+          hint: 'nama@email.com',
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+        ),
+        const SizedBox(height: 14),
+        _InputField(
+          controller: _emailPasswordController,
+          icon: Icons.lock_outline_rounded,
+          label: 'Password saat ini',
+          hint: 'Konfirmasi dengan password kamu',
+          obscureText: _obscureEmailPassword,
+          textInputAction: TextInputAction.done,
+          autofillHints: const [AutofillHints.password],
+          suffixIcon: IconButton(
+            icon: Icon(
+              _obscureEmailPassword
+                  ? Icons.visibility_off_rounded
+                  : Icons.visibility_rounded,
+            ),
+            onPressed: () => setState(
+              () => _obscureEmailPassword = !_obscureEmailPassword,
+            ),
+          ),
+          onFieldSubmitted: (_) => _addEmail(),
+        ),
+        const SizedBox(height: 18),
+        _RecoveryPrimaryButton(
+          label: 'Simpan dan kirim kode',
+          isLoading: _isSubmitting,
+          onPressed: _addEmail,
+        ),
+      ];
+    }
+
+    return [
+      Text(
+        'Verifikasi email kamu',
+        style: TextStyle(
+          color: colorScheme.onSurface,
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        'Masukkan kode yang dikirim ke $_maskedEmail.',
+        style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14),
+      ),
+      const SizedBox(height: 20),
+      if (!_emailCodeSent)
+        _RecoveryPrimaryButton(
+          label: 'Kirim kode verifikasi',
+          isLoading: _isSubmitting,
+          onPressed: _requestEmailCode,
+        ),
+      if (_emailCodeSent) ...[
+        _InputField(
+          controller: _emailCodeController,
+          icon: Icons.pin_rounded,
+          label: 'Kode 6 digit',
+          hint: '000000',
+          keyboardType: TextInputType.number,
+          inputFormatters: tapGoOtpInputFormatters,
+          textInputAction: TextInputAction.done,
+          onFieldSubmitted: (_) => _confirmEmailCode(),
+        ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: (_emailResendSeconds > 0 || _isSubmitting)
+                ? null
+                : _requestEmailCode,
+            child: Text(
+              _emailResendSeconds > 0
+                  ? 'Kirim ulang kode dalam $_emailResendSeconds detik'
+                  : 'Kirim ulang kode',
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _RecoveryPrimaryButton(
+          label: 'Verifikasi',
+          isLoading: _isSubmitting,
+          onPressed: _confirmEmailCode,
         ),
       ],
     ];

@@ -30,6 +30,9 @@ export class MemberIdentityService {
     return {
       memberId: identity.publicCode,
       displayName: user.fullName,
+      phone: user.phone,
+      email: user.email,
+      emailVerified: user.emailVerifiedAt !== null,
       membership: user.membership?.name ?? "Basic",
       membershipTier: user.membership?.tier ?? "BASIC",
       status: identity.revokedAt ? "INACTIVE" : "ACTIVE",
