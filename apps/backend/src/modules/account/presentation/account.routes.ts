@@ -8,7 +8,7 @@ import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
 import { requireAuth } from "../../../core/security/authContext.js";
 import { verifyPassword } from "../../../core/security/passwordHasher.js";
-import { accountDeletionRequestSchema, updatePhoneSchema } from "./account.validators.js";
+import { accountDeletionRequestSchema, updateEmailSchema, updatePhoneSchema } from "./account.validators.js";
 
 export const accountRouter = Router();
 
@@ -89,6 +89,48 @@ accountRouter.put(
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         throw new AppError("Nomor HP sudah dipakai akun lain.", StatusCodes.CONFLICT, "PHONE_ALREADY_IN_USE");
+      }
+      throw error;
+    }
+  })
+);
+
+/**
+ * Tambah/ubah email akun sendiri.
+ *
+ * Pola identik dengan PUT /phone: bukti kepemilikan lewat password saat ini,
+ * dan email baru selalu dianggap belum terbukti (emailVerifiedAt dikosongkan)
+ * sampai pemilik menuntaskan alur /auth/verification/*. Tanpa ini, kolom
+ * email tidak pernah bisa diisi untuk akun yang mendaftar tanpa email —
+ * mengunci mereka dari kanal pemulihan password lewat email selamanya.
+ */
+accountRouter.put(
+  "/email",
+  validateRequest(updateEmailSchema),
+  asyncHandler(async (req, res) => {
+    const user = await prisma.user.findUnique({
+      where: { id: req.auth!.userId },
+      select: { passwordHash: true }
+    });
+    if (!user?.passwordHash) {
+      throw new AppError("User not found", StatusCodes.NOT_FOUND, "USER_NOT_FOUND");
+    }
+
+    const matches = await verifyPassword(user.passwordHash, req.body.currentPassword);
+    if (!matches) {
+      throw new AppError("Password saat ini tidak cocok.", StatusCodes.UNAUTHORIZED, "INVALID_CREDENTIALS");
+    }
+
+    try {
+      const updated = await prisma.user.update({
+        where: { id: req.auth!.userId },
+        data: { email: req.body.email, emailVerifiedAt: null },
+        select: { id: true, email: true }
+      });
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new AppError("Email sudah dipakai akun lain.", StatusCodes.CONFLICT, "EMAIL_ALREADY_IN_USE");
       }
       throw error;
     }

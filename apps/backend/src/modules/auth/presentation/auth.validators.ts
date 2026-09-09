@@ -8,6 +8,7 @@ export const phoneSchema = z
   .regex(/^(\+?[1-9]\d{7,31}|0\d{7,31})$/)
   .transform(normalizePhoneNumber);
 export const passwordSchema = z.string().min(6).max(128);
+export const emailSchema = z.string().trim().toLowerCase().email().max(180);
 
 const wrapBody = (value: unknown) => {
   if (value && typeof value === "object" && "body" in value) {
