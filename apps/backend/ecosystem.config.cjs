@@ -3,7 +3,7 @@ module.exports = {
     {
       name: "tapgo-api",
       cwd: __dirname,
-      script: "dist/server.js",
+      script: "dist/src/server.js",
       exec_mode: "fork",
       instances: 1,
       max_memory_restart: "512M",
