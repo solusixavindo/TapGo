@@ -139,7 +139,12 @@ export class RideService {
       );
     }
 
-    return this.toQuoteView(quote);
+    // routePolyline sengaja tidak disimpan ke tabel RideQuote (lihat komentar
+    // di DistanceEstimate) — ditempel di sini, hanya untuk respons quote yang
+    // baru dihitung. Replay idempotent (di atas) tidak menyertakannya karena
+    // hanya membaca baris DB, bukan kegagalan — client sudah menerimanya di
+    // respons pertama.
+    return { ...this.toQuoteView(quote), routePolyline: estimate.routePolyline };
   }
 
   // -------------------------------------------------------------------------

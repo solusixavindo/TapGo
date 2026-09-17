@@ -47,6 +47,22 @@ describe("mapOsrmRouteResponse (unit)", () => {
       mapOsrmRouteResponse({ code: "Ok", routes: [{ duration: 10 }] }),
     ).toThrowError(/tidak valid/);
   });
+
+  it("menyertakan routePolyline saat geometry ada di respons", () => {
+    const result = mapOsrmRouteResponse({
+      code: "Ok",
+      routes: [{ distance: 1000, duration: 200, geometry: "abc123~xyz" }],
+    });
+    expect(result.routePolyline).toBe("abc123~xyz");
+  });
+
+  it("tidak menyertakan key routePolyline sama sekali saat geometry kosong/tidak ada", () => {
+    const result = mapOsrmRouteResponse({
+      code: "Ok",
+      routes: [{ distance: 1000, duration: 200 }],
+    });
+    expect("routePolyline" in result).toBe(false);
+  });
 });
 
 describe("OsrmDistanceAdapter (unit, fetch distubbing)", () => {
@@ -85,6 +101,8 @@ describe("OsrmDistanceAdapter (unit, fetch distubbing)", () => {
     expect(requestedUrl).toContain(
       `/route/v1/driving/${PICKUP.lng},${PICKUP.lat};${DROPOFF.lng},${DROPOFF.lat}`,
     );
+    expect(requestedUrl).toContain("overview=full");
+    expect(requestedUrl).toContain("geometries=polyline");
     expect(result).toEqual({
       distanceMeters: 2000,
       durationSeconds: 400,
@@ -92,6 +110,31 @@ describe("OsrmDistanceAdapter (unit, fetch distubbing)", () => {
       source: "OSRM_ROAD_V1",
     });
     expect(fallback.calls).toBe(0);
+  });
+
+  it("meneruskan routePolyline dari OSRM ke hasil estimate", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            code: "Ok",
+            routes: [{ distance: 2000, duration: 400, geometry: "route_geom_encoded" }],
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+
+    const fallback = new StubFallback();
+    const adapter = new OsrmDistanceAdapter("http://localhost:5001", fallback);
+    const result = await adapter.estimate({
+      pickup: PICKUP,
+      dropoff: DROPOFF,
+      serviceType: "MOTORCYCLE",
+    });
+
+    expect(result.routePolyline).toBe("route_geom_encoded");
   });
 
   it("jatuh ke fallback saat OSRM merespons HTTP error", async () => {

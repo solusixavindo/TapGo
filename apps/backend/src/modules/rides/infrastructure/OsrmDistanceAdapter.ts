@@ -9,7 +9,7 @@ const ETA_FRACTION_OF_DURATION = 0.25;
 
 type OsrmRouteResponse = {
   code?: string;
-  routes?: Array<{ distance?: number; duration?: number }>;
+  routes?: Array<{ distance?: number; duration?: number; geometry?: string }>;
 };
 
 /**
@@ -22,6 +22,7 @@ type OsrmRouteResponse = {
 export function mapOsrmRouteResponse(payload: OsrmRouteResponse): {
   distanceMeters: number;
   durationSeconds: number;
+  routePolyline?: string;
 } {
   const route = payload.routes?.[0];
   if (
@@ -35,6 +36,13 @@ export function mapOsrmRouteResponse(payload: OsrmRouteResponse): {
   return {
     distanceMeters: Math.max(1, Math.round(route.distance as number)),
     durationSeconds: Math.max(1, Math.round(route.duration as number)),
+    // Geometri opsional: jarak/durasi tetap valid untuk tarif walau geometri
+    // kosong/rusak — jangan gagalkan seluruh quote hanya karena rute tidak
+    // bisa digambar. Key dihilangkan sepenuhnya (bukan diisi `undefined`)
+    // supaya cocok dengan `exactOptionalPropertyTypes`.
+    ...(typeof route.geometry === "string" && route.geometry.length > 0
+      ? { routePolyline: route.geometry }
+      : {}),
   };
 }
 
@@ -66,10 +74,8 @@ export class OsrmDistanceAdapter implements DistancePort {
     serviceType: RideServiceType;
   }): Promise<DistanceEstimate> {
     try {
-      const { distanceMeters, durationSeconds } = await this.fetchRoute(
-        input.pickup,
-        input.dropoff,
-      );
+      const { distanceMeters, durationSeconds, routePolyline } =
+        await this.fetchRoute(input.pickup, input.dropoff);
       const boundedDuration = Math.max(60, durationSeconds);
       const etaSeconds = Math.max(
         60,
@@ -80,6 +86,7 @@ export class OsrmDistanceAdapter implements DistancePort {
         durationSeconds: boundedDuration,
         etaSeconds,
         source: OsrmDistanceAdapter.SOURCE,
+        ...(routePolyline ? { routePolyline } : {}),
       };
     } catch (error) {
       logger.warn(
@@ -92,7 +99,8 @@ export class OsrmDistanceAdapter implements DistancePort {
 
   private async fetchRoute(pickup: GeoPoint, dropoff: GeoPoint) {
     const coords = `${pickup.lng},${pickup.lat};${dropoff.lng},${dropoff.lat}`;
-    const url = `${this.baseUrl.replace(/\/$/, "")}/route/v1/driving/${coords}?overview=false&alternatives=false&steps=false`;
+    const url = `${this.baseUrl.replace(/\/$/, "")}/route/v1/driving/${coords}` +
+      "?overview=full&geometries=polyline&alternatives=false&steps=false";
 
     const response = await fetch(url, {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

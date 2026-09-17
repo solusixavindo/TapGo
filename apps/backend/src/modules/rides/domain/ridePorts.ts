@@ -20,6 +20,15 @@ export type DistanceEstimate = {
   etaSeconds: number;
   /** Penanda sumber estimasi untuk audit (mis. "HAVERSINE_LOCAL_V1"). */
   source: string;
+  /**
+   * Geometri rute jalan asli (encoded polyline, presisi 5 — format standar
+   * OSRM/Google) untuk digambar di peta client. Hanya ada saat sumbernya
+   * benar-benar rute jalan (OSRM); adapter garis-lurus (Local) tidak mengisi
+   * field ini karena tidak punya geometri jalan sungguhan untuk ditampilkan.
+   * Sengaja TIDAK dipersist ke tabel RideQuote — dipakai sekali untuk
+   * digambar saat quote ditampilkan, dihitung ulang tiap request baru.
+   */
+  routePolyline?: string;
 };
 
 /**
