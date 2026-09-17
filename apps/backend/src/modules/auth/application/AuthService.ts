@@ -140,25 +140,6 @@ export class AuthService {
     return this.issueTokenPair(user.id, user.role, input.context);
   }
 
-  async requestOtp(input: { phone: string; purpose: "LOGIN" | "REGISTER" }) {
-    const code = this.generateOtp();
-    const codeHash = await hashPassword(code);
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-
-    await this.authRepository.createOtpChallenge({
-      phone: input.phone,
-      codeHash,
-      purpose: input.purpose,
-      expiresAt
-    });
-
-    return {
-      expiresAt,
-      delivery: "SMS",
-      developmentCode: env.NODE_ENV === "production" ? undefined : code
-    };
-  }
-
   async refresh(refreshToken: string, context: AuthClientContext) {
     const payload = verifyRefreshToken(refreshToken);
     const session = await this.authRepository.findSessionById(payload.sessionId);
