@@ -353,9 +353,11 @@ class DriverRide {
     this.totalFare,
     this.currency = 'IDR',
     this.updatedAt,
+    this.paymentMethod = 'CASH',
   });
 
   factory DriverRide.fromJson(Map<String, dynamic> json) {
+    final payment = json['payment'];
     final pickup = json['pickup'];
     final dropoff = json['dropoff'];
     final fare = json['fare'];
@@ -372,8 +374,16 @@ class DriverRide {
       currency:
           '${(fare is Map ? fare['currency'] : null) ?? json['currency'] ?? 'IDR'}',
       updatedAt: DateTime.tryParse('${json['updatedAt'] ?? ''}'),
+      paymentMethod: payment is Map && payment['method'] == 'DIGITAL'
+          ? 'DIGITAL'
+          : 'CASH',
     );
   }
+
+  /// 'DIGITAL' = penumpang sudah membayar lewat TapGoPay: driver TIDAK boleh
+  /// menagih tunai. Nilai selain DIGITAL diperlakukan sebagai tunai.
+  final String paymentMethod;
+  bool get isPaidDigitally => paymentMethod == 'DIGITAL';
 
   final String reference;
   final String serviceType;

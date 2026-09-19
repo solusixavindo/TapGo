@@ -725,8 +725,20 @@ class _RideSummary extends StatelessWidget {
               InfoChip(label: _duration(ride.durationSeconds!)),
             if (ride.totalFare != null)
               InfoChip(label: _rupiah(ride.totalFare!)),
+            InfoChip(label: ride.isPaidDigitally ? 'TapGoPay' : 'Tunai'),
           ],
         ),
+        if (ride.isPaidDigitally) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Sudah dibayar lewat TapGoPay. Jangan menagih tunai ke penumpang.',
+            key: const ValueKey('ride-paid-digital-notice'),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ],
     );
   }
