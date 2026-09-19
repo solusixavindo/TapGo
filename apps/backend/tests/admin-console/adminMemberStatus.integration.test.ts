@@ -130,6 +130,19 @@ describe.skipIf(!runIntegration)("Admin member account status", () => {
     expect(trend[trend.length - 1]!.count).toBe(1);
     expect(trend.slice(-7).reduce((sum, row) => sum + row.count, 0)).toBe(2);
   });
+
+  it("direktori member menampilkan saldo PPOB dan wallet nyata dari dompet, bukan jatah paket", async () => {
+    const vip = await createUser("SUPER_ADMIN_VIP");
+    const member = await createUser("USER");
+    await prisma.wallet.create({
+      data: { userId: member.id, balance: "0.00", cashBalance: "12000.00", ppobBalance: "5000.00" }
+    });
+    const res = await call(vip, `/api/v1/admin/members?search=${encodeURIComponent(member.phone)}`);
+    const body = (await res.json()) as { data: { items: { id: string; ppobBalance: string; walletBalance: string }[] } };
+    const row = body.data.items.find((i) => i.id === member.id)!;
+    expect(row.ppobBalance).toBe("5000.00");
+    expect(row.walletBalance).toBe("12000.00");
+  });
 });
 
 async function createUser(role: UserRole, overrides: { phone?: string } = {}): Promise<User> {

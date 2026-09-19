@@ -2293,7 +2293,9 @@ export class AdminConsoleService {
       directSponsorCount,
       totalDownline,
       walletBalance: this.decimal(user.wallet?.cashBalance),
-      ppobBalance: this.decimal(activeMembership?.membership.ppobBalance),
+      // Saldo PPOB NYATA di dompet member (termasuk bonus Basic Rp5.000), bukan
+      // jatah PPOB paket — yang terakhir 0 untuk Basic dan menyesatkan.
+      ppobBalance: this.decimal(user.wallet?.ppobBalance),
       commissionTotal: this.decimal(commissionTotal._sum.amount)
     };
   }
