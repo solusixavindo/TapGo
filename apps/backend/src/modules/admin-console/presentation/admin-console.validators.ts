@@ -233,3 +233,11 @@ export const adminRoleCandidateSchema = z.object({
     q: z.string().trim().min(3).max(60)
   })
 });
+
+export const adminAuditLogQuerySchema = z.object({
+  query: z.object({
+    ...paginationQuery,
+    action: z.string().trim().min(1).max(120).optional(),
+    entityType: z.string().trim().min(1).max(80).optional()
+  })
+});

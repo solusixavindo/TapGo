@@ -557,7 +557,7 @@ describe.skipIf(!runIntegration)("Admin console API", () => {
   });
 
   it("manages reward lifecycle without double cash ledger", async () => {
-    const admin = await createUser("ADMIN002", "ADMIN");
+    const admin = await createUser("ADMIN002", "SUPER_ADMIN");
     const user = await createUser("REWARD001", "USER");
     const rejectedUser = await createUser("REWARD002", "USER");
     const userToken = tokenFor(user);
@@ -638,7 +638,7 @@ describe.skipIf(!runIntegration)("Admin console API", () => {
   });
 
   it("serves financial admin reports with separated cash and PPOB liability", async () => {
-    const admin = await createUser("ADMIN003", "ADMIN");
+    const admin = await createUser("ADMIN003", "SUPER_ADMIN");
     const superAdmin = await createUser("SUPER003", "SUPER_ADMIN");
     const user = await createUser("USER003", "USER");
     const adminToken = tokenFor(admin);

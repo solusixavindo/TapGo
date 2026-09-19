@@ -486,6 +486,10 @@ model Membership {
   bpjsBenefit   String?        @map("bpjs_benefit")
   merchandise   Json?
   businessRight String?        @map("business_right")
+  /// Harga pokok satu paket (rupiah) dan rinciannya per komponen — dasar
+  /// HPP pada laporan laba rugi. 0 berarti HPP paket ini belum diisi.
+  hppTotal      Decimal        @default(0) @map("hpp_total") @db.Decimal(14, 2)
+  hppBreakdown  Json?          @map("hpp_breakdown")
   isActive      Boolean        @default(true) @map("is_active")
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")

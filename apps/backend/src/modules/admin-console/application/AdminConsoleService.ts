@@ -1143,6 +1143,85 @@ export class AdminConsoleService {
     }));
   }
 
+  /**
+   * Log audit untuk konsol. SUPER_ADMIN melihat aksi operasional dan uang;
+   * aksi yang mengungkap siapa memegang otoritas admin (peran, scope) serta
+   * alamat IP hanya untuk SUPER_ADMIN_VIP.
+   */
+  async listAuditLogs(input: {
+    page: number;
+    pageSize: number;
+    action?: string;
+    entityType?: string;
+    includeAuthority: boolean;
+  }) {
+    const where: Prisma.AuditLogWhereInput = {
+      ...(input.action ? { action: input.action } : {}),
+      ...(input.entityType ? { entityType: input.entityType } : {}),
+      ...(input.includeAuthority
+        ? {}
+        : {
+            NOT: [
+              { action: { startsWith: "ADMIN_ROLE" } },
+              { action: { startsWith: "SUPER_ADMIN_VIP" } },
+              { action: { startsWith: "admin.scope" } }
+            ]
+          })
+    };
+    const [total, rows] = await Promise.all([
+      this.prisma.auditLog.count({ where }),
+      this.prisma.auditLog.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (input.page - 1) * input.pageSize,
+        take: input.pageSize,
+        select: {
+          id: true,
+          action: true,
+          entityType: true,
+          entityId: true,
+          metadata: true,
+          createdAt: true,
+          ...(input.includeAuthority ? { ipAddress: true } : {}),
+          actor: { select: { fullName: true, role: true } }
+        }
+      })
+    ]);
+    return {
+      total,
+      items: rows.map((row) => ({
+        id: row.id,
+        action: row.action,
+        entityType: row.entityType,
+        entityId: row.entityId,
+        metadata: row.metadata,
+        createdAt: row.createdAt,
+        actorName: row.actor?.fullName ?? "Sistem",
+        actorRole: row.actor?.role ?? null,
+        ...("ipAddress" in row ? { ipAddress: row.ipAddress } : {})
+      }))
+    };
+  }
+
+  /** Mencatat aksi admin yang belum dicatat oleh layanan asalnya. */
+  async recordAdminAction(input: {
+    actorId: string;
+    action: string;
+    entityType: string;
+    entityId: string;
+    metadata?: Prisma.InputJsonValue;
+  }) {
+    await this.prisma.auditLog.create({
+      data: {
+        actorId: input.actorId,
+        action: input.action,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        ...(input.metadata !== undefined ? { metadata: input.metadata } : {})
+      }
+    });
+  }
+
   async memberRequests(input: PageInput & { status?: MembershipOrderStatus }) {
     const where: Prisma.MembershipOrderWhereInput = {
       ...(input.status ? { status: input.status } : {})
@@ -1516,6 +1595,172 @@ export class AdminConsoleService {
       totalActiveSilver: packageCounts.SILVER,
       totalActiveGold: packageCounts.GOLD,
       totalActivePlatinum: packageCounts.PLATINUM
+    };
+  }
+
+  /**
+   * Laporan laba rugi manajemen, dihitung dari data operasional sistem.
+   *
+   * BUKAN laporan keuangan resmi/teraudit. Yang dihitung hanyalah yang benar-
+   * benar tercatat di sistem; biaya di luar sistem (biaya gateway pembayaran,
+   * harga modal PPOB dari provider, gaji, server, pajak) belum ada di sini
+   * dan disebut eksplisit di `notes` agar angka laba tidak dibaca berlebihan.
+   */
+  async profitLossReport(input: DateRangeOnlyInput) {
+    const current = await this.computeProfitLoss(input);
+
+    let previous: Awaited<ReturnType<AdminConsoleService["computeProfitLoss"]>> | null = null;
+    if (input.dateFrom && input.dateTo) {
+      const length = input.dateTo.getTime() - input.dateFrom.getTime();
+      if (length > 0) {
+        previous = await this.computeProfitLoss({
+          dateFrom: new Date(input.dateFrom.getTime() - length - 1),
+          dateTo: new Date(input.dateFrom.getTime() - 1)
+        });
+      }
+    }
+
+    const [walletLiability, withdrawPending] = await Promise.all([
+      this.walletLiabilityReport(input),
+      this.prisma.withdrawal.aggregate({
+        where: { status: { in: ["PENDING", "APPROVED"] } },
+        _sum: { amount: true }
+      })
+    ]);
+
+    return {
+      period: this.reportPeriod(input),
+      ...current,
+      previous: previous
+        ? {
+            totalRevenue: previous.revenue.total,
+            totalExpenses: previous.expenses.total,
+            operatingProfit: previous.operatingProfit
+          }
+        : null,
+      memo: {
+        ppobGrossSales: current.memo.ppobGrossSales,
+        walletLiabilityCash: walletLiability.totalCashBalance,
+        walletLiabilityPpob: walletLiability.totalPpobBalance,
+        withdrawalsOutstanding: this.decimal(withdrawPending._sum.amount)
+      },
+      notes: [
+        "Dihitung dari data sistem TapGo; bukan laporan keuangan teraudit.",
+        ...(current.hpp.missingTiers.length > 0
+          ? [`HPP paket ${current.hpp.missingTiers.join(", ")} belum diisi, jadi belum dihitung sebagai beban.`]
+          : []),
+        "HPP paket dicatat saat paket terjual, termasuk saldo PPOB yang diberikan sebagai manfaat.",
+        "Belum termasuk: biaya gateway pembayaran, harga modal PPOB dari provider, gaji, server, pajak, dan biaya operasional lain di luar sistem.",
+        "Komisi ojek hanya tercatat untuk perjalanan yang dibayar TapGoPay; ojek tunai belum memotong komisi.",
+        "Saldo dompet dan penarikan tertunda adalah kewajiban, bukan pendapatan atau beban."
+      ]
+    };
+  }
+
+  private async computeProfitLoss(input: DateRangeOnlyInput) {
+    const range = this.createdAtRange(input);
+    const [
+      invoicesPaid,
+      invoicesRefunded,
+      rideCommission,
+      ppob,
+      sponsor,
+      level,
+      reward,
+      profitSharing,
+      paidInvoices
+    ] = await Promise.all([
+      this.prisma.invoice.aggregate({ where: { status: "PAID", ...range }, _sum: { amount: true } }),
+      this.prisma.invoice.aggregate({ where: { status: "REFUNDED", ...range }, _sum: { amount: true } }),
+      this.prisma.commission.aggregate({
+        where: { type: "RIDE_COMPANY_REVENUE", status: { in: ["PENDING", "POSTED"] }, ...range },
+        _sum: { amount: true }
+      }),
+      this.prisma.ppobTransaction.aggregate({
+        where: { status: "SUCCESS", ...range },
+        _sum: { adminFee: true, totalAmount: true }
+      }),
+      this.sumCommissionByTypesInRange(sponsorTypes, input),
+      this.sumCommissionByTypesInRange(levelTypes, input),
+      this.rewardSummaryReport(input),
+      this.profitSharingSummaryReport(input),
+      this.prisma.invoice.findMany({
+        where: { status: "PAID", ...range },
+        select: {
+          order: {
+            select: {
+              membership: { select: { tier: true, name: true, hppTotal: true, hppBreakdown: true } }
+            }
+          }
+        }
+      })
+    ]);
+
+    // HPP paket: jumlah paket terjual dalam periode x harga pokok per paket.
+    const tierMap = new Map<string, { tier: string; name: string; units: number; unitCost: Prisma.Decimal; items: unknown }>();
+    for (const row of paidInvoices) {
+      const membership = row.order?.membership;
+      if (!membership) continue;
+      const entry = tierMap.get(membership.tier) ?? {
+        tier: membership.tier,
+        name: membership.name,
+        units: 0,
+        unitCost: new Prisma.Decimal(membership.hppTotal),
+        items: membership.hppBreakdown
+      };
+      entry.units += 1;
+      tierMap.set(membership.tier, entry);
+    }
+    const hppTiers = Array.from(tierMap.values()).map((entry) => ({
+      tier: entry.tier,
+      name: entry.name,
+      units: entry.units,
+      unitCost: entry.unitCost.toFixed(2),
+      total: entry.unitCost.mul(entry.units).toFixed(2),
+      items: entry.items ?? null
+    }));
+    const hppTotal = hppTiers.reduce((sum, tier) => sum.plus(tier.total), new Prisma.Decimal(0));
+    const hppMissing = hppTiers.filter((tier) => new Prisma.Decimal(tier.unitCost).isZero()).map((tier) => tier.name);
+
+    const membershipSales = new Prisma.Decimal(invoicesPaid._sum.amount ?? 0);
+    const membershipRefunds = new Prisma.Decimal(invoicesRefunded._sum.amount ?? 0);
+    const membershipNet = membershipSales.minus(membershipRefunds);
+    const rideRevenue = new Prisma.Decimal(rideCommission._sum.amount ?? 0);
+    const ppobFee = new Prisma.Decimal(ppob._sum.adminFee ?? 0);
+    const totalRevenue = membershipNet.plus(rideRevenue).plus(ppobFee);
+
+    const sponsorBonus = new Prisma.Decimal(sponsor._sum.amount ?? 0);
+    const levelBonus = new Prisma.Decimal(level._sum.amount ?? 0);
+    const rewardPaid = new Prisma.Decimal(reward.totalPaid ?? 0);
+    const profitSharingPaid = new Prisma.Decimal(profitSharing.totalPaid ?? 0);
+    const totalExpenses = sponsorBonus.plus(levelBonus).plus(rewardPaid).plus(profitSharingPaid).plus(hppTotal);
+
+    const operatingProfit = totalRevenue.minus(totalExpenses);
+    const margin = totalRevenue.gt(0)
+      ? operatingProfit.div(totalRevenue).mul(100).toDecimalPlaces(1).toString()
+      : null;
+
+    return {
+      revenue: {
+        membershipSales: membershipSales.toFixed(2),
+        membershipRefunds: membershipRefunds.toFixed(2),
+        membershipNet: membershipNet.toFixed(2),
+        rideCommission: rideRevenue.toFixed(2),
+        ppobAdminFee: ppobFee.toFixed(2),
+        total: totalRevenue.toFixed(2)
+      },
+      expenses: {
+        sponsorBonus: sponsorBonus.toFixed(2),
+        levelBonus: levelBonus.toFixed(2),
+        rewardPaid: rewardPaid.toFixed(2),
+        profitSharing: profitSharingPaid.toFixed(2),
+        hppPackages: hppTotal.toFixed(2),
+        total: totalExpenses.toFixed(2)
+      },
+      hpp: { tiers: hppTiers, missingTiers: hppMissing },
+      operatingProfit: operatingProfit.toFixed(2),
+      operatingMarginPercent: margin,
+      memo: { ppobGrossSales: new Prisma.Decimal(ppob._sum.totalAmount ?? 0).toFixed(2) }
     };
   }
 

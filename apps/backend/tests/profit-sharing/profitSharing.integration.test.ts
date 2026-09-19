@@ -58,7 +58,7 @@ describe.skipIf(!runIntegration)("Profit sharing admin API", () => {
   });
 
   it("allows admin to create a profit sharing period", async () => {
-    const admin = await createApiUser("ADMINPS1", "ADMIN");
+    const admin = await createApiUser("ADMINPS1", "SUPER_ADMIN");
 
     const response = await createPeriod(admin, 5, 2026, 300000);
     const body = await response.json() as { data: { status: string; periodMonth: number; periodYear: number; netProfitAmount: string; totalPoolAmount: string } };

@@ -99,6 +99,9 @@ const envSchema = z.object({
   /// WALLET_CASH_OUT_ENABLED agar rilis Google Play tetap tertutup walau
   /// pencairan web dinyalakan.
   WALLET_CASH_OUT_WEB_ENABLED: strictEnvBoolean(false),
+  /// Penarikan dengan nominal sama atau di atas ini hanya boleh disetujui
+  /// SUPER_ADMIN_VIP (rupiah penuh). Di bawahnya cukup SUPER_ADMIN.
+  WITHDRAWAL_VIP_THRESHOLD: z.coerce.number().int().positive().default(2_000_000),
   /// Transfer P2P TapGoPay antar user (Stage R2.10). Tidak melibatkan payment
   /// gateway eksternal (murni saldo internal), tapi tetap default mati sampai
   /// Owner menyalakannya secara sadar — pola yang sama dengan fitur uang lain

@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
-import { PaymentStatus, Prisma, PrismaClient, WithdrawalStatus } from "@prisma/client";
+import { PaymentStatus, Prisma, PrismaClient, UserRole, WithdrawalStatus } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../core/errors/AppError.js";
+import { roleSatisfies } from "../../../core/security/roleHierarchy.js";
 import { phoneLookupVariants } from "../../../core/security/phone.js";
 import {
   BankAccountSnapshot,
@@ -13,6 +14,13 @@ import {
   WalletTransferItem,
   WithdrawalItem
 } from "../domain/WalletRepository.js";
+
+/**
+ * Ambang default penarikan yang wajib disetujui SUPER_ADMIN_VIP. Controller
+ * memasok nilai dari env; konstanta ini hanya cadangan fail-closed. Berkas ini
+ * sengaja tidak mengimpor config/env agar tidak memaksa env dimuat lebih awal.
+ */
+const DEFAULT_WITHDRAWAL_VIP_THRESHOLD = 2_000_000;
 
 /** Referensi publik: PREFIX- + 10 karakter alfabet aman (tanpa 0/O/1/I) — pola sama dengan PPOB. */
 function generateReference(prefix: string): string {
@@ -219,7 +227,7 @@ export class PrismaWalletRepository implements WalletRepository {
   }
 
   async approveWithdrawal(
-    input: { withdrawalId: string; adminId: string; note?: string },
+    input: { withdrawalId: string; adminId: string; actorRole?: UserRole; vipThreshold?: number; note?: string },
     tx: Prisma.TransactionClient
   ): Promise<WithdrawalItem> {
     const withdrawal = await tx.withdrawal.findUnique({ where: { id: input.withdrawalId } });
@@ -229,6 +237,19 @@ export class PrismaWalletRepository implements WalletRepository {
 
     if (withdrawal.status !== "PENDING") {
       throw new AppError("Only pending withdrawals can be approved", StatusCodes.CONFLICT, "WITHDRAWAL_INVALID_STATE");
+    }
+
+    // Nominal besar wajib disetujui pemilik (SUPER_ADMIN_VIP). Peran yang tidak
+    // diketahui diperlakukan sebagai kurang berwenang (fail closed).
+    if (
+      withdrawal.amount.gte(input.vipThreshold ?? DEFAULT_WITHDRAWAL_VIP_THRESHOLD) &&
+      !(input.actorRole && roleSatisfies(input.actorRole, "SUPER_ADMIN_VIP"))
+    ) {
+      throw new AppError(
+        "Penarikan dengan nominal ini harus disetujui Super Admin VIP.",
+        StatusCodes.FORBIDDEN,
+        "WITHDRAWAL_VIP_REQUIRED"
+      );
     }
 
     const approvedAt = new Date();

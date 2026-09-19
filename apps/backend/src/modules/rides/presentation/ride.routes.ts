@@ -7,6 +7,7 @@ import { AppError } from "../../../core/errors/AppError.js";
 import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
 import { requireAuth, requireRoles } from "../../../core/security/authContext.js";
+import { maskForOperator } from "../../../core/security/adminMasking.js";
 import {
   rideLocationRateLimiter,
   rideWriteRateLimiter,
@@ -338,7 +339,7 @@ driverRideRouter.post(
 // Admin / Moderasi — /api/v1/admin/rides
 // ---------------------------------------------------------------------------
 
-adminRideRouter.use(requireAuth, requireRoles("ADMIN", "SUPER_ADMIN"));
+adminRideRouter.use(requireAuth, requireRoles("ADMIN", "SUPER_ADMIN"), maskForOperator);
 
 adminRideRouter.get(
   "/",
@@ -413,6 +414,7 @@ adminRideRouter.patch(
 
 adminRideRouter.patch(
   "/vehicles/:vehicleId/verification",
+  requireRoles("SUPER_ADMIN"),
   validateRequest(adminVehicleVerificationSchema),
   asyncHandler(async (req, res) => {
     const data = await rideService.updateVehicleVerificationByAdmin({
@@ -428,6 +430,7 @@ adminRideRouter.patch(
 
 adminRideRouter.get(
   "/drivers/:driverProfileId",
+  requireRoles("SUPER_ADMIN"),
   validateRequest(adminDriverProfileSchema),
   asyncHandler(async (req, res) => {
     const data = await rideService.getAdminDriver(

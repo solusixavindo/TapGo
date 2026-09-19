@@ -238,7 +238,7 @@ describe.skipIf(!runIntegration)("Antrian dokumen mitra driver", () => {
   }
 
   async function createAdmin() {
-    return createUserOnly("ADM", "ADMIN");
+    return createUserOnly("ADM", "SUPER_ADMIN");
   }
 
   function upload(account: { token: string }, type: string, bytes: Buffer) {

@@ -3,6 +3,7 @@ import { prisma } from "../../../config/prisma.js";
 import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
 import { requireAuth, requireRoles } from "../../../core/security/authContext.js";
+import { maskForOperator } from "../../../core/security/adminMasking.js";
 import { walletTransferRateLimiter } from "../../../core/security/rateLimit.js";
 import { WalletService } from "../application/WalletService.js";
 import { PrismaWalletRepository } from "../infrastructure/PrismaWalletRepository.js";
@@ -46,36 +47,42 @@ walletRouter.post(
 walletRouter.get(
   "/admin/users/:userId",
   requireRoles("ADMIN", "SUPER_ADMIN"),
+  maskForOperator,
   validateRequest(adminUserWalletSchema),
   asyncHandler(controller.adminUserWallet)
 );
 walletRouter.get(
   "/admin/withdrawals",
   requireRoles("ADMIN", "SUPER_ADMIN"),
+  maskForOperator,
   validateRequest(withdrawalListSchema),
   asyncHandler(controller.adminWithdrawals)
 );
 walletRouter.get(
   "/admin/withdrawals/:withdrawalId",
   requireRoles("ADMIN", "SUPER_ADMIN"),
+  maskForOperator,
   validateRequest(withdrawalDetailSchema),
   asyncHandler(controller.adminWithdrawal)
 );
 walletRouter.post(
   "/admin/withdrawals/:withdrawalId/approve",
-  requireRoles("ADMIN", "SUPER_ADMIN"),
+  requireRoles("SUPER_ADMIN"),
+  maskForOperator,
   validateRequest(withdrawalActionSchema),
   asyncHandler(controller.approveWithdrawal)
 );
 walletRouter.post(
   "/admin/withdrawals/:withdrawalId/reject",
-  requireRoles("ADMIN", "SUPER_ADMIN"),
+  requireRoles("SUPER_ADMIN"),
+  maskForOperator,
   validateRequest(withdrawalActionSchema),
   asyncHandler(controller.rejectWithdrawal)
 );
 walletRouter.post(
   "/admin/withdrawals/:withdrawalId/paid",
   requireRoles("SUPER_ADMIN"),
+  maskForOperator,
   validateRequest(withdrawalActionSchema),
   asyncHandler(controller.markWithdrawalPaid)
 );

@@ -219,7 +219,7 @@ describe.skipIf(!runIntegration)("Ride digital payment (TapGoPay)", () => {
 
   it("koreksi admin ke batal mengembalikan dana penumpang", async () => {
     const passenger = await createPassenger({ balance: 100000, cash: 0 });
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const quote = await createQuote(passenger);
     const reference = await orderRef(passenger, quote.quoteId);
 

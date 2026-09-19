@@ -1,4 +1,4 @@
-import { PaymentStatus, Prisma, WithdrawalStatus } from "@prisma/client";
+import { PaymentStatus, Prisma, UserRole, WithdrawalStatus } from "@prisma/client";
 
 export type WalletSnapshot = {
   id: string;
@@ -116,6 +116,8 @@ export interface WalletRepository {
   approveWithdrawal(input: {
     withdrawalId: string;
     adminId: string;
+    actorRole?: UserRole;
+    vipThreshold?: number;
     note?: string;
   }, tx: Prisma.TransactionClient): Promise<WithdrawalItem>;
   rejectWithdrawal(input: {

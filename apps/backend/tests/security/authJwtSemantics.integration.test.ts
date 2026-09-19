@@ -198,7 +198,7 @@ describe.skipIf(!runIntegration)("Stage 5.4 — semantik JWT & batas router admi
     const ghostAdmin = randomUUID();
     const res = await authed(
       `/api/v1/admin/rides/drivers/${driver.id}/status`,
-      signAccessToken({ sub: ghostAdmin, role: "ADMIN", sessionId: "s" }),
+      signAccessToken({ sub: ghostAdmin, role: "SUPER_ADMIN", sessionId: "s" }),
       "PATCH",
       { status: "SUSPENDED", reason: "uji kegagalan internal" },
     );
@@ -258,6 +258,9 @@ describe.skipIf(!runIntegration)("Stage 5.4 — semantik JWT & batas router admi
 
   it("delapan route admin sah tetap mencapai handler yang benar", async () => {
     const admin = await createUser("ADMIN");
+    // Moderasi driver dan koreksi status ride memindahkan/mengembalikan uang
+    // (refund TapGoPay), jadi hanya SUPER_ADMIN; sisanya cukup ADMIN.
+    const superAdmin = await createUser("SUPER_ADMIN");
     const driver = await createDriverProfile();
     const vehicle = await prisma.rideVehicle.findFirstOrThrow({
       where: { driverProfileId: driver.id },
@@ -282,7 +285,7 @@ describe.skipIf(!runIntegration)("Stage 5.4 — semantik JWT & batas router admi
     // 5 & 6: moderasi driver dan kendaraan (PATCH)
     const drvPatch = await authed(
       `/api/v1/admin/rides/drivers/${driver.id}/status`,
-      tokenFor(admin),
+      tokenFor(superAdmin),
       "PATCH",
       { status: "SUSPENDED", reason: "uji routing 5.4" },
     );
@@ -306,7 +309,7 @@ describe.skipIf(!runIntegration)("Stage 5.4 — semantik JWT & batas router admi
 
     const correction = await authed(
       `/api/v1/admin/rides/${ride.publicReference}/status`,
-      tokenFor(admin),
+      tokenFor(superAdmin),
       "PATCH",
       { status: "NO_DRIVER", reason: "uji routing 5.4" },
     );

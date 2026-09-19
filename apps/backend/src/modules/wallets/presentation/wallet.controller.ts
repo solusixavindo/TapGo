@@ -101,6 +101,8 @@ export class WalletController {
     const result = await this.walletService.approveWithdrawal({
       withdrawalId: req.params.withdrawalId as string,
       adminId: req.auth!.userId,
+      actorRole: req.auth!.role,
+      vipThreshold: env.WITHDRAWAL_VIP_THRESHOLD,
       ...this.optionalNote(req.body.note)
     });
     res.json({ success: true, data: result });

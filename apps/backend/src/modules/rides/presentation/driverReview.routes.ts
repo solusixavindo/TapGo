@@ -4,6 +4,7 @@ import { prisma } from "../../../config/prisma.js";
 import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
 import { requireAuth, requireRoles } from "../../../core/security/authContext.js";
+import { maskForOperator } from "../../../core/security/adminMasking.js";
 import { adminRateLimiter } from "../../../core/security/rateLimit.js";
 import { DriverReviewScopeService } from "../application/DriverReviewScopeService.js";
 import {
@@ -69,7 +70,7 @@ const reassignSchema = z.preprocess(
 
 export const driverReviewRouter = Router();
 
-driverReviewRouter.use(requireAuth, adminRateLimiter, requireRoles("ADMIN", "SUPER_ADMIN"));
+driverReviewRouter.use(requireAuth, adminRateLimiter, requireRoles("ADMIN", "SUPER_ADMIN"), maskForOperator);
 
 driverReviewRouter.get(
   "/applications",

@@ -3,6 +3,7 @@ import { SupportTicketStatus, UserRole } from "@prisma/client";
 import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
 import { requireAuth, requireRoles } from "../../../core/security/authContext.js";
+import { maskForOperator } from "../../../core/security/adminMasking.js";
 import { supportRateLimiter } from "../../../core/security/rateLimit.js";
 import { SupportTicketService } from "../application/SupportTicketService.js";
 import {
@@ -54,7 +55,7 @@ supportRouter.get(
   }),
 );
 
-adminSupportRouter.use(requireAuth, requireRoles(UserRole.ADMIN, UserRole.SUPER_ADMIN));
+adminSupportRouter.use(requireAuth, requireRoles(UserRole.ADMIN, UserRole.SUPER_ADMIN), maskForOperator);
 
 adminSupportRouter.get(
   "/tickets",

@@ -82,7 +82,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
   // --- D1: lookup driver/vehicle tidak boleh bergantung pada limit daftar ---
 
   it("D1 detail driver tetap ditemukan meski di luar jendela limit daftar", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     // Driver target dibuat PALING AWAL agar berada di luar 50 teratas
     // (daftar admin diurutkan createdAt desc dengan limit default 50).
     const target = await createDriver("MOTORCYCLE");
@@ -100,7 +100,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
   });
 
   it("D1 detail kendaraan tetap ditemukan meski di luar jendela limit daftar", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const target = await createDriver("CAR");
     const vehicle = await prisma.rideVehicle.findFirstOrThrow({
       where: { driverProfileId: target.profile.id },
@@ -120,7 +120,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
   // --- A: urutan route — setiap endpoint harus sampai ke handler yang benar --
 
   it("A route statis /drivers tidak tertutup oleh /:reference", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     await createDriver("MOTORCYCLE");
 
     const res = await api("/api/v1/admin/rides/drivers", { token: tokenFor(admin) });
@@ -132,7 +132,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
   });
 
   it("A seluruh endpoint admin sampai ke handler yang dimaksud", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const driver = await createDriver("MOTORCYCLE");
     const vehicle = await prisma.rideVehicle.findFirstOrThrow({
       where: { driverProfileId: driver.profile.id },
@@ -222,7 +222,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
   });
 
   it("A referensi ride malformed ditolak validator, tidak jatuh ke handler lain", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     for (const bad of ["bukan-referensi", "RID-lowercase", "RID-SHORT"]) {
       const res = await api(`/api/v1/admin/rides/${bad}`, { token: tokenFor(admin) });
       expect(res.status).toBeGreaterThanOrEqual(400);
@@ -234,7 +234,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
   });
 
   it("A UUID malformed pada driver/vehicle ditolak dengan aman", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const badDriver = await api("/api/v1/admin/rides/drivers/bukan-uuid", {
       token: tokenFor(admin),
     });
@@ -249,7 +249,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
   });
 
   it("A reason terlalu panjang ditolak dan tidak mengubah state", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const driver = await createDriver("MOTORCYCLE");
 
     const res = await api(`/api/v1/admin/rides/drivers/${driver.profile.id}/status`, {
@@ -270,7 +270,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
   // --- D2: audit moderasi wajib ada meski driver belum punya ride ----------
 
   it("D2 suspend driver tanpa riwayat ride tetap tercatat di AuditLog", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const driver = await createDriver("MOTORCYCLE");
 
     const res = await api(`/api/v1/admin/rides/drivers/${driver.profile.id}/status`, {
@@ -293,7 +293,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
   });
 
   it("D2 moderasi berulang tercatat setiap kali (tanpa tertelan eventKey)", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const driver = await createDriver("MOTORCYCLE");
 
     for (const status of ["SUSPENDED", "ACTIVE", "SUSPENDED"]) {
@@ -314,7 +314,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
   });
 
   it("D2 moderasi kendaraan tercatat di AuditLog", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const driver = await createDriver("MOTORCYCLE");
     const vehicle = await prisma.rideVehicle.findFirstOrThrow({
       where: { driverProfileId: driver.profile.id },
@@ -337,7 +337,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
   // --- D3: moderasi konkuren harus punya satu pemenang --------------------
 
   it("D3 moderasi identik konkuren hanya menghasilkan satu perubahan dan satu audit", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const driver = await createDriver("MOTORCYCLE");
 
     const results = await Promise.all(
@@ -370,7 +370,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
   });
 
   it("D3 transisi yang menjadi tidak sah setelah kalah balapan ditolak", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const driver = await createDriver("MOTORCYCLE");
 
     // REJECTED bersifat terminal: setelah diterapkan, permintaan SUSPENDED
@@ -406,7 +406,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
 
   it("D4 admin tidak dapat menetapkan NO_DRIVER pada ride yang sudah punya driver", async () => {
     const { reference } = await inTripRide();
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
 
     const res = await api(`/api/v1/admin/rides/${reference}/status`, {
       method: "PATCH",
@@ -424,7 +424,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
 
   it("D4 admin tidak dapat menetapkan EXPIRED pada ride yang sedang berjalan", async () => {
     const { reference } = await inTripRide();
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
 
     const res = await api(`/api/v1/admin/rides/${reference}/status`, {
       method: "PATCH",
@@ -438,7 +438,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
 
   it("D4 CANCELLED_BY_SYSTEM tetap diizinkan pada ride berjalan", async () => {
     const { reference } = await inTripRide();
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
 
     const res = await api(`/api/v1/admin/rides/${reference}/status`, {
       method: "PATCH",
@@ -452,7 +452,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
   });
 
   it("D4 NO_DRIVER tetap diizinkan saat masih mencari driver", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const passenger = await createUser("USER");
     const quote = await createQuote(passenger);
     const created = await createOrder(passenger, quote.quoteId);
@@ -471,7 +471,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
 
   it("D5 admin tidak dapat menetapkan PAYMENT_FAILED melalui koreksi status ride", async () => {
     const { reference } = await inTripRide();
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
 
     const res = await api(`/api/v1/admin/rides/${reference}/status`, {
       method: "PATCH",
@@ -491,7 +491,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
 
   it("D6 driver dengan ride aktif tidak dapat langsung disuspend", async () => {
     const { driver } = await inTripRide();
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
 
     const res = await api(`/api/v1/admin/rides/drivers/${driver.profile.id}/status`, {
       method: "PATCH",
@@ -511,7 +511,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
 
   it("D6 kendaraan yang dipakai ride aktif tidak dapat langsung dinonaktifkan", async () => {
     const { driver } = await inTripRide();
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const vehicle = await prisma.rideVehicle.findFirstOrThrow({
       where: { driverProfileId: driver.profile.id },
     });
@@ -533,7 +533,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
 
   it("D6 setelah ride selesai, driver dapat disuspend", async () => {
     const { driver, reference } = await inTripRide();
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     await api(`/api/v1/driver/rides/${reference}/complete`, {
       method: "POST",
       token: tokenFor(driver.user),
@@ -550,7 +550,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
   // --- D7: audit tidak boleh memuat koordinat presisi --------------------
 
   it("D7 AuditLog moderasi tidak memuat koordinat maupun PII mentah", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const driver = await createDriver("MOTORCYCLE");
     await api(`/api/v1/admin/rides/drivers/${driver.profile.id}/status`, {
       method: "PATCH",
@@ -571,7 +571,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
   it("D8 seluruh moderasi admin tidak menyentuh domain finansial", async () => {
     const before = await financialSnapshot();
     const { reference, driver } = await inTripRide();
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
 
     await api(`/api/v1/admin/rides/${reference}/status`, {
       method: "PATCH",
@@ -609,7 +609,7 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
 
     // Jalankan KETIGA jenis moderasi: koreksi ride, moderasi driver, moderasi kendaraan.
     const { reference, driver } = await inTripRide();
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const vehicle = await prisma.rideVehicle.findFirstOrThrow({
       where: { driverProfileId: driver.profile.id },
     });

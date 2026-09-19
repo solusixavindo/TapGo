@@ -557,7 +557,7 @@ describe.skipIf(!runIntegration)("Stage 5.2 — Ride backend foundation", () => 
   it("endpoint admin ride hanya dapat diakses ADMIN/SUPER_ADMIN", async () => {
     const passenger = await createUser("USER");
     const driver = await createDriver("MOTORCYCLE");
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const superAdmin = await createUser("SUPER_ADMIN");
 
     const unauthenticated = await api("/api/v1/admin/rides");
@@ -582,7 +582,7 @@ describe.skipIf(!runIntegration)("Stage 5.2 — Ride backend foundation", () => 
   });
 
   it("admin dapat melihat ringkasan ride dengan data kontak termasking", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const passenger = await createUser("USER");
     const quote = await createQuote(passenger);
     const created = await createOrder(passenger, quote.quoteId);
@@ -607,7 +607,7 @@ describe.skipIf(!runIntegration)("Stage 5.2 — Ride backend foundation", () => 
   });
 
   it("admin dapat mengoreksi ride aktif ke terminal tanpa mengubah Business Engine", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const before = await businessEngineSnapshot();
     const { reference, driver } = await assignedRide();
 
@@ -641,7 +641,7 @@ describe.skipIf(!runIntegration)("Stage 5.2 — Ride backend foundation", () => 
   });
 
   it("koreksi admin duplikat idempoten dan hanya membuat satu RideEvent admin", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const { reference } = await assignedRide();
 
     const payload = {
@@ -676,7 +676,7 @@ describe.skipIf(!runIntegration)("Stage 5.2 — Ride backend foundation", () => 
   });
 
   it("koreksi admin konkuren tidak menciptakan hasil konflik ganda", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const { reference } = await assignedRide();
 
     const results = await Promise.all(
@@ -708,7 +708,7 @@ describe.skipIf(!runIntegration)("Stage 5.2 — Ride backend foundation", () => 
   });
 
   it("admin tidak dapat membuka kembali atau mengoreksi ride terminal", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const { reference } = await completedRide();
 
     const res = await api(`/api/v1/admin/rides/${reference}/status`, {
@@ -724,7 +724,7 @@ describe.skipIf(!runIntegration)("Stage 5.2 — Ride backend foundation", () => 
   });
 
   it("admin correction menolak status non-allowlist dan reason kosong dengan error aman", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const { reference } = await assignedRide();
 
     const invalidStatus = await api(`/api/v1/admin/rides/${reference}/status`, {
@@ -749,7 +749,7 @@ describe.skipIf(!runIntegration)("Stage 5.2 — Ride backend foundation", () => 
   });
 
   it("admin detail unknown ride/driver/vehicle mengembalikan 404 aman", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const missingRide = await api("/api/v1/admin/rides/RID-AAAAAAAAAA", {
       token: tokenFor(admin),
     });
@@ -769,7 +769,7 @@ describe.skipIf(!runIntegration)("Stage 5.2 — Ride backend foundation", () => 
   });
 
   it("list admin ride mendukung filter, limit bounded, dan urutan terbaru", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const passengerA = await createUser("USER");
     const passengerB = await createUser("USER");
     await createOrder(passengerA, (await createQuote(passengerA)).quoteId);
@@ -793,7 +793,7 @@ describe.skipIf(!runIntegration)("Stage 5.2 — Ride backend foundation", () => 
   });
 
   it("admin dapat suspend driver dan driver tersebut tidak dapat online", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const driver = await createDriver("MOTORCYCLE");
     await setOnline(driver);
 
@@ -813,7 +813,7 @@ describe.skipIf(!runIntegration)("Stage 5.2 — Ride backend foundation", () => 
   });
 
   it("admin dapat reactivate driver suspended tetapi rejected bersifat terminal", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const suspended = await createDriver("MOTORCYCLE", { status: "SUSPENDED" });
     const rejected = await createDriver("MOTORCYCLE", { status: "REJECTED" });
 
@@ -837,7 +837,7 @@ describe.skipIf(!runIntegration)("Stage 5.2 — Ride backend foundation", () => 
   });
 
   it("admin dapat menolak kendaraan sehingga driver tidak menerima offer baru", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const passenger = await createUser("USER");
     const driver = await createDriver("MOTORCYCLE");
     const vehicle = await prisma.rideVehicle.findFirstOrThrow({
@@ -870,7 +870,7 @@ describe.skipIf(!runIntegration)("Stage 5.2 — Ride backend foundation", () => 
   });
 
   it("kendaraan rejected tidak dapat langsung verified tanpa review ulang pending", async () => {
-    const admin = await createUser("ADMIN");
+    const admin = await createUser("SUPER_ADMIN");
     const driver = await createDriver("MOTORCYCLE");
     const vehicle = await prisma.rideVehicle.findFirstOrThrow({
       where: { driverProfileId: driver.profile.id },

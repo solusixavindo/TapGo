@@ -53,6 +53,15 @@ const ADMIN_ENDPOINTS: ReadonlyArray<Endpoint> = [
     method: "POST",
     path: "/api/v1/admin/member-requests/00000000-0000-4000-8000-000000000000/reject-documents"
   },
+  { method: "GET", path: "/api/v1/admin/delete-requests" },
+  { method: "GET", path: "/api/v1/admin/contact-messages" }
+];
+
+/**
+ * Endpoint yang wajib SUPER_ADMIN. Seluruh data dan aksi keuangan ada di sini:
+ * ADMIN (operator) tidak boleh melihat maupun memindahkan uang.
+ */
+const SUPER_ADMIN_ENDPOINTS: ReadonlyArray<Endpoint> = [
   { method: "GET", path: "/api/v1/admin/invoices" },
   { method: "GET", path: "/api/v1/admin/payments" },
   { method: "GET", path: "/api/v1/admin/commissions" },
@@ -60,18 +69,13 @@ const ADMIN_ENDPOINTS: ReadonlyArray<Endpoint> = [
   { method: "GET", path: "/api/v1/admin/withdrawals" },
   { method: "GET", path: "/api/v1/admin/withdraw-requests" },
   { method: "GET", path: "/api/v1/admin/rewards" },
-  { method: "GET", path: "/api/v1/admin/delete-requests" },
-  { method: "GET", path: "/api/v1/admin/contact-messages" },
   { method: "GET", path: "/api/v1/admin/reports/bonus" },
   { method: "GET", path: "/api/v1/admin/reports/bonus.csv" },
   { method: "GET", path: "/api/v1/admin/reports/ppob" },
   { method: "GET", path: "/api/v1/admin/reports/ppob.csv" },
   { method: "GET", path: "/api/v1/admin/reports/reward" },
-  { method: "GET", path: "/api/v1/admin/reports/reward.csv" }
-];
+  { method: "GET", path: "/api/v1/admin/reports/reward.csv" },
 
-/** Endpoint yang wajib SUPER_ADMIN. */
-const SUPER_ADMIN_ENDPOINTS: ReadonlyArray<Endpoint> = [
   { method: "GET", path: "/api/v1/admin/commission-settings" },
   { method: "GET", path: "/api/v1/admin/roles" },
   { method: "PUT", path: "/api/v1/admin/roles/00000000-0000-4000-8000-000000000000" },

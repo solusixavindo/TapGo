@@ -83,8 +83,14 @@ async function main() {
       name: "Silver",
       price: 500000,
       ppobBalance: 100000,
-      bpjsBenefit: "BPJS TK, JKK, JKM",
+      bpjsBenefit: "BPJS Ketenagakerjaan JKK dan JKM (gratis 1 bulan, bulan berikutnya dibayar sendiri)",
       merchandise: ["Kaos TAPGO"],
+      hppTotal: 190000,
+      hppBreakdown: [
+        { name: "Kaos TAPGO", quantity: 1, unit: "pcs", cost: 70000 },
+        { name: "Saldo PPOB", quantity: 1, unit: "paket", cost: 100000 },
+        { name: "BPJS JKK dan JKM (1 bulan)", quantity: 1, unit: "paket", cost: 20000 }
+      ],
       businessRight: "Hak Usaha"
     },
     {
@@ -92,8 +98,16 @@ async function main() {
       name: "Gold",
       price: 3000000,
       ppobBalance: 600000,
-      bpjsBenefit: "BPJS TK, JKK, JKM",
-      merchandise: ["Kaos TAPGO", "Topi TAPGO"],
+      bpjsBenefit: "BPJS Ketenagakerjaan JKK dan JKM 1 tahun",
+      merchandise: ["Kaos TAPGO", "Rompi TAPGO", "Banner TAPGO"],
+      hppTotal: 1230000,
+      hppBreakdown: [
+        { name: "Kaos TAPGO", quantity: 1, unit: "pcs", cost: 70000 },
+        { name: "Rompi TAPGO", quantity: 1, unit: "pcs", cost: 170000 },
+        { name: "Banner TAPGO", quantity: 1, unit: "pcs", cost: 150000 },
+        { name: "Saldo PPOB", quantity: 1, unit: "paket", cost: 600000 },
+        { name: "BPJS JKK dan JKM 1 tahun", quantity: 1, unit: "paket", cost: 240000 }
+      ],
       businessRight: "Hak Usaha"
     },
     {
@@ -101,8 +115,16 @@ async function main() {
       name: "Platinum",
       price: 5500000,
       ppobBalance: 1000000,
-      bpjsBenefit: "BPJS TK, JKK, JKM, JHT",
-      merchandise: ["Kaos TAPGO", "Jaket TAPGO", "Rompi TAPGO"],
+      bpjsBenefit: "BPJS Ketenagakerjaan 1 tahun (JKK, JKM, JHT)",
+      merchandise: ["Kaos TAPGO", "Rompi TAPGO", "Banner TAPGO"],
+      hppTotal: 1870000,
+      hppBreakdown: [
+        { name: "Kaos TAPGO", quantity: 1, unit: "pcs", cost: 70000 },
+        { name: "Rompi TAPGO", quantity: 1, unit: "pcs", cost: 170000 },
+        { name: "Banner TAPGO", quantity: 1, unit: "pcs", cost: 150000 },
+        { name: "Saldo PPOB", quantity: 1, unit: "paket", cost: 1000000 },
+        { name: "BPJS JKK, JKM, JHT 1 tahun", quantity: 1, unit: "paket", cost: 480000 }
+      ],
       businessRight: "Hak Usaha Mitra"
     }
   ]) {
@@ -116,7 +138,8 @@ async function main() {
         ppobBalance: packagePlan.ppobBalance,
         bpjsBenefit: packagePlan.bpjsBenefit,
         merchandise: packagePlan.merchandise,
-        businessRight: packagePlan.businessRight
+        businessRight: packagePlan.businessRight,
+        ...("hppTotal" in packagePlan ? { hppTotal: packagePlan.hppTotal, hppBreakdown: packagePlan.hppBreakdown } : {})
       },
       create: {
         tier: packagePlan.tier,
@@ -127,7 +150,8 @@ async function main() {
         ppobBalance: packagePlan.ppobBalance,
         bpjsBenefit: packagePlan.bpjsBenefit,
         merchandise: packagePlan.merchandise,
-        businessRight: packagePlan.businessRight
+        businessRight: packagePlan.businessRight,
+        ...("hppTotal" in packagePlan ? { hppTotal: packagePlan.hppTotal, hppBreakdown: packagePlan.hppBreakdown } : {})
       }
     });
 

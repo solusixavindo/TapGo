@@ -1,4 +1,6 @@
 import { Request, Response } from "express";
+import { env } from "../../../config/env.js";
+import { roleSatisfies } from "../../../core/security/roleHierarchy.js";
 import { AdminConsoleService } from "../application/AdminConsoleService.js";
 import { WalletService } from "../../wallets/application/WalletService.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
@@ -34,6 +36,22 @@ export class AdminConsoleController {
     const result = await this.adminConsoleService.recentAdminActivity(
       Number.isFinite(limit) && limit > 0 ? limit : 20
     );
+    res.json({ success: true, data: result });
+  };
+
+  profitLossReport = async (req: Request, res: Response) => {
+    const result = await this.adminConsoleService.profitLossReport(this.dateRange(req));
+    res.json({ success: true, data: result });
+  };
+
+  auditLogs = async (req: Request, res: Response) => {
+    const result = await this.adminConsoleService.listAuditLogs({
+      page: Number(req.query.page),
+      pageSize: Number(req.query.pageSize),
+      ...(typeof req.query.action === "string" ? { action: req.query.action } : {}),
+      ...(typeof req.query.entityType === "string" ? { entityType: req.query.entityType } : {}),
+      includeAuthority: roleSatisfies(req.auth!.role, "SUPER_ADMIN_VIP")
+    });
     res.json({ success: true, data: result });
   };
 
@@ -115,6 +133,8 @@ export class AdminConsoleController {
     const result = await this.walletService.approveWithdrawal({
       withdrawalId: String(req.params.id),
       adminId: req.auth!.userId,
+      actorRole: req.auth!.role,
+      vipThreshold: env.WITHDRAWAL_VIP_THRESHOLD,
       ...(typeof req.body.note === "string" ? { note: req.body.note } : {})
     });
     res.json({ success: true, data: result });
@@ -153,6 +173,12 @@ export class AdminConsoleController {
       role: req.auth!.role,
       orderId: String(req.params.id),
       paymentReference: `ADMIN-${req.auth!.userId}`
+    });
+    await this.adminConsoleService.recordAdminAction({
+      actorId: req.auth!.userId,
+      action: "MEMBERSHIP_PAYMENT_CONFIRMED",
+      entityType: "MembershipOrder",
+      entityId: String(req.params.id)
     });
     res.json({ success: true, data: result });
   };

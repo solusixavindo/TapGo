@@ -99,7 +99,7 @@ describe.skipIf(!runIntegration)("Withdrawal API", () => {
 
   it("approves withdrawal without deducting wallet twice", async () => {
     const user = await createUser("WDUSER03", "USER", "150000.00");
-    const admin = await createUser("WDADMIN3", "ADMIN", "0.00");
+    const admin = await createUser("WDADMIN3", "SUPER_ADMIN", "0.00");
     const withdrawal = await createdWithdrawalId(user, 100000);
 
     const response = await adminAction(admin, withdrawal, "approve");
@@ -111,7 +111,7 @@ describe.skipIf(!runIntegration)("Withdrawal API", () => {
 
   it("rejects withdrawal and refunds balance once", async () => {
     const user = await createUser("WDUSER04", "USER", "150000.00");
-    const admin = await createUser("WDADMIN4", "ADMIN", "0.00");
+    const admin = await createUser("WDADMIN4", "SUPER_ADMIN", "0.00");
     const withdrawal = await createdWithdrawalId(user, 100000);
 
     const response = await adminAction(admin, withdrawal, "reject");

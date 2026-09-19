@@ -66,7 +66,7 @@ export class WalletService {
     });
   }
 
-  approveWithdrawal(input: { withdrawalId: string; adminId: string; note?: string }) {
+  approveWithdrawal(input: { withdrawalId: string; adminId: string; actorRole?: UserRole; vipThreshold?: number; note?: string }) {
     return this.walletRepository.transaction((tx) => this.walletRepository.approveWithdrawal(input, tx));
   }
 
