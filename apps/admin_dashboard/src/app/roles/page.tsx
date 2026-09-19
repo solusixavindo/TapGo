@@ -149,8 +149,6 @@ export default function RolesPage() {
           title="Pengelolaan Role"
           subtitle="Hanya Super Admin VIP yang dapat mengubah role admin dan super admin"
           role={myRole}
-          backHref="/member-requests"
-          backLabel="Kembali ke verifikasi keanggotaan"
         />
 
         {error ? (

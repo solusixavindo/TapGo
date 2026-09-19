@@ -77,8 +77,6 @@ export default function GantiPasswordPage() {
           title="Ganti Password"
           subtitle="Berlaku untuk akun yang sedang masuk"
           role={role}
-          backHref="/member-requests"
-          backLabel="Kembali ke verifikasi keanggotaan"
         />
 
         {selesai ? (

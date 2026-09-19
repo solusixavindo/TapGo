@@ -146,14 +146,14 @@ export default function MemberRequestsPage() {
             <>
               <Link
                 href="/driver-documents"
-                className="rounded-lg border border-white/25 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/10"
+                className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
               >
                 Dokumen mitra driver
               </Link>
               {role === "SUPER_ADMIN_VIP" ? (
                 <Link
                   href="/roles"
-                  className="rounded-lg border border-white/25 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/10"
+                  className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
                 >
                   Pengelolaan role
                 </Link>
@@ -161,7 +161,7 @@ export default function MemberRequestsPage() {
               <button
                 type="button"
                 onClick={() => void refresh()}
-                className="rounded-lg border border-white/25 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/10"
+                className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
               >
                 Muat ulang
               </button>

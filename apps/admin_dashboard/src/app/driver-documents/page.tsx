@@ -98,13 +98,11 @@ export default function DriverDocumentsPage() {
           title="Dokumen Mitra Driver"
           subtitle={`${menungguPemeriksaan.length} mitra menunggu pemeriksaan dari ${rows.length} yang memiliki dokumen`}
           role={role}
-          backHref="/member-requests"
-          backLabel="Kembali ke verifikasi keanggotaan"
           actions={
             <button
               type="button"
               onClick={() => void refresh()}
-              className="rounded-lg border border-white/25 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/10"
+              className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
             >
               Muat ulang
             </button>

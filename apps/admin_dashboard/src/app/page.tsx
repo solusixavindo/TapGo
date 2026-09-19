@@ -14,7 +14,7 @@ export default function AdminLoginPage() {
 
   useEffect(() => {
     if (readToken()) {
-      router.replace("/member-requests");
+      router.replace("/beranda");
     }
   }, [router]);
 
@@ -25,7 +25,7 @@ export default function AdminLoginPage() {
     setError("");
     try {
       await login(phone.trim(), password);
-      router.replace("/member-requests");
+      router.replace("/beranda");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Tidak dapat masuk.");
       setBusy(false);

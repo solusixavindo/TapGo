@@ -287,6 +287,161 @@ export function assignAdminRole(userId: string, role: string, reasonCode: string
   });
 }
 
+// --- Beranda: ringkasan & tren ----------------------------------------------
+
+export type DashboardSummary = {
+  totalMembers: number;
+  totalBasic: number;
+  totalSilver: number;
+  totalGold: number;
+  totalPlatinum: number;
+  totalRevenue: string;
+  totalCommission: string;
+  totalWithdrawPending: string;
+  totalWithdrawApproved: string;
+  totalWalletBalance: string;
+  totalPpobGiven: string;
+  totalRewardPending: string;
+};
+
+export type DashboardGrowth = {
+  registrationTrend: Array<{ date: string; count: number }>;
+  activeUsers7d: number;
+  activeUsers30d: number;
+  pendingApprovals: { memberRequests: number; rewards: number; withdrawals: number; total: number };
+};
+
+export type RetentionWarningDocument = {
+  orderId: string;
+  memberName: string;
+  referralCode: string;
+  documentType: string;
+  expiresAt: string;
+};
+
+export type AdminActivityEntry = {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  actorName: string;
+  createdAt: string;
+};
+
+export function documentsNearingRetention() {
+  return request<RetentionWarningDocument[]>("/admin/dashboard/documents-nearing-retention");
+}
+
+export function recentAdminActivity() {
+  return request<AdminActivityEntry[]>("/admin/dashboard/activity?limit=20");
+}
+
+export type FinancialSummary = {
+  totalCashWalletLiability: string;
+  totalPpobLiability: string;
+  totalSponsorBonus: string;
+  totalLevelBonus: string;
+  totalRewardPending: string;
+  totalRewardApproved: string;
+  totalRewardPaid: string;
+  totalProfitSharing: string;
+  totalWithdrawalPending: string;
+  totalWithdrawalPaidApproved: string;
+  totalMembershipRevenuePaid: string;
+  totalActiveBasic: number;
+  totalActiveSilver: number;
+  totalActiveGold: number;
+  totalActivePlatinum: number;
+};
+
+export type PpobSummary = {
+  basicRegistrationPpobTotal: string;
+  silverPpobTotal: string;
+  goldPpobTotal: string;
+  platinumPpobTotal: string;
+  unknownPackagePpobTotal: string;
+  packagePpobBenefitTotal: string;
+  totalPpobLiability: string;
+  totalNonWithdrawablePpob: string;
+};
+
+export function dashboardSummary() {
+  return request<DashboardSummary>("/admin/dashboard/summary");
+}
+
+export function dashboardGrowth() {
+  return request<DashboardGrowth>("/admin/dashboard/growth");
+}
+
+export function financialSummaryReport() {
+  return request<FinancialSummary>("/admin/reports/financial-summary");
+}
+
+export function ppobSummaryReportApi() {
+  return request<PpobSummary>("/admin/reports/ppob-summary");
+}
+
+/**
+ * Mengunduh laporan CSV.
+ *
+ * Tidak bisa memakai <a href> langsung: endpoint menuntut header
+ * Authorization, dan token tersimpan di sessionStorage, bukan cookie. Pola
+ * sama dengan fetchDocumentObjectUrl — ambil sebagai blob lalu picu unduhan
+ * lewat elemen <a> sementara.
+ */
+export async function downloadReportCsv(kind: "bonus" | "ppob" | "reward") {
+  const response = await fetch(`${API_BASE}/admin/reports/${kind}.csv`, {
+    headers: { authorization: `Bearer ${readToken()}` },
+    credentials: "omit"
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { message?: string };
+    throw new Error(payload.message ?? "Laporan belum dapat diunduh.");
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `tapgo-${kind}-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+// --- Direktori member --------------------------------------------------------
+
+export type MemberListItem = {
+  id: string;
+  fullName: string;
+  email: string | null;
+  phone: string;
+  referralCode: string;
+  joinedAt: string;
+  membership: { tier: string; name: string } | null;
+  sponsor: { id: string; fullName: string; phone: string; referralCode: string } | null;
+  directSponsorCount: number;
+  totalDownline: number;
+  walletBalance: string;
+  ppobBalance: string;
+  commissionTotal: string;
+};
+
+export async function listMembers(params: { page?: number; search?: string; tier?: string }) {
+  const query = new URLSearchParams({
+    page: String(params.page ?? 1),
+    pageSize: "20"
+  });
+  if (params.search) query.set("search", params.search);
+  if (params.tier) query.set("package", params.tier);
+  const result = await request<{
+    items: MemberListItem[];
+    total?: number;
+    pagination?: { total?: number };
+  }>(`/admin/members?${query.toString()}`);
+  return { items: result.items, total: result.pagination?.total ?? result.total ?? result.items.length };
+}
+
 export function formatRupiah(value: string | number) {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -312,4 +467,116 @@ export function remainingRetention(expiresAt: string | null) {
   const hours = Math.floor(remaining / (60 * 60 * 1000));
   const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
   return hours > 0 ? `${hours} jam ${minutes} menit lagi` : `${minutes} menit lagi`;
+}
+
+// --- Penarikan dana dan log audit (SUPER_ADMIN ke atas) ----------------------
+
+/** Peringkat peran administratif; sama dengan tangga di backend. */
+const ROLE_RANK: Record<string, number> = { ADMIN: 1, SUPER_ADMIN: 2, SUPER_ADMIN_VIP: 3 };
+
+export function roleAtLeast(role: string, minimum: "ADMIN" | "SUPER_ADMIN" | "SUPER_ADMIN_VIP") {
+  return (ROLE_RANK[role] ?? 0) >= ROLE_RANK[minimum]!;
+}
+
+/** Ambang penarikan yang hanya boleh disetujui VIP. Server tetap penjaga sesungguhnya. */
+export const WITHDRAWAL_VIP_THRESHOLD = 2_000_000;
+
+export type WithdrawalStatus = "PENDING" | "APPROVED" | "REJECTED" | "PAID" | "CANCELLED";
+
+export type AdminWithdrawal = {
+  id: string;
+  amount: string;
+  status: WithdrawalStatus;
+  bankName: string | null;
+  accountNumber: string | null;
+  accountHolderName: string | null;
+  requestedAt: string;
+  approvedAt: string | null;
+  paidAt: string | null;
+  rejectedAt: string | null;
+  note: string | null;
+  user?: { id: string; fullName: string; phone: string } | null;
+};
+
+export function listAdminWithdrawals(params: { status?: WithdrawalStatus; page?: number }) {
+  const query = new URLSearchParams({ page: String(params.page ?? 1), pageSize: "20" });
+  if (params.status) query.set("status", params.status);
+  return request<{ items: AdminWithdrawal[] }>(`/admin/withdrawals?${query.toString()}`);
+}
+
+export function actOnWithdrawal(id: string, action: "approve" | "reject" | "paid", note?: string) {
+  return request<AdminWithdrawal>(`/admin/withdrawals/${id}/${action}`, {
+    method: "POST",
+    body: JSON.stringify(note ? { note } : {})
+  });
+}
+
+export type AuditLogItem = {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  actorName: string;
+  actorRole: string | null;
+  ipAddress?: string | null;
+};
+
+export function listAuditLogs(params: { page?: number; action?: string; entityType?: string }) {
+  const query = new URLSearchParams({ page: String(params.page ?? 1), pageSize: "25" });
+  if (params.action) query.set("action", params.action);
+  if (params.entityType) query.set("entityType", params.entityType);
+  return request<{ total: number; items: AuditLogItem[] }>(`/admin/audit-logs?${query.toString()}`);
+}
+
+// --- Laba rugi (hanya SUPER_ADMIN_VIP) ----------------------------------------
+
+export type ProfitLossReport = {
+  period: { from?: string | null; to?: string | null; dateFrom?: string | null; dateTo?: string | null } | null;
+  revenue: {
+    membershipSales: string;
+    membershipRefunds: string;
+    membershipNet: string;
+    rideCommission: string;
+    ppobAdminFee: string;
+    total: string;
+  };
+  expenses: {
+    sponsorBonus: string;
+    levelBonus: string;
+    rewardPaid: string;
+    profitSharing: string;
+    hppPackages: string;
+    total: string;
+  };
+  hpp: {
+    tiers: Array<{
+      tier: string;
+      name: string;
+      units: number;
+      unitCost: string;
+      total: string;
+      items: Array<{ name: string; quantity: number; unit: string; cost: number }> | null;
+    }>;
+    missingTiers: string[];
+  };
+  operatingProfit: string;
+  operatingMarginPercent: string | null;
+  previous: { totalRevenue: string; totalExpenses: string; operatingProfit: string } | null;
+  memo: {
+    ppobGrossSales: string;
+    walletLiabilityCash: string;
+    walletLiabilityPpob: string;
+    withdrawalsOutstanding: string;
+  };
+  notes: string[];
+};
+
+export function profitLossReport(params: { dateFrom?: string; dateTo?: string }) {
+  const query = new URLSearchParams();
+  if (params.dateFrom) query.set("dateFrom", params.dateFrom);
+  if (params.dateTo) query.set("dateTo", params.dateTo);
+  const suffix = query.toString();
+  return request<ProfitLossReport>(`/admin/reports/profit-loss${suffix ? `?${suffix}` : ""}`);
 }

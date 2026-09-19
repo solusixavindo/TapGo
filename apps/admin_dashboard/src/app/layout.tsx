@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import ConsoleShell from "./console-shell";
 
 export const metadata: Metadata = {
   title: "TapGo Admin",
@@ -9,7 +10,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ConsoleShell>{children}</ConsoleShell>
+      </body>
     </html>
   );
 }
