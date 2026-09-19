@@ -103,6 +103,46 @@ describe.skipIf(!runIntegration)("Account Profile API", () => {
     expect(response.status).toBe(409);
   });
 
+  it("foto profil satu akun dibagi antara web dan aplikasi (kanal WEB <-> APP)", async () => {
+    const user = await createUser("ACCAVT002");
+    const withChannel = (channel: "WEB" | "APP") =>
+      (signAccessToken as unknown as (p: { sub: string; role: UserRole; sessionId: string; channel: "WEB" | "APP" }) => string)({
+        sub: user.id,
+        role: user.role,
+        sessionId: `session-${channel}-${user.id}`,
+        channel
+      });
+
+    // Diunggah dari web (dashboard mitra / formulir pendaftaran) ...
+    const fromWeb = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0a, 0x0b, 0x0c]);
+    const upload = await api("/api/v1/account/avatar", {
+      method: "POST",
+      token: withChannel("WEB"),
+      rawBody: fromWeb,
+      contentType: "image/png"
+    });
+    expect(upload.status).toBe(201);
+
+    // ... langsung terbaca oleh aplikasi.
+    const appView = await api("/api/v1/account/avatar", { token: withChannel("APP") });
+    expect(appView.status).toBe(200);
+    expect(Buffer.from(await appView.arrayBuffer()).equals(fromWeb)).toBe(true);
+
+    // Diganti dari aplikasi -> web melihat yang terbaru.
+    const fromApp = Buffer.from([0xff, 0xd8, 0xff, 0x11, 0x12]);
+    const replace = await api("/api/v1/account/avatar", {
+      method: "POST",
+      token: withChannel("APP"),
+      rawBody: fromApp,
+      contentType: "image/jpeg"
+    });
+    expect(replace.status).toBe(201);
+    const webView = await api("/api/v1/account/avatar", { token: withChannel("WEB") });
+    expect(webView.headers.get("content-type")).toBe("image/jpeg");
+    expect(Buffer.from(await webView.arrayBuffer()).equals(fromApp)).toBe(true);
+    expect(await prisma.userAvatar.count({ where: { userId: user.id } })).toBe(1);
+  });
+
   it("uploads, serves, and replaces a profile avatar", async () => {
     const user = await createUser("ACCAVT001");
     const firstImage = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x01, 0x02, 0x03]);
