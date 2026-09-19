@@ -1081,6 +1081,7 @@ class _TapGoDeviceContext {
     required this.deviceFingerprint,
     required this.appVersion,
     required this.platform,
+    this.installer = '',
   });
 
   final String deviceId;
@@ -1088,11 +1089,18 @@ class _TapGoDeviceContext {
   final String appVersion;
   final String platform;
 
+  /// Paket installer Android (mis. `com.android.vending` untuk Google Play);
+  /// kosong bila tidak diketahui. Dikirim agar server dapat menandai sumber
+  /// instalasi pendaftaran — penanda operasional, bukan bukti kriptografis.
+  final String installer;
+
   Map<String, String> get headers => {
         'X-TapGo-Device-Id': deviceId,
         'X-TapGo-Device-Fingerprint': deviceFingerprint,
         'X-TapGo-App-Version': appVersion,
         'X-TapGo-Platform': platform,
+        ..._tapGoDistributionHeader,
+        if (installer.isNotEmpty) 'X-TapGo-Installer': installer,
       };
 }
 
@@ -1118,6 +1126,7 @@ class _TapGoDeviceContextStore {
   static Map<String, String> get fallbackHeaders => {
         'X-TapGo-App-Version': _appVersion,
         'X-TapGo-Platform': Platform.operatingSystem,
+        ..._tapGoDistributionHeader,
       };
 
   final FlutterSecureStorage _storage;
@@ -1143,7 +1152,21 @@ class _TapGoDeviceContextStore {
       deviceFingerprint: fingerprint,
       appVersion: _appVersion,
       platform: Platform.operatingSystem,
+      installer: await _readInstaller(),
     );
+  }
+
+  /// Paket installer aplikasi. Kegagalan membaca tidak boleh mengganggu
+  /// permintaan apa pun: hasilnya cukup kosong.
+  Future<String> _readInstaller() async {
+    try {
+      final info =
+          await PackageInfo.fromPlatform().timeout(const Duration(seconds: 2));
+      return (info.installerStore ?? '').trim();
+    } catch (error) {
+      _tapGoDebugLog('[TapGo Device] installer unavailable: $error');
+      return '';
+    }
   }
 
   Future<String> _readOrCreate(String key, String Function() create) async {

@@ -10,6 +10,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
@@ -133,6 +134,12 @@ bool get tapGoIsPlayDistribution =>
 
 bool get tapGoIsDirectDistribution =>
     _tapGoDistributionMode == TapGoDistributionMode.direct;
+
+/// Jenis build yang dilaporkan ke server ("play" / "direct"); kosong bila lain.
+Map<String, String> get _tapGoDistributionHeader => {
+      if (tapGoIsPlayDistribution) 'X-TapGo-Distribution': 'play',
+      if (tapGoIsDirectDistribution) 'X-TapGo-Distribution': 'direct',
+    };
 
 /// Stage R2.7 — mode demo PPOB (UAT tanpa backend): katalog mini lokal dan
 /// order yang jujur mencerminkan fail-closed provider (REFUNDED).
