@@ -177,9 +177,12 @@ class DemoClientSession {
   final int todayBonus;
   final List<WalletTransactionModel> transactions;
 
-  bool get isSuperAdmin => role == 'SUPER_ADMIN';
-  bool get isAdmin => role == 'ADMIN' || role == 'SUPER_ADMIN';
-  bool get isMember => !isAdmin;
+  // Peran admin tidak punya tampilan di aplikasi user (keputusan owner):
+  // konsol admin hanya di web. Getter dipertahankan agar kode lama tetap
+  // terkompilasi, tetapi selalu false sehingga tidak ada jalur ke layar admin.
+  bool get isSuperAdmin => false;
+  bool get isAdmin => false;
+  bool get isMember => true;
 
   DemoClientSession copyWith({
     String? userId,

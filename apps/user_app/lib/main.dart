@@ -584,12 +584,10 @@ class _RoleDashboardGate extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final session = ref.watch(_demoSessionProvider);
-    final dashboard = session.isSuperAdmin
-        ? const SuperAdminDashboardScreen()
-        : session.role == 'ADMIN'
-            ? const AdminDashboardScreen()
-            : const TapGoDashboard();
+    // Keputusan owner: aplikasi user tidak menampilkan dashboard admin untuk
+    // peran apa pun. Admin/Super Admin bekerja di konsol web; di aplikasi
+    // mereka diperlakukan seperti member biasa.
+    const dashboard = TapGoDashboard();
 
     return PopScope(
       canPop: false,

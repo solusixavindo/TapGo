@@ -312,16 +312,7 @@ Future<T?> _showTapGoBottomSheet<T>({
 }
 
 Widget _roleDashboardForContext(BuildContext context) {
-  final session = ProviderScope.containerOf(
-    context,
-    listen: false,
-  ).read(_demoSessionProvider);
-  if (session.isSuperAdmin) {
-    return const SuperAdminDashboardScreen();
-  }
-  if (session.role == 'ADMIN') {
-    return const AdminDashboardScreen();
-  }
+  // Dashboard admin tidak tersedia di aplikasi user (lihat _RoleDashboardGate).
   return const TapGoDashboard();
 }
 

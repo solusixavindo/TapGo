@@ -2817,19 +2817,6 @@ class AccountScreen extends ConsumerWidget {
               Icons.account_balance_wallet_rounded,
               () => _openDemo(context, const DemoWalletScreen()),
             ),
-          if (session.isAdmin)
-            _AccountMenuTile(
-              session.isSuperAdmin
-                  ? 'Super Admin Dashboard'
-                  : 'Admin Dashboard',
-              Icons.business_center_rounded,
-              () => _openDemo(
-                context,
-                session.isSuperAdmin
-                    ? const SuperAdminDashboardScreen()
-                    : const AdminDashboardScreen(),
-              ),
-            ),
           // Permintaan Owner: Rekening Bank dihapus dari build Play demi
           // proses review Play Store (mengurangi permukaan fitur terkait
           // pencairan dana). Tetap tampil pada distribusi Direct — tidak
