@@ -163,6 +163,48 @@ describe.skipIf(!runIntegration)("Admin member account status", () => {
     expect(data.totalCashWalletLiability).toBe("20000.00");
     expect(data.totalPpobLiability).toBe("5000.00");
   });
+
+  it("sumber pendaftaran: header Play + installer Google Play tercatat, header tidak valid diabaikan, filter bekerja", async () => {
+    const vip = await createUser("SUPER_ADMIN_VIP");
+    // Event lama tidak ikut terhapus bersama user (relasi SetNull) — bersihkan agar hitungan pasti.
+    await prisma.registrationEvent.deleteMany({});
+    const register = async (phone: string, headers: Record<string, string>) => {
+      const res = await fetch(`${baseUrl}/api/v1/auth/register`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...headers },
+        body: JSON.stringify({ name: `Sumber ${phone}`, phone, password: "rahasia123" })
+      });
+      expect(res.status, phone).toBe(201);
+    };
+    await register("+6281200100001", { "x-tapgo-distribution": "play", "x-tapgo-installer": "com.android.vending" });
+    await register("+6281200100002", { "x-tapgo-distribution": "play", "x-tapgo-installer": "com.evil.sideload" });
+    await register("+6281200100003", { "x-tapgo-distribution": "hacked<script>", "x-tapgo-installer": "bad value!" });
+    await register("+6281200100004", {});
+
+    const events = await prisma.registrationEvent.findMany({
+      where: { normalizedPhone: { contains: "81200100" } },
+      orderBy: { normalizedPhone: "asc" }
+    });
+    expect(events.map((e) => [e.distribution, e.installer])).toEqual([
+      ["play", "com.android.vending"],
+      ["play", "com.evil.sideload"],
+      [null, null],
+      [null, null]
+    ]);
+
+    const list = async (query: string) => {
+      const res = await call(vip, `/api/v1/admin/members?pageSize=50&${query}`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { data: { items: { phone: string; signupSource: string }[] } };
+      return body.data.items
+        .filter((i) => i.phone.includes("81200100"))
+        .map((i) => `${i.phone.slice(-1)}:${i.signupSource}`)
+        .sort();
+    };
+    expect(await list("source=PLAY")).toEqual(["1:PLAY"]);
+    expect(await list("source=OTHER")).toEqual(["2:OTHER"]);
+    expect(await list("source=UNKNOWN")).toEqual(["3:UNKNOWN", "4:UNKNOWN"]);
+  });
 });
 
 async function createUser(role: UserRole, overrides: { phone?: string } = {}): Promise<User> {

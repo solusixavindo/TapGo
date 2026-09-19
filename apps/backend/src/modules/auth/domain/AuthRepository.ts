@@ -20,6 +20,8 @@ export type CreateSessionInput = {
   refreshTokenHash: string;
   userAgent?: string;
   ipAddress?: string;
+    distribution?: string;
+    installer?: string;
   expiresAt: Date;
 };
 

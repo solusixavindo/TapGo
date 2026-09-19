@@ -63,7 +63,8 @@ export class AdminConsoleController {
       ...(typeof req.query.package === "string" ? { package: req.query.package as never } : {}),
       ...(typeof req.query.status === "string" ? { status: req.query.status } : {}),
       ...(req.query.activeDays ? { activeDays: Number(req.query.activeDays) } : {}),
-      ...(req.query.registeredDays ? { registeredDays: Number(req.query.registeredDays) } : {})
+      ...(req.query.registeredDays ? { registeredDays: Number(req.query.registeredDays) } : {}),
+      ...(typeof req.query.source === "string" ? { source: req.query.source as "PLAY" | "OTHER" | "UNKNOWN" } : {})
     });
     res.json({ success: true, data: result });
   };

@@ -24,7 +24,8 @@ export const adminListQuerySchema = z.object({
     /// Filter kartu Beranda: login dalam N hari terakhir / daftar dalam N hari
     /// (hari ini = 1) menurut hari kalender WIB.
     activeDays: z.coerce.number().int().min(1).max(90).optional(),
-    registeredDays: z.coerce.number().int().min(1).max(90).optional()
+    registeredDays: z.coerce.number().int().min(1).max(90).optional(),
+    source: z.enum(["PLAY", "OTHER", "UNKNOWN"]).optional()
   })
 });
 

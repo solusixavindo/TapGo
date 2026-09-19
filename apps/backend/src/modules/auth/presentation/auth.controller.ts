@@ -70,3 +70,12 @@ export class AuthController {
 	    };
 	  }
 	}
+	    const rawDistribution = req.headers["x-tapgo-distribution"];
+	    const rawInstaller = req.headers["x-tapgo-installer"];
+	    // Nilai dari klien divalidasi ketat sebelum disimpan (daftar putih / pola).
+	    const distribution =
+	      rawDistribution === "play" || rawDistribution === "direct" ? rawDistribution : undefined;
+	    const installer =
+	      typeof rawInstaller === "string" && /^[A-Za-z0-9._-]{1,100}$/.test(rawInstaller) ? rawInstaller : undefined;
+	      ...(distribution !== undefined ? { distribution } : {}),
+	      ...(installer !== undefined ? { installer } : {}),

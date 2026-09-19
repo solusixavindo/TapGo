@@ -431,6 +431,7 @@ export type MemberListItem = {
   sponsor: { id: string; fullName: string; phone: string; referralCode: string } | null;
   directSponsorCount: number;
   totalDownline: number;
+  signupSource?: "PLAY" | "OTHER" | "UNKNOWN";
   walletBalance: string;
   withdrawableBalance: string;
   ppobBalance: string;
@@ -443,6 +444,7 @@ export async function listMembers(params: {
   tier?: string;
   activeDays?: number;
   registeredDays?: number;
+  source?: string;
 }) {
   const query = new URLSearchParams({
     page: String(params.page ?? 1),
@@ -450,6 +452,7 @@ export async function listMembers(params: {
   });
   if (params.search) query.set("search", params.search);
   if (params.tier) query.set("package", params.tier);
+  if (params.source) query.set("source", params.source);
   if (params.activeDays) query.set("activeDays", String(params.activeDays));
   if (params.registeredDays) query.set("registeredDays", String(params.registeredDays));
   const result = await request<{

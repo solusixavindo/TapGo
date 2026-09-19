@@ -26,6 +26,7 @@ type MemberListInput = PageInput & {
   status?: string;
   activeDays?: number;
   registeredDays?: number;
+  source?: "PLAY" | "OTHER" | "UNKNOWN";
 };
 
 /** Indonesia (WIB) = UTC+7 tanpa DST; hari kalender dibatasi di zona ini. */
@@ -36,6 +37,16 @@ function wibDayStart(daysBack = 0, now = new Date()) {
   const shifted = new Date(now.getTime() + WIB_OFFSET_MS);
   shifted.setUTCHours(0, 0, 0, 0);
   return new Date(shifted.getTime() - WIB_OFFSET_MS - daysBack * 86_400_000);
+}
+
+/** Pendaftaran dari build Play yang dipasang lewat Google Play (dilaporkan klien). */
+const PLAY_INSTALL = { distribution: "play", installer: "com.android.vending" } as const;
+
+function signupSourceOf(event: { distribution: string | null; installer: string | null } | null) {
+  if (!event || !event.distribution) return "UNKNOWN" as const;
+  return event.distribution === "play" && event.installer === PLAY_INSTALL.installer
+    ? ("PLAY" as const)
+    : ("OTHER" as const);
 }
 
 type PaymentListInput = PageInput & {
@@ -2269,7 +2280,7 @@ export class AdminConsoleService {
       sponsor: { id: string; fullName: string; phone: string; referralCode: string };
     } | null;
   }) {
-    const [directSponsorCount, totalDownline, commissionTotal, activeMembership] = await Promise.all([
+    const [directSponsorCount, totalDownline, commissionTotal, activeMembership, signupEvent] = await Promise.all([
       this.prisma.referral.count({ where: { sponsorId: user.id, status: "ACTIVE" } }),
       this.prisma.referralLevel.count({ where: { ancestorId: user.id } }),
       this.prisma.commission.aggregate({
@@ -2283,6 +2294,11 @@ export class AdminConsoleService {
           order: { include: { invoice: true } }
         },
         orderBy: { activeAt: "desc" }
+      }),
+      this.prisma.registrationEvent.findFirst({
+        where: { userId: user.id },
+        orderBy: { createdAt: "asc" },
+        select: { distribution: true, installer: true }
       })
     ]);
 
@@ -2292,6 +2308,8 @@ export class AdminConsoleService {
       email: user.email,
       phone: user.phone,
       referralCode: user.referralCode,
+      // PLAY = build Play + installer Google Play; OTHER = build lain/APK langsung; UNKNOWN = tanpa data (akun lama).
+      signupSource: signupSourceOf(signupEvent),
       joinedAt: user.createdAt,
       membership: user.membership,
       activeMembership,
@@ -2322,6 +2340,18 @@ export class AdminConsoleService {
           })()
         : {}),
       ...(input.registeredDays ? { createdAt: { gte: wibDayStart(input.registeredDays - 1) } } : {}),
+      ...(input.source === "PLAY"
+        ? { registrationEvents: { some: PLAY_INSTALL } }
+        : input.source === "UNKNOWN"
+          ? { registrationEvents: { none: { distribution: { not: null } } } }
+          : input.source === "OTHER"
+            ? {
+                AND: [
+                  { registrationEvents: { some: { distribution: { not: null } } } },
+                  { NOT: { registrationEvents: { some: PLAY_INSTALL } } }
+                ]
+              }
+            : {}),
       ...(input.search
         ? {
             OR: [

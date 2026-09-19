@@ -29,6 +29,9 @@ export type AuthClientContext = {
   ipAddress?: string;
   deviceIdentifier?: string;
   /**
+  /** Sumber instalasi yang dilaporkan klien (penanda operasional, bukan bukti). */
+  distribution?: string;
+  installer?: string;
    * Kanal yang menerbitkan token, di-stamp oleh controller berdasarkan
    * endpoint login yang dipanggil (K1c). Bila tidak diisi, token terbit tanpa
    * klaim kanal — perilaku lama yang masih diterima bertahap (K2a).
@@ -86,7 +89,9 @@ export class AuthService {
 	          registrationEvent: {
 	            ...(deviceFingerprintHash !== undefined ? { deviceFingerprintHash } : {}),
 	            ...(input.context.ipAddress !== undefined ? { ipAddress: input.context.ipAddress } : {}),
-	            ...(input.context.userAgent !== undefined ? { userAgent: input.context.userAgent } : {})
+	            ...(input.context.userAgent !== undefined ? { userAgent: input.context.userAgent } : {}),
+	            ...(input.context.distribution !== undefined ? { distribution: input.context.distribution } : {}),
+	            ...(input.context.installer !== undefined ? { installer: input.context.installer } : {})
 	          }
 	        });
         userId = user.id;

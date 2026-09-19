@@ -5,6 +5,12 @@ import { useCallback, useEffect, useState } from "react";
 import { MemberListItem, formatMoment, formatRupiah, listMembers, readRole, readToken } from "../../lib/api";
 import ConsoleHeader from "../console-header";
 
+const SOURCE_LABEL: Record<string, string> = {
+  PLAY: "Play Store",
+  OTHER: "Bukan Play Store",
+  UNKNOWN: "Tidak diketahui (akun lama)"
+};
+
 const TIERS = ["", "BASIC", "SILVER", "GOLD", "PLATINUM"] as const;
 const TIER_LABEL: Record<string, string> = {
   "": "Semua paket",
@@ -31,13 +37,13 @@ export default function MembersPage() {
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState("");
   // Filter dari kartu Beranda (?aktif=7, ?daftar=1|7), hari kalender WIB.
-  const [scope, setScope] = useState<{ activeDays?: number; registeredDays?: number }>({});
+  const [scope, setScope] = useState<{ activeDays?: number; registeredDays?: number; source?: string }>({});
 
   const refresh = useCallback(async (
     nextPage: number,
     nextSearch: string,
     nextTier: string,
-    nextScope: { activeDays?: number; registeredDays?: number } = {}
+    nextScope: { activeDays?: number; registeredDays?: number; source?: string } = {}
   ) => {
     setLoading(true);
     try {
@@ -92,6 +98,13 @@ export default function MembersPage() {
   function onSearchSubmit() {
     setPage(1);
     void refresh(1, search, tier, scope);
+  }
+
+  function onSourceChange(next: string) {
+    const nextScope = { ...scope, ...(next ? { source: next } : { source: undefined }) };
+    setScope(nextScope);
+    setPage(1);
+    void refresh(1, search, tier, nextScope);
   }
 
   function onTierChange(next: string) {
@@ -150,6 +163,17 @@ export default function MembersPage() {
               </option>
             ))}
           </select>
+          <select
+            value={scope.source ?? ""}
+            onChange={(event) => onSourceChange(event.target.value)}
+            aria-label="Sumber pendaftaran"
+            className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+          >
+            <option value="">Semua sumber</option>
+            <option value="PLAY">Play Store</option>
+            <option value="OTHER">Bukan Play Store</option>
+            <option value="UNKNOWN">Tidak diketahui (akun lama)</option>
+          </select>
           <button
             type="button"
             onClick={onSearchSubmit}
@@ -192,6 +216,7 @@ export default function MembersPage() {
 
                   {expanded ? (
                     <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 md:grid-cols-4">
+                      <Detail label="Sumber pendaftaran" value={SOURCE_LABEL[member.signupSource ?? "UNKNOWN"]} />
                       <Detail label="Saldo TapGoPay" value={formatRupiah(member.walletBalance)} />
                       <Detail label="Dapat ditarik" value={formatRupiah(member.withdrawableBalance)} />
                       <Detail label="Saldo PPOB" value={formatRupiah(member.ppobBalance)} />

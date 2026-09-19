@@ -1337,6 +1337,11 @@ model RegistrationEvent {
 
   user       User?       @relation("RegistrationEventUser", fields: [userId], references: [id], onDelete: SetNull)
   abuseFlags AbuseFlag[]
+  /// Jenis build aplikasi yang dilaporkan klien: "play" atau "direct".
+  distribution          String?  @db.VarChar(16)
+  /// Paket installer Android yang dilaporkan klien (mis. com.android.vending
+  /// untuk Google Play). Dilaporkan klien, jadi penanda operasional — bukan bukti kriptografis.
+  installer             String?  @db.VarChar(100)
 
   @@index([userId, createdAt])
   @@index([normalizedPhone, createdAt])

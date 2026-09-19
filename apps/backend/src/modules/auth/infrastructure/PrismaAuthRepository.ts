@@ -270,6 +270,8 @@ export class PrismaAuthRepository implements AuthRepository {
 	    const suspiciousReasons: string[] = [];
 	    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
+	      distribution?: string;
+	      installer?: string;
 	    // Serialkan evaluasi sinyal anti-abuse per-key (bukan satu lock global).
 	    // Tanpa ini, dua registrasi bersamaan yang berbagi device/IP/kode
 	    // referral bisa sama-sama membaca count lama sehingga flag tidak naik.
@@ -321,6 +323,8 @@ export class PrismaAuthRepository implements AuthRepository {
 	        ...(suspiciousReasons.length > 0 ? { suspiciousReasons } : {})
 	      },
 	      select: { id: true }
+	        ...(input.distribution !== undefined ? { distribution: input.distribution } : {}),
+	        ...(input.installer !== undefined ? { installer: input.installer } : {}),
 	    });
 
 	    if (suspiciousReasons.length === 0) {
