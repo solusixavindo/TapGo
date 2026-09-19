@@ -41,3 +41,9 @@ export const commissionHistorySchema = z.object({
     pageSize: z.coerce.number().int().min(1).max(100).default(20)
   })
 });
+
+export const referralMemberAvatarSchema = z.object({
+  params: z.object({
+    userId: z.string().uuid()
+  })
+});

@@ -95,6 +95,10 @@ const envSchema = z.object({
   MEMBERSHIP_PURCHASE_APP_ENABLED: strictEnvBoolean(false),
   /// Pencairan saldo wallet. Terpisah penuh dari pembelian membership.
   WALLET_CASH_OUT_ENABLED: strictEnvBoolean(false),
+  /// Pencairan saldo lewat dashboard mitra (kanal WEB saja). Terpisah dari
+  /// WALLET_CASH_OUT_ENABLED agar rilis Google Play tetap tertutup walau
+  /// pencairan web dinyalakan.
+  WALLET_CASH_OUT_WEB_ENABLED: strictEnvBoolean(false),
   /// Transfer P2P TapGoPay antar user (Stage R2.10). Tidak melibatkan payment
   /// gateway eksternal (murni saldo internal), tapi tetap default mati sampai
   /// Owner menyalakannya secara sadar — pola yang sama dengan fitur uang lain

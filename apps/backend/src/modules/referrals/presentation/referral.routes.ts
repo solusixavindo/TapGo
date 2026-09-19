@@ -11,6 +11,7 @@ import {
   commissionHistorySchema,
   referralDepthSchema,
   referralDownlineSchema,
+  referralMemberAvatarSchema,
   referralTreeSchema,
   referralUplinkSchema
 } from "./referral.validators.js";
@@ -24,6 +25,11 @@ export const referralRouter = Router();
 referralRouter.use(requireAuth);
 referralRouter.get("/summary", asyncHandler(controller.summary));
 referralRouter.get("/tree", validateRequest(referralTreeSchema), asyncHandler(controller.tree));
+referralRouter.get(
+  "/members/:userId/avatar",
+  validateRequest(referralMemberAvatarSchema),
+  asyncHandler(controller.memberAvatar)
+);
 referralRouter.get("/uplink", validateRequest(referralUplinkSchema), asyncHandler(controller.uplink));
 referralRouter.get("/downlines", validateRequest(referralDownlineSchema), asyncHandler(controller.downlines));
 referralRouter.get("/depth", validateRequest(referralDepthSchema), asyncHandler(controller.depth));

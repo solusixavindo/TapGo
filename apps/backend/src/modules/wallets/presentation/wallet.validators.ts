@@ -88,3 +88,11 @@ export const topUpOrderParamSchema = z.object({
     orderId: z.string().uuid()
   })
 });
+
+export const webWithdrawalRequestSchema = z.object({
+  body: z.object({
+    amount: z.coerce.number().int().min(50000).max(100000000),
+    password: z.string().min(1).max(200),
+    notes: z.string().max(500).optional()
+  })
+});

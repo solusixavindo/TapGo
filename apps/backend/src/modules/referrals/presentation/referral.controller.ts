@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
+import { AppError } from "../../../core/errors/AppError.js";
 import { ReferralService } from "../application/ReferralService.js";
 
 export class ReferralController {
@@ -24,6 +25,23 @@ export class ReferralController {
   summary = async (req: Request, res: Response) => {
     const result = await this.referralService.getSummary(req.auth!.userId);
     res.json({ success: true, data: result });
+  };
+
+  memberAvatar = async (req: Request, res: Response) => {
+    const avatar = await this.referralService.getDescendantAvatar(
+      req.auth!.userId,
+      String(req.params.userId)
+    );
+    // 404 yang sama untuk "bukan anggota referral Anda" dan "belum ada foto":
+    // membedakan keduanya akan membocorkan siapa yang ada di pohon orang lain.
+    if (!avatar) {
+      throw new AppError("Foto tidak ditemukan.", StatusCodes.NOT_FOUND, "REFERRAL_AVATAR_NOT_FOUND");
+    }
+    res.setHeader("cache-control", "no-store, no-cache, must-revalidate, private");
+    res.setHeader("pragma", "no-cache");
+    res.setHeader("content-type", avatar.contentType);
+    res.setHeader("x-content-type-options", "nosniff");
+    res.send(avatar.bytes);
   };
 
   tree = async (req: Request, res: Response) => {

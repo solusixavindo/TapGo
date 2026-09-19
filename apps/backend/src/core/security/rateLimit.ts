@@ -210,6 +210,25 @@ export const walletTransferRateLimiter = rateLimit({
   }
 });
 
+/**
+ * Pengajuan pencairan saldo. Sengaja ketat dan fail-closed: tiap percobaan
+ * memicu verifikasi password (argon2), jadi endpoint ini juga tidak boleh
+ * menjadi jalan menebak password.
+ */
+export const withdrawalRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  ...rateLimitStore("withdrawal", "closed"),
+  keyGenerator: (req) => `withdrawal-user:${req.auth?.userId ?? req.ip ?? "unknown"}`,
+  message: {
+    success: false,
+    code: "WITHDRAWAL_RATE_LIMITED",
+    message: "Terlalu banyak percobaan pencairan. Silakan coba lagi nanti."
+  }
+});
+
 /** Kirim pesan chat per-ride (Stage R2.10) — mencegah spam ke lawan bicara. */
 export const chatRateLimiter = rateLimit({
   windowMs: 60 * 1000,

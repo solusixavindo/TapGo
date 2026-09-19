@@ -16,6 +16,7 @@ export type ReferralTreeNode = {
   level: number;
   membershipTier: MembershipTier;
   joinedAt: Date;
+  hasAvatar: boolean;
 };
 
 export type ReferralUplinkNode = {
@@ -120,6 +121,8 @@ export interface ReferralRepository {
   }, tx: Prisma.TransactionClient): Promise<void>;
   getSummary(userId: string): Promise<ReferralSummary>;
   getTree(userId: string, maxLevel: number): Promise<ReferralTreeNode[]>;
+  /** Foto anggota, hanya bila `ancestorId` memang atasannya di pohon referral. */
+  getDescendantAvatar(ancestorId: string, descendantId: string): Promise<{ bytes: Buffer; contentType: string } | null>;
   getUplinkChain(userId: string, maxLevel: number): Promise<ReferralUplinkNode[]>;
   getDownlinesRecursive(userId: string, maxLevel: number, page: number, pageSize: number): Promise<ReferralDownlineNode[]>;
   getDepthStats(userId: string, maxLevel: number): Promise<ReferralDepthStats>;

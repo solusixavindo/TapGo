@@ -63,6 +63,10 @@ export class ReferralService {
     return this.repository.getSummary(userId);
   }
 
+  getDescendantAvatar(ancestorId: string, descendantId: string) {
+    return this.repository.getDescendantAvatar(ancestorId, descendantId);
+  }
+
   getTree(userId: string, maxLevel: number) {
     return this.repository.getTree(userId, Math.min(maxLevel, MAX_REFERRAL_LEVEL));
   }

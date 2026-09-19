@@ -346,6 +346,7 @@ export class PrismaReferralRepository implements ReferralRepository {
             fullName: true,
             referralCode: true,
             createdAt: true,
+            avatarUrl: true,
             membership: { select: { tier: true } }
           }
         }
@@ -359,8 +360,22 @@ export class PrismaReferralRepository implements ReferralRepository {
       referralCode: item.descendant.referralCode,
       level: item.level,
       membershipTier: item.descendant.membership?.tier ?? "BASIC",
-      joinedAt: item.createdAt
+      joinedAt: item.createdAt,
+      hasAvatar: Boolean(item.descendant.avatarUrl)
     }));
+  }
+
+  async getDescendantAvatar(ancestorId: string, descendantId: string) {
+    const link = await this.prisma.referralLevel.findUnique({
+      where: { ancestorId_descendantId: { ancestorId, descendantId } },
+      select: { id: true }
+    });
+    if (!link) return null;
+    const avatar = await this.prisma.userAvatar.findUnique({
+      where: { userId: descendantId },
+      select: { bytes: true, contentType: true }
+    });
+    return avatar ? { bytes: Buffer.from(avatar.bytes), contentType: avatar.contentType } : null;
   }
 
   async getUplinkChain(userId: string, maxLevel: number): Promise<ReferralUplinkNode[]> {
