@@ -61,15 +61,6 @@ export class AuthController {
 	  private getContext(req: Request) {
 	    const headerDeviceId = req.headers["x-tapgo-device-id"];
 	    const headerDeviceFingerprint = req.headers["x-tapgo-device-fingerprint"];
-	    return {
-	      ...(typeof req.headers["user-agent"] === "string" ? { userAgent: req.headers["user-agent"] } : {}),
-	      ...(typeof req.ip === "string" ? { ipAddress: req.ip } : {}),
-	      ...(typeof headerDeviceId === "string" ? { deviceIdentifier: headerDeviceId } : {}),
-	      ...(typeof headerDeviceFingerprint === "string" ? { deviceIdentifier: headerDeviceFingerprint } : {}),
-              ...(this.channel !== undefined ? { channel: this.channel } : {})
-	    };
-	  }
-	}
 	    const rawDistribution = req.headers["x-tapgo-distribution"];
 	    const rawInstaller = req.headers["x-tapgo-installer"];
 	    // Nilai dari klien divalidasi ketat sebelum disimpan (daftar putih / pola).
@@ -77,5 +68,14 @@ export class AuthController {
 	      rawDistribution === "play" || rawDistribution === "direct" ? rawDistribution : undefined;
 	    const installer =
 	      typeof rawInstaller === "string" && /^[A-Za-z0-9._-]{1,100}$/.test(rawInstaller) ? rawInstaller : undefined;
+	    return {
+	      ...(typeof req.headers["user-agent"] === "string" ? { userAgent: req.headers["user-agent"] } : {}),
+	      ...(typeof req.ip === "string" ? { ipAddress: req.ip } : {}),
 	      ...(distribution !== undefined ? { distribution } : {}),
 	      ...(installer !== undefined ? { installer } : {}),
+	      ...(typeof headerDeviceId === "string" ? { deviceIdentifier: headerDeviceId } : {}),
+	      ...(typeof headerDeviceFingerprint === "string" ? { deviceIdentifier: headerDeviceFingerprint } : {}),
+              ...(this.channel !== undefined ? { channel: this.channel } : {})
+	    };
+	  }
+	}

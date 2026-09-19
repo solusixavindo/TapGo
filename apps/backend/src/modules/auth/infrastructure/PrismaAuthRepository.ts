@@ -265,13 +265,13 @@ export class PrismaAuthRepository implements AuthRepository {
 	      deviceFingerprintHash?: string;
 	      ipAddress?: string;
 	      userAgent?: string;
+	      distribution?: string;
+	      installer?: string;
 	    }
 	  ) {
 	    const suspiciousReasons: string[] = [];
 	    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-	      distribution?: string;
-	      installer?: string;
 	    // Serialkan evaluasi sinyal anti-abuse per-key (bukan satu lock global).
 	    // Tanpa ini, dua registrasi bersamaan yang berbagi device/IP/kode
 	    // referral bisa sama-sama membaca count lama sehingga flag tidak naik.
@@ -318,13 +318,13 @@ export class PrismaAuthRepository implements AuthRepository {
 	        ...(input.deviceFingerprintHash !== undefined ? { deviceFingerprintHash: input.deviceFingerprintHash } : {}),
 	        ...(input.ipAddress !== undefined ? { ipAddress: input.ipAddress } : {}),
 	        ...(input.userAgent !== undefined ? { userAgent: input.userAgent.slice(0, 500) } : {}),
+	        ...(input.distribution !== undefined ? { distribution: input.distribution } : {}),
+	        ...(input.installer !== undefined ? { installer: input.installer } : {}),
 	        ...(input.sponsorReferralCode !== undefined ? { referralCodeUsed: input.sponsorReferralCode } : {}),
 	        suspicious: suspiciousReasons.length > 0,
 	        ...(suspiciousReasons.length > 0 ? { suspiciousReasons } : {})
 	      },
 	      select: { id: true }
-	        ...(input.distribution !== undefined ? { distribution: input.distribution } : {}),
-	        ...(input.installer !== undefined ? { installer: input.installer } : {}),
 	    });
 
 	    if (suspiciousReasons.length === 0) {
