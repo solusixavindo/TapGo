@@ -6,6 +6,7 @@ import { logger } from "../../../core/logger/logger.js";
 import { PpobRepository, PpobTransactionRecord } from "../domain/PpobRepository.js";
 import { PpobProviderDisabledError, PpobProviderGateway } from "../domain/ppobProvider.js";
 import { normalizePpobTarget } from "../domain/targetValidation.js";
+import { MobileOperator, OPERATOR_LABEL, detectMobileOperator } from "../domain/operatorDetection.js";
 
 /** Referensi publik PPOB: PPB- + 10 karakter alfabet aman (tanpa 0/O/1/I). */
 function generatePpobReference(): string {
@@ -87,6 +88,9 @@ export class PpobService {
       }
     }
 
+    // Pilih kode produk provider SEBELUM saldo didebit: nomor dari operator yang
+    // tidak didukung ditolak di sini, bukan lewat refund setelah provider gagal.
+    const providerSku = this.resolveProviderSku(product, targetNumber);
     const totalAmount = product.price.plus(product.adminFee);
 
     let pending: PpobTransaction;
@@ -100,6 +104,7 @@ export class PpobService {
             targetNumber,
             totalAmount,
             provider: this.provider.name,
+            providerSku,
             ...(input.idempotencyKey !== undefined
               ? { idempotencyKey: input.idempotencyKey }
               : {})
@@ -129,12 +134,49 @@ export class PpobService {
     }
 
     return {
-      transaction: await this.dispatchToProvider(
-        pending,
-        product.providerSku ?? product.sku
-      ),
+      transaction: await this.dispatchToProvider(pending, providerSku),
       replayed: false
     };
+  }
+
+  /**
+   * Kode produk provider untuk (produk, nomor). Produk pulsa/data yang punya
+   * peta per operator dirutekan lewat deteksi prefiks nomor; produk lain memakai
+   * providerSku tunggal (atau sku internal bila kosong).
+   */
+  resolveProviderSku(
+    product: { sku: string; providerSku: string | null; providerSkus?: unknown },
+    targetNumber: string
+  ): string {
+    const map =
+      product.providerSkus && typeof product.providerSkus === "object" && !Array.isArray(product.providerSkus)
+        ? (product.providerSkus as Record<string, unknown>)
+        : null;
+    if (!map) {
+      return product.providerSku ?? product.sku;
+    }
+    // jsonb tidak menjaga urutan kunci; urutkan agar pesan deterministik.
+    const supported = Object.keys(map)
+      .sort()
+      .map((key) => OPERATOR_LABEL[key as MobileOperator] ?? key)
+      .join(", ");
+    const operator = detectMobileOperator(targetNumber);
+    if (!operator) {
+      throw new AppError(
+        `Operator nomor ini tidak dikenali. Produk ini tersedia untuk: ${supported}.`,
+        StatusCodes.UNPROCESSABLE_ENTITY,
+        "PPOB_OPERATOR_UNKNOWN"
+      );
+    }
+    const providerSku = map[operator];
+    if (typeof providerSku !== "string" || providerSku.length === 0) {
+      throw new AppError(
+        `Produk ini belum tersedia untuk ${OPERATOR_LABEL[operator]}. Tersedia untuk: ${supported}.`,
+        StatusCodes.UNPROCESSABLE_ENTITY,
+        "PPOB_OPERATOR_UNSUPPORTED"
+      );
+    }
+    return providerSku;
   }
 
   /**

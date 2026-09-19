@@ -281,17 +281,33 @@ async function main() {
       create: product
     });
   }
-  // Padanan kode produk Digiflazz (lihat migrasi 20260919160000_ppob_digiflazz_sku_mapping).
-  const digiflazzSkuMap: Record<string, string> = {
-    PULSA_5K: "s5",
-    PULSA_10K: "s10",
-    PULSA_20K: "s20",
-    PULSA_50K: "s50",
-    PULSA_100K: "s100",
-    PLN_100K: "pln100"
+  // Rute Digiflazz + keputusan katalog (lihat migrasi 20260919170000_ppob_operator_routing).
+  const digiflazzCatalog: Record<string, { providerSku?: string; providerSkus?: Record<string, string>; price?: number; isActive?: boolean }> = {
+    PULSA_5K: { providerSkus: { telkomsel: "s5", axis: "ax5", tri: "t5", xl: "x5" } },
+    PULSA_10K: { providerSkus: { telkomsel: "s10", axis: "ax10", tri: "t10", xl: "x10", smartfren: "sm10" } },
+    PULSA_20K: { providerSkus: { telkomsel: "s20", indosat: "i20", tri: "t20" } },
+    PULSA_50K: { providerSkus: { telkomsel: "s50", indosat: "i50" } },
+    PULSA_100K: { providerSkus: { telkomsel: "s100" } },
+    DATA_1GB: { providerSkus: { telkomsel: "flash1" }, price: 16500 },
+    PLN_20K: { providerSku: "pln20", price: 22500 },
+    PLN_50K: { providerSku: "pln50", price: 52500 },
+    PLN_100K: { providerSku: "pln100" },
+    PLN_200K: { isActive: false },
+    DATA_5GB: { isActive: false },
+    DATA_10GB: { isActive: false },
+    BPJS_IURAN_1BULAN: { isActive: false },
+    PDAM_50K: { isActive: false },
+    PDAM_100K: { isActive: false },
+    EMONEY_20K: { isActive: false },
+    EMONEY_50K: { isActive: false },
+    EMONEY_100K: { isActive: false }
   };
-  for (const [sku, providerSku] of Object.entries(digiflazzSkuMap)) {
-    await prisma.ppobProduct.updateMany({ where: { sku, providerSku: null }, data: { providerSku } });
+  for (const [sku, patch] of Object.entries(digiflazzCatalog)) {
+    const { providerSkus, ...rest } = patch;
+    await prisma.ppobProduct.updateMany({
+      where: { sku },
+      data: { ...rest, ...(providerSkus ? { providerSkus } : {}) }
+    });
   }
 
   await prisma.promoCode.upsert({

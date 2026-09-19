@@ -1860,6 +1860,10 @@ model PpobProduct {
   /// Kode produk di sisi provider (mis. buyer_sku_code Digiflazz). Nullable:
   /// bila kosong, adapter memakai sku internal apa adanya.
   providerSku  String?           @map("provider_sku") @db.VarChar(60)
+  /// Pulsa/data: kode produk provider per operator, mis. {"telkomsel":"s5","xl":"x5"}.
+  /// Bila terisi, kode dipilih dari operator nomor tujuan; operator yang tidak
+  /// ada di sini ditolak sebelum saldo didebit.
+  providerSkus Json?             @map("provider_skus")
   isActive     Boolean           @default(true) @map("is_active")
   sortOrder    Int               @default(0) @map("sort_order")
   createdAt    DateTime          @default(now()) @map("created_at")
@@ -1899,6 +1903,9 @@ model PpobTransaction {
   /// Harga modal dari provider (mis. `price` Digiflazz) pada transaksi sukses —
   /// dasar HPP PPOB di laporan laba rugi. Null = tidak dilaporkan.
   providerCost      Decimal?              @map("provider_cost") @db.Decimal(14, 2)
+  /// Kode produk provider yang benar-benar dipakai (hasil pemilihan per operator);
+  /// dipakai lagi saat rekonsiliasi status. Null pada transaksi lama.
+  providerSku       String?               @map("provider_sku") @db.VarChar(60)
   failureCode       String?               @map("failure_code") @db.VarChar(40)
   failureReason     String?               @map("failure_reason") @db.VarChar(240)
 

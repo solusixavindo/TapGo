@@ -18,7 +18,8 @@ const PRODUCT_SELECT = {
   description: true,
   price: true,
   adminFee: true,
-  providerSku: true
+  providerSku: true,
+  providerSkus: true
 } satisfies Prisma.PpobProductSelect;
 
 export class PrismaPpobRepository implements PpobRepository {
@@ -66,6 +67,7 @@ export class PrismaPpobRepository implements PpobRepository {
       targetNumber: string;
       totalAmount: Prisma.Decimal;
       provider: string;
+      providerSku: string;
       idempotencyKey?: string;
     },
     tx: Prisma.TransactionClient
@@ -125,6 +127,7 @@ export class PrismaPpobRepository implements PpobRepository {
         totalAmount: input.totalAmount,
         status: "PENDING",
         provider: input.provider,
+        providerSku: input.providerSku,
         walletTransactionId: ledger.id,
         ...(input.idempotencyKey !== undefined
           ? { idempotencyKey: input.idempotencyKey }
@@ -276,6 +279,7 @@ export class PrismaPpobRepository implements PpobRepository {
         category: true,
         targetNumber: true,
         provider: true,
+        providerSku: true,
         product: { select: { providerSku: true } }
       },
       orderBy: { createdAt: "asc" },
@@ -289,7 +293,7 @@ export class PrismaPpobRepository implements PpobRepository {
       category: row.category,
       targetNumber: row.targetNumber,
       provider: row.provider,
-      providerSku: row.product.providerSku ?? row.skuSnapshot
+      providerSku: row.providerSku ?? row.product.providerSku ?? row.skuSnapshot
     }));
   }
 

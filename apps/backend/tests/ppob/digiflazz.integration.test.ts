@@ -202,6 +202,61 @@ describe.skipIf(!runIntegration)("Stage R2.8 — Digiflazz real provider integra
     expect(saved.providerCost?.toFixed(2)).toBe("11500.00");
   });
 
+  it("rute per operator: kode provider dipilih dari prefiks nomor dan disimpan di transaksi", async () => {
+    const user = await createUserWithPpobBalance("100000");
+    const buy = (targetNumber: string) =>
+      api("/api/v1/ppob/transactions", {
+        method: "POST",
+        token: tokenFor(user),
+        body: { sku: "PULSA_MULTI_5K", targetNumber }
+      });
+
+    const xl = await buy("081712345678"); // XL
+    expect(xl.status).toBe(201);
+    const tsel = await buy("+6281212345678"); // Telkomsel, format +62
+    expect(tsel.status).toBe(201);
+    expect(stubRequests.map((r) => r.buyer_sku_code)).toEqual(["x5", "s5"]);
+
+    const xlBody = (await xl.json()) as { data: any };
+    const saved = await prisma.ppobTransaction.findUniqueOrThrow({ where: { publicReference: xlBody.data.reference } });
+    expect(saved.providerSku).toBe("x5");
+  });
+
+  it("operator tidak didukung atau tidak dikenal ditolak SEBELUM saldo didebit dan tanpa memanggil provider", async () => {
+    const user = await createUserWithPpobBalance("100000");
+    const buy = (targetNumber: string) =>
+      api("/api/v1/ppob/transactions", {
+        method: "POST",
+        token: tokenFor(user),
+        body: { sku: "PULSA_MULTI_5K", targetNumber }
+      });
+
+    const indosat = await buy("081512345678"); // Indosat: tidak ada di peta produk
+    expect(indosat.status).toBe(422);
+    const indosatBody = (await indosat.json()) as { code?: string; message?: string };
+    expect(indosatBody.code).toBe("PPOB_OPERATOR_UNSUPPORTED");
+    expect(indosatBody.message).toContain("Indosat");
+
+    const unknown = await buy("080012345678"); // prefiks tidak dikenal
+    expect(unknown.status).toBe(422);
+    expect(((await unknown.json()) as { code?: string }).code).toBe("PPOB_OPERATOR_UNKNOWN");
+
+    expect(stubRequests).toHaveLength(0);
+    const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
+    expect(wallet.ppobBalance.toFixed(2)).toBe("100000.00");
+    expect(await prisma.ppobTransaction.count({ where: { userId: user.id } })).toBe(0);
+  });
+
+  it("katalog memuat daftar operator yang didukung untuk produk multi-operator", async () => {
+    const user = await createUserWithPpobBalance("1000");
+    const res = await api("/api/v1/ppob/catalog", { token: tokenFor(user) });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { items: Array<{ products: Array<{ sku: string; supportedOperators: string[] }> }> } };
+    const all = body.data.items.flatMap((item) => item.products);
+    expect(all.find((p) => p.sku === "PULSA_MULTI_5K")?.supportedOperators).toEqual(["telkomsel", "tri", "xl"]);
+    expect(all.find((p) => p.sku === "PULSA_TSEL_10")?.supportedOperators).toEqual([]);
+  });
+
   it("jawaban Gagal dari provider: FAILED + refund penuh + rc sebagai failureCode", async () => {
     const user = await createUserWithPpobBalance("100000");
     // Skenario dikeyed ref_id, yang belum diketahui — pasang lewat wildcard:
@@ -557,6 +612,18 @@ async function seedCatalog() {
       price: new Prisma.Decimal("11500"),
       providerSku: "tsel10",
       sortOrder: 1
+    }
+  });
+  // Rute per operator (pulsa multi-operator): kode provider dipilih dari prefiks nomor.
+  await prisma.ppobProduct.create({
+    data: {
+      sku: "PULSA_MULTI_5K",
+      category: "PULSA",
+      brand: "Multi-operator",
+      name: "Pulsa 5.000 multi-operator",
+      price: new Prisma.Decimal("6500"),
+      providerSkus: { telkomsel: "s5", xl: "x5", tri: "t5" },
+      sortOrder: 2
     }
   });
   await prisma.ppobProduct.create({

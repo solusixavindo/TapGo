@@ -101,6 +101,7 @@ interface CatalogProductRow {
   description: string | null;
   price: Prisma.Decimal;
   adminFee: Prisma.Decimal;
+  providerSkus?: Prisma.JsonValue | null;
 }
 
 function serializeCatalogProduct(product: CatalogProductRow) {
@@ -111,7 +112,12 @@ function serializeCatalogProduct(product: CatalogProductRow) {
     price: money(product.price),
     adminFee: money(product.adminFee),
     targetLabel: PPOB_TARGET_LABELS[product.category] ?? "Nomor Tujuan",
-    brand: product.brand
+    brand: product.brand,
+    // Pulsa/data: operator yang dapat dilayani (kosong = tidak dibatasi operator).
+    supportedOperators:
+      product.providerSkus && typeof product.providerSkus === "object" && !Array.isArray(product.providerSkus)
+        ? Object.keys(product.providerSkus).sort()
+        : []
   };
 }
 
@@ -126,6 +132,8 @@ async function buildInquiryPayload(input: {
 }) {
   const product = await getService().getProductForPurchase(input.sku);
   const targetNumber = normalizePpobTarget(product.category, input.targetNumber);
+  // Tolak lebih awal (sebelum konfirmasi bayar) bila operator nomor tidak didukung produk ini.
+  getService().resolveProviderSku(product, targetNumber);
   const wallet = await prisma.wallet.findUnique({
     where: { userId: input.userId },
     select: { balance: true, ppobBalance: true }

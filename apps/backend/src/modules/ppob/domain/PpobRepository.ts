@@ -8,6 +8,8 @@ export type PpobProductView = {
   description: string | null;
   price: Prisma.Decimal;
   adminFee: Prisma.Decimal;
+  /// Kode provider per operator (pulsa/data); dipakai klien hanya untuk daftar operator.
+  providerSkus?: Prisma.JsonValue | null;
 };
 
 /// Produk lengkap dengan id internal — hanya dipakai di dalam service.
@@ -56,6 +58,8 @@ export interface PpobRepository {
       targetNumber: string;
       totalAmount: Prisma.Decimal;
       provider: string;
+      /// Kode produk provider yang sudah dipilih untuk transaksi ini.
+      providerSku: string;
       idempotencyKey?: string;
     },
     tx: Prisma.TransactionClient
