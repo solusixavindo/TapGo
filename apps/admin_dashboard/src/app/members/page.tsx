@@ -30,11 +30,23 @@ export default function MembersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState("");
+  // Filter dari kartu Beranda (?aktif=7, ?daftar=1|7), hari kalender WIB.
+  const [scope, setScope] = useState<{ activeDays?: number; registeredDays?: number }>({});
 
-  const refresh = useCallback(async (nextPage: number, nextSearch: string, nextTier: string) => {
+  const refresh = useCallback(async (
+    nextPage: number,
+    nextSearch: string,
+    nextTier: string,
+    nextScope: { activeDays?: number; registeredDays?: number } = {}
+  ) => {
     setLoading(true);
     try {
-      const result = await listMembers({ page: nextPage, search: nextSearch || undefined, tier: nextTier || undefined });
+      const result = await listMembers({
+        page: nextPage,
+        search: nextSearch || undefined,
+        tier: nextTier || undefined,
+        ...nextScope
+      });
       setItems(result.items);
       setTotal(result.total);
       setError("");
@@ -51,23 +63,46 @@ export default function MembersPage() {
       return;
     }
     setRole(readRole());
-    void refresh(1, "", "");
+    const params = new URLSearchParams(window.location.search);
+    const aktif = Number(params.get("aktif"));
+    const daftar = Number(params.get("daftar"));
+    const initial = {
+      ...(Number.isInteger(aktif) && aktif > 0 ? { activeDays: aktif } : {}),
+      ...(Number.isInteger(daftar) && daftar > 0 ? { registeredDays: daftar } : {})
+    };
+    setScope(initial);
+    void refresh(1, "", "", initial);
   }, [router, refresh]);
+
+  function clearScope() {
+    setScope({});
+    setPage(1);
+    window.history.replaceState(null, "", window.location.pathname);
+    void refresh(1, search, tier, {});
+  }
+
+  const scopeLabel = scope.activeDays
+    ? `Login dalam ${scope.activeDays} hari terakhir`
+    : scope.registeredDays === 1
+      ? "Mendaftar hari ini"
+      : scope.registeredDays
+        ? `Mendaftar dalam ${scope.registeredDays} hari terakhir`
+        : "";
 
   function onSearchSubmit() {
     setPage(1);
-    void refresh(1, search, tier);
+    void refresh(1, search, tier, scope);
   }
 
   function onTierChange(next: string) {
     setTier(next);
     setPage(1);
-    void refresh(1, search, next);
+    void refresh(1, search, next, scope);
   }
 
   function goToPage(next: number) {
     setPage(next);
-    void refresh(next, search, tier);
+    void refresh(next, search, tier, scope);
   }
 
   const totalPages = Math.max(1, Math.ceil(total / 20));
@@ -84,6 +119,15 @@ export default function MembersPage() {
         {error ? (
           <p role="alert" className="mb-4 rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {error}
+          </p>
+        ) : null}
+
+        {scopeLabel ? (
+          <p className="mb-3 flex flex-wrap items-center gap-2 text-sm text-slate-700">
+            <span className="rounded-full bg-brand-navy px-3 py-1 text-xs font-bold text-white">{scopeLabel}</span>
+            <button type="button" onClick={clearScope} className="text-xs font-semibold text-slate-500 underline underline-offset-4">
+              Tampilkan semua member
+            </button>
           </p>
         ) : null}
 

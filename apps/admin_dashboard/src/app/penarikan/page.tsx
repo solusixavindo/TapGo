@@ -100,6 +100,14 @@ export default function WithdrawalsPage() {
     void refresh(status);
   }, [router, refresh, status]);
 
+  // Kartu Beranda membuka tab yang sesuai (?status=PENDING|APPROVED|PAID|REJECTED).
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("status");
+    if (wanted && TABS.some((tab) => tab.status === wanted)) {
+      setStatus(wanted as WithdrawalStatus);
+    }
+  }, []);
+
   const isVip = roleAtLeast(role, "SUPER_ADMIN_VIP");
 
   async function confirm() {

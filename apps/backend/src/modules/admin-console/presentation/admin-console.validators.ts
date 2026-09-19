@@ -20,7 +20,11 @@ export const adminListQuerySchema = z.object({
     ...paginationQuery,
     search: z.string().trim().min(1).max(120).optional(),
     package: z.nativeEnum(MembershipTier).optional(),
-    status: z.string().trim().min(1).max(40).optional()
+    status: z.string().trim().min(1).max(40).optional(),
+    /// Filter kartu Beranda: login dalam N hari terakhir / daftar dalam N hari
+    /// (hari ini = 1) menurut hari kalender WIB.
+    activeDays: z.coerce.number().int().min(1).max(90).optional(),
+    registeredDays: z.coerce.number().int().min(1).max(90).optional()
   })
 });
 

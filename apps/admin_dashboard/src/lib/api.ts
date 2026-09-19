@@ -435,13 +435,21 @@ export type MemberListItem = {
   commissionTotal: string;
 };
 
-export async function listMembers(params: { page?: number; search?: string; tier?: string }) {
+export async function listMembers(params: {
+  page?: number;
+  search?: string;
+  tier?: string;
+  activeDays?: number;
+  registeredDays?: number;
+}) {
   const query = new URLSearchParams({
     page: String(params.page ?? 1),
     pageSize: "20"
   });
   if (params.search) query.set("search", params.search);
   if (params.tier) query.set("package", params.tier);
+  if (params.activeDays) query.set("activeDays", String(params.activeDays));
+  if (params.registeredDays) query.set("registeredDays", String(params.registeredDays));
   const result = await request<{
     items: MemberListItem[];
     total?: number;

@@ -49,12 +49,13 @@ const ACTIVITY_LABEL: Record<string, string> = {
 /**
  * Beranda konsol admin.
  *
- * Auto-refresh polling 30 detik, bukan push/websocket — tidak ada plumbing
+ * Auto-refresh polling 10 detik (berhenti saat tab tersembunyi, langsung
+ * menyegarkan saat tab kembali dilihat), bukan push/websocket — tidak ada plumbing
  * socket admin di backend (socket.io yang ada khusus alur ride/chat driver).
  * Ini keputusan pragmatis: cukup untuk kebutuhan "live" pemantauan, tanpa
  * membangun infrastruktur realtime baru.
  */
-const REFRESH_INTERVAL_MS = 30_000;
+const REFRESH_INTERVAL_MS = 10_000;
 
 function formatDateShort(iso: string) {
   const parsed = new Date(`${iso}T00:00:00Z`);
@@ -71,6 +72,7 @@ export default function BerandaPage() {
   const [activity, setActivity] = useState<AdminActivityEntry[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -94,6 +96,7 @@ export default function BerandaPage() {
       setFinancial(financialResult);
       setRetentionWarnings(retentionResult);
       setActivity(activityResult);
+      setUpdatedAt(new Date());
       setError("");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Data belum dapat dimuat.");
@@ -109,8 +112,15 @@ export default function BerandaPage() {
     }
     setRole(readRole());
     void refresh();
-    const timer = setInterval(() => void refresh(), REFRESH_INTERVAL_MS);
-    return () => clearInterval(timer);
+    const tick = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    const timer = setInterval(tick, REFRESH_INTERVAL_MS);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", tick);
+    };
   }, [router, refresh]);
 
   return (
@@ -118,9 +128,16 @@ export default function BerandaPage() {
       <div className="mx-auto max-w-6xl">
         <ConsoleHeader
           title="Beranda"
-          subtitle={roleAtLeast(role, "SUPER_ADMIN") ? "Ringkasan pendaftaran, aktivitas, dan keuangan TapGo — diperbarui otomatis tiap 30 detik" : "Ringkasan pendaftaran dan antrean kerja TapGo — diperbarui otomatis tiap 30 detik"}
+          subtitle={roleAtLeast(role, "SUPER_ADMIN") ? "Ringkasan pendaftaran, aktivitas, dan keuangan TapGo — diperbarui otomatis tiap 10 detik" : "Ringkasan pendaftaran dan antrean kerja TapGo — diperbarui otomatis tiap 10 detik"}
           role={role}
         />
+
+        {updatedAt ? (
+          <p className="mb-3 flex items-center gap-2 text-xs text-slate-500" aria-live="off">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+            Langsung · diperbarui {new Intl.DateTimeFormat("id-ID", { timeStyle: "medium", timeZone: "Asia/Jakarta" }).format(updatedAt)} WIB
+          </p>
+        ) : null}
 
         {error ? (
           <p role="alert" className="mb-4 rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -133,19 +150,22 @@ export default function BerandaPage() {
         ) : (
           <>
             <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              <KpiCard label="Total member" value={String(summary?.totalMembers ?? 0)} />
+              <KpiCard href="/members" label="Total member" value={String(summary?.totalMembers ?? 0)} />
               <KpiCard
+                href="/members?aktif=7"
                 label="User aktif (7 hari)"
                 value={String(growth?.activeUsers7d ?? 0)}
                 hint={`${growth?.activeUsers30d ?? 0} dalam 30 hari`}
               />
               <KpiCard
+                href="/members?daftar=1"
                 label="Pendaftaran hari ini"
                 value={String(
                   growth?.registrationTrend[growth.registrationTrend.length - 1]?.count ?? 0
                 )}
               />
               <KpiCard
+                href="/members?daftar=7"
                 label="Pendaftaran 7 hari terakhir"
                 value={String(
                   growth?.registrationTrend.slice(-7).reduce((sum, row) => sum + row.count, 0) ?? 0
@@ -162,8 +182,21 @@ export default function BerandaPage() {
                   <Link href="/member-requests" className="font-semibold underline underline-offset-4">
                     {growth.pendingApprovals.memberRequests} pengajuan member
                   </Link>
-                  <span>{growth.pendingApprovals.rewards} reward</span>
-                  <span>{growth.pendingApprovals.withdrawals} penarikan saldo</span>
+                  {roleAtLeast(role, "SUPER_ADMIN") ? (
+                    <>
+                      <Link href="/reports" className="font-semibold underline underline-offset-4">
+                        {growth.pendingApprovals.rewards} reward
+                      </Link>
+                      <Link href="/penarikan?status=PENDING" className="font-semibold underline underline-offset-4">
+                        {growth.pendingApprovals.withdrawals} penarikan saldo
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <span>{growth.pendingApprovals.rewards} reward</span>
+                      <span>{growth.pendingApprovals.withdrawals} penarikan saldo</span>
+                    </>
+                  )}
                 </div>
               </section>
             ) : null}
@@ -218,16 +251,17 @@ export default function BerandaPage() {
               </h2>
               <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
                 <MoneyCard
+                  href="/reports"
                   label="Pendapatan upgrade membership"
                   value={financial?.totalMembershipRevenuePaid}
                 />
-                <MoneyCard label="Total komisi (bonus)" value={summary?.totalCommission} />
-                <MoneyCard label="Saldo wallet beredar" value={financial?.totalCashWalletLiability} />
-                <MoneyCard label="Saldo PPOB beredar" value={financial?.totalPpobLiability} />
-                <MoneyCard label="Withdraw menunggu" value={financial?.totalWithdrawalPending} />
-                <MoneyCard label="Withdraw disetujui/lunas" value={financial?.totalWithdrawalPaidApproved} />
-                <MoneyCard label="Reward menunggu" value={financial?.totalRewardPending} />
-                <MoneyCard label="Bagi hasil terbayar" value={financial?.totalProfitSharing} />
+                <MoneyCard href="/reports" label="Total komisi (bonus)" value={summary?.totalCommission} />
+                <MoneyCard href="/reports" label="Saldo wallet beredar" value={financial?.totalCashWalletLiability} />
+                <MoneyCard href="/reports" label="Saldo PPOB beredar" value={financial?.totalPpobLiability} />
+                <MoneyCard href="/penarikan?status=PENDING" label="Withdraw menunggu" value={financial?.totalWithdrawalPending} />
+                <MoneyCard href="/penarikan?status=PAID" label="Withdraw disetujui/lunas" value={financial?.totalWithdrawalPaidApproved} />
+                <MoneyCard href="/reports" label="Reward menunggu" value={financial?.totalRewardPending} />
+                <MoneyCard href="/reports" label="Bagi hasil terbayar" value={financial?.totalProfitSharing} />
               </div>
             </section>
             ) : null}
@@ -262,23 +296,28 @@ export default function BerandaPage() {
   );
 }
 
-function KpiCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
+const CARD_LINK =
+  "group block rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-brand-green hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-green";
+
+function KpiCard({ href, label, value, hint }: { href: string; label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <Link href={href} className={CARD_LINK}>
       <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p>
       <p className="mt-2 text-2xl font-black text-brand-navy">{value}</p>
       {hint ? <p className="mt-1 text-xs text-slate-400">{hint}</p> : null}
-    </div>
+      <p className="mt-2 text-[11px] font-semibold text-brand-green opacity-0 transition group-hover:opacity-100">Lihat rincian →</p>
+    </Link>
   );
 }
 
-function MoneyCard({ label, value }: { label: string; value?: string }) {
+function MoneyCard({ href, label, value }: { href: string; label: string; value?: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <Link href={href} className={CARD_LINK}>
       <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p>
       <p className="mt-2 text-lg font-black text-brand-navy">
         {value !== undefined ? formatRupiah(value) : "—"}
       </p>
-    </div>
+      <p className="mt-2 text-[11px] font-semibold text-brand-green opacity-0 transition group-hover:opacity-100">Lihat rincian →</p>
+    </Link>
   );
 }

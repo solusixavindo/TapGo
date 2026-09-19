@@ -61,7 +61,9 @@ export class AdminConsoleController {
       pageSize: Number(req.query.pageSize),
       ...(typeof req.query.search === "string" ? { search: req.query.search } : {}),
       ...(typeof req.query.package === "string" ? { package: req.query.package as never } : {}),
-      ...(typeof req.query.status === "string" ? { status: req.query.status } : {})
+      ...(typeof req.query.status === "string" ? { status: req.query.status } : {}),
+      ...(req.query.activeDays ? { activeDays: Number(req.query.activeDays) } : {}),
+      ...(req.query.registeredDays ? { registeredDays: Number(req.query.registeredDays) } : {})
     });
     res.json({ success: true, data: result });
   };

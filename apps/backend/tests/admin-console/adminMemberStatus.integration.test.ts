@@ -99,6 +99,37 @@ describe.skipIf(!runIntegration)("Admin member account status", () => {
     expect((await call(vip, `/api/v1/admin/members/${admin.id}/status`, "PUT", { status: "SUSPENDED", reason: "uji" })).status).toBe(409);
     expect((await prisma.user.findUniqueOrThrow({ where: { id: admin.id } })).status).toBe("ACTIVE");
   });
+
+  it("kartu Beranda: filter aktif/daftar memakai hari kalender WIB dan tren cocok dengan daftar", async () => {
+    const vip = await createUser("SUPER_ADMIN_VIP");
+    const shifted = new Date(Date.now() + 7 * 3_600_000);
+    shifted.setUTCHours(0, 0, 0, 0);
+    const wibTodayStart = new Date(shifted.getTime() - 7 * 3_600_000);
+
+    // Tepat awal hari WIB (bisa masih "kemarin" menurut UTC) => harus terhitung hari ini.
+    const today = await createUser("USER");
+    await prisma.user.update({ where: { id: today.id }, data: { createdAt: wibTodayStart, lastLoginAt: new Date() } });
+    // Semenit sebelum awal hari WIB => bukan hari ini.
+    const yesterday = await createUser("USER");
+    await prisma.user.update({ where: { id: yesterday.id }, data: { createdAt: new Date(wibTodayStart.getTime() - 60_000) } });
+    const idle = await createUser("USER");
+    await prisma.user.update({ where: { id: idle.id }, data: { createdAt: new Date(wibTodayStart.getTime() - 20 * 86_400_000) } });
+
+    const list = async (query: string) => {
+      const res = await call(vip, `/api/v1/admin/members?${query}`);
+      expect(res.status).toBe(200);
+      return ((await res.json()) as { data: { items: { id: string }[]; pagination: { total: number } } }).data;
+    };
+    expect((await list("registeredDays=1")).items.map((i) => i.id)).toEqual([today.id]);
+    expect((await list("registeredDays=2")).pagination.total).toBe(2);
+    expect((await list("activeDays=7")).items.map((i) => i.id)).toEqual([today.id]);
+    expect((await list("")).pagination.total).toBe(3);
+
+    const growth = await call(vip, "/api/v1/admin/dashboard/growth");
+    const trend = ((await growth.json()) as { data: { registrationTrend: { date: string; count: number }[] } }).data.registrationTrend;
+    expect(trend[trend.length - 1]!.count).toBe(1);
+    expect(trend.slice(-7).reduce((sum, row) => sum + row.count, 0)).toBe(2);
+  });
 });
 
 async function createUser(role: UserRole, overrides: { phone?: string } = {}): Promise<User> {

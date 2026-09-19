@@ -24,7 +24,19 @@ type MemberListInput = PageInput & {
   search?: string;
   package?: MembershipTier;
   status?: string;
+  activeDays?: number;
+  registeredDays?: number;
 };
+
+/** Indonesia (WIB) = UTC+7 tanpa DST; hari kalender dibatasi di zona ini. */
+const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+/** Awal hari WIB (sebagai instan UTC), `daysBack` hari sebelum hari ini. */
+function wibDayStart(daysBack = 0, now = new Date()) {
+  const shifted = new Date(now.getTime() + WIB_OFFSET_MS);
+  shifted.setUTCHours(0, 0, 0, 0);
+  return new Date(shifted.getTime() - WIB_OFFSET_MS - daysBack * 86_400_000);
+}
 
 type PaymentListInput = PageInput & {
   status?: PaymentStatus;
@@ -985,11 +997,10 @@ export class AdminConsoleService {
    */
   async registrationTrend(days = 30) {
     const bounded = Math.min(90, Math.max(1, Math.trunc(days)));
-    const since = new Date();
-    since.setUTCHours(0, 0, 0, 0);
-    since.setUTCDate(since.getUTCDate() - (bounded - 1));
+    // Hari kalender WIB, bukan UTC: "hari ini" berganti pukul 00:00 WIB.
+    const since = wibDayStart(bounded - 1);
     const rows = await this.prisma.$queryRaw<Array<{ day: Date; count: bigint }>>`
-      SELECT date_trunc('day', "created_at") AS day, COUNT(*) AS count
+      SELECT date_trunc('day', "created_at" + interval '7 hours') AS day, COUNT(*) AS count
       FROM "users"
       WHERE "role" = 'USER'
         AND "created_at" >= ${since}
@@ -1002,10 +1013,8 @@ export class AdminConsoleService {
 
     const series: Array<{ date: string; count: number }> = [];
     for (let offset = bounded - 1; offset >= 0; offset -= 1) {
-      const date = new Date();
-      date.setUTCHours(0, 0, 0, 0);
-      date.setUTCDate(date.getUTCDate() - offset);
-      const key = date.toISOString().slice(0, 10);
+      // Kunci tanggal WIB: geser instan awal-hari-WIB +7 jam lalu baca tanggal UTC-nya.
+      const key = new Date(wibDayStart(offset).getTime() + WIB_OFFSET_MS).toISOString().slice(0, 10);
       series.push({ date: key, count: countByDay.get(key) ?? 0 });
     }
     return series;
@@ -2294,6 +2303,14 @@ export class AdminConsoleService {
       role: "USER",
       ...(input.package ? { membership: { tier: input.package } } : {}),
       ...(input.status ? { status: input.status as never } : {}),
+      ...(input.activeDays
+        ? (() => {
+            const since = new Date();
+            since.setUTCDate(since.getUTCDate() - input.activeDays);
+            return { lastLoginAt: { gte: since } };
+          })()
+        : {}),
+      ...(input.registeredDays ? { createdAt: { gte: wibDayStart(input.registeredDays - 1) } } : {}),
       ...(input.search
         ? {
             OR: [
