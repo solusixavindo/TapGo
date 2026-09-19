@@ -281,6 +281,18 @@ async function main() {
       create: product
     });
   }
+  // Padanan kode produk Digiflazz (lihat migrasi 20260919160000_ppob_digiflazz_sku_mapping).
+  const digiflazzSkuMap: Record<string, string> = {
+    PULSA_5K: "s5",
+    PULSA_10K: "s10",
+    PULSA_20K: "s20",
+    PULSA_50K: "s50",
+    PULSA_100K: "s100",
+    PLN_100K: "pln100"
+  };
+  for (const [sku, providerSku] of Object.entries(digiflazzSkuMap)) {
+    await prisma.ppobProduct.updateMany({ where: { sku, providerSku: null }, data: { providerSku } });
+  }
 
   await prisma.promoCode.upsert({
     where: { code: "TAPGOHEMAT" },
