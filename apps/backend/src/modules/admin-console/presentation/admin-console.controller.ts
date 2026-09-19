@@ -239,6 +239,16 @@ export class AdminConsoleController {
     res.json({ success: true, data: result });
   };
 
+  setMemberStatus = async (req: Request, res: Response) => {
+    const result = await this.adminConsoleService.setMemberAccountStatus({
+      actorId: req.auth!.userId,
+      userId: String(req.params.userId),
+      status: req.body.status,
+      reason: req.body.reason
+    });
+    res.json({ success: true, data: result });
+  };
+
   assignAdminRole = async (req: Request, res: Response) => {
     const result = await this.adminRoleService.assignRole({
       actorId: req.auth!.userId,

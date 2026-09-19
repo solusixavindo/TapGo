@@ -14,6 +14,7 @@ import {
   readRole,
   readToken,
   rejectDocuments,
+  setMemberAccountStatus,
   verifyDocuments
 } from "../../lib/api";
 import ConsoleHeader from "../console-header";
@@ -61,6 +62,7 @@ export default function MemberRequestsPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [rejectReason, setRejectReason] = useState("");
+  const [accountReason, setAccountReason] = useState("");
 
   const selected = useMemo(
     () => requests.find((item) => item.id === selectedId) ?? null,
@@ -121,6 +123,30 @@ export default function MemberRequestsPage() {
       setDocuments(fresh);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Tindakan belum dapat diproses.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeAccountStatus(status: "ACTIVE" | "SUSPENDED") {
+    const user = selected?.user;
+    if (!user || busy) return;
+    const label = status === "SUSPENDED" ? "menonaktifkan" : "mengaktifkan kembali";
+    if (!window.confirm(`Yakin ${label} akun ${user.fullName}?`)) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await setMemberAccountStatus(user.id, status, accountReason.trim());
+      setNotice(
+        status === "SUSPENDED"
+          ? `Akun ${user.fullName} dinonaktifkan. Sesi login-nya dicabut.`
+          : `Akun ${user.fullName} diaktifkan kembali.`
+      );
+      setAccountReason("");
+      await refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Status akun belum dapat diubah.");
     } finally {
       setBusy(false);
     }
@@ -208,6 +234,11 @@ export default function MemberRequestsPage() {
                   <div className="flex items-start justify-between gap-3">
                     <span className="text-sm font-semibold">
                       {request.user?.fullName ?? "—"}
+                      {request.user?.status === "SUSPENDED" ? (
+                        <span className="ml-2 rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                          Akun nonaktif
+                        </span>
+                      ) : null}
                     </span>
                     <span
                       className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${statusTone(request)}`}
@@ -276,6 +307,47 @@ export default function MemberRequestsPage() {
                     ))
                   )}
                 </div>
+
+                {role === "SUPER_ADMIN_VIP" && selected.user ? (
+                  <div className="mt-6 border-t border-slate-200 pt-5 print:hidden">
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                      Status akun member
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      {selected.user.status === "SUSPENDED"
+                        ? "Akun ini nonaktif: tidak bisa masuk atau bertransaksi."
+                        : "Menonaktifkan akun langsung mencabut sesi login member. Saldo dan riwayat tidak dihapus, dan akun dapat diaktifkan kembali."}
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <input
+                        value={accountReason}
+                        onChange={(event) => setAccountReason(event.target.value)}
+                        placeholder="Alasan (wajib, tercatat di log audit)"
+                        maxLength={300}
+                        className="min-w-[220px] flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-slate-500"
+                      />
+                      {selected.user.status === "SUSPENDED" ? (
+                        <button
+                          type="button"
+                          onClick={() => void changeAccountStatus("ACTIVE")}
+                          disabled={busy || accountReason.trim().length < 3}
+                          className="rounded-lg bg-brand-green px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                        >
+                          Aktifkan kembali
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void changeAccountStatus("SUSPENDED")}
+                          disabled={busy || accountReason.trim().length < 3}
+                          className="rounded-lg border border-rose-300 px-4 py-2.5 text-sm font-semibold text-rose-700 disabled:opacity-50"
+                        >
+                          Nonaktifkan akun
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
 
                 {isAwaitingVerification(selected) ? (
                   <div className="mt-6 border-t border-slate-200 pt-5 print:hidden">

@@ -241,3 +241,11 @@ export const adminAuditLogQuerySchema = z.object({
     entityType: z.string().trim().min(1).max(80).optional()
   })
 });
+
+export const adminMemberStatusSchema = z.object({
+  params: z.object({ userId: z.string().uuid() }),
+  body: z.object({
+    status: z.enum(["ACTIVE", "SUSPENDED"]),
+    reason: z.string().trim().min(3).max(300)
+  })
+});

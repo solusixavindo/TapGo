@@ -36,6 +36,7 @@ import {
   adminMemberRequestActionSchema,
   adminOrderQuerySchema,
   adminRoleAssignSchema,
+  adminMemberStatusSchema,
   adminRoleCandidateSchema,
   adminPaymentQuerySchema,
   adminReportQuerySchema,
@@ -334,6 +335,12 @@ adminConsoleRouter.get(
   requireRoles("SUPER_ADMIN_VIP"),
   validateRequest(adminRoleCandidateSchema),
   asyncHandler(controller.adminRoleCandidates)
+);
+adminConsoleRouter.put(
+  "/members/:userId/status",
+  requireRoles("SUPER_ADMIN_VIP"),
+  validateRequest(adminMemberStatusSchema),
+  asyncHandler(controller.setMemberStatus)
 );
 adminConsoleRouter.put(
   "/roles/:userId",

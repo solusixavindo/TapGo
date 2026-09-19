@@ -27,7 +27,7 @@ export type MemberRequest = {
   membership: { name: string; tier: string } | null;
   invoice: { number: string } | null;
   userMembership: { status: string } | null;
-  user: { id: string; fullName: string; phone: string; referralCode: string } | null;
+  user: { id: string; fullName: string; phone: string; referralCode: string; status?: string } | null;
 };
 
 export type DocumentSummary = {
@@ -278,6 +278,14 @@ export function listAdminAccounts() {
 
 export function searchRoleCandidates(query: string) {
   return request<RoleCandidate[]>(`/admin/roles/candidates?q=${encodeURIComponent(query)}`);
+}
+
+/** Khusus Super Admin VIP: nonaktifkan / aktifkan kembali akun member. */
+export function setMemberAccountStatus(userId: string, status: "ACTIVE" | "SUSPENDED", reason: string) {
+  return request<{ id: string; fullName: string; status: string; changed: boolean }>(
+    `/admin/members/${userId}/status`,
+    { method: "PUT", body: JSON.stringify({ status, reason }) }
+  );
 }
 
 export function assignAdminRole(userId: string, role: string, reasonCode: string) {

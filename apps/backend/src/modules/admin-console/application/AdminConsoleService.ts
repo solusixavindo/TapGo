@@ -1231,7 +1231,7 @@ export class AdminConsoleService {
       this.prisma.membershipOrder.findMany({
         where,
         include: {
-          user: { select: { id: true, fullName: true, phone: true, referralCode: true } },
+          user: { select: { id: true, fullName: true, phone: true, referralCode: true, status: true } },
           membership: true,
           invoice: true,
           payments: { orderBy: { createdAt: "desc" }, take: 1 },
@@ -1244,6 +1244,80 @@ export class AdminConsoleService {
     ]);
 
     return this.page(items, total, input);
+  }
+
+  /**
+   * Menonaktifkan / mengaktifkan kembali akun member. Keputusan pemilik: hanya
+   * SUPER_ADMIN_VIP (dijaga di route). Akun admin tidak boleh diubah lewat
+   * sini — role dikelola di halaman Peran — dan tidak boleh menonaktifkan diri
+   * sendiri. Saat dinonaktifkan, semua sesi dicabut dan token lama gugur
+   * seketika (authVersion naik), dalam transaksi yang sama dengan audit.
+   */
+  async setMemberAccountStatus(input: {
+    actorId: string;
+    userId: string;
+    status: "ACTIVE" | "SUSPENDED";
+    reason: string;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const target = await tx.user.findUnique({
+        where: { id: input.userId },
+        select: { id: true, fullName: true, role: true, status: true }
+      });
+      if (!target) {
+        throw new AppError("Member tidak ditemukan.", StatusCodes.NOT_FOUND, "MEMBER_NOT_FOUND");
+      }
+      if (target.id === input.actorId) {
+        throw new AppError("Akun sendiri tidak dapat dinonaktifkan.", StatusCodes.CONFLICT, "MEMBER_STATUS_SELF");
+      }
+      if (target.role === "ADMIN" || target.role === "SUPER_ADMIN" || target.role === "SUPER_ADMIN_VIP") {
+        throw new AppError(
+          "Akun admin dikelola lewat halaman Pengaturan Role.",
+          StatusCodes.CONFLICT,
+          "MEMBER_STATUS_ADMIN_TARGET"
+        );
+      }
+      if (target.status !== "ACTIVE" && target.status !== "SUSPENDED") {
+        throw new AppError(
+          "Status akun ini tidak dapat diubah dari sini.",
+          StatusCodes.CONFLICT,
+          "MEMBER_STATUS_NOT_CHANGEABLE"
+        );
+      }
+
+      const previousStatus = target.status;
+      if (previousStatus === input.status) {
+        return { id: target.id, fullName: target.fullName, status: target.status, changed: false };
+      }
+
+      const now = new Date();
+      const updated = await tx.user.update({
+        where: { id: target.id },
+        data: {
+          status: input.status,
+          ...(input.status === "SUSPENDED"
+            ? { authVersion: { increment: 1 }, sessionsRevokedAt: now }
+            : {})
+        },
+        select: { id: true, fullName: true, status: true }
+      });
+      if (input.status === "SUSPENDED") {
+        await tx.session.updateMany({
+          where: { userId: target.id, revokedAt: null },
+          data: { revokedAt: now }
+        });
+      }
+      await tx.auditLog.create({
+        data: {
+          actorId: input.actorId,
+          action: input.status === "SUSPENDED" ? "MEMBER_ACCOUNT_SUSPENDED" : "MEMBER_ACCOUNT_REACTIVATED",
+          entityType: "USER",
+          entityId: target.id,
+          metadata: { previousStatus, newStatus: input.status, reason: input.reason }
+        }
+      });
+      return { ...updated, changed: true };
+    });
   }
 
   async rejectMemberRequest(input: { orderId: string; adminId: string; reason?: string }) {
