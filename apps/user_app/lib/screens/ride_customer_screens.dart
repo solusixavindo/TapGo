@@ -494,6 +494,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   RideLocation? _dropoff;
   RideQuoteView? _quote;
 
+  /// 'CASH' (bawaan) atau 'DIGITAL' (TapGoPay). Server tetap penentu akhir.
+  String _paymentMethod = 'CASH';
+
   bool _isBusy = false;
   String? _errorMessage;
 
@@ -615,6 +618,16 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         return;
       }
 
+      if (_paymentMethod == 'DIGITAL' &&
+          ref.read(_demoSessionProvider).walletBalance < quote.totalFare) {
+        setState(() {
+          _paymentMethod = 'CASH';
+          _errorMessage =
+              'Saldo TapGoPay tidak cukup untuk perjalanan ini. Pilih tunai atau isi saldo dulu.';
+        });
+        return;
+      }
+
       final pickupNote = _pickupNoteController.text.trim();
       final request = widget.orderRequest ?? _apiClient.createRideOrder;
       final data = await request(
@@ -622,6 +635,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         // Kunci yang sama dipakai ulang bila pengguna mencoba lagi.
         idempotencyKey: _orderIdempotencyKey,
         pickupNote: pickupNote.isEmpty ? null : pickupNote,
+        paymentMethod: _paymentMethod,
       );
       if (!mounted) {
         return;
@@ -933,6 +947,63 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     );
   }
 
+  Widget _paymentSelector(ColorScheme colorScheme, RideQuoteView quote) {
+    final balance = ref.watch(_demoSessionProvider).walletBalance;
+    final enough = balance >= quote.totalFare;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Metode pembayaran',
+          style: TextStyle(
+            color: colorScheme.onSurface,
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _RidePaymentChoiceTile(
+                key: const ValueKey('payment-cash'),
+                icon: Icons.payments_rounded,
+                title: 'Tunai',
+                subtitle: 'Bayar ke driver',
+                selected: _paymentMethod == 'CASH',
+                enabled: !_isBusy,
+                colorScheme: colorScheme,
+                onTap: () => setState(() => _paymentMethod = 'CASH'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _RidePaymentChoiceTile(
+                key: const ValueKey('payment-digital'),
+                icon: Icons.account_balance_wallet_rounded,
+                title: 'TapGoPay',
+                subtitle: enough
+                    ? 'Saldo ${tapGoFormatRideRupiah(balance)}'
+                    : 'Saldo kurang (${tapGoFormatRideRupiah(balance)})',
+                selected: _paymentMethod == 'DIGITAL',
+                enabled: !_isBusy && enough,
+                colorScheme: colorScheme,
+                onTap: () => setState(() => _paymentMethod = 'DIGITAL'),
+              ),
+            ),
+          ],
+        ),
+        if (!enough) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Saldo belum cukup untuk perjalanan ini. Gunakan tunai, atau isi saldo di tapgolion.id/topup.',
+            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _quoteCard(ColorScheme colorScheme, RideQuoteView quote) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -993,7 +1064,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Tarif dihitung server TapGo. Pembayaran tunai kepada driver.',
+            _paymentMethod == 'DIGITAL'
+                ? 'Tarif dihitung server TapGo. Dibayar dari saldo TapGoPay.'
+                : 'Tarif dihitung server TapGo. Pembayaran tunai kepada driver.',
             style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
           ),
           if (quote.expiresAt != null) ...[
@@ -1011,6 +1084,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
               ),
             ),
           ],
+          const SizedBox(height: 16),
+          _paymentSelector(colorScheme, quote),
           const SizedBox(height: 16),
           TextField(
             controller: _pickupNoteController,
@@ -1031,6 +1106,92 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
             onPressed: quote.isExpired ? null : _confirmOrder,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Pilihan metode pembayaran (Tunai / TapGoPay). Tile nonaktif tampil redup
+/// dan tidak bisa dipilih, dengan alasannya tertulis di subjudul.
+class _RidePaymentChoiceTile extends StatelessWidget {
+  const _RidePaymentChoiceTile({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.enabled,
+    required this.colorScheme,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final bool enabled;
+  final ColorScheme colorScheme;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = selected ? _brandBlue : colorScheme.outlineVariant;
+    return Semantics(
+      button: true,
+      selected: selected,
+      enabled: enabled,
+      label: '$title, $subtitle',
+      child: Opacity(
+        opacity: enabled ? 1 : 0.5,
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 64),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: selected
+                  ? _brandBlue.withValues(alpha: 0.08)
+                  : colorScheme.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: accent, width: selected ? 2 : 1),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, size: 22, color: selected ? _brandBlue : null),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: colorScheme.onSurface,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colorScheme.onSurfaceVariant,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (selected)
+                  const Icon(Icons.check_circle_rounded,
+                      size: 20, color: _brandBlue),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1642,7 +1803,11 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
           ],
           const SizedBox(height: 6),
           Text(
-            'Pembayaran tunai kepada driver.',
+            order.isDigitalPayment
+                ? (order.phase == RideUiPhase.cancelled
+                    ? 'Dibayar dengan TapGoPay. Saldo dikembalikan penuh ke dompet Anda.'
+                    : 'Dibayar dengan TapGoPay. Tidak perlu membayar tunai ke driver.')
+                : 'Pembayaran tunai kepada driver.',
             style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
           ),
         ],

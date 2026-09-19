@@ -284,11 +284,18 @@ class RideOrderView {
     required this.driver,
     required this.vehicle,
     required this.createdAt,
+    this.paymentMethod = 'CASH',
+    this.paymentState = '',
   });
 
   final String reference;
   final String serviceType;
   final String status;
+
+  /// 'CASH' atau 'DIGITAL' (TapGoPay). Dari server; tidak pernah ditebak klien.
+  final String paymentMethod;
+  final String paymentState;
+  bool get isDigitalPayment => paymentMethod == 'DIGITAL';
 
   /// Berasal dari server. Inilah penentu berhenti polling.
   final bool isFinal;
@@ -406,7 +413,10 @@ class RideOrderView {
   static RideOrderView fromJson(Map<String, dynamic> json) {
     final fare = (json['fare'] as Map<String, dynamic>?) ?? const {};
     final cancellation = json['cancellation'] as Map<String, dynamic>?;
+    final payment = json['payment'] as Map<String, dynamic>?;
     return RideOrderView(
+      paymentMethod: '${payment?['method'] ?? 'CASH'}',
+      paymentState: '${payment?['state'] ?? ''}',
       reference: '${json['reference'] ?? ''}',
       serviceType: '${json['serviceType'] ?? ''}',
       status: '${json['status'] ?? ''}',
@@ -452,7 +462,11 @@ String tapGoRideErrorMessage(Object error) {
       case 'RIDE_COORDINATE_INVALID':
         return 'Lokasi yang dipilih belum valid.';
       case 'RIDE_DIGITAL_PAYMENT_NOT_CONFIGURED':
-        return 'Pembayaran digital belum tersedia. Gunakan tunai.';
+        return 'Pembayaran TapGoPay belum tersedia. Gunakan tunai.';
+      case 'RIDE_INSUFFICIENT_BALANCE':
+        return 'Saldo TapGoPay tidak cukup. Pilih tunai atau isi saldo dulu.';
+      case 'RIDE_BALANCE_CHANGED':
+        return 'Saldo baru saja berubah. Silakan coba lagi.';
       case 'RATE_LIMITED':
         return 'Terlalu banyak permintaan. Coba lagi beberapa saat lagi.';
     }
@@ -500,6 +514,7 @@ typedef RideOrderRequest = Future<Map<String, dynamic>> Function({
   required String quoteId,
   String? idempotencyKey,
   String? pickupNote,
+  String? paymentMethod,
 });
 
 typedef RideDetailRequest = Future<Map<String, dynamic>> Function(

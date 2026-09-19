@@ -349,7 +349,7 @@ void main() {
         tester,
         historyRequest: () async => [orderPayload(status: 'IN_TRIP')],
         detailRequest: (_) async => orderPayload(status: 'IN_TRIP'),
-        orderRequest: ({required quoteId, idempotencyKey, pickupNote}) async {
+        orderRequest: ({required quoteId, idempotencyKey, pickupNote, paymentMethod}) async {
           orderCalls += 1;
           return const {};
         },
@@ -489,7 +489,7 @@ void main() {
               },
               detailRequest: (_) async =>
                   orderPayload(status: 'DRIVER_ARRIVED'),
-              orderRequest: ({required quoteId, idempotencyKey, pickupNote}) async {
+              orderRequest: ({required quoteId, idempotencyKey, pickupNote, paymentMethod}) async {
                 orderCalls += 1;
                 return const {};
               },
@@ -594,7 +594,7 @@ void main() {
           orderPayload(status: 'SEARCHING_DRIVER', reference: 'RID-CCCC33DDD3'),
         ],
         detailRequest: (_) async => orderPayload(status: 'DRIVER_ASSIGNED'),
-        orderRequest: ({required quoteId, idempotencyKey, pickupNote}) async {
+        orderRequest: ({required quoteId, idempotencyKey, pickupNote, paymentMethod}) async {
           orderCalls += 1;
           return const {};
         },

@@ -269,7 +269,7 @@ void main() {
         required dropoff,
       }) async =>
           quotePayload(),
-      orderRequest: ({required quoteId, idempotencyKey, pickupNote}) async =>
+      orderRequest: ({required quoteId, idempotencyKey, pickupNote, paymentMethod}) async =>
           orderPayload(status: 'SEARCHING_DRIVER'),
       detailRequest: (_) async => orderPayload(status: 'SEARCHING_DRIVER'),
     );

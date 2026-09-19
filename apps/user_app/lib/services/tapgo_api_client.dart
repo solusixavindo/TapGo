@@ -335,13 +335,14 @@ class _TapGoApiClient {
     required String quoteId,
     String? idempotencyKey,
     String? pickupNote,
+    String? paymentMethod,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       _apiPath('rides'),
-      // CASH sesuai kontrak tahap ini. DIGITAL tidak pernah dikirim.
+      // Hanya dua nilai sah; apa pun selain DIGITAL (TapGoPay) menjadi CASH.
       data: {
         'quoteId': quoteId,
-        'paymentMethod': 'CASH',
+        'paymentMethod': paymentMethod == 'DIGITAL' ? 'DIGITAL' : 'CASH',
         if (pickupNote != null && pickupNote.isNotEmpty)
           'pickupNote': pickupNote,
       },
@@ -600,13 +601,16 @@ class _TapGoApiClient {
 
   Future<_TapGoProductionSnapshot> productionSnapshot() async {
     if (tapGoIsPlayDistribution) {
-      final membership = await _productionSnapshotPart(
-        'membership',
-        () => get('/membership/me'),
-      );
+      // Dompet tetap dibaca di build Play: saldo PPOB tampil di Beranda dan
+      // saldo utama menentukan apakah TapGoPay bisa dipilih untuk ojek.
+      // Bagian ini opsional — bila gagal, app tetap jalan tanpa angka saldo.
+      final parts = await Future.wait([
+        _productionSnapshotPart('membership', () => get('/membership/me')),
+        _productionSnapshotPart('wallet', _walletForSnapshot),
+      ]);
       return _TapGoProductionSnapshot.fromMaps(
-        membership: membership,
-        wallet: const {},
+        membership: parts[0],
+        wallet: parts[1],
         transactions: const {'items': []},
         referralSummary: const {},
         referralTree: const {},

@@ -5,6 +5,11 @@ final _demoSessionProvider = StateProvider<DemoClientSession>(
   (ref) => DemoClientSession.initial(),
 );
 
+/// Pintu masuk untuk test: provider sesi bersifat private, sehingga test
+/// tidak bisa mengisi saldo wallet tanpa alias publik ini.
+@visibleForTesting
+final tapGoSessionProviderForTest = _demoSessionProvider;
+
 /// Foto profil dibagikan antara ikon tab "Akun" dan halaman Profil supaya
 /// keduanya konsisten dan tidak masing-masing menembak request sendiri.
 /// null berarti belum ada foto atau gagal dimuat — pemanggil jatuh balik ke

@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tapgo_user_app/demo/client_flow_models.dart';
 import 'package:tapgo_user_app/main.dart';
 
 /// Regression Ojek Online penumpang (Stage R2.4).
@@ -450,7 +451,7 @@ void main() {
                     const Duration(minutes: 1),
                   ),
             ),
-            orderRequest: ({required quoteId, idempotencyKey, pickupNote}) async {
+            orderRequest: ({required quoteId, idempotencyKey, pickupNote, paymentMethod}) async {
               orderCalls += 1;
               return orderPayload();
             },
@@ -533,7 +534,7 @@ void main() {
               required dropoff,
             }) async =>
                 quotePayload(),
-            orderRequest: ({required quoteId, idempotencyKey, pickupNote}) {
+            orderRequest: ({required quoteId, idempotencyKey, pickupNote, paymentMethod}) {
               orderCalls += 1;
               return gate.future;
             },
@@ -577,7 +578,7 @@ void main() {
               required dropoff,
             }) async =>
                 quotePayload(),
-            orderRequest: ({required quoteId, idempotencyKey, pickupNote}) async {
+            orderRequest: ({required quoteId, idempotencyKey, pickupNote, paymentMethod}) async {
               keys.add(idempotencyKey);
               attempt += 1;
               if (attempt == 1) {
@@ -1663,6 +1664,101 @@ void main() {
 
       final size = tester.getSize(find.byType(FilledButton));
       expect(size.height, greaterThanOrEqualTo(48));
+    });
+  });
+
+  group('Metode pembayaran (Tunai / TapGoPay)', () {
+    Future<List<String?>> bookWith(
+      WidgetTester tester, {
+      required int walletBalance,
+      required Future<void> Function() interact,
+    }) async {
+      final sent = <String?>[];
+      useTallView(tester);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            tapGoSessionProviderForTest.overrideWith(
+              (ref) => DemoClientSession.initial().copyWith(
+                walletBalance: walletBalance,
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            home: RideBookingScreen(
+              initialService: RideServiceKind.motorcycle,
+              locationPort: const DemoLocationPort(),
+              quoteRequest: ({
+                required serviceType,
+                required pickup,
+                required dropoff,
+              }) async =>
+                  quotePayload(),
+              orderRequest: ({
+                required quoteId,
+                idempotencyKey,
+                pickupNote,
+                paymentMethod,
+              }) async {
+                sent.add(paymentMethod);
+                return orderPayload();
+              },
+              detailRequest: (_) async => orderPayload(),
+            ),
+          ),
+        ),
+      );
+      await settleFrames(tester);
+      await pickRoute(tester);
+      await tapVisible(tester, find.text('Cek Harga'));
+      await settleFrames(tester);
+      await interact();
+      return sent;
+    }
+
+    testWidgets('bawaan tunai: order dikirim dengan CASH', (tester) async {
+      final sent = await bookWith(
+        tester,
+        walletBalance: 100000,
+        interact: () async {
+          await tapVisible(tester, find.text('Pesan Sekarang'));
+          await settleFrames(tester);
+        },
+      );
+      expect(sent, ['CASH']);
+    });
+
+    testWidgets('pilih TapGoPay saat saldo cukup: order dikirim dengan DIGITAL',
+        (tester) async {
+      final sent = await bookWith(
+        tester,
+        walletBalance: 100000,
+        interact: () async {
+          await tapVisible(tester, find.byKey(const ValueKey('payment-digital')));
+          await tester.pump();
+          await tapVisible(tester, find.text('Pesan Sekarang'));
+          await settleFrames(tester);
+        },
+      );
+      expect(sent, ['DIGITAL']);
+    });
+
+    testWidgets('saldo kurang: TapGoPay tidak bisa dipilih dan alasannya tampil',
+        (tester) async {
+      final sent = await bookWith(
+        tester,
+        walletBalance: 1000,
+        interact: () async {
+          await tester.ensureVisible(find.byKey(const ValueKey('payment-digital')));
+          await tester.tap(find.byKey(const ValueKey('payment-digital')),
+              warnIfMissed: false);
+          await tester.pump();
+          expect(find.textContaining('Saldo kurang'), findsOneWidget);
+          await tapVisible(tester, find.text('Pesan Sekarang'));
+          await settleFrames(tester);
+        },
+      );
+      expect(sent, ['CASH']);
     });
   });
 }
