@@ -135,13 +135,33 @@ describe.skipIf(!runIntegration)("Admin member account status", () => {
     const vip = await createUser("SUPER_ADMIN_VIP");
     const member = await createUser("USER");
     await prisma.wallet.create({
-      data: { userId: member.id, balance: "0.00", cashBalance: "12000.00", ppobBalance: "5000.00" }
+      data: { userId: member.id, balance: "12000.00", cashBalance: "12000.00", ppobBalance: "5000.00" }
     });
     const res = await call(vip, `/api/v1/admin/members?search=${encodeURIComponent(member.phone)}`);
     const body = (await res.json()) as { data: { items: { id: string; ppobBalance: string; walletBalance: string }[] } };
     const row = body.data.items.find((i) => i.id === member.id)!;
     expect(row.ppobBalance).toBe("5000.00");
     expect(row.walletBalance).toBe("12000.00");
+  });
+
+  it("saldo TapGoPay = wallet.balance (seperti aplikasi), dapat ditarik = cashBalance, total beredar cocok", async () => {
+    const vip = await createUser("SUPER_ADMIN_VIP");
+    const topup = await createUser("USER");
+    const earner = await createUser("USER");
+    // Top up: masuk ke balance tapi bukan bagian yang bisa ditarik.
+    await prisma.wallet.create({ data: { userId: topup.id, balance: "50000.00", cashBalance: "0.00", ppobBalance: "5000.00" } });
+    await prisma.wallet.create({ data: { userId: earner.id, balance: "20000.00", cashBalance: "20000.00", ppobBalance: "0.00" } });
+
+    const list = await call(vip, "/api/v1/admin/members?pageSize=50");
+    const rows = ((await list.json()) as { data: { items: { id: string; walletBalance: string; withdrawableBalance: string }[] } }).data.items;
+    const topupRow = rows.find((r) => r.id === topup.id)!;
+    expect([topupRow.walletBalance, topupRow.withdrawableBalance]).toEqual(["50000.00", "0.00"]);
+
+    const summary = await call(vip, "/api/v1/admin/reports/financial-summary");
+    const data = ((await summary.json()) as { data: Record<string, string> }).data;
+    expect(data.totalWalletLiability).toBe("70000.00");
+    expect(data.totalCashWalletLiability).toBe("20000.00");
+    expect(data.totalPpobLiability).toBe("5000.00");
   });
 });
 

@@ -942,7 +942,7 @@ export class AdminConsoleService {
         _sum: { amount: true }
       }),
       this.prisma.wallet.aggregate({
-        _sum: { cashBalance: true }
+        _sum: { balance: true }
       }),
       this.prisma.rewardTransaction.aggregate({
         where: { status: "PENDING" },
@@ -980,7 +980,8 @@ export class AdminConsoleService {
       totalProfitSharing: this.decimal(profitSharing._sum.amount),
       totalWithdrawPending: this.decimal(withdrawPending._sum.amount),
       totalWithdrawApproved: this.decimal(withdrawApproved._sum.amount),
-      totalWalletBalance: this.decimal(walletBalance._sum.cashBalance),
+      // Saldo TapGoPay total (yang dilihat member di aplikasi), bukan hanya yang bisa ditarik.
+      totalWalletBalance: this.decimal(walletBalance._sum.balance),
       totalPpobGiven: await this.sumWalletTransactions(["PPOB_BENEFIT"]),
       totalRewardPending: this.decimal(rewardPending._sum.amount)
     };
@@ -1663,6 +1664,7 @@ export class AdminConsoleService {
     ]);
 
     return {
+      totalWalletLiability: walletLiability.totalWalletBalance,
       totalCashWalletLiability: walletLiability.totalCashBalance,
       totalPpobLiability: walletLiability.totalPpobBalance,
       totalSponsorBonus: this.decimal(sponsorBonus._sum.amount),
@@ -1723,6 +1725,7 @@ export class AdminConsoleService {
         : null,
       memo: {
         ppobGrossSales: current.memo.ppobGrossSales,
+        walletLiabilityWallet: walletLiability.totalWalletBalance,
         walletLiabilityCash: walletLiability.totalCashBalance,
         walletLiabilityPpob: walletLiability.totalPpobBalance,
         withdrawalsOutstanding: this.decimal(withdrawPending._sum.amount)
@@ -1850,7 +1853,7 @@ export class AdminConsoleService {
   async walletLiabilityReport(_input: DateRangeOnlyInput = {}) {
     const [aggregate, cashUsers, ppobUsers] = await Promise.all([
       this.prisma.wallet.aggregate({
-        _sum: { cashBalance: true, ppobBalance: true }
+        _sum: { balance: true, cashBalance: true, ppobBalance: true }
       }),
       this.prisma.wallet.count({
         where: { cashBalance: { gt: 0 } }
@@ -1861,6 +1864,9 @@ export class AdminConsoleService {
     ]);
 
     return {
+      // `balance` = saldo TapGoPay total (dilihat member & dipakai bayar ojek);
+      // `cashBalance` = bagian yang boleh ditarik; PPOB terpisah.
+      totalWalletBalance: this.decimal(aggregate._sum.balance),
       totalCashBalance: this.decimal(aggregate._sum.cashBalance),
       totalPpobBalance: this.decimal(aggregate._sum.ppobBalance),
       totalWithdrawableBalance: this.decimal(aggregate._sum.cashBalance),
@@ -2292,7 +2298,10 @@ export class AdminConsoleService {
       sponsor: user.referralRecord?.sponsor ?? null,
       directSponsorCount,
       totalDownline,
-      walletBalance: this.decimal(user.wallet?.cashBalance),
+      // Sama dengan aplikasi/web: saldo TapGoPay = wallet.balance; sebagian di antaranya
+      // (cashBalance) yang dapat ditarik.
+      walletBalance: this.decimal(user.wallet?.balance),
+      withdrawableBalance: this.decimal(user.wallet?.cashBalance),
       // Saldo PPOB NYATA di dompet member (termasuk bonus Basic Rp5.000), bukan
       // jatah PPOB paket — yang terakhir 0 untuk Basic dan menyesatkan.
       ppobBalance: this.decimal(user.wallet?.ppobBalance),

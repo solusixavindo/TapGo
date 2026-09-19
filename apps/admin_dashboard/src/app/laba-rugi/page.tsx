@@ -272,7 +272,11 @@ export default function ProfitLossPage() {
                 <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Kewajiban dan catatan (bukan pendapatan/beban)</h2>
                 <dl className="mt-3 space-y-2 text-sm">
                   <div className="flex justify-between gap-4">
-                    <dt className="text-slate-600">Saldo dompet member (dapat ditarik)</dt>
+                    <dt className="text-slate-600">Saldo TapGoPay member (total)</dt>
+                    <dd className="font-bold tabular-nums">{formatRupiah(report.memo.walletLiabilityWallet)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-slate-600">Di antaranya dapat ditarik</dt>
                     <dd className="font-bold tabular-nums">{formatRupiah(report.memo.walletLiabilityCash)}</dd>
                   </div>
                   <div className="flex justify-between gap-4">

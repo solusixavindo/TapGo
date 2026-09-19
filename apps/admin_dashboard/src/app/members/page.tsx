@@ -192,7 +192,8 @@ export default function MembersPage() {
 
                   {expanded ? (
                     <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 md:grid-cols-4">
-                      <Detail label="Saldo wallet" value={formatRupiah(member.walletBalance)} />
+                      <Detail label="Saldo TapGoPay" value={formatRupiah(member.walletBalance)} />
+                      <Detail label="Dapat ditarik" value={formatRupiah(member.withdrawableBalance)} />
                       <Detail label="Saldo PPOB" value={formatRupiah(member.ppobBalance)} />
                       <Detail label="Total komisi diterima" value={formatRupiah(member.commissionTotal)} />
                       <Detail label="Referral langsung / total referral" value={`${member.directSponsorCount} / ${member.totalDownline}`} />

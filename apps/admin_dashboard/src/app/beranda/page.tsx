@@ -249,14 +249,15 @@ export default function BerandaPage() {
               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
                 Ringkasan keuangan
               </h2>
-              <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+              <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3">
                 <MoneyCard
                   href="/reports"
                   label="Pendapatan upgrade membership"
                   value={financial?.totalMembershipRevenuePaid}
                 />
                 <MoneyCard href="/reports" label="Total komisi (bonus)" value={summary?.totalCommission} />
-                <MoneyCard href="/reports" label="Saldo wallet beredar" value={financial?.totalCashWalletLiability} />
+                <MoneyCard href="/reports" label="Saldo TapGoPay beredar" value={financial?.totalWalletLiability} />
+                <MoneyCard href="/reports" label="Saldo dapat ditarik" value={financial?.totalCashWalletLiability} />
                 <MoneyCard href="/reports" label="Saldo PPOB beredar" value={financial?.totalPpobLiability} />
                 <MoneyCard href="/penarikan?status=PENDING" label="Withdraw menunggu" value={financial?.totalWithdrawalPending} />
                 <MoneyCard href="/penarikan?status=PAID" label="Withdraw disetujui/lunas" value={financial?.totalWithdrawalPaidApproved} />

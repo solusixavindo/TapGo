@@ -345,6 +345,7 @@ export function recentAdminActivity() {
 }
 
 export type FinancialSummary = {
+  totalWalletLiability: string;
   totalCashWalletLiability: string;
   totalPpobLiability: string;
   totalSponsorBonus: string;
@@ -431,6 +432,7 @@ export type MemberListItem = {
   directSponsorCount: number;
   totalDownline: number;
   walletBalance: string;
+  withdrawableBalance: string;
   ppobBalance: string;
   commissionTotal: string;
 };
@@ -582,6 +584,7 @@ export type ProfitLossReport = {
   previous: { totalRevenue: string; totalExpenses: string; operatingProfit: string } | null;
   memo: {
     ppobGrossSales: string;
+    walletLiabilityWallet: string;
     walletLiabilityCash: string;
     walletLiabilityPpob: string;
     withdrawalsOutstanding: string;

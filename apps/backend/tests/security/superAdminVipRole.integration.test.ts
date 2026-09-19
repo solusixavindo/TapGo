@@ -268,7 +268,9 @@ describe.skipIf(!runIntegration)("Super admin VIP role", () => {
 
     expect(response.status).toBe(403);
     const body = (await response.json()) as { code?: string };
-    expect(body.code).toBe("ADMIN_SCOPE_TOP_LEVEL_PROTECTED");
+    // Pengelolaan scope kini khusus SUPER_ADMIN_VIP, jadi SUPER_ADMIN ditolak
+    // lebih awal (peran aktor); akun puncak tetap tidak tersentuh.
+    expect(body.code).toBe("ADMIN_SCOPE_ACTOR_ROLE_REQUIRED");
 
     const grant = await prisma.adminScopeGrant.findUniqueOrThrow({ where: { id: vipGrant } });
     expect(grant.status).toBe("ACTIVE");

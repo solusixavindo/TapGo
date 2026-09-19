@@ -103,6 +103,15 @@ export default function ReportsPage() {
             </section>
 
             <section className="mt-6">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Saldo member</h2>
+              <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+                <MoneyCard label="Saldo TapGoPay beredar" value={financial?.totalWalletLiability} />
+                <MoneyCard label="Di antaranya dapat ditarik" value={financial?.totalCashWalletLiability} />
+                <MoneyCard label="Saldo PPOB beredar" value={financial?.totalPpobLiability} />
+              </div>
+            </section>
+
+            <section className="mt-6">
               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">PPOB</h2>
               <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
                 <MoneyCard label="Saldo PPOB beredar" value={ppob?.totalPpobLiability} />
