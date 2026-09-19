@@ -22,6 +22,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'demo/client_flow_models.dart';
 import 'features/ppob/application/ppob_providers.dart';
+import 'services/token_refresh_coordinator.dart';
 import 'features/ppob/data/ppob_demo_repository.dart';
 import 'features/ppob/data/ppob_repository.dart';
 import 'features/ppob/domain/ppob_models.dart';
@@ -339,6 +340,12 @@ final _apiClient = _TapGoApiClient(
   baseUrl: _normalizeApiBaseUrl(_tapGoApiBaseUrl),
 );
 final _tapGoScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+final _tapGoNavigatorKey = GlobalKey<NavigatorState>();
+
+/// Hook uji: mensimulasikan server yang menegaskan sesi sudah berakhir.
+@visibleForTesting
+void tapGoTriggerSessionExpiredForTests() =>
+    _apiClient.onSessionExpired?.call();
 const _productionApiRootUrl = 'https://api.tapgolion.id';
 const _productionFinalSyncResetKey =
     'tapgo.production.final_sync_cache_reset.v1';
@@ -481,9 +488,25 @@ class TapGoUserApp extends ConsumerWidget {
     final isAuthenticated = ref.watch(_isAuthenticatedProvider);
     final themePreference = ref.watch(tapGoThemePreferenceProvider);
 
+    // Data PPOB terikat pada sesi: begitu pengguna masuk/keluar/berganti akun,
+    // katalog dan riwayat yang tersimpan (termasuk ERROR lama seperti "sesi
+    // berakhir") dibuang dan dimuat ulang. Sebelumnya error sebelum login tetap
+    // tampil setelah login berhasil.
+    void refetchPpob(Object? previous, Object? next) {
+      ref.invalidate(ppobCatalogProvider);
+      ref.invalidate(ppobOrdersProvider);
+    }
+
+    ref.listen<bool>(_isAuthenticatedProvider, refetchPpob);
+    ref.listen<String?>(
+      _demoSessionProvider.select((session) => session.userId),
+      refetchPpob,
+    );
+
     return MaterialApp(
       title: 'TapGo',
       scaffoldMessengerKey: _tapGoScaffoldMessengerKey,
+      navigatorKey: _tapGoNavigatorKey,
       debugShowCheckedModeBanner: false,
       theme: tapGoReadableTheme(),
       darkTheme: tapGoReadableTheme(brightness: Brightness.dark),

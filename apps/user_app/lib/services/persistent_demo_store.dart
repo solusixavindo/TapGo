@@ -606,8 +606,54 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
     } finally {
       if (mounted) {
         setState(() => _loaded = true);
+        // Pendaftaran SETELAH pemulihan awal: selama bootstrap, keputusan sesi
+        // diambil oleh _restore() sendiri dan tidak boleh disalip.
+        _apiClient.onSessionExpired = _handleSessionExpired;
       }
     }
+  }
+
+  @override
+  void dispose() {
+    if (identical(_apiClient.onSessionExpired, _handleSessionExpired)) {
+      _apiClient.onSessionExpired = null;
+    }
+    super.dispose();
+  }
+
+  /// Server menegaskan sesi sudah tidak berlaku (dicabut / token tidak sah /
+  /// refresh ditolak tegas). Keluarkan pengguna dengan rapi: bersihkan sesi
+  /// lokal, tampilkan pesan, dan arahkan ke layar masuk. Sebelumnya aplikasi
+  /// tetap tampak "sudah masuk" dan tiap layar menampilkan error mentah
+  /// ("sesi Anda telah berakhir") sampai pengguna keluar manual.
+  Future<void> _handleSessionExpired() async {
+    if (!mounted || !_loaded) {
+      return;
+    }
+    _tapGoDebugLog('[TapGo Auth] session expired confirmed by server; signing out.');
+    _apiClient.setAccessToken(null);
+    try {
+      await _persistentStore.clearSession().timeout(
+            const Duration(seconds: 2),
+            onTimeout: () {},
+          );
+    } catch (_) {}
+    if (!mounted) {
+      return;
+    }
+    ref.read(_demoSessionProvider.notifier).state = DemoClientSession.initial();
+    ref.read(_isAuthenticatedProvider.notifier).state = false;
+    _tapGoScaffoldMessengerKey.currentState
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Sesi Anda berakhir. Silakan masuk kembali.'),
+        ),
+      );
+    _tapGoNavigatorKey.currentState?.pushAndRemoveUntil(
+      _tapGoPageRoute((_) => const AuthScreen()),
+      (_) => false,
+    );
   }
 }
 /// True hanya bila server dengan tegas menolak kredensial (401/403).

@@ -51,10 +51,20 @@ class _TapGoApiClient {
               error.requestOptions.extra['tapgoTokenRetried'] == true;
           final isRefreshCall =
               error.requestOptions.path.contains('auth/refresh');
-          if (response?.statusCode != 401 ||
-              code != 'AUTH_TOKEN_EXPIRED' ||
-              alreadyRetried ||
-              isRefreshCall) {
+          final hadAuthorization =
+              error.requestOptions.headers['Authorization'] != null;
+          if (response?.statusCode != 401 || isRefreshCall) {
+            return handler.next(error);
+          }
+          // Server menegaskan sesi ini sudah mati (dicabut / token tidak sah):
+          // tidak ada gunanya refresh. Keluarkan pengguna dengan rapi ke layar
+          // masuk, bukan membiarkan tiap layar menampilkan error mentah.
+          if (hadAuthorization &&
+              (code == 'AUTH_SESSION_REVOKED' || code == 'AUTH_TOKEN_INVALID')) {
+            _notifySessionExpired();
+            return handler.next(error);
+          }
+          if (code != 'AUTH_TOKEN_EXPIRED' || alreadyRetried) {
             return handler.next(error);
           }
           final tokens = await _persistentStore.restoreTokens();
@@ -63,15 +73,14 @@ class _TapGoApiClient {
             return handler.next(error);
           }
           final (result, refreshed) = await refreshSession(refreshToken);
+          if (result == TapGoSessionRefreshResult.rejected) {
+            _notifySessionExpired();
+          }
           if (result != TapGoSessionRefreshResult.refreshed ||
               refreshed == null) {
             return handler.next(error);
           }
-          setAccessToken(refreshed.accessToken);
-          await _persistentStore.saveTokens(
-            accessToken: refreshed.accessToken,
-            refreshToken: refreshed.refreshToken,
-          );
+          // Penyimpanan token baru sudah dilakukan koordinator (di dalam kunci).
           _tapGoDebugLog(
             '[TapGo Auth] access token auto-refreshed after 401; retrying request.',
           );
@@ -89,22 +98,48 @@ class _TapGoApiClient {
     );
   }
 
+  /// Dipanggil sekali per sesi ketika server menegaskan sesi sudah tidak berlaku.
+  /// Didaftarkan oleh bootstrap sesi setelah pemulihan awal selesai.
+  void Function()? onSessionExpired;
+  bool _sessionExpiredNotified = false;
+
+  void _notifySessionExpired() {
+    if (_sessionExpiredNotified) {
+      return;
+    }
+    _sessionExpiredNotified = true;
+    onSessionExpired?.call();
+  }
+
   final Dio _dio;
   final _TapGoDeviceContextStore _deviceContextStore;
   String baseUrl;
 
-  // Beberapa layar (bootstrap sesi, snapshot produksi, alur ride) bisa
-  // memicu refresh token secara bersamaan saat access token kedaluwarsa.
-  // Refresh token bersifat sekali pakai (dirotasi di server) — dua request
-  // refresh yang berbarengan akan saling menjatuhkan satu sama lain kalau
-  // masing-masing mengirim token yang sama secara terpisah. Field ini
-  // membuat semua pemanggil bersamaan MENUNGGU dan BERBAGI satu hasil
-  // refresh yang sama, bukan masing-masing menembak request sendiri.
-  Future<
-      (
-        TapGoSessionRefreshResult,
-        ({String accessToken, String refreshToken})?,
-      )>? _inFlightRefresh;
+  // SEMUA penukaran refresh token lewat koordinator ini (lihat
+  // token_refresh_coordinator.dart): satu penukaran pada satu waktu, token yang
+  // sudah dikonsumsi tidak pernah dikirim lagi, dan pasangan baru disimpan
+  // sebelum kunci dilepas. Ini menutup balapan yang membuat server mencabut
+  // seluruh sesi (pengguna dipaksa login ulang padahal tidak logout).
+  late final TokenRefreshCoordinator _refreshCoordinator =
+      TokenRefreshCoordinator(
+    network: _networkRefresh,
+    persist: (tokens) async {
+      setAccessToken(tokens.accessToken);
+      await _persistentStore.saveTokens(
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      );
+    },
+    readStored: () async {
+      final stored = await _persistentStore.restoreTokens();
+      final access = stored.accessToken;
+      final refresh = stored.refreshToken;
+      if (access == null || access.isEmpty || refresh == null || refresh.isEmpty) {
+        return null;
+      }
+      return (accessToken: access, refreshToken: refresh);
+    },
+  );
 
   String get rootUrl => _rootUrlFromApiBaseUrl(baseUrl);
 
@@ -119,43 +154,37 @@ class _TapGoApiClient {
       return;
     }
     _dio.options.headers['Authorization'] = 'Bearer $token';
+    // Token baru (login/refresh) = sesi hidup lagi: izinkan pemberitahuan
+    // kedaluwarsa berikutnya.
+    _sessionExpiredNotified = false;
   }
 
   /// Menukar refresh token menjadi pasangan token baru (rotasi di server).
-  /// Mengembalikan null bila refresh token kosong. Hasil dibedakan tiga:
-  /// [TapGoSessionRefreshResult.refreshed] (token baru), [rejected] (server
-  /// menolak — token dicabut / ganti password → sesi boleh dikosongkan), dan
-  /// [unreachable] (gangguan jaringan/5xx — sesi HARUS dipertahankan agar
-  /// pengguna tidak dipaksa login ulang hanya karena koneksi putus).
-  /// Header Authorization sengaja dikosongkan: endpoint refresh hanya butuh
-  /// refreshToken di body, dan mengirim access token kedaluwarsa bisa 401.
+  /// Hasil dibedakan tiga: [TapGoSessionRefreshResult.refreshed] (token baru),
+  /// [rejected] (server menolak tegas — sesi dicabut / token tidak sah → sesi
+  /// boleh dikosongkan), dan [unreachable] (gangguan jaringan/5xx/409 — sesi
+  /// HARUS dipertahankan agar pengguna tidak dipaksa login ulang).
   Future<
       (
         TapGoSessionRefreshResult,
         ({String accessToken, String refreshToken})?,
-      )> refreshSession(String refreshToken) {
-    if (refreshToken.isEmpty) {
-      return Future.value((TapGoSessionRefreshResult.rejected, null));
-    }
-    final existing = _inFlightRefresh;
-    if (existing != null) {
-      return existing;
-    }
-    final future = _performRefreshSession(refreshToken);
-    _inFlightRefresh = future;
-    future.whenComplete(() {
-      if (identical(_inFlightRefresh, future)) {
-        _inFlightRefresh = null;
-      }
-    });
-    return future;
+      )> refreshSession(String refreshToken) async {
+    final outcome = await _refreshCoordinator.refresh(refreshToken);
+    return switch (outcome.status) {
+      RefreshStatus.refreshed => outcome.tokens == null
+          ? (TapGoSessionRefreshResult.unreachable, null)
+          : (TapGoSessionRefreshResult.refreshed, outcome.tokens),
+      RefreshStatus.rejected => (TapGoSessionRefreshResult.rejected, null),
+      RefreshStatus.unreachable ||
+      RefreshStatus.conflict =>
+        (TapGoSessionRefreshResult.unreachable, null),
+    };
   }
 
-  Future<
-      (
-        TapGoSessionRefreshResult,
-        ({String accessToken, String refreshToken})?,
-      )> _performRefreshSession(String refreshToken) async {
+  /// Satu-satunya pemanggilan HTTP ke /auth/refresh (hanya dipanggil koordinator).
+  /// Header Authorization sengaja dikosongkan: endpoint ini hanya butuh
+  /// refreshToken di body, dan mengirim access token kedaluwarsa bisa 401.
+  Future<RefreshOutcome> _networkRefresh(String refreshToken) async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
         _apiPath('auth/refresh'),
@@ -166,20 +195,24 @@ class _TapGoApiClient {
       final access = '${data['accessToken'] ?? ''}';
       final refresh = '${data['refreshToken'] ?? ''}';
       if (access.isEmpty || refresh.isEmpty) {
-        return (TapGoSessionRefreshResult.unreachable, null);
+        return (status: RefreshStatus.unreachable, tokens: null);
       }
       return (
-        TapGoSessionRefreshResult.refreshed,
-        (accessToken: access, refreshToken: refresh),
+        status: RefreshStatus.refreshed,
+        tokens: (accessToken: access, refreshToken: refresh),
       );
     } on DioException catch (error) {
       final status = error.response?.statusCode;
-      if (status == 401 || status == 403) {
-        return (TapGoSessionRefreshResult.rejected, null);
+      if (status == 409) {
+        // TOKEN_ROTATED: permintaan lain yang sah baru saja menukar token ini.
+        return (status: RefreshStatus.conflict, tokens: null);
       }
-      return (TapGoSessionRefreshResult.unreachable, null);
+      if (status == 401 || status == 403) {
+        return (status: RefreshStatus.rejected, tokens: null);
+      }
+      return (status: RefreshStatus.unreachable, tokens: null);
     } catch (_) {
-      return (TapGoSessionRefreshResult.unreachable, null);
+      return (status: RefreshStatus.unreachable, tokens: null);
     }
   }
 
