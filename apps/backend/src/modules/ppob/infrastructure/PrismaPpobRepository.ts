@@ -137,7 +137,7 @@ export class PrismaPpobRepository implements PpobRepository {
     input: {
       transactionId: string;
       outcome:
-        | { kind: "SUCCESS"; providerReference: string; serialNumber: string | null }
+        | { kind: "SUCCESS"; providerReference: string; serialNumber: string | null; providerCost?: number | null }
         | { kind: "PROCESSING"; providerReference: string }
         | {
             kind: "FAILED";
@@ -157,6 +157,7 @@ export class PrismaPpobRepository implements PpobRepository {
           status: "SUCCESS",
           providerReference: outcome.providerReference,
           serialNumber: outcome.serialNumber,
+          ...(outcome.providerCost != null ? { providerCost: new Prisma.Decimal(outcome.providerCost) } : {}),
           completedAt: new Date()
         }
       });

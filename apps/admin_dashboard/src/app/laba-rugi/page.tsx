@@ -99,6 +99,21 @@ function Line({ label, value, revenue, indent, bold, negative }: { label: string
   );
 }
 
+const METHOD_LABEL: Record<string, string> = {
+  credit_card: "Kartu kredit/debit",
+  gopay: "GoPay",
+  qris: "QRIS",
+  shopeepay: "ShopeePay",
+  dana: "DANA",
+  ovo: "OVO",
+  bank_transfer: "Virtual account",
+  echannel: "Virtual account Mandiri",
+  permata: "Virtual account Permata",
+  cstore: "Gerai ritel",
+  akulaku: "Akulaku",
+  kredivo: "Kredivo"
+};
+
 export default function ProfitLossPage() {
   const router = useRouter();
   const [role, setRole] = useState("");
@@ -212,11 +227,16 @@ export default function ProfitLossPage() {
                   <Line label="Penjualan membership" value={report.revenue.membershipSales} revenue={revenueTotal} indent />
                   <Line label="Pengembalian dana membership" value={report.revenue.membershipRefunds} revenue={revenueTotal} indent negative />
                   <Line label="Komisi platform ojek (TapGoPay)" value={report.revenue.rideCommission} revenue={revenueTotal} indent />
-                  <Line label="Biaya admin PPOB" value={report.revenue.ppobAdminFee} revenue={revenueTotal} indent />
+                  <Line label="Penjualan PPOB" value={report.revenue.ppobSales} revenue={revenueTotal} indent />
                   <Line label="Total pendapatan" value={report.revenue.total} revenue={revenueTotal} bold />
                   <tr>
                     <td colSpan={3} className="bg-slate-50 px-5 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                       Beban
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colSpan={3} className="px-5 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                      Biaya langsung
                     </td>
                   </tr>
                   <Line label="Bonus referral" value={report.expenses.sponsorBonus} revenue={revenueTotal} indent negative />
@@ -224,11 +244,79 @@ export default function ProfitLossPage() {
                   <Line label="Reward dibayar" value={report.expenses.rewardPaid} revenue={revenueTotal} indent negative />
                   <Line label="Bagi hasil dibayar" value={report.expenses.profitSharing} revenue={revenueTotal} indent negative />
                   <Line label="HPP paket membership (perlengkapan, BPJS, saldo PPOB)" value={report.expenses.hppPackages} revenue={revenueTotal} indent negative />
+                  <Line label="Harga modal PPOB (Digiflazz)" value={report.expenses.ppobCost} revenue={revenueTotal} indent negative />
+                  <tr>
+                    <td colSpan={3} className="px-5 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                      Biaya operasional
+                    </td>
+                  </tr>
+                  <Line label="Biaya gateway pembayaran (Midtrans)" value={report.expenses.gatewayFee} revenue={revenueTotal} indent negative />
+                  <Line label="Server" value={report.expenses.serverCost} revenue={revenueTotal} indent negative />
+                  <Line label={`Pajak (${report.operating.taxRatePercent}% dari pendapatan)`} value={report.expenses.tax} revenue={revenueTotal} indent negative />
                   <Line label="Total beban" value={report.expenses.total} revenue={revenueTotal} bold negative />
                   <Line label="Laba operasional" value={report.operatingProfit} revenue={revenueTotal} bold />
                 </tbody>
               </table>
             </div>
+
+            <section className="mt-6 rounded-2xl bg-white p-5 shadow-sm">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Rincian biaya operasional</h2>
+              <div className="mt-3 grid gap-6 md:grid-cols-2">
+                <div>
+                  <p className="text-sm font-bold">Gateway pembayaran (tarif publik Midtrans)</p>
+                  {report.operating.gateway.byMethod.length === 0 ? (
+                    <p className="mt-2 text-sm text-slate-500">Belum ada pembayaran Midtrans yang berhasil pada periode ini.</p>
+                  ) : (
+                    <table className="mt-2 w-full text-left text-sm">
+                      <thead className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                        <tr>
+                          <th className="py-1.5">Metode</th>
+                          <th className="py-1.5 text-right">Transaksi</th>
+                          <th className="py-1.5 text-right">Nilai</th>
+                          <th className="py-1.5 text-right">Biaya</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {report.operating.gateway.byMethod.map((row) => (
+                          <tr key={row.type}>
+                            <td className="py-1.5">{METHOD_LABEL[row.type] ?? row.type}</td>
+                            <td className="py-1.5 text-right tabular-nums">{row.count}</td>
+                            <td className="py-1.5 text-right tabular-nums">{formatRupiah(row.gross)}</td>
+                            <td className="py-1.5 text-right tabular-nums">{formatRupiah(row.fee)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                  {report.operating.gateway.unknownCount > 0 ? (
+                    <p className="mt-2 text-xs text-amber-700">
+                      {report.operating.gateway.unknownCount} pembayaran tanpa jenis pembayaran tercatat belum dihitung biayanya.
+                    </p>
+                  ) : null}
+                </div>
+                <dl className="space-y-3 text-sm">
+                  <div>
+                    <dt className="font-bold">PPOB</dt>
+                    <dd className="mt-1 text-slate-600">
+                      {report.operating.ppob.successCount} transaksi sukses
+                      {report.operating.ppob.withoutCostCount > 0
+                        ? `, ${report.operating.ppob.withoutCostCount} di antaranya tanpa harga modal tercatat (belum dihitung).`
+                        : ", seluruhnya dengan harga modal dari Digiflazz."}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-bold">Server</dt>
+                    <dd className="mt-1 text-slate-600">
+                      {formatRupiah(report.operating.server.monthly)} per bulan, dibagi per hari selama {report.operating.server.days} hari pada periode ini.
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-bold">Pajak</dt>
+                    <dd className="mt-1 text-slate-600">{report.operating.taxRatePercent}% dari total pendapatan.</dd>
+                  </div>
+                </dl>
+              </div>
+            </section>
 
             {report.hpp.tiers.some((tier) => tier.items && tier.items.length > 0) ? (
               <section className="mt-6 rounded-2xl bg-white p-5 shadow-sm">

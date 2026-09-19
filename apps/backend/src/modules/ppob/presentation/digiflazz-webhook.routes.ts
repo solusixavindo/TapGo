@@ -50,6 +50,7 @@ interface DigiflazzWebhookData {
   rc?: string;
   message?: string;
   sn?: string | null;
+  price?: number;
 }
 
 export const digiflazzWebhookRouter = Router();
@@ -85,7 +86,7 @@ digiflazzWebhookRouter.post(
 
     const status = data.status.trim().toLowerCase();
     let outcome:
-      | { kind: "SUCCESS"; providerReference: string; serialNumber: string | null }
+      | { kind: "SUCCESS"; providerReference: string; serialNumber: string | null; providerCost?: number | null }
       | {
           kind: "FAILED";
           providerReference: string | null;
@@ -97,7 +98,8 @@ digiflazzWebhookRouter.post(
       outcome = {
         kind: "SUCCESS",
         providerReference: data.ref_id,
-        serialNumber: data.sn && data.sn.trim().length > 0 ? data.sn : null
+        serialNumber: data.sn && data.sn.trim().length > 0 ? data.sn : null,
+        providerCost: typeof data.price === "number" && data.price > 0 ? data.price : null
       };
     } else if (status === "gagal") {
       outcome = {

@@ -549,7 +549,7 @@ export class PrismaWalletRepository implements WalletRepository {
     });
   }
 
-  async markTopUpOrderPaid(input: { orderId: string; providerReference: string }): Promise<WalletTopUpOrderItem | null> {
+  async markTopUpOrderPaid(input: { orderId: string; providerReference: string; paymentType?: string }): Promise<WalletTopUpOrderItem | null> {
     return this.prisma.$transaction(async (tx) => {
       const order = await tx.walletTopUpOrder.findUnique({ where: { id: input.orderId } });
       if (!order) {
@@ -561,7 +561,21 @@ export class PrismaWalletRepository implements WalletRepository {
       // menemukan count===0 dan dianggap sudah selesai, bukan diproses ulang.
       const updated = await tx.walletTopUpOrder.updateMany({
         where: { id: input.orderId, status: "PENDING" },
-        data: { status: "PAID", paidAt: new Date(), providerReference: input.providerReference }
+        data: {
+          status: "PAID",
+          paidAt: new Date(),
+          providerReference: input.providerReference,
+          ...(input.paymentType
+            ? {
+                metadata: {
+                  ...(order.metadata && typeof order.metadata === "object" && !Array.isArray(order.metadata)
+                    ? (order.metadata as Record<string, Prisma.InputJsonValue>)
+                    : {}),
+                  paymentType: input.paymentType
+                }
+              }
+            : {})
+        }
       });
       if (updated.count !== 1) {
         return null;

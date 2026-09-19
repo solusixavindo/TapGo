@@ -560,7 +560,7 @@ export type ProfitLossReport = {
     membershipRefunds: string;
     membershipNet: string;
     rideCommission: string;
-    ppobAdminFee: string;
+    ppobSales: string;
     total: string;
   };
   expenses: {
@@ -569,7 +569,20 @@ export type ProfitLossReport = {
     rewardPaid: string;
     profitSharing: string;
     hppPackages: string;
+    gatewayFee: string;
+    ppobCost: string;
+    serverCost: string;
+    tax: string;
     total: string;
+  };
+  operating: {
+    gateway: {
+      byMethod: Array<{ type: string; count: number; gross: string; fee: string }>;
+      unknownCount: number;
+    };
+    ppob: { successCount: number; withoutCostCount: number };
+    server: { monthly: number; days: number };
+    taxRatePercent: number;
   };
   hpp: {
     tiers: Array<{

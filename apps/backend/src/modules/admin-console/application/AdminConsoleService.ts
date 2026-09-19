@@ -11,6 +11,8 @@ import {
 } from "@prisma/client";
 import crypto from "node:crypto";
 import { StatusCodes } from "http-status-codes";
+import { midtransFeeFor } from "../../../core/finance/midtransFees.js";
+import { plConfig, prorateMonthlyCost } from "../../../core/finance/plConfig.js";
 import { AppError } from "../../../core/errors/AppError.js";
 import { hashPassword } from "../../../core/security/passwordHasher.js";
 import { normalizePhoneNumber, phoneLookupVariants } from "../../../core/security/phone.js";
@@ -1747,7 +1749,17 @@ export class AdminConsoleService {
           ? [`HPP paket ${current.hpp.missingTiers.join(", ")} belum diisi, jadi belum dihitung sebagai beban.`]
           : []),
         "HPP paket dicatat saat paket terjual, termasuk saldo PPOB yang diberikan sebagai manfaat.",
-        "Belum termasuk: biaya gateway pembayaran, harga modal PPOB dari provider, gaji, server, pajak, dan biaya operasional lain di luar sistem.",
+        "Biaya gateway dihitung dari tarif publik Midtrans per metode (belum termasuk potongan lain di kontrak Anda). Pembayaran dengan jenis tidak dikenal tidak dihitung.",
+        ...(current.operating.gateway.unknownCount > 0
+          ? [`${current.operating.gateway.unknownCount} pembayaran Midtrans tanpa jenis pembayaran tercatat, jadi biayanya belum dihitung.`]
+          : []),
+        "Harga modal PPOB diambil dari harga yang ditagihkan Digiflazz saat transaksi sukses.",
+        ...(current.operating.ppob.withoutCostCount > 0
+          ? [`${current.operating.ppob.withoutCostCount} transaksi PPOB sukses tanpa harga modal tercatat, jadi modalnya belum dihitung.`]
+          : []),
+        "HPP paket sudah memuat saldo PPOB yang diberikan; pembelian PPOB dengan saldo itu ikut tercatat lagi di penjualan dan modal PPOB, jadi sebagian bisa terhitung dua kali.",
+        `Server dihitung Rp${new Intl.NumberFormat("id-ID").format(current.operating.server.monthly)} per bulan, dibagi per hari sepanjang periode. Pajak ${current.operating.taxRatePercent}% dari total pendapatan.`,
+        "Belum termasuk: gaji dan biaya operasional lain di luar sistem.",
         "Komisi ojek hanya tercatat untuk perjalanan yang dibayar TapGoPay; ojek tunai belum memotong komisi.",
         "Saldo dompet dan penarikan tertunda adalah kewajiban, bukan pendapatan atau beban."
       ]
@@ -1765,7 +1777,11 @@ export class AdminConsoleService {
       level,
       reward,
       profitSharing,
-      paidInvoices
+      paidInvoices,
+      membershipPayments,
+      topUpPayments,
+      ppobWithoutCost,
+      firstUser
     ] = await Promise.all([
       this.prisma.invoice.aggregate({ where: { status: "PAID", ...range }, _sum: { amount: true } }),
       this.prisma.invoice.aggregate({ where: { status: "REFUNDED", ...range }, _sum: { amount: true } }),
@@ -1775,7 +1791,8 @@ export class AdminConsoleService {
       }),
       this.prisma.ppobTransaction.aggregate({
         where: { status: "SUCCESS", ...range },
-        _sum: { adminFee: true, totalAmount: true }
+        _sum: { adminFee: true, totalAmount: true, providerCost: true },
+        _count: { _all: true }
       }),
       this.sumCommissionByTypesInRange(sponsorTypes, input),
       this.sumCommissionByTypesInRange(levelTypes, input),
@@ -1790,8 +1807,43 @@ export class AdminConsoleService {
             }
           }
         }
-      })
+      }),
+      // Biaya gateway: pembayaran Midtrans yang berhasil (paidAt dalam periode).
+      this.prisma.membershipPayment.findMany({
+        where: { status: "PAID", provider: "MIDTRANS", ...this.paidAtRange(input) },
+        select: { amount: true, metadata: true }
+      }),
+      this.prisma.walletTopUpOrder.findMany({
+        where: { status: "PAID", provider: "MIDTRANS", ...this.paidAtRange(input) },
+        select: { amount: true, metadata: true }
+      }),
+      this.prisma.ppobTransaction.count({
+        where: { status: "SUCCESS", providerCost: null, ...range }
+      }),
+      this.prisma.user.aggregate({ _min: { createdAt: true } })
     ]);
+
+    // Biaya gateway per metode. Jenis pembayaran yang tidak dikenal tidak
+    // dihitung (dan dilaporkan jumlahnya) daripada menebak tarifnya.
+    const gatewayByType = new Map<string, { count: number; gross: Prisma.Decimal; fee: Prisma.Decimal }>();
+    let gatewayUnknown = 0;
+    let gatewayTotal = new Prisma.Decimal(0);
+    for (const payment of [...membershipPayments, ...topUpPayments]) {
+      const meta = payment.metadata as { paymentType?: string | null } | null;
+      const type = meta?.paymentType ?? null;
+      const { known, fee } = midtransFeeFor(type, payment.amount);
+      if (!known) {
+        gatewayUnknown += 1;
+        continue;
+      }
+      const key = String(type).toLowerCase();
+      const row = gatewayByType.get(key) ?? { count: 0, gross: new Prisma.Decimal(0), fee: new Prisma.Decimal(0) };
+      row.count += 1;
+      row.gross = row.gross.plus(payment.amount);
+      row.fee = row.fee.plus(fee);
+      gatewayByType.set(key, row);
+      gatewayTotal = gatewayTotal.plus(fee);
+    }
 
     // HPP paket: jumlah paket terjual dalam periode x harga pokok per paket.
     const tierMap = new Map<string, { tier: string; name: string; units: number; unitCost: Prisma.Decimal; items: unknown }>();
@@ -1823,14 +1875,35 @@ export class AdminConsoleService {
     const membershipRefunds = new Prisma.Decimal(invoicesRefunded._sum.amount ?? 0);
     const membershipNet = membershipSales.minus(membershipRefunds);
     const rideRevenue = new Prisma.Decimal(rideCommission._sum.amount ?? 0);
-    const ppobFee = new Prisma.Decimal(ppob._sum.adminFee ?? 0);
-    const totalRevenue = membershipNet.plus(rideRevenue).plus(ppobFee);
+    // Penjualan PPOB = yang dibayar pelanggan (harga + biaya admin); harga
+    // modal dari provider dicatat sebagai beban terpisah (ppobCost).
+    const ppobSales = new Prisma.Decimal(ppob._sum.totalAmount ?? 0);
+    const ppobCost = new Prisma.Decimal(ppob._sum.providerCost ?? 0);
+    const totalRevenue = membershipNet.plus(rideRevenue).plus(ppobSales);
 
     const sponsorBonus = new Prisma.Decimal(sponsor._sum.amount ?? 0);
     const levelBonus = new Prisma.Decimal(level._sum.amount ?? 0);
     const rewardPaid = new Prisma.Decimal(reward.totalPaid ?? 0);
     const profitSharingPaid = new Prisma.Decimal(profitSharing.totalPaid ?? 0);
-    const totalExpenses = sponsorBonus.plus(levelBonus).plus(rewardPaid).plus(profitSharingPaid).plus(hppTotal);
+    // Biaya operasional: server (tetap per bulan, dibagi per hari) dan pajak
+    // (persentase dari total pendapatan) — asumsi bisa diubah lewat environment.
+    const config = plConfig();
+    const periodFrom = input.dateFrom ?? firstUser._min.createdAt ?? new Date();
+    const periodTo = input.dateTo ?? new Date();
+    const server = prorateMonthlyCost(config.serverCostMonthly, periodFrom, periodTo);
+    const serverCost = new Prisma.Decimal(server.amount);
+    const tax = totalRevenue.gt(0)
+      ? totalRevenue.mul(config.taxRatePercent).div(100).toDecimalPlaces(2)
+      : new Prisma.Decimal(0);
+    const totalExpenses = sponsorBonus
+      .plus(levelBonus)
+      .plus(rewardPaid)
+      .plus(profitSharingPaid)
+      .plus(hppTotal)
+      .plus(gatewayTotal)
+      .plus(ppobCost)
+      .plus(serverCost)
+      .plus(tax);
 
     const operatingProfit = totalRevenue.minus(totalExpenses);
     const margin = totalRevenue.gt(0)
@@ -1843,7 +1916,7 @@ export class AdminConsoleService {
         membershipRefunds: membershipRefunds.toFixed(2),
         membershipNet: membershipNet.toFixed(2),
         rideCommission: rideRevenue.toFixed(2),
-        ppobAdminFee: ppobFee.toFixed(2),
+        ppobSales: ppobSales.toFixed(2),
         total: totalRevenue.toFixed(2)
       },
       expenses: {
@@ -1852,7 +1925,25 @@ export class AdminConsoleService {
         rewardPaid: rewardPaid.toFixed(2),
         profitSharing: profitSharingPaid.toFixed(2),
         hppPackages: hppTotal.toFixed(2),
+        gatewayFee: gatewayTotal.toFixed(2),
+        ppobCost: ppobCost.toFixed(2),
+        serverCost: serverCost.toFixed(2),
+        tax: tax.toFixed(2),
         total: totalExpenses.toFixed(2)
+      },
+      operating: {
+        gateway: {
+          byMethod: Array.from(gatewayByType.entries()).map(([type, row]) => ({
+            type,
+            count: row.count,
+            gross: row.gross.toFixed(2),
+            fee: row.fee.toFixed(2)
+          })),
+          unknownCount: gatewayUnknown
+        },
+        ppob: { successCount: ppob._count._all, withoutCostCount: ppobWithoutCost },
+        server: { monthly: config.serverCostMonthly, days: server.days },
+        taxRatePercent: config.taxRatePercent
       },
       hpp: { tiers: hppTiers, missingTiers: hppMissing },
       operatingProfit: operatingProfit.toFixed(2),
@@ -2388,6 +2479,18 @@ export class AdminConsoleService {
       _sum: { amount: true }
     });
     return this.decimal(result._sum.amount);
+  }
+
+  private paidAtRange(input: { dateFrom?: Date; dateTo?: Date }) {
+    if (!input.dateFrom && !input.dateTo) {
+      return {};
+    }
+    return {
+      paidAt: {
+        ...(input.dateFrom ? { gte: input.dateFrom } : {}),
+        ...(input.dateTo ? { lte: input.dateTo } : {})
+      }
+    };
   }
 
   private createdAtRange(input: { dateFrom?: Date; dateTo?: Date }) {

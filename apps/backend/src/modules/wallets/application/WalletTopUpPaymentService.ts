@@ -209,7 +209,11 @@ export class WalletTopUpPaymentService {
         ...(payload.currency !== undefined ? { providedCurrency: payload.currency } : {}),
       });
 
-      const paid = await this.walletRepository.markTopUpOrderPaid({ orderId: order.id, providerReference: paymentReference });
+      const paid = await this.walletRepository.markTopUpOrderPaid({
+        orderId: order.id,
+        providerReference: paymentReference,
+        ...(payload.payment_type ? { paymentType: payload.payment_type } : {})
+      });
       return { status: "PAID", idempotent: paid === null, order: paid };
     }
 

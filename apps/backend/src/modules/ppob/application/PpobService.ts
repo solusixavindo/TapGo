@@ -215,7 +215,7 @@ export class PpobService {
   async finalizeFromProviderNotification(input: {
     publicReference: string;
     outcome:
-      | { kind: "SUCCESS"; providerReference: string; serialNumber: string | null }
+      | { kind: "SUCCESS"; providerReference: string; serialNumber: string | null; providerCost?: number | null }
       | {
           kind: "FAILED";
           providerReference: string | null;

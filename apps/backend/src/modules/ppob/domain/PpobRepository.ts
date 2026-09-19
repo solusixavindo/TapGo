@@ -71,7 +71,7 @@ export interface PpobRepository {
     input: {
       transactionId: string;
       outcome:
-        | { kind: "SUCCESS"; providerReference: string; serialNumber: string | null }
+        | { kind: "SUCCESS"; providerReference: string; serialNumber: string | null; providerCost?: number | null }
         | { kind: "PROCESSING"; providerReference: string }
         | {
             kind: "FAILED";

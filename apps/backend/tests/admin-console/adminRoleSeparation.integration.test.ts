@@ -31,6 +31,8 @@ describe.skipIf(!runIntegration)("Admin role separation", () => {
       throw new Error("TAPGO_TEST_DATABASE_URL must point to a dedicated test database.");
     }
     process.env.NODE_ENV = "test";
+    // Biaya server dimatikan agar angka laporan tidak bergantung pada tanggal uji.
+    process.env.PL_SERVER_COST_MONTHLY = "0";
     process.env.DATABASE_URL = testDatabaseUrl;
     process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET ?? "test-access-secret-admin-role-separation";
     process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? "test-refresh-secret-admin-role-separation";
@@ -51,6 +53,7 @@ describe.skipIf(!runIntegration)("Admin role separation", () => {
   });
 
   afterAll(async () => {
+    delete process.env.PL_SERVER_COST_MONTHLY;
     await cleanDatabase();
     await new Promise<void>((resolve, reject) => {
       if (!server) return resolve();
@@ -237,9 +240,12 @@ describe.skipIf(!runIntegration)("Admin role separation", () => {
     expect(data.revenue.total).toBe("508000.00");
     expect(data.expenses.sponsorBonus).toBe("40000.00");
     expect(data.expenses.levelBonus).toBe("10000.00");
-    expect(data.expenses.total).toBe("50000.00");
-    expect(data.operatingProfit).toBe("458000.00");
-    expect(data.operatingMarginPercent).toBe("90.2");
+    // Pajak 11% x pendapatan Rp508.000 = Rp55.880; server dimatikan pada uji ini.
+    expect(data.expenses.tax).toBe("55880.00");
+    expect(data.expenses.serverCost).toBe("0.00");
+    expect(data.expenses.total).toBe("105880.00");
+    expect(data.operatingProfit).toBe("402120.00");
+    expect(data.operatingMarginPercent).toBe("79.2");
     expect(Array.isArray(data.notes)).toBe(true);
     expect(data.notes.length).toBeGreaterThan(0);
   });
@@ -282,7 +288,9 @@ describe.skipIf(!runIntegration)("Admin role separation", () => {
     // 2 paket Platinum x Rp2.095.000; Silver belum diisi HPP-nya.
     expect(data.expenses.hppPackages).toBe("4190000.00");
     expect(data.revenue.total).toBe("11500000.00");
-    expect(data.operatingProfit).toBe("7310000.00");
+    // Beban = HPP 4.190.000 + pajak 11% x 11.500.000 (1.265.000) = 5.455.000.
+    expect(data.expenses.tax).toBe("1265000.00");
+    expect(data.operatingProfit).toBe("6045000.00");
     const platinumRow = data.hpp.tiers.find((tier: any) => tier.tier === "PLATINUM");
     expect(platinumRow.units).toBe(2);
     expect(platinumRow.unitCost).toBe("2095000.00");
@@ -290,6 +298,113 @@ describe.skipIf(!runIntegration)("Admin role separation", () => {
     expect(platinumRow.items).toHaveLength(2);
     expect(data.hpp.missingTiers).toEqual(["Silver"]);
     expect(data.notes.some((note: string) => note.includes("Silver") && note.includes("belum diisi"))).toBe(true);
+  });
+
+  it("laba rugi memuat biaya gateway, modal PPOB, server, dan pajak dari data nyata", async () => {
+    const vip = await createUser("SUPER_ADMIN_VIP");
+    const silver = await prisma.membership.findFirstOrThrow({ where: { tier: "SILVER" } });
+    let seq = 0;
+    async function pay(amount: number, paymentType: string | null) {
+      seq += 1;
+      const buyer = await createUser("USER");
+      const order = await prisma.membershipOrder.create({
+        data: { userId: buyer.id, membershipId: silver.id, status: "PAID", totalAmount: new Prisma.Decimal(amount), packageSnapshot: {} }
+      });
+      const invoice = await prisma.invoice.create({
+        data: { orderId: order.id, userId: buyer.id, number: `INV-GW-${seq}`, status: "PAID", amount: new Prisma.Decimal(amount) }
+      });
+      await prisma.membershipPayment.create({
+        data: {
+          orderId: order.id,
+          invoiceId: invoice.id,
+          userId: buyer.id,
+          status: "PAID",
+          amount: new Prisma.Decimal(amount),
+          method: "MIDTRANS_SNAP",
+          provider: "MIDTRANS",
+          paidAt: new Date(),
+          metadata: paymentType ? { paymentType } : {}
+        }
+      });
+    }
+    await pay(500_000, "credit_card"); // (2.000 + 14.500) x 1,11 = 18.315
+    await pay(100_000, "gopay"); // 2.000
+    await pay(1_000_000, "qris"); // 7.000
+    await pay(300_000, null); // jenis tidak tercatat => tidak dihitung, dilaporkan
+
+    const topUpUser = await createUser("USER");
+    await prisma.walletTopUpOrder.create({
+      data: {
+        userId: topUpUser.id,
+        reference: "TOPUP-GW-1",
+        status: "PAID",
+        amount: new Prisma.Decimal(200_000),
+        provider: "MIDTRANS",
+        paidAt: new Date(),
+        metadata: { paymentType: "qris" } // 1.400
+      }
+    });
+
+    const product = await prisma.ppobProduct.create({
+      data: { sku: "PL_TEST_20K", category: "PULSA", brand: "Telkomsel", name: "Pulsa 20K", price: new Prisma.Decimal(21_500) }
+    });
+    async function ppob(reference: string, providerCost: number | null) {
+      await prisma.ppobTransaction.create({
+        data: {
+          publicReference: reference,
+          userId: topUpUser.id,
+          productId: product.id,
+          skuSnapshot: product.sku,
+          productNameSnapshot: product.name,
+          brandSnapshot: product.brand,
+          category: "PULSA",
+          targetNumber: "081200000000",
+          amount: new Prisma.Decimal(21_500),
+          adminFee: new Prisma.Decimal(0),
+          totalAmount: new Prisma.Decimal(21_500),
+          status: "SUCCESS",
+          provider: "digiflazz",
+          ...(providerCost !== null ? { providerCost: new Prisma.Decimal(providerCost) } : {}),
+          completedAt: new Date()
+        }
+      });
+    }
+    await ppob("PPOB-PL-1", 20_074);
+    await ppob("PPOB-PL-2", null); // modal tidak tercatat => dilaporkan, tidak ditebak
+
+    process.env.PL_SERVER_COST_MONTHLY = "1500000";
+    let data: any;
+    try {
+      const response = await call(vip, "/api/v1/admin/reports/profit-loss");
+      expect(response.status).toBe(200);
+      data = ((await response.json()) as { data: any }).data;
+    } finally {
+      process.env.PL_SERVER_COST_MONTHLY = "0";
+    }
+
+    // Gateway: 18.315 + 2.000 + 7.000 + 1.400 (top-up) = 28.715
+    expect(data.expenses.gatewayFee).toBe("28715.00");
+    expect(data.operating.gateway.unknownCount).toBe(1);
+    const byType = Object.fromEntries(data.operating.gateway.byMethod.map((row: any) => [row.type, row]));
+    expect(byType.credit_card.fee).toBe("18315.00");
+    expect(byType.qris.count).toBe(2);
+    expect(byType.qris.fee).toBe("8400.00");
+
+    // PPOB: penjualan 2 x 21.500; modal hanya yang tercatat (20.074); 1 tanpa modal.
+    expect(data.revenue.ppobSales).toBe("43000.00");
+    expect(data.expenses.ppobCost).toBe("20074.00");
+    expect(data.operating.ppob).toEqual({ successCount: 2, withoutCostCount: 1 });
+
+    // Server: Rp1.500.000/bulan dibagi per hari, periode = dari akun pertama sampai sekarang.
+    expect(data.operating.server.monthly).toBe(1_500_000);
+    expect(Number(data.expenses.serverCost)).toBeGreaterThan(0);
+    expect(Number(data.expenses.serverCost)).toBeLessThan(1_500_000 * 2);
+
+    // Pajak 11% dari total pendapatan (membership 1.900.000 + PPOB 43.000).
+    expect(data.revenue.total).toBe("1943000.00");
+    expect(data.expenses.tax).toBe("213730.00");
+    expect(data.notes.some((n: string) => n.includes("tanpa jenis pembayaran"))).toBe(true);
+    expect(data.notes.some((n: string) => n.includes("tanpa harga modal"))).toBe(true);
   });
 
   it("koreksi status ojek hanya untuk SUPER_ADMIN ke atas", async () => {

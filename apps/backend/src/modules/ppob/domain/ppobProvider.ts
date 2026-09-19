@@ -36,6 +36,9 @@ export type PpobPurchaseOutcome =
       providerReference: string;
       /// Token PLN / serial number. null bila produk tidak mengeluarkannya.
       serialNumber: string | null;
+      /// Harga modal yang ditagihkan provider (rupiah, mis. `price` Digiflazz).
+      /// Dasar HPP PPOB pada laporan laba rugi; null/absen bila tidak dilaporkan.
+      providerCost?: number | null;
     }
   | {
       kind: "PROCESSING";

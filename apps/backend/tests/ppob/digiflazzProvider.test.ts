@@ -35,8 +35,17 @@ describe("Digiflazz adapter (unit)", () => {
     expect(outcome).toEqual({
       kind: "SUCCESS",
       providerReference: "PPB-A2B3C4D5E6",
-      serialNumber: "SN/2026/08/001"
+      serialNumber: "SN/2026/08/001",
+      providerCost: null
     });
+  });
+
+  it("price Digiflazz pada Sukses dibawa sebagai providerCost (harga modal)", () => {
+    expect(mapDigiflazzStatus({ ref_id: "PPB-X", status: "Sukses", price: 20074 })).toMatchObject({
+      kind: "SUCCESS",
+      providerCost: 20074
+    });
+    expect(mapDigiflazzStatus({ ref_id: "PPB-X", status: "Sukses", price: 0 })).toMatchObject({ providerCost: null });
   });
 
   it('sn kosong pada "Sukses" tetap SUCCESS dengan serialNumber null', () => {

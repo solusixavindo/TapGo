@@ -149,6 +149,7 @@ export function mapDigiflazzStatus(data: {
   rc?: string;
   message?: string;
   sn?: string | null;
+  price?: number;
 }): PpobPurchaseOutcome {
   const providerReference = data.ref_id ?? "unknown";
   const status = data.status?.trim().toLowerCase();
@@ -157,7 +158,8 @@ export function mapDigiflazzStatus(data: {
     return {
       kind: "SUCCESS",
       providerReference,
-      serialNumber: data.sn && data.sn.trim().length > 0 ? data.sn : null
+      serialNumber: data.sn && data.sn.trim().length > 0 ? data.sn : null,
+      providerCost: typeof data.price === "number" && data.price > 0 ? data.price : null
     };
   }
   if (status === "pending") {

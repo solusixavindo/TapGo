@@ -163,6 +163,8 @@ export interface WalletRepository {
   }): Promise<void>;
   /** Idempotent: mengembalikan null bila order sudah bukan PENDING (replay). */
   markTopUpOrderPaid(input: {
+    /// Jenis pembayaran dari gateway (mis. gopay, qris) — dasar biaya gateway di laporan.
+    paymentType?: string;
     orderId: string;
     providerReference: string;
   }): Promise<WalletTopUpOrderItem | null>;

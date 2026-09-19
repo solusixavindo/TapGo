@@ -196,6 +196,10 @@ describe.skipIf(!runIntegration)("Stage R2.8 — Digiflazz real provider integra
 
     const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
     expect(wallet.ppobBalance.toFixed(2)).toBe("88500.00");
+
+    // Harga modal dari provider (price Digiflazz) tersimpan untuk laporan laba rugi.
+    const saved = await prisma.ppobTransaction.findUniqueOrThrow({ where: { publicReference: body.data.reference } });
+    expect(saved.providerCost?.toFixed(2)).toBe("11500.00");
   });
 
   it("jawaban Gagal dari provider: FAILED + refund penuh + rc sebagai failureCode", async () => {

@@ -1896,6 +1896,9 @@ model PpobTransaction {
   providerReference String?               @map("provider_reference") @db.VarChar(64)
   /// Token PLN / serial number pulsa. Hanya disajikan ke pemilik transaksi.
   serialNumber      String?               @map("serial_number") @db.VarChar(120)
+  /// Harga modal dari provider (mis. `price` Digiflazz) pada transaksi sukses —
+  /// dasar HPP PPOB di laporan laba rugi. Null = tidak dilaporkan.
+  providerCost      Decimal?              @map("provider_cost") @db.Decimal(14, 2)
   failureCode       String?               @map("failure_code") @db.VarChar(40)
   failureReason     String?               @map("failure_reason") @db.VarChar(240)
 
