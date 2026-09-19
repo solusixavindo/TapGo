@@ -100,13 +100,27 @@ abstract class LocationSelectionPort {
   RideLocationProviderStatus get status;
 
   /// Cari kandidat alamat dari teks bebas (mis. "Monas Jakarta").
-  Future<List<RideAddressCandidate>> searchAddress(String query);
+  ///
+  /// [near] membatasi hasil ke sekitar satu titik (mis. titik jemput yang
+  /// sudah dipilih) supaya rekomendasi tidak melompat ke kota/provinsi lain
+  /// yang kebetulan punya nama jalan sama.
+  Future<List<RideAddressCandidate>> searchAddress(
+    String query, {
+    RideLocation? near,
+  });
 
   /// Alamat terbaik untuk satu koordinat (reverse geocode).
   Future<String?> reverseAddress(double lat, double lng);
 
   /// Lokasi perangkat saat ini, atau null bila izin/gps tidak tersedia.
   Future<RideLocation?> currentLocation();
+
+  /// Perkiraan lokasi CEPAT dari cache GPS terakhir (tanpa memicu prompt izin
+  /// atau menunggu fix baru) — dipakai sebagai bias pencarian saat sheet
+  /// pemilih lokasi baru dibuka dan belum ada titik acuan (mis. titik jemput
+  /// belum dipilih). Null bila belum ada fix tersimpan atau izin belum ada;
+  /// pemanggil harus tetap berjalan normal tanpa bias saat null.
+  Future<RideLocation?> lastKnownLocation();
 }
 
 /// Label pendek dari hasil Nominatim: dua komponen pertama alamat.
@@ -144,8 +158,17 @@ class OsmLocationPort implements LocationSelectionPort {
   @override
   RideLocationProviderStatus get status => RideLocationProviderStatus.ready;
 
+  /// Setengah lebar/tinggi kotak pembatas pencarian (derajat) di sekitar
+  /// [near] — kira-kira 35-40 km, cakupan wajar untuk "satu kota/kabupaten
+  /// terdekat" tanpa melompat ke provinsi lain yang kebetulan sama nama
+  /// jalannya.
+  static const _nearBoxDegrees = 0.35;
+
   @override
-  Future<List<RideAddressCandidate>> searchAddress(String query) async {
+  Future<List<RideAddressCandidate>> searchAddress(
+    String query, {
+    RideLocation? near,
+  }) async {
     final trimmed = query.trim();
     if (trimmed.length < 3) return const [];
     try {
@@ -159,6 +182,12 @@ class OsmLocationPort implements LocationSelectionPort {
           'countrycodes': 'id',
           'accept-language': 'id',
           'addressdetails': 0,
+          if (near != null) ...{
+            'viewbox':
+                '${near.lng - _nearBoxDegrees},${near.lat + _nearBoxDegrees},'
+                '${near.lng + _nearBoxDegrees},${near.lat - _nearBoxDegrees}',
+            'bounded': 1,
+          },
         },
         options: Options(headers: _headers),
       );
@@ -198,6 +227,10 @@ class OsmLocationPort implements LocationSelectionPort {
     }
   }
 
+  /// Toleransi kesalahan jarak yang diminta: hasil GPS harus berada dalam
+  /// radius 50 meter dari titik sesungguhnya pengguna.
+  static const _maxAcceptableAccuracyMeters = 50.0;
+
   @override
   Future<RideLocation?> currentLocation() async {
     try {
@@ -209,12 +242,26 @@ class OsmLocationPort implements LocationSelectionPort {
           permission == LocationPermission.deniedForever) {
         return null;
       }
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 10),
-        ),
-      );
+      // Sebelumnya cuma satu percobaan dengan accuracy .high — hasil pertama
+      // GPS baru "settle" kadang masih di atas 50m. Dicoba sampai dua kali
+      // dengan akurasi tertinggi yang tersedia, dan dipakai hasil terbaik
+      // (bukan cuma percobaan terakhir) bila keduanya belum memenuhi 50m.
+      Position? best;
+      for (var attempt = 1; attempt <= 2; attempt++) {
+        final position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.best,
+            timeLimit: Duration(seconds: 12),
+          ),
+        );
+        if (best == null || position.accuracy < best.accuracy) {
+          best = position;
+        }
+        if (best.accuracy <= _maxAcceptableAccuracyMeters) {
+          break;
+        }
+      }
+      final position = best!;
       final address = await reverseAddress(position.latitude, position.longitude);
       return RideLocation(
         id: 'gps-${position.latitude}-${position.longitude}',
@@ -222,6 +269,50 @@ class OsmLocationPort implements LocationSelectionPort {
         address: address ??
             'Koordinat ${position.latitude.toStringAsFixed(5)}, '
                 '${position.longitude.toStringAsFixed(5)}',
+        lat: position.latitude,
+        lng: position.longitude,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<RideLocation?> lastKnownLocation() async {
+    try {
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        // Sengaja TIDAK meminta izin di sini — ini cuma bias pencarian,
+        // bukan aksi yang pengguna minta secara sadar. Prompt izin harus
+        // muncul saat pengguna menekan "Gunakan lokasi saya", bukan diam-diam
+        // saat sheet pencarian baru dibuka.
+        return null;
+      }
+      var position = await Geolocator.getLastKnownPosition();
+      if (position == null) {
+        // Belum ada fix GPS tersimpan sama sekali (mis. baru install, atau
+        // izin baru diberikan dan belum pernah menekan "Gunakan lokasi
+        // saya") — laporan Owner: pencarian Tujuan masih jauh dari lokasi
+        // user karena bias-nya kosong tepat di kasus ini. Izin sudah pasti
+        // ada di titik ini (dicek di atas), jadi minta satu fix cepat
+        // langsung alih-alih diam-diam menyerah ke pencarian tanpa bias.
+        try {
+          position = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.medium,
+              timeLimit: Duration(seconds: 5),
+            ),
+          );
+        } catch (_) {
+          return null;
+        }
+      }
+      return RideLocation(
+        id: 'gps-last-${position.latitude}-${position.longitude}',
+        label: 'Perkiraan lokasi',
+        address: 'Koordinat ${position.latitude.toStringAsFixed(5)}, '
+            '${position.longitude.toStringAsFixed(5)}',
         lat: position.latitude,
         lng: position.longitude,
       );
@@ -264,7 +355,10 @@ class DemoLocationPort implements LocationSelectionPort {
   RideLocationProviderStatus get status => RideLocationProviderStatus.ready;
 
   @override
-  Future<List<RideAddressCandidate>> searchAddress(String query) async {
+  Future<List<RideAddressCandidate>> searchAddress(
+    String query, {
+    RideLocation? near,
+  }) async {
     final trimmed = query.trim().toLowerCase();
     if (trimmed.isEmpty) return _candidates;
     return _candidates
@@ -278,6 +372,9 @@ class DemoLocationPort implements LocationSelectionPort {
 
   @override
   Future<RideLocation?> currentLocation() async => _candidates.first.toRideLocation();
+
+  @override
+  Future<RideLocation?> lastKnownLocation() async => null;
 }
 
 /// Port yang berlaku untuk aplikasi.

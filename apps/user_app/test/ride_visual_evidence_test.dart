@@ -269,7 +269,7 @@ void main() {
         required dropoff,
       }) async =>
           quotePayload(),
-      orderRequest: ({required quoteId, idempotencyKey}) async =>
+      orderRequest: ({required quoteId, idempotencyKey, pickupNote}) async =>
           orderPayload(status: 'SEARCHING_DRIVER'),
       detailRequest: (_) async => orderPayload(status: 'SEARCHING_DRIVER'),
     );
@@ -289,8 +289,8 @@ void main() {
       expect(tapGoIsPlayDistribution, isTrue);
       tapGoRideHistoryLoaderForTests = () async => const [];
       addTearDown(() => tapGoRideHistoryLoaderForTests = null);
-      tapGoDashboardVisualFixtureEnabled = true;
-      addTearDown(() => tapGoDashboardVisualFixtureEnabled = false);
+      tapGoDashboardVisualFixtureEnabledForTests = true;
+      addTearDown(() => tapGoDashboardVisualFixtureEnabledForTests = false);
     }
 
     /// Memberi waktu aset SVG selesai dimuat sebelum gambar diambil.

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../application/ppob_providers.dart';
 import '../domain/ppob_models.dart';
@@ -92,44 +93,86 @@ class _PpobCategoryGrid extends StatelessWidget {
   }
 }
 
-class _PpobCategoryTile extends StatelessWidget {
+class _PpobCategoryTile extends StatefulWidget {
   const _PpobCategoryTile({required this.category});
 
   final PpobCategory category;
 
   @override
+  State<_PpobCategoryTile> createState() => _PpobCategoryTileState();
+}
+
+/// Feedback tekan halus (scale 0.97x) + shadow lembut bertinta warna
+/// kategori, menggantikan kartu flat + ripple polos sebelumnya — laporan
+/// Owner: tampilan kartu PPOB perlu dipoles agar terasa lebih premium.
+class _PpobCategoryTileState extends State<_PpobCategoryTile> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed != value) {
+      setState(() => _pressed = value);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final category = widget.category;
+    final illustration = ppobCategoryIllustrationAsset(category.code);
     final icon = ppobCategoryIcon(category.icon, categoryCode: category.code);
+    final accent = ppobCategoryColor(category.code);
 
-    return Material(
-      color: theme.cardColor,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => PpobCategoryScreen(category: category),
-          ),
+    return GestureDetector(
+      onTapDown: (_) => _setPressed(true),
+      onTapCancel: () => _setPressed(false),
+      onTapUp: (_) => _setPressed(false),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => PpobCategoryScreen(category: category),
         ),
-        child: Padding(
+      ),
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: Container(
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: accent.withValues(alpha: 0.16),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
           padding: const EdgeInsets.all(12),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: ppobCategoryColor(category.code).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
+              if (illustration != null)
+                SvgPicture.asset(
+                  illustration,
+                  width: 44,
+                  height: 44,
+                  fit: BoxFit.contain,
+                  clipBehavior: Clip.none,
+                )
+              else
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: ppobCategoryColor(category.code).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: ppobCategoryColor(category.code),
+                    size: 22,
+                  ),
                 ),
-                child: Icon(
-                  icon,
-                  color: ppobCategoryColor(category.code),
-                  size: 22,
-                ),
-              ),
               const SizedBox(height: 10),
               Text(
                 category.name,

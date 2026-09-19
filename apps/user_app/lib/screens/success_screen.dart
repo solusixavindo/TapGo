@@ -50,11 +50,11 @@ class PaymentSuccessScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 28),
-              const Text(
+              Text(
                 'Pendaftaran Berhasil',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Color(0xFF0A2A43),
+                  color: Theme.of(context).colorScheme.onSurface,
                   fontSize: 28,
                   fontWeight: FontWeight.w900,
                 ),
@@ -63,7 +63,9 @@ class PaymentSuccessScreen extends StatelessWidget {
               Text(
                 'Paket ${package.name} aktif. Invoice ${invoice.number} sudah lunas.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Color(0xFF718096)),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: 24),
               _InfoPanel(

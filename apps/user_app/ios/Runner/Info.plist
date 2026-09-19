@@ -4,6 +4,11 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<!-- Dipakai tombol "lokasi saya saat ini" saat memilih titik jemput/tujuan
+	     ojek online (lihat ride_location_port.dart). Tanpa kunci ini iOS
+	     menolak permintaan izin secara diam-diam, bukan hanya memperingatkan. -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>TapGo memakai lokasi Anda untuk menyarankan titik jemput dan mengukur jarak perjalanan.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

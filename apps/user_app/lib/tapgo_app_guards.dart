@@ -11,9 +11,15 @@ void installTapGoCrashGuards() {
   };
 
   // Kesalahan asinkron di luar tangkapan framework — melewati handler ini
-  // berarti jejaknya ada, bukan aplikasi yang mati tanpa catatan.
+  // berarti jejaknya ada, bukan aplikasi yang mati tanpa catatan. Detail
+  // error+stack hanya dicetak di build development: di build produksi
+  // debugPrint tidak di-strip oleh compiler, jadi mencetaknya tanpa gerbang
+  // berarti isi error (berpotensi memuat data request/response) bocor ke
+  // log perangkat (mis. adb logcat) pengguna nyata.
   PlatformDispatcher.instance.onError = (error, stack) {
-    debugPrint('[TapGo Crash] ${error.runtimeType}: $error\n$stack');
+    if (kDebugMode) {
+      debugPrint('[TapGo Crash] ${error.runtimeType}: $error\n$stack');
+    }
     return true;
   };
 }

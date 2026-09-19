@@ -42,7 +42,7 @@ class AdminMemberDetailScreen extends StatelessWidget {
             children: [
               Expanded(
                 child: _StatCard(
-                  label: 'Mitra',
+                  label: 'Referral',
                   value: '${member.totalDownline}',
                 ),
               ),
@@ -55,7 +55,7 @@ class AdminMemberDetailScreen extends StatelessWidget {
           const SizedBox(height: 14),
           _DemoMenuTile(
             icon: Icons.person_pin_rounded,
-            title: 'Sponsor / Upline',
+            title: 'Pemberi Referral',
             subtitle: member.sponsor,
             onTap: () {},
           ),
@@ -82,8 +82,8 @@ class AdminMemberDetailScreen extends StatelessWidget {
           ],
           _DemoMenuTile(
             icon: Icons.account_tree_rounded,
-            title: 'Lihat Jaringan',
-            subtitle: 'Buka referal tim',
+            title: 'Lihat Referral',
+            subtitle: 'Buka daftar referral',
             onTap: () => _openDemo(context, const ReferralTreeScreen()),
           ),
         ],

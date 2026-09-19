@@ -1,7 +1,8 @@
 part of '../main.dart';
 
-/// Lembar pemilih lokasi ride: pencarian alamat (Nominatim) + pin pada peta
-/// OpenStreetMap + tombol lokasi saat ini.
+/// Lembar pemilih lokasi ride: pencarian alamat (Nominatim) + pin tengah yang
+/// diam sementara peta digeser di bawahnya (manual pin dropper, seperti
+/// Grab/Gojek) + tombol lokasi saat ini.
 ///
 /// Port-agnostik: semua panggilan geocoding lewat [LocationSelectionPort],
 /// sehingga mode demo memakai data sintetis tanpa menyentuh jaringan.
@@ -11,17 +12,24 @@ class RideLocationPickerSheet extends StatefulWidget {
     required this.port,
     required this.title,
     this.initial,
+    this.near,
   });
 
   final LocationSelectionPort port;
   final String title;
   final RideLocation? initial;
 
+  /// Titik acuan untuk membatasi hasil pencarian (mis. titik jemput yang
+  /// sudah dipilih, saat sheet ini dibuka untuk mencari tujuan) DAN sebagai
+  /// titik awal pin sebelum pengguna menggeser peta.
+  final RideLocation? near;
+
   static Future<RideLocation?> show(
     BuildContext context, {
     required LocationSelectionPort port,
     required String title,
     RideLocation? initial,
+    RideLocation? near,
   }) {
     return showModalBottomSheet<RideLocation>(
       context: context,
@@ -31,6 +39,7 @@ class RideLocationPickerSheet extends StatefulWidget {
         port: port,
         title: title,
         initial: initial,
+        near: near,
       ),
     );
   }
@@ -47,17 +56,21 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
   final _searchController = TextEditingController();
   final _mapController = MapController();
   Timer? _debounce;
+  Timer? _centerDebounce;
 
   List<RideAddressCandidate> _results = const [];
   RideAddressCandidate? _selected;
   bool _searching = false;
   bool _locating = false;
+  bool _resolvingCenter = false;
+  bool _userMovedMap = false;
   String? _notice;
 
   @override
   void initState() {
     super.initState();
     final initial = widget.initial;
+    final near = widget.near;
     if (initial != null) {
       _selected = RideAddressCandidate(
         label: initial.label,
@@ -65,12 +78,43 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
         lat: initial.lat,
         lng: initial.lng,
       );
+    } else if (near != null) {
+      _selected = RideAddressCandidate(
+        label: near.label,
+        address: near.address,
+        lat: near.lat,
+        lng: near.lng,
+      );
+    } else {
+      // Belum ada acuan sama sekali (mis. field Jemput dibuka duluan) — pin
+      // tampil dulu di titik default sambil menunggu GPS terakhir, supaya
+      // "Pakai lokasi ini" tidak nonaktif menunggu jaringan.
+      _selected = RideAddressCandidate(
+        label: 'Titik pilihan',
+        address: 'Geser peta untuk memilih titik jemput/tujuan',
+        lat: _defaultCenter.latitude,
+        lng: _defaultCenter.longitude,
+      );
+      unawaited(_recenterToFallbackNear());
     }
+  }
+
+  /// Pindah otomatis ke GPS terakhir HANYA bila pengguna belum menggeser peta
+  /// sendiri — laporan Owner: field Jemput masih menampilkan daerah jauh dari
+  /// user karena sebelumnya tidak ada acuan sama sekali di kasus ini.
+  Future<void> _recenterToFallbackNear() async {
+    final location = await widget.port.lastKnownLocation();
+    if (!mounted || location == null || _userMovedMap) {
+      return;
+    }
+    _moveMap(LatLng(location.lat, location.lng), 15);
+    await _resolveCenter(LatLng(location.lat, location.lng));
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _centerDebounce?.cancel();
     _searchController.dispose();
     _mapController.dispose();
     super.dispose();
@@ -90,7 +134,10 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
       _searching = true;
       _notice = null;
     });
-    final results = await widget.port.searchAddress(query);
+    final results = await widget.port.searchAddress(
+      query,
+      near: widget.near ?? _selected?.toRideLocation(),
+    );
     if (!mounted) return;
     setState(() {
       _searching = false;
@@ -113,32 +160,45 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
             'Lokasi perangkat tidak tersedia. Periksa izin lokasi dan GPS.';
         return;
       }
-      _selected = RideAddressCandidate(
-        label: location.label,
-        address: location.address,
-        lat: location.lat,
-        lng: location.lng,
-      );
+      _userMovedMap = true;
       _notice = null;
     });
-    final loc = location;
-    if (loc != null) _moveMap(LatLng(loc.lat, loc.lng), 16);
+    if (location != null) {
+      _selectAndCenter(
+        RideAddressCandidate(
+          label: location.label,
+          address: location.address,
+          lat: location.lat,
+          lng: location.lng,
+        ),
+      );
+    }
   }
 
   void _pickCandidate(RideAddressCandidate candidate) {
-    setState(() => _selected = candidate);
-    _moveMap(LatLng(candidate.lat, candidate.lng), 16);
+    _userMovedMap = true;
+    _selectAndCenter(candidate);
   }
 
-  Future<void> _pickFromMap(LatLng point) async {
+  void _selectAndCenter(RideAddressCandidate candidate, {double zoom = 16}) {
     setState(() {
-      _searching = true;
-      _notice = null;
+      _selected = candidate;
+      _results = const [];
     });
-    final address = await widget.port.reverseAddress(point.latitude, point.longitude);
+    _moveMap(LatLng(candidate.lat, candidate.lng), zoom);
+  }
+
+  /// Reverse-geocode titik tengah peta saat ini — dipanggil setelah pin
+  /// (diam di tengah layar) berhenti bergerak karena peta digeser pengguna.
+  Future<void> _resolveCenter(LatLng point) async {
+    setState(() => _resolvingCenter = true);
+    final address = await widget.port.reverseAddress(
+      point.latitude,
+      point.longitude,
+    );
     if (!mounted) return;
     setState(() {
-      _searching = false;
+      _resolvingCenter = false;
       _selected = RideAddressCandidate(
         label: address != null ? _shortLabelForUi(address) : 'Titik pilihan',
         address: address ??
@@ -147,6 +207,20 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
         lat: point.latitude,
         lng: point.longitude,
       );
+    });
+  }
+
+  /// Dipicu tiap kamera peta bergerak. Hanya gerakan dari GESTURE pengguna
+  /// (geser jari) yang memicu reverse-geocode — perpindahan programatik
+  /// (mis. dari memilih hasil pencarian) sudah punya alamat sendiri, tidak
+  /// perlu ditimpa.
+  void _onMapPositionChanged(MapCamera camera, bool hasGesture) {
+    if (!hasGesture) return;
+    _userMovedMap = true;
+    _centerDebounce?.cancel();
+    _centerDebounce = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      unawaited(_resolveCenter(_mapController.camera.center));
     });
   }
 
@@ -250,7 +324,7 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
           Expanded(
             child: Stack(
               children: [
-                if (_results.isNotEmpty && selected == null)
+                if (_results.isNotEmpty)
                   ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     itemCount: _results.length,
@@ -274,7 +348,7 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
                       );
                     },
                   )
-                else
+                else ...[
                   ClipRRect(
                     borderRadius: BorderRadius.circular(16),
                     child: FlutterMap(
@@ -283,29 +357,14 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
                         initialCenter: selected != null
                             ? LatLng(selected.lat, selected.lng)
                             : _defaultCenter,
-                        initialZoom: 14,
-                        onTap: (_, point) => unawaited(_pickFromMap(point)),
+                        initialZoom: 16,
+                        onPositionChanged: _onMapPositionChanged,
                       ),
                       children: [
                         TileLayer(
                           urlTemplate: _tileUrl,
                           userAgentPackageName: 'com.xavindo.tapgo',
                         ),
-                        if (selected != null)
-                          MarkerLayer(
-                            markers: [
-                              Marker(
-                                point: LatLng(selected.lat, selected.lng),
-                                width: 44,
-                                height: 44,
-                                child: const Icon(
-                                  Icons.location_on_rounded,
-                                  size: 44,
-                                  color: Color(0xFF0A84FF),
-                                ),
-                              ),
-                            ],
-                          ),
                         Align(
                           alignment: Alignment.bottomRight,
                           child: Padding(
@@ -322,6 +381,67 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
                       ],
                     ),
                   ),
+                  // Pin diam di tengah layar — peta yang bergerak di
+                  // bawahnya, bukan pin yang berpindah (Manual Pin Dropper,
+                  // pola Grab/Gojek). Koordinat presisi diambil dari
+                  // center-point kamera peta, bukan dari posisi ikon ini.
+                  IgnorePointer(
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 36),
+                        child: Icon(
+                          Icons.location_on_rounded,
+                          size: 44,
+                          color: _resolvingCenter
+                              ? const Color(0xFF0A84FF).withValues(alpha: 0.55)
+                              : const Color(0xFF0A84FF),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_resolvingCenter)
+                    Positioned(
+                      top: 12,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surface,
+                            borderRadius: BorderRadius.circular(999),
+                            boxShadow: const [
+                              BoxShadow(
+                                  color: Color(0x22000000),
+                                  blurRadius: 8,
+                                  offset: Offset(0, 3)),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Mencari alamat…',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: colorScheme.onSurface,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
                 if (_searching)
                   const Positioned(
                     top: 12,
@@ -356,7 +476,7 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
                     ),
                   ),
                 FilledButton(
-                  onPressed: selected == null
+                  onPressed: selected == null || _resolvingCenter
                       ? null
                       : () => Navigator.of(context)
                           .pop(selected.toRideLocation()),

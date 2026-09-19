@@ -91,8 +91,17 @@ class _ReferralNodeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = _packageAccent(node.packageName);
+    // Root (Anda sendiri) dibedakan dari mitra lain — sebelumnya semua node
+    // memakai kartu putih identik, hanya badge yang beda warna.
+    final isRoot = node.level == 0;
 
     return Material(
+      // Sebelumnya root memakai Colors.transparent + gradient beralpha
+      // rendah, sehingga di mode gelap kartu ini mewarisi latar Scaffold
+      // yang gelap sementara teks nama (di bawah) tetap hardcode navy gelap
+      // — nyaris tak terbaca. Latar putih di sini konsisten dengan kartu
+      // non-root, gradient oranye tetap tampil DI ATAS putih (bukan di atas
+      // Scaffold), jadi kontras teks aman di kedua mode.
       color: Colors.white,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
@@ -101,8 +110,24 @@ class _ReferralNodeCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
+            gradient: isRoot
+                ? LinearGradient(
+                    colors: [
+                      _brandOrange.withValues(alpha: 0.10),
+                      _brandOrange.withValues(alpha: 0.03),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            color: isRoot ? null : Colors.white,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFEAF0F6)),
+            border: Border.all(
+              color: isRoot
+                  ? _brandOrange.withValues(alpha: 0.35)
+                  : const Color(0xFFEAF0F6),
+              width: isRoot ? 1.4 : 1,
+            ),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x0C000000),
@@ -160,7 +185,7 @@ class _ReferralNodeCard extends StatelessWidget {
                         ),
                         _ReferralMetaChip(
                           icon: Icons.account_tree_rounded,
-                          label: '${node.totalDownline} mitra',
+                          label: '${node.totalDownline} anggota',
                           color: _brandBlue,
                         ),
                         _ReferralMetaChip(
@@ -231,7 +256,7 @@ class _ReferralLevelBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = level == 0 ? 'Root' : 'Level $level';
+    final label = level == 0 ? 'Root' : 'Tingkat $level';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(

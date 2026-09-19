@@ -8,33 +8,42 @@ class SuperMenuScreen extends StatefulWidget {
 }
 
 class _SuperMenuScreenState extends State<SuperMenuScreen> {
+  // TapGo Food/Mart, Tagihan, Membership, Reward, dan grup Komunitas
+  // (Kelas Online/Webinar/Event/Support) dihapus total dari Super Menu atas
+  // permintaan owner — belum ada implementasi layanan sungguhan di baliknya.
   static const _directGroups = [
     _SuperMenuGroup('Layanan', [
       _SuperMenuItem('TapGo Ride', Icons.two_wheeler_rounded),
       _SuperMenuItem('TapGo Car', Icons.local_taxi_rounded),
-      _SuperMenuItem('TapGo Food', Icons.restaurant_menu_rounded),
-      _SuperMenuItem('TapGo Mart', Icons.storefront_rounded),
     ]),
+    // Sempat dikonsolidasi jadi satu tile 'PPOB' (supaya sama dengan
+    // _playGroups), lalu owner minta kembali ke 6 tile terpisah supaya semua
+    // kategori PPOB langsung terlihat di Super Menu tanpa lewat grid
+    // PpobHomeScreen dulu. Tiap tile membuka kategorinya sendiri lewat
+    // tapGoOpenPpobCategory (lihat _openMenuDetail), ikon memakai warna yang
+    // sama dengan ppobCategoryColor() supaya konsisten dengan grid PPOB.
     _SuperMenuGroup('Digital', [
       _SuperMenuItem('Pulsa', Icons.phone_iphone_rounded),
-      _SuperMenuItem('PPOB', Icons.receipt_long_rounded),
+      _SuperMenuItem('Paket Data', Icons.wifi_rounded),
+      _SuperMenuItem('Token PLN', Icons.bolt_rounded),
+      _SuperMenuItem('E-Wallet', Icons.account_balance_wallet_rounded),
       _SuperMenuItem('BPJS', Icons.health_and_safety_rounded),
-      _SuperMenuItem('Tagihan', Icons.request_quote_rounded),
+      _SuperMenuItem('PDAM', Icons.water_drop_rounded),
     ]),
     _SuperMenuGroup('Bisnis', [
-      _SuperMenuItem('Membership', Icons.workspace_premium_rounded),
       _SuperMenuItem('Referral', Icons.hub_rounded),
-      _SuperMenuItem('Reward', Icons.emoji_events_rounded),
-    ]),
-    _SuperMenuGroup('Komunitas', [
-      _SuperMenuItem('Kelas Online', Icons.school_rounded),
-      _SuperMenuItem('Webinar', Icons.video_camera_front_rounded),
-      _SuperMenuItem('Event', Icons.event_available_rounded),
-      _SuperMenuItem('Support', Icons.volunteer_activism_rounded),
     ]),
   ];
 
   static const _playGroups = [
+    _SuperMenuGroup('Digital', [
+      _SuperMenuItem('Pulsa', Icons.phone_iphone_rounded),
+      _SuperMenuItem('Paket Data', Icons.wifi_rounded),
+      _SuperMenuItem('Token PLN', Icons.bolt_rounded),
+      _SuperMenuItem('E-Wallet', Icons.account_balance_wallet_rounded),
+      _SuperMenuItem('BPJS', Icons.health_and_safety_rounded),
+      _SuperMenuItem('PDAM', Icons.water_drop_rounded),
+    ]),
     _SuperMenuGroup('Akun', [
       _SuperMenuItem('Kartu Anggota', Icons.badge_rounded),
       _SuperMenuItem('Profil', Icons.person_rounded),
@@ -84,8 +93,8 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
                 children: [
                   Text(
                     group.title,
-                    style: const TextStyle(
-                      color: Color(0xFF0A2A43),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontSize: 18,
                       fontWeight: FontWeight.w900,
                     ),
@@ -120,12 +129,34 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
   }
 
   void _openMenuDetail(BuildContext context, String label) {
+    final categoryCode = _ppobCategoryCodeForLabel(label);
+    if (categoryCode != null) {
+      unawaited(tapGoOpenPpobCategory(context, categoryCode));
+      return;
+    }
     final destination = _superMenuDestinationForLabel(label);
     if (destination != null) {
       _openDemo(context, destination);
     }
   }
 }
+
+String? tapGoPpobCategoryCodeForLabelForTests(String label) =>
+    _ppobCategoryCodeForLabel(label);
+
+/// Kode kategori backend untuk tile PPOB Super Menu (Pulsa, Paket Data,
+/// Token PLN, E-Wallet, BPJS, PDAM) — dipetakan terpisah dari
+/// _superMenuDestinationForLabel karena tujuannya butuh data async
+/// (kategori dari ppobCatalogProvider), bukan Widget statis.
+String? _ppobCategoryCodeForLabel(String label) => switch (label) {
+      'Pulsa' => 'PULSA',
+      'Paket Data' => 'DATA',
+      'Token PLN' => 'PLN_PREPAID',
+      'E-Wallet' => 'EWALLET',
+      'BPJS' => 'BPJS',
+      'PDAM' => 'PDAM',
+      _ => null,
+    };
 
 List<_SuperMenuGroup> _superMenuGroupsForDistribution(
   TapGoDistributionMode mode,
@@ -144,6 +175,7 @@ List<String> tapGoSuperMenuLabelsForDistributionForTests(
 Widget? _superMenuDestinationForLabel(String label) {
   if (tapGoIsPlayDistribution) {
     return switch (label) {
+      'PPOB' => const PpobHomeScreen(),
       'Kartu Anggota' => const BasicMemberCardScreen(),
       'Profil' => const ProfileDetailsScreen(),
       'Tiket Bantuan' => const ContactUsScreen(),
@@ -154,8 +186,9 @@ Widget? _superMenuDestinationForLabel(String label) {
   return switch (label) {
     'Membership' || 'Membership Saya' => const MembershipPackagesScreen(),
     'Referral' => const ReferralDashboardScreen(),
-    'Marketing Plan' => const MarketingPlanScreen(),
+    'Program Referral' => const MarketingPlanScreen(),
     'Reward' => const RewardScreen(),
+    'PPOB' || 'Pulsa' => const PpobHomeScreen(),
     _ => FeatureDetailScreen(title: label),
   };
 }
@@ -279,7 +312,7 @@ class MarketingPlanScreen extends StatelessWidget {
       return const MembershipScreen();
     }
     return _DemoScaffold(
-      title: 'Marketing Plan',
+      title: 'Program Referral',
       subtitle: 'PT. TapGo Lion Indonesia',
       child: Column(
         children: [
@@ -295,8 +328,8 @@ class MarketingPlanScreen extends StatelessWidget {
             icon: Icons.hub_rounded,
             title: 'Referral Dashboard',
             subtitle: tapGoIsPlayDistribution
-                ? 'Kode referral, level aktif, dan jaringan'
-                : 'Kode referral, level aktif, jaringan, bonus',
+                ? 'Kode referral, tingkat aktif, dan daftar referral'
+                : 'Kode referral, tingkat aktif, daftar referral, bonus',
             onTap: () => _openDemo(context, const ReferralDashboardScreen()),
           ),
           if (tapGoIsDirectDistribution)
@@ -308,8 +341,8 @@ class MarketingPlanScreen extends StatelessWidget {
             ),
           _DemoMenuTile(
             icon: Icons.account_tree_rounded,
-            title: 'Referal Tim',
-            subtitle: 'Visual struktur referal tim level 1 sampai 10',
+            title: 'Daftar Referral',
+            subtitle: 'Daftar referral per tingkat, tingkat 1 sampai 10',
             onTap: () => _openDemo(context, const ReferralTreeScreen()),
           ),
         ],
@@ -660,6 +693,7 @@ class _MembershipActiveDetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
@@ -667,7 +701,7 @@ class _MembershipActiveDetailRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(color: Color(0xFF718096)),
+              style: TextStyle(color: colorScheme.onSurfaceVariant),
             ),
           ),
           const SizedBox(width: 12),
@@ -675,8 +709,8 @@ class _MembershipActiveDetailRow extends StatelessWidget {
             child: Text(
               value,
               textAlign: TextAlign.right,
-              style: const TextStyle(
-                color: Color(0xFF0A2A43),
+              style: TextStyle(
+                color: colorScheme.onSurface,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -769,14 +803,14 @@ class ReferralDashboardScreen extends ConsumerWidget {
             children: [
               Expanded(
                 child: _StatCard(
-                  label: 'Direct sponsor',
+                  label: 'Referral langsung',
                   value: '${session.directSponsor}',
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _StatCard(
-                  label: 'Level aktif',
+                  label: 'Tingkat aktif',
                   value: '${session.activeLevel}',
                 ),
               ),
@@ -787,7 +821,7 @@ class ReferralDashboardScreen extends ConsumerWidget {
             children: [
               Expanded(
                 child: _StatCard(
-                  label: 'Total mitra',
+                  label: 'Total referral',
                   value: '${session.downline}',
                 ),
               ),
@@ -908,21 +942,21 @@ class DemoWalletScreen extends ConsumerWidget {
             ),
           if (_isTapGoDevelopmentBuild && !production.hasValue) ...[
             const _WalletLedgerItem(
-              title: 'Sponsor Bonus',
+              title: 'Bonus Referral',
               amount: '+ Rp400.000',
-              note: '10 direct sponsor x Rp500.000 x 8%',
+              note: '10 referral langsung x Rp500.000 x 8%',
               color: Color(0xFF0877EE),
             ),
             const _WalletLedgerItem(
-              title: 'Level Bonus',
+              title: 'Bonus Tingkat',
               amount: '+ Rp400.000',
-              note: 'Level 1 bonus dari 10 transaksi',
+              note: 'Bonus tingkat 1 dari 10 transaksi',
               color: Color(0xFF00A86B),
             ),
             const _WalletLedgerItem(
               title: 'Reward Bonus',
               amount: '+ Rp500.000',
-              note: 'Platinum qualified 10 direct sponsor',
+              note: 'Platinum terpenuhi 10 referral langsung',
               color: Color(0xFFFF8A00),
             ),
             const _WalletLedgerItem(
@@ -1254,6 +1288,11 @@ class _BankDropdownField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Sebelumnya field ini memaksa fillColor putih + teks navy hardcode,
+    // beda sendiri dari _InputField lain di layar yang sama (yang sudah
+    // memakai colorScheme) — di mode gelap jadi kotak putih menyala di
+    // tengah layar gelap. Disamakan ke pola colorScheme yang sama.
+    final colorScheme = Theme.of(context).colorScheme;
     return FormField<String>(
       initialValue: controller.text,
       validator: (_) =>
@@ -1275,12 +1314,17 @@ class _BankDropdownField extends StatelessWidget {
                 Icons.account_balance_rounded,
                 color: _brandBlue,
               ),
-              suffixIcon: const Icon(Icons.expand_more_rounded),
+              suffixIcon: Icon(
+                Icons.expand_more_rounded,
+                color: colorScheme.onSurfaceVariant,
+              ),
               labelText: label,
               hintText: 'Pilih bank',
+              labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+              hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
               errorText: field.errorText,
               filled: true,
-              fillColor: Colors.white,
+              fillColor: colorScheme.surface,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(18),
                 borderSide: BorderSide.none,
@@ -1290,8 +1334,8 @@ class _BankDropdownField extends StatelessWidget {
               controller.text.isEmpty ? 'Pilih bank' : controller.text,
               style: TextStyle(
                 color: controller.text.isEmpty
-                    ? const Color(0xFF94A3B8)
-                    : const Color(0xFF172033),
+                    ? colorScheme.onSurfaceVariant
+                    : colorScheme.onSurface,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -1326,10 +1370,10 @@ class _BankDropdownField extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
+                    Text(
                       'Pilih Bank',
                       style: TextStyle(
-                        color: Color(0xFF0A2A43),
+                        color: Theme.of(context).colorScheme.onSurface,
                         fontWeight: FontWeight.w900,
                         fontSize: 20,
                       ),
@@ -1571,9 +1615,9 @@ Kontak support: support@tapgolion.id, WhatsApp +62 838-0025-5588, alamat Jalan K
 const _termsContent = '''
 Dengan menggunakan TapGo, pengguna menyetujui ketentuan layanan membership, referral, wallet, PPOB, dan withdraw yang berlaku.
 
-Paket Basic bersifat gratis dengan bonus registrasi Rp5.000 dan sponsor bonus Rp2.000 sesuai ketentuan 1.000 user pertama. Paket Silver, Gold, dan Platinum memiliki harga, benefit PPOB, dan hak usaha sesuai informasi yang ditampilkan di aplikasi.
+Paket Basic bersifat gratis dengan bonus registrasi Rp5.000 dan bonus referral Rp2.000 sesuai ketentuan 1.000 user pertama. Paket Silver, Gold, dan Platinum memiliki harga, benefit PPOB, dan hak usaha sesuai informasi yang ditampilkan di aplikasi.
 
-Bonus sponsor, level, reward, dan profit sharing mengikuti marketing plan TapGo dan hanya diberikan jika syarat bisnis terpenuhi serta transaksi tercatat valid di sistem.
+Bonus referral, reward, dan bagi hasil mengikuti ketentuan program TapGo dan hanya diberikan jika syarat bisnis terpenuhi serta transaksi tercatat valid di sistem.
 
 Saldo TapGoPay dan PPOB hanya dapat digunakan sesuai fungsi layanan yang tersedia. Withdraw mengikuti minimum nominal, verifikasi rekening, dan proses approval admin.
 
@@ -1963,12 +2007,35 @@ class _SupportTicketCard extends StatelessWidget {
   }
 }
 
-class SupportTicketDetailScreen extends StatelessWidget {
+class SupportTicketDetailScreen extends StatefulWidget {
   const SupportTicketDetailScreen({required this.ticket, super.key});
 
   final Map<String, dynamic> ticket;
 
+  @override
+  State<SupportTicketDetailScreen> createState() =>
+      _SupportTicketDetailScreenState();
+}
+
+class _SupportTicketDetailScreenState
+    extends State<SupportTicketDetailScreen> {
+  // Future di-cache sekali di initState (pola sama seperti perbaikan
+  // ProfileDetailsScreen): sebelumnya widget ini StatelessWidget yang
+  // memanggil _load() langsung di dalam build(), sehingga SETIAP rebuild
+  // (mis. dipicu perubahan Theme app-wide saat ganti tema) membuat Future
+  // baru dan berpotensi tabrakan dengan request lama yang masih berjalan
+  // saat halaman ini dalam proses ditutup — sumber race Element-tree yang
+  // sama dengan crash 'Simpan nomor HP'.
+  late Future<Map<String, dynamic>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
   Future<Map<String, dynamic>> _load() async {
+    final ticket = widget.ticket;
     final id = ticket['id']?.toString();
     if (id == null || id.isEmpty) {
       return ticket;
@@ -1985,11 +2052,12 @@ class SupportTicketDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ticket = widget.ticket;
     return _DemoScaffold(
       title: 'Detail Tiket',
       subtitle: 'Status dan pesan bantuan',
       child: FutureBuilder<Map<String, dynamic>>(
-        future: _load(),
+        future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: _TapGoLoading(size: 24));

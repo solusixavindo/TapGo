@@ -2,10 +2,10 @@ part of '../main.dart';
 
 enum _ReferralTreeFilter {
   all('Semua', null),
-  level1('Level 1', 1),
-  level3('Level 3', 3),
-  level5('Level 5', 5),
-  level10('Level 10', 10);
+  level1('Tingkat 1', 1),
+  level3('Tingkat 3', 3),
+  level5('Tingkat 5', 5),
+  level10('Tingkat 10', 10);
 
   const _ReferralTreeFilter(this.label, this.level);
 

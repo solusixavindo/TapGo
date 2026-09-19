@@ -167,14 +167,20 @@ class _MembershipRegistrationScreenState
                     ],
                     onChanged: (value) =>
                         setState(() => _gender = value ?? _gender),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                     decoration: InputDecoration(
                       prefixIcon: const Icon(
                         Icons.wc_rounded,
                         color: _brandBlue,
                       ),
                       labelText: 'Jenis kelamin',
+                      labelStyle: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: Theme.of(context).colorScheme.surface,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(18),
                         borderSide: BorderSide.none,

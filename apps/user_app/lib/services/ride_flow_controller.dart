@@ -6,6 +6,44 @@ part of '../main.dart';
 /// yang hanya hidup di client, dan `isFinal` dari backend yang menghentikan
 /// polling — bukan daftar status yang disalin ke sini dan bisa basi.
 
+/// Mendekode encoded polyline presisi-5 (format standar OSRM/Google) jadi
+/// titik-titik lat/lng untuk digambar di peta. Input rusak/kosong
+/// mengembalikan list kosong (rute tidak digambar) alih-alih melempar error —
+/// booking tetap harus bisa lanjut walau geometri gagal didekode.
+List<LatLng> tapGoDecodePolyline(String encoded) {
+  final points = <LatLng>[];
+  var index = 0;
+  var lat = 0;
+  var lng = 0;
+  try {
+    while (index < encoded.length) {
+      var shift = 0;
+      var result = 0;
+      int byte;
+      do {
+        byte = encoded.codeUnitAt(index++) - 63;
+        result |= (byte & 0x1f) << shift;
+        shift += 5;
+      } while (byte >= 0x20);
+      lat += (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
+
+      shift = 0;
+      result = 0;
+      do {
+        byte = encoded.codeUnitAt(index++) - 63;
+        result |= (byte & 0x1f) << shift;
+        shift += 5;
+      } while (byte >= 0x20);
+      lng += (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
+
+      points.add(LatLng(lat / 1e5, lng / 1e5));
+    }
+  } catch (_) {
+    return const [];
+  }
+  return points;
+}
+
 /// Jenis layanan sesuai enum backend `RideServiceType`.
 enum RideServiceKind { motorcycle, car }
 
@@ -53,6 +91,9 @@ const Map<String, String> tapGoRideCancellationReasons = {
 
 /// Batas panjang catatan pembatalan, mengikuti validator backend.
 const int tapGoRideCancellationNoteMaxLength = 500;
+
+/// Batas panjang catatan lokasi jemput, mengikuti validator backend.
+const int tapGoRidePickupNoteMaxLength = 280;
 
 /// Status yang berarti perjalanan masih berjalan dan wajib dipulihkan.
 ///
@@ -119,6 +160,7 @@ class RideQuoteView {
     required this.subtotalFare,
     required this.totalFare,
     required this.expiresAt,
+    this.routePolyline,
   });
 
   final String quoteId;
@@ -132,6 +174,12 @@ class RideQuoteView {
   final int subtotalFare;
   final int totalFare;
   final DateTime? expiresAt;
+
+  /// Geometri rute jalan asli (encoded polyline) dari OSRM, bila server
+  /// sedang memakai provider itu. Null bila server memakai estimasi
+  /// garis-lurus (LOCAL) — UI cukup tidak menggambar rute saat null, bukan
+  /// menganggapnya error.
+  final String? routePolyline;
 
   bool get isExpired {
     final deadline = expiresAt;
@@ -158,6 +206,9 @@ class RideQuoteView {
       subtotalFare: _int(fare['subtotalFare']),
       totalFare: _int(fare['totalFare']),
       expiresAt: DateTime.tryParse('${json['expiresAt'] ?? ''}'),
+      routePolyline: json['routePolyline'] is String
+          ? json['routePolyline'] as String
+          : null,
     );
   }
 }
@@ -448,6 +499,7 @@ typedef RideQuoteRequest = Future<Map<String, dynamic>> Function({
 typedef RideOrderRequest = Future<Map<String, dynamic>> Function({
   required String quoteId,
   String? idempotencyKey,
+  String? pickupNote,
 });
 
 typedef RideDetailRequest = Future<Map<String, dynamic>> Function(

@@ -58,6 +58,25 @@ IconData ppobCategoryIcon(String? iconName, {String? categoryCode}) {
   };
 }
 
+/// Ilustrasi SVG bermerek TapGo untuk kategori PPOB yang sudah punya asetnya
+/// di `assets/illustrations/services/` — set aset yang sama dipakai grid
+/// layanan utama dashboard, supaya kategori ini terasa satu bahasa visual
+/// dengan ikon utama alih-alih ikon Material generik.
+///
+/// Sengaja hanya memetakan kode yang asetnya benar-benar cocok secara makna
+/// (Pulsa, BPJS). Kategori lain (Paket Data, Token PLN, E-Wallet, PDAM) belum
+/// punya ilustrasi bermerek — memaksakan aset yang maknanya tidak pas lebih
+/// buruk daripada ikon Material yang jujur, jadi kategori itu tetap memakai
+/// [ppobCategoryIcon] sampai asetnya tersedia.
+String? ppobCategoryIllustrationAsset(String categoryCode) {
+  const basePath = 'assets/illustrations/services';
+  return switch (categoryCode) {
+    'PULSA' => '$basePath/tg-pulsa.svg',
+    'BPJS' => '$basePath/tg-bpjs.svg',
+    _ => null,
+  };
+}
+
 /// Warna khas per kategori PPOB, mengikuti bahasa visual dashboard
 /// (ikon tematik + aksen warna berbeda per layanan).
 Color ppobCategoryColor(String categoryCode) {

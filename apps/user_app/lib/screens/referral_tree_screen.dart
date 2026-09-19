@@ -12,6 +12,8 @@ class _ReferralTreeScreenState extends ConsumerState<ReferralTreeScreen> {
   _ReferralTreeFilter _selectedFilter = _ReferralTreeFilter.all;
   DateTime? _lastBackendTreeAt;
   final Set<String> _collapsedNodeIds = <String>{};
+  ProviderSubscription<AsyncValue<_TapGoProductionSnapshot>>?
+      _snapshotSubscription;
 
   @override
   void initState() {
@@ -28,7 +30,7 @@ class _ReferralTreeScreenState extends ConsumerState<ReferralTreeScreen> {
             totalDownline: session.downline,
             children: const [],
           );
-    ref.listenManual(_productionSnapshotProvider, (_, next) {
+    _snapshotSubscription = ref.listenManual(_productionSnapshotProvider, (_, next) {
       final tree = next.valueOrNull?.referralTree;
       final loadedAt = next.valueOrNull?.loadedAt;
       if (tree == null || loadedAt == null || loadedAt == _lastBackendTreeAt) {
@@ -52,6 +54,12 @@ class _ReferralTreeScreenState extends ConsumerState<ReferralTreeScreen> {
   }
 
   @override
+  void dispose() {
+    _snapshotSubscription?.close();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final production = ref.watch(_productionSnapshotProvider);
     final session = ref.watch(_demoSessionProvider);
@@ -60,10 +68,10 @@ class _ReferralTreeScreenState extends ConsumerState<ReferralTreeScreen> {
         ? _root
         : _applyExpansionState(_rootFromBackendTree(backendTree, session));
     return _DemoScaffold(
-      title: 'Referal Tim',
+      title: 'Daftar Referral',
       subtitle: production.hasValue
-          ? 'Struktur referal tim TapGo'
-          : 'Struktur referal tim TapGo 10 level',
+          ? 'Daftar referral TapGo'
+          : 'Daftar referral TapGo 10 tingkat',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -88,7 +96,7 @@ class _ReferralTreeScreenState extends ConsumerState<ReferralTreeScreen> {
               icon: Icons.account_tree_rounded,
               title: 'Belum ada referral',
               subtitle:
-                  'Mitra akan muncul setelah member memakai kode referral.',
+                  'Anggota akan muncul setelah member memakai kode referral.',
             ),
           ],
         ],
@@ -147,17 +155,26 @@ class _ReferralTreeSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Gradient sama dengan _WalletCard di Beranda (dashboard_screen.dart) —
+    // "Referal Tim" sebelumnya satu-satunya kartu ringkasan bergaya form
+    // datar di antara kartu-kartu premium lain di app; disamakan di sini
+    // supaya terasa satu bahasa visual. _MiniMetric memang didesain untuk
+    // duduk di atas gradient gelap (lihat pemakaian yang sama di _WalletCard).
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        gradient: const LinearGradient(
+          colors: [Color(0xFF041B33), Color(0xFF0758C9), Color(0xFF0B7BF7)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(24),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Color(0x10000000),
-            blurRadius: 18,
-            offset: Offset(0, 8),
+            color: _brandBlue.withValues(alpha: 0.28),
+            blurRadius: 24,
+            offset: const Offset(0, 14),
           ),
         ],
       ),
@@ -165,16 +182,46 @@ class _ReferralTreeSummary extends StatelessWidget {
         children: [
           Row(
             children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+                ),
+                child: const Icon(
+                  Icons.account_tree_rounded,
+                  color: Colors.white,
+                  size: 21,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Daftar Referral Saya',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
               Expanded(
                 child: _MiniMetric(
-                  label: 'Direct Sponsor',
+                  label: 'Referral Langsung',
                   value: '${session.directSponsor}',
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: _MiniMetric(
-                  label: 'Total Mitra',
+                  label: 'Total Referral',
                   value: '${session.downline}',
                 ),
               ),
@@ -185,7 +232,7 @@ class _ReferralTreeSummary extends StatelessWidget {
             children: [
               Expanded(
                 child: _MiniMetric(
-                  label: 'Level Aktif',
+                  label: 'Tingkat Aktif',
                   value: '${session.activeLevel}',
                 ),
               ),
@@ -219,6 +266,10 @@ class _ReferralFilterChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Chip belum terpilih memakai warna latar default Material 3
+    // (surfaceContainerLow), yang ikut gelap di mode gelap — label hardcode
+    // navy sebelumnya jadi teks gelap di atas chip gelap.
+    final colorScheme = Theme.of(context).colorScheme;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -233,7 +284,7 @@ class _ReferralFilterChips extends StatelessWidget {
                   labelStyle: TextStyle(
                     color: selected == filter
                         ? Colors.white
-                        : const Color(0xFF263241),
+                        : colorScheme.onSurface,
                     fontWeight: FontWeight.w800,
                   ),
                   onSelected: (_) => onSelected(filter),

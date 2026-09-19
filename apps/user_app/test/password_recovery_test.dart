@@ -51,7 +51,7 @@ void main() {
     testWidgets('mulai dari langkah identifier', (tester) async {
       await tester.pumpWidget(wrap(const PasswordRecoveryScreen()));
 
-      expect(find.text('Masukkan nomor HP atau email'), findsOneWidget);
+      expect(find.text('Masukkan email akun Anda'), findsOneWidget);
       expect(find.text('Kirim kode'), findsOneWidget);
       // Langkah lanjutan belum boleh muncul.
       expect(find.text('Verifikasi kode'), findsNothing);
@@ -66,9 +66,9 @@ void main() {
       await tester.tap(find.text('Kirim kode'));
       await tester.pump();
 
-      expect(find.text('Isi nomor HP atau email dulu.'), findsOneWidget);
+      expect(find.text('Isi email dulu.'), findsOneWidget);
       // Tetap di langkah pertama.
-      expect(find.text('Masukkan nomor HP atau email'), findsOneWidget);
+      expect(find.text('Masukkan email akun Anda'), findsOneWidget);
     });
 
     testWidgets('field kode hanya menerima 6 digit angka', (tester) async {

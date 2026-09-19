@@ -364,6 +364,17 @@ Future<void> _confirmAndLogout(BuildContext context, WidgetRef ref) async {
     return;
   }
 
+  // Cabut sesi di backend SELAGI access token masih terpasang — endpoint ini
+  // mengenali sesi mana yang dicabut dari klaim di dalam token itu sendiri.
+  // Best-effort: kegagalan jaringan tidak boleh mencegah pengguna keluar di
+  // perangkatnya sendiri, tapi kita tetap mencoba supaya refresh token yang
+  // mungkin sudah bocor tidak bisa dipakai lagi setelah pengguna logout.
+  try {
+    await _apiClient.logout();
+  } catch (error) {
+    _tapGoDebugLog('[TapGo Auth] server-side logout skipped: $error');
+  }
+
   _apiClient.setAccessToken(null);
   await _persistentStore.clearSession();
   ref.read(_demoSessionProvider.notifier).state = DemoClientSession.initial();
@@ -770,6 +781,44 @@ class _StatusSurface extends StatelessWidget {
   }
 }
 
+/// Ikon 48x48 untuk item menu Akun, tiga tingkat:
+/// 1. PNG isometrik premium (`PremiumTapGoIcon`) bila menu itu sudah punya asetnya.
+/// 2. Ilustrasi SVG bermerek yang sama dengan grid layanan Beranda, bila ada.
+/// 3. Ikon Material polos dalam kotak biru muda — satu-satunya jalan yang
+///    benar-benar generik, dipakai hanya bila menu itu belum punya aset sama sekali.
+Widget _menuTileIcon({required String title, required IconData fallbackIcon}) {
+  if (PremiumTapGoIcon.assetFor(title) != null) {
+    return PremiumTapGoIcon(
+      label: title,
+      fallbackIcon: fallbackIcon,
+      size: 48,
+      padding: 2,
+    );
+  }
+  final svgAsset = _TapGoServiceIllustration.assetFor(title);
+  if (svgAsset != null) {
+    // Aset tg-*.svg sudah berupa ilustrasi 3D lengkap dengan gradient/bayangan
+    // sendiri (dipakai apa adanya di grid Beranda) — sebelumnya kode ini
+    // membungkusnya dalam kotak biru pastel datar, membuatnya terlihat beda
+    // gaya dari ikon PNG "stiker" tetangganya (yang dirender tanpa kotak
+    // sama sekali). Dirender langsung di sini supaya konsisten.
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: SvgPicture.asset(svgAsset, fit: BoxFit.contain),
+    );
+  }
+  return Container(
+    width: 48,
+    height: 48,
+    decoration: BoxDecoration(
+      color: const Color(0xFFEAF7FF),
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Icon(fallbackIcon, color: _brandBlue),
+  );
+}
+
 class _DemoMenuTile extends StatelessWidget {
   const _DemoMenuTile({
     required this.icon,
@@ -801,22 +850,7 @@ class _DemoMenuTile extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                PremiumTapGoIcon.assetFor(title) != null
-                    ? PremiumTapGoIcon(
-                        label: title,
-                        fallbackIcon: icon,
-                        size: 48,
-                        padding: 2,
-                      )
-                    : Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEAF7FF),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Icon(icon, color: _brandBlue),
-                      ),
+                _menuTileIcon(title: title, fallbackIcon: icon),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(

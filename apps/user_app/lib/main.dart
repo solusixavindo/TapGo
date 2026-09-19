@@ -16,6 +16,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:socket_io_client/socket_io_client.dart' as io_client;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'demo/client_flow_models.dart';
@@ -23,6 +24,7 @@ import 'features/ppob/application/ppob_providers.dart';
 import 'features/ppob/data/ppob_demo_repository.dart';
 import 'features/ppob/data/ppob_repository.dart';
 import 'features/ppob/domain/ppob_models.dart';
+import 'features/ppob/presentation/ppob_category_screen.dart';
 import 'features/ppob/presentation/ppob_home_screen.dart';
 
 part 'data/demo_membership_data.dart';
@@ -47,11 +49,13 @@ part 'screens/membership_screen.dart';
 part 'screens/password_recovery_screen.dart';
 part 'screens/payment_demo_screen.dart';
 part 'screens/referral_tree_screen.dart';
+part 'screens/ride_chat_screen.dart';
 part 'screens/ride_customer_screens.dart';
 part 'screens/ride_location_picker.dart';
 part 'screens/splash_screen.dart';
 part 'screens/success_screen.dart';
 part 'screens/verification_gate_screen.dart';
+part 'screens/wallet_transfer_screen.dart';
 part 'services/persistent_demo_store.dart';
 part 'services/ride_flow_controller.dart';
 part 'services/ride_location_port.dart';
@@ -218,6 +222,38 @@ void tapGoOpenPpobHome(BuildContext context) {
   );
 }
 
+/// Membuka satu kategori PPOB langsung (dipakai tile Super Menu — Pulsa,
+/// Paket Data, Token PLN, E-Wallet, BPJS, PDAM), bukan lewat grid PpobHomeScreen
+/// dulu. Kalau katalog belum termuat atau kode kategori tidak ditemukan
+/// (mis. backend belum menyediakannya), jatuh ke PpobHomeScreen supaya
+/// pengguna tetap sampai ke sesuatu yang berguna, bukan macet di tempat.
+Future<void> tapGoOpenPpobCategory(
+  BuildContext context,
+  String categoryCode,
+) async {
+  final navigator = Navigator.of(context);
+  final container = ProviderScope.containerOf(context, listen: false);
+  List<PpobCategory> categories;
+  try {
+    categories = await container.read(ppobCatalogProvider.future);
+  } catch (_) {
+    categories = const [];
+  }
+  PpobCategory? category;
+  for (final candidate in categories) {
+    if (candidate.code == categoryCode) {
+      category = candidate;
+      break;
+    }
+  }
+  if (!context.mounted) return;
+  navigator.push(
+    category != null
+        ? _tapGoPageRoute((_) => PpobCategoryScreen(category: category!))
+        : _tapGoPageRoute((_) => const PpobHomeScreen()),
+  );
+}
+
 bool get _isPaymentSimulatorEnabled =>
     tapGoEnablePaymentSimulatorForTests ||
     _isTapGoDevelopmentBuild ||
@@ -322,6 +358,8 @@ const _tapgoApiEndpoints = [
   _TapGoEndpointCatalog.bankAccountUpdate,
   _TapGoEndpointCatalog.withdrawalRequest,
   _TapGoEndpointCatalog.withdrawalHistory,
+  _TapGoEndpointCatalog.walletTransferRequest,
+  _TapGoEndpointCatalog.walletTransferHistory,
   _TapGoEndpointCatalog.accountDeleteRequest,
   _TapGoEndpointCatalog.contactMessage,
   _TapGoEndpointCatalog.memberIdentity,

@@ -19,8 +19,8 @@ Future<Set<String>> renderDashboard(
   bool fixture = false,
 }) async {
   tapGoDisablePersistenceForTests = true;
-  tapGoDashboardVisualFixtureEnabled = fixture;
-  addTearDown(() => tapGoDashboardVisualFixtureEnabled = false);
+  tapGoDashboardVisualFixtureEnabledForTests = fixture;
+  addTearDown(() => tapGoDashboardVisualFixtureEnabledForTests = false);
 
   final overflows = <String>{};
   final previousHandler = FlutterError.onError;
@@ -221,62 +221,74 @@ void main() {
     });
   }, skip: tapGoIsPlayDistribution ? null : 'khusus TAPGO_DISTRIBUTION=play');
 
-  group('kartu status membership duplikat sudah dihapus', () {
-    testWidgets('card kuning tidak ditemukan pada dashboard', (tester) async {
-      await renderDashboard(tester, width: 360, height: 800, fixture: true);
-      // Kartu kuning dirender oleh _MarketingPlanCard; pada distribusi Play
-      // widget itu tidak lagi dipasang.
-      expect(find.byType(OutlinedButton), findsNothing);
-      expect(find.text('Detail Basic'), findsNothing);
-      expect(find.text('Benefit'), findsNothing);
-      expect(find.text('Status akun Basic aktif'), findsNothing);
-    });
-
-    testWidgets('teks "Paket aktif:" tidak ditemukan', (tester) async {
-      await renderDashboard(tester, width: 360, height: 800, fixture: true);
-      expect(find.textContaining('Paket aktif:'), findsNothing);
-    });
-
-    testWidgets('card Membership biru tetap ada', (tester) async {
-      await renderDashboard(tester, width: 360, height: 800, fixture: true);
-      expect(find.text('Membership'), findsOneWidget);
-      expect(find.text('Basic'), findsWidgets);
-      expect(find.text('Klik untuk detail'), findsOneWidget);
-    });
-
-    testWidgets('tap card Membership biru membuka detail membership', (
+  group('kartu saldo PPOB menggantikan kartu Paket aktif pada Play', () {
+    testWidgets('kartu saldo PPOB tampil, kartu Paket aktif sudah hilang', (
       tester,
     ) async {
       await renderDashboard(tester, width: 360, height: 800, fixture: true);
-      // Pada viewport nyata kartu bisa berada di bawah lipatan atau tertutup
-      // bottom navigation, jadi digulir dulu seperti pengguna.
-      await tester.ensureVisible(find.text('Klik untuk detail'));
-      for (var index = 0; index < 8; index += 1) {
-        await tester.pump(const Duration(milliseconds: 80));
-      }
-      await tester.tap(find.text('Klik untuk detail'));
-      for (var index = 0; index < 14; index += 1) {
-        await tester.pump(const Duration(milliseconds: 80));
-      }
-      expect(find.byType(MembershipScreen), findsOneWidget);
+      // Permintaan Owner: kartu "Paket aktif: Basic" dihapus dari Beranda
+      // Play (Akun sudah menampilkan tier & status, kartu ini cuma
+      // mengulanginya) dan digantikan kartu saldo PPOB yang lebih berguna.
+      expect(find.text('Saldo PPOB'), findsOneWidget);
+      expect(find.text('Buka PPOB'), findsOneWidget);
+      expect(find.textContaining('Paket aktif:'), findsNothing);
+      expect(find.text('Detail Basic'), findsNothing);
+      // Baris Referral/Mitra tetap TIDAK boleh muncul pada Play.
+      expect(find.text('Referral Saya'), findsNothing);
+      expect(find.text('Mitra Saya'), findsNothing);
     });
+
+    testWidgets('card Membership biru sudah dihapus dari Beranda', (
+      tester,
+    ) async {
+      await renderDashboard(tester, width: 360, height: 800, fixture: true);
+      // Akun (_AccountHero) sudah menampilkan tier & status; kartu ini dulu
+      // mengulang info yang sama di Beranda, jadi dihapus atas permintaan
+      // Owner. Kartu wallet TapGoPay menempati slot yang sama sekarang.
+      expect(find.text('Klik untuk detail'), findsNothing);
+      expect(find.text('Klik untuk riwayat'), findsOneWidget);
+      expect(find.text('TapGoPay'), findsOneWidget);
+    });
+
+    testWidgets(
+      'tap card wallet membuka DemoWalletScreen, yang redirect ke membership pada Play',
+      (tester) async {
+        await renderDashboard(tester, width: 360, height: 800, fixture: true);
+        // Pada viewport nyata kartu bisa berada di bawah lipatan atau tertutup
+        // bottom navigation, jadi digulir dulu seperti pengguna.
+        await tester.ensureVisible(find.text('Klik untuk riwayat'));
+        for (var index = 0; index < 8; index += 1) {
+          await tester.pump(const Duration(milliseconds: 80));
+        }
+        await tester.tap(find.text('Klik untuk riwayat'));
+        for (var index = 0; index < 14; index += 1) {
+          await tester.pump(const Duration(milliseconds: 80));
+        }
+        // DemoWalletScreen redirect ke MembershipScreen pada distribusi Play
+        // (tidak ada layar wallet terpisah di sana) — perilaku ini sudah ada
+        // sebelum kartu Membership dihapus dari Beranda, bukan regresi baru.
+        expect(find.byType(MembershipScreen), findsOneWidget);
+      },
+    );
 
     testWidgets('status Basic pada header akun tetap tampil', (tester) async {
       await renderDashboard(tester, width: 360, height: 800, fixture: true);
-      // Chip Basic pada header, di luar kartu Membership.
+      // Chip Basic pada header, tidak lagi bergantung pada kartu Membership.
       expect(find.text('Basic'), findsWidgets);
       expect(find.textContaining('Halo,'), findsOneWidget);
     });
 
-    testWidgets('tidak ada ruang kosong menggantikan card yang dihapus', (
+    testWidgets('tidak ada ruang kosong berlebih menuju grid layanan', (
       tester,
     ) async {
       await renderDashboard(tester, width: 360, height: 800, fixture: true);
-      // Kartu Membership langsung diikuti grid layanan.
-      final walletBottom = tester.getRect(find.byType(GridView)).top;
-      final membershipBottom =
-          tester.getRect(find.text('Klik untuk detail')).bottom;
-      final gap = walletBottom - membershipBottom;
+      // Kartu saldo PPOB (_PpobBalanceCard, tombol "Buka PPOB" adalah elemen
+      // terakhirnya) sekarang langsung diikuti grid layanan — jaraknya hanya
+      // SizedBox(height: 22) di dashboard_screen.dart, jadi seharusnya jauh
+      // lebih kecil daripada tinggi satu kartu penuh.
+      final gridTop = tester.getRect(find.byType(GridView)).top;
+      final cardBottom = tester.getRect(find.text('Buka PPOB')).bottom;
+      final gap = gridTop - cardBottom;
       expect(
         gap,
         lessThan(140),
@@ -364,8 +376,8 @@ void main() {
         fixture: true,
       );
       expect(overflows, isEmpty);
-      expect(find.text('Membership'), findsOneWidget);
-      expect(find.textContaining('Paket aktif:'), findsNothing);
+      expect(find.text('TapGoPay'), findsOneWidget);
+      expect(find.text('Saldo PPOB'), findsOneWidget);
     });
   }, skip: tapGoIsPlayDistribution ? null : 'khusus TAPGO_DISTRIBUTION=play');
 }

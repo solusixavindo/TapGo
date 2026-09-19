@@ -28,7 +28,15 @@ class _TapGoPersistentStore {
     }
   }
 
-  static const _storageWriteTimeout = Duration(milliseconds: 900);
+  // 900ms sebelumnya terlalu ketat: penulisan pertama ke
+  // FlutterSecureStorage/EncryptedSharedPreferences di Android memicu
+  // inisialisasi kunci Keystore, yang pada perangkat fisik nyata (bukan
+  // emulator) sering memakan waktu lebih dari 900ms. Saat itu terjadi,
+  // _safeWrite diam-diam melaporkan gagal, login tetap terlihat berhasil di
+  // UI (aktivasi sesi tidak menunggu hasil persist), tapi token tidak pernah
+  // benar-benar tersimpan — sehingga sesi hilang begitu aplikasi ditutup dan
+  // dibuka lagi, padahal pengguna tidak pernah logout.
+  static const _storageWriteTimeout = Duration(seconds: 3);
 
   Future<bool> saveAuth(bool value) async {
     if (tapGoDisablePersistenceForTests) {
@@ -250,31 +258,52 @@ class _TapGoPersistentStore {
   Future<String?> _safeRead(String key) async {
     try {
       return await _storage.read(key: key);
-    } catch (_) {
+    } catch (error) {
+      // Kunci yang memang belum pernah ditulis mengembalikan null TANPA
+      // melempar exception — cabang ini hanya kena saat baca sungguhan
+      // gagal (mis. Android Keystore ter-invalidasi). Dicatat supaya
+      // "belum pernah login" tidak tercampur diam-diam dengan "gagal baca
+      // storage" saat menelusuri laporan sesi yang hilang.
+      _tapGoDebugLog('[TapGo Storage] read failed for $key: $error');
       return null;
     }
   }
 
+  // Baca sudah dapat retry (_restoreLocalStateWithRetry) dari laporan
+  // "sesi hilang setelah force-stop" sebelumnya, tapi tulis masih satu kali
+  // percobaan saja. Celah yang sama bisa terjadi di sisi tulis: penulisan
+  // PERTAMA ke Keystore/EncryptedSharedPreferences memicu inisialisasi kunci
+  // yang di sebagian perangkat nyata bisa melewati 3 detik, membuat login
+  // terlihat berhasil di UI padahal token tidak pernah benar-benar tersimpan.
+  // Dicoba dua kali sebelum benar-benar menyerah, sama seperti pola baca.
   Future<bool> _safeWrite(String key, String value) async {
-    try {
-      await _storage
-          .write(key: key, value: value)
-          .timeout(_storageWriteTimeout);
-      return true;
-    } catch (error) {
-      _tapGoDebugLog('[TapGo Storage] write skipped for $key: $error');
-      return false;
+    for (var attempt = 1; attempt <= 2; attempt++) {
+      try {
+        await _storage
+            .write(key: key, value: value)
+            .timeout(_storageWriteTimeout);
+        return true;
+      } catch (error) {
+        _tapGoDebugLog(
+          '[TapGo Storage] write attempt $attempt/2 failed for $key: $error',
+        );
+      }
     }
+    return false;
   }
 
   Future<bool> _safeDelete(String key) async {
-    try {
-      await _storage.delete(key: key).timeout(_storageWriteTimeout);
-      return true;
-    } catch (error) {
-      _tapGoDebugLog('[TapGo Storage] delete skipped for $key: $error');
-      return false;
+    for (var attempt = 1; attempt <= 2; attempt++) {
+      try {
+        await _storage.delete(key: key).timeout(_storageWriteTimeout);
+        return true;
+      } catch (error) {
+        _tapGoDebugLog(
+          '[TapGo Storage] delete attempt $attempt/2 failed for $key: $error',
+        );
+      }
     }
+    return false;
   }
 
   bool _hasPaidMembership(DemoClientSession session) {
@@ -295,6 +324,32 @@ class _TapGoPersistentStore {
     }
     return keys.toSet().toList();
   }
+}
+
+/// Baca satu operasi storage lokal dengan jeda longgar + percobaan ulang.
+///
+/// Dipakai HANYA untuk baca sesi saat cold start (_SessionBootstrap._restore)
+/// — bukan penggantian umum untuk timeout lain di aplikasi. Pada percobaan
+/// pertama timeout, DICOBA LAGI sekali dengan jeda yang sama alih-alih
+/// langsung menyerah ke [fallback]; [fallback] hanya dipakai setelah KEDUA
+/// percobaan gagal, supaya isolate yang sedang sibuk saat cold start (bukan
+/// storage yang benar-benar rusak/kosong) tidak disalahartikan sebagai
+/// "belum pernah login".
+Future<T> _restoreLocalStateWithRetry<T>(
+  Future<T> Function() read,
+  T fallback,
+) async {
+  const timeout = Duration(seconds: 6);
+  for (var attempt = 1; attempt <= 2; attempt++) {
+    try {
+      return await read().timeout(timeout);
+    } on TimeoutException {
+      _tapGoDebugLog(
+        '[TapGo Startup] local storage read timed out (attempt $attempt/2).',
+      );
+    }
+  }
+  return fallback;
 }
 
 class _SessionBootstrap extends ConsumerStatefulWidget {
@@ -331,18 +386,30 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
     var auth = false;
     DemoClientSession? restoredSession;
     try {
-      final storedAuth = await _persistentStore.restoreAuth().timeout(
-            const Duration(seconds: 2),
-            onTimeout: () => false,
-          );
-      final session = await _persistentStore.restoreSession().timeout(
-            const Duration(seconds: 2),
-            onTimeout: () => null,
-          );
-      final tokens = await _persistentStore.restoreTokens().timeout(
-            const Duration(seconds: 2),
-            onTimeout: () => (accessToken: null, refreshToken: null),
-          );
+      // Baca storage lokal dengan percobaan ulang + jeda longgar, BUKAN
+      // fallback diam-diam ke "kosong" pada timeout 2 detik yang lama.
+      // Ditemukan lewat reproduksi nyata (login -> force-stop -> buka
+      // ulang): pada cold start yang berat (plugin native lain — Geolocator,
+      // Firebase, dsb. — ikut berebut inisialisasi di frame yang sama),
+      // isolate Dart bisa belum sempat menuntaskan Future baca
+      // EncryptedSharedPreferences dalam 2 detik BUKAN karena datanya
+      // kosong, melainkan karena isolate sedang sibuk. onTimeout lama
+      // (kembalikan kosong) membuat "baca terlambat" tidak bisa dibedakan
+      // dari "memang belum pernah login", lalu cabang di bawah menghapus
+      // sesi yang SEBENARNYA MASIH VALID (dibuktikan: file storage terenkripsi
+      // masih utuh persis sebelum baca ini, lalu terhapus tepat sesudahnya).
+      final storedAuth = await _restoreLocalStateWithRetry(
+        _persistentStore.restoreAuth,
+        false,
+      );
+      final session = await _restoreLocalStateWithRetry(
+        _persistentStore.restoreSession,
+        null,
+      );
+      var tokens = await _restoreLocalStateWithRetry(
+        _persistentStore.restoreTokens,
+        (accessToken: null, refreshToken: null),
+      );
       if (!mounted) {
         return;
       }
@@ -350,12 +417,46 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
       restoredSession = session;
       if (_isTapGoProductionBuild &&
           (tokens.accessToken == null || tokens.accessToken!.isEmpty)) {
-        auth = false;
-        restoredSession = null;
-        await _persistentStore.clearSession().timeout(
-              const Duration(seconds: 2),
-              onTimeout: () {},
+        // Access token hilang bukan otomatis berarti "belum pernah login" —
+        // bisa juga gagal baca storage sesaat (timeout/Keystore) sementara
+        // refresh token masih sah. Coba tukar dulu sebelum benar-benar
+        // menghapus sesi, supaya kegagalan baca sesaat tidak memaksa login
+        // ulang padahal sesi sebenarnya masih valid.
+        var recoveredWithoutAccessToken = false;
+        final refreshToken = tokens.refreshToken;
+        if (refreshToken != null && refreshToken.isNotEmpty) {
+          try {
+            final (refreshResult, refreshed) =
+                await _apiClient.refreshSession(refreshToken);
+            if (refreshResult == TapGoSessionRefreshResult.refreshed &&
+                refreshed != null) {
+              await _persistentStore.saveTokens(
+                accessToken: refreshed.accessToken,
+                refreshToken: refreshed.refreshToken,
+              );
+              tokens = (
+                accessToken: refreshed.accessToken,
+                refreshToken: refreshed.refreshToken,
+              );
+              recoveredWithoutAccessToken = true;
+              _tapGoDebugLog(
+                '[TapGo Auth] session recovered via refresh (access token was missing).',
+              );
+            }
+          } catch (refreshError) {
+            _tapGoDebugLog(
+              '[TapGo Auth] refresh without access token failed: $refreshError',
             );
+          }
+        }
+        if (!recoveredWithoutAccessToken) {
+          auth = false;
+          restoredSession = null;
+          await _persistentStore.clearSession().timeout(
+                const Duration(seconds: 2),
+                onTimeout: () {},
+              );
+        }
       }
       if (tokens.accessToken != null && tokens.accessToken!.isNotEmpty) {
         _apiClient.setAccessToken(tokens.accessToken);
@@ -520,6 +621,8 @@ bool _isAuthRejection(Object error) {
   return false;
 }
 
+@visibleForTesting
+bool tapGoIsAuthRejectionForTests(Object error) => _isAuthRejection(error);
 
 @visibleForTesting
 Map<String, dynamic> tapGoSessionToJsonForTests(DemoClientSession session) =>

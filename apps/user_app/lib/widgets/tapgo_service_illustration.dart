@@ -27,7 +27,7 @@ class _TapGoServiceIllustration extends StatelessWidget {
     'Referral Saya': '$_basePath/tg-referral.svg',
     'Membership': '$_basePath/tg-membership.svg',
     'Membership Saya': '$_basePath/tg-membership.svg',
-    'Marketing Plan': '$_basePath/tg-membership.svg',
+    'Program Referral': '$_basePath/tg-membership.svg',
     'Reward': '$_basePath/tg-reward.svg',
     'Bonus': '$_basePath/tg-bonus.svg',
     'Bonus hari ini': '$_basePath/tg-bonus.svg',
@@ -38,6 +38,18 @@ class _TapGoServiceIllustration extends StatelessWidget {
     'Pulsa': '$_basePath/tg-pulsa.svg',
     'Tagihan': '$_basePath/tg-tagihan.svg',
     'BPJS': '$_basePath/tg-bpjs.svg',
+    // 4 tile PPOB Super Menu berikut sebelumnya jatuh ke Icon Material
+    // generik (tier 3) karena belum ada aset 3D — mencolok beda gaya dari
+    // 'Pulsa'/'BPJS' di sebelahnya (laporan Owner: "ikon tidak konsisten").
+    // 'Paket Data'/'Token PLN'/'PDAM' memakai ilustrasi baru bergaya sama
+    // (viewBox 96x96, gradien linear, ellipse bayangan) dengan palet warna
+    // yang sudah dipakai ilustrasi lain di folder ini. 'E-Wallet' memakai
+    // ulang tg-wallet.svg — padanan konsep yang sudah ada, sama seperti
+    // 'Rekening Bank'/'Wallet & Withdraw' di bawah.
+    'Paket Data': '$_basePath/tg-paket-data.svg',
+    'Token PLN': '$_basePath/tg-token-pln.svg',
+    'E-Wallet': '$_basePath/tg-wallet.svg',
+    'PDAM': '$_basePath/tg-pdam.svg',
     'Merchant': '$_basePath/tg-merchant.svg',
     'TapGo Food': '$_basePath/tg-merchant.svg',
     'TapGo Mart': '$_basePath/tg-marketplace.svg',
@@ -66,6 +78,21 @@ class _TapGoServiceIllustration extends StatelessWidget {
     'Chat': '$_basePath/tg-chat.svg',
     'Profile': '$_basePath/tg-profile.svg',
     'Akun': '$_basePath/tg-profile.svg',
+    // Menu 'Daftar Referral' di Akun (Stage R2.10) memakai aset yang sama dengan
+    // grid Beranda: belum ada aset PNG isometrik terpisah untuk menu Akun
+    // (lihat PremiumTapGoIconAction), jadi menu ini sengaja jatuh ke tingkat
+    // kedua _DemoMenuTile (SVG) alih-alih fallback Icon Material generik.
+    'Daftar Referral': '$_basePath/tg-referral.svg',
+    // 'Rekening Bank' juga belum punya aset PNG isometrik khusus. tg-wallet
+    // (ikon dompet/uang 3D) adalah padanan konsep terdekat yang sudah ada —
+    // sama seperti 'Daftar Referral' di atas, lebih baik memakai ilustrasi 3D
+    // yang konsisten gaya-nya daripada Icon Material generik.
+    'Rekening Bank': '$_basePath/tg-wallet.svg',
+    // 'Wallet & Withdraw' sebelumnya tidak terdaftar sama sekali di sini,
+    // sehingga jatuh ke Icon Material generik (account_balance_wallet_rounded
+    // polos) — mencolok beda gaya dari tile Akun lainnya yang semua pakai
+    // ilustrasi 3D. Konsepnya sama dengan 'Rekening Bank'/'Wallet' di atas.
+    'Wallet & Withdraw': '$_basePath/tg-wallet.svg',
   };
 
   static String? assetFor(String label) => _assets[label];

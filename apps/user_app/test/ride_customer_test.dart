@@ -450,7 +450,7 @@ void main() {
                     const Duration(minutes: 1),
                   ),
             ),
-            orderRequest: ({required quoteId, idempotencyKey}) async {
+            orderRequest: ({required quoteId, idempotencyKey, pickupNote}) async {
               orderCalls += 1;
               return orderPayload();
             },
@@ -533,7 +533,7 @@ void main() {
               required dropoff,
             }) async =>
                 quotePayload(),
-            orderRequest: ({required quoteId, idempotencyKey}) {
+            orderRequest: ({required quoteId, idempotencyKey, pickupNote}) {
               orderCalls += 1;
               return gate.future;
             },
@@ -577,7 +577,7 @@ void main() {
               required dropoff,
             }) async =>
                 quotePayload(),
-            orderRequest: ({required quoteId, idempotencyKey}) async {
+            orderRequest: ({required quoteId, idempotencyKey, pickupNote}) async {
               keys.add(idempotencyKey);
               attempt += 1;
               if (attempt == 1) {

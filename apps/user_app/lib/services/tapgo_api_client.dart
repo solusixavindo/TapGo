@@ -34,11 +34,77 @@ class _TapGoApiClient {
         },
       ),
     );
+    // Sebelumnya, refresh-otomatis saat access token kedaluwarsa (~15 mnt)
+    // hanya ditambal ad-hoc di beberapa layar (alur ride, snapshot beranda),
+    // sedangkan PPOB sama sekali tidak punya jalur ini — begitu token
+    // kedaluwarsa saat pengguna sedang mengisi pulsa, error mentah dari
+    // server ("Sesi Anda sudah berakhir...") langsung tampil tanpa dicoba
+    // refresh dulu. Interceptor ini menutup celahnya SEKALI di satu tempat
+    // untuk SEMUA permintaan, bukan menambal per-layar.
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onError: (error, handler) async {
+          final response = error.response;
+          final data = response?.data;
+          final code = data is Map ? data['code'] : null;
+          final alreadyRetried =
+              error.requestOptions.extra['tapgoTokenRetried'] == true;
+          final isRefreshCall =
+              error.requestOptions.path.contains('auth/refresh');
+          if (response?.statusCode != 401 ||
+              code != 'AUTH_TOKEN_EXPIRED' ||
+              alreadyRetried ||
+              isRefreshCall) {
+            return handler.next(error);
+          }
+          final tokens = await _persistentStore.restoreTokens();
+          final refreshToken = tokens.refreshToken;
+          if (refreshToken == null || refreshToken.isEmpty) {
+            return handler.next(error);
+          }
+          final (result, refreshed) = await refreshSession(refreshToken);
+          if (result != TapGoSessionRefreshResult.refreshed ||
+              refreshed == null) {
+            return handler.next(error);
+          }
+          setAccessToken(refreshed.accessToken);
+          await _persistentStore.saveTokens(
+            accessToken: refreshed.accessToken,
+            refreshToken: refreshed.refreshToken,
+          );
+          _tapGoDebugLog(
+            '[TapGo Auth] access token auto-refreshed after 401; retrying request.',
+          );
+          final retryOptions = error.requestOptions;
+          retryOptions.headers['Authorization'] = 'Bearer ${refreshed.accessToken}';
+          retryOptions.extra['tapgoTokenRetried'] = true;
+          try {
+            final retryResponse = await _dio.fetch(retryOptions);
+            return handler.resolve(retryResponse);
+          } on DioException catch (retryError) {
+            return handler.next(retryError);
+          }
+        },
+      ),
+    );
   }
 
   final Dio _dio;
   final _TapGoDeviceContextStore _deviceContextStore;
   String baseUrl;
+
+  // Beberapa layar (bootstrap sesi, snapshot produksi, alur ride) bisa
+  // memicu refresh token secara bersamaan saat access token kedaluwarsa.
+  // Refresh token bersifat sekali pakai (dirotasi di server) — dua request
+  // refresh yang berbarengan akan saling menjatuhkan satu sama lain kalau
+  // masing-masing mengirim token yang sama secara terpisah. Field ini
+  // membuat semua pemanggil bersamaan MENUNGGU dan BERBAGI satu hasil
+  // refresh yang sama, bukan masing-masing menembak request sendiri.
+  Future<
+      (
+        TapGoSessionRefreshResult,
+        ({String accessToken, String refreshToken})?,
+      )>? _inFlightRefresh;
 
   String get rootUrl => _rootUrlFromApiBaseUrl(baseUrl);
 
@@ -67,10 +133,29 @@ class _TapGoApiClient {
       (
         TapGoSessionRefreshResult,
         ({String accessToken, String refreshToken})?,
-      )> refreshSession(String refreshToken) async {
+      )> refreshSession(String refreshToken) {
     if (refreshToken.isEmpty) {
-      return (TapGoSessionRefreshResult.rejected, null);
+      return Future.value((TapGoSessionRefreshResult.rejected, null));
     }
+    final existing = _inFlightRefresh;
+    if (existing != null) {
+      return existing;
+    }
+    final future = _performRefreshSession(refreshToken);
+    _inFlightRefresh = future;
+    future.whenComplete(() {
+      if (identical(_inFlightRefresh, future)) {
+        _inFlightRefresh = null;
+      }
+    });
+    return future;
+  }
+
+  Future<
+      (
+        TapGoSessionRefreshResult,
+        ({String accessToken, String refreshToken})?,
+      )> _performRefreshSession(String refreshToken) async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
         _apiPath('auth/refresh'),
@@ -249,11 +334,17 @@ class _TapGoApiClient {
   Future<Map<String, dynamic>> createRideOrder({
     required String quoteId,
     String? idempotencyKey,
+    String? pickupNote,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       _apiPath('rides'),
       // CASH sesuai kontrak tahap ini. DIGITAL tidak pernah dikirim.
-      data: {'quoteId': quoteId, 'paymentMethod': 'CASH'},
+      data: {
+        'quoteId': quoteId,
+        'paymentMethod': 'CASH',
+        if (pickupNote != null && pickupNote.isNotEmpty)
+          'pickupNote': pickupNote,
+      },
       options: idempotencyKey == null
           ? null
           : Options(headers: {'Idempotency-Key': idempotencyKey}),
@@ -420,6 +511,14 @@ class _TapGoApiClient {
     return _TapGoAuthUser.fromMap(_unwrap(response.data));
   }
 
+  /// Mencabut sesi (refresh token) saat ini di backend. Wajib dipanggil
+  /// SEBELUM access token lokal dihapus — endpoint ini mengidentifikasi sesi
+  /// mana yang dicabut lewat klaim di dalam access token yang sedang
+  /// dikirim, bukan dari body request.
+  Future<void> logout() async {
+    await _dio.post<void>(_apiPath('auth/logout'));
+  }
+
   /// Mengganti password akun yang sedang masuk. Backend menjawab 204 tanpa
   /// badan dan mencabut SEMUA sesi — termasuk sesi pemanggil — sehingga
   /// pemanggil wajib membersihkan sesi lokal segera setelah sukses.
@@ -527,7 +626,7 @@ class _TapGoApiClient {
         () => get('/referrals/summary'),
       ),
       _productionSnapshotPart(
-        'referal tim',
+        'daftar referral',
         () => get(
           '/referrals/downlines',
           query: {'maxLevel': 10, 'page': 1, 'pageSize': 100},
@@ -1129,7 +1228,12 @@ class _TapGoProductionSnapshot {
           packageData?['name']?.toString() ??
           'Basic',
     );
-    final ppobBalance = _intFrom(packageData?['ppobBalance']);
+    // Saldo PPOB nyata ada di wallet (termasuk bonus registrasi). Field
+    // packageData['ppobBalance'] hanyalah nominal manfaat paket (Basic = 0),
+    // sehingga sebelumnya beranda menampilkan Rp0 padahal wallet berisi saldo.
+    final ppobBalance = wallet.containsKey('ppobBalance')
+        ? _intFrom(wallet['ppobBalance'])
+        : _intFrom(packageData?['ppobBalance']);
     final todayBonus = _todayBonusFrom(commissionItems);
     final founderRole = (membershipData?['founderRole'] ??
             membershipMetadata?['founderRole'] ??
@@ -1784,9 +1888,9 @@ String _labelFromType(String type) {
     'REGISTRATION_BONUS' => 'Bonus Registrasi',
     'BASIC_REGISTER_BONUS' => 'Bonus Registrasi',
     'PPOB_BENEFIT' => 'Saldo PPOB',
-    'SPONSOR_BONUS' => 'Bonus Sponsor',
-    'BASIC_SPONSOR_BONUS' => 'Bonus Sponsor',
-    'LEVEL_BONUS' => 'Level Bonus',
+    'SPONSOR_BONUS' => 'Bonus Referral',
+    'BASIC_SPONSOR_BONUS' => 'Bonus Referral',
+    'LEVEL_BONUS' => 'Bonus Tingkat',
     'REWARD_BONUS' => 'Reward Bonus',
     'PROFIT_SHARING' => 'Profit Sharing',
     'WITHDRAWAL' => 'Withdraw',

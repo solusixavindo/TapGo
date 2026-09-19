@@ -501,11 +501,19 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   /// ulang atas permintaan yang sama, sehingga retry tidak menggandakan order.
   String? _orderIdempotencyKey;
 
+  final _pickupNoteController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     _service = widget.initialService;
     _port = widget.locationPort ?? tapGoRideLocationPort();
+  }
+
+  @override
+  void dispose() {
+    _pickupNoteController.dispose();
+    super.dispose();
   }
 
   bool get _providerReady => _port.status == RideLocationProviderStatus.ready;
@@ -607,11 +615,13 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         return;
       }
 
+      final pickupNote = _pickupNoteController.text.trim();
       final request = widget.orderRequest ?? _apiClient.createRideOrder;
       final data = await request(
         quoteId: quote.quoteId,
         // Kunci yang sama dipakai ulang bila pengguna mencoba lagi.
         idempotencyKey: _orderIdempotencyKey,
+        pickupNote: pickupNote.isEmpty ? null : pickupNote,
       );
       if (!mounted) {
         return;
@@ -682,6 +692,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                   title: 'Tujuan',
                   icon: Icons.flag_rounded,
                   selected: _dropoff,
+                  near: _pickup,
                   onSelected: (value) => setState(() {
                     _dropoff = value;
                     _quote = null;
@@ -723,50 +734,15 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
           child: Padding(
             padding: EdgeInsets.only(
                 right: kind == RideServiceKind.motorcycle ? 10 : 0),
-            child: InkWell(
-              onTap: _isBusy
-                  ? null
-                  : () => setState(() {
-                        _service = kind;
-                        _quote = null;
-                      }),
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                constraints: const BoxConstraints(minHeight: 56),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? _brandBlue.withValues(alpha: 0.10)
-                      : colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: selected ? _brandBlue : colorScheme.outlineVariant,
-                    width: selected ? 1.6 : 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(kind.icon,
-                        size: 22,
-                        color: selected
-                            ? _brandBlue
-                            : colorScheme.onSurfaceVariant),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        kind.displayName,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: selected ? _brandBlue : colorScheme.onSurface,
-                          fontSize: 14.5,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            child: _ServiceSelectorTile(
+              kind: kind,
+              selected: selected,
+              enabled: !_isBusy,
+              colorScheme: colorScheme,
+              onTap: () => setState(() {
+                _service = kind;
+                _quote = null;
+              }),
             ),
           ),
         );
@@ -780,6 +756,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     required IconData icon,
     required RideLocation? selected,
     required ValueChanged<RideLocation> onSelected,
+    RideLocation? near,
   }) {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -820,6 +797,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                       port: _port,
                       title: title,
                       initial: selected,
+                      near: near,
                     );
                     if (picked != null) onSelected(picked);
                   },
@@ -868,6 +846,93 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     );
   }
 
+  /// Pratinjau rute jalan asli (bukan garis lurus) dari geometri OSRM. Hanya
+  /// dirender saat backend benar-benar memakai provider OSRM (routePolyline
+  /// terisi) — saat provider LOCAL (garis-lurus) dipakai, kartu quote tetap
+  /// tampil normal tanpa peta ini, tidak ada state error.
+  Widget _routePreviewMap(
+    String encodedPolyline,
+    RideLocation pickup,
+    RideLocation dropoff,
+  ) {
+    final points = tapGoDecodePolyline(encodedPolyline);
+    if (points.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final bounds = LatLngBounds.fromPoints(points);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: SizedBox(
+        height: 160,
+        child: IgnorePointer(
+          child: FlutterMap(
+            options: MapOptions(
+              initialCameraFit: CameraFit.bounds(
+                bounds: bounds,
+                padding: const EdgeInsets.all(28),
+              ),
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.none,
+              ),
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.xavindo.tapgo',
+              ),
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: points,
+                    strokeWidth: 4,
+                    color: _brandBlue,
+                  ),
+                ],
+              ),
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: LatLng(pickup.lat, pickup.lng),
+                    width: 28,
+                    height: 28,
+                    child: const Icon(
+                      Icons.trip_origin_rounded,
+                      size: 20,
+                      color: Color(0xFF16A66A),
+                    ),
+                  ),
+                  Marker(
+                    point: LatLng(dropoff.lat, dropoff.lng),
+                    width: 28,
+                    height: 28,
+                    child: const Icon(
+                      Icons.location_on_rounded,
+                      size: 28,
+                      color: Color(0xFFEC3F54),
+                    ),
+                  ),
+                ],
+              ),
+              Align(
+                alignment: Alignment.bottomRight,
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Text(
+                    tapGoOsmAttribution,
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: Colors.black.withValues(alpha: 0.55),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _quoteCard(ColorScheme colorScheme, RideQuoteView quote) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -891,6 +956,13 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
             ),
           ),
           const SizedBox(height: 12),
+          if (quote.routePolyline != null &&
+              quote.routePolyline!.isNotEmpty &&
+              _pickup != null &&
+              _dropoff != null) ...[
+            _routePreviewMap(quote.routePolyline!, _pickup!, _dropoff!),
+            const SizedBox(height: 12),
+          ],
           RideDetailRow(label: 'Jenis layanan', value: _service.displayName),
           RideDetailRow(label: 'Jemput', value: _pickup?.label ?? '-'),
           RideDetailRow(label: 'Tujuan', value: _dropoff?.label ?? '-'),
@@ -940,12 +1012,118 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
             ),
           ],
           const SizedBox(height: 16),
+          TextField(
+            controller: _pickupNoteController,
+            maxLines: 2,
+            // Batas keras mengikuti validator backend, sehingga catatan
+            // panjang ditolak di sini alih-alih menjadi error 400.
+            maxLength: tapGoRidePickupNoteMaxLength,
+            decoration: const InputDecoration(
+              labelText: 'Catatan untuk lokasi jemput (opsional)',
+              hintText: 'Mis. di depan minimarket, bukan gang sebelah',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 4),
           RidePrimaryButton(
             label: 'Pesan Sekarang',
             isBusy: _isBusy,
             onPressed: quote.isExpired ? null : _confirmOrder,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Kartu pilihan armada (Motor/Mobil) dengan feedback tekan halus (scale
+/// 0.97x) dan shadow lembut bertinta warna brand saat terpilih — sebelumnya
+/// cuma InkWell polos + perubahan warna border, laporan Owner: tampilan
+/// kartu perlu dipoles.
+class _ServiceSelectorTile extends StatefulWidget {
+  const _ServiceSelectorTile({
+    required this.kind,
+    required this.selected,
+    required this.enabled,
+    required this.colorScheme,
+    required this.onTap,
+  });
+
+  final RideServiceKind kind;
+  final bool selected;
+  final bool enabled;
+  final ColorScheme colorScheme;
+  final VoidCallback onTap;
+
+  @override
+  State<_ServiceSelectorTile> createState() => _ServiceSelectorTileState();
+}
+
+class _ServiceSelectorTileState extends State<_ServiceSelectorTile> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed != value) {
+      setState(() => _pressed = value);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = widget.selected;
+    final colorScheme = widget.colorScheme;
+    return GestureDetector(
+      onTapDown: widget.enabled ? (_) => _setPressed(true) : null,
+      onTapCancel: widget.enabled ? () => _setPressed(false) : null,
+      onTapUp: widget.enabled ? (_) => _setPressed(false) : null,
+      onTap: widget.enabled ? widget.onTap : null,
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 56),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected
+                ? _brandBlue.withValues(alpha: 0.10)
+                : colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected ? _brandBlue : colorScheme.outlineVariant,
+              width: selected ? 1.6 : 1,
+            ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: _brandBlue.withValues(alpha: 0.18),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            children: [
+              Icon(widget.kind.icon,
+                  size: 22,
+                  color:
+                      selected ? _brandBlue : colorScheme.onSurfaceVariant),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  widget.kind.displayName,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: selected ? _brandBlue : colorScheme.onSurface,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1214,6 +1392,25 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
                   _searchingCard(colorScheme),
                 if (order.driver != null && order.vehicle != null) ...[
                   _driverCard(colorScheme, order.driver!, order.vehicle!),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _openDemo(
+                        context,
+                        RideChatScreen(rideReference: widget.reference),
+                      ),
+                      icon: const Icon(Icons.chat_bubble_outline_rounded),
+                      label: const Text('Chat dengan Driver'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _brandBlue,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 14),
                 ],
                 _tripCard(colorScheme, order),

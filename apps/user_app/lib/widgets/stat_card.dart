@@ -156,12 +156,16 @@ class _PlayStatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
       decoration: BoxDecoration(
-        color: emphasized ? const Color(0xFFFFF3D1) : const Color(0xFFEAF5FF),
+        color: emphasized
+            ? const Color(0xFFFFD166)
+            : Colors.white.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: emphasized ? const Color(0xFFFFD166) : const Color(0xFFBFE0FF),
+          color: emphasized
+              ? const Color(0xFFFFE9A8)
+              : Colors.white.withValues(alpha: 0.38),
         ),
       ),
       child: Text(
@@ -169,7 +173,7 @@ class _PlayStatusPill extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: emphasized ? const Color(0xFF7A5200) : _brandBlue,
+          color: emphasized ? const Color(0xFF5A3D00) : Colors.white,
           fontSize: 12,
           fontWeight: FontWeight.w900,
           decoration: TextDecoration.none,
@@ -187,25 +191,26 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-          ),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
-            style: const TextStyle(color: Color(0xFF718096), fontSize: 12),
+            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
           ),
           const SizedBox(height: 8),
           Text(
             value,
-            style: const TextStyle(
-              color: Color(0xFF0A2A43),
+            style: TextStyle(
+              color: colorScheme.onSurface,
               fontSize: 22,
               fontWeight: FontWeight.w900,
             ),
@@ -223,22 +228,22 @@ class _BonusBreakdownCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sponsor = _sumTransactions(transactions, ['sponsor']);
-    final level = _sumTransactions(transactions, ['level']);
+    final sponsor = _sumTransactions(transactions, ['sponsor', 'referral']);
+    final level = _sumTransactions(transactions, ['level', 'tingkat']);
     final reward = _sumTransactions(transactions, ['reward']);
     final profit = _sumTransactions(transactions, ['profit sharing']);
     return Column(
       children: [
         _WalletLedgerItem(
-          title: 'Total bonus sponsor',
+          title: 'Total bonus referral',
           amount: formatRupiah(sponsor),
-          note: sponsor > 0 ? 'Tercatat di wallet' : 'Belum ada bonus sponsor',
+          note: sponsor > 0 ? 'Tercatat di wallet' : 'Belum ada bonus referral',
           color: const Color(0xFF0877EE),
         ),
         _WalletLedgerItem(
-          title: 'Total bonus level',
+          title: 'Total bonus tingkat',
           amount: formatRupiah(level),
-          note: level > 0 ? 'Tercatat di wallet' : 'Belum ada bonus level',
+          note: level > 0 ? 'Tercatat di wallet' : 'Belum ada bonus tingkat',
           color: const Color(0xFF00A86B),
         ),
         _WalletLedgerItem(
@@ -411,17 +416,17 @@ class _MarketingRulesCard extends StatelessWidget {
   const _MarketingRulesCard();
 
   static const _rates = [
-    'Sponsor bonus: 8%',
-    'Level 1: 8%',
-    'Level 2: 4%',
-    'Level 3: 2%',
-    'Level 4: 2%',
-    'Level 5: 2%',
-    'Level 6: 1%',
-    'Level 7: 1%',
-    'Level 8: 1%',
-    'Level 9: 1%',
-    'Level 10: 1%',
+    'Bonus referral: 8%',
+    'Tingkat 1: 8%',
+    'Tingkat 2: 4%',
+    'Tingkat 3: 2%',
+    'Tingkat 4: 2%',
+    'Tingkat 5: 2%',
+    'Tingkat 6: 1%',
+    'Tingkat 7: 1%',
+    'Tingkat 8: 1%',
+    'Tingkat 9: 1%',
+    'Tingkat 10: 1%',
   ];
 
   @override
@@ -438,7 +443,7 @@ class _MarketingRulesCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Rumus Marketing Plan',
+            'Ketentuan Bonus Referral',
             style: TextStyle(
               color: Color(0xFF0A2A43),
               fontSize: 18,
@@ -452,11 +457,11 @@ class _MarketingRulesCard extends StatelessWidget {
             children: _rates.map((rate) => _BenefitChip(label: rate)).toList(),
           ),
           const SizedBox(height: 14),
-          const _PackageRow(label: '3 sponsor', value: 'Unlock sampai level 3'),
-          const _PackageRow(label: '5 sponsor', value: 'Unlock sampai level 5'),
+          const _PackageRow(label: '3 referral langsung', value: 'Buka sampai tingkat 3'),
+          const _PackageRow(label: '5 referral langsung', value: 'Buka sampai tingkat 5'),
           const _PackageRow(
-            label: '10 sponsor',
-            value: 'Unlock sampai level 10',
+            label: '10 referral langsung',
+            value: 'Buka sampai tingkat 10',
           ),
         ],
       ),
@@ -472,13 +477,17 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Dipakai langsung di atas latar Scaffold (bukan di dalam kartu putih),
+    // jadi warna teks harus ikut tema — sebelumnya navy/abu-abu hardcode di
+    // sini nyaris tak terbaca di atas Scaffold gelap.
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
-          style: const TextStyle(
-            color: Color(0xFF0A2A43),
+          style: TextStyle(
+            color: colorScheme.onSurface,
             fontSize: 26,
             fontWeight: FontWeight.w900,
           ),
@@ -486,8 +495,8 @@ class _SectionHeader extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           subtitle,
-          style: const TextStyle(
-            color: Color(0xFF718096),
+          style: TextStyle(
+            color: colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -598,83 +607,153 @@ class _ActivityTile extends StatelessWidget {
 }
 
 class _AccountHero extends StatelessWidget {
-  const _AccountHero({required this.session});
+  const _AccountHero({required this.session, this.avatarBytes});
 
   final DemoClientSession session;
+  final Uint8List? avatarBytes;
 
   @override
   Widget build(BuildContext context) {
     if (tapGoIsPlayDistribution) {
+      // Sengaja dibuat berbeda secara struktural dari kartu menu putih di
+      // bawahnya (bukan cuma beda warna) — sudut lebih besar, aksen emas
+      // brand TapGo, cincin bercahaya di sekitar avatar, dan sapuan cahaya
+      // berjalan (_ShineSweep) — supaya terasa seperti "kartu identitas",
+      // bukan salah satu baris menu. Owner sebelumnya menilai versi flat
+      // sebelumnya kurang menarik dan tidak cukup beda dari menu di bawahnya.
       return Container(
         key: const ValueKey('play_profile_header'),
         width: double.infinity,
-        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF061A2E), Color(0xFF0B3A6E), Color(0xFF0569E8)],
-          ),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: const Color(0x3322D3EE)),
+          borderRadius: BorderRadius.circular(28),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x330569E8),
-              blurRadius: 24,
-              offset: Offset(0, 12),
+              color: Color(0x400B3A6E),
+              blurRadius: 30,
+              offset: Offset(0, 16),
             ),
           ],
         ),
-        child: Row(
-          children: [
-            const PremiumTapGoIcon(
-              label: 'Profil',
-              fallbackIcon: Icons.person_rounded,
-              size: 64,
-              padding: 3,
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    session.userName,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 19,
-                      height: 1.12,
-                      fontWeight: FontWeight.w900,
-                      decoration: TextDecoration.none,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: Stack(
+            children: [
+              const Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFF061A2E),
+                        Color(0xFF0B3A6E),
+                        Color(0xFF0569E8),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  const Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _PlayStatusPill(label: 'Basic', emphasized: true),
-                      _PlayStatusPill(label: 'Aktif'),
-                    ],
-                  ),
-                ],
+                ),
               ),
-            ),
-          ],
+              const Positioned.fill(child: _ShineSweep()),
+              // Garis aksen emas tipis di tepi atas — menyatukan warna biru
+              // korporat dengan emas logo TapGo, sekaligus jadi pembeda
+              // visual instan dari kartu putih polos di bawahnya.
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: 4,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFFFFD166), Color(0xFFFFB000)],
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFFD166), Color(0xFFFFB000)],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFFB000).withValues(
+                              alpha: 0.45,
+                            ),
+                            blurRadius: 16,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                      child: ClipOval(
+                        child: avatarBytes != null
+                            ? Image.memory(
+                                avatarBytes!,
+                                width: 64,
+                                height: 64,
+                                fit: BoxFit.cover,
+                              )
+                            : const PremiumTapGoIcon(
+                                label: 'Profil',
+                                fallbackIcon: Icons.person_rounded,
+                                size: 64,
+                                padding: 3,
+                              ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            session.userName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              height: 1.12,
+                              fontWeight: FontWeight.w900,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                          const SizedBox(height: 9),
+                          const Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _PlayStatusPill(label: 'Basic', emphasized: true),
+                              _PlayStatusPill(label: 'Aktif'),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
 
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-          ),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
       child: Column(
         children: [
           ClipRRect(
@@ -689,8 +768,8 @@ class _AccountHero extends StatelessWidget {
           Text(
             session.userName,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFF0A2A43),
+            style: TextStyle(
+              color: colorScheme.onSurface,
               fontSize: 20,
               fontWeight: FontWeight.w900,
             ),
@@ -712,7 +791,7 @@ class _AccountHero extends StatelessWidget {
                 ? 'Paket aktif: ${session.activePackageName}'
                 : 'Paket aktif: ${session.activePackageName} • Kode ${session.referralCode}',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Color(0xFF718096)),
+            style: TextStyle(color: colorScheme.onSurfaceVariant),
           ),
           if (tapGoIsDirectDistribution) const SizedBox(height: 12),
           if (tapGoIsDirectDistribution)

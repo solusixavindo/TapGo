@@ -51,7 +51,19 @@ class _PpobCheckoutScreenState extends ConsumerState<PpobCheckoutScreen> {
   String get _normalizedTarget =>
       _targetController.text.replaceAll(RegExp(r'[\s-]+'), '').trim();
 
-  bool get _targetReady => _normalizedTarget.length >= 5;
+  bool get _targetReady {
+    final target = _normalizedTarget;
+    if (target.length < 5) {
+      return false;
+    }
+    final pattern = widget.product.targetPattern;
+    if (pattern == null) {
+      return true;
+    }
+    // Server tetap memvalidasi ulang (sumber kebenaran); ini murni menghindari
+    // round-trip inquiry yang sudah pasti akan ditolak dengan PPOB_TARGET_INVALID.
+    return RegExp(pattern).hasMatch(target);
+  }
 
   Future<void> _runInquiry() async {
     if (_isBusy || !_targetReady) {

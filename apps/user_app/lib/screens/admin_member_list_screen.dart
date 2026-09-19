@@ -37,7 +37,7 @@ class _AdminMemberListScreenState extends ConsumerState<AdminMemberListScreen> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const _SearchBox(hint: 'Cari member, sponsor, atau paket...'),
+              const _SearchBox(hint: 'Cari member, kode referral, atau paket...'),
               const SizedBox(height: 14),
               if (adminSnapshot.isLoading) ...[
                 const _AdminListSectionLabel('Memuat data admin...'),
@@ -143,7 +143,7 @@ class _AdminMemberTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${member.packageName} • ${member.paymentStatus} • ${member.totalDownline} mitra',
+                        '${member.packageName} • ${member.paymentStatus} • ${member.totalDownline} referral',
                         style: const TextStyle(
                           color: Color(0xFF718096),
                           fontSize: 12,

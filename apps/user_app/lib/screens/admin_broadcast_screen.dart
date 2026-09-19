@@ -37,20 +37,27 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
             hint: 'Judul pesan',
           ),
           const SizedBox(height: 12),
-          TextField(
-            controller: _messageController,
-            maxLines: 5,
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.message_rounded, color: _brandBlue),
-              labelText: 'Isi pesan',
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(18),
-                borderSide: BorderSide.none,
-              ),
-            ),
-            onChanged: (_) => setState(() {}),
+          Builder(
+            builder: (context) {
+              final colorScheme = Theme.of(context).colorScheme;
+              return TextField(
+                controller: _messageController,
+                maxLines: 5,
+                style: TextStyle(color: colorScheme.onSurface),
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.message_rounded, color: _brandBlue),
+                  labelText: 'Isi pesan',
+                  labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                  filled: true,
+                  fillColor: colorScheme.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                onChanged: (_) => setState(() {}),
+              );
+            },
           ),
           const SizedBox(height: 16),
           _BroadcastPreview(
@@ -62,11 +69,22 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
             width: double.infinity,
             child: FilledButton.icon(
               onPressed: () {
-                _TapGoSnackbar.info(context, 'Broadcast siap ditinjau.');
+                _TapGoSnackbar.info(
+                  context,
+                  'Pratinjau tersimpan. Pengiriman broadcast sungguhan belum '
+                  'terhubung ke backend.',
+                );
               },
               icon: const Icon(Icons.send_rounded),
               label: const Text('Pratinjau Kirim Broadcast'),
             ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Layar ini hanya menampilkan pratinjau tampilan pesan — belum ada '
+            'jalur pengiriman broadcast nyata.',
+            style: TextStyle(fontSize: 11, color: Color(0xFF7A8A99)),
+            textAlign: TextAlign.center,
           ),
         ],
       ),

@@ -161,33 +161,29 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                   forceWallet: true,
                 ),
               ),
-              // Kartu status kuning (_MarketingPlanCard) tetap tidak
-              // dirender pada distribusi Play — sesuai kebijakan R2.6 (upgrade
-              // membership hanya lewat web), bukan lagi karena kartu biru di
-              // atas dianggap sudah mewakilinya. Pada distribusi direct kartu
-              // biru adalah TapGoPay, jadi kartu kuning ini tetap satu-satunya
-              // jalan ke paket membership di app.
-              if (!tapGoIsPlayDistribution) ...[
-                const SizedBox(height: 16),
-                _DashboardEntrance(
-                  order: 5,
-                  child: _MarketingPlanCard(
-                    session: session,
-                    isLoading: production.isLoading,
-                  ),
-                ),
-              ],
-              // Jarak tunggal menuju grid layanan, sehingga tidak ada ruang
-              // kosong yang tertinggal setelah kartu dihapus.
-              const SizedBox(height: 22),
+              // Play: kartu "Paket aktif: Basic" dihapus (permintaan Owner —
+              // Akun sudah menampilkan tier & status, kartu ini cuma
+              // mengulanginya) dan digantikan kartu saldo PPOB yang lebih
+              // berguna di Beranda. Direct tetap memakai _MarketingPlanCard
+              // karena baris Referral/Mitra di sana masih relevan untuk
+              // distribusi itu.
+              const SizedBox(height: 16),
               _DashboardEntrance(
-                order: tapGoIsPlayDistribution ? 4 : 5,
-                child: const _ServiceGrid(),
+                order: 4,
+                child: tapGoIsPlayDistribution
+                    ? _PpobBalanceCard(
+                        session: session,
+                        isLoading: production.isLoading,
+                      )
+                    : _MarketingPlanCard(
+                        session: session,
+                        isLoading: production.isLoading,
+                      ),
               ),
-              const SizedBox(height: 24),
-              _DashboardEntrance(
-                order: tapGoIsPlayDistribution ? 5 : 6,
-                child: const _ContentCards(),
+              const SizedBox(height: 22),
+              const _DashboardEntrance(
+                order: 5,
+                child: _ServiceGrid(),
               ),
             ],
           ),
@@ -789,7 +785,7 @@ class _SearchRowState extends State<_SearchRow> {
   static const _playPlaceholders = [
     'Cari layanan TapGo',
     'Cari Kartu Anggota',
-    'Cari Referal Tim',
+    'Cari PPOB',
   ];
 
   int _placeholderIndex = 0;
@@ -1291,22 +1287,6 @@ class _PromoSlide extends StatelessWidget {
                   ),
                 ),
               ),
-              Positioned(
-                right: -30,
-                top: -34,
-                child: Container(
-                  width: 142,
-                  height: 142,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(
-                      alpha: hasImage ? 0.08 : 0.10,
-                    ),
-                    border: Border.all(
-                        color: Theme.of(context).colorScheme.outlineVariant),
-                  ),
-                ),
-              ),
               if (!hasImage)
                 Positioned(
                   right: isCompact ? 12 : 18,
@@ -1543,20 +1523,6 @@ class _WalletCard extends ConsumerWidget {
         child: Stack(
           children: [
             Positioned(
-              right: -32,
-              top: -36,
-              child: Container(
-                width: 136,
-                height: 136,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.08),
-                  border: Border.all(
-                      color: Theme.of(context).colorScheme.outlineVariant),
-                ),
-              ),
-            ),
-            Positioned(
               left: 24,
               top: 10,
               right: 124,
@@ -1755,7 +1721,7 @@ class _MarketingPlanCard extends StatelessWidget {
                   Row(
                     children: [
                       _ServiceAssetIcon(
-                        label: 'Reward',
+                        label: 'Kartu Anggota',
                         icon: Icons.workspace_premium_rounded,
                         style: _serviceIconStyle('Membership'),
                         size: 52,
@@ -1778,8 +1744,8 @@ class _MarketingPlanCard extends StatelessWidget {
                             const SizedBox(height: 3),
                             Text(
                               tapGoIsPlayDistribution
-                                  ? 'Status akun Basic aktif'
-                                  : 'Kode ${session.referralCode} | Level aktif ${session.activeLevel}',
+                                  ? 'Status akun ${session.activePackageName} aktif'
+                                  : 'Kode ${session.referralCode} | Tingkat aktif ${session.activeLevel}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(color: mutedColor, fontSize: 12),
@@ -1831,16 +1797,16 @@ class _MarketingPlanCard extends StatelessWidget {
                         Expanded(
                           child: _MiniMetric(
                             label: 'Referral Saya',
-                            value: '${session.directSponsor} direct',
+                            value: '${session.directSponsor} langsung',
                             animatedValue: session.directSponsor,
-                            formatter: (value) => '$value direct',
+                            formatter: (value) => '$value langsung',
                             isLoading: isLoading,
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: _MiniMetric(
-                            label: 'Mitra Saya',
+                            label: 'Seluruh Referral',
                             value: '${session.downline} user',
                             animatedValue: session.downline,
                             formatter: (value) => '$value user',
@@ -1873,7 +1839,7 @@ class _MarketingPlanCard extends StatelessWidget {
                       label: FittedBox(
                         child: Text(
                           tapGoIsPlayDistribution
-                              ? 'Detail Basic'
+                              ? 'Detail ${session.activePackageName}'
                               : 'Membership',
                         ),
                       ),
@@ -1881,6 +1847,141 @@ class _MarketingPlanCard extends StatelessWidget {
                         foregroundColor: _brandBlue,
                         backgroundColor: Colors.white.withValues(alpha: 0.72),
                         side: const BorderSide(color: _brandBlue),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Kartu saldo PPOB untuk Beranda (Play). Menggantikan _MarketingPlanCard
+/// yang sebelumnya di sini — lihat catatan di call site dashboard_screen.dart.
+class _PpobBalanceCard extends StatelessWidget {
+  const _PpobBalanceCard({required this.session, required this.isLoading});
+
+  final DemoClientSession session;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    // Sebelumnya pakai teknik "bingkai gradien" (Container gradien luar +
+    // padding tipis + ClipRRect radius sedikit lebih kecil di dalam) yang
+    // dipinjam dari _MarketingPlanCard. Kombinasi gradien linear kontras
+    // tinggi (lavender-ungu-putih) dengan selisih radius luar/dalam membuat
+    // cincin tipis itu terlihat tidak rata tepat di sudut — laporan "ujung
+    // lancip" dari Owner. Diganti satu Container radius tunggal + border
+    // solid tipis supaya sudutnya benar-benar mulus.
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.55)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF4F46E5).withValues(alpha: 0.20),
+            blurRadius: 22,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Stack(
+          children: [
+            const Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF4F46E5), Color(0xFF6D5AE6)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+              ),
+            ),
+            const Positioned.fill(child: _ShineSweep()),
+            Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const _ServiceAssetIcon(
+                        label: 'PPOB',
+                        icon: Icons.receipt_long_rounded,
+                        style: _ServiceIconStyle(
+                          primary: Color(0xFF4F46E5),
+                          secondary: Color(0xFF818CF8),
+                          background: Color(0xFFEEF0FF),
+                        ),
+                        size: 52,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Saldo PPOB',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              isLoading
+                                  ? 'Memuat saldo...'
+                                  : _formatCompactRupiah(session.ppobBalance),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Gunakan saldo PPOB untuk Pulsa, Paket Data, Token PLN, '
+                    'E-Wallet, BPJS, dan PDAM.',
+                    style: TextStyle(
+                      color: Color(0xDDFFFFFF),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => tapGoOpenPpobHome(context),
+                      icon: const Icon(Icons.receipt_long_rounded),
+                      label: const Text('Buka PPOB'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF4F46E5),
+                        backgroundColor: Colors.white.withValues(alpha: 0.92),
+                        side: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.72),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
@@ -1907,14 +2008,28 @@ class _ShineSweep extends StatefulWidget {
 
 class _ShineSweepState extends State<_ShineSweep>
     with SingleTickerProviderStateMixin {
+  // Versi lama: sapuan LINEAR (tanpa easing) berulang nonstop setiap 3.6
+  // detik — laporan Owner: "animasi kurang profesional" pada kartu saldo
+  // PPOB. Diganti pola yang dipakai app kelas atas: satu kedipan cahaya
+  // singkat dengan easing halus, lalu jeda diam yang jauh lebih panjang
+  // sebelum berulang, bukan lampu sorot yang muter terus-menerus.
+  static const _cycleDuration = Duration(milliseconds: 5200);
+  static const _sweepFraction = 0.22;
+
   late final AnimationController _controller;
+  late final Animation<double> _progress;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 3600),
+    _controller = AnimationController(vsync: this, duration: _cycleDuration);
+    _progress = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(
+        0,
+        _sweepFraction,
+        curve: Curves.easeInOutCubic,
+      ),
     );
     if (_dashboardLiveAnimationsEnabled) {
       _controller.repeat();
@@ -1932,9 +2047,9 @@ class _ShineSweepState extends State<_ShineSweep>
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _controller,
+      animation: _progress,
       builder: (context, child) {
-        final dx = -1.4 + (_controller.value * 2.8);
+        final dx = -1.4 + (_progress.value * 2.8);
         return Transform.translate(
           offset: Offset(dx * 180, 0),
           child: Transform.rotate(
@@ -1988,6 +2103,11 @@ class _ServiceGrid extends StatelessWidget {
   static const _directServices = [
     // Badge 'Segera' dilepas karena layanan sudah dapat dibuka; badge apa pun
     // membuat onTap bernilai null pada _tapGoServiceActionFor.
+    //
+    // TapGo Food, TapGo Mart, Jasa, TapGo Bantu, dan Lainnya dihapus total
+    // dari grid ini (kedua distribusi) atas permintaan owner — belum ada
+    // implementasi layanan sungguhan di baliknya, jadi menampilkannya hanya
+    // mengarah ke pesan "belum dapat dibuka".
     _ServiceItem(
       'TapGo Ride',
       Icons.two_wheeler_rounded,
@@ -2000,32 +2120,7 @@ class _ServiceGrid extends StatelessWidget {
       Color(0xFF0B7A75),
       null,
     ),
-    _ServiceItem(
-      'TapGo Food',
-      Icons.restaurant_menu_rounded,
-      Color(0xFFE85D04),
-      null,
-    ),
-    _ServiceItem(
-      'TapGo Mart',
-      Icons.storefront_rounded,
-      Color(0xFF0088A6),
-      null,
-    ),
-    _ServiceItem(
-      'Jasa',
-      Icons.home_repair_service_rounded,
-      Color(0xFFD97706),
-      null,
-    ),
-    _ServiceItem('Pulsa', Icons.phone_iphone_rounded, Color(0xFF1486B8), null),
-    _ServiceItem(
-      'TapGo Bantu',
-      Icons.volunteer_activism_rounded,
-      Color(0xFF0569E8),
-      'Segera',
-    ),
-    _ServiceItem('Lainnya', Icons.grid_view_rounded, Color(0xFF697386), null),
+    _ServiceItem('PPOB', Icons.receipt_long_rounded, Color(0xFF1486B8), null),
   ];
 
   static const _playServices = [
@@ -2116,7 +2211,6 @@ VoidCallback? _tapGoServiceActionFor(BuildContext context, _ServiceItem item) {
             context,
             const BasicMemberCardScreen(),
           ),
-      'Referral' => () => _openDemo(context, const ReferralTreeScreen()),
       'Profil' => () => _openDemo(context, const ProfileDetailsScreen()),
       'Tiket Bantuan' => () => _openDemo(context, const ContactUsScreen()),
       'Hapus Akun' => () => _openDemo(
@@ -2207,134 +2301,7 @@ class _FloatingServiceTileState extends State<_FloatingServiceTile>
   }
 }
 
-class _ContentCards extends StatelessWidget {
-  const _ContentCards();
-
-  @override
-  Widget build(BuildContext context) {
-    if (tapGoIsPlayDistribution) {
-      return const SizedBox.shrink();
-    }
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            height: 192,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                  color: Theme.of(context).colorScheme.outlineVariant),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Kelas Online Spesial 🔥',
-                  style: TextStyle(
-                    color: _brandBlue,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Akan dimulai pada',
-                  style: TextStyle(color: Colors.grey.shade600),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 9,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFF3434),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text(
-                    '02:06:03',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 18,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Container(
-            height: 192,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(22),
-              gradient: const LinearGradient(
-                colors: [Color(0xFF06284A), Color(0xFF0B5FC7)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: _brandBlue.withValues(alpha: 0.18),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  tapGoIsPlayDistribution
-                      ? 'Layanan Digital'
-                      : 'PPOB & Benefit',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  tapGoIsPlayDistribution
-                      ? 'Akses layanan tersedia melalui membership TapGo.'
-                      : 'Saldo, transaksi, dan reward dalam satu dashboard.',
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xDDEAF7FF),
-                    fontSize: 12,
-                    height: 1.3,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const Spacer(),
-                Align(
-                  alignment: Alignment.bottomRight,
-                  child: _ServiceAssetIcon(
-                    label: 'PPOB',
-                    icon: Icons.receipt_long_rounded,
-                    style: _serviceIconStyle('PPOB'),
-                    size: 54,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _BottomNav extends StatelessWidget {
+class _BottomNav extends ConsumerWidget {
   const _BottomNav({
     required this.selectedIndex,
     required this.onTabSelected,
@@ -2346,7 +2313,8 @@ class _BottomNav extends StatelessWidget {
   final VoidCallback onCenterTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final avatarBytes = ref.watch(_accountAvatarBytesProvider).valueOrNull;
     final screenWidth = MediaQuery.sizeOf(context).width;
     final centerGap = screenWidth < 380 ? 60.0 : 74.0;
     final colorScheme = Theme.of(context).colorScheme;
@@ -2415,6 +2383,7 @@ class _BottomNav extends StatelessWidget {
                     ),
                     _NavItem(
                       icon: Icons.person_outline_rounded,
+                      avatarBytes: avatarBytes,
                       label: 'Akun',
                       width: navItemWidth,
                       active: selectedIndex == 3,
@@ -2491,6 +2460,7 @@ class _NavItem extends StatelessWidget {
     required this.onTap,
     this.active = false,
     this.width = _navItemPreferredWidth,
+    this.avatarBytes,
   });
 
   final IconData icon;
@@ -2498,6 +2468,9 @@ class _NavItem extends StatelessWidget {
   final VoidCallback onTap;
   final bool active;
   final double width;
+  // Dipakai HANYA oleh item "Akun" — bila terisi, foto profil ditampilkan
+  // menggantikan ikon generik. Item lain tidak pernah mengisi ini.
+  final Uint8List? avatarBytes;
 
   @override
   Widget build(BuildContext context) {
@@ -2527,7 +2500,12 @@ class _NavItem extends StatelessWidget {
                 scale: active ? 1.10 : 1,
                 duration: const Duration(milliseconds: 220),
                 curve: Curves.easeOutCubic,
-                child: Icon(icon, color: color, size: 26),
+                child: avatarBytes != null && avatarBytes!.isNotEmpty
+                    ? CircleAvatar(
+                        radius: 13,
+                        backgroundImage: MemoryImage(avatarBytes!),
+                      )
+                    : Icon(icon, color: color, size: 26),
               ),
             ),
             const SizedBox(height: 5),
@@ -2700,7 +2678,7 @@ String _activityCategoryFromTitle(String title) {
 
 IconData _activityIconFromTitle(String title) {
   final lower = title.toLowerCase();
-  if (lower.contains('level')) {
+  if (lower.contains('level') || lower.contains('tingkat')) {
     return Icons.layers_rounded;
   }
   if (lower.contains('reward')) {
@@ -2727,7 +2705,7 @@ class ChatScreen extends StatelessWidget {
         children: [
           _SectionHeader(
             title: 'Chat',
-            subtitle: 'Pesan sponsor, jaringan, CS, dan notifikasi',
+            subtitle: 'Pesan, bantuan CS, dan notifikasi',
           ),
           SizedBox(height: 16),
           _SearchBox(hint: 'Cari chat atau notifikasi...'),
@@ -2749,12 +2727,13 @@ class AccountScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(_demoSessionProvider);
+    final avatarBytes = ref.watch(_accountAvatarBytesProvider).valueOrNull;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 176),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _AccountHero(session: session),
+          _AccountHero(session: session, avatarBytes: avatarBytes),
           // _AccountHero (mode Play) sudah menampilkan nama, tier, dan status
           // aktif — kartu "Membership Basic" yang dulu dirender di sini hanya
           // mengulang dua fakta yang sama, jadi tidak dirender lagi di sini.
@@ -2784,14 +2763,14 @@ class AccountScreen extends ConsumerWidget {
               children: [
                 Expanded(
                   child: _StatCard(
-                    label: 'Sponsor',
+                    label: 'Referral Langsung',
                     value: '${session.directSponsor}',
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: _StatCard(
-                    label: 'Level aktif',
+                    label: 'Tingkat aktif',
                     value: '${session.activeLevel}',
                   ),
                 ),
@@ -2804,19 +2783,18 @@ class AccountScreen extends ConsumerWidget {
             Icons.badge_rounded,
             () => _openDemo(context, const BasicMemberCardScreen()),
           ),
-          // Sebelumnya jalan satu-satunya menuju ReferralTreeScreen dari Akun
-          // adalah lewat 'Jaringan Saya' (khusus distribusi direct) atau lewat
-          // redirect tersembunyi dari kartu wallet Beranda → DemoWalletScreen
-          // → MembershipScreen → menu 'Referal Tim'. Tautan langsung ini
-          // dibuka untuk kedua distribusi: ini murni tampilan baca-saja dari
-          // data referral asli (tidak ada ajakan pembelian), jadi aman untuk
-          // Play (lihat juga entri grid 'Referral' di Beranda).
-          _AccountMenuTile(
-            'Referal Tim',
-            Icons.account_tree_rounded,
-            () => _openDemo(context, const ReferralTreeScreen()),
-            subtitle: 'Struktur referal tim level 1 sampai 10',
-          ),
+          // Permintaan Owner: struktur Referal Tim dihapus dari APLIKASI demi
+          // proses review Play Store — tetap tersedia di web (landing page),
+          // hanya tidak lagi jadi entry point di dalam app. Tetap tampil pada
+          // distribusi Direct karena bukan bagian dari build yang diajukan
+          // ke Play Store.
+          if (tapGoIsDirectDistribution)
+            _AccountMenuTile(
+              'Daftar Referral',
+              Icons.account_tree_rounded,
+              () => _openDemo(context, const ReferralTreeScreen()),
+              subtitle: 'Daftar referral per tingkat, tingkat 1 sampai 10',
+            ),
           _AccountMenuTile(
             'Profil',
             Icons.person_rounded,
@@ -2835,27 +2813,9 @@ class AccountScreen extends ConsumerWidget {
           ),
           if (tapGoIsDirectDistribution)
             _AccountMenuTile(
-              'Jaringan Saya',
-              Icons.account_tree_rounded,
-              () => _openDemo(context, const ReferralTreeScreen()),
-            ),
-          if (tapGoIsDirectDistribution) ...[
-            _AccountMenuTile(
               'Wallet & Withdraw',
               Icons.account_balance_wallet_rounded,
               () => _openDemo(context, const DemoWalletScreen()),
-            ),
-            _AccountMenuTile(
-              'Riwayat Komisi',
-              Icons.receipt_long_rounded,
-              () => _openDemo(context, const CommissionHistoryScreen()),
-            ),
-          ],
-          if (tapGoIsDirectDistribution)
-            _AccountMenuTile(
-              'Reward',
-              Icons.emoji_events_rounded,
-              () => _openDemo(context, const RewardScreen()),
             ),
           if (session.isAdmin)
             _AccountMenuTile(
@@ -2870,22 +2830,16 @@ class AccountScreen extends ConsumerWidget {
                     : const AdminDashboardScreen(),
               ),
             ),
+          // Permintaan Owner: Rekening Bank dihapus dari build Play demi
+          // proses review Play Store (mengurangi permukaan fitur terkait
+          // pencairan dana). Tetap tampil pada distribusi Direct — tidak
+          // berubah dari perilaku sebelumnya di sana.
           if (tapGoIsDirectDistribution)
             _AccountMenuTile(
-              'KYC',
-              Icons.verified_user_rounded,
-              () => _openDemo(context, const FeatureDetailScreen(title: 'KYC')),
+              'Rekening Bank',
+              Icons.account_balance_rounded,
+              () => _openDemo(context, const BankAccountScreen()),
             ),
-          // Sebelumnya hanya muncul pada distribusi direct. Menyimpan nomor
-          // rekening bukan pencairan saldo — murni data profil — jadi aman
-          // ditampilkan di semua distribusi. Aksi pencairan sungguhan (bukan
-          // penyimpanan datanya) tetap tunduk pada WALLET_CASH_OUT_ENABLED
-          // di backend, tidak berubah oleh baris ini.
-          _AccountMenuTile(
-            'Rekening Bank',
-            Icons.account_balance_rounded,
-            () => _openDemo(context, const BankAccountScreen()),
-          ),
           _AccountMenuTile(
             'Kebijakan Privasi',
             Icons.privacy_tip_rounded,
@@ -2923,12 +2877,6 @@ class AccountScreen extends ConsumerWidget {
             Icons.help_outline_rounded,
             () => _openDemo(context, const HelpCenterScreen()),
           ),
-          if (tapGoIsDirectDistribution)
-            _AccountMenuTile(
-              'Pengaturan',
-              Icons.settings_rounded,
-              () => _openDemo(context, const SettingsScreen()),
-            ),
           _AccountMenuTile(
             'Logout',
             Icons.logout_rounded,
@@ -3025,8 +2973,28 @@ class _ThemeOptionTile extends StatelessWidget {
   }
 }
 
-class ProfileDetailsScreen extends ConsumerWidget {
+class ProfileDetailsScreen extends ConsumerStatefulWidget {
   const ProfileDetailsScreen({super.key});
+
+  @override
+  ConsumerState<ProfileDetailsScreen> createState() =>
+      _ProfileDetailsScreenState();
+}
+
+class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
+  // Future di-cache sekali di initState, TIDAK dibuat ulang tiap build().
+  // ProfileDetailsScreen menonton _demoSessionProvider, yang ditulis ulang
+  // oleh alur seperti ubah nomor HP — kalau _load() dipanggil inline di
+  // dalam build() (pola lama), setiap tulisan sesi memicu FutureBuilder
+  // membuang Future lama dan memulai request baru pertengahan alur lain,
+  // memperbesar jendela race pada rebuild yang tumpang tindih.
+  late Future<_BasicMemberCardData> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load(ref.read(_demoSessionProvider));
+  }
 
   Future<_BasicMemberCardData> _load(DemoClientSession session) async {
     final loader = tapGoMemberIdentityLoaderForTests;
@@ -3048,12 +3016,12 @@ class ProfileDetailsScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final session = ref.watch(_demoSessionProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Profil')),
       body: FutureBuilder<_BasicMemberCardData>(
-        future: _load(session),
+        future: _future,
         builder: (context, snapshot) {
           final fallback = _BasicMemberCardData(
             displayName:
@@ -3074,13 +3042,6 @@ class ProfileDetailsScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
             children: [
-              _AccountHero(
-                session: session.copyWith(
-                  userName: profile.displayName,
-                  activePackageName: 'Basic',
-                ),
-              ),
-              const SizedBox(height: 16),
               const _ProfileAvatarEditor(),
               const SizedBox(height: 16),
               if (isLoading)
@@ -3180,14 +3141,15 @@ class ProfileDetailsScreen extends ConsumerWidget {
 /// registrasi membership), widget ini mengambil/mengunggah foto lewat
 /// backend (`GET`/`POST /account/avatar`) sehingga foto tersimpan di server
 /// dan tampil di perangkat mana pun pengguna masuk.
-class _ProfileAvatarEditor extends StatefulWidget {
+class _ProfileAvatarEditor extends ConsumerStatefulWidget {
   const _ProfileAvatarEditor();
 
   @override
-  State<_ProfileAvatarEditor> createState() => _ProfileAvatarEditorState();
+  ConsumerState<_ProfileAvatarEditor> createState() =>
+      _ProfileAvatarEditorState();
 }
 
-class _ProfileAvatarEditorState extends State<_ProfileAvatarEditor> {
+class _ProfileAvatarEditorState extends ConsumerState<_ProfileAvatarEditor> {
   static const int _maxAvatarBytes = 4 * 1024 * 1024;
 
   Uint8List? _bytes;
@@ -3294,6 +3256,10 @@ class _ProfileAvatarEditorState extends State<_ProfileAvatarEditor> {
           _bytes = bytes;
           _isUploading = false;
         });
+        // Ikon tab "Akun" membaca foto dari provider terpisah supaya tidak
+        // menembak request sendiri — invalidasi di sini supaya ikon nav
+        // ikut ter-refresh, bukan hanya foto di halaman ini.
+        ref.invalidate(_accountAvatarBytesProvider);
         _TapGoSnackbar.success(context, 'Foto profil berhasil diperbarui.');
       }
     } catch (_) {
@@ -3407,12 +3373,22 @@ Future<void> _showPhoneEditSheet(
                 phone: tapGoSanitizePhoneInput(phoneController.text),
                 currentPassword: passwordController.text,
               );
-              final updated = session.copyWith(phone: newPhone);
-              ref.read(_demoSessionProvider.notifier).state = updated;
-              unawaited(_persistentStore.saveSession(updated));
+              // Tutup sheet SEBELUM menulis state sesi global. Menulis
+              // _demoSessionProvider memicu rebuild ProfileDetailsScreen (dan
+              // layar lain yang ikut menonton sesi) secara sinkron; kalau ini
+              // terjadi SEBELUM sheet ditutup, rebuild itu tumpang tindih
+              // dengan animasi keluar modal yang masih memegang
+              // phoneController/passwordController — race inilah yang
+              // sebelumnya memicu 'TextEditingController was used after
+              // being disposed' lalu berujung pada crash
+              // '_dependents.isEmpty' (ditemukan lewat reproduksi nyata di
+              // perangkat, bukan dugaan).
               if (sheetContext.mounted) {
                 Navigator.of(sheetContext).pop();
               }
+              final updated = session.copyWith(phone: newPhone);
+              ref.read(_demoSessionProvider.notifier).state = updated;
+              unawaited(_persistentStore.saveSession(updated));
               if (context.mounted) {
                 _TapGoSnackbar.success(context, 'Nomor HP berhasil diperbarui.');
               }
@@ -3513,8 +3489,14 @@ Future<void> _showPhoneEditSheet(
       },
     ),
   );
-  phoneController.dispose();
-  passwordController.dispose();
+  // Ditunda satu frame: menyusul perbaikan di submit() (pop sheet dulu
+  // sebelum menulis state sesi), memberi jeda satu frame tambahan sebelum
+  // dispose memastikan animasi keluar modal benar-benar selesai memproses
+  // widget yang masih memegang controller ini.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    phoneController.dispose();
+    passwordController.dispose();
+  });
 }
 
 class _SectionLabel extends StatelessWidget {
@@ -3648,11 +3630,11 @@ class HelpCenterScreen extends StatelessWidget {
       if (tapGoIsDirectDistribution) ...[
         (
           'Kode referral',
-          'Bagikan kode referral Anda agar jaringan dan bonus tercatat otomatis.',
+          'Bagikan kode referral Anda agar referral dan bonus tercatat otomatis.',
         ),
         (
           'Saldo TapGoPay',
-          'Saldo berasal dari bonus registrasi, sponsor, komisi, dan reward real.',
+          'Saldo berasal dari bonus registrasi, bonus referral, komisi, dan reward.',
         ),
         (
           'Ajukan withdraw',
@@ -4624,7 +4606,32 @@ _ServiceIconStyle _serviceIconStyle(String label) {
         secondary: Color(0xFF86EFAC),
         background: Color(0xFFEAFBF0),
       ),
-    'Membership' || 'Marketing Plan' || 'Reward' => const _ServiceIconStyle(
+    // Warna 4 kategori PPOB berikut mengikuti ppobCategoryColor() (lihat
+    // ppob_shared.dart) supaya Super Menu terasa satu bahasa visual dengan
+    // grid kategori di dalam PpobHomeScreen — belum punya ilustrasi SVG
+    // bermerek, jadi tier 3 (_ServiceIcon3D) dengan warna yang sama ini
+    // adalah cara paling konsisten yang tersedia saat ini.
+    'Paket Data' => const _ServiceIconStyle(
+        primary: Color(0xFF0B7A75),
+        secondary: Color(0xFF5EEAD4),
+        background: Color(0xFFE6FFFB),
+      ),
+    'Token PLN' => const _ServiceIconStyle(
+        primary: Color(0xFFF59E0B),
+        secondary: Color(0xFFFCD34D),
+        background: Color(0xFFFFF7E6),
+      ),
+    'E-Wallet' => const _ServiceIconStyle(
+        primary: Color(0xFF4F46E5),
+        secondary: Color(0xFF818CF8),
+        background: Color(0xFFEEF2FF),
+      ),
+    'PDAM' => const _ServiceIconStyle(
+        primary: Color(0xFF0284C7),
+        secondary: Color(0xFF7DD3FC),
+        background: Color(0xFFE8F6FF),
+      ),
+    'Membership' || 'Program Referral' || 'Reward' => const _ServiceIconStyle(
         primary: Color(0xFFF59E0B),
         secondary: Color(0xFFFFD166),
         background: Color(0xFFFFF4E4),

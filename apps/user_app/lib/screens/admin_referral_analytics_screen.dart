@@ -18,7 +18,7 @@ class AdminReferralAnalyticsScreen extends ConsumerWidget {
     return _DemoScaffold(
       title: 'Referral Analytics',
       subtitle: adminSnapshot.hasValue
-          ? 'Top sponsor dan level aktif'
+          ? 'Top referral dan tingkat aktif'
           : 'Analytics referral TapGo',
       child: Column(
         children: [
@@ -34,7 +34,7 @@ class AdminReferralAnalyticsScreen extends ConsumerWidget {
               children: [
                 Expanded(
                   child: _StatCard(
-                    label: 'Level Aktif',
+                    label: 'Tingkat Aktif',
                     value: adminSnapshot.hasValue
                         ? '${_activeLevelFromDirectSponsor(_intFrom(summary?['maxDirectSponsor']))}'
                         : '-',
@@ -56,7 +56,7 @@ class AdminReferralAnalyticsScreen extends ConsumerWidget {
             icon: Icons.account_tree_rounded,
             title: 'Global Referral Analytics belum tersedia',
             subtitle:
-                'Tree admin global belum aktif. Data top sponsor tetap dibaca dari sistem TapGo.',
+                'Tree admin global belum aktif. Data top referral tetap dibaca dari sistem TapGo.',
           ),
           const SizedBox(height: 6),
           if (adminSnapshot.hasError)
@@ -65,22 +65,22 @@ class AdminReferralAnalyticsScreen extends ConsumerWidget {
             const _StatusSurface(
               icon: Icons.sync_rounded,
               title: 'Memuat referral',
-              subtitle: 'Mengambil data top sponsor...',
+              subtitle: 'Mengambil data top referral...',
             )
           else if (topSponsors.isEmpty)
             const _StatusSurface(
               icon: Icons.hub_rounded,
               title: 'Belum ada referral',
               subtitle:
-                  'Data jaringan akan muncul setelah user memakai sponsor.',
+                  'Data referral akan muncul setelah user memakai kode referral.',
             )
           else
             ...topSponsors.take(12).map(
                   (member) => _WalletLedgerItem(
                     title: member.name,
-                    amount: '${member.totalDownline} mitra',
+                    amount: '${member.totalDownline} referral',
                     note:
-                        '${member.packageName} • Sponsor ${member.sponsor} • Komisi ${formatRupiah(member.totalCommission)}',
+                        '${member.packageName} • Pemberi ${member.sponsor} • Komisi ${formatRupiah(member.totalCommission)}',
                     color: _packageAccent(member.packageName),
                   ),
                 ),

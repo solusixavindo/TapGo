@@ -206,21 +206,50 @@ void main() {
         TapGoDistributionMode.direct,
       );
 
+      // PPOB tidak lagi satu tile gabungan — semua kategorinya (fitur
+      // pembayaran tagihan biasa, bukan referral/MLM) tampil langsung di
+      // Super Menu pada kedua distribusi, lihat item 8.
+      const ppobCategoryLabels = [
+        'Pulsa',
+        'Paket Data',
+        'Token PLN',
+        'E-Wallet',
+        'BPJS',
+        'PDAM',
+      ];
+
       expect(playLabels, contains('Kartu Anggota'));
       expect(playLabels, contains('Tiket Bantuan'));
+      for (final label in ppobCategoryLabels) {
+        expect(playLabels, contains(label));
+      }
+      expect(playLabels, isNot(contains('PPOB')));
       expect(playLabels, isNot(contains('Referral')));
       expect(playLabels, isNot(contains('TapGo Ride')));
       expect(playLabels, isNot(contains('TapGo Car')));
       expect(playLabels, isNot(contains('TapGo Food')));
       expect(playLabels, isNot(contains('TapGo Mart')));
-      expect(playLabels, isNot(contains('Pulsa')));
-      expect(playLabels, isNot(contains('PPOB')));
 
       expect(directLabels, contains('Referral'));
       expect(directLabels, contains('TapGo Ride'));
-      expect(directLabels, contains('PPOB'));
+      for (final label in ppobCategoryLabels) {
+        expect(directLabels, contains(label));
+      }
+      expect(directLabels, isNot(contains('PPOB')));
 
-      expect(tapGoSuperMenuDestinationForLabelForTests('PPOB'), isNull);
+      for (final entry in const {
+        'Pulsa': 'PULSA',
+        'Paket Data': 'DATA',
+        'Token PLN': 'PLN_PREPAID',
+        'E-Wallet': 'EWALLET',
+        'BPJS': 'BPJS',
+        'PDAM': 'PDAM',
+      }.entries) {
+        expect(
+          tapGoPpobCategoryCodeForLabelForTests(entry.key),
+          entry.value,
+        );
+      }
       expect(tapGoSuperMenuDestinationForLabelForTests('Referral'), isNull);
       expect(
         tapGoSuperMenuDestinationForLabelForTests('Profil'),
@@ -617,14 +646,35 @@ void main() {
     (WidgetTester tester) async {
       await openDashboard(tester);
 
-      // Status Basic kini ditampilkan kartu Membership biru. Kartu status
-      // kuning yang mengulang informasi yang sama dihapus pada Stage R2.4T,
-      // jadi jaminan yang diuji tetap sama: dashboard menampilkan paket aktif
-      // Basic dan tidak menawarkan pembelian berbayar.
-      expect(find.text('Membership'), findsOneWidget);
+      // Kartu Membership biru dihapus dari Beranda (permintaan Owner) —
+      // slotnya kini selalu kartu wallet TapGoPay. Kartu status kuning
+      // (_MarketingPlanCard, tombol "Detail Basic") sendiri juga sudah
+      // dihapus dari Beranda Play dan digantikan _PpobBalanceCard (permintaan
+      // Owner berikutnya: Akun sudah menampilkan tier & status, kartu itu
+      // cuma mengulanginya) — jaminan yang benar-benar diuji tetap sama:
+      // dashboard menampilkan status Basic (via header akun) dan tidak ada
+      // ajakan pembelian berbayar di mana pun pada Beranda.
+      expect(find.text('TapGoPay'), findsOneWidget);
       expect(find.text('Basic'), findsWidgets);
+      expect(find.text('Saldo PPOB'), findsOneWidget);
       expect(find.textContaining('Paket aktif:'), findsNothing);
-      expect(find.text('Marketing Plan'), findsNothing);
+      expect(find.text('Detail Basic'), findsNothing);
+      expect(find.text('Program Referral'), findsNothing);
+      expect(find.text('Bayar Sekarang'), findsNothing);
+      expect(find.text('Daftar'), findsNothing);
+
+      // Kartu anggota baca-saja (dibuka lewat Akun > Kartu Anggota, bukan
+      // lagi lewat Beranda) tetap tidak pernah menawarkan pembelian.
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(home: BasicMemberCardScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(BasicMemberCardScreen), findsOneWidget);
+      expect(find.byType(MembershipPackagesScreen), findsNothing);
+      expect(find.text('Bayar Sekarang'), findsNothing);
+      expect(find.text('Daftar'), findsNothing);
       await tester.pumpWidget(
         const ProviderScope(
           child: MaterialApp(home: MembershipPackagesScreen()),
@@ -717,10 +767,15 @@ void main() {
     expect(find.text('Super Menu'), findsOneWidget);
     expect(find.text('TapGo Ride'), findsNothing);
     expect(find.text('PPOB'), findsNothing);
+    expect(find.text('Pulsa'), findsOneWidget);
+    expect(find.text('Paket Data'), findsOneWidget);
+    expect(find.text('Token PLN'), findsOneWidget);
+    expect(find.text('E-Wallet'), findsOneWidget);
+    expect(find.text('BPJS'), findsOneWidget);
+    expect(find.text('PDAM'), findsOneWidget);
     expect(find.text('Referral'), findsNothing);
     expect(find.text('Kartu Anggota'), findsOneWidget);
     expect(find.text('Reward'), findsNothing);
-    expect(find.text('BPJS'), findsNothing);
     expect(find.text('Tiket Bantuan'), findsOneWidget);
   });
 
@@ -956,7 +1011,6 @@ void main() {
 
     expect(find.text('TapGoPay'), findsOneWidget);
     expect(find.byIcon(Icons.apps_rounded), findsOneWidget);
-    expect(find.text('Membership'), findsWidgets);
 
     await tester.tap(find.text('Akun'));
     await tester.pumpAndSettle();
@@ -991,19 +1045,25 @@ void main() {
     expect(find.text('Super Admin Dashboard'), findsNothing);
   });
 
-  testWidgets('Play account menu hides bank and cash surfaces', (
-    WidgetTester tester,
-  ) async {
-    await openDashboard(tester);
+  testWidgets(
+    'Play account menu hides withdraw/cash surfaces, bank account, and referral team',
+    (WidgetTester tester) async {
+      await openDashboard(tester);
 
-    await tester.tap(find.text('Akun'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Akun'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Rekening Bank'), findsNothing);
-    expect(find.text('Wallet & Withdraw'), findsNothing);
-    expect(find.text('Riwayat Komisi'), findsNothing);
-    expect(find.text('TapGoPay'), findsNothing);
-  });
+      // Permintaan Owner (kepatuhan review Play Store): Rekening Bank dan
+      // Referal Tim dihapus dari entry point Akun pada distribusi Play —
+      // Referal Tim tetap tersedia di web, Rekening Bank tetap tampil pada
+      // distribusi Direct (tidak berubah di sana).
+      expect(find.text('Rekening Bank'), findsNothing);
+      expect(find.text('Referal Tim'), findsNothing);
+      expect(find.text('Wallet & Withdraw'), findsNothing);
+      expect(find.text('Riwayat Komisi'), findsNothing);
+      expect(find.text('TapGoPay'), findsNothing);
+    },
+  );
 
   testWidgets('bank account picker still opens directly without assertion', (
     WidgetTester tester,
@@ -1249,6 +1309,10 @@ void main() {
         'assets/icons/basic_portal/support_ticket.png',
       );
       expect(tapGoServiceIllustrationAssetForTests('Tiket Bantuan'), isNull);
+      // 1: hanya grid tile "Kartu Anggota" yang memakai aset premium
+      // member_card.png. Kartu status paket (_MarketingPlanCard) sudah
+      // digantikan _PpobBalanceCard pada Play, yang ikonnya berlabel 'PPOB'
+      // (SVG tg-ppob.svg / _ServiceIcon3D), bukan PremiumTapGoIcon.
       expect(find.byType(PremiumTapGoIcon), findsNWidgets(1));
     },
   );
@@ -1312,16 +1376,9 @@ void main() {
     expect(find.text('secret'), findsNothing);
     expect(find.text('token'), findsNothing);
     expect(find.text('device'), findsNothing);
-    final header = tester.widget<Container>(
-      find.byKey(const ValueKey('play_profile_header')),
-    );
-    final headerDecoration = header.decoration! as BoxDecoration;
-    expect(headerDecoration.color, isNull);
-    expect(headerDecoration.gradient, isA<LinearGradient>());
-    expect(
-      (headerDecoration.gradient! as LinearGradient).colors,
-      contains(const Color(0xFF061A2E)),
-    );
+    // Kartu _AccountHero (key 'play_profile_header') sengaja dihapus dari
+    // halaman ini — foto profil sekarang jadi header, bukan kartu gradien.
+    expect(find.byKey(const ValueKey('play_profile_header')), findsNothing);
 
     for (final text in ['Sandika TapGo', 'Basic', 'Aktif']) {
       final widget = tester.widget<Text>(find.text(text).first);

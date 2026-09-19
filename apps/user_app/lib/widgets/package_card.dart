@@ -124,8 +124,8 @@ class _MembershipPackageCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             if (!isPlayDistribution) ...[
-              _PackageRow(label: 'Bonus sponsor', value: package.sponsorBonus),
-              _PackageRow(label: 'Bonus level', value: package.levelBonus),
+              _PackageRow(label: 'Bonus referral', value: package.sponsorBonus),
+              _PackageRow(label: 'Bonus tingkat', value: package.levelBonus),
               _PackageRow(label: 'Saldo PPOB', value: package.ppobBalance),
             ],
             _PackageRow(label: 'BPJS', value: package.bpjsBenefit),
@@ -179,6 +179,8 @@ String _tapGoPlaySafeMembershipBenefit(String benefit) {
   }
   if (normalized.contains('bonus') ||
       normalized.contains('sponsor') ||
+      normalized.contains('referral') ||
+      normalized.contains('tingkat') ||
       normalized.contains('profit')) {
     return '';
   }

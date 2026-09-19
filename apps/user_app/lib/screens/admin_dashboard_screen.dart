@@ -167,7 +167,7 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
     _AdminDashboardMenuItem(
       icon: Icons.groups_rounded,
       title: 'Member Management',
-      subtitle: 'List member, status paket, sponsor, jaringan',
+      subtitle: 'List member, status paket, referral',
       open: (context) => _openDemo(context, const AdminMemberListScreen()),
     ),
     _AdminDashboardMenuItem(
@@ -199,14 +199,14 @@ List<_AdminDashboardMenuItem> _adminMenuItems(bool isSuperAdmin) {
     _AdminDashboardMenuItem(
       icon: Icons.hub_rounded,
       title: 'Referral Analytics',
-      subtitle: 'Top sponsor, level aktif, referal tim',
+      subtitle: 'Top referral, tingkat aktif, daftar referral',
       open: (context) =>
           _openDemo(context, const AdminReferralAnalyticsScreen()),
     ),
     _AdminDashboardMenuItem(
       icon: Icons.assessment_rounded,
       title: 'Laporan Bonus',
-      subtitle: 'Registration, sponsor, level, reward bonus',
+      subtitle: 'Registrasi, referral, tingkat, reward bonus',
       open: (context) => _openDemo(
         context,
         const _AdminReportScreen(
@@ -764,7 +764,7 @@ class _FounderProgramScreenState extends ConsumerState<FounderProgramScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Sponsor ${item['totalSponsorBonus'] ?? '0.00'} • Level ${item['totalLevelBonus'] ?? '0.00'} • Total ${item['totalCommission'] ?? '0.00'}',
+            'Referral ${item['totalSponsorBonus'] ?? '0.00'} • Tingkat ${item['totalLevelBonus'] ?? '0.00'} • Total ${item['totalCommission'] ?? '0.00'}',
             style: const TextStyle(color: Color(0xFF94A3B8)),
           ),
           if (isChairman && item['bankAccountMasked'] != null) ...[
@@ -887,14 +887,14 @@ class FounderProgramDetailScreen extends StatelessWidget {
               if (data['bankAccountMasked'] != null)
                 _FounderDetailRow('Bank Account', data['bankAccountMasked']),
               _FounderDetailRow('Referral Count', data['referralCount']),
-              _FounderDetailRow('Sponsor Bonus', data['totalSponsorBonus']),
-              _FounderDetailRow('Level Bonus', data['totalLevelBonus']),
+              _FounderDetailRow('Bonus Referral', data['totalSponsorBonus']),
+              _FounderDetailRow('Bonus Tingkat', data['totalLevelBonus']),
               _FounderDetailRow('Total Commission', data['totalCommission']),
               const SizedBox(height: 12),
-              const Text(
+              Text(
                 'Audit Trail',
                 style: TextStyle(
-                  color: Color(0xFF0A2A43),
+                  color: Theme.of(context).colorScheme.onSurface,
                   fontWeight: FontWeight.w900,
                   fontSize: 16,
                 ),
@@ -1137,13 +1137,13 @@ class _AdminPackageBreakdown extends StatelessWidget {
               ),
               _BenefitChip(
                 label: summary == null
-                    ? 'Sponsor Bonus Rp0'
-                    : 'Sponsor ${_formatCompactRupiah(_intFrom(summary!['totalSponsorBonus']))}',
+                    ? 'Bonus Referral Rp0'
+                    : 'Referral ${_formatCompactRupiah(_intFrom(summary!['totalSponsorBonus']))}',
               ),
               _BenefitChip(
                 label: summary == null
-                    ? 'Level Bonus Rp0'
-                    : 'Level ${_formatCompactRupiah(_intFrom(summary!['totalLevelBonus']))}',
+                    ? 'Bonus Tingkat Rp0'
+                    : 'Tingkat ${_formatCompactRupiah(_intFrom(summary!['totalLevelBonus']))}',
               ),
               _BenefitChip(
                 label: summary == null

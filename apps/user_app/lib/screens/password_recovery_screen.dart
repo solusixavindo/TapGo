@@ -10,6 +10,12 @@ final List<TextInputFormatter> tapGoOtpInputFormatters = [
   LengthLimitingTextInputFormatter(6),
 ];
 
+/// Pemeriksaan format longgar — cukup untuk menolak salah ketik di klien;
+/// backend tetap menjadi penentu akhir apakah email itu benar-benar terdaftar
+/// dan terverifikasi.
+final RegExp _tapGoEmailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+bool _tapGoLooksLikeEmail(String value) => _tapGoEmailPattern.hasMatch(value);
+
 /// Aturan password baru. Cerminan `validatePasswordPolicy` di backend;
 /// backend tetap menjadi penentu akhir — ini hanya membantu pengguna melihat
 /// syaratnya sebelum mengirim.
@@ -159,7 +165,11 @@ class _PasswordRecoveryScreenState
     return _guarded(() async {
       final identifier = _identifierController.text.trim();
       if (identifier.isEmpty) {
-        setState(() => _errorMessage = 'Isi nomor HP atau email dulu.');
+        setState(() => _errorMessage = 'Isi email dulu.');
+        return;
+      }
+      if (!_tapGoLooksLikeEmail(identifier)) {
+        setState(() => _errorMessage = 'Format email belum sesuai.');
         return;
       }
       await _apiClient.requestPasswordRecovery(identifier);
@@ -282,7 +292,7 @@ class _PasswordRecoveryScreenState
   List<Widget> _identifierStep(ColorScheme colorScheme) {
     return [
       Text(
-        'Masukkan nomor HP atau email',
+        'Masukkan email akun Anda',
         style: TextStyle(
           color: colorScheme.onSurface,
           fontSize: 20,
@@ -294,12 +304,44 @@ class _PasswordRecoveryScreenState
         'Kami akan mengirim kode verifikasi bila akun ditemukan.',
         style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14),
       ),
+      const SizedBox(height: 12),
+      // Pesan tetap, sama untuk semua pengguna — sengaja begitu supaya tidak
+      // membocorkan status akun tertentu. Pemulihan hanya lewat email
+      // terverifikasi; belum ada penyedia SMS/WhatsApp yang terpasang, jadi
+      // nomor HP sengaja tidak lagi diterima di layar ini.
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline_rounded,
+                size: 18, color: colorScheme.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Kode hanya bisa dikirim lewat email yang sudah terverifikasi '
+                'di akun Anda. Bila akun Anda belum punya email atau belum '
+                'diverifikasi, hubungi Admin TapGo untuk dibantu.',
+                style: TextStyle(
+                  color: colorScheme.onSurfaceVariant,
+                  fontSize: 12.5,
+                  height: 1.4,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
       const SizedBox(height: 20),
       _InputField(
         controller: _identifierController,
-        icon: Icons.account_circle_rounded,
-        label: 'Nomor HP atau email',
-        hint: '0812xxxxxxx atau nama@email.com',
+        icon: Icons.email_rounded,
+        label: 'Email',
+        hint: 'nama@email.com',
         keyboardType: TextInputType.emailAddress,
         textInputAction: TextInputAction.done,
         onFieldSubmitted: (_) => _submitIdentifier(),

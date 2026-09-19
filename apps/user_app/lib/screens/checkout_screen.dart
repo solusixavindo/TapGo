@@ -60,16 +60,31 @@ class CheckoutScreen extends StatelessWidget {
           _TapGoReveal(
             order: 3,
             child: TextButton.icon(
-              onPressed: () {
-                _TapGoSnackbar.info(context, 'Invoice siap diunduh.');
-              },
-              icon: const Icon(Icons.download_rounded),
-              label: const Text('Unduh Invoice'),
+              onPressed: () => _copyInvoiceSummary(context, invoice),
+              icon: const Icon(Icons.copy_rounded),
+              label: const Text('Salin Detail Invoice'),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _copyInvoiceSummary(
+    BuildContext context,
+    InvoiceModel invoice,
+  ) async {
+    await Clipboard.setData(
+      ClipboardData(
+        text: 'Invoice: ${invoice.number}\n'
+            'Paket: ${invoice.packageName}\n'
+            'Total: ${formatRupiah(invoice.total)}',
+      ),
+    );
+    if (!context.mounted) {
+      return;
+    }
+    _TapGoSnackbar.info(context, 'Detail invoice disalin ke clipboard.');
   }
 
   void _showWhatsAppPreview(BuildContext context, InvoiceModel invoice) {
@@ -82,10 +97,10 @@ class CheckoutScreen extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Pratinjau WhatsApp',
               style: TextStyle(
-                color: Color(0xFF0A2A43),
+                color: Theme.of(context).colorScheme.onSurface,
                 fontSize: 20,
                 fontWeight: FontWeight.w900,
               ),

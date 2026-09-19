@@ -205,7 +205,13 @@ Future<TapGoSessionPersistenceResult>
     tapGoPersistAuthenticatedSessionBestEffort({
   required DemoClientSession session,
   required List<TapGoSessionPersistStep> steps,
-  Duration stepTimeout = const Duration(seconds: 1),
+  // Beberapa step (mis. saveTokens) melakukan lebih dari satu penulisan
+  // FlutterSecureStorage secara berurutan, masing-masing sudah dibatasi
+  // _storageWriteTimeout (3 detik) di persistent_demo_store.dart. Batas step
+  // di sini HARUS lebih longgar daripada jumlah kasus terburuknya (2×3
+  // detik), bukan lebih ketat — 1 detik sebelumnya justru memotong step
+  // sebelum penulisan yang sah sempat selesai di perangkat fisik nyata.
+  Duration stepTimeout = const Duration(seconds: 8),
 }) async {
   final failedSteps = <String>[];
   for (final step in steps) {
@@ -314,10 +320,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _referralController = TextEditingController();
   final _nameFocusNode = FocusNode();
   final _phoneFocusNode = FocusNode();
+  final _emailFocusNode = FocusNode();
   final _passwordFocusNode = FocusNode();
   final _referralFocusNode = FocusNode();
   bool _isRegister = false;
@@ -341,6 +349,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               name: _nameController.text.trim(),
               phone: phone,
               password: _passwordController.text,
+              email: _emailController.text.trim().isEmpty
+                  ? null
+                  : _emailController.text.trim(),
               referralCode: tapGoIsDirectDistribution
                   ? _referralController.text.trim()
                   : null,
@@ -392,7 +403,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         _tapGoDebugLog('[TapGo Auth] membership snapshot skipped: $error');
       }
       _tapGoDebugLog('[TapGo Auth] in_memory_session:$authMode');
-      _activateAuthenticatedSession(session);
+      await _activateAuthenticatedSession(session);
     } on DioException catch (error) {
       _tapGoDebugLog('[TapGo Auth] backend auth failed: ${error.message}');
       _tapGoDebugLog(
@@ -419,7 +430,14 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
-  void _activateAuthenticatedSession(DemoClientSession session) {
+  /// Sesi disimpan ke disk SEBELUM diaktifkan/dinavigasikan ke dashboard —
+  /// bukan fire-and-forget. Kalau proses dimatikan OS tepat setelah login
+  /// (umum saat app berpindah/di-swipe), sesi yang belum sempat tersimpan
+  /// akan hilang tanpa peringatan sama sekali di buka berikutnya. Menunggu
+  /// penyimpanan selesai dulu menutup celah itu; penundaannya kecil karena
+  /// tiap langkah penyimpanan sudah dibatasi timeout singkat.
+  Future<void> _activateAuthenticatedSession(DemoClientSession session) async {
+    await _persistAuthenticatedSession(session);
     tapGoActivateAuthenticatedRuntimeSession(
       session: session,
       setSession: (value) =>
@@ -428,7 +446,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           ref.read(_isAuthenticatedProvider.notifier).state = value,
       afterAuthenticated: _openAuthenticatedDashboard,
     );
-    unawaited(_persistAuthenticatedSession(session));
   }
 
   void _openAuthenticatedDashboard() {
@@ -597,10 +614,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     _referralController.dispose();
     _nameFocusNode.dispose();
     _phoneFocusNode.dispose();
+    _emailFocusNode.dispose();
     _passwordFocusNode.dispose();
     _referralFocusNode.dispose();
     super.dispose();
@@ -710,9 +729,26 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       autofillHints: const [AutofillHints.telephoneNumber],
                       validator: _phoneValidator,
                       textInputAction: TextInputAction.next,
-                      onFieldSubmitted: (_) =>
-                          _passwordFocusNode.requestFocus(),
+                      onFieldSubmitted: (_) => _isRegister
+                          ? _emailFocusNode.requestFocus()
+                          : _passwordFocusNode.requestFocus(),
                     ),
+                    if (_isRegister) ...[
+                      const SizedBox(height: 12),
+                      _InputField(
+                        controller: _emailController,
+                        focusNode: _emailFocusNode,
+                        icon: Icons.email_rounded,
+                        label: 'Email',
+                        hint: 'nama@email.com (untuk lupa password)',
+                        keyboardType: TextInputType.emailAddress,
+                        autofillHints: const [AutofillHints.email],
+                        validator: _emailValidator,
+                        textInputAction: TextInputAction.next,
+                        onFieldSubmitted: (_) =>
+                            _passwordFocusNode.requestFocus(),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     _InputField(
                       controller: _passwordController,
@@ -805,6 +841,17 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 
   String? _phoneValidator(String? value) {
     return tapGoPhoneValidatorMessage(value);
+  }
+
+  /// Opsional, tapi kalau diisi wajib berbentuk email — dipakai untuk lupa
+  /// password lewat email, jadi salah format lebih baik ditolak di sini
+  /// daripada baru ketahuan saat akun butuh dipulihkan.
+  String? _emailValidator(String? value) {
+    final trimmed = (value ?? '').trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    return _tapGoLooksLikeEmail(trimmed) ? null : 'Format email belum sesuai';
   }
 
   String? _passwordValidator(String? value) {
