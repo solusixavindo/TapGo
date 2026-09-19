@@ -197,6 +197,51 @@ void main() {
       );
     });
 
+    testWidgets('11 checkout — operator: petunjuk awal', (tester) async {
+      await shoot(
+        tester,
+        '11_ppob_checkout_operator_idle',
+        repository: createDemoPpobRepository(),
+        child: PpobCheckoutScreen(
+          categoryCode: 'PULSA',
+          product: demoProduct('PULSA_10K'),
+        ),
+      );
+    });
+
+    testWidgets('12 checkout — operator terdeteksi (XL)', (tester) async {
+      await shoot(
+        tester,
+        '12_ppob_checkout_operator_ok',
+        repository: createDemoPpobRepository(),
+        child: PpobCheckoutScreen(
+          categoryCode: 'PULSA',
+          product: demoProduct('PULSA_10K'),
+        ),
+        interact: (tester) async {
+          await tester.enterText(find.byType(TextFormField), '081712345678');
+          await tester.pump();
+        },
+      );
+    });
+
+    testWidgets('13 checkout — operator belum didukung (Indosat)',
+        (tester) async {
+      await shoot(
+        tester,
+        '13_ppob_checkout_operator_unsupported',
+        repository: createDemoPpobRepository(),
+        child: PpobCheckoutScreen(
+          categoryCode: 'PULSA',
+          product: demoProduct('PULSA_10K'),
+        ),
+        interact: (tester) async {
+          await tester.enterText(find.byType(TextFormField), '081512345678');
+          await tester.pump();
+        },
+      );
+    });
+
     testWidgets('04 checkout — rincian saldo gabungan', (tester) async {
       await shoot(
         tester,

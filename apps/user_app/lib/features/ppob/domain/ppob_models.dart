@@ -38,6 +38,7 @@ class PpobProduct {
     this.description,
     this.targetPattern,
     this.sortOrder = 0,
+    this.supportedOperators = const [],
   });
 
   final String id;
@@ -49,6 +50,10 @@ class PpobProduct {
   final String targetLabel;
   final String? targetPattern;
   final int sortOrder;
+
+  /// Pulsa/data: kode operator yang dapat dilayani (mis. `telkomsel`, `xl`).
+  /// Kosong berarti produk tidak dibatasi operator.
+  final List<String> supportedOperators;
 
   double get totalPrice => price + adminFee;
 
@@ -63,6 +68,9 @@ class PpobProduct {
       targetLabel: _stringFromJson(json['targetLabel'], 'Nomor Tujuan'),
       targetPattern: json['targetPattern'] is String ? json['targetPattern'] as String : null,
       sortOrder: json['sortOrder'] is num ? (json['sortOrder'] as num).toInt() : 0,
+      supportedOperators: json['supportedOperators'] is List
+          ? (json['supportedOperators'] as List).whereType<String>().toList()
+          : const [],
     );
   }
 }

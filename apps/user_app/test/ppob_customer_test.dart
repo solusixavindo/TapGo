@@ -314,6 +314,85 @@ void main() {
       expect(find.text('Dari saldo utama'), findsOneWidget);
     });
 
+    Future<void> pumpMultiOperator(WidgetTester tester, _FakePpobWires wires) async {
+      wires.catalog = [
+        _category(products: const [
+          PpobProduct(
+            id: 'prod-multi',
+            sku: 'PULSA_5K',
+            name: 'Pulsa Rp5.000',
+            price: 6500,
+            adminFee: 0,
+            targetLabel: 'Nomor HP',
+            targetPattern: '^[0-9]{10,15}\$',
+            supportedOperators: ['telkomsel', 'axis', 'tri', 'xl'],
+          ),
+        ]),
+      ];
+      await pumpCheckout(tester, wires);
+    }
+
+    Future<void> typeNumber(WidgetTester tester, String value) async {
+      await tester.enterText(find.byType(TextFormField), value);
+      await tester.pump();
+    }
+
+    bool cekHargaEnabled(WidgetTester tester) {
+      final button = tester.widget<FilledButton>(find.byType(FilledButton));
+      return button.onPressed != null;
+    }
+
+    testWidgets('operator: petunjuk awal menyebut operator yang didukung',
+        (tester) async {
+      await pumpMultiOperator(tester, _FakePpobWires());
+      expect(find.byKey(const ValueKey('ppob-operator-idle')), findsOneWidget);
+      expect(find.textContaining('Tersedia untuk: Axis, Telkomsel, Tri, XL.'),
+          findsOneWidget);
+    });
+
+    testWidgets('operator: nomor XL terdeteksi dan boleh cek harga',
+        (tester) async {
+      await pumpMultiOperator(tester, _FakePpobWires());
+      await typeNumber(tester, '081712345678');
+      expect(find.byKey(const ValueKey('ppob-operator-ok')), findsOneWidget);
+      expect(find.text('Operator: XL'), findsOneWidget);
+      expect(cekHargaEnabled(tester), isTrue);
+    });
+
+    testWidgets('operator: format +62 dan spasi tetap dikenali', (tester) async {
+      await pumpMultiOperator(tester, _FakePpobWires());
+      await typeNumber(tester, '+62 812-1234-5678');
+      expect(find.text('Operator: Telkomsel'), findsOneWidget);
+    });
+
+    testWidgets('operator tidak didukung: peringatan + tombol nonaktif',
+        (tester) async {
+      final wires = _FakePpobWires();
+      await pumpMultiOperator(tester, wires);
+      await typeNumber(tester, '081512345678'); // Indosat
+      expect(
+          find.byKey(const ValueKey('ppob-operator-unsupported')), findsOneWidget);
+      expect(find.textContaining('belum tersedia untuk Indosat'), findsOneWidget);
+      expect(cekHargaEnabled(tester), isFalse);
+      expect(wires.inquiryCalls, 0);
+    });
+
+    testWidgets('prefiks tidak dikenal: pesan jelas + tombol nonaktif',
+        (tester) async {
+      await pumpMultiOperator(tester, _FakePpobWires());
+      await typeNumber(tester, '080012345678');
+      expect(find.byKey(const ValueKey('ppob-operator-unknown')), findsOneWidget);
+      expect(cekHargaEnabled(tester), isFalse);
+    });
+
+    testWidgets('produk tanpa batas operator tidak menampilkan status operator',
+        (tester) async {
+      await pumpCheckout(tester, _FakePpobWires());
+      await typeNumber(tester, '081512345678');
+      expect(find.textContaining('Operator'), findsNothing);
+      expect(cekHargaEnabled(tester), isTrue);
+    });
+
     testWidgets('saldo tidak cukup: tombol bayar nonaktif + pesan jelas',
         (tester) async {
       final wires = _FakePpobWires()..inquiryWalletBalance = 1000;

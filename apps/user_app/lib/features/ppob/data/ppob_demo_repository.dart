@@ -51,9 +51,10 @@ class _PpobDemoState {
   List<dynamic> get catalogJson => [
         _category('demo-cat-pulsa', 'PULSA', 'Pulsa', 'phone_iphone', 1, [
           _product('demo-pulsa-10k', 'PULSA_10K', 'Pulsa Rp10.000', 11500.0, 0.0,
-              'Nomor HP', '^[0-9]{10,15}\$', 1),
+              'Nomor HP', '^[0-9]{10,15}\$', 1,
+              ['telkomsel', 'axis', 'tri', 'xl', 'smartfren']),
           _product('demo-pulsa-50k', 'PULSA_50K', 'Pulsa Rp50.000', 51000.0, 0.0,
-              'Nomor HP', '^[0-9]{10,15}\$', 2),
+              'Nomor HP', '^[0-9]{10,15}\$', 2, ['telkomsel', 'indosat']),
         ]),
         _category('demo-cat-data', 'DATA', 'Paket Data', 'wifi', 2, [
           _product('demo-data-5gb', 'DATA_5GB', 'Paket Data 5 GB', 43000.0, 0.0,
@@ -205,8 +206,9 @@ class _PpobDemoState {
     double adminFee,
     String targetLabel,
     String targetPattern,
-    int sortOrder,
-  ) =>
+    int sortOrder, [
+    List<String> supportedOperators = const [],
+  ]) =>
       {
         'id': id,
         'sku': sku,
@@ -217,5 +219,6 @@ class _PpobDemoState {
         'targetLabel': targetLabel,
         'targetPattern': targetPattern,
         'sortOrder': sortOrder,
+        'supportedOperators': supportedOperators,
       };
 }

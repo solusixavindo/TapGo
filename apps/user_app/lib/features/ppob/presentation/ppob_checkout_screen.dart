@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/ppob_providers.dart';
 import '../domain/ppob_models.dart';
+import '../domain/ppob_operator.dart';
 import 'ppob_history_screen.dart';
 import 'widgets/ppob_shared.dart';
 
@@ -51,9 +52,33 @@ class _PpobCheckoutScreenState extends ConsumerState<PpobCheckoutScreen> {
   String get _normalizedTarget =>
       _targetController.text.replaceAll(RegExp(r'[\s-]+'), '').trim();
 
+  /// Status operator untuk produk yang dibatasi operator (pulsa/data). Null =
+  /// produk tidak dibatasi operator, jadi tidak ada pemeriksaan/tampilan operator.
+  _OperatorCheck? get _operatorCheck {
+    final supported = widget.product.supportedOperators;
+    if (supported.isEmpty) {
+      return null;
+    }
+    final target = _normalizedTarget;
+    if (normalizePpobMsisdn(target).length < 4) {
+      return _OperatorCheck.idle(supported);
+    }
+    final detected = detectPpobOperator(target);
+    if (detected == null) {
+      return _OperatorCheck.unknown(supported);
+    }
+    return supported.contains(detected)
+        ? _OperatorCheck.ok(detected, supported)
+        : _OperatorCheck.unsupported(detected, supported);
+  }
+
   bool get _targetReady {
     final target = _normalizedTarget;
     if (target.length < 5) {
+      return false;
+    }
+    final operatorCheck = _operatorCheck;
+    if (operatorCheck != null && !operatorCheck.accepted) {
       return false;
     }
     final pattern = widget.product.targetPattern;
@@ -164,6 +189,10 @@ class _PpobCheckoutScreenState extends ConsumerState<PpobCheckoutScreen> {
                 prefixIcon: const Icon(Icons.dialpad_rounded),
               ),
             ),
+            if (_operatorCheck != null) ...[
+              const SizedBox(height: 8),
+              _OperatorStatus(check: _operatorCheck!),
+            ],
             const SizedBox(height: 12),
             if (_errorMessage != null) ...[
               _ErrorBanner(message: _errorMessage!),
@@ -456,6 +485,85 @@ class _ErrorBanner extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+enum _OperatorState { idle, ok, unsupported, unknown }
+
+/// Hasil pemeriksaan operator nomor tujuan terhadap operator yang didukung produk.
+class _OperatorCheck {
+  const _OperatorCheck._(this.state, this.detected, this.supported);
+
+  factory _OperatorCheck.idle(List<String> supported) =>
+      _OperatorCheck._(_OperatorState.idle, null, supported);
+  factory _OperatorCheck.ok(String detected, List<String> supported) =>
+      _OperatorCheck._(_OperatorState.ok, detected, supported);
+  factory _OperatorCheck.unsupported(String detected, List<String> supported) =>
+      _OperatorCheck._(_OperatorState.unsupported, detected, supported);
+  factory _OperatorCheck.unknown(List<String> supported) =>
+      _OperatorCheck._(_OperatorState.unknown, null, supported);
+
+  final _OperatorState state;
+  final String? detected;
+  final List<String> supported;
+
+  /// Nomor boleh dilanjutkan ke cek harga (idle tetap diperbolehkan karena
+  /// panjang nomor sudah dijaga aturan lain).
+  bool get accepted =>
+      state == _OperatorState.ok || state == _OperatorState.idle;
+}
+
+class _OperatorStatus extends StatelessWidget {
+  const _OperatorStatus({required this.check});
+
+  final _OperatorCheck check;
+
+  @override
+  Widget build(BuildContext context) {
+    final list = ppobOperatorList(check.supported);
+    final (IconData icon, Color color, String text) = switch (check.state) {
+      _OperatorState.idle => (
+          Icons.sim_card_outlined,
+          Theme.of(context).colorScheme.onSurfaceVariant,
+          'Operator terdeteksi otomatis dari nomor. Tersedia untuk: $list.',
+        ),
+      _OperatorState.ok => (
+          Icons.check_circle_rounded,
+          const Color(0xFF16A34A),
+          'Operator: ${ppobOperatorLabel(check.detected!)}',
+        ),
+      _OperatorState.unsupported => (
+          Icons.warning_amber_rounded,
+          const Color(0xFFB45309),
+          'Produk ini belum tersedia untuk ${ppobOperatorLabel(check.detected!)}. '
+              'Tersedia untuk: $list.',
+        ),
+      _OperatorState.unknown => (
+          Icons.help_outline_rounded,
+          const Color(0xFFB45309),
+          'Operator nomor ini belum dikenali. Tersedia untuk: $list.',
+        ),
+    };
+    return Row(
+      key: ValueKey('ppob-operator-${check.state.name}'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 13,
+              fontWeight: check.state == _OperatorState.ok
+                  ? FontWeight.w700
+                  : FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
