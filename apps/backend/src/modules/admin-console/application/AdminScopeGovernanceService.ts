@@ -1,7 +1,7 @@
 import { AdminScope, AdminScopeGrantStatus, Prisma, PrismaClient, UserRole } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../core/errors/AppError.js";
-import { isAdminRole, isSuperAdminRole, isTopLevelRole, roleSatisfies } from "../../../core/security/roleHierarchy.js";
+import { isAdminRole, isTopLevelRole, roleSatisfies } from "../../../core/security/roleHierarchy.js";
 
 /**
  * Tata kelola scope admin.
@@ -178,9 +178,10 @@ export class AdminScopeGovernanceService {
         ADMIN_SCOPE_ACTOR_INACTIVE
       );
     }
-    // SUPER_ADMIN adalah SYARAT, bukan pemberi kewenangan. ADMIN yang memegang
-    // ADMIN_SCOPE_MANAGE tetap ditolak di sini.
-    if (!isSuperAdminRole(actor.role)) {
+    // Keputusan pemilik: pemberian/pencabutan scope khusus SUPER_ADMIN_VIP.
+    // Role adalah SYARAT, bukan pemberi kewenangan: ADMIN atau SUPER_ADMIN
+    // biasa yang memegang ADMIN_SCOPE_MANAGE tetap ditolak di sini.
+    if (!roleSatisfies(actor.role, "SUPER_ADMIN_VIP")) {
       throw new AppError(
         "Kewenangan pengelolaan scope tidak tersedia.",
         StatusCodes.FORBIDDEN,

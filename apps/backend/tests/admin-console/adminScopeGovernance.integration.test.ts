@@ -94,9 +94,9 @@ async function runBootstrap(userId: string, reason = "INITIAL_BOOTSTRAP", confir
   }
 }
 
-/** Manager penuh: SUPER_ADMIN aktif dengan ADMIN_SCOPE_MANAGE. */
+/** Manager penuh: SUPER_ADMIN_VIP aktif dengan ADMIN_SCOPE_MANAGE. */
 async function createManager() {
-  const user = await createUser("SUPER_ADMIN");
+  const user = await createUser("SUPER_ADMIN_VIP");
   const grant = await prisma.adminScopeGrant.create({
     data: { userId: user.id, scope: MANAGE, grantedById: user.id, status: "ACTIVE" }
   });
@@ -283,9 +283,19 @@ describeIntegration("Stage R2.3 — admin scope governance", () => {
     expect(response.body.code).toBe("ADMIN_SCOPE_ACTOR_ROLE_REQUIRED");
   });
 
-  it("12. SUPER_ADMIN tanpa manage scope ditolak", async () => {
+  it("11b. SUPER_ADMIN biasa (bukan VIP) dengan ADMIN_SCOPE_MANAGE tetap ditolak", async () => {
     const superAdmin = await createUser("SUPER_ADMIN");
+    await prisma.adminScopeGrant.create({
+      data: { userId: superAdmin.id, scope: MANAGE, grantedById: superAdmin.id, status: "ACTIVE" }
+    });
     const response = await api("/api/v1/admin/scope-grants", { token: tokenFor(superAdmin) });
+    expect(response.status).toBe(403);
+    expect(response.body.code).toBe("ADMIN_SCOPE_ACTOR_ROLE_REQUIRED");
+  });
+
+  it("12. SUPER_ADMIN_VIP tanpa manage scope ditolak", async () => {
+    const vip = await createUser("SUPER_ADMIN_VIP");
+    const response = await api("/api/v1/admin/scope-grants", { token: tokenFor(vip) });
     expect(response.status).toBe(403);
     expect(response.body.code).toBe("ADMIN_SCOPE_MANAGE_REQUIRED");
   });
