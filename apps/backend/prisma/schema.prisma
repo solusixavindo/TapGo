@@ -1471,6 +1471,12 @@ enum RidePaymentState {
   /// Driver melapor tunai diterima — BUKAN saldo digital.
   CASH_REPORTED
   FAILED
+  /// TapGoPay: tarif sudah ditahan dari saldo penumpang, menunggu perjalanan selesai.
+  DIGITAL_HELD
+  /// TapGoPay: perjalanan selesai, saldo driver sudah dikreditkan.
+  DIGITAL_PAID
+  /// TapGoPay: perjalanan batal, tarif dikembalikan ke saldo penumpang.
+  DIGITAL_REFUNDED
 }
 
 enum RideEventType {

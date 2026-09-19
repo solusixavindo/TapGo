@@ -11,6 +11,7 @@ import {
 } from "@prisma/client";
 import { createHash, randomBytes } from "node:crypto";
 import { StatusCodes } from "http-status-codes";
+import { env } from "../../../config/env.js";
 import { AppError } from "../../../core/errors/AppError.js";
 import {
   DisclosureSource,
@@ -157,8 +158,8 @@ export class RideService {
     paymentMethod: "CASH" | "DIGITAL";
     idempotencyKey?: string;
   }) {
-    // Pembayaran digital fail-closed pada Stage 5.2.
-    if (input.paymentMethod === "DIGITAL") {
+    // Pembayaran digital (TapGoPay) fail-closed sampai dinyalakan eksplisit.
+    if (input.paymentMethod === "DIGITAL" && !env.RIDE_DIGITAL_PAYMENT_ENABLED) {
       throw new AppError(
         "Pembayaran digital belum tersedia untuk perjalanan",
         StatusCodes.FORBIDDEN,
@@ -255,8 +256,9 @@ export class RideService {
             subtotalFare: quote.subtotalFare,
             totalFare: quote.totalFare,
             fareRuleVersion: quote.fareRuleVersion,
-            paymentMethod: "CASH",
-            paymentState: "CASH_EXPECTED",
+            paymentMethod: input.paymentMethod,
+            paymentState:
+              input.paymentMethod === "DIGITAL" ? "DIGITAL_HELD" : "CASH_EXPECTED",
           },
         });
       } catch (error) {
@@ -272,6 +274,16 @@ export class RideService {
           );
         }
         throw error;
+      }
+
+      // TapGoPay: tarif ditahan dari saldo dalam transaksi yang sama dengan
+      // pembuatan order — bila saldo kurang, order ikut dibatalkan (rollback).
+      if (input.paymentMethod === "DIGITAL") {
+        await this.holdDigitalPayment(tx, {
+          orderId: created.id,
+          passengerId: input.userId,
+          totalFare: created.totalFare,
+        });
       }
 
       await this.writeEvent(tx, {
@@ -372,6 +384,7 @@ export class RideService {
       });
 
       await this.releaseDriver(tx, order.driverProfileId);
+      await this.refundDigitalPayment(tx, order);
       await this.writeEvent(tx, {
         rideOrderId: order.id,
         type: "CANCELLED",
@@ -639,7 +652,8 @@ export class RideService {
         data.completedAt = now;
         // Tunai: TIDAK membuat saldo digital apa pun. Hanya menandai bahwa
         // pembayaran tunai diharapkan/dilaporkan; rekonsiliasi di luar scope.
-        data.paymentState = "CASH_REPORTED";
+        // TapGoPay: state pindah ke DIGITAL_PAID lewat settleDigitalPayment.
+        if (order.paymentMethod === "CASH") data.paymentState = "CASH_REPORTED";
       }
 
       // Conditional update: memastikan status tidak berubah oleh proses lain.
@@ -665,14 +679,17 @@ export class RideService {
         // fail-closed di createOrder — sehingga cabang ini saat ini tidak
         // pernah tereksekusi, dan memang seharusnya begitu sampai pembayaran
         // digital diaktifkan.
-        if (order.paymentMethod !== "CASH") {
-          await this.recordRideRevenueShare(tx, order, profile.id);
+        if (order.paymentMethod === "DIGITAL") {
+          await this.settleDigitalPayment(tx, order, profile.id);
         }
       }
 
       await this.writeEvent(tx, {
         rideOrderId: order.id,
-        type: input.next === "COMPLETED" ? "CASH_REPORTED" : "STATUS_CHANGED",
+        type:
+          input.next === "COMPLETED" && order.paymentMethod === "CASH"
+            ? "CASH_REPORTED"
+            : "STATUS_CHANGED",
         actorUserId: input.userId,
         actorRole: "DRIVER",
         previousStatus: order.status,
@@ -730,6 +747,7 @@ export class RideService {
       });
 
       await this.releaseDriver(tx, profile.id);
+      await this.refundDigitalPayment(tx, order);
       await this.writeEvent(tx, {
         rideOrderId: order.id,
         type: "CANCELLED",
@@ -980,6 +998,7 @@ export class RideService {
       });
 
       await this.releaseDriver(tx, order.driverProfileId);
+      await this.refundDigitalPayment(tx, order);
       await this.writeEvent(tx, {
         rideOrderId: order.id,
         type: input.status === "CANCELLED_BY_SYSTEM" ? "CANCELLED" : "STATUS_CHANGED",
@@ -1345,10 +1364,153 @@ export class RideService {
   }
 
   /**
+   * TapGoPay: menahan tarif dari saldo penumpang (escrow).
+   *
+   * Saldo utama (`balance`) dipakai; bagian yang bisa ditarik (`cashBalance`)
+   * dipakai terakhir, supaya top up tidak menghabiskan penghasilan yang
+   * sebenarnya bisa dicairkan. Pembagian itu disimpan di ledger agar refund
+   * mengembalikan komposisi yang sama persis.
+   *
+   * Update bersyarat pada nilai yang dibaca: dua pemesanan serentak tidak bisa
+   * sama-sama lolos dengan saldo yang hanya cukup untuk satu.
+   */
+  private async holdDigitalPayment(
+    tx: Prisma.TransactionClient,
+    input: { orderId: string; passengerId: string; totalFare: number },
+  ) {
+    const wallet = await tx.wallet.findUnique({
+      where: { userId: input.passengerId },
+      select: { id: true, balance: true, cashBalance: true },
+    });
+    const fare = new Prisma.Decimal(input.totalFare);
+    if (!wallet || wallet.balance.lt(fare)) {
+      throw new AppError(
+        "Saldo TapGoPay tidak mencukupi",
+        StatusCodes.BAD_REQUEST,
+        "RIDE_INSUFFICIENT_BALANCE",
+      );
+    }
+
+    const nonCash = wallet.balance.minus(wallet.cashBalance);
+    const fromCash = Prisma.Decimal.max(fare.minus(nonCash), new Prisma.Decimal(0));
+
+    const held = await tx.wallet.updateMany({
+      where: {
+        id: wallet.id,
+        balance: wallet.balance,
+        cashBalance: wallet.cashBalance,
+      },
+      data: {
+        balance: { decrement: fare },
+        cashBalance: { decrement: fromCash },
+      },
+    });
+    if (held.count !== 1) {
+      throw new AppError(
+        "Saldo berubah, silakan coba lagi",
+        StatusCodes.CONFLICT,
+        "RIDE_BALANCE_CHANGED",
+      );
+    }
+
+    await tx.walletTransaction.create({
+      data: {
+        walletId: wallet.id,
+        type: "PAYMENT",
+        amount: fare.neg(),
+        referenceType: "RIDE_ORDER",
+        referenceId: input.orderId,
+        metadata: { fromCash: fromCash.toString(), held: true },
+      },
+    });
+  }
+
+  /**
+   * TapGoPay: mengembalikan tarif yang ditahan. Idempoten — hanya order yang
+   * masih DIGITAL_HELD yang dikembalikan, dan perpindahan state adalah
+   * penjaganya: pemanggilan kedua tidak mengembalikan apa pun.
+   */
+  private async refundDigitalPayment(
+    tx: Prisma.TransactionClient,
+    order: { id: string; paymentMethod: string },
+  ) {
+    if (order.paymentMethod !== "DIGITAL") return;
+
+    const flipped = await tx.rideOrder.updateMany({
+      where: { id: order.id, paymentState: "DIGITAL_HELD" },
+      data: { paymentState: "DIGITAL_REFUNDED" },
+    });
+    if (flipped.count !== 1) return;
+
+    const payment = await tx.walletTransaction.findFirst({
+      where: { referenceType: "RIDE_ORDER", referenceId: order.id, type: "PAYMENT" },
+      select: { walletId: true, amount: true, metadata: true },
+    });
+    if (!payment) {
+      throw new AppError(
+        "Catatan pembayaran perjalanan tidak ditemukan",
+        StatusCodes.INTERNAL_SERVER_ERROR,
+        "RIDE_PAYMENT_LEDGER_MISSING",
+      );
+    }
+
+    const meta = (payment.metadata ?? {}) as Record<string, unknown>;
+    const refund = payment.amount.abs();
+    const fromCash = new Prisma.Decimal(String(meta.fromCash ?? "0"));
+
+    await tx.wallet.update({
+      where: { id: payment.walletId },
+      data: {
+        balance: { increment: refund },
+        cashBalance: { increment: fromCash },
+      },
+    });
+    await tx.walletTransaction.create({
+      data: {
+        walletId: payment.walletId,
+        type: "REFUND",
+        amount: refund,
+        referenceType: "RIDE_ORDER",
+        referenceId: order.id,
+        metadata: { fromCash: fromCash.toString() },
+      },
+    });
+  }
+
+  /**
+   * TapGoPay: perjalanan selesai — tarif yang ditahan dilunasi. State
+   * DIGITAL_HELD -> DIGITAL_PAID adalah penjaga idempotensi; bila order tidak
+   * dalam keadaan ditahan, penyelesaian dibatalkan agar tidak ada saldo
+   * driver yang lahir tanpa saldo penumpang yang dipotong.
+   */
+  private async settleDigitalPayment(
+    tx: Prisma.TransactionClient,
+    order: { id: string; totalFare: number },
+    driverProfileId: string,
+  ) {
+    const paid = await tx.rideOrder.updateMany({
+      where: { id: order.id, paymentState: "DIGITAL_HELD" },
+      data: { paymentState: "DIGITAL_PAID" },
+    });
+    if (paid.count !== 1) {
+      throw new AppError(
+        "Pembayaran perjalanan belum siap diselesaikan",
+        StatusCodes.CONFLICT,
+        "RIDE_PAYMENT_NOT_HELD",
+      );
+    }
+    await this.recordRideRevenueShare(
+      tx,
+      { id: order.id, driverProfileId, totalFare: order.totalFare },
+      driverProfileId,
+    );
+  }
+
+  /**
    * Mencatat bagi hasil ride 92:8 saat sesi selesai.
    *
-   * HANYA untuk ride dengan pembayaran DIGITAL — pemanggil (advanceByDriver)
-   * wajib menyaring `order.paymentMethod !== "CASH"` sebelum memanggil ini.
+   * HANYA untuk ride dengan pembayaran DIGITAL — dipanggil lewat
+   * settleDigitalPayment setelah tarif penumpang terbukti ditahan.
    * Ride tunai dikecualikan total dari Business Engine (lihat "Isolasi
    * Business Engine" di rideFoundation.integration.test.ts): uangnya sudah
    * berpindah tangan secara fisik di luar aplikasi, jadi mencatatnya lagi ke

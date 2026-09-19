@@ -182,6 +182,9 @@ const envSchema = z.object({
   /// asli lewat instance OSRM self-host — butuh OSRM_BASE_URL. Nilai asing
   /// menggagalkan boot (z.enum), bukan diam-diam jatuh ke LOCAL.
   RIDE_DISTANCE_PROVIDER: z.enum(["LOCAL", "OSRM"]).default("LOCAL"),
+  /// Pembayaran perjalanan dengan saldo TapGoPay. Default mati (fail-closed);
+  /// pesanan DIGITAL ditolak sampai dinyalakan eksplisit.
+  RIDE_DIGITAL_PAYMENT_ENABLED: strictEnvBoolean(false),
   /// Wajib diisi bila RIDE_DISTANCE_PROVIDER=OSRM (lihat resolveDistancePort
   /// di ride.routes.ts) — kosong menggagalkan boot, bukan diam-diam memakai
   /// LOCAL. Contoh lokal: http://localhost:5001
