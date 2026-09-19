@@ -41,6 +41,14 @@ export type AuthClientContext = {
 
 export class AuthService {
   private static readonly maxReferralCodeAttempts = 8;
+  /// Jendela toleransi permintaan refresh ganda setelah rotasi (lihat refresh()).
+  private static readonly refreshRotationGraceMs = 30_000;
+
+  private static sameHash(a: string, b: string) {
+    const left = Buffer.from(a);
+    const right = Buffer.from(b);
+    return left.length === right.length && crypto.timingSafeEqual(left, right);
+  }
 
   constructor(private readonly authRepository: AuthRepository) {}
 
@@ -154,7 +162,27 @@ export class AuthService {
     }
 
     const tokenHash = this.hashToken(refreshToken);
-    if (!crypto.timingSafeEqual(Buffer.from(tokenHash), Buffer.from(session.refreshTokenHash))) {
+    if (!AuthService.sameHash(tokenHash, session.refreshTokenHash)) {
+      // Token ini bukan yang terbaru. Bila itu token SEBELUM rotasi terakhir dan
+      // rotasinya baru saja terjadi, ini hampir pasti permintaan refresh ganda yang
+      // berbarengan dari perangkat yang sama (dua layar/proses, atau retry) — bukan
+      // pencurian. Tolak dengan 409 tanpa mencabut sesi: pihak yang menang sudah
+      // memegang token baru. Klien lama memperlakukan 409 sebagai gangguan sementara
+      // (sesi dipertahankan), bukan penolakan.
+      const rotatedRecently =
+        session.previousRefreshTokenHash !== null &&
+        session.previousRefreshTokenHash !== undefined &&
+        session.rotatedAt !== null &&
+        session.rotatedAt !== undefined &&
+        Date.now() - session.rotatedAt.getTime() <= AuthService.refreshRotationGraceMs &&
+        AuthService.sameHash(tokenHash, session.previousRefreshTokenHash);
+      if (rotatedRecently) {
+        throw new AppError(
+          "Refresh token baru saja dirotasi oleh permintaan lain",
+          StatusCodes.CONFLICT,
+          "TOKEN_ROTATED"
+        );
+      }
       await this.authRepository.revokeSession(session.id);
       throw new AppError("Refresh token reuse detected", StatusCodes.UNAUTHORIZED, "TOKEN_REUSE_DETECTED");
     }
@@ -195,7 +223,21 @@ export class AuthService {
     });
     const expiresAt = this.refreshExpiryDate();
 
-    await this.authRepository.rotateSession(session.id, this.hashToken(newRefreshToken), expiresAt);
+    const rotated = await this.authRepository.rotateSession(
+      session.id,
+      session.refreshTokenHash,
+      this.hashToken(newRefreshToken),
+      expiresAt
+    );
+    if (!rotated) {
+      // Kalah balapan dengan refresh lain yang sah pada token yang sama: token baru
+      // kita tidak tersimpan, jadi jangan diberikan ke klien.
+      throw new AppError(
+        "Refresh token baru saja dirotasi oleh permintaan lain",
+        StatusCodes.CONFLICT,
+        "TOKEN_ROTATED"
+      );
+    }
 
     return {
       user: toPublicUser(user),
@@ -286,7 +328,12 @@ export class AuthService {
     const finalAccessToken = signAccessToken({ sub: userId, role, sessionId: session.id, authVersion, ...channelClaim });
     const finalRefreshToken = signRefreshToken({ sub: userId, role, sessionId: session.id, authVersion, ...channelClaim });
 
-    await this.authRepository.rotateSession(session.id, this.hashToken(finalRefreshToken), expiresAt);
+    await this.authRepository.rotateSession(
+      session.id,
+      this.hashToken(refreshToken),
+      this.hashToken(finalRefreshToken),
+      expiresAt
+    );
 
     const user = await this.authRepository.findUserById(userId);
     if (!user) {

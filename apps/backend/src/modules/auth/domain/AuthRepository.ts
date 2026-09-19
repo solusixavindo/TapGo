@@ -29,6 +29,9 @@ export type SessionRecord = {
   id: string;
   userId: string;
   refreshTokenHash: string;
+  /// Hash sebelum rotasi terakhir + waktunya (toleransi refresh ganda); null bila belum pernah dirotasi.
+  previousRefreshTokenHash?: string | null;
+  rotatedAt?: Date | null;
   revokedAt: Date | null;
   expiresAt: Date;
 };
@@ -54,7 +57,14 @@ export interface AuthRepository {
   getAuthVersion(userId: string): Promise<number>;
   createSession(input: CreateSessionInput): Promise<SessionRecord>;
   findSessionById(sessionId: string): Promise<SessionRecord | null>;
-  rotateSession(sessionId: string, refreshTokenHash: string, expiresAt: Date): Promise<void>;
+  /// Rotasi ATOMIK: hanya berhasil bila hash saat ini masih `expectedRefreshTokenHash`
+  /// dan sesi belum dicabut. Mengembalikan false bila kalah balapan dengan rotasi lain.
+  rotateSession(
+    sessionId: string,
+    expectedRefreshTokenHash: string,
+    refreshTokenHash: string,
+    expiresAt: Date
+  ): Promise<boolean>;
   revokeSession(sessionId: string): Promise<void>;
 
   /**

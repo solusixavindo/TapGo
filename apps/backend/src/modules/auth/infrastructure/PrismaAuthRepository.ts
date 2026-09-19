@@ -456,14 +456,22 @@ export class PrismaAuthRepository implements AuthRepository {
     return this.prisma.session.findUnique({ where: { id: sessionId } });
   }
 
-  async rotateSession(sessionId: string, refreshTokenHash: string, expiresAt: Date) {
-    await this.prisma.session.update({
-      where: { id: sessionId },
+  async rotateSession(
+    sessionId: string,
+    expectedRefreshTokenHash: string,
+    refreshTokenHash: string,
+    expiresAt: Date
+  ) {
+    const result = await this.prisma.session.updateMany({
+      where: { id: sessionId, refreshTokenHash: expectedRefreshTokenHash, revokedAt: null },
       data: {
+        previousRefreshTokenHash: expectedRefreshTokenHash,
+        rotatedAt: new Date(),
         refreshTokenHash,
         expiresAt
       }
     });
+    return result.count === 1;
   }
 
   async revokeSession(sessionId: string) {

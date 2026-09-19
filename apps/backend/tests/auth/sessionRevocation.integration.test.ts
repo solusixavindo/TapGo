@@ -228,18 +228,61 @@ describeIntegration("Stage R2.1 — session revocation survives integration", ()
     expect((await api("GET", "/api/v1/auth/me", undefined, accessToken)).status).toBe(200);
   });
 
-  it("8. reuse refresh token lama ditolak walau rotasi terjadi pada detik yang sama", async () => {
+  it("8. refresh ganda tepat setelah rotasi ditolak 409 TANPA mencabut sesi (bukan pencurian)", async () => {
     const { phone } = await createAccount();
     const { refreshToken } = await login(phone, OLD_PASSWORD);
 
-    // Tanpa jeda: refresh berikutnya mendarat pada detik yang sama dengan
-    // penerbitan token. Tanpa klaim jwtid unik, token hasil rotasi berbunyi
-    // byte-identik dengan token lama dan reuse tidak pernah terdeteksi.
     const first = await api("POST", "/api/v1/auth/refresh", { refreshToken });
     expect(first.status).toBe(200);
+    const fresh = first.body.data!.refreshToken as string;
+
+    // Token lama dipakai lagi beberapa milidetik kemudian (layar/proses ganda).
+    const duplicate = await api("POST", "/api/v1/auth/refresh", { refreshToken });
+    expect(duplicate.status).toBe(409);
+    expect(duplicate.body.code).toBe("TOKEN_ROTATED");
+
+    // Sesi utuh: token baru dari pemenang tetap bisa dipakai.
+    const next = await api("POST", "/api/v1/auth/refresh", { refreshToken: fresh });
+    expect(next.status).toBe(200);
+  });
+
+  it("8b. pemakaian ulang token lama SETELAH jendela toleransi = pencurian: sesi dicabut", async () => {
+    const { phone } = await createAccount();
+    const { refreshToken } = await login(phone, OLD_PASSWORD);
+    const first = await api("POST", "/api/v1/auth/refresh", { refreshToken });
+    expect(first.status).toBe(200);
+
+    // Majukan waktu rotasi melewati jendela toleransi (30 detik).
+    await prisma.session.updateMany({
+      where: { revokedAt: null },
+      data: { rotatedAt: new Date(Date.now() - 120_000) }
+    });
 
     const replay = await api("POST", "/api/v1/auth/refresh", { refreshToken });
     expect(replay.status).toBe(401);
     expect(replay.body.code).toBe("TOKEN_REUSE_DETECTED");
+
+    // Token baru ikut mati karena sesinya dicabut.
+    const afterRevoke = await api("POST", "/api/v1/auth/refresh", { refreshToken: first.body.data!.refreshToken });
+    expect(afterRevoke.status).toBe(401);
+  });
+
+  it("8c. dua refresh SERENTAK dengan token yang sama: satu menang, satu 409, sesi tetap hidup", async () => {
+    const { phone } = await createAccount();
+    const { refreshToken } = await login(phone, OLD_PASSWORD);
+
+    const [a, b] = await Promise.all([
+      api("POST", "/api/v1/auth/refresh", { refreshToken }),
+      api("POST", "/api/v1/auth/refresh", { refreshToken })
+    ]);
+    const statuses = [a.status, b.status].sort();
+    expect(statuses).toEqual([200, 409]);
+    const winner = a.status === 200 ? a : b;
+
+    const sessions = await prisma.session.findMany({});
+    expect(sessions.every((row) => row.revokedAt === null)).toBe(true);
+
+    const next = await api("POST", "/api/v1/auth/refresh", { refreshToken: winner.body.data!.refreshToken });
+    expect(next.status).toBe(200);
   });
 });

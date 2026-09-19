@@ -804,6 +804,12 @@ model Session {
   id               String    @id @default(uuid()) @db.Uuid
   userId           String    @map("user_id") @db.Uuid
   refreshTokenHash String    @map("refresh_token_hash")
+  /// Hash refresh token SEBELUM rotasi terakhir dan waktunya. Dipakai mengenali
+  /// permintaan refresh ganda yang berbarengan (layar/proses ganda di HP yang
+  /// sama) tanpa mencabut sesi; pemakaian ulang di luar jendela toleransi
+  /// tetap dianggap pencurian dan mencabut sesi.
+  previousRefreshTokenHash String? @map("previous_refresh_token_hash")
+  rotatedAt        DateTime? @map("rotated_at")
   userAgent        String?   @map("user_agent")
   ipAddress        String?   @map("ip_address") @db.Inet
   expiresAt        DateTime  @map("expires_at")
