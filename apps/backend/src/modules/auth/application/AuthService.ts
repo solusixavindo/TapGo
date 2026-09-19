@@ -28,10 +28,10 @@ export type AuthClientContext = {
   userAgent?: string;
   ipAddress?: string;
   deviceIdentifier?: string;
-  /**
   /** Sumber instalasi yang dilaporkan klien (penanda operasional, bukan bukti). */
   distribution?: string;
   installer?: string;
+  /**
    * Kanal yang menerbitkan token, di-stamp oleh controller berdasarkan
    * endpoint login yang dipanggil (K1c). Bila tidak diisi, token terbit tanpa
    * klaim kanal — perilaku lama yang masih diterima bertahap (K2a).
