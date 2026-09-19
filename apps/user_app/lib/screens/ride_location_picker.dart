@@ -224,6 +224,11 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
     });
   }
 
+  /// Pin jemput hijau, pin tujuan merah — beda jelas dari titik biru posisi pengguna.
+  Color get _pinColor => widget.title.toLowerCase().contains('jemput')
+      ? const Color(0xFF16A34A)
+      : const Color(0xFFEC3F54);
+
   void _moveMap(LatLng center, double zoom) {
     try {
       _mapController.move(center, zoom);
@@ -365,20 +370,62 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
                           urlTemplate: _tileUrl,
                           userAgentPackageName: 'com.xavindo.tapgo',
                         ),
-                        Align(
-                          alignment: Alignment.bottomRight,
-                          child: Padding(
-                            padding: const EdgeInsets.all(6),
-                            child: Text(
-                              tapGoOsmAttribution,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.black.withValues(alpha: 0.55),
+                        // Titik biru posisi pengguna + lingkar akurasi.
+                        TapGoUserLocationLayer(source: widget.port),
+                      ],
+                    ),
+                  ),
+                  // Atribusi peta (OSM) — di balik satu ketukan, bukan teks permanen.
+                  const Positioned(
+                    left: 0,
+                    bottom: 0,
+                    child: TapGoMapAttributionButton(),
+                  ),
+                  // Tombol "lokasi saya": pusatkan peta + pin ke posisi pengguna.
+                  // Dibangun dari Material+InkResponse (bukan IconButton) agar tidak
+                  // mewarisi bingkai tombol dari tema aplikasi.
+                  Positioned(
+                    right: 10,
+                    bottom: 10,
+                    child: Semantics(
+                      button: true,
+                      label: 'Lokasi saya',
+                      child: DecoratedBox(
+                        key: const ValueKey('picker-recenter'),
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Color(0x33000000),
+                              blurRadius: 6,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: InkResponse(
+                            onTap: _locating ? null : _useCurrentLocation,
+                            customBorder: const CircleBorder(),
+                            child: SizedBox(
+                              width: 44,
+                              height: 44,
+                              child: Center(
+                                child: _locating
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2),
+                                      )
+                                    : const Icon(Icons.my_location_rounded,
+                                        size: 22, color: Color(0xFF334155)),
                               ),
                             ),
                           ),
                         ),
-                      ],
+                      ),
                     ),
                   ),
                   // Pin diam di tengah layar — peta yang bergerak di
@@ -393,8 +440,8 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
                           Icons.location_on_rounded,
                           size: 44,
                           color: _resolvingCenter
-                              ? const Color(0xFF0A84FF).withValues(alpha: 0.55)
-                              : const Color(0xFF0A84FF),
+                              ? _pinColor.withValues(alpha: 0.55)
+                              : _pinColor,
                         ),
                       ),
                     ),

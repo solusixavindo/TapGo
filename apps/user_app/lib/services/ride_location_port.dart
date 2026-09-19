@@ -95,6 +95,28 @@ class RideAddressCandidate {
       );
 }
 
+/// Satu pembacaan posisi langsung dari GPS (untuk titik biru di peta).
+class RideLocationFix {
+  const RideLocationFix({
+    required this.lat,
+    required this.lng,
+    required this.accuracyMeters,
+  });
+
+  final double lat;
+  final double lng;
+
+  /// Radius ketidakpastian dalam meter (dari GPS).
+  final double accuracyMeters;
+}
+
+/// Sumber posisi langsung. Antarmuka terpisah agar implementasi/fake
+/// [LocationSelectionPort] yang tidak butuh GPS tetap valid tanpa perubahan.
+abstract interface class LiveLocationSource {
+  /// Aliran posisi perangkat; kosong bila izin ditolak / GPS mati.
+  Stream<RideLocationFix> watchPosition();
+}
+
 /// Kontrak pemilihan lokasi.
 abstract class LocationSelectionPort {
   RideLocationProviderStatus get status;
@@ -134,7 +156,7 @@ String _shortLabel(String displayName) {
 /// Kebijakan Nominatim mewajibkan User-Agent yang mengidentifikasi aplikasi
 /// dan membatasi 1 permintaan/detik; klien di sini mematuhinya dengan antrean
 /// sederhana (permintaan berturut dijeda) dan header yang jelas.
-class OsmLocationPort implements LocationSelectionPort {
+class OsmLocationPort implements LocationSelectionPort, LiveLocationSource {
   OsmLocationPort({Dio? http}) : _http = http ?? Dio();
 
   static const _searchUrl = 'https://nominatim.openstreetmap.org/search';
@@ -274,6 +296,38 @@ class OsmLocationPort implements LocationSelectionPort {
       );
     } catch (_) {
       return null;
+    }
+  }
+
+  @override
+  Stream<RideLocationFix> watchPosition() async* {
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        return;
+      }
+      yield* Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.best,
+          distanceFilter: 3,
+        ),
+      ).map(
+        (position) => RideLocationFix(
+          lat: position.latitude,
+          lng: position.longitude,
+          accuracyMeters: position.accuracy,
+        ),
+      );
+    } catch (_) {
+      // Posisi langsung hanya pemanis tampilan: kegagalan apa pun cukup
+      // berarti "tidak ada titik biru", bukan galat bagi pengguna.
     }
   }
 

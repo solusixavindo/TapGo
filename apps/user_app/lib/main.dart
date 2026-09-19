@@ -70,6 +70,7 @@ part 'widgets/referral_tree_node_widget.dart';
 part 'widgets/stat_card.dart';
 part 'widgets/tapgo_service_illustration.dart';
 part 'widgets/tapgo_button.dart';
+part 'widgets/map_user_location.dart';
 
 const _brandBlue = Color(0xFF0569E8);
 const _brandOrange = Color(0xFFFF8A00);

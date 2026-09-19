@@ -878,7 +878,10 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       borderRadius: BorderRadius.circular(14),
       child: SizedBox(
         height: 160,
-        child: IgnorePointer(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
           child: FlutterMap(
             options: MapOptions(
               initialCameraFit: CameraFit.bounds(
@@ -927,21 +930,17 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                   ),
                 ],
               ),
-              Align(
-                alignment: Alignment.bottomRight,
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: Text(
-                    tapGoOsmAttribution,
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: Colors.black.withValues(alpha: 0.55),
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
+              ),
+            ),
+            // Atribusi peta di balik satu ketukan (di luar IgnorePointer agar bisa diketuk).
+            const Positioned(
+              left: 0,
+              bottom: 0,
+              child: TapGoMapAttributionButton(),
+            ),
+          ],
         ),
       ),
     );
