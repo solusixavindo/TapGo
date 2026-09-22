@@ -12,7 +12,7 @@ Support email: support@tapgolion.id
 TapGo may collect and process the following data:
 
 - Account data: name, phone number, password hash, account status, and role.
-- Referral data: referral code, sponsor/upline relationship, downline relationship, and referral activity.
+- Referral data: referral code, sponsor/upline relationship, mitra relationship, and referral activity.
 - Membership data: selected package, membership status, membership order, invoice, package benefit, and transaction status.
 - Wallet data: application wallet balance, PPOB benefit balance, wallet transaction history, withdrawal request, and bank account data submitted by the user.
 - Transaction data: membership payment status, invoice number, payment reference, payment provider response, and payment callback status.
