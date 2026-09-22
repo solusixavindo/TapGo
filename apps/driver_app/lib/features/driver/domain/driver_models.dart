@@ -51,13 +51,73 @@ enum RideStatus {
 
 enum DriverAvailability { offline, online, busy }
 
+/// Status verifikasi wajah HARI INI (kalender WIB) — sekali per hari, bukan
+/// per toggle online. Nilainya otoritatif dari server (DriverFaceCheckStatus
+/// di backend), bukan disimpulkan lokal, supaya install ulang aplikasi tidak
+/// bisa membuka blokir sendiri.
+enum DriverFaceCheckStatus {
+  pending,
+  passed,
+  blocked;
+
+  static DriverFaceCheckStatus fromApi(String? value) => switch (value) {
+        'PASSED' => DriverFaceCheckStatus.passed,
+        'BLOCKED' => DriverFaceCheckStatus.blocked,
+        _ => DriverFaceCheckStatus.pending,
+      };
+}
+
+/// Ringkasan status verifikasi wajah hari ini + sisa percobaan.
+class DriverFaceCheckSnapshot {
+  const DriverFaceCheckSnapshot({
+    required this.status,
+    required this.attemptsRemaining,
+  });
+
+  final DriverFaceCheckStatus status;
+  final int attemptsRemaining;
+
+  factory DriverFaceCheckSnapshot.fromJson(Map<String, dynamic> json) {
+    return DriverFaceCheckSnapshot(
+      status: DriverFaceCheckStatus.fromApi(json['status'] as String?),
+      attemptsRemaining: (json['attemptsRemaining'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// Vektor embedding wajah referensi (BUKAN foto) milik driver, dipakai untuk
+/// mencocokkan swafoto hari ini secara LOKAL di perangkat. minSimilarity
+/// dikirim server supaya ambang batas dapat disetel ulang tanpa rilis app.
+class DriverFaceReferenceEmbedding {
+  const DriverFaceReferenceEmbedding({
+    required this.embedding,
+    required this.modelVersion,
+    required this.minSimilarity,
+  });
+
+  final List<double> embedding;
+  final String modelVersion;
+  final double minSimilarity;
+
+  factory DriverFaceReferenceEmbedding.fromJson(Map<String, dynamic> json) {
+    final raw = json['embedding'];
+    return DriverFaceReferenceEmbedding(
+      embedding: raw is List
+          ? raw.map((e) => (e as num).toDouble()).toList(growable: false)
+          : const [],
+      modelVersion: '${json['modelVersion'] ?? ''}',
+      minSimilarity: (json['minSimilarity'] as num?)?.toDouble() ?? 0.75,
+    );
+  }
+}
+
 /// Jenis berkas yang diminta saat verifikasi mitra.
 ///
 /// Nilainya harus persis sama dengan daftar tertutup di backend
 /// (DRIVER_DOCUMENT_TYPES). Backend menolak jenis di luar daftar itu, jadi
 /// perbedaan sekecil apa pun di sini akan terlihat sebagai kegagalan unggah,
 /// bukan sebagai kesalahan diam-diam.
-enum DriverDocumentKind { ktp, sim, stnk, selfie }
+enum DriverDocumentKind { ktp, sim, stnk, selfie, skck }
 
 /// Status siklus pengajuan mitra (H1). Nilainya cermin langsung dari backend.
 enum DriverApplicationStatus {
@@ -125,6 +185,8 @@ extension DriverDocumentKindX on DriverDocumentKind {
         return 'STNK';
       case DriverDocumentKind.selfie:
         return 'Swafoto';
+      case DriverDocumentKind.skck:
+        return 'SKCK';
     }
   }
 
@@ -138,6 +200,8 @@ extension DriverDocumentKindX on DriverDocumentKind {
         return 'STNK kendaraan, nomor polisi terbaca jelas.';
       case DriverDocumentKind.selfie:
         return 'Swafoto sambil memegang KTP, wajah terlihat jelas.';
+      case DriverDocumentKind.skck:
+        return 'SKCK yang masih berlaku, seluruh bagian masuk bingkai.';
     }
   }
 }
@@ -341,6 +405,28 @@ class DriverSession {
   final String driverName;
 }
 
+/// Hasil langkah 1 Daftar/Masuk dengan Google.
+///
+/// Dua bentuk yang mungkin, dibedakan lewat [needsPhone]:
+/// - Email Google sudah terdaftar -> [session] terisi, siap dipakai
+///   langsung seperti hasil [DriverRepository.login] biasa.
+/// - Email belum pernah terdaftar -> [session] null, UI wajib menampilkan
+///   formulir nomor HP lalu memanggil
+///   [DriverRepository.completeGoogleRegistration] dengan idToken yang sama.
+class GoogleAuthResult {
+  const GoogleAuthResult.session(this.session)
+      : needsPhone = false,
+        suggestedFullName = null;
+
+  const GoogleAuthResult.needsPhone({this.suggestedFullName})
+      : session = null,
+        needsPhone = true;
+
+  final DriverSession? session;
+  final bool needsPhone;
+  final String? suggestedFullName;
+}
+
 class DriverRide {
   const DriverRide({
     required this.reference,
@@ -348,6 +434,7 @@ class DriverRide {
     required this.status,
     required this.pickupAddress,
     required this.dropoffAddress,
+    this.pickupNote,
     this.distanceMeters,
     this.durationSeconds,
     this.totalFare,
@@ -367,13 +454,16 @@ class DriverRide {
       status: _rideStatus('${json['status'] ?? ''}'),
       pickupAddress: _addressOf(pickup, json['pickupAddress']),
       dropoffAddress: _addressOf(dropoff, json['dropoffAddress']),
+      pickupNote: json['pickupNote'] as String?,
       distanceMeters: _intOf(json['distanceMeters'] ?? json['distance']),
       durationSeconds: _intOf(json['durationSeconds'] ?? json['duration']),
       totalFare:
           _intOf(json['totalFare'] ?? (fare is Map ? fare['totalFare'] : null)),
       currency:
           '${(fare is Map ? fare['currency'] : null) ?? json['currency'] ?? 'IDR'}',
-      updatedAt: DateTime.tryParse('${json['updatedAt'] ?? ''}'),
+      updatedAt: DateTime.tryParse(
+        '${json['updatedAt'] ?? json['createdAt'] ?? ''}',
+      ),
       paymentMethod: payment is Map && payment['method'] == 'DIGITAL'
           ? 'DIGITAL'
           : 'CASH',
@@ -390,6 +480,7 @@ class DriverRide {
   final RideStatus status;
   final String pickupAddress;
   final String dropoffAddress;
+  final String? pickupNote;
   final int? distanceMeters;
   final int? durationSeconds;
   final int? totalFare;
@@ -447,4 +538,95 @@ int? _intOf(Object? value) {
   if (value is int) return value;
   if (value is num) return value.round();
   return int.tryParse('$value');
+}
+
+double? _doubleOf(Object? value) {
+  if (value == null) return null;
+  if (value is double) return value;
+  if (value is num) return value.toDouble();
+  return double.tryParse('$value');
+}
+
+/// Ringkasan pendapatan kotor dari GET /driver/earnings/summary. "Kotor"
+/// karena backend belum memotong komisi apa pun dari nominal ini (lihat
+/// catatan grossFare di RideService.earningsSummary) — jangan diberi label
+/// "pendapatan bersih" di UI.
+class DriverEarningsSummary {
+  const DriverEarningsSummary({
+    required this.range,
+    required this.tripCount,
+    required this.grossFare,
+    required this.currency,
+    required this.byDay,
+  });
+
+  factory DriverEarningsSummary.fromJson(Map<String, dynamic> json) {
+    final rawByDay = json['byDay'];
+    return DriverEarningsSummary(
+      range: '${json['range'] ?? 'today'}',
+      tripCount: _intOf(json['tripCount']) ?? 0,
+      grossFare: _intOf(json['grossFare']) ?? 0,
+      currency: '${json['currency'] ?? 'IDR'}',
+      byDay: rawByDay is List
+          ? rawByDay
+              .whereType<Map>()
+              .map((e) => DriverEarningsDay.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
+    );
+  }
+
+  final String range;
+  final int tripCount;
+  final int grossFare;
+  final String currency;
+  final List<DriverEarningsDay> byDay;
+}
+
+class DriverEarningsDay {
+  const DriverEarningsDay({
+    required this.date,
+    required this.tripCount,
+    required this.grossFare,
+  });
+
+  factory DriverEarningsDay.fromJson(Map<String, dynamic> json) {
+    return DriverEarningsDay(
+      date: '${json['date'] ?? ''}',
+      tripCount: _intOf(json['tripCount']) ?? 0,
+      grossFare: _intOf(json['grossFare']) ?? 0,
+    );
+  }
+
+  final String date;
+  final int tripCount;
+  final int grossFare;
+}
+
+/// Statistik objektif dari GET /driver/performance — TIDAK ada rating
+/// bintang di sini (lihat catatan di RideService.performanceSummary).
+/// Setiap rate bernilai null bila datanya belum ada, bukan 0 — pembeda
+/// penting antara "belum ada tawaran sama sekali" dan "tidak pernah
+/// menerima satu pun tawaran".
+class DriverPerformanceSummary {
+  const DriverPerformanceSummary({
+    required this.totalTrips,
+    this.acceptanceRate,
+    this.completionRate,
+    this.cancellationRate,
+  });
+
+  factory DriverPerformanceSummary.fromJson(Map<String, dynamic> json) {
+    return DriverPerformanceSummary(
+      totalTrips: _intOf(json['totalTrips']) ?? 0,
+      acceptanceRate: _doubleOf(json['acceptanceRate']),
+      completionRate: _doubleOf(json['completionRate']),
+      cancellationRate: _doubleOf(json['cancellationRate']),
+    );
+  }
+
+  final int totalTrips;
+  final double? acceptanceRate;
+  final double? completionRate;
+  final double? cancellationRate;
 }

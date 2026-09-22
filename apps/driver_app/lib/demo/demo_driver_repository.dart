@@ -53,6 +53,26 @@ class DemoDriverRepository implements DriverRepository {
   }
 
   @override
+  Future<GoogleAuthResult> loginWithGoogle({required String idToken}) async {
+    return const GoogleAuthResult.needsPhone(suggestedFullName: 'Driver Demo');
+  }
+
+  @override
+  Future<DriverSession> completeGoogleRegistration({
+    required String idToken,
+    required String phone,
+    String? fullName,
+  }) async {
+    _session = DriverSession(
+      accessToken: 'DEMO_ACCESS',
+      refreshToken: 'DEMO_REFRESH',
+      driverName: fullName?.trim().isNotEmpty == true ? fullName! : 'DRIVER_DEMO',
+    );
+    setScenario(DriverScenario.homeOffline);
+    return _session!;
+  }
+
+  @override
   Future<void> logout() async {
     _session = null;
     _scenario = DriverScenario.login;
@@ -139,6 +159,48 @@ class DemoDriverRepository implements DriverRepository {
       default:
         return null;
     }
+  }
+
+  @override
+  Future<List<DriverRide>> rideHistory({int limit = 20}) async {
+    if (_scenario == DriverScenario.networkError) {
+      throw const DriverApiException(
+          code: 'NETWORK_ERROR', message: 'Koneksi belum stabil.');
+    }
+    return _demoRideHistory.take(limit).toList();
+  }
+
+  @override
+  Future<DriverEarningsSummary> earningsSummary({String range = 'today'}) async {
+    if (_scenario == DriverScenario.networkError) {
+      throw const DriverApiException(
+          code: 'NETWORK_ERROR', message: 'Koneksi belum stabil.');
+    }
+    return DriverEarningsSummary(
+      range: range,
+      tripCount: 12,
+      grossFare: 258000,
+      currency: 'IDR',
+      byDay: const [
+        DriverEarningsDay(date: '2026-09-10', tripCount: 5, grossFare: 110000),
+        DriverEarningsDay(date: '2026-09-09', tripCount: 4, grossFare: 85000),
+        DriverEarningsDay(date: '2026-09-08', tripCount: 3, grossFare: 63000),
+      ],
+    );
+  }
+
+  @override
+  Future<DriverPerformanceSummary> performanceSummary() async {
+    if (_scenario == DriverScenario.networkError) {
+      throw const DriverApiException(
+          code: 'NETWORK_ERROR', message: 'Koneksi belum stabil.');
+    }
+    return const DriverPerformanceSummary(
+      totalTrips: 128,
+      acceptanceRate: 0.92,
+      completionRate: 0.97,
+      cancellationRate: 0.03,
+    );
   }
 
   @override
@@ -232,6 +294,12 @@ class DemoDriverRepository implements DriverRepository {
     String? brand,
     String? model,
     String? color,
+    String? fullName,
+    String? dateOfBirth,
+    String? address,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
+    required bool declarationAccepted,
   }) async {
     _demoApplication = const DriverApplicationInfo(
       id: 'demo-application',
@@ -245,6 +313,66 @@ class DemoDriverRepository implements DriverRepository {
   Future<DriverApplicationSnapshot> withdrawApplication() async {
     _demoApplication = null;
     return myApplication();
+  }
+
+  final _demoChatMessages = <Map<String, dynamic>>[];
+
+  @override
+  Future<List<Map<String, dynamic>>> chatMessages(String rideReference) async {
+    return List<Map<String, dynamic>>.from(_demoChatMessages);
+  }
+
+  @override
+  Future<void> sendChatMessage(String rideReference, String message) async {
+    _demoChatMessages.add({
+      'id': 'demo-${_demoChatMessages.length}',
+      'senderType': 'DRIVER',
+      'message': message,
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+  }
+
+  @override
+  Future<void> markChatRead(String rideReference) async {}
+
+  @override
+  Future<void> sendLocation({
+    required double lat,
+    required double lng,
+    required int accuracyMeters,
+    required DateTime capturedAt,
+  }) async {}
+
+  // --- Verifikasi wajah harian (mode demo — murni in-memory) --------------
+  //
+  // Stub ini TIDAK pernah menyentuh camera/google_mlkit_face_detection/
+  // tflite_flutter — DriverFaceCheckScreen sendiri sudah bercabang ke tombol
+  // simulasi saat kDriverDemoMode aktif dan tidak memanggil pipeline ML nyata
+  // sama sekali, jadi method di sini hanya perlu konsisten secara data.
+  DriverFaceCheckStatus _demoFaceCheckStatus = DriverFaceCheckStatus.pending;
+
+  @override
+  Future<DriverFaceCheckSnapshot> faceCheckToday() async {
+    return DriverFaceCheckSnapshot(status: _demoFaceCheckStatus, attemptsRemaining: 3);
+  }
+
+  @override
+  Future<DriverFaceReferenceEmbedding> faceCheckReference() async {
+    return const DriverFaceReferenceEmbedding(
+      embedding: [],
+      modelVersion: 'demo',
+      minSimilarity: 0.75,
+    );
+  }
+
+  @override
+  Future<DriverFaceCheckSnapshot> submitFaceCheckAttempt({
+    required double similarityScore,
+    required bool livenessPassed,
+    required String modelVersion,
+  }) async {
+    _demoFaceCheckStatus = DriverFaceCheckStatus.passed;
+    return DriverFaceCheckSnapshot(status: _demoFaceCheckStatus, attemptsRemaining: 3);
   }
 }
 
@@ -270,3 +398,51 @@ DriverRide _demoRide(RideStatus status) => DriverRide(
       totalFare: 9000,
       updatedAt: DateTime(2026, 8, 4, 9, 30),
     );
+
+final List<DriverRide> _demoRideHistory = [
+  DriverRide(
+    reference: 'RIDE-DEMO-005',
+    serviceType: 'MOTORCYCLE',
+    status: RideStatus.completed,
+    pickupAddress: 'Alun-Alun Serang',
+    dropoffAddress: 'Pasar Rau',
+    pickupNote: 'Depan minimarket, motor putih',
+    distanceMeters: 2500,
+    durationSeconds: 600,
+    totalFare: 9000,
+    updatedAt: DateTime(2026, 9, 10, 8, 15),
+  ),
+  DriverRide(
+    reference: 'RIDE-DEMO-004',
+    serviceType: 'CAR',
+    status: RideStatus.cancelledByPassenger,
+    pickupAddress: 'Terminal Pakupatan',
+    dropoffAddress: 'Ciceri Permai',
+    distanceMeters: 4200,
+    durationSeconds: 900,
+    totalFare: 15000,
+    updatedAt: DateTime(2026, 9, 9, 19, 40),
+  ),
+  DriverRide(
+    reference: 'RIDE-DEMO-003',
+    serviceType: 'MOTORCYCLE',
+    status: RideStatus.completed,
+    pickupAddress: 'Kampus Untirta',
+    dropoffAddress: 'BSD Kota Serang',
+    distanceMeters: 3100,
+    durationSeconds: 720,
+    totalFare: 11000,
+    updatedAt: DateTime(2026, 9, 9, 14, 5),
+  ),
+  DriverRide(
+    reference: 'RIDE-DEMO-002',
+    serviceType: 'MOTORCYCLE',
+    status: RideStatus.completed,
+    pickupAddress: 'RSUD Serang',
+    dropoffAddress: 'Alun-Alun Serang',
+    distanceMeters: 1800,
+    durationSeconds: 420,
+    totalFare: 7000,
+    updatedAt: DateTime(2026, 9, 8, 11, 20),
+  ),
+];

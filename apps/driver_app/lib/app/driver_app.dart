@@ -6,13 +6,14 @@ class TapGoDriverApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(testThemeModeProvider);
+    final skipSplash = ref.watch(testSkipSplashProvider);
     return MaterialApp(
       title: 'TapGo Driver',
       debugShowCheckedModeBanner: false,
       themeMode: themeMode ?? ThemeMode.system,
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
-      home: const DriverShell(),
+      home: skipSplash ? const DriverShell() : const SplashScreen(),
     );
   }
 }

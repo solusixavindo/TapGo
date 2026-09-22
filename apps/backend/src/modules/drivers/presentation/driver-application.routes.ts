@@ -27,7 +27,17 @@ const submitSchema = z.object({
     plateNumber: z.string().trim().min(4).max(12),
     brand: z.string().trim().max(60).optional(),
     model: z.string().trim().max(60).optional(),
-    color: z.string().trim().max(30).optional()
+    color: z.string().trim().max(30).optional(),
+    // Data Diri (wizard halaman 2) — seluruhnya wajib, bukan opsional.
+    fullName: z.string().trim().min(1).max(120),
+    dateOfBirth: z.string().trim().date(),
+    address: z.string().trim().min(1).max(255),
+    emergencyContactName: z.string().trim().min(1).max(120),
+    emergencyContactPhone: z.string().trim().min(1).max(20),
+    // Wajib true, bukan opsional — tanpa persetujuan pernyataan, pengajuan
+    // ditolak fail-closed di sini, bukan diterima diam-diam tanpa bukti
+    // persetujuan.
+    declarationAccepted: z.literal(true)
   })
 });
 
@@ -54,7 +64,22 @@ driverApplicationRouter.post(
       plateNumber: req.body.plateNumber,
       ...(req.body.brand !== undefined ? { brand: req.body.brand } : {}),
       ...(req.body.model !== undefined ? { model: req.body.model } : {}),
-      ...(req.body.color !== undefined ? { color: req.body.color } : {})
+      ...(req.body.color !== undefined ? { color: req.body.color } : {}),
+      ...(req.body.fullName !== undefined
+        ? { fullName: req.body.fullName }
+        : {}),
+      ...(req.body.dateOfBirth !== undefined
+        ? { dateOfBirth: req.body.dateOfBirth }
+        : {}),
+      ...(req.body.address !== undefined
+        ? { address: req.body.address }
+        : {}),
+      ...(req.body.emergencyContactName !== undefined
+        ? { emergencyContactName: req.body.emergencyContactName }
+        : {}),
+      ...(req.body.emergencyContactPhone !== undefined
+        ? { emergencyContactPhone: req.body.emergencyContactPhone }
+        : {})
     });
     res.status(201).json({ success: true, data });
   })

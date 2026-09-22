@@ -19,6 +19,7 @@ class DriverController extends StateNotifier<DriverState>
   final DriverRepository _repository;
   final DriverLocationPort _locationPort;
   Timer? _pollTimer;
+  Timer? _locationTimer;
   bool _polling = false;
   final Set<String> _singleFlights = <String>{};
 
@@ -62,6 +63,66 @@ class DriverController extends StateNotifier<DriverState>
       );
     } finally {
       _endFlight('login');
+      state = state.copyWith(isBusy: false);
+    }
+  }
+
+  /// Langkah 1 Daftar/Masuk dengan Google. Mengembalikan hasilnya ke
+  /// pemanggil (LoginScreen) supaya UI dapat memutuskan menampilkan
+  /// formulir nomor HP atau langsung berhasil — beda dari [login] yang
+  /// tidak perlu itu karena hasilnya selalu sesi langsung.
+  Future<GoogleAuthResult?> loginWithGoogle(String idToken) async {
+    if (!_startFlight('loginWithGoogle')) return null;
+    state = state.copyWith(isBusy: true, clearMessage: true);
+    try {
+      final result = await _repository.loginWithGoogle(idToken: idToken);
+      if (!result.needsPhone) {
+        state = state.copyWith(session: result.session);
+        await refreshWorkspace();
+      }
+      return result;
+    } on DriverApiException catch (error) {
+      state = state.copyWith(
+        status: error.statusCode == 401
+            ? DriverWorkspaceStatus.sessionExpired
+            : DriverWorkspaceStatus.unauthenticated,
+        message: error.message,
+      );
+      return null;
+    } finally {
+      _endFlight('loginWithGoogle');
+      state = state.copyWith(isBusy: false);
+    }
+  }
+
+  /// Langkah 2, dipanggil setelah [loginWithGoogle] mengembalikan
+  /// needsPhone: true dan pengguna mengisi nomor HP-nya.
+  Future<bool> completeGoogleRegistration({
+    required String idToken,
+    required String phone,
+    String? fullName,
+  }) async {
+    if (!_startFlight('completeGoogleRegistration')) return false;
+    state = state.copyWith(isBusy: true, clearMessage: true);
+    try {
+      final session = await _repository.completeGoogleRegistration(
+        idToken: idToken,
+        phone: phone,
+        fullName: fullName,
+      );
+      state = state.copyWith(session: session);
+      await refreshWorkspace();
+      return true;
+    } on DriverApiException catch (error) {
+      state = state.copyWith(
+        status: error.statusCode == 401
+            ? DriverWorkspaceStatus.sessionExpired
+            : DriverWorkspaceStatus.unauthenticated,
+        message: error.message,
+      );
+      return false;
+    } finally {
+      _endFlight('completeGoogleRegistration');
       state = state.copyWith(isBusy: false);
     }
   }
@@ -136,6 +197,67 @@ class DriverController extends StateNotifier<DriverState>
       state = state.copyWith(isBusy: false);
     }
   }
+
+  /// Jalur yang dipakai tombol toggle untuk arah offline->online SAJA —
+  /// offline tetap memanggil [setAvailability] langsung, tidak butuh
+  /// verifikasi wajah.
+  ///
+  /// SENGAJA tidak lewat _applyCapabilityError/DriverWorkspaceStatus untuk
+  /// kondisi "belum verifikasi hari ini": pola itu mengganti SELURUH tampilan
+  /// workspace (menyembunyikan tab pesanan/pendapatan/riwayat), cocok untuk
+  /// kapabilitas yang benar-benar hilang (suspended/rejected) tapi salah di
+  /// sini — driver yang cuma belum sempat swafoto hari ini tetap harus bisa
+  /// melihat dashboardnya sendiri selagi offline.
+  Future<void> checkAndGoOnline(BuildContext context) async {
+    if (!_startFlight('availability')) return;
+    try {
+      final snapshot = await _repository.faceCheckToday();
+      if (snapshot.status == DriverFaceCheckStatus.blocked) {
+        state = state.copyWith(
+          message: 'Percobaan verifikasi wajah hari ini sudah habis. Hubungi admin TapGo.',
+        );
+        return;
+      }
+      if (snapshot.status != DriverFaceCheckStatus.passed) {
+        if (!context.mounted) return;
+        final passed = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(builder: (_) => const DriverFaceCheckScreen()),
+        );
+        if (passed != true) return;
+      }
+    } on DriverApiException catch (error) {
+      // Flag DRIVER_FACE_CHECK_ENABLED mati di server -> 503 di sini berarti
+      // fitur belum aktif sama sekali: lanjut seperti sebelum fitur ini ada,
+      // bukan memblokir online karena kondisi yang bukan kesalahan driver.
+      if (error.code != 'DRIVER_FACE_CHECK_DISABLED') {
+        _applyCapabilityError(error);
+        return;
+      }
+    } finally {
+      _endFlight('availability');
+    }
+    await setAvailability(DriverAvailability.online);
+  }
+
+  /// Referensi wajah (embedding, bukan foto) untuk dicocokkan lokal di layar
+  /// verifikasi. Passthrough tipis — tidak mengubah state, layar yang
+  /// menangani siklus hidup kamera/ML sendiri.
+  Future<DriverFaceReferenceEmbedding> faceCheckReference() =>
+      _repository.faceCheckReference();
+
+  /// Mengirim hasil yang sudah diputuskan di perangkat. Server menegakkan
+  /// ulang ambang batas — lihat DriverFaceCheckService.submitAttempt di
+  /// backend.
+  Future<DriverFaceCheckSnapshot> submitFaceCheckAttempt({
+    required double similarityScore,
+    required bool livenessPassed,
+    required String modelVersion,
+  }) =>
+      _repository.submitFaceCheckAttempt(
+        similarityScore: similarityScore,
+        livenessPassed: livenessPassed,
+        modelVersion: modelVersion,
+      );
 
   /// Memuat ulang ringkasan dokumen.
   ///
@@ -219,6 +341,12 @@ class DriverController extends StateNotifier<DriverState>
     String? brand,
     String? model,
     String? color,
+    String? fullName,
+    String? dateOfBirth,
+    String? address,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
+    required bool declarationAccepted,
   }) async {
     if (!_startFlight('application-submit')) return;
     state = state.copyWith(isBusy: true, clearMessage: true);
@@ -229,6 +357,12 @@ class DriverController extends StateNotifier<DriverState>
         brand: brand,
         model: model,
         color: color,
+        fullName: fullName,
+        dateOfBirth: dateOfBirth,
+        address: address,
+        emergencyContactName: emergencyContactName,
+        emergencyContactPhone: emergencyContactPhone,
+        declarationAccepted: declarationAccepted,
       );
       state = state.copyWith(
         application: snapshot.application,
@@ -383,6 +517,16 @@ class DriverController extends StateNotifier<DriverState>
   }
 
   void _applyCapabilityError(DriverApiException error) {
+    // Pengaman untuk race (mis. hari kalender WIB berganti tepat di antara
+    // pengecekan lokal checkAndGoOnline dan setAvailability sungguhan di
+    // server) — TIDAK boleh mengubah state.status: tanpa cabang ini kode
+    // jatuh ke default networkError, yang salah DAN mengganti seluruh
+    // tampilan workspace padahal driver cuma perlu verifikasi ulang.
+    if (error.code == 'RIDE_DRIVER_FACE_CHECK_REQUIRED' ||
+        error.code == 'RIDE_DRIVER_FACE_CHECK_BLOCKED') {
+      state = state.copyWith(message: error.message);
+      return;
+    }
     _stopPolling();
     final status = switch (error.code) {
       'RIDE_DRIVER_PROFILE_REQUIRED' => DriverWorkspaceStatus.profileRequired,
@@ -403,12 +547,43 @@ class DriverController extends StateNotifier<DriverState>
     if (state.activeRide?.isTerminal ?? false) return;
     _pollTimer ??= Timer.periodic(const Duration(seconds: 12), (_) => _poll());
     state = state.copyWith(isPolling: true);
+    _startLocationUpdates();
   }
 
   void _stopPolling() {
     _pollTimer?.cancel();
     _pollTimer = null;
     if (mounted) state = state.copyWith(isPolling: false);
+    _stopLocationUpdates();
+  }
+
+  /// Kirim lokasi berkala selama driver online/punya perjalanan aktif —
+  /// tepat mengikuti kondisi yang sama dengan polling tawaran di atas, jadi
+  /// dimulai/dihentikan dari titik yang sama (bukan orkestrasi terpisah).
+  void _startLocationUpdates() {
+    _locationTimer ??= Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => unawaited(_sendLocationSilently()),
+    );
+  }
+
+  void _stopLocationUpdates() {
+    _locationTimer?.cancel();
+    _locationTimer = null;
+  }
+
+  /// Berbeda dari [sendLocationIfAvailable]: dipanggil sendiri oleh timer,
+  /// bukan atas permintaan UI, jadi kegagalan (izin ditolak, GPS mati,
+  /// jaringan) tidak boleh menulis state.message — itu akan menimpa pesan
+  /// lain yang lebih penting (mis. galat tawaran) setiap 15 detik. Lokasi
+  /// bersifat best-effort.
+  Future<void> _sendLocationSilently() async {
+    try {
+      if (!await _locationPort.isAvailable) return;
+      await _locationPort.sendCurrentLocation();
+    } catch (_) {
+      // Diam sengaja — lihat catatan di atas.
+    }
   }
 
   Future<void> _poll() async {

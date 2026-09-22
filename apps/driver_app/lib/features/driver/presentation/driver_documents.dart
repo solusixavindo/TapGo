@@ -7,7 +7,17 @@ part of '../../../main.dart';
 /// menyampaikan hal itu apa adanya — termasuk hitungan mundurnya — supaya
 /// driver tahu berkasnya tidak menumpuk di server tanpa batas waktu.
 class DriverDocumentsSection extends ConsumerStatefulWidget {
-  const DriverDocumentsSection({super.key});
+  const DriverDocumentsSection({
+    this.kinds = DriverDocumentKind.values,
+    this.showHeader = true,
+    super.key,
+  });
+
+  /// Subset dokumen yang ditampilkan — dipakai wizard pengajuan untuk
+  /// memisahkan dokumen inti (halaman 1) dari dokumen tambahan seperti SKCK
+  /// (halaman 4), tanpa menggandakan widget kartu dokumennya.
+  final List<DriverDocumentKind> kinds;
+  final bool showHeader;
 
   @override
   ConsumerState<DriverDocumentsSection> createState() =>
@@ -35,9 +45,11 @@ class _DriverDocumentsSectionState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _DocumentsHeader(),
-        const SizedBox(height: 12),
-        for (final kind in DriverDocumentKind.values) ...[
+        if (widget.showHeader) ...[
+          const _DocumentsHeader(),
+          const SizedBox(height: 12),
+        ],
+        for (final kind in widget.kinds) ...[
           _DocumentCard(
             kind: kind,
             summary: state.documentOf(kind),

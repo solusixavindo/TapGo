@@ -10,6 +10,13 @@ const String driverBrandLogoAsset = 'assets/images/tapgo_logo_512.png';
 class DriverShell extends ConsumerStatefulWidget {
   const DriverShell({super.key});
 
+  /// Memindahkan tab bawah aktif dari mana pun di bawah DriverShell — dipakai
+  /// mis. oleh banner perjalanan aktif di Beranda untuk pindah ke tab
+  /// Pesanan. Tidak melakukan apa pun bila tidak ada DriverShell di atasnya.
+  static void selectTab(BuildContext context, int index) {
+    context.findAncestorStateOfType<_DriverShellState>()?._selectTab(index);
+  }
+
   @override
   ConsumerState<DriverShell> createState() => _DriverShellState();
 }
@@ -54,9 +61,7 @@ class _DriverShellState extends ConsumerState<DriverShell> {
                     EdgeInsets.only(bottom: state.isAuthenticated ? 24 : 0),
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 220),
-                  child: showTabs && _tabIndex == 1
-                      ? const DriverAccountScreen(key: ValueKey('account'))
-                      : _bodyFor(state),
+                  child: showTabs ? _tabBodyFor(_tabIndex) : _bodyFor(state),
                 ),
               ),
             ),
@@ -72,8 +77,16 @@ class _DriverShellState extends ConsumerState<DriverShell> {
                   setState(() => _tabIndex = value),
               destinations: const [
                 NavigationDestination(
-                  icon: Icon(Icons.route_rounded),
-                  label: 'Perjalanan',
+                  icon: Icon(Icons.home_rounded),
+                  label: 'Beranda',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.receipt_long_rounded),
+                  label: 'Pesanan',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.savings_rounded),
+                  label: 'Pendapatan',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.person_rounded),
@@ -84,6 +97,22 @@ class _DriverShellState extends ConsumerState<DriverShell> {
           : null,
       ),
     );
+  }
+
+  void _selectTab(int index) => setState(() => _tabIndex = index);
+
+  Widget _tabBodyFor(int index) {
+    switch (index) {
+      case 0:
+        return const DriverHomeScreen(key: ValueKey('home'));
+      case 1:
+        return const DriverOrdersScreen(key: ValueKey('orders'));
+      case 2:
+        return const DriverEarningsScreen(key: ValueKey('earnings'));
+      case 3:
+      default:
+        return const DriverAccountScreen(key: ValueKey('account'));
+    }
   }
 
   Widget _bodyFor(DriverState state) {
@@ -157,7 +186,9 @@ class _DriverShellState extends ConsumerState<DriverShell> {
           showRetry: true,
         );
       case DriverWorkspaceStatus.active:
-        return const DriverHomeScreen(key: ValueKey('home'));
+        // Tidak terjangkau: status active selalu berarti showTabs true di
+        // build(), sehingga dispatch lewat _tabBodyFor, bukan lewat sini.
+        return const SizedBox.shrink();
     }
   }
 }
@@ -209,12 +240,207 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   /// Password tersembunyi secara default; hanya pengguna yang membukanya.
   bool _obscurePassword = true;
+  bool _isGoogleBusy = false;
 
   @override
   void dispose() {
     _phone.dispose();
     _password.dispose();
     super.dispose();
+  }
+
+  /// Daftar/Masuk dengan Google.
+  ///
+  /// Konfigurasi Android (package name + SHA-1) didaftarkan di Google Cloud
+  /// Console, bukan hardcoded di kode. `serverClientId` HARUS diisi dengan
+  /// Web OAuth client ID dari project yang sama, supaya idToken yang
+  /// diterbitkan Android beraudience client Web — persis yang diverifikasi
+  /// backend lewat GOOGLE_OAUTH_CLIENT_ID. Sampai kredensial itu didaftarkan
+  /// (lihat catatan rilis), signIn() akan gagal dengan error dari Google,
+  /// ditangkap dan ditampilkan sebagai pesan ramah di bawah.
+  Future<void> _continueWithGoogle() async {
+    if (_isGoogleBusy) return;
+    // Lepas fokus keyboard sebelum ada kemungkinan sesi langsung terbentuk
+    // (akun Google yang sudah terdaftar) — mencegah crash framework yang
+    // sama seperti di catatan _showCompleteGoogleRegistrationSheet.
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _isGoogleBusy = true);
+    final controller = ref.read(driverControllerProvider.notifier);
+    try {
+      final account = await GoogleSignIn(
+        scopes: const ['email'],
+        serverClientId:
+            kGoogleServerClientId.isEmpty ? null : kGoogleServerClientId,
+      ).signIn();
+      if (account == null) {
+        // Pengguna membatalkan pemilihan akun — bukan error, diam saja.
+        return;
+      }
+      final auth = await account.authentication;
+      final idToken = auth.idToken;
+      if (idToken == null) {
+        throw const DriverApiException(
+          code: 'GOOGLE_TOKEN_MISSING',
+          message: 'Google tidak mengembalikan token yang valid.',
+        );
+      }
+      final result = await controller.loginWithGoogle(idToken);
+      if (result == null || !mounted) return;
+      if (result.needsPhone) {
+        await _showCompleteGoogleRegistrationSheet(
+          idToken: idToken,
+          suggestedFullName: result.suggestedFullName,
+        );
+      }
+    } catch (_) {
+      // Kegagalan SDK Google (mis. OAuth client belum terdaftar) ditangkap
+      // di sini; state.message dari controller sudah menangani penolakan
+      // dari backend sendiri.
+    } finally {
+      if (mounted) setState(() => _isGoogleBusy = false);
+    }
+  }
+
+  Future<void> _showCompleteGoogleRegistrationSheet({
+    required String idToken,
+    String? suggestedFullName,
+  }) async {
+    final phoneController = TextEditingController();
+    final nameController = TextEditingController(text: suggestedFullName ?? '');
+    final formKey = GlobalKey<FormState>();
+    bool isSubmitting = false;
+    String? errorMessage;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setModalState) {
+          void submit() {
+            if (isSubmitting) return;
+            if (!(formKey.currentState?.validate() ?? false)) return;
+            // Lepas fokus keyboard SEBELUM memicu perubahan sesi. Tanpa ini,
+            // sukses login menyebabkan DriverShell menukar LoginScreen lewat
+            // AnimatedSwitcher saat field di sheet ini masih fokus, memicu
+            // crash framework ("_dependents.isEmpty") karena FocusNode field
+            // masih terpasang pada subtree yang sedang dibongkar.
+            FocusManager.instance.primaryFocus?.unfocus();
+            setModalState(() {
+              isSubmitting = true;
+              errorMessage = null;
+            });
+            () async {
+              final controller = ref.read(driverControllerProvider.notifier);
+              final ok = await controller.completeGoogleRegistration(
+                idToken: idToken,
+                phone: phoneController.text,
+                fullName: nameController.text,
+              );
+              if (ok) {
+                if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+                return;
+              }
+              final message = ref.read(driverControllerProvider).message;
+              setModalState(() {
+                isSubmitting = false;
+                errorMessage = message ?? 'Pendaftaran belum berhasil. Coba lagi.';
+              });
+            }();
+          }
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              8,
+              20,
+              MediaQuery.of(sheetContext).viewInsets.bottom + 20,
+            ),
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Lengkapi Pendaftaran',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Akun Google Anda belum terhubung ke TapGo Driver. '
+                    'Nomor HP dibutuhkan sebagai identitas utama akun.',
+                    style: TextStyle(
+                      color: Theme.of(sheetContext).colorScheme.onSurfaceVariant,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: nameController,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Nama lengkap',
+                      hintText: 'Nama sesuai KTP',
+                      prefixIcon: Icon(Icons.badge_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) => (value == null || value.trim().isEmpty)
+                        ? 'Isi nama lengkap.'
+                        : null,
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.done,
+                    decoration: const InputDecoration(
+                      labelText: 'Nomor HP',
+                      hintText: '08xxxxxxxxxx',
+                      prefixIcon: Icon(Icons.smartphone_rounded),
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) => (value == null || value.trim().length < 8)
+                        ? 'Masukkan nomor HP yang valid.'
+                        : null,
+                    onFieldSubmitted: (_) => submit(),
+                  ),
+                  const SizedBox(height: 18),
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFFFC857),
+                      foregroundColor: const Color(0xFF061A2F),
+                      minimumSize: const Size.fromHeight(52),
+                      textStyle: const TextStyle(
+                        fontFamily: 'Roboto',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    onPressed: isSubmitting ? null : submit,
+                    child: isSubmitting
+                        ? const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFF061A2F),
+                            ),
+                          )
+                        : const Text('Selesaikan Pendaftaran'),
+                  ),
+                  if (errorMessage != null) ...[
+                    const SizedBox(height: 14),
+                    ErrorNotice(message: errorMessage!),
+                  ],
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    phoneController.dispose();
+    nameController.dispose();
   }
 
   @override
@@ -324,27 +550,255 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 )
               : const Text('Masuk sebagai Driver'),
         ),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(child: Divider(color: Theme.of(context).dividerColor)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                'atau',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Expanded(child: Divider(color: Theme.of(context).dividerColor)),
+          ],
+        ),
+        const SizedBox(height: 20),
+        OutlinedButton(
+          key: const ValueKey('driver-google-signin-button'),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(52),
+            side: BorderSide(color: Theme.of(context).colorScheme.outline),
+          ),
+          onPressed: _isGoogleBusy ? null : _continueWithGoogle,
+          child: _isGoogleBusy
+              ? const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Ikon huruf "G" empat-warna Google dibangun dari widget,
+                    // bukan aset gambar — supaya tidak perlu menambah berkas
+                    // logo pihak ketiga hanya untuk satu tombol.
+                    const _GoogleGlyph(),
+                    const SizedBox(width: 12),
+                    Flexible(
+                      child: Text(
+                        'Lanjutkan dengan Google',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+        ),
         if (kDriverDemoMode) const DemoScenarioSelector(),
       ],
     );
   }
 }
 
+/// Tab "Beranda": peta live posisi driver (mengikuti [DriverLocationPort]
+/// yang terpasang — kosong/statis pada NoDriverLocationPort, dipakai mode
+/// demo dan widget test) dengan kartu status/ketersediaan mengambang di
+/// atasnya. Tawaran, perjalanan aktif, dan riwayat sudah pindah ke tab
+/// "Pesanan" — beranda hanya menjawab "saya online atau tidak, dan di mana".
 class DriverHomeScreen extends ConsumerWidget {
   const DriverHomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(driverControllerProvider);
-    final controller = ref.read(driverControllerProvider.notifier);
     final topPadding = kDriverDemoMode ? 52.0 : 20.0;
+    // SizedBox.expand memaksa Stack di bawah ini menerima constraint tegas
+    // sebesar area yang tersedia. Tanpa ini, Stack yang punya satu child
+    // non-Positioned (kartu status) menyusut mengikuti tinggi kartu itu saat
+    // parent-nya (AnimatedSwitcher di DriverShell) memberi constraint
+    // longgar — peta di baliknya (Positioned.fill) ikut terpotong sependek
+    // kartu, dan sisa layar di bawahnya menampilkan warna latar Scaffold
+    // polos, bukan peta.
+    return SizedBox.expand(
+      child: Stack(
+        children: [
+          const Positioned.fill(child: _DriverLiveMap()),
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(16, topPadding, 16, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _StatusHeroCard(state: state),
+                  if (state.message != null) ...[
+                    const SizedBox(height: 12),
+                    ErrorNotice(message: state.message!),
+                  ],
+                  if (state.activeRide != null) ...[
+                    const SizedBox(height: 12),
+                    _ActiveRideBanner(ride: state.activeRide!),
+                  ],
+                  if (kDriverDemoMode) ...[
+                    const SizedBox(height: 12),
+                    const DemoScenarioSelector(),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Peta OpenStreetMap (pola sama seperti user_app: tanpa API key) yang
+/// mengikuti [DriverLocationPort.positionStream]. Tanpa GPS asli (demo/test)
+/// peta tetap tampil, hanya diam di titik acuan tanpa marker bergerak —
+/// bukan menyembunyikan peta sama sekali, supaya tab ini tidak kosong.
+class _DriverLiveMap extends ConsumerWidget {
+  const _DriverLiveMap();
+
+  static const _defaultCenter = LatLng(-6.1754, 106.8272); // Jakarta
+  static const _tileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final locationPort = ref.watch(locationPortProvider);
+    return StreamBuilder<(double, double)>(
+      stream: locationPort.positionStream,
+      builder: (context, snapshot) {
+        final fix = snapshot.data;
+        final point =
+            fix == null ? _defaultCenter : LatLng(fix.$1, fix.$2);
+        return FlutterMap(
+          key: const ValueKey('driver-home-map'),
+          options: MapOptions(initialCenter: point, initialZoom: 15),
+          children: [
+            TileLayer(
+              urlTemplate: _tileUrl,
+              userAgentPackageName: 'com.xavindo.tapgo.driver',
+            ),
+            if (fix != null)
+              MarkerLayer(markers: [
+                Marker(
+                  point: point,
+                  width: 44,
+                  height: 44,
+                  child: const Icon(
+                    Icons.two_wheeler_rounded,
+                    color: Color(0xFF0877E8),
+                    size: 36,
+                  ),
+                ),
+              ]),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Ringkasan singkat perjalanan aktif di Beranda — tap untuk pindah ke tab
+/// Pesanan, tempat detail dan aksinya berada. Beranda sengaja tidak
+/// menduplikasi ActiveRideCard secara penuh di sini.
+class _ActiveRideBanner extends StatelessWidget {
+  const _ActiveRideBanner({required this.ride});
+  final DriverRide ride;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      key: const ValueKey('active-ride-banner'),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: () => DriverShell.selectTab(context, 1),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            children: [
+              const Icon(Icons.route_rounded, color: Color(0xFF0877E8)),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Perjalanan aktif',
+                        style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 4),
+                    Text(_statusLabel(ride.status)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Tab "Pesanan": tawaran + perjalanan aktif ("Aktif") dan riwayat
+/// perjalanan ("Riwayat") dalam satu tab, sesuai pola Gojek/Grab — bukan
+/// tersebar di beranda dan menu akun seperti sebelumnya.
+class DriverOrdersScreen extends StatelessWidget {
+  const DriverOrdersScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final topPadding = kDriverDemoMode ? 52.0 : 20.0;
+    return DefaultTabController(
+      length: 2,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, topPadding, 16, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Pesanan', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 12),
+            const TabBar(
+              key: ValueKey('orders-tabs'),
+              tabs: [Tab(text: 'Aktif'), Tab(text: 'Riwayat')],
+            ),
+            const Expanded(
+              child: TabBarView(
+                children: [
+                  DriverOrdersActiveTab(),
+                  DriverRideHistoryBody(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Sub-tab "Aktif" milik DriverOrdersScreen — tawaran perjalanan dan
+/// perjalanan yang sedang berjalan. Ini adalah konten yang sebelumnya jadi
+/// isi utama tab "Perjalanan" (2-tab lama), dipindah apa adanya minus kartu
+/// status/ketersediaan yang sekarang tinggal di Beranda.
+class DriverOrdersActiveTab extends ConsumerWidget {
+  const DriverOrdersActiveTab({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(driverControllerProvider);
+    final controller = ref.read(driverControllerProvider.notifier);
     return RefreshIndicator(
       onRefresh: controller.refreshWorkspace,
       child: ListView(
-        padding: EdgeInsets.fromLTRB(16, topPadding, 16, 120),
+        padding: const EdgeInsets.only(top: 8, bottom: 120),
         children: [
-          _StatusHeroCard(state: state),
-          const SizedBox(height: 16),
           if (state.message != null) ...[
             ErrorNotice(message: state.message!),
             const SizedBox(height: 12),
@@ -360,6 +814,8 @@ class DriverHomeScreen extends ConsumerWidget {
   }
 }
 
+/// Placeholder tab "Pendapatan" — dibangun penuh pada tahap ringkasan
+/// pendapatan + statistik performa (agregasi RideOrder/RideEvent backend).
 class _BrandHeader extends StatelessWidget {
   const _BrandHeader({required this.title, required this.subtitle});
   final String title;
@@ -386,22 +842,15 @@ class _BrandHeader extends StatelessWidget {
           Semantics(
             label: 'Logo TapGo',
             image: true,
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Image.asset(
-                driverBrandLogoAsset,
-                width: 56,
-                height: 56,
-                // Rasio asli 1:1 dipertahankan; tanpa ini logo dapat
-                // teregang bila kotak induknya berubah.
-                fit: BoxFit.contain,
-                filterQuality: FilterQuality.high,
-                excludeFromSemantics: true,
-              ),
+            child: Image.asset(
+              driverBrandLogoAsset,
+              width: 64,
+              height: 64,
+              // Rasio asli 1:1 dipertahankan; tanpa ini logo dapat
+              // teregang bila kotak induknya berubah.
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+              excludeFromSemantics: true,
             ),
           ),
           const SizedBox(height: 18),
@@ -554,11 +1003,9 @@ class _StatusHeroCard extends ConsumerWidget {
               ),
               onPressed: state.isBusy
                   ? null
-                  : () => controller.setAvailability(
-                        isOnline
-                            ? DriverAvailability.offline
-                            : DriverAvailability.online,
-                      ),
+                  : () => isOnline
+                      ? controller.setAvailability(DriverAvailability.offline)
+                      : controller.checkAndGoOnline(context),
               icon: Icon(
                 isOnline
                     ? Icons.pause_circle_rounded
@@ -620,9 +1067,7 @@ class DriverAccountScreen extends ConsumerWidget {
       children: [
         Text('Akun Saya', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 16),
-        const DriverApplicationSection(),
-        const SizedBox(height: 16),
-        const DriverDocumentsSection(),
+        const DriverApplicationEntryPoint(),
         const SizedBox(height: 16),
         if (state.vehiclePlateMasked != null)
           Card(
@@ -782,6 +1227,18 @@ class ActiveRideCard extends ConsumerWidget {
               title: 'Jemput',
               value: ride.pickupAddress,
             ),
+            if (ride.pickupNote != null && ride.pickupNote!.isNotEmpty)
+              Padding(
+                key: const ValueKey('active-ride-pickup-note'),
+                padding: const EdgeInsets.only(top: 6, left: 32),
+                child: Text(
+                  'Catatan: ${ride.pickupNote}',
+                  style: const TextStyle(
+                    fontStyle: FontStyle.italic,
+                    color: Colors.black54,
+                  ),
+                ),
+              ),
             const SizedBox(height: 12),
             _TimelineStep(
               icon: Icons.flag_rounded,
@@ -797,6 +1254,19 @@ class ActiveRideCard extends ConsumerWidget {
                 onPressed: state.isBusy ? null : controller.advanceRide,
                 child: Text(_actionLabel(action)),
               ),
+            if (!ride.isTerminal && ride.status != RideStatus.searchingDriver) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                key: const ValueKey('trip-chat-action'),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => RideChatScreen(rideReference: ride.reference),
+                  ),
+                ),
+                icon: const Icon(Icons.chat_bubble_outline_rounded),
+                label: const Text('Chat dengan Penumpang'),
+              ),
+            ],
             if (!ride.isTerminal) ...[
               const SizedBox(height: 10),
               OutlinedButton(
@@ -862,6 +1332,18 @@ class OfferDetailSheet extends ConsumerWidget {
                 title: 'Lokasi Jemput',
                 value: ride.pickupAddress,
               ),
+              if (ride.pickupNote != null && ride.pickupNote!.isNotEmpty)
+                Padding(
+                  key: const ValueKey('offer-pickup-note'),
+                  padding: const EdgeInsets.only(top: 6, left: 32),
+                  child: Text(
+                    'Catatan: ${ride.pickupNote}',
+                    style: const TextStyle(
+                      fontStyle: FontStyle.italic,
+                      color: Colors.black54,
+                    ),
+                  ),
+                ),
               const SizedBox(height: 12),
               _TimelineStep(
                 icon: Icons.flag_rounded,
@@ -959,9 +1441,7 @@ class CapabilityScreen extends ConsumerWidget {
         EmptyStateCard(icon: icon, title: title, message: message),
         const SizedBox(height: 16),
         if (showDocuments) ...[
-          const DriverDocumentsSection(),
-          const SizedBox(height: 16),
-          const DriverApplicationSection(),
+          const DriverApplicationEntryPoint(),
           const SizedBox(height: 16),
         ],
         if (showRetry)
@@ -1014,6 +1494,44 @@ class EmptyStateCard extends StatelessWidget {
     );
   }
 }
+
+/// Penanda "G" empat-warna untuk tombol "Lanjutkan dengan Google".
+///
+/// Dibangun dari widget, bukan aset gambar berlisensi Google — cukup untuk
+/// memberi isyarat visual pada tombol tanpa menambah dependensi aset baru.
+class _GoogleGlyph extends StatelessWidget {
+  const _GoogleGlyph();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 20,
+      height: 20,
+      child: Text(
+        'G',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w900,
+          height: 1.0,
+          foreground: _googleGPaint,
+        ),
+      ),
+    );
+  }
+}
+
+// Gradasi sederhana approksimasi warna resmi Google (biru/merah/kuning/hijau)
+// tanpa mengklaim jadi logo resmi.
+final Paint _googleGPaint = Paint()
+  ..shader = const LinearGradient(
+    colors: [
+      Color(0xFF4285F4),
+      Color(0xFFEA4335),
+      Color(0xFFFBBC05),
+      Color(0xFF34A853),
+    ],
+  ).createShader(const Rect.fromLTWH(0, 0, 20, 20));
 
 class ErrorNotice extends StatelessWidget {
   const ErrorNotice({required this.message, super.key});

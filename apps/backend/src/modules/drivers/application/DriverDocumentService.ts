@@ -37,7 +37,7 @@ const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
  * satu salah ketik akan melahirkan jenis dokumen baru secara diam-diam dan
  * membuat laporan admin tidak lagi dapat dipercaya.
  */
-export const DRIVER_DOCUMENT_TYPES = ["KTP", "SIM", "STNK", "SELFIE"] as const;
+export const DRIVER_DOCUMENT_TYPES = ["KTP", "SIM", "STNK", "SELFIE", "SKCK"] as const;
 export type DriverDocumentType = (typeof DRIVER_DOCUMENT_TYPES)[number];
 
 export function isDriverDocumentType(value: string): value is DriverDocumentType {

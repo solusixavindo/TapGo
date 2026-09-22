@@ -301,6 +301,33 @@ void main() {
   });
 
   group('R2.5B auth and capability', () {
+    test(
+        'isAuthFailure hanya true untuk 401/AUTH_REQUIRED, bukan status '
+        'kapabilitas driver', () {
+      const authFailures = [
+        DriverApiException(
+          code: 'AUTH_REQUIRED',
+          message: 'x',
+          statusCode: 401,
+        ),
+        DriverApiException(code: 'ANYTHING', message: 'x', statusCode: 401),
+        DriverApiException(code: 'AUTH_REQUIRED', message: 'x'),
+      ];
+      const capabilityOnly = [
+        DriverApiException(code: 'RIDE_DRIVER_PROFILE_REQUIRED', message: 'x'),
+        DriverApiException(code: 'RIDE_DRIVER_NOT_ACTIVE', message: 'x'),
+        DriverApiException(code: 'RIDE_DRIVER_ACCOUNT_INACTIVE', message: 'x'),
+      ];
+      for (final error in authFailures) {
+        expect(error.isAuthFailure, isTrue, reason: error.code);
+        expect(error.isAuthOrCapability, isTrue, reason: error.code);
+      }
+      for (final error in capabilityOnly) {
+        expect(error.isAuthFailure, isFalse, reason: error.code);
+        expect(error.isAuthOrCapability, isTrue, reason: error.code);
+      }
+    });
+
     testWidgets('session valid dipulihkan ke workspace driver', (tester) async {
       final repo = FakeDriverRepository(session: demoSession);
       await pumpDriver(tester, repo);
@@ -464,19 +491,18 @@ void main() {
 
       expect(find.byKey(const ValueKey('profile-required')), findsOneWidget);
       await tester.scrollUntilVisible(
-        find.byKey(const ValueKey('driver-application-form')),
+        find.byKey(const ValueKey('start-application-wizard')),
         200,
         scrollable: find.byType(Scrollable).first,
       );
-      expect(
-        find.byKey(const ValueKey('driver-application-form')),
-        findsOneWidget,
+      await tester.tap(find.byKey(const ValueKey('start-application-wizard')));
+      await tester.pumpAndSettle();
+
+      // Dokumen belum lengkap -> tombol Lanjut terkunci di halaman pertama.
+      final next = tester.widget<FilledButton>(
+        find.byKey(const ValueKey('driver-application-wizard-next')),
       );
-      // Dokumen belum lengkap -> tombol kirim terkunci.
-      final submit = tester.widget<FilledButton>(
-        find.byKey(const ValueKey('driver-application-submit')),
-      );
-      expect(submit.onPressed, isNull);
+      expect(next.onPressed, isNull);
     });
 
     testWidgets(
@@ -490,7 +516,9 @@ void main() {
           statusCode: 403,
         ),
       );
-      // Lengkapi keempat dokumen lewat kontrak repository yang sama.
+      // Lengkapi kelima dokumen (termasuk SKCK) lewat kontrak repository
+      // yang sama — wizard membaginya ke halaman 1 dan halaman 4, tapi
+      // kelengkapannya tetap dicek dari data yang sama.
       for (final kind in DriverDocumentKind.values) {
         await repo.uploadDocument(
           kind: kind,
@@ -500,20 +528,68 @@ void main() {
       }
       await pumpDriver(tester, repo);
 
+      final nextKey = find.byKey(const ValueKey('driver-application-wizard-next'));
       await tester.scrollUntilVisible(
-        find.byKey(const ValueKey('driver-application-plate')),
+        find.byKey(const ValueKey('start-application-wizard')),
         200,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.tap(find.byKey(const ValueKey('start-application-wizard')));
+      await tester.pumpAndSettle();
+
+      // Halaman 1 — Upload Dokumen: sudah lengkap lewat repository di atas.
+      await tester.tap(nextKey);
+      await tester.pumpAndSettle();
+
+      // Halaman 2 — Data Diri: seluruh field wajib diisi, tidak ada opsional.
       await tester.enterText(
-        find.byKey(const ValueKey('driver-application-plate')),
+        find.byKey(const ValueKey('wizard-full-name')),
+        'Budi Santoso',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('wizard-address')),
+        'Jl. Melati No. 5, Jakarta',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('wizard-date-of-birth')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('wizard-emergency-name')),
+        'Siti Santoso',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('wizard-emergency-phone')),
+        '081234567890',
+      );
+      await tester.pump();
+      await tester.tap(nextKey);
+      await tester.pumpAndSettle();
+
+      // Halaman 3 — Data Kendaraan.
+      await tester.enterText(
+        find.byKey(const ValueKey('wizard-plate')),
         'B 1234 UJI',
       );
-      await tester.tap(find.byKey(const ValueKey('driver-application-submit')));
+      await tester.pump();
+      await tester.tap(nextKey);
+      await tester.pumpAndSettle();
+
+      // Halaman 4 — Upload Data Tambahan (SKCK): sudah lengkap juga.
+      await tester.tap(nextKey);
+      await tester.pumpAndSettle();
+
+      // Halaman 5 — Pernyataan.
+      await tester.tap(find.byKey(const ValueKey('wizard-declaration-checkbox')));
+      await tester.pumpAndSettle();
+      await tester.tap(nextKey);
       await tester.pumpAndSettle();
 
       expect(repo.submitCalls, 1);
       expect(repo.submittedForms.single['plateNumber'], 'B 1234 UJI');
+      expect(repo.submittedForms.single['fullName'], 'Budi Santoso');
+      expect(repo.submittedForms.single['declarationAccepted'], isTrue);
       expect(
         find.byKey(const ValueKey('driver-application-open')),
         findsOneWidget,
@@ -550,7 +626,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(repo.withdrawCalls, 1);
-      expect(find.byKey(const ValueKey('driver-application-form')),
+      expect(find.byKey(const ValueKey('start-application-wizard')),
           findsOneWidget);
     });
   });
@@ -594,7 +670,7 @@ void main() {
         offerItems: [demoOffer],
         acceptCompleter: accept,
       );
-      await pumpDriver(tester, repo);
+      await pumpDriverOrders(tester, repo);
       final offerTile = find.byKey(const ValueKey('offer-RIDE-DEMO-001'));
       await tapReachable(tester, offerTile);
       await tester.pumpAndSettle();
@@ -622,7 +698,7 @@ void main() {
           statusCode: 409,
         ),
       );
-      await pumpDriver(tester, repo);
+      await pumpDriverOrders(tester, repo);
       final offerTile = find.byKey(const ValueKey('offer-RIDE-DEMO-001'));
       await tapReachable(tester, offerTile);
       await tester.pumpAndSettle();
@@ -636,6 +712,57 @@ void main() {
       await tester.pumpAndSettle();
       expect(repo.rejectCalls, 1);
     });
+
+    testWidgets('catatan lokasi jemput tampil di detail tawaran dan perjalanan aktif',
+        (tester) async {
+      const offerWithNote = DriverRide(
+        reference: 'RIDE-DEMO-001',
+        serviceType: 'MOTORCYCLE',
+        status: RideStatus.searchingDriver,
+        pickupAddress: 'LOKASI_DEMO_A',
+        dropoffAddress: 'LOKASI_DEMO_B',
+        pickupNote: 'Di depan minimarket, bukan gang sebelah',
+        distanceMeters: 2500,
+        durationSeconds: 600,
+        totalFare: 9000,
+      );
+      final accept = Completer<DriverRide>();
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        availability: DriverAvailability.online,
+        offerItems: [offerWithNote],
+        acceptCompleter: accept,
+      );
+      await pumpDriverOrders(tester, repo);
+      await tapReachable(
+          tester, find.byKey(const ValueKey('offer-RIDE-DEMO-001')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('offer-pickup-note')), findsOneWidget);
+      expect(
+        find.text('Catatan: Di depan minimarket, bukan gang sebelah'),
+        findsOneWidget,
+      );
+
+      await tapReachable(
+          tester, find.byKey(const ValueKey('accept-offer-button')));
+      accept.complete(const DriverRide(
+        reference: 'RIDE-DEMO-001',
+        serviceType: 'MOTORCYCLE',
+        status: RideStatus.driverToPickup,
+        pickupAddress: 'LOKASI_DEMO_A',
+        dropoffAddress: 'LOKASI_DEMO_B',
+        pickupNote: 'Di depan minimarket, bukan gang sebelah',
+        distanceMeters: 2500,
+        durationSeconds: 600,
+        totalFare: 9000,
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('active-ride-pickup-note')), findsOneWidget);
+      expect(
+        find.text('Catatan: Di depan minimarket, bukan gang sebelah'),
+        findsOneWidget,
+      );
+    });
   });
 
   group('R2.5B active ride lifecycle', () {
@@ -647,14 +774,14 @@ void main() {
         availability: DriverAvailability.offline,
         current: demoRide(RideStatus.driverAssigned),
       );
-      await pumpDriver(tester, repo);
+      await pumpDriverOrders(tester, repo);
       expect(find.text('Perjalanan Aktif'), findsOneWidget);
       expect(find.text('RIDE-DEMO-001'), findsOneWidget);
     });
 
     testWidgets('no current ride kembali ke home/offers', (tester) async {
       final repo = FakeDriverRepository(session: demoSession);
-      await pumpDriver(tester, repo);
+      await pumpDriverOrders(tester, repo);
       expect(find.text('Belum ada tawaran'), findsOneWidget);
     });
 
@@ -678,7 +805,7 @@ void main() {
         session: demoSession,
         current: demoRide(RideStatus.driverAssigned),
       );
-      await pumpDriver(tester, repo);
+      await pumpDriverOrders(tester, repo);
       var primaryAction = find.byKey(const ValueKey('trip-primary-action'));
       await tapReachable(tester, primaryAction);
       await tester.pumpAndSettle();
@@ -700,7 +827,7 @@ void main() {
         session: demoSession,
         current: demoRide(RideStatus.driverToPickup),
       );
-      await pumpDriver(tester, cancelRepo);
+      await pumpDriverOrders(tester, cancelRepo);
       final cancelAction = find.byKey(const ValueKey('trip-cancel-action'));
       await tapReachable(tester, cancelAction);
       await tester.pumpAndSettle();
@@ -713,14 +840,14 @@ void main() {
         session: demoSession,
         current: demoRide(RideStatus.unknown),
       );
-      await pumpDriver(tester, repo);
+      await pumpDriverOrders(tester, repo);
       expect(find.byKey(const ValueKey('trip-primary-action')), findsNothing);
 
       final doneRepo = FakeDriverRepository(
         session: demoSession,
         current: demoRide(RideStatus.completed),
       );
-      await pumpDriver(tester, doneRepo);
+      await pumpDriverOrders(tester, doneRepo);
       expect(find.text('Perjalanan selesai'), findsOneWidget);
       expect(find.byKey(const ValueKey('trip-primary-action')), findsNothing);
     });
@@ -731,7 +858,7 @@ void main() {
         session: demoSession,
         current: demoRide(RideStatus.driverToPickup),
       );
-      await pumpDriver(tester, repo);
+      await pumpDriverOrders(tester, repo);
       final controller = ProviderScope.containerOf(
         tester.element(find.byType(DriverShell)),
       ).read(driverControllerProvider.notifier);
@@ -741,6 +868,206 @@ void main() {
       await tester.pumpAndSettle();
       expect(repo.currentRideCalls, beforeResume + 1);
       expect(find.text('Perjalanan Aktif'), findsOneWidget);
+    });
+  });
+
+  group('R2.5B ride history', () {
+    testWidgets('daftar riwayat tampil dari tab Pesanan > Riwayat, terbaru dulu',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        historyItems: const [
+          DriverRide(
+            reference: 'RIDE-DEMO-002',
+            serviceType: 'MOTORCYCLE',
+            status: RideStatus.completed,
+            pickupAddress: 'LOKASI_DEMO_A',
+            dropoffAddress: 'LOKASI_DEMO_B',
+            totalFare: 9000,
+          ),
+          DriverRide(
+            reference: 'RIDE-DEMO-001',
+            serviceType: 'MOTORCYCLE',
+            status: RideStatus.cancelledByDriver,
+            pickupAddress: 'LOKASI_DEMO_A',
+            dropoffAddress: 'LOKASI_DEMO_B',
+            totalFare: 9000,
+          ),
+        ],
+      );
+      await pumpDriverOrders(tester, repo);
+
+      await tester.tap(find.text('Riwayat'));
+      await tester.pumpAndSettle();
+
+      expect(repo.historyCalls, 1);
+      expect(find.byKey(const ValueKey('ride-history-list')), findsOneWidget);
+      expect(find.text('RIDE-DEMO-002'), findsOneWidget);
+      expect(find.text('RIDE-DEMO-001'), findsOneWidget);
+    });
+
+    testWidgets('daftar kosong menampilkan pesan, bukan error',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriverOrders(tester, repo);
+
+      await tester.tap(find.text('Riwayat'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('ride-history-empty')), findsOneWidget);
+    });
+
+    testWidgets('kegagalan jaringan menampilkan retry, bukan crash',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      repo.historyError = const DriverApiException(
+        code: 'NETWORK_ERROR',
+        message: 'Koneksi belum stabil.',
+      );
+      await pumpDriverOrders(tester, repo);
+
+      await tester.tap(find.text('Riwayat'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Koneksi belum stabil.'), findsOneWidget);
+      expect(find.byKey(const ValueKey('ride-history-retry')), findsOneWidget);
+    });
+  });
+
+  group('navigasi 4 tab dan peta live Beranda', () {
+    testWidgets('NavigationBar menampilkan 4 destinasi: Beranda, Pesanan, Pendapatan, Akun',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+
+      final nav = tester.widget<NavigationBar>(find.byType(NavigationBar));
+      expect(nav.destinations, hasLength(4));
+      final labels = nav.destinations
+          .cast<NavigationDestination>()
+          .map((d) => d.label)
+          .toList();
+      expect(labels, ['Beranda', 'Pesanan', 'Pendapatan', 'Akun']);
+    });
+
+    testWidgets('peta Beranda merender FlutterMap tanpa fix lokasi (mode demo/tanpa GPS)',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+
+      expect(find.byKey(const ValueKey('driver-home-map')), findsOneWidget);
+      // Tanpa fix (NoDriverLocationPort default di test), marker tidak boleh
+      // tampil — hanya tile dasar, bukan posisi palsu.
+      expect(find.byIcon(Icons.two_wheeler_rounded), findsNothing);
+    });
+
+    testWidgets('peta Beranda menampilkan marker begitu positionStream mengirim fix GPS',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      // StreamController, bukan Stream.value: langganan StreamBuilder harus
+      // sudah terpasang SEBELUM fix dikirim, supaya tidak bergantung pada
+      // urutan microtask antara subscribe dan emit satu nilai tunggal.
+      final controller = StreamController<(double, double)>.broadcast();
+      addTearDown(controller.close);
+      final location = RecordingLocationPort(available: true, fixes: controller.stream);
+      // MarkerLayer memangkas marker di luar viewport kamera saat ini
+      // (lihat flutter_map MarkerLayer.build — "Cull if out of bounds").
+      // Kamera peta dipusatkan ke _defaultCenter pada frame PERTAMA dan
+      // tidak otomatis mengikuti fix baru (masalah UX terpisah, di luar
+      // cakupan perbaikan ini) — jadi fix di sini sengaja praktis identik
+      // dengan _defaultCenter, supaya test ini murni menguji penyaluran fix
+      // ke MarkerLayer, bukan perilaku kamera flutter_map itu sendiri.
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      await tester.pumpWidget(
+        buildTestableDriverApp(repository: repo, locationPort: location),
+      );
+      await tester.pumpAndSettle();
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      });
+
+      controller.add((-6.1754, 106.8272));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('driver-home-map')), findsOneWidget);
+      expect(find.byIcon(Icons.two_wheeler_rounded), findsOneWidget);
+    });
+  });
+
+  group('R2.5B earnings and performance', () {
+    testWidgets('ringkasan pendapatan dan performa tampil dari tab Pendapatan',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        earningsSummaryResult: const DriverEarningsSummary(
+          range: 'today',
+          tripCount: 3,
+          grossFare: 27000,
+          currency: 'IDR',
+          byDay: [
+            DriverEarningsDay(date: '2026-09-10', tripCount: 3, grossFare: 27000),
+          ],
+        ),
+        performanceSummaryResult: const DriverPerformanceSummary(
+          totalTrips: 10,
+          acceptanceRate: 0.8,
+          completionRate: 0.9,
+          cancellationRate: 0.1,
+        ),
+      );
+      await pumpDriver(tester, repo);
+
+      await tester.tap(find.byIcon(Icons.savings_rounded));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('earnings-summary-card')), findsOneWidget);
+      expect(find.text('3'), findsOneWidget);
+      expect(find.text('Rp27.000'), findsWidgets);
+      expect(find.byKey(const ValueKey('performance-card')), findsOneWidget);
+      expect(find.text('80%'), findsOneWidget);
+      expect(find.text('90%'), findsOneWidget);
+      expect(find.text('10%'), findsOneWidget);
+    });
+
+    testWidgets('rentang berbeda memanggil ulang ringkasan pendapatan',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+
+      await tester.tap(find.byIcon(Icons.savings_rounded));
+      await tester.pumpAndSettle();
+      expect(repo.earningsCalls, 1);
+
+      await tester.tap(find.byKey(const ValueKey('earnings-range-week')));
+      await tester.pumpAndSettle();
+      expect(repo.earningsCalls, 2);
+    });
+
+    testWidgets('belum ada data performa menampilkan "Belum ada data", bukan 0%',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+
+      await tester.tap(find.byIcon(Icons.savings_rounded));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Belum ada data'), findsNWidgets(3));
+    });
+
+    testWidgets('kegagalan jaringan pada pendapatan menampilkan retry',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      repo.earningsError = const DriverApiException(
+        code: 'NETWORK_ERROR',
+        message: 'Koneksi belum stabil.',
+      );
+      await pumpDriver(tester, repo);
+
+      await tester.tap(find.byIcon(Icons.savings_rounded));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('earnings-retry')), findsOneWidget);
     });
   });
 
@@ -790,6 +1117,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.receipt_long_rounded));
+      await tester.pumpAndSettle();
       await tapReachable(
           tester, find.byKey(const ValueKey('offer-RIDE-DEMO-001')));
       await tester.pumpAndSettle();
@@ -812,6 +1141,23 @@ void main() {
       ).read(driverControllerProvider.notifier);
       await controller.sendLocationIfAvailable();
       expect(location.sendCalls, 0);
+    });
+
+    testWidgets('lokasi terkirim berkala selama workspace aktif',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final location = RecordingLocationPort(available: true);
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, locationPort: location));
+      await tester.pumpAndSettle();
+      expect(location.sendCalls, 0);
+
+      // Timer berkala 15 detik — pump waktu palsu, bukan menunggu nyata.
+      await tester.pump(const Duration(seconds: 16));
+      expect(location.sendCalls, 1);
+
+      await tester.pump(const Duration(seconds: 15));
+      expect(location.sendCalls, 2);
     });
 
     testWidgets(
@@ -875,6 +1221,18 @@ Future<void> pumpDriver(WidgetTester tester, FakeDriverRepository repo) async {
   });
 }
 
+/// Sama seperti [pumpDriver], lalu pindah ke tab "Pesanan" — tawaran,
+/// perjalanan aktif, dan riwayat kini hidup di sana, bukan di Beranda.
+Future<void> pumpDriverOrders(WidgetTester tester, FakeDriverRepository repo) async {
+  await pumpDriver(tester, repo);
+  // Lewat ikon, bukan find.text('Pesanan'): pumpWidget berulang dalam satu
+  // test dapat mempertahankan _tabIndex sebelumnya (elemen root tidak
+  // berubah tipe), sehingga judul layar "Pesanan" bisa sudah tampil
+  // berdampingan dengan label NavigationDestination yang sama persis.
+  await tester.tap(find.byIcon(Icons.receipt_long_rounded));
+  await tester.pumpAndSettle();
+}
+
 Future<void> tapReachable(WidgetTester tester, Finder finder) async {
   await Scrollable.ensureVisible(
     tester.element(finder),
@@ -918,6 +1276,9 @@ class FakeDriverRepository implements DriverRepository {
     required this.session,
     this.current,
     this.offerItems = const [],
+    this.historyItems = const [],
+    this.earningsSummaryResult,
+    this.performanceSummaryResult,
     this.applicationInfo,
     this.availability = DriverAvailability.offline,
     this.currentError,
@@ -932,6 +1293,7 @@ class FakeDriverRepository implements DriverRepository {
   DriverSession? session;
   DriverRide? current;
   List<DriverRide> offerItems;
+  List<DriverRide> historyItems;
   DriverAvailability availability;
   DriverApiException? currentError;
   Object? offersError;
@@ -976,6 +1338,21 @@ class FakeDriverRepository implements DriverRepository {
   }
 
   @override
+  Future<GoogleAuthResult> loginWithGoogle({required String idToken}) async {
+    return const GoogleAuthResult.needsPhone(suggestedFullName: 'Fake Google User');
+  }
+
+  @override
+  Future<DriverSession> completeGoogleRegistration({
+    required String idToken,
+    required String phone,
+    String? fullName,
+  }) async {
+    session = demoSession;
+    return demoSession;
+  }
+
+  @override
   Future<void> logout() async {
     logoutCalls += 1;
     session = null;
@@ -1001,6 +1378,46 @@ class FakeDriverRepository implements DriverRepository {
     currentRideCalls += 1;
     if (currentError != null) throw currentError!;
     return current;
+  }
+
+  int historyCalls = 0;
+  DriverApiException? historyError;
+
+  @override
+  Future<List<DriverRide>> rideHistory({int limit = 20}) async {
+    historyCalls += 1;
+    if (historyError != null) throw historyError!;
+    return historyItems.take(limit).toList();
+  }
+
+  DriverEarningsSummary? earningsSummaryResult;
+  Object? earningsError;
+  int earningsCalls = 0;
+
+  @override
+  Future<DriverEarningsSummary> earningsSummary({String range = 'today'}) async {
+    earningsCalls += 1;
+    if (earningsError != null) throw earningsError!;
+    return earningsSummaryResult ??
+        const DriverEarningsSummary(
+          range: 'today',
+          tripCount: 0,
+          grossFare: 0,
+          currency: 'IDR',
+          byDay: [],
+        );
+  }
+
+  DriverPerformanceSummary? performanceSummaryResult;
+  Object? performanceError;
+  int performanceCalls = 0;
+
+  @override
+  Future<DriverPerformanceSummary> performanceSummary() async {
+    performanceCalls += 1;
+    if (performanceError != null) throw performanceError!;
+    return performanceSummaryResult ??
+        const DriverPerformanceSummary(totalTrips: 0);
   }
 
   @override
@@ -1096,7 +1513,7 @@ class FakeDriverRepository implements DriverRepository {
   Object? withdrawError;
   int submitCalls = 0;
   int withdrawCalls = 0;
-  final List<Map<String, String?>> submittedForms = [];
+  final List<Map<String, Object?>> submittedForms = [];
 
   DriverApplicationSnapshot _snapshot() => DriverApplicationSnapshot(
         application: applicationInfo,
@@ -1118,6 +1535,12 @@ class FakeDriverRepository implements DriverRepository {
     String? brand,
     String? model,
     String? color,
+    String? fullName,
+    String? dateOfBirth,
+    String? address,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
+    required bool declarationAccepted,
   }) async {
     if (submitError != null) throw submitError!;
     submitCalls += 1;
@@ -1127,6 +1550,12 @@ class FakeDriverRepository implements DriverRepository {
       'brand': brand,
       'model': model,
       'color': color,
+      'fullName': fullName,
+      'dateOfBirth': dateOfBirth,
+      'address': address,
+      'emergencyContactName': emergencyContactName,
+      'emergencyContactPhone': emergencyContactPhone,
+      'declarationAccepted': declarationAccepted,
     });
     applicationInfo = const DriverApplicationInfo(
       id: 'fake-application',
@@ -1143,10 +1572,56 @@ class FakeDriverRepository implements DriverRepository {
     applicationInfo = null;
     return _snapshot();
   }
+
+  @override
+  Future<List<Map<String, dynamic>>> chatMessages(String rideReference) async {
+    return const [];
+  }
+
+  @override
+  Future<void> sendChatMessage(String rideReference, String message) async {}
+
+  @override
+  Future<void> markChatRead(String rideReference) async {}
+
+  int sendLocationCalls = 0;
+
+  @override
+  Future<void> sendLocation({
+    required double lat,
+    required double lng,
+    required int accuracyMeters,
+    required DateTime capturedAt,
+  }) async {
+    sendLocationCalls += 1;
+  }
+
+  DriverFaceCheckStatus faceCheckStatus = DriverFaceCheckStatus.passed;
+
+  @override
+  Future<DriverFaceCheckSnapshot> faceCheckToday() async =>
+      DriverFaceCheckSnapshot(status: faceCheckStatus, attemptsRemaining: 3);
+
+  @override
+  Future<DriverFaceReferenceEmbedding> faceCheckReference() async =>
+      const DriverFaceReferenceEmbedding(embedding: [], modelVersion: 'test', minSimilarity: 0.75);
+
+  @override
+  Future<DriverFaceCheckSnapshot> submitFaceCheckAttempt({
+    required double similarityScore,
+    required bool livenessPassed,
+    required String modelVersion,
+  }) async {
+    faceCheckStatus = DriverFaceCheckStatus.passed;
+    return DriverFaceCheckSnapshot(status: faceCheckStatus, attemptsRemaining: 3);
+  }
 }
 
 class RecordingLocationPort implements DriverLocationPort {
-  RecordingLocationPort({required this.available});
+  RecordingLocationPort({
+    required this.available,
+    Stream<(double, double)>? fixes,
+  }) : positionStream = fixes ?? const Stream.empty();
   final bool available;
   int sendCalls = 0;
 
@@ -1157,4 +1632,7 @@ class RecordingLocationPort implements DriverLocationPort {
   Future<void> sendCurrentLocation() async {
     sendCalls += 1;
   }
+
+  @override
+  final Stream<(double lat, double lng)> positionStream;
 }

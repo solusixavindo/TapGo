@@ -12,6 +12,10 @@ import {
   DriverDocumentService
 } from "./DriverDocumentService.js";
 import { DriverReviewScopeService } from "../../rides/application/DriverReviewScopeService.js";
+import { DriverFaceCheckService } from "./DriverFaceCheckService.js";
+import { DriverFaceEmbeddingService } from "./DriverFaceEmbeddingService.js";
+import { decryptDocument } from "../../../core/security/documentCipher.js";
+import { env } from "../../../config/env.js";
 
 /**
  * Pengajuan mandiri mitra driver (Stage H1, keputusan Owner K1-A..K4-A + D1).
@@ -91,7 +95,9 @@ export type DriverApplicationSummary = {
 export class DriverApplicationService {
   constructor(
     private readonly prisma: PrismaClient,
-    private readonly scopes: DriverReviewScopeService
+    private readonly scopes: DriverReviewScopeService,
+    private readonly faceCheck: DriverFaceCheckService = new DriverFaceCheckService(prisma),
+    private readonly faceEmbedding: DriverFaceEmbeddingService = new DriverFaceEmbeddingService()
   ) {}
 
   // -------------------------------------------------------------------
@@ -103,10 +109,26 @@ export class DriverApplicationService {
     application: DriverApplicationSummary | null;
     documentsComplete: boolean;
     vehicle: { serviceType: RideServiceType | null; plateMasked: string | null };
+    personalData: {
+      fullName: string | null;
+      dateOfBirth: Date | null;
+      address: string | null;
+      emergencyContactName: string | null;
+      emergencyContactPhone: string | null;
+    };
   }> {
     const driver = await this.prisma.driver.findUnique({
       where: { userId },
-      select: { id: true, vehicleType: true, vehiclePlate: true }
+      select: {
+        id: true,
+        vehicleType: true,
+        vehiclePlate: true,
+        fullName: true,
+        dateOfBirth: true,
+        address: true,
+        emergencyContactName: true,
+        emergencyContactPhone: true
+      }
     });
 
     const application = await this.prisma.rideDriverApplication.findFirst({
@@ -132,6 +154,13 @@ export class DriverApplicationService {
       vehicle: {
         serviceType: this.legacyVehicleTypeToServiceType(driver?.vehicleType ?? null),
         plateMasked: driver?.vehiclePlate ?? null
+      },
+      personalData: {
+        fullName: driver?.fullName ?? null,
+        dateOfBirth: driver?.dateOfBirth ?? null,
+        address: driver?.address ?? null,
+        emergencyContactName: driver?.emergencyContactName ?? null,
+        emergencyContactPhone: driver?.emergencyContactPhone ?? null
       }
     };
   }
@@ -148,6 +177,11 @@ export class DriverApplicationService {
     brand?: string;
     model?: string;
     color?: string;
+    fullName?: string;
+    dateOfBirth?: string;
+    address?: string;
+    emergencyContactName?: string;
+    emergencyContactPhone?: string;
   }): Promise<DriverApplicationSummary> {
     const plate = normalizePlate(input.plateNumber);
     if (!PLATE_PATTERN.test(plate)) {
@@ -167,7 +201,7 @@ export class DriverApplicationService {
 
     if (!driver || !(await this.requiredDocumentsComplete(driver.id))) {
       throw new AppError(
-        "Lengkapi dulu keempat dokumen (KTP, SIM, STNK, foto diri) sebelum mengajukan.",
+        "Lengkapi dulu kelima dokumen (KTP, SIM, STNK, foto diri, SKCK) sebelum mengajukan.",
         StatusCodes.CONFLICT,
         DRIVER_APPLICATION_DOCUMENTS_INCOMPLETE
       );
@@ -214,7 +248,11 @@ export class DriverApplicationService {
           userId: input.userId,
           cycleNumber: total + 1,
           status: "SUBMITTED",
-          submittedAt: new Date()
+          submittedAt: new Date(),
+          // Rute hanya memanggil submit() setelah declarationAccepted
+          // divalidasi wajib true di schema — jadi sampai di sini, waktu
+          // pengiriman pengajuan INI adalah waktu pernyataan disetujui.
+          declarationAcceptedAt: new Date()
         },
         select: {
           id: true,
@@ -234,7 +272,18 @@ export class DriverApplicationService {
           vehicleType: legacyType,
           vehiclePlate: plateMasked,
           licenseNumber: plateHashed,
-          kycStatus: "PENDING"
+          kycStatus: "PENDING",
+          ...(input.fullName ? { fullName: input.fullName } : {}),
+          ...(input.dateOfBirth
+            ? { dateOfBirth: new Date(input.dateOfBirth) }
+            : {}),
+          ...(input.address ? { address: input.address } : {}),
+          ...(input.emergencyContactName
+            ? { emergencyContactName: input.emergencyContactName }
+            : {}),
+          ...(input.emergencyContactPhone
+            ? { emergencyContactPhone: input.emergencyContactPhone }
+            : {})
         }
       });
 
@@ -380,6 +429,37 @@ export class DriverApplicationService {
         where: { driverId: legacyDriver.id, status: "PENDING" },
         data: { status: "APPROVED", reviewedBy: input.actorId, reviewedAt: now }
       });
+
+      // Verifikasi wajah harian (bila diaktifkan): embedding HARUS dihitung
+      // di sini, sekarang, karena ini satu-satunya jendela di mana swafoto
+      // KYC mentah dijamin masih terbaca — purgeExpired() hanya menyisakan
+      // dokumen mentah selama pengajuan berstatus DRAFT/SUBMITTED/UNDER_REVIEW,
+      // dan baris di atas baru saja memindahkan pengajuan ini keluar dari
+      // status itu. Menunda ke luar transaksi berisiko approve() sukses
+      // tapi embedding gagal dibuat tanpa jejak yang jelas.
+      if (env.DRIVER_FACE_CHECK_ENABLED) {
+        const selfie = await tx.driverDocument.findUnique({
+          where: { driverId_type: { driverId: legacyDriver.id, type: "SELFIE" } }
+        });
+        if (!selfie?.cipherText || !selfie.cipherIv || !selfie.cipherTag) {
+          throw new AppError(
+            "Swafoto KYC tidak ditemukan, tidak dapat menghitung referensi wajah.",
+            StatusCodes.CONFLICT,
+            "DRIVER_FACE_REFERENCE_SOURCE_MISSING"
+          );
+        }
+        const rawSelfie = decryptDocument(
+          {
+            cipherText: selfie.cipherText,
+            cipherIv: selfie.cipherIv,
+            cipherTag: selfie.cipherTag,
+            keyVersion: selfie.keyVersion
+          },
+          "driver"
+        );
+        const embedding = await this.faceEmbedding.computeEmbedding(rawSelfie);
+        await this.faceCheck.storeReference(tx, { userId: application.userId, embedding });
+      }
 
       await tx.auditLog.create({
         data: {

@@ -111,6 +111,17 @@ const envSchema = z.object({
   /// MEMBERSHIP_PURCHASE_APP_ENABLED: tetap false untuk aplikasi Play karena
   /// pembayaran eksternal in-app menuntut Play Billing.
   WALLET_TOPUP_ENABLED: strictEnvBoolean(false),
+  /// Verifikasi wajah harian driver sebelum online. Default mati: pencocokan
+  /// terjadi di HP driver (tidak ada API pihak ketiga), server hanya melacak
+  /// hari/percobaan dan menegakkan ambang batas — lihat DriverFaceCheckService.
+  DRIVER_FACE_CHECK_ENABLED: strictEnvBoolean(false),
+  /// Percobaan verifikasi wajah yang diizinkan per driver per hari sebelum
+  /// diblokir dan diarahkan menghubungi admin.
+  DRIVER_FACE_CHECK_MAX_ATTEMPTS_PER_DAY: z.coerce.number().int().positive().max(10).default(3),
+  /// Ambang skor kemiripan (0-1) yang ditegakkan ULANG di server — klien tidak
+  /// pernah cukup dipercaya mengirim {passed: true} begitu saja. Disetel ulang
+  /// selama rollout berdasarkan similarityScore nyata yang tercatat.
+  DRIVER_FACE_CHECK_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.75),
   // Release 1 tidak memakai realtime/chat. Fail-closed: Socket.IO hanya
   // di-attach bila diaktifkan eksplisit ("true"). Nilai lain -> false.
   REALTIME_ENABLED: strictEnvBoolean(false),
@@ -158,6 +169,13 @@ const envSchema = z.object({
   SMTP_FROM: z.string().optional(),
   /// true = TLS implisit (port 465); false = STARTTLS (port 587).
   SMTP_SECURE: strictEnvBoolean(false),
+  /// Daftar/masuk dengan akun Google (driver_app). Ini WAJIB "Web client ID"
+  /// dari Google Cloud Console — bukan Android client ID — karena itulah
+  /// audience yang tercantum pada ID token yang diverifikasi di sini,
+  /// mengikuti dokumentasi resmi Google Identity Services. Tanpa ini,
+  /// endpoint /auth/google fail-closed dengan 503, bukan diam-diam menerima
+  /// token yang tidak pernah benar-benar diverifikasi.
+  GOOGLE_OAUTH_CLIENT_ID: z.string().optional(),
   DOKU_CLIENT_ID: z.string().optional(),
   DOKU_SECRET_KEY: z.string().optional(),
   DOKU_API_KEY: z.string().optional(),

@@ -41,7 +41,11 @@ const IV_LENGTH = 12;
  */
 export const DOCUMENT_DOMAINS = {
   membership: "tapgo.membership.document.v1",
-  driver: "tapgo.driver.document.v1"
+  driver: "tapgo.driver.document.v1",
+  // Vektor embedding wajah (bukan foto) — lihat DriverFaceReference di
+  // schema.prisma. Domain terpisah dari "driver" (dokumen KTP/SIM/dst) supaya
+  // kebocoran satu tidak melemahkan yang lain.
+  driverFace: "tapgo.driver.faceembedding.v1"
 } as const;
 
 export type DocumentDomain = keyof typeof DOCUMENT_DOMAINS;

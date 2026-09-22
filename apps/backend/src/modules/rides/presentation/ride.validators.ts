@@ -68,7 +68,8 @@ export const createOrderSchema = z.object({
     // DIGITAL sengaja diterima skema agar ditolak fail-closed di service
     // dengan kode error yang jelas, bukan 400 generik.
     paymentMethod: z.enum(["CASH", "DIGITAL"]).default("CASH"),
-  }),
+    pickupNote: z.string().trim().max(280).optional()
+  })
 });
 
 export const rideReferenceSchema = z.object({
@@ -86,6 +87,14 @@ export const cancelRideSchema = z.object({
 export const driverAvailabilitySchema = z.object({
   body: z.object({
     availability: z.enum(["OFFLINE", "ONLINE", "BUSY"]),
+  }),
+});
+
+export const driverFaceCheckAttemptSchema = z.object({
+  body: z.object({
+    similarityScore: z.number().min(0).max(1),
+    livenessPassed: z.boolean(),
+    modelVersion: z.string().min(1).max(40),
   }),
 });
 

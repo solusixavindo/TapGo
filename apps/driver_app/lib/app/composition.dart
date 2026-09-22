@@ -6,6 +6,12 @@ Widget buildTestableDriverApp({
   DriverLocationPort? locationPort,
   DriverScenario scenario = DriverScenario.homeOffline,
   ThemeMode themeMode = ThemeMode.light,
+  // Splash bergantung pada SharedPreferences (kanal platform) dan jeda
+  // waktu nyata — keduanya tidak cocok untuk widget test yang mengharapkan
+  // DriverShell tampil seketika. Test yang secara eksplisit ingin menguji
+  // SplashScreen/OnboardingScreen memakainya langsung sebagai widget,
+  // bukan lewat helper ini.
+  bool skipSplash = true,
 }) {
   return ProviderScope(
     overrides: [
@@ -14,6 +20,7 @@ Widget buildTestableDriverApp({
           .overrideWithValue(locationPort ?? NoDriverLocationPort()),
       initialScenarioProvider.overrideWithValue(scenario),
       testThemeModeProvider.overrideWithValue(themeMode),
+      testSkipSplashProvider.overrideWithValue(skipSplash),
     ],
     child: const TapGoDriverApp(),
   );
@@ -27,11 +34,16 @@ final driverRepositoryProvider = Provider<DriverRepository>(
           storage: kIsWeb ? MemorySessionStore() : SecureSessionStore(),
         ),
 );
-final locationPortProvider =
-    Provider<DriverLocationPort>((_) => NoDriverLocationPort());
+final locationPortProvider = Provider<DriverLocationPort>((ref) {
+  // Mode demo tidak pernah menyentuh GPS/network asli — konsisten dengan
+  // prinsip zero-network demo yang sudah diuji di tempat lain.
+  if (kDriverDemoMode) return NoDriverLocationPort();
+  return GeolocatorDriverLocationPort(ref.watch(driverRepositoryProvider));
+});
 final initialScenarioProvider =
     Provider<DriverScenario>((_) => _initialScenarioFromUri());
 final testThemeModeProvider = Provider<ThemeMode?>((_) => null);
+final testSkipSplashProvider = Provider<bool>((_) => false);
 final driverControllerProvider =
     StateNotifierProvider<DriverController, DriverState>((ref) {
   return DriverController(

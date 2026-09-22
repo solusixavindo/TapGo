@@ -85,7 +85,7 @@ async function createAccount(prefix: string, role: UserRole = "USER") {
 
 /** Mengunggah keempat dokumen wajib lewat HTTP nyata. */
 async function uploadAllDocuments(account: { token: string }) {
-  for (const type of ["ktp", "sim", "stnk", "selfie"]) {
+  for (const type of ["ktp", "sim", "stnk", "selfie", "skck"]) {
     const res = await api(`/api/v1/driver/documents/${type}`, {
       token: account.token,
       raw: PNG
@@ -116,7 +116,19 @@ async function createReviewer(scopes: AdminScope[] = REVIEW_SCOPES) {
 async function submitApplication(account: { token: string }, plate = "B 1234 UJI") {
   return api("/api/v1/driver/applications", {
     token: account.token,
-    body: { serviceType: "MOTORCYCLE", plateNumber: plate, brand: "Honda", model: "Vario", color: "Hitam" }
+    body: {
+      serviceType: "MOTORCYCLE",
+      plateNumber: plate,
+      brand: "Honda",
+      model: "Vario",
+      color: "Hitam",
+      fullName: "Calon Driver Uji",
+      dateOfBirth: "1995-05-20",
+      address: "Jl. Uji No. 1, Jakarta",
+      emergencyContactName: "Kontak Darurat Uji",
+      emergencyContactPhone: "081200000000",
+      declarationAccepted: true
+    }
   });
 }
 
@@ -225,6 +237,47 @@ describe.skipIf(!runIntegration)("H1 — pengajuan mandiri mitra driver", () => 
     expect(mine.body.data.vehicle.serviceType).toBe("MOTORCYCLE");
   });
 
+  it("declarationAccepted wajib true — ditolak tanpa itu, meski dokumen lengkap", async () => {
+    const calon = await createAccount("CALON");
+    await uploadAllDocuments(calon);
+    const res = await api("/api/v1/driver/applications", {
+      token: calon.token,
+      body: { serviceType: "MOTORCYCLE", plateNumber: "B 1234 UJI" }
+    });
+    expect(res.status).toBe(400);
+    expect(await prisma.rideDriverApplication.count()).toBe(0);
+  });
+
+  it("data diri (wizard halaman 2) tersimpan dan tampil lagi lewat mine", async () => {
+    const calon = await createAccount("CALON");
+    await uploadAllDocuments(calon);
+    const res = await api("/api/v1/driver/applications", {
+      token: calon.token,
+      body: {
+        serviceType: "MOTORCYCLE",
+        plateNumber: "B 1234 UJI",
+        fullName: "Budi Santoso",
+        dateOfBirth: "1995-05-20",
+        address: "Jl. Melati No. 5, Jakarta",
+        emergencyContactName: "Siti Santoso",
+        emergencyContactPhone: "081234567890",
+        declarationAccepted: true
+      }
+    });
+    expect(res.status).toBe(201);
+
+    const mine = await api("/api/v1/driver/applications/mine", { token: calon.token });
+    expect(mine.body.data.personalData.fullName).toBe("Budi Santoso");
+    expect(mine.body.data.personalData.address).toBe("Jl. Melati No. 5, Jakarta");
+    expect(mine.body.data.personalData.emergencyContactName).toBe("Siti Santoso");
+    expect(mine.body.data.personalData.emergencyContactPhone).toBe("081234567890");
+
+    const stored = await prisma.rideDriverApplication.findFirst({
+      where: { userId: calon.user.id }
+    });
+    expect(stored?.declarationAcceptedAt).not.toBeNull();
+  });
+
   it("withdraw mengakhiri pengajuan terbuka; pengajuan baru bisa dibuat lagi", async () => {
     const calon = await createAccount("CALON");
     await uploadAllDocuments(calon);
@@ -257,7 +310,7 @@ describe.skipIf(!runIntegration)("H1 — pengajuan mandiri mitra driver", () => 
 
     await api("/api/v1/driver/applications/withdraw", { token: calon.token, body: {} });
     const sweptAfterTerminal = await docs.purgeExpired();
-    expect(sweptAfterTerminal).toBe(4);
+    expect(sweptAfterTerminal).toBe(5);
   });
 
   it("K3-A: approve tanpa klaim aktif ditolak; dengan klaim → APPROVED + profil + kendaraan (K4-A)", async () => {
@@ -312,6 +365,44 @@ describe.skipIf(!runIntegration)("H1 — pengajuan mandiri mitra driver", () => 
       where: { action: "DRIVER_APPLICATION_APPROVED", entityId: applicationId }
     });
     expect(audits).toBe(1);
+  });
+
+  it("DRIVER_FACE_CHECK_ENABLED=true tanpa model embedding nyata: approve gagal fail-closed, bukan diam-diam lolos tanpa referensi wajah", async () => {
+    // DriverFaceEmbeddingService.computeEmbedding() BELUM diimplementasikan
+    // (lihat komentarnya) — ini menegaskan bahwa menyalakan flag tanpa
+    // menyambungkan model sungguhan gagal terang-terangan, bukan menyimpan
+    // profil driver tanpa DriverFaceReference lalu membuat verifikasi wajah
+    // harian mustahil dilewati driver mana pun.
+    backendEnv.DRIVER_FACE_CHECK_ENABLED = true;
+    try {
+      const calon = await createAccount("FACEFLAG");
+      await uploadAllDocuments(calon);
+      const submitted = await submitApplication(calon);
+      const applicationId = submitted.body.data.id as string;
+
+      const reviewer = await createReviewer();
+      await api(`/api/v1/admin/driver-review/applications/${applicationId}/claim`, {
+        token: reviewer.token,
+        body: {}
+      });
+
+      const approved = await api(`/api/v1/admin/driver-review/applications/${applicationId}/approve`, {
+        token: reviewer.token,
+        body: {}
+      });
+      expect(approved.status).toBe(503);
+      expect(approved.body.code).toBe("DRIVER_FACE_EMBEDDING_MODEL_UNAVAILABLE");
+
+      // Transaksi HARUS batal seluruhnya — bukan hanya langkah embedding-nya.
+      const application = await prisma.rideDriverApplication.findUniqueOrThrow({
+        where: { id: applicationId }
+      });
+      expect(application.status).toBe("UNDER_REVIEW");
+      const profile = await prisma.rideDriverProfile.findUnique({ where: { userId: calon.user.id } });
+      expect(profile).toBeNull();
+    } finally {
+      backendEnv.DRIVER_FACE_CHECK_ENABLED = false;
+    }
   });
 
   it("K3-A: reject oleh pemegang klaim → REJECTED dengan kode alasan; siklus baru boleh diajukan", async () => {

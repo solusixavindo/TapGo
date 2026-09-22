@@ -331,6 +331,9 @@ model User {
   rideEventsActed        RideEvent[]             @relation("RideEventActor")
   rideIdempotencyKeys    RideIdempotencyRecord[]
   rideDriverApplications RideDriverApplication[]
+  driverFaceReference    DriverFaceReference?
+  driverFaceChecks       DriverFaceCheck[]       @relation("DriverFaceCheckUser")
+  driverFaceCheckOverrides DriverFaceCheck[]      @relation("DriverFaceCheckOverride")
 
   // Release 2 — domain PPOB (Stage R2.7).
   ppobTransactions PpobTransaction[]
@@ -844,6 +847,13 @@ model Driver {
   licenseNumber  String?      @unique @map("license_number") @db.VarChar(80)
   vehicleType    String       @default("BIKE") @map("vehicle_type") @db.VarChar(40)
   vehiclePlate   String?      @map("vehicle_plate") @db.VarChar(24)
+  // Data Diri (wizard pengajuan halaman 2) — diisi ulang tiap pengajuan,
+  // sama seperti data kendaraan di atas, bukan riwayat per-siklus.
+  fullName              String?   @map("full_name") @db.VarChar(120)
+  dateOfBirth           DateTime? @map("date_of_birth") @db.Date
+  address               String?   @db.VarChar(255)
+  emergencyContactName  String?   @map("emergency_contact_name") @db.VarChar(120)
+  emergencyContactPhone String?   @map("emergency_contact_phone") @db.VarChar(20)
   ratingAverage  Decimal      @default(5.0) @map("rating_average") @db.Decimal(3, 2)
   ratingCount    Int          @default(0) @map("rating_count")
   currentLat     Decimal?     @map("current_lat") @db.Decimal(10, 7)
@@ -902,6 +912,76 @@ model DriverDocument {
   @@unique([driverId, type])
   @@index([expiresAt])
   @@map("driver_documents")
+}
+
+/// Embedding wajah referensi driver (Stage — verifikasi wajah harian).
+///
+/// Dihitung SATU KALI di dalam transaksi DriverApplicationService.approve(),
+/// dari swafoto KYC yang saat itu masih terbaca (sebelum masa simpan 24 jam +
+/// pengecualian "pengajuan terbuka" berakhir dan isinya disapu bersih oleh
+/// DriverDocumentService.purgeExpired()). Vektor angka, BUKAN foto — tidak
+/// mudah dibalik menjadi gambar, dan inilah satu-satunya sumber pembanding
+/// yang tersedia untuk verifikasi harian setelah driver aktif berbulan-bulan.
+model DriverFaceReference {
+  id       String @id @default(uuid()) @db.Uuid
+  userId   String @unique @map("user_id") @db.Uuid
+
+  /// Ciphertext AES-256-GCM dari vektor embedding (bukan foto). Pola identik
+  /// DriverDocument, domain kunci terpisah ("driver-face").
+  embeddingCipherText Bytes  @map("embedding_cipher_text")
+  embeddingCipherIv   Bytes  @map("embedding_cipher_iv")
+  embeddingCipherTag  Bytes  @map("embedding_cipher_tag")
+  keyVersion          Int    @map("key_version")
+  /// Nama+versi model yang menghasilkan vektor ini. Wajib dicocokkan dengan
+  /// model yang dibundel di aplikasi driver saat pencocokan — embedding dari
+  /// model berbeda tidak sebanding secara matematis.
+  modelVersion        String @map("model_version") @db.VarChar(40)
+  computedAt          DateTime @default(now()) @map("computed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("driver_face_references")
+}
+
+enum DriverFaceCheckStatus {
+  PENDING
+  PASSED
+  BLOCKED
+}
+
+/// Satu baris per driver per hari kalender (WIB). Pelacakan percobaan
+/// verifikasi wajah harian HARUS otoritatif di server, bukan state lokal HP —
+/// install ulang aplikasi tidak boleh bisa membuka blokir.
+model DriverFaceCheck {
+  id        String                @id @default(uuid()) @db.Uuid
+  userId    String                @map("user_id") @db.Uuid
+  /// Hari kalender WIB (Asia/Jakarta) yang diwakili baris ini — bukan UTC,
+  /// supaya driver tidak diminta verifikasi ulang saat pagi WIB gara-gara
+  /// hari UTC sudah berganti tengah malam sebelumnya.
+  checkDate DateTime              @db.Date @map("check_date")
+  status    DriverFaceCheckStatus @default(PENDING)
+  attemptCount    Int      @default(0) @map("attempt_count")
+  similarityScore Decimal? @map("similarity_score") @db.Decimal(5, 4)
+  modelVersion    String?  @map("model_version") @db.VarChar(40)
+  lastAttemptAt   DateTime? @map("last_attempt_at")
+  passedAt        DateTime? @map("passed_at")
+  blockedAt       DateTime? @map("blocked_at")
+  /// Override admin membuka blokir tanpa memalsukan hasil PASSED asli.
+  adminOverrideById String?  @map("admin_override_by_id") @db.Uuid
+  adminOverrideAt   DateTime? @map("admin_override_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user            User  @relation("DriverFaceCheckUser", fields: [userId], references: [id], onDelete: Cascade)
+  adminOverrideBy User? @relation("DriverFaceCheckOverride", fields: [adminOverrideById], references: [id], onDelete: Restrict)
+
+  @@unique([userId, checkDate])
+  @@index([userId, checkDate])
+  @@map("driver_face_checks")
 }
 
 model Ride {
@@ -1336,6 +1416,11 @@ model RegistrationEvent {
   deviceFingerprintHash String?  @map("device_fingerprint_hash") @db.VarChar(64)
   ipAddress             String?  @map("ip_address") @db.Inet
   userAgent             String?  @map("user_agent") @db.VarChar(500)
+  /// Jenis build aplikasi yang dilaporkan klien: "play" atau "direct".
+  distribution          String?  @db.VarChar(16)
+  /// Paket installer Android yang dilaporkan klien (mis. com.android.vending
+  /// untuk Google Play). Dilaporkan klien, jadi penanda operasional — bukan bukti kriptografis.
+  installer             String?  @db.VarChar(100)
   referralCodeUsed      String?  @map("referral_code_used") @db.VarChar(24)
   suspicious            Boolean  @default(false)
   suspiciousReasons     Json?    @map("suspicious_reasons")
@@ -1343,11 +1428,6 @@ model RegistrationEvent {
 
   user       User?       @relation("RegistrationEventUser", fields: [userId], references: [id], onDelete: SetNull)
   abuseFlags AbuseFlag[]
-  /// Jenis build aplikasi yang dilaporkan klien: "play" atau "direct".
-  distribution          String?  @db.VarChar(16)
-  /// Paket installer Android yang dilaporkan klien (mis. com.android.vending
-  /// untuk Google Play). Dilaporkan klien, jadi penanda operasional — bukan bukti kriptografis.
-  installer             String?  @db.VarChar(100)
 
   @@index([userId, createdAt])
   @@index([normalizedPhone, createdAt])
@@ -1571,6 +1651,9 @@ model RideDriverApplication {
   approvedAt         DateTime? @map("approved_at")
   rejectedAt         DateTime? @map("rejected_at")
   withdrawnAt        DateTime? @map("withdrawn_at")
+  /// Bukti persetujuan pernyataan (wizard halaman 5) pada saat pengajuan ini
+  /// dikirim — ditegakkan wajib true di schema request, bukan opsional.
+  declarationAcceptedAt DateTime? @map("declaration_accepted_at")
   /// Kode alasan keputusan yang dibatasi panjangnya — BUKAN teks bebas dan
   /// BUKAN pesan exception. Kosakata kode ditegakkan application service.
   decisionReasonCode String?   @map("decision_reason_code") @db.VarChar(60)
@@ -1714,6 +1797,10 @@ model RideOrder {
   dropoffLat     Decimal @map("dropoff_lat") @db.Decimal(10, 7)
   dropoffLng     Decimal @map("dropoff_lng") @db.Decimal(10, 7)
   dropoffAddress String  @map("dropoff_address") @db.VarChar(255)
+  /// Catatan penumpang soal titik jemput (mis. "di depan minimarket, bukan
+  /// gang sebelah") — opsional, ditulis saat memesan, tampil ke driver di
+  /// detail tawaran/perjalanan aktif.
+  pickupNote     String? @map("pickup_note") @db.VarChar(280)
 
   // Snapshot tarif authoritative (integer rupiah) — dikunci dari quote.
   distanceMeters  Int    @map("distance_meters")

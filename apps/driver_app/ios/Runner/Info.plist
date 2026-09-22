@@ -11,6 +11,10 @@
 	<string>TapGo Driver memakai kamera untuk memotret dokumen verifikasi mitra Anda.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>TapGo Driver membuka galeri agar Anda dapat memilih foto dokumen verifikasi mitra.</string>
+	<!-- Peta live posisi driver di Beranda + kirim lokasi berkala ke backend
+	     selama online. Hanya dipakai saat aplikasi terbuka (whileInUse). -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>TapGo Driver memakai lokasi Anda untuk menampilkan posisi di peta dan mencocokkan tawaran perjalanan terdekat selama Anda online.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

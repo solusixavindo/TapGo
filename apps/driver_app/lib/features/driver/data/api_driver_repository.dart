@@ -25,7 +25,11 @@ class ApiDriverRepository implements DriverRepository {
       await currentRide();
       return _session;
     } on DriverApiException catch (error) {
-      if (error.isAuthOrCapability) {
+      // Hanya kegagalan auth sungguhan yang menghapus sesi. Status
+      // kapabilitas (profil belum lengkap/akun nonaktif) tetap punya sesi
+      // sah — token TIDAK dihapus, supaya app tidak memaksa login ulang di
+      // buka berikutnya selagi status kapabilitasnya masih sama.
+      if (error.isAuthFailure) {
         await _storage.clear();
         _session = null;
         _applyToken();
@@ -41,6 +45,47 @@ class ApiDriverRepository implements DriverRepository {
       () => _dio.post<dynamic>(
         '/auth/login',
         data: {'phone': _normalizePhone(phone), 'password': password},
+      ),
+    );
+    final session = _sessionFrom(data);
+    _session = session;
+    _applyToken();
+    await _storage.save(session);
+    return session;
+  }
+
+  @override
+  Future<GoogleAuthResult> loginWithGoogle({required String idToken}) async {
+    final data = await _request(
+      () => _dio.post<dynamic>('/auth/google', data: {'idToken': idToken}),
+    );
+    if (data['needsPhone'] == true) {
+      return GoogleAuthResult.needsPhone(
+        suggestedFullName: data['suggestedFullName']?.toString(),
+      );
+    }
+    final session = _sessionFrom(data);
+    _session = session;
+    _applyToken();
+    await _storage.save(session);
+    return GoogleAuthResult.session(session);
+  }
+
+  @override
+  Future<DriverSession> completeGoogleRegistration({
+    required String idToken,
+    required String phone,
+    String? fullName,
+  }) async {
+    final data = await _request(
+      () => _dio.post<dynamic>(
+        '/auth/google/complete',
+        data: {
+          'idToken': idToken,
+          'phone': _normalizePhone(phone),
+          if (fullName != null && fullName.trim().isNotEmpty)
+            'fullName': fullName.trim(),
+        },
       ),
     );
     final session = _sessionFrom(data);
@@ -141,6 +186,40 @@ class ApiDriverRepository implements DriverRepository {
   }
 
   @override
+  Future<List<DriverRide>> rideHistory({int limit = 20}) async {
+    final data = await _request(
+      () => _dio.get<dynamic>(
+        '/driver/rides/history',
+        queryParameters: {'limit': limit},
+      ),
+    );
+    final items = data['items'] is List
+        ? data['items'] as List
+        : data['data'] as List? ?? const [];
+    return items
+        .whereType<Map>()
+        .map((e) => DriverRide.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+  }
+
+  @override
+  Future<DriverEarningsSummary> earningsSummary({String range = 'today'}) async {
+    final data = await _request(
+      () => _dio.get<dynamic>(
+        '/driver/earnings/summary',
+        queryParameters: {'range': range},
+      ),
+    );
+    return DriverEarningsSummary.fromJson(data);
+  }
+
+  @override
+  Future<DriverPerformanceSummary> performanceSummary() async {
+    final data = await _request(() => _dio.get<dynamic>('/driver/performance'));
+    return DriverPerformanceSummary.fromJson(data);
+  }
+
+  @override
   Future<DriverRide?> currentRide() async {
     final data =
         await _request(() => _dio.get<dynamic>('/driver/rides/current'));
@@ -227,6 +306,12 @@ class ApiDriverRepository implements DriverRepository {
     String? brand,
     String? model,
     String? color,
+    String? fullName,
+    String? dateOfBirth,
+    String? address,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
+    required bool declarationAccepted,
   }) async {
     await _request(
       () => _dio.post<dynamic>(
@@ -237,6 +322,16 @@ class ApiDriverRepository implements DriverRepository {
           if (brand != null && brand.isNotEmpty) 'brand': brand,
           if (model != null && model.isNotEmpty) 'model': model,
           if (color != null && color.isNotEmpty) 'color': color,
+          if (fullName != null && fullName.isNotEmpty) 'fullName': fullName,
+          if (dateOfBirth != null && dateOfBirth.isNotEmpty)
+            'dateOfBirth': dateOfBirth,
+          if (address != null && address.isNotEmpty) 'address': address,
+          if (emergencyContactName != null && emergencyContactName.isNotEmpty)
+            'emergencyContactName': emergencyContactName,
+          if (emergencyContactPhone != null &&
+              emergencyContactPhone.isNotEmpty)
+            'emergencyContactPhone': emergencyContactPhone,
+          'declarationAccepted': declarationAccepted,
         },
       ),
     );
@@ -250,6 +345,91 @@ class ApiDriverRepository implements DriverRepository {
     await _request(
         () => _dio.post<dynamic>('/driver/applications/withdraw'));
     return myApplication();
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> chatMessages(String rideReference) async {
+    final data = await _request(
+      () => _dio.get<dynamic>(
+        '/chat/rides/$rideReference/messages',
+        queryParameters: {'page': 1, 'pageSize': 100},
+      ),
+    );
+    final items = data['items'] is List
+        ? data['items'] as List
+        : data['data'] as List? ?? const [];
+    return items
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+
+  @override
+  Future<void> sendChatMessage(String rideReference, String message) async {
+    await _request(
+      () => _dio.post<dynamic>(
+        '/chat/rides/$rideReference/messages',
+        data: {'message': message},
+      ),
+    );
+  }
+
+  @override
+  Future<void> markChatRead(String rideReference) async {
+    await _request(
+      () => _dio.post<dynamic>('/chat/rides/$rideReference/read'),
+    );
+  }
+
+  @override
+  Future<DriverFaceCheckSnapshot> faceCheckToday() async {
+    final data = await _request(() => _dio.get<dynamic>('/driver/face-check/today'));
+    return DriverFaceCheckSnapshot.fromJson(data);
+  }
+
+  @override
+  Future<DriverFaceReferenceEmbedding> faceCheckReference() async {
+    final data = await _request(() => _dio.get<dynamic>('/driver/face-check/reference'));
+    return DriverFaceReferenceEmbedding.fromJson(data);
+  }
+
+  @override
+  Future<DriverFaceCheckSnapshot> submitFaceCheckAttempt({
+    required double similarityScore,
+    required bool livenessPassed,
+    required String modelVersion,
+  }) async {
+    final data = await _request(
+      () => _dio.post<dynamic>(
+        '/driver/face-check/attempt',
+        data: {
+          'similarityScore': similarityScore,
+          'livenessPassed': livenessPassed,
+          'modelVersion': modelVersion,
+        },
+      ),
+    );
+    return DriverFaceCheckSnapshot.fromJson(data);
+  }
+
+  @override
+  Future<void> sendLocation({
+    required double lat,
+    required double lng,
+    required int accuracyMeters,
+    required DateTime capturedAt,
+  }) async {
+    await _request(
+      () => _dio.post<dynamic>(
+        '/driver/location',
+        data: {
+          'lat': lat,
+          'lng': lng,
+          'accuracyMeters': accuracyMeters,
+          'capturedAt': capturedAt.toUtc().toIso8601String(),
+        },
+      ),
+    );
   }
 
   DriverApplicationSnapshot _applicationSnapshotFrom(
@@ -393,11 +573,19 @@ class DriverApiException implements Exception {
   final int? statusCode;
 
   bool get isAuthOrCapability =>
-      statusCode == 401 ||
-      code == 'AUTH_REQUIRED' ||
+      isAuthFailure ||
       code == 'RIDE_DRIVER_PROFILE_REQUIRED' ||
       code == 'RIDE_DRIVER_NOT_ACTIVE' ||
       code == 'RIDE_DRIVER_ACCOUNT_INACTIVE';
+
+  /// Sesi benar-benar tidak valid (token ditolak/kedaluwarsa) — berbeda dari
+  /// status KAPABILITAS driver (mis. profil belum lengkap, akun nonaktif)
+  /// yang tetap punya sesi sah, hanya belum boleh mengakses fitur tertentu.
+  /// Membedakan ini penting: hanya kegagalan auth sungguhan yang boleh
+  /// menghapus token tersimpan — status kapabilitas tidak boleh, karena
+  /// token itu masih sah dan menghapusnya memaksa login ulang tiap buka app
+  /// selama status kapabilitas belum berubah (lihat restoreSession()).
+  bool get isAuthFailure => statusCode == 401 || code == 'AUTH_REQUIRED';
 }
 
 String _friendlyMessage(String code, String fallback) {
@@ -428,6 +616,14 @@ String _friendlyMessage(String code, String fallback) {
       return 'Verifikasi Anda sudah disetujui, dokumen tidak dapat diubah lagi.';
     case 'MEMBERSHIP_DOCUMENT_SECRET_UNAVAILABLE':
       return 'Layanan unggah dokumen sedang tidak tersedia. Coba beberapa saat lagi.';
+    case 'RIDE_DRIVER_FACE_CHECK_REQUIRED':
+      return 'Verifikasi wajah harian diperlukan sebelum online.';
+    case 'RIDE_DRIVER_FACE_CHECK_BLOCKED':
+      return 'Percobaan verifikasi wajah hari ini sudah habis. Hubungi admin TapGo.';
+    case 'RIDE_DRIVER_FACE_CHECK_MISMATCH':
+      return 'Wajah tidak cocok. Silakan coba lagi.';
+    case 'RIDE_DRIVER_FACE_REFERENCE_MISSING':
+      return 'Foto referensi wajah belum tersedia. Hubungi admin TapGo.';
     default:
       return fallback.isEmpty
           ? 'Terjadi kendala. Silakan coba lagi.'

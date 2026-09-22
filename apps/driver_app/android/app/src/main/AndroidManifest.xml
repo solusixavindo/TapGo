@@ -7,6 +7,11 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- Peta live posisi driver di Beranda + kirim lokasi berkala ke backend
+         selama online. Hanya foreground (whileInUse) — tidak ada klaim akses
+         lokasi latar belakang. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <application
         android:label="TapGo Driver"
         android:name="${applicationName}"

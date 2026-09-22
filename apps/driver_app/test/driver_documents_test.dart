@@ -52,6 +52,14 @@ void main() {
       buildTestableDriverApp(repository: repository, scenario: scenario),
     );
     await tester.pumpAndSettle();
+    // Dokumen sekarang berada di halaman 1 wizard pengajuan, bukan lagi
+    // ditumpuk langsung di layar kapabilitas — masuk dulu bila CTA-nya ada
+    // (tidak ada sama sekali saat akses dihentikan, dengan sengaja).
+    final startWizard = find.byKey(const ValueKey('start-application-wizard'));
+    if (startWizard.evaluate().isNotEmpty) {
+      await tester.tap(startWizard);
+      await tester.pumpAndSettle();
+    }
   }
 
   group('Dokumen verifikasi mitra', () {
@@ -61,7 +69,7 @@ void main() {
       // huruf di sini muncul sebagai kegagalan unggah yang membingungkan.
       expect(
         DriverDocumentKind.values.map((kind) => kind.api).toList(),
-        <String>['KTP', 'SIM', 'STNK', 'SELFIE'],
+        <String>['KTP', 'SIM', 'STNK', 'SELFIE', 'SKCK'],
       );
     });
 
@@ -73,9 +81,17 @@ void main() {
       await pump(tester, repository, scenario: DriverScenario.rejected);
 
       // Inilah pemeriksaan terpenting: driver yang ditolak WAJIB punya jalan
-      // memperbaiki berkasnya.
+      // memperbaiki berkasnya. Halaman pertama wizard hanya memuat keempat
+      // dokumen inti — SKCK punya halamannya sendiri (halaman 4) dan diuji
+      // terpisah di widget_test.dart bersama alur wizard penuh.
       expect(find.byType(DriverDocumentsSection), findsOneWidget);
-      for (final kind in DriverDocumentKind.values) {
+      const coreKinds = [
+        DriverDocumentKind.ktp,
+        DriverDocumentKind.sim,
+        DriverDocumentKind.stnk,
+        DriverDocumentKind.selfie,
+      ];
+      for (final kind in coreKinds) {
         expect(
           find.byKey(ValueKey('document-upload-${kind.api}')),
           findsOneWidget,

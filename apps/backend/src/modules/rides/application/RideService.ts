@@ -13,6 +13,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { StatusCodes } from "http-status-codes";
 import { env } from "../../../config/env.js";
 import { AppError } from "../../../core/errors/AppError.js";
+import { DriverFaceCheckService } from "../../drivers/application/DriverFaceCheckService.js";
 import {
   DisclosureSource,
   PASSENGER_DISCLOSURE_INCLUDE,
@@ -64,6 +65,7 @@ export class RideService {
     private readonly prisma: PrismaClient,
     private readonly distance: DistancePort,
     private readonly matching: MatchingPort,
+    private readonly faceCheck: DriverFaceCheckService = new DriverFaceCheckService(prisma),
   ) {}
 
   // -------------------------------------------------------------------------
@@ -156,6 +158,7 @@ export class RideService {
     userId: string;
     quoteId: string;
     paymentMethod: "CASH" | "DIGITAL";
+    pickupNote?: string;
     idempotencyKey?: string;
   }) {
     // Pembayaran digital (TapGoPay) fail-closed sampai dinyalakan eksplisit.
@@ -248,6 +251,7 @@ export class RideService {
             dropoffLat: quote.dropoffLat,
             dropoffLng: quote.dropoffLng,
             dropoffAddress: quote.dropoffAddress,
+            ...(input.pickupNote ? { pickupNote: input.pickupNote } : {}),
             distanceMeters: quote.distanceMeters,
             durationSeconds: quote.durationSeconds,
             baseFare: quote.baseFare,
@@ -415,6 +419,19 @@ export class RideService {
         "RIDE_DRIVER_NOT_ACTIVE",
       );
     }
+    // Verifikasi wajah harian hanya digerbangi pada transisi SUNGGUHAN ke
+    // ONLINE (bukan online->online berulang dari polling/refresh) — sekali
+    // per hari kalender WIB, bukan setiap toggle. Sengaja TIDAK dipasang di
+    // createRequireDriverCapability karena guard itu berlaku untuk seluruh
+    // rute /driver/*, termasuk yang read-only (riwayat, earnings) — driver
+    // yang belum verifikasi hari ini tetap harus bisa membuka dashboardnya
+    // sendiri selagi offline.
+    if (
+      input.availability === "ONLINE" &&
+      profile.availability !== "ONLINE"
+    ) {
+      await this.faceCheck.requirePassedToday(input.userId);
+    }
     const updated = await this.prisma.rideDriverProfile.update({
       where: { id: profile.id },
       data: { availability: input.availability, lastSeenAt: new Date() },
@@ -484,6 +501,106 @@ export class RideService {
     }
 
     return orders[0] ? this.toOrderView(orders[0]) : null;
+  }
+
+  /** Riwayat seluruh perjalanan milik driver, terbaru dulu — termasuk yang
+   * sudah selesai/dibatalkan, berbeda dari getCurrentRideForDriver yang
+   * hanya melihat status aktif. */
+  async listRidesForDriver(userId: string, limit = 20) {
+    const profile = await this.requireDriverProfile(userId);
+    const orders = await this.prisma.rideOrder.findMany({
+      where: { driverProfileId: profile.id },
+      orderBy: { createdAt: "desc" },
+      take: Math.max(1, Math.min(limit, 50)),
+    });
+    return orders.map((o) => this.toOrderView(o));
+  }
+
+  /**
+   * Ringkasan pendapatan kotor dari order yang sudah COMPLETED, dalam
+   * rentang bergulir (7/30 hari terakhir termasuk hari ini, bukan
+   * kalender minggu/bulan — menghindari ambiguitas awal minggu/bulan).
+   *
+   * Sengaja disebut "grossFare", bukan "earnings"/"pendapatan bersih":
+   * pembagian 92:8 (recordRideRevenueShare) belum aktif untuk ride tunai,
+   * jadi nominal ini belum dipotong komisi apa pun — menyebutnya "earnings"
+   * akan menyiratkan seolah sudah net.
+   */
+  async earningsSummary(userId: string, range: "today" | "week" | "month" = "today") {
+    const profile = await this.requireDriverProfile(userId);
+    const since = startOfEarningsRange(range);
+
+    const orders = await this.prisma.rideOrder.findMany({
+      where: {
+        driverProfileId: profile.id,
+        status: "COMPLETED",
+        createdAt: { gte: since },
+      },
+      select: { totalFare: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const byDay = new Map<string, { tripCount: number; grossFare: number }>();
+    let grossFare = 0;
+    for (const order of orders) {
+      grossFare += order.totalFare;
+      const day = order.createdAt.toISOString().slice(0, 10);
+      const entry = byDay.get(day) ?? { tripCount: 0, grossFare: 0 };
+      entry.tripCount += 1;
+      entry.grossFare += order.totalFare;
+      byDay.set(day, entry);
+    }
+
+    return {
+      range,
+      tripCount: orders.length,
+      grossFare,
+      currency: "IDR",
+      byDay: [...byDay.entries()].map(([date, values]) => ({ date, ...values })),
+    };
+  }
+
+  /**
+   * Statistik objektif dari data yang benar-benar ada — TIDAK ada rating
+   * bintang penumpang→driver di sini: model Review yang ada di schema
+   * menempel ke tabel Ride legacy yang sudah tidak dipakai jalur manapun
+   * sejak Release 2, jadi menampilkan "rating" dari sana akan menyesatkan.
+   *
+   * - acceptanceRate: DRIVER_ASSIGNED vs DRIVER_REJECTED_OFFER (RideEvent).
+   * - completionRate/cancellationRate: dihitung hanya dari order yang
+   *   pernah di-assign lalu berakhir COMPLETED atau CANCELLED_BY_DRIVER —
+   *   pembatalan oleh penumpang/sistem sengaja TIDAK dihitung terhadap
+   *   driver, karena bukan keputusan driver.
+   * - Penyebut nol menghasilkan null (belum ada data), bukan NaN/Infinity.
+   */
+  async performanceSummary(userId: string) {
+    const profile = await this.requireDriverProfile(userId);
+
+    const [assignedEvents, rejectedEvents, completedOrders, cancelledOrders] =
+      await Promise.all([
+        this.prisma.rideEvent.count({
+          where: { type: "DRIVER_ASSIGNED", actorUserId: userId },
+        }),
+        this.prisma.rideEvent.count({
+          where: { type: "DRIVER_REJECTED_OFFER", actorUserId: userId },
+        }),
+        this.prisma.rideOrder.count({
+          where: { driverProfileId: profile.id, status: "COMPLETED" },
+        }),
+        this.prisma.rideOrder.count({
+          where: { driverProfileId: profile.id, status: "CANCELLED_BY_DRIVER" },
+        }),
+      ]);
+
+    const totalOffers = assignedEvents + rejectedEvents;
+    const totalDecided = completedOrders + cancelledOrders;
+
+    return {
+      totalTrips: completedOrders,
+      acceptanceRate: totalOffers > 0 ? assignedEvents / totalOffers : null,
+      completionRate: totalDecided > 0 ? completedOrders / totalDecided : null,
+      cancellationRate: totalDecided > 0 ? cancelledOrders / totalDecided : null,
+    };
   }
 
   /**
@@ -1793,6 +1910,7 @@ export class RideService {
     status: RideOrderStatus;
     pickupAddress: string;
     dropoffAddress: string;
+    pickupNote?: string | null;
     distanceMeters: number;
     durationSeconds: number;
     baseFare: number;
@@ -1833,6 +1951,7 @@ export class RideService {
       isFinal: isTerminalStatus(order.status),
       pickupAddress: order.pickupAddress,
       dropoffAddress: order.dropoffAddress,
+      pickupNote: order.pickupNote ?? null,
       distanceMeters: order.distanceMeters,
       durationSeconds: order.durationSeconds,
       fare: {
@@ -1873,6 +1992,7 @@ export class RideService {
     serviceType: RideServiceType;
     pickupAddress: string;
     dropoffAddress: string;
+    pickupNote?: string | null;
     distanceMeters: number;
     durationSeconds: number;
     totalFare: number;
@@ -1883,6 +2003,7 @@ export class RideService {
       serviceType: order.serviceType,
       pickupAddress: order.pickupAddress,
       dropoffAddress: order.dropoffAddress,
+      pickupNote: order.pickupNote ?? null,
       distanceMeters: order.distanceMeters,
       durationSeconds: order.durationSeconds,
       totalFare: order.totalFare,
@@ -1997,6 +2118,16 @@ export function generatePublicReference(): string {
   let suffix = "";
   for (const b of bytes) suffix += alphabet[b % alphabet.length];
   return `RID-${suffix}`;
+}
+
+/** Batas awal rentang bergulir, sejajar UTC 00:00 — pola sama seperti
+ * sumTodayTransferOut di PrismaWalletRepository. */
+function startOfEarningsRange(range: "today" | "week" | "month"): Date {
+  const start = new Date();
+  start.setUTCHours(0, 0, 0, 0);
+  if (range === "week") start.setUTCDate(start.getUTCDate() - 6);
+  if (range === "month") start.setUTCDate(start.getUTCDate() - 29);
+  return start;
 }
 
 function maskPhone(phone: string | null): string | null {

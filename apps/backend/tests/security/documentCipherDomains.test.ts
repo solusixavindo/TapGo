@@ -31,7 +31,7 @@ describe("pemisahan domain kunci dokumen", () => {
   const isi = Buffer.from("isi dokumen identitas untuk pengujian", "utf8");
 
   it("membuka kembali dokumen pada domain yang sama", () => {
-    for (const domain of ["membership", "driver"] as const) {
+    for (const domain of ["membership", "driver", "driverFace"] as const) {
       const terkunci = encryptDocument(isi, domain);
       const dibuka = decryptDocument(
         {
@@ -49,7 +49,9 @@ describe("pemisahan domain kunci dokumen", () => {
   it("MENOLAK membuka dokumen memakai kunci domain lain", () => {
     const pasangan = [
       ["membership", "driver"],
-      ["driver", "membership"]
+      ["driver", "membership"],
+      ["driver", "driverFace"],
+      ["driverFace", "driver"]
     ] as const;
 
     for (const [asal, tujuan] of pasangan) {

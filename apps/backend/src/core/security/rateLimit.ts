@@ -229,6 +229,25 @@ export const withdrawalRateLimiter = rateLimit({
   }
 });
 
+/// Batas percobaan submit verifikasi wajah harian — lapisan pertahanan
+/// TAMBAHAN di luar aturan bisnis "3x lalu diblokir sehari" (yang ditegakkan
+/// DriverFaceCheckService dari database, bukan dari limiter ini). Endpoint ini
+/// menggerbangi kapabilitas akun (bisa online/tidak), jadi diperlakukan
+/// sekelas withdrawal — posture "closed", bukan "open".
+export const faceCheckRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  ...rateLimitStore("face-check", "closed"),
+  keyGenerator: (req) => `face-check-user:${req.auth?.userId ?? req.ip ?? "unknown"}`,
+  message: {
+    success: false,
+    code: "FACE_CHECK_RATE_LIMITED",
+    message: "Terlalu banyak percobaan verifikasi wajah. Silakan coba lagi nanti."
+  }
+});
+
 /** Kirim pesan chat per-ride (Stage R2.10) — mencegah spam ke lawan bicara. */
 export const chatRateLimiter = rateLimit({
   windowMs: 60 * 1000,

@@ -16,6 +16,7 @@ import {
   DriverApplicationService,
   REJECT_REASON_CODES
 } from "../../drivers/application/DriverApplicationService.js";
+import { DriverFaceCheckService } from "../../drivers/application/DriverFaceCheckService.js";
 
 /**
  * Route admin untuk antrian dan claim/lease review driver.
@@ -38,6 +39,7 @@ import {
 const scopeService = new DriverReviewScopeService(prisma);
 const leaseService = new DriverReviewLeaseService(prisma, scopeService);
 const applicationService = new DriverApplicationService(prisma, scopeService);
+const faceCheckService = new DriverFaceCheckService(prisma);
 
 const wrapBody = (value: unknown) => {
   if (value && typeof value === "object" && "body" in value) {
@@ -157,6 +159,19 @@ driverReviewRouter.post(
       actorId: req.auth!.userId,
       applicationId: req.params.id as string,
       reasonCode: req.body.reasonCode
+    });
+    res.json({ success: true, data });
+  })
+);
+
+/// Membuka blokir verifikasi wajah harian driver tanpa memalsukan hasil
+/// PASSED asli — dicatat DriverFaceCheckService.adminOverride() ke AuditLog.
+driverReviewRouter.post(
+  "/face-check/:userId/override",
+  asyncHandler(async (req, res) => {
+    const data = await faceCheckService.adminOverride({
+      userId: req.params.userId as string,
+      adminId: req.auth!.userId
     });
     res.json({ success: true, data });
   })

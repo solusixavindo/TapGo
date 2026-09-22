@@ -9,10 +9,12 @@ import { validateRequest } from "../../../core/http/validateRequest.js";
 import { requireAuth, requireRoles } from "../../../core/security/authContext.js";
 import { maskForOperator } from "../../../core/security/adminMasking.js";
 import {
+  faceCheckRateLimiter,
   rideLocationRateLimiter,
   rideWriteRateLimiter,
 } from "../../../core/security/rateLimit.js";
 import { RideService } from "../application/RideService.js";
+import { DriverFaceCheckService } from "../../drivers/application/DriverFaceCheckService.js";
 import { DistancePort } from "../domain/ridePorts.js";
 import { createRequireDriverCapability } from "./driverCapability.js";
 import { LocalDistanceAdapter } from "../infrastructure/LocalDistanceAdapter.js";
@@ -46,6 +48,7 @@ import {
   createOrderSchema,
   createQuoteSchema,
   driverAvailabilitySchema,
+  driverFaceCheckAttemptSchema,
   driverLocationSchema,
   listRidesSchema,
   rideReferenceSchema,
@@ -55,10 +58,12 @@ export const rideRouter = Router();
 export const driverRideRouter = Router();
 export const adminRideRouter = Router();
 
+const driverFaceCheckService = new DriverFaceCheckService(prisma);
 const rideService = new RideService(
   prisma,
   resolveDistancePort(),
   new PrismaMatchingAdapter(prisma),
+  driverFaceCheckService,
 );
 
 /** Ambil parameter referensi sebagai string tunggal (sudah divalidasi Zod). */
@@ -134,6 +139,7 @@ rideRouter.post(
       userId: req.auth!.userId,
       quoteId: req.body.quoteId,
       paymentMethod: req.body.paymentMethod,
+      ...(req.body.pickupNote ? { pickupNote: req.body.pickupNote } : {}),
       ...(idempotencyKeyOf(req.headers["idempotency-key"])
         ? { idempotencyKey: idempotencyKeyOf(req.headers["idempotency-key"])! }
         : {}),
@@ -218,6 +224,73 @@ driverRideRouter.get(
   asyncHandler(async (req, res) => {
     const data = await rideService.getCurrentRideForDriver(req.auth!.userId);
     res.json({ success: true, data });
+  }),
+);
+
+driverRideRouter.get(
+  "/rides/history",
+  asyncHandler(async (req, res) => {
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    const data = await rideService.listRidesForDriver(req.auth!.userId, limit);
+    res.json({ success: true, data });
+  }),
+);
+
+driverRideRouter.get(
+  "/earnings/summary",
+  asyncHandler(async (req, res) => {
+    const rawRange = req.query.range;
+    const range =
+      rawRange === "week" || rawRange === "month" ? rawRange : "today";
+    const data = await rideService.earningsSummary(req.auth!.userId, range);
+    res.json({ success: true, data });
+  }),
+);
+
+driverRideRouter.get(
+  "/performance",
+  asyncHandler(async (req, res) => {
+    const data = await rideService.performanceSummary(req.auth!.userId);
+    res.json({ success: true, data });
+  }),
+);
+
+/// Verifikasi wajah harian — dicek sekali per hari kalender WIB sebelum
+/// online, lihat RideService.setAvailability() dan DriverFaceCheckService.
+driverRideRouter.get(
+  "/face-check/today",
+  asyncHandler(async (req, res) => {
+    const data = await driverFaceCheckService.getTodayStatus(req.auth!.userId);
+    res.json({ success: true, data });
+  }),
+);
+
+/// Kirim EMBEDDING (vektor angka), bukan foto — dipakai perangkat untuk
+/// mencocokkan swafoto hari ini secara lokal. Selalu milik req.auth.userId
+/// sendiri, tidak pernah dari parameter klien.
+driverRideRouter.get(
+  "/face-check/reference",
+  asyncHandler(async (req, res) => {
+    const { embedding, modelVersion } = await driverFaceCheckService.getReference(req.auth!.userId);
+    res.json({
+      success: true,
+      data: { embedding: Array.from(embedding), modelVersion, minSimilarity: env.DRIVER_FACE_CHECK_MIN_SIMILARITY },
+    });
+  }),
+);
+
+driverRideRouter.post(
+  "/face-check/attempt",
+  faceCheckRateLimiter,
+  validateRequest(driverFaceCheckAttemptSchema),
+  asyncHandler(async (req, res) => {
+    const data = await driverFaceCheckService.submitAttempt({
+      userId: req.auth!.userId,
+      similarityScore: req.body.similarityScore,
+      livenessPassed: req.body.livenessPassed,
+      modelVersion: req.body.modelVersion,
+    });
+    res.status(StatusCodes.CREATED).json({ success: true, data });
   }),
 );
 
