@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend (lint, typecheck, test)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tapgo
+          POSTGRES_PASSWORD: tapgo_password
+          POSTGRES_DB: tapgo_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # Kredensial di bawah ini nilai dummy/sandbox saja — sama persis dengan
+      # apps/backend/.env.test.example yang sudah ada di repo, bukan secret
+      # sungguhan. Aman ditulis langsung di sini, tidak perlu GitHub Secrets.
+      NODE_ENV: test
+      DATABASE_URL: postgresql://tapgo:tapgo_password@localhost:5432/tapgo_test?schema=public
+      TAPGO_TEST_DATABASE_URL: postgresql://tapgo:tapgo_password@localhost:5432/tapgo_test?schema=public
+      JWT_ACCESS_SECRET: tapgo_test_access_secret_64_chars_minimum_for_integration_tests
+      JWT_REFRESH_SECRET: tapgo_test_refresh_secret_64_chars_minimum_for_integration_tests
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_TTL_DAYS: "30"
+      CORS_ORIGINS: http://localhost:3000
+      MIDTRANS_SERVER_KEY: SB-Mid-server-test-key
+      MIDTRANS_CLIENT_KEY: SB-Mid-client-test-key
+      MIDTRANS_IS_PRODUCTION: "false"
+      MIDTRANS_NOTIFICATION_SECRET: ""
+      MIDTRANS_SNAP_URL: http://127.0.0.1:59999/snap/v1/transactions
+      PPOB_PROVIDER: stub
+      DIGIFLAZZ_USERNAME: tapgo_test_user
+      DIGIFLAZZ_API_KEY: tapgo_test_api_key
+      DIGIFLAZZ_TESTING: "true"
+      DIGIFLAZZ_WEBHOOK_SECRET: tapgo_test_webhook_secret_32chars
+      PPOB_RECONCILE_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Prisma generate
+        working-directory: apps/backend
+        run: npx prisma generate --schema prisma/schema.prisma
+
+      - name: Prisma migrate (test database)
+        working-directory: apps/backend
+        run: npx prisma migrate deploy --schema prisma/schema.prisma
+
+      - run: npm run lint --workspace apps/backend
+
+      - name: Typecheck (tsc)
+        run: npm run build --workspace apps/backend
+
+      - run: npm test --workspace apps/backend
+
+  driver_app:
+    name: driver_app (analyze, test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.6"
+          channel: stable
+
+      - name: flutter pub get
+        working-directory: apps/driver_app
+        run: flutter pub get
+
+      - name: flutter analyze
+        working-directory: apps/driver_app
+        run: flutter analyze
+
+      - name: flutter test
+        working-directory: apps/driver_app
+        run: flutter test
+
+  # user_app sengaja belum dimasukkan: `flutter analyze` saat ini gagal di
+  # test/ewallet_visual_test.dart (deklarasi `_enabled` yang tidak dipakai —
+  # tampak seperti gating visual-test yang belum selesai disambungkan, bukan
+  # masalah trivial untuk diperbaiki tanpa memahami maksud aslinya). Setelah
+  # itu dibereskan, tambahkan job serupa job driver_app di atas.
