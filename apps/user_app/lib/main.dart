@@ -233,20 +233,35 @@ void tapGoOpenPpobHome(BuildContext context) {
 
 /// Membuka satu kategori PPOB langsung (dipakai tile Super Menu — Pulsa,
 /// Paket Data, Token PLN, E-Wallet, BPJS, PDAM), bukan lewat grid PpobHomeScreen
-/// dulu. Kalau katalog belum termuat atau kode kategori tidak ditemukan
-/// (mis. backend belum menyediakannya), jatuh ke PpobHomeScreen supaya
-/// pengguna tetap sampai ke sesuatu yang berguna, bukan macet di tempat.
+/// dulu.
+///
+/// Akar masalah yang diperbaiki (laporan Owner 22 Sep 2026): sebelumnya,
+/// KATEGORI YANG TIDAK DITEMUKAN di katalog (mis. BPJS/PDAM sebelum penyedia
+/// mengaktifkannya) diam-diam jatuh ke [PpobHomeScreen] (judul "PPOB") — tile
+/// "BPJS" membuka layar yang terlihat seperti kategori lain, bukan penjelasan
+/// bahwa BPJS belum tersedia. Sekarang dua kegagalan dibedakan:
+///  - katalog GAGAL DIMUAT (jaringan/server) -> [PpobHomeScreen], yang sudah
+///    punya UI muat-ulang sendiri untuk kegagalan sementara ini;
+///  - katalog berhasil dimuat tapi kategorinya memang TIDAK ADA di dalamnya
+///    -> [PpobCategoryUnavailableScreen], yang menyebut nama layanan dan
+///    alasannya, bukan tampilan yang membingungkan.
 Future<void> tapGoOpenPpobCategory(
   BuildContext context,
-  String categoryCode,
-) async {
+  String categoryCode, {
+  required String label,
+}) async {
   final navigator = Navigator.of(context);
   final container = ProviderScope.containerOf(context, listen: false);
-  List<PpobCategory> categories;
+  List<PpobCategory>? categories;
   try {
     categories = await container.read(ppobCatalogProvider.future);
   } catch (_) {
-    categories = const [];
+    categories = null;
+  }
+  if (!context.mounted) return;
+  if (categories == null) {
+    navigator.push(_tapGoPageRoute((_) => const PpobHomeScreen()));
+    return;
   }
   PpobCategory? category;
   for (final candidate in categories) {
@@ -255,11 +270,10 @@ Future<void> tapGoOpenPpobCategory(
       break;
     }
   }
-  if (!context.mounted) return;
   navigator.push(
     category != null
         ? _tapGoPageRoute((_) => PpobCategoryScreen(category: category!))
-        : _tapGoPageRoute((_) => const PpobHomeScreen()),
+        : _tapGoPageRoute((_) => PpobCategoryUnavailableScreen(label: label)),
   );
 }
 

@@ -158,13 +158,15 @@ class _PlayStatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
       decoration: BoxDecoration(
+        // Emas TapGo (D4AF37), sama dengan Kartu Anggota resmi — sebelumnya
+        // kuning (FFD166) dan terbaca sebagai warna berbeda dari logo.
         color: emphasized
-            ? const Color(0xFFFFD166)
+            ? const Color(0xFFD4AF37)
             : Colors.white.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
           color: emphasized
-              ? const Color(0xFFFFE9A8)
+              ? const Color(0xFF9C7C1E)
               : Colors.white.withValues(alpha: 0.38),
         ),
       ),
@@ -621,16 +623,32 @@ class _AccountHero extends StatelessWidget {
       // berjalan (_ShineSweep) — supaya terasa seperti "kartu identitas",
       // bukan salah satu baris menu. Owner sebelumnya menilai versi flat
       // sebelumnya kurang menarik dan tidak cukup beda dari menu di bawahnya.
+      //
+      // Palet emas SAMA PERSIS dengan Kartu Anggota resmi (F6D47C/D4AF37/
+      // 9C7C1E, lihat _MemberCardEmvChip di dashboard_screen.dart) — owner
+      // menilai gradien kuning-oranye sebelumnya (FFD166/FFB000) terbaca
+      // "kuning", bukan emas TapGo. Border emas tipis + watermark logo
+      // ditambahkan supaya kartu ini terasa sekelas kartu anggota, bukan
+      // sekadar header halaman.
       return Container(
         key: const ValueKey('play_profile_header'),
         width: double.infinity,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(28),
+          border: Border.all(
+            color: const Color(0xFFD4AF37).withValues(alpha: 0.6),
+            width: 1.4,
+          ),
           boxShadow: const [
             BoxShadow(
               color: Color(0x400B3A6E),
               blurRadius: 30,
               offset: Offset(0, 16),
+            ),
+            BoxShadow(
+              color: Color(0x33D4AF37),
+              blurRadius: 20,
+              offset: Offset(0, 4),
             ),
           ],
         ),
@@ -654,6 +672,26 @@ class _AccountHero extends StatelessWidget {
                 ),
               ),
               const Positioned.fill(child: _ShineSweep()),
+              // Watermark logo, samar di pojok kanan bawah — bahasa visual
+              // yang sama dengan Kartu Anggota resmi (basic_member_card_surface).
+              Positioned(
+                right: -18,
+                bottom: -18,
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: 0.10,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Image.asset(
+                        'assets/images/tapgo_logo.jpeg',
+                        width: 96,
+                        height: 96,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
               // Garis aksen emas tipis di tepi atas — menyatukan warna biru
               // korporat dengan emas logo TapGo, sekaligus jadi pembeda
               // visual instan dari kartu putih polos di bawahnya.
@@ -665,7 +703,11 @@ class _AccountHero extends StatelessWidget {
                   height: 4,
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Color(0xFFFFD166), Color(0xFFFFB000)],
+                      colors: [
+                        Color(0xFFF6D47C),
+                        Color(0xFFD4AF37),
+                        Color(0xFF9C7C1E),
+                      ],
                     ),
                   ),
                 ),
@@ -679,12 +721,16 @@ class _AccountHero extends StatelessWidget {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: const LinearGradient(
-                          colors: [Color(0xFFFFD166), Color(0xFFFFB000)],
+                          colors: [
+                            Color(0xFFF6D47C),
+                            Color(0xFFD4AF37),
+                            Color(0xFF9C7C1E),
+                          ],
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFFFFB000).withValues(
-                              alpha: 0.45,
+                            color: const Color(0xFFD4AF37).withValues(
+                              alpha: 0.5,
                             ),
                             blurRadius: 16,
                             spreadRadius: 1,

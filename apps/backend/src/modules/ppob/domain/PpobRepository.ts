@@ -120,4 +120,48 @@ export interface PpobRepository {
    * false bila instance lain sedang memegang kunci — aman tanpa Redis.
    */
   tryAcquireReconcileLock(key: number, tx: Prisma.TransactionClient): Promise<boolean>;
+
+  /**
+   * Produk yang DIKELOLA sinkronisasi harga (Stage R2.12): punya providerSku
+   * tunggal atau providerSkus (multi-operator). Produk tanpa keduanya (mis.
+   * BPJS/PDAM yang belum diaktifkan Digiflazz untuk akun ini) TIDAK ikut —
+   * status aktif/nonaktifnya adalah keputusan produk, bukan keputusan harga.
+   * Menyertakan produk NONAKTIF sekalipun: bila Digiflazz mengaktifkan lagi
+   * suatu kode, siklus berikutnya harus bisa menghidupkannya kembali.
+   */
+  listProductsForPriceSync(): Promise<PpobPriceSyncCandidate[]>;
+
+  /**
+   * Menerapkan hasil satu siklus sinkronisasi harga dalam satu transaksi.
+   * Setiap baris HANYA menulis kolom yang relevan (price/providerSkus/
+   * isActive/priceSyncedAt) — sku, brand, nama, dan kategori produk tidak
+   * pernah disentuh oleh sinkronisasi harga.
+   */
+  applyPriceSyncUpdates(
+    updates: PpobPriceSyncUpdate[],
+    syncedAt: Date
+  ): Promise<{ updated: number }>;
 }
+
+/// Satu produk yang dipertimbangkan pada siklus sinkronisasi harga.
+export type PpobPriceSyncCandidate = {
+  id: string;
+  sku: string;
+  name: string;
+  category: PpobCategory;
+  price: Prisma.Decimal;
+  isActive: boolean;
+  providerSku: string | null;
+  /// Record<kunci operator, kode provider> — hanya untuk produk multi-operator.
+  providerSkus: Prisma.JsonValue | null;
+};
+
+/// Perubahan yang ditulis untuk satu produk pada satu siklus sinkronisasi.
+export type PpobPriceSyncUpdate = {
+  id: string;
+  price: number;
+  isActive: boolean;
+  /// Hanya diisi untuk produk multi-operator (mengganti providerSkus produk
+  /// dengan hanya operator yang lolos band harga siklus ini).
+  providerSkus?: Record<string, string>;
+};

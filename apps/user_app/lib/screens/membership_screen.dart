@@ -131,7 +131,7 @@ class _SuperMenuScreenState extends State<SuperMenuScreen> {
   void _openMenuDetail(BuildContext context, String label) {
     final categoryCode = _ppobCategoryCodeForLabel(label);
     if (categoryCode != null) {
-      unawaited(tapGoOpenPpobCategory(context, categoryCode));
+      unawaited(tapGoOpenPpobCategory(context, categoryCode, label: label));
       return;
     }
     final destination = _superMenuDestinationForLabel(label);

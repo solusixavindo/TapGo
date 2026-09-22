@@ -190,3 +190,38 @@ class _PpobCategoryTileState extends State<_PpobCategoryTile> {
     );
   }
 }
+
+/// Layar untuk kategori PPOB yang BELUM tersedia di katalog server (mis.
+/// BPJS/PDAM sebelum penyedia mengaktifkan layanan tersebut untuk akun kami).
+///
+/// Akar masalah yang diperbaiki: tile Super Menu (Pulsa/Data/PLN/E-Wallet/
+/// BPJS/PDAM) sebelumnya membuka kategori ini lewat tautan langsung
+/// (tapGoOpenPpobCategory) yang, saat kategorinya tidak ditemukan di katalog,
+/// diam-diam jatuh ke [PpobHomeScreen] (judul "PPOB") — pengguna menekan
+/// "BPJS" tetapi melihat grid kategori PPOB umum tanpa penjelasan. Sekarang
+/// tile yang belum tersedia membuka layar khusus ini, yang menyebut nama
+/// layanannya dan alasannya secara jujur, dengan jalan keluar ke katalog PPOB
+/// yang sungguhan aktif.
+class PpobCategoryUnavailableScreen extends StatelessWidget {
+  const PpobCategoryUnavailableScreen({super.key, required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(label)),
+      body: PpobNoticeView(
+        icon: Icons.hourglass_top_rounded,
+        title: '$label belum tersedia',
+        message:
+            'Kami sedang menyiapkan layanan $label bersama mitra penyedia. '
+            'Sementara itu, Pulsa, Paket Data, dan Token PLN sudah bisa dipakai.',
+        actionLabel: 'Buka Katalog PPOB',
+        onAction: () => Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(builder: (_) => const PpobHomeScreen()),
+        ),
+      ),
+    );
+  }
+}

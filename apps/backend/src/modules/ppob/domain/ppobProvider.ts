@@ -51,6 +51,17 @@ export type PpobPurchaseOutcome =
       failureReason: string;
     };
 
+/// Satu baris daftar harga provider (Stage R2.12 — sinkronisasi harga PPOB).
+export interface PpobPriceListEntry {
+  /// Kode produk provider (buyer_sku_code Digiflazz) — kunci pencocokan
+  /// dengan providerSku/providerSkus produk kita.
+  providerSku: string;
+  /// Harga modal SAAT INI di sisi provider (rupiah).
+  cost: number;
+  /// false = provider sedang menutup penjualan produk ini (stok/gangguan).
+  buyerProductStatus: boolean;
+}
+
 export interface PpobProviderGateway {
   /// Nama adapter, dicatat pada transaksi untuk audit. "stub" hari ini.
   readonly name: string;
@@ -61,6 +72,12 @@ export interface PpobProviderGateway {
    * melewati provider tanpa inquiry.
    */
   checkStatus?(inquiry: PpobStatusInquiry): Promise<PpobPurchaseOutcome>;
+  /**
+   * Daftar harga modal terkini provider. Opsional: hanya provider yang
+   * mendukung sinkronisasi harga (Digiflazz) mengimplementasikannya —
+   * PpobPriceSyncService melewati provider yang tidak mendukungnya.
+   */
+  fetchPriceList?(): Promise<PpobPriceListEntry[]>;
 }
 
 /// Provider dimatikan lewat konfigurasi (PPOB_PROVIDER=disabled).

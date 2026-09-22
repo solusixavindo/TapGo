@@ -8,6 +8,7 @@ import { disconnectRateLimitStore } from "./core/security/rateLimitStore.js";
 import { DriverDocumentService } from "./modules/drivers/application/DriverDocumentService.js";
 import { MembershipDocumentService } from "./modules/memberships/application/MembershipDocumentService.js";
 import { PpobService } from "./modules/ppob/application/PpobService.js";
+import { PpobPriceSyncService } from "./modules/ppob/application/PpobPriceSyncService.js";
 import { PrismaPpobRepository } from "./modules/ppob/infrastructure/PrismaPpobRepository.js";
 import { DigiflazzPpobProvider } from "./modules/ppob/infrastructure/DigiflazzPpobProvider.js";
 import { attachRealtime } from "./realtime/socket.js";
@@ -137,6 +138,35 @@ if (env.PPOB_RECONCILE_ENABLED && env.PPOB_PROVIDER === "digiflazz") {
   void runReconcileCycle();
 }
 
+/**
+ * Worker sinkronisasi harga PPOB (Stage R2.12).
+ *
+ * Sama alasannya dengan worker rekonsiliasi di atas: dipasang di server.ts
+ * (bukan createApp) supaya test yang mengimpor createApp tidak ikut
+ * menyalakan timer latar, dan hanya berjalan bila diaktifkan eksplisit
+ * dengan provider yang mendukungnya.
+ */
+let ppobPriceSyncTimer: NodeJS.Timeout | undefined;
+if (env.PPOB_PRICE_SYNC_ENABLED && env.PPOB_PROVIDER === "digiflazz") {
+  const priceSyncService = new PpobPriceSyncService(
+    new PrismaPpobRepository(prisma),
+    DigiflazzPpobProvider.fromEnv()
+  );
+  const runPriceSyncCycle = async () => {
+    try {
+      const result = await priceSyncService.runSyncCycle();
+      if (!result.skipped) {
+        logger.info(result, "PPOB price sync cycle completed");
+      }
+    } catch (error) {
+      logger.error({ err: error }, "PPOB price sync cycle failed");
+    }
+  };
+  ppobPriceSyncTimer = setInterval(() => void runPriceSyncCycle(), env.PPOB_PRICE_SYNC_INTERVAL_MS);
+  ppobPriceSyncTimer.unref();
+  void runPriceSyncCycle();
+}
+
 const server = httpServer.listen(env.PORT, env.HOST, () => {
   logger.info({ host: env.HOST, port: env.PORT }, "TapGo backend is running");
 });
@@ -146,6 +176,9 @@ async function shutdown(signal: string) {
   clearInterval(purgeTimer);
   if (ppobReconcileTimer) {
     clearInterval(ppobReconcileTimer);
+  }
+  if (ppobPriceSyncTimer) {
+    clearInterval(ppobPriceSyncTimer);
   }
   server.close(async () => {
     await redis?.quit();

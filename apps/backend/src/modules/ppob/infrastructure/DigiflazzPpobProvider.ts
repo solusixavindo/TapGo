@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { env } from "../../../config/env.js";
 import { logger } from "../../../core/logger/logger.js";
 import {
+  PpobPriceListEntry,
   PpobProviderGateway,
   PpobPurchaseOutcome,
   PpobPurchaseRequest,
@@ -24,6 +25,16 @@ import {
 
 const DEFAULT_BASE_URL = "https://api.digiflazz.com/v1";
 const REQUEST_TIMEOUT_MS = 10000;
+
+interface DigiflazzPriceListRow {
+  buyer_sku_code?: string;
+  price?: number;
+  buyer_product_status?: boolean;
+}
+
+interface DigiflazzPriceListPayload {
+  data?: DigiflazzPriceListRow[] | { rc?: string; message?: string } | null;
+}
 
 interface DigiflazzTransactionPayload {
   data?: {
@@ -101,6 +112,75 @@ export class DigiflazzPpobProvider implements PpobProviderGateway {
       sign: digiflazzSign(this.config.username, this.config.apiKey, inquiry.publicReference),
       testing: this.config.testing
     });
+  }
+
+  /**
+   * Daftar harga modal Digiflazz terkini (Stage R2.12 — sinkronisasi harga
+   * PPOB). Menggabungkan prepaid dan pascabayar; pascabayar yang belum
+   * diaktifkan Digiflazz untuk akun ini (akun belum berlangganan produk
+   * tersebut) mengembalikan daftar kosong alih-alih menggagalkan siklus.
+   */
+  async fetchPriceList(): Promise<PpobPriceListEntry[]> {
+    const prepaid = await this.fetchPriceListFor("prepaid");
+    const pasca = await this.fetchPriceListFor("pasca").catch((error: unknown) => {
+      logger.info(
+        { err: error },
+        "Digiflazz price-list pascabayar tidak tersedia untuk akun ini; produk pascabayar dilewati"
+      );
+      return [] as PpobPriceListEntry[];
+    });
+    return [...prepaid, ...pasca];
+  }
+
+  private async fetchPriceListFor(cmd: "prepaid" | "pasca"): Promise<PpobPriceListEntry[]> {
+    const url = `${this.config.baseUrl.replace(/\/$/, "")}/price-list`;
+    // sign untuk price-list BUKAN md5(username+apiKey+ref_id) seperti transaksi —
+    // dokumentasi Digiflazz memakai kata kunci tetap "pricelist" di posisi ref_id.
+    const sign = createHash("md5")
+      .update(`${this.config.username}${this.config.apiKey}pricelist`)
+      .digest("hex");
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ cmd, username: this.config.username, sign }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+      });
+    } catch (error) {
+      logger.warn({ err: error, url, cmd }, "Digiflazz price-list request failed");
+      throw error;
+    }
+
+    let payload: DigiflazzPriceListPayload;
+    try {
+      payload = (await response.json()) as DigiflazzPriceListPayload;
+    } catch {
+      throw new Error(`Digiflazz price-list returned non-JSON response (HTTP ${response.status})`);
+    }
+
+    const rows = payload.data;
+    if (!response.ok || !Array.isArray(rows)) {
+      const message = rows && !Array.isArray(rows) ? rows.message : undefined;
+      throw new Error(
+        `Digiflazz price-list rejected (HTTP ${response.status}, cmd=${cmd}): ${message ?? "no payload"}`
+      );
+    }
+
+    return rows
+      .filter(
+        (row): row is DigiflazzPriceListRow & { buyer_sku_code: string; price: number } =>
+          typeof row.buyer_sku_code === "string" && typeof row.price === "number" && row.price > 0
+      )
+      .map((row) => ({
+        providerSku: row.buyer_sku_code,
+        cost: row.price,
+        buyerProductStatus: row.buyer_product_status !== false
+      }));
   }
 
   private async callTransaction(body: Record<string, unknown>): Promise<PpobPurchaseOutcome> {

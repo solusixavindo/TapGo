@@ -23,6 +23,7 @@ import { midtransRouter } from "./modules/payments/presentation/midtrans.routes.
 import { dokuPaymentRouter, dokuWebhookRouter } from "./modules/payments/presentation/doku.routes.js";
 import { ppobRouter } from "./modules/ppob/presentation/ppob.routes.js";
 import { digiflazzWebhookRouter } from "./modules/ppob/presentation/digiflazz-webhook.routes.js";
+import { adminPpobSyncRouter } from "./modules/ppob/presentation/admin-ppob-sync.routes.js";
 import { profitSharingRouter } from "./modules/profit-sharing/presentation/profit-sharing.routes.js";
 import { referralRouter } from "./modules/referrals/presentation/referral.routes.js";
 import { driverReviewRouter } from "./modules/rides/presentation/driverReview.routes.js";
@@ -109,6 +110,7 @@ export function createApp() {
   // HMAC X-Hub-Signature di dalam router; rate limit mengikuti jalur webhook
   // pembayaran lain.
   app.use("/api/v1/webhooks/ppob", paymentRateLimiter, digiflazzWebhookRouter);
+  app.use("/api/v1/admin/ppob", adminRateLimiter, adminPpobSyncRouter);
   // Release 2 — domain Ride. Tidak diekspos ke aplikasi Play Release 1.
   app.use("/api/v1/rides", rideRouter);
   // URUTAN PENTING. driverRideRouter memasang pemeriksa kapabilitas untuk

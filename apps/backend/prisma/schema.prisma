@@ -1872,6 +1872,10 @@ model PpobProduct {
   providerSkus Json?             @map("provider_skus")
   isActive     Boolean           @default(true) @map("is_active")
   sortOrder    Int               @default(0) @map("sort_order")
+  /// Kapan harga/rute operator produk ini terakhir disinkronkan dari Digiflazz
+  /// (PpobPriceSyncService). Null = belum pernah, atau bukan produk yang
+  /// dikelola sinkronisasi (tanpa providerSku/providerSkus).
+  priceSyncedAt DateTime?        @map("price_synced_at")
   createdAt    DateTime          @default(now()) @map("created_at")
   updatedAt    DateTime          @updatedAt @map("updated_at")
   transactions PpobTransaction[]

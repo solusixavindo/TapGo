@@ -262,9 +262,17 @@ async function main() {
     { category: "BPJS", brand: "BPJS Kesehatan", sku: "BPJS_IURAN_1BULAN", name: "Iuran BPJS Kesehatan 1 Bulan", description: "Iuran BPJS Kesehatan 1 bulan per orang.", price: 42000, adminFee: 2500, sortOrder: 1 },
     { category: "PDAM", brand: "PDAM", sku: "PDAM_50K", name: "Tagihan PDAM Rp50.000", description: "Pembayaran tagihan air PDAM nominal Rp50.000.", price: 50000, adminFee: 3000, sortOrder: 1 },
     { category: "PDAM", brand: "PDAM", sku: "PDAM_100K", name: "Tagihan PDAM Rp100.000", description: "Pembayaran tagihan air PDAM nominal Rp100.000.", price: 100000, adminFee: 3000, sortOrder: 2 },
-    { category: "EWALLET", brand: "E-Money", sku: "EMONEY_20K", name: "E-Money Rp20.000", description: "Top up e-money Rp20.000.", price: 21500, adminFee: 0, sortOrder: 1 },
-    { category: "EWALLET", brand: "E-Money", sku: "EMONEY_50K", name: "E-Money Rp50.000", description: "Top up e-money Rp50.000.", price: 51500, adminFee: 0, sortOrder: 2 },
-    { category: "EWALLET", brand: "E-Money", sku: "EMONEY_100K", name: "E-Money Rp100.000", description: "Top up e-money Rp100.000.", price: 101500, adminFee: 0, sortOrder: 3 }
+    // Top up per dompet nyata (bukan "E-Money" generik — Digiflazz menjual
+    // per dompet, lihat migrasi 20260920120000_ppob_ewallet_topup). Harga di
+    // sini hanya nilai awal; PpobPriceSyncService menimpanya begitu aktif.
+    { category: "EWALLET", brand: "DANA", sku: "EWALLET_DANA_20K", name: "DANA Rp20.000", description: "Top up saldo DANA Rp20.000. Nomor tujuan harus terdaftar di DANA.", price: 21000, adminFee: 0, sortOrder: 1 },
+    { category: "EWALLET", brand: "DANA", sku: "EWALLET_DANA_50K", name: "DANA Rp50.000", description: "Top up saldo DANA Rp50.000. Nomor tujuan harus terdaftar di DANA.", price: 51000, adminFee: 0, sortOrder: 2 },
+    { category: "EWALLET", brand: "GoPay", sku: "EWALLET_GOPAY_50K", name: "GoPay Rp50.000", description: "Top up saldo GoPay Rp50.000. Nomor tujuan harus terdaftar di GoPay.", price: 52500, adminFee: 0, sortOrder: 3 },
+    { category: "EWALLET", brand: "GoPay", sku: "EWALLET_GOPAY_100K", name: "GoPay Rp100.000", description: "Top up saldo GoPay Rp100.000. Nomor tujuan harus terdaftar di GoPay.", price: 102500, adminFee: 0, sortOrder: 4 },
+    { category: "EWALLET", brand: "OVO", sku: "EWALLET_OVO_50K", name: "OVO Rp50.000", description: "Top up saldo OVO Rp50.000. Nomor tujuan harus terdaftar di OVO.", price: 52000, adminFee: 0, sortOrder: 5 },
+    { category: "EWALLET", brand: "OVO", sku: "EWALLET_OVO_100K", name: "OVO Rp100.000", description: "Top up saldo OVO Rp100.000. Nomor tujuan harus terdaftar di OVO.", price: 102000, adminFee: 0, sortOrder: 6 },
+    { category: "EWALLET", brand: "ShopeePay", sku: "EWALLET_SHOPEEPAY_50K", name: "ShopeePay Rp50.000", description: "Top up saldo ShopeePay Rp50.000. Nomor tujuan harus terdaftar di ShopeePay.", price: 52000, adminFee: 0, sortOrder: 7 },
+    { category: "EWALLET", brand: "ShopeePay", sku: "EWALLET_SHOPEEPAY_100K", name: "ShopeePay Rp100.000", description: "Top up saldo ShopeePay Rp100.000. Nomor tujuan harus terdaftar di ShopeePay.", price: 102000, adminFee: 0, sortOrder: 8 }
   ];
   for (const product of ppobProducts) {
     await prisma.ppobProduct.upsert({
@@ -298,9 +306,14 @@ async function main() {
     BPJS_IURAN_1BULAN: { isActive: false },
     PDAM_50K: { isActive: false },
     PDAM_100K: { isActive: false },
-    EMONEY_20K: { isActive: false },
-    EMONEY_50K: { isActive: false },
-    EMONEY_100K: { isActive: false }
+    EWALLET_DANA_20K: { providerSku: "dana20" },
+    EWALLET_DANA_50K: { providerSku: "dana50" },
+    EWALLET_GOPAY_50K: { providerSku: "go50" },
+    EWALLET_GOPAY_100K: { providerSku: "go100" },
+    EWALLET_OVO_50K: { providerSku: "ovo50" },
+    EWALLET_OVO_100K: { providerSku: "ovo100" },
+    EWALLET_SHOPEEPAY_50K: { providerSku: "shopee50" },
+    EWALLET_SHOPEEPAY_100K: { providerSku: "shopee100" }
   };
   for (const [sku, patch] of Object.entries(digiflazzCatalog)) {
     const { providerSkus, ...rest } = patch;

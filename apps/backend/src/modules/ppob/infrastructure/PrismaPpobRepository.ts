@@ -3,6 +3,8 @@ import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../core/errors/AppError.js";
 import {
   PpobOpenTransaction,
+  PpobPriceSyncCandidate,
+  PpobPriceSyncUpdate,
   PpobProductRecord,
   PpobProductView,
   PpobRepository,
@@ -345,5 +347,46 @@ export class PrismaPpobRepository implements PpobRepository {
       SELECT pg_try_advisory_xact_lock(${key}) AS acquired
     `;
     return rows[0]?.acquired === true;
+  }
+
+  listProductsForPriceSync(): Promise<PpobPriceSyncCandidate[]> {
+    return this.prisma.ppobProduct.findMany({
+      where: {
+        OR: [{ providerSku: { not: null } }, { providerSkus: { not: Prisma.JsonNull } }]
+      },
+      select: {
+        id: true,
+        sku: true,
+        name: true,
+        category: true,
+        price: true,
+        isActive: true,
+        providerSku: true,
+        providerSkus: true
+      }
+    });
+  }
+
+  async applyPriceSyncUpdates(
+    updates: PpobPriceSyncUpdate[],
+    syncedAt: Date
+  ): Promise<{ updated: number }> {
+    if (updates.length === 0) {
+      return { updated: 0 };
+    }
+    await this.prisma.$transaction(
+      updates.map((update) =>
+        this.prisma.ppobProduct.update({
+          where: { id: update.id },
+          data: {
+            price: update.price,
+            isActive: update.isActive,
+            priceSyncedAt: syncedAt,
+            ...(update.providerSkus !== undefined ? { providerSkus: update.providerSkus } : {})
+          }
+        })
+      )
+    );
+    return { updated: updates.length };
   }
 }
