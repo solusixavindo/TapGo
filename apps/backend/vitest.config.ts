@@ -5,6 +5,7 @@ export default defineConfig({
     environment: "node",
     globals: false,
     include: ["tests/**/*.test.ts"],
+    setupFiles: ["tests/setup/disconnectPrismaAfterFile.ts"],
     fileParallelism: false,
     pool: "forks",
     poolOptions: {

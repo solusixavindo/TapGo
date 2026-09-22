@@ -29,8 +29,13 @@ jobs:
       # apps/backend/.env.test.example yang sudah ada di repo, bukan secret
       # sungguhan. Aman ditulis langsung di sini, tidak perlu GitHub Secrets.
       NODE_ENV: test
-      DATABASE_URL: postgresql://tapgo:tapgo_password@localhost:5432/tapgo_test?schema=public
-      TAPGO_TEST_DATABASE_URL: postgresql://tapgo:tapgo_password@localhost:5432/tapgo_test?schema=public
+      # connection_limit=25: tetap cukup untuk uji konkurensi terberat suite
+      # (registrationQuotaConcurrency.integration.test.ts, ~20 aktor paralel)
+      # tapi lebih rendah dari default harness (30) — mengurangi tekanan pada
+      # max_connections Postgres (100 bawaan image) di samping perbaikan
+      # tests/setup/disconnectPrismaAfterFile.ts yang menutup pool tiap file.
+      DATABASE_URL: postgresql://tapgo:tapgo_password@localhost:5432/tapgo_test?schema=public&connection_limit=25
+      TAPGO_TEST_DATABASE_URL: postgresql://tapgo:tapgo_password@localhost:5432/tapgo_test?schema=public&connection_limit=25
       JWT_ACCESS_SECRET: tapgo_test_access_secret_64_chars_minimum_for_integration_tests
       JWT_REFRESH_SECRET: tapgo_test_refresh_secret_64_chars_minimum_for_integration_tests
       JWT_ACCESS_TTL: 15m
