@@ -713,8 +713,9 @@ class _AccountHero extends StatelessWidget {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
+                padding: const EdgeInsets.fromLTRB(18, 24, 18, 30),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Container(
                       padding: const EdgeInsets.all(3),
@@ -738,19 +739,23 @@ class _AccountHero extends StatelessWidget {
                         ],
                       ),
                       child: ClipOval(
-                        child: avatarBytes != null
-                            ? Image.memory(
-                                avatarBytes!,
-                                width: 64,
-                                height: 64,
-                                fit: BoxFit.cover,
-                              )
-                            : const PremiumTapGoIcon(
-                                label: 'Profil',
-                                fallbackIcon: Icons.person_rounded,
-                                size: 64,
-                                padding: 3,
-                              ),
+                        child: SizedBox(
+                          width: 72,
+                          height: 72,
+                          child: avatarBytes != null
+                              ? Image.memory(
+                                  avatarBytes!,
+                                  width: 72,
+                                  height: 72,
+                                  fit: BoxFit.cover,
+                                )
+                              : const PremiumTapGoIcon(
+                                  label: 'Profil',
+                                  fallbackIcon: Icons.person_rounded,
+                                  size: 72,
+                                  padding: 3,
+                                ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -770,7 +775,7 @@ class _AccountHero extends StatelessWidget {
                               decoration: TextDecoration.none,
                             ),
                           ),
-                          const SizedBox(height: 9),
+                          const SizedBox(height: 12),
                           const Wrap(
                             spacing: 8,
                             runSpacing: 8,
