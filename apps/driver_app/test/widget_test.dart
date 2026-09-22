@@ -779,6 +779,37 @@ void main() {
       expect(find.text('RIDE-DEMO-001'), findsOneWidget);
     });
 
+    testWidgets(
+        'peta, nama penumpang, dan tombol navigasi tampil saat koordinat tersedia',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        current: demoRideWithLocation(RideStatus.driverToPickup),
+      );
+      await pumpDriverOrders(tester, repo);
+      expect(find.byKey(const ValueKey('active-ride-map')), findsOneWidget);
+      expect(find.byKey(const ValueKey('trip-navigate-action')), findsOneWidget);
+      expect(find.byKey(const ValueKey('active-ride-passenger-name')),
+          findsOneWidget);
+      expect(find.text('Sari'), findsOneWidget);
+    });
+
+    testWidgets(
+        'peta dan tombol navigasi disembunyikan bila koordinat belum tersedia (order lama)',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        current: demoRide(RideStatus.driverToPickup),
+      );
+      await pumpDriverOrders(tester, repo);
+      expect(find.byKey(const ValueKey('active-ride-map')), findsNothing);
+      expect(find.byKey(const ValueKey('trip-navigate-action')), findsNothing);
+      expect(find.byKey(const ValueKey('active-ride-passenger-name')),
+          findsNothing);
+      // Kartu perjalanan tetap tampil apa adanya — fail-soft, bukan crash.
+      expect(find.text('Perjalanan Aktif'), findsOneWidget);
+    });
+
     testWidgets('no current ride kembali ke home/offers', (tester) async {
       final repo = FakeDriverRepository(session: demoSession);
       await pumpDriverOrders(tester, repo);
@@ -1266,6 +1297,24 @@ DriverRide demoRide(RideStatus status) => DriverRide(
       status: status,
       pickupAddress: 'LOKASI_DEMO_A',
       dropoffAddress: 'LOKASI_DEMO_B',
+      distanceMeters: 2500,
+      durationSeconds: 600,
+      totalFare: 9000,
+    );
+
+/// Sama seperti [demoRide], plus koordinat+nama penumpang — dipakai untuk
+/// menguji peta/tombol navigasi/nama penumpang pada ActiveRideCard.
+DriverRide demoRideWithLocation(RideStatus status) => DriverRide(
+      reference: 'RIDE-DEMO-001',
+      serviceType: 'MOTORCYCLE',
+      status: status,
+      pickupAddress: 'LOKASI_DEMO_A',
+      dropoffAddress: 'LOKASI_DEMO_B',
+      pickupLat: -6.1754,
+      pickupLng: 106.8272,
+      dropoffLat: -6.1854,
+      dropoffLng: 106.8372,
+      passengerName: 'Sari',
       distanceMeters: 2500,
       durationSeconds: 600,
       totalFare: 9000,

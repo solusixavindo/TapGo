@@ -20,6 +20,10 @@ import {
   buildPassengerDisclosure
 } from "./passengerDriverDisclosure.js";
 import {
+  DRIVER_DISCLOSURE_INCLUDE,
+  buildDriverDisclosure
+} from "./driverPassengerDisclosure.js";
+import {
   calculateFare,
   quoteExpiryFrom,
 } from "../domain/fareCalculator.js";
@@ -490,6 +494,7 @@ export class RideService {
       },
       orderBy: { createdAt: "asc" },
       take: 2,
+      include: DRIVER_DISCLOSURE_INCLUDE,
     });
 
     if (orders.length > 1) {
@@ -512,6 +517,7 @@ export class RideService {
       where: { driverProfileId: profile.id },
       orderBy: { createdAt: "desc" },
       take: Math.max(1, Math.min(limit, 50)),
+      include: DRIVER_DISCLOSURE_INCLUDE,
     });
     return orders.map((o) => this.toOrderView(o));
   }
@@ -623,6 +629,7 @@ export class RideService {
     return this.prisma.$transaction(async (tx) => {
       const order = await tx.rideOrder.findUnique({
         where: { publicReference: input.publicReference },
+        include: DRIVER_DISCLOSURE_INCLUDE,
       });
       if (!order) {
         throw new AppError(
@@ -693,6 +700,7 @@ export class RideService {
 
       const updated = await tx.rideOrder.findUniqueOrThrow({
         where: { id: order.id },
+        include: DRIVER_DISCLOSURE_INCLUDE,
       });
       return this.toOrderView(updated);
     });
@@ -737,6 +745,7 @@ export class RideService {
     return this.prisma.$transaction(async (tx) => {
       const order = await tx.rideOrder.findUnique({
         where: { publicReference: input.publicReference },
+        include: DRIVER_DISCLOSURE_INCLUDE,
       });
       if (!order) {
         throw new AppError(
@@ -815,6 +824,7 @@ export class RideService {
 
       const updated = await tx.rideOrder.findUniqueOrThrow({
         where: { id: order.id },
+        include: DRIVER_DISCLOSURE_INCLUDE,
       });
       return this.toOrderView(updated);
     });
@@ -861,6 +871,7 @@ export class RideService {
           cancellationPolicy: CANCELLATION_POLICY_VERSION,
           cancelledAt: new Date(),
         },
+        include: DRIVER_DISCLOSURE_INCLUDE,
       });
 
       await this.releaseDriver(tx, profile.id);
@@ -1908,7 +1919,11 @@ export class RideService {
     publicReference: string;
     serviceType: RideServiceType;
     status: RideOrderStatus;
+    pickupLat: Prisma.Decimal;
+    pickupLng: Prisma.Decimal;
     pickupAddress: string;
+    dropoffLat: Prisma.Decimal;
+    dropoffLng: Prisma.Decimal;
     dropoffAddress: string;
     pickupNote?: string | null;
     distanceMeters: number;
@@ -1928,12 +1943,14 @@ export class RideService {
     completedAt: Date | null;
     cancelledAt: Date | null;
     createdAt: Date;
-    // Opsional: hanya terisi pada jalur penumpang yang memuat relasinya.
-    // Jalur lain (mis. admin) memakai view tersendiri dan tidak terpengaruh.
+    // Opsional: hanya terisi pada jalur yang memuat relasinya (penumpang
+    // memuat driverProfile/vehicle, driver memuat passenger). Jalur lain
+    // (mis. admin) memakai view tersendiri dan tidak terpengaruh.
     driverProfileId?: string | null;
     vehicleId?: string | null;
     driverProfile?: DisclosureSource["driverProfile"];
     vehicle?: DisclosureSource["vehicle"];
+    passenger?: { fullName?: string | null } | null;
   }) {
     const disclosure = buildPassengerDisclosure({
       status: order.status,
@@ -1943,13 +1960,21 @@ export class RideService {
       ...(order.driverProfile !== undefined ? { driverProfile: order.driverProfile } : {}),
       ...(order.vehicle !== undefined ? { vehicle: order.vehicle } : {}),
     });
+    const driverDisclosure = buildDriverDisclosure({
+      status: order.status,
+      driverProfileId: order.driverProfileId ?? null,
+      assignedAt: order.assignedAt,
+      ...(order.passenger !== undefined ? { passenger: order.passenger } : {}),
+    });
 
     return {
       reference: order.publicReference,
       serviceType: order.serviceType,
       status: order.status,
       isFinal: isTerminalStatus(order.status),
+      pickup: { lat: order.pickupLat.toNumber(), lng: order.pickupLng.toNumber() },
       pickupAddress: order.pickupAddress,
+      dropoff: { lat: order.dropoffLat.toNumber(), lng: order.dropoffLng.toNumber() },
       dropoffAddress: order.dropoffAddress,
       pickupNote: order.pickupNote ?? null,
       distanceMeters: order.distanceMeters,
@@ -1982,6 +2007,10 @@ export class RideService {
       // Tambahan additive Stage R2.4A. Bentuk field existing tidak diubah.
       driver: disclosure.driver,
       vehicle: disclosure.vehicle,
+      // Tambahan additive: identitas penumpang untuk driver (lihat
+      // driverPassengerDisclosure.ts) — null pada jalur yang tidak memuat
+      // relasi passenger (mis. penumpang melihat order-nya sendiri).
+      passenger: driverDisclosure.passenger,
       createdAt: order.createdAt,
     };
   }

@@ -169,10 +169,22 @@ describe.skipIf(!runIntegration)("GET /driver/rides/history", () => {
       order.plateHash,
       order.passenger.phone,
       order.passenger.email,
+      // Nama lengkap tidak boleh bocor — hanya nama depan (lihat
+      // driverPassengerDisclosure.ts) yang boleh tampil.
+      order.passenger.fullName,
     ]) {
       expect(serialized).not.toContain(forbidden);
     }
-    expect(serialized).not.toContain("passenger");
+    // Sejak "Menuju Jemput map parity", driver YANG SUDAH ditugaskan boleh
+    // melihat nama depan penumpang (buildDriverDisclosure) — field
+    // "passenger" karena itu memang diharapkan muncul, dibatasi ke bentuk
+    // minimal { displayName } saja.
+    const historyItem = (res.body.data as Array<Record<string, any>>).find(
+      (row) => row.reference === order.publicReference,
+    );
+    expect(historyItem?.passenger).toEqual({
+      displayName: order.passenger.fullName.split(" ")[0],
+    });
     expect(serialized).not.toContain("phone");
     expect(serialized).not.toContain("email");
     expect(serialized).not.toContain("plateNumberHash");

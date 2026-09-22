@@ -706,6 +706,119 @@ class _DriverLiveMap extends ConsumerWidget {
   }
 }
 
+/// Peta perjalanan aktif — pin jemput/tujuan + marker posisi diri sendiri
+/// (dari [locationPortProvider], sumber yang sama dengan peta Beranda) +
+/// garis lurus ke titik yang relevan untuk fase saat ini. BUKAN rute
+/// jalan ter-snap (lihat catatan keputusan desain di plan "Menuju Jemput
+/// map parity") — untuk navigasi turn-by-turn sungguhan driver diarahkan
+/// ke Google Maps lewat tombol "Buka di Google Maps".
+class _ActiveRideMap extends ConsumerStatefulWidget {
+  const _ActiveRideMap({required this.ride});
+  final DriverRide ride;
+
+  @override
+  ConsumerState<_ActiveRideMap> createState() => _ActiveRideMapState();
+}
+
+class _ActiveRideMapState extends ConsumerState<_ActiveRideMap> {
+  static const _tileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  final _mapController = MapController();
+  LatLng? _lastCentered;
+
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  /// flutter_map hanya memakai [MapOptions.initialCenter] SEKALI, pada frame
+  /// pertama widget ini dibuat — bukan setiap rebuild. Tanpa ini, peta tidak
+  /// akan pernah mengikuti fix GPS baru selagi driver bergerak (statis di
+  /// titik pertama, persis bug yang sama dengan _DriverLiveMap di Beranda
+  /// bila tidak ditangani), dan juga tidak akan pindah target saat status
+  /// berubah dari menuju-jemput ke dalam-perjalanan.
+  void _recenter(LatLng point) {
+    if (_lastCentered == point) return;
+    _lastCentered = point;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _mapController.move(point, _mapController.camera.zoom);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ride = widget.ride;
+    final pickup = LatLng(ride.pickupLat!, ride.pickupLng!);
+    final dropoff = ride.dropoffLat != null && ride.dropoffLng != null
+        ? LatLng(ride.dropoffLat!, ride.dropoffLng!)
+        : null;
+    final target = _navigationTarget(ride) ?? pickup;
+    final locationPort = ref.watch(locationPortProvider);
+    return ClipRRect(
+      key: const ValueKey('active-ride-map'),
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        height: 200,
+        child: StreamBuilder<(double, double)>(
+          stream: locationPort.positionStream,
+          builder: (context, snapshot) {
+            final fix = snapshot.data;
+            final driverPoint = fix == null ? null : LatLng(fix.$1, fix.$2);
+            _recenter(driverPoint ?? target);
+            return FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: driverPoint ?? target,
+                initialZoom: 14,
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate: _tileUrl,
+                  userAgentPackageName: 'com.xavindo.tapgo.driver',
+                ),
+                if (driverPoint != null)
+                  PolylineLayer(polylines: [
+                    Polyline(
+                      points: [driverPoint, target],
+                      strokeWidth: 4,
+                      color: const Color(0xFF0877E8),
+                    ),
+                  ]),
+                MarkerLayer(markers: [
+                  Marker(
+                    point: pickup,
+                    width: 40,
+                    height: 40,
+                    child: const Icon(Icons.my_location_rounded,
+                        color: Color(0xFF16A34A), size: 32),
+                  ),
+                  if (dropoff != null)
+                    Marker(
+                      point: dropoff,
+                      width: 40,
+                      height: 40,
+                      child: const Icon(Icons.flag_rounded,
+                          color: Color(0xFFDC2626), size: 32),
+                    ),
+                  if (driverPoint != null)
+                    Marker(
+                      point: driverPoint,
+                      width: 44,
+                      height: 44,
+                      child: const Icon(Icons.two_wheeler_rounded,
+                          color: Color(0xFF0877E8), size: 36),
+                    ),
+                ]),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
 /// Ringkasan singkat perjalanan aktif di Beranda — tap untuk pindah ke tab
 /// Pesanan, tempat detail dan aksinya berada. Beranda sengaja tidak
 /// menduplikasi ActiveRideCard secara penuh di sini.
@@ -1146,12 +1259,22 @@ class OfferTile extends ConsumerWidget {
   }
 }
 
-class _RideSummary extends StatelessWidget {
+class _RideSummary extends ConsumerWidget {
   const _RideSummary({required this.ride});
   final DriverRide ride;
 
+  /// Fase "menuju jemput": ringkasan jarak/durasi statis (total trip) tidak
+  /// relevan lagi — yang berguna bagi driver adalah SISA jarak ke titik
+  /// jemput, yang berubah selagi ia bergerak.
+  static const _headingToPickup = {
+    RideStatus.driverAssigned,
+    RideStatus.driverToPickup,
+  };
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final showLiveDistance =
+        _headingToPickup.contains(ride.status) && ride.pickupLat != null && ride.pickupLng != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1164,9 +1287,14 @@ class _RideSummary extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            if (ride.distanceMeters != null)
+            if (showLiveDistance)
+              _LiveDistanceChip(
+                target: LatLng(ride.pickupLat!, ride.pickupLng!),
+                fallbackMeters: ride.distanceMeters,
+              )
+            else if (ride.distanceMeters != null)
               InfoChip(label: _distance(ride.distanceMeters!)),
-            if (ride.durationSeconds != null)
+            if (!showLiveDistance && ride.durationSeconds != null)
               InfoChip(label: _duration(ride.durationSeconds!)),
             if (ride.totalFare != null)
               InfoChip(label: _rupiah(ride.totalFare!)),
@@ -1185,6 +1313,39 @@ class _RideSummary extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// Jarak sisa ke [target], dihitung ulang tiap kali fix GPS baru masuk lewat
+/// [locationPortProvider] — bukan field dari server. Sebelum fix pertama
+/// tersedia (baru buka layar, atau demo/test tanpa GPS), tampil nilai
+/// statis [fallbackMeters] alih-alih kosong.
+class _LiveDistanceChip extends ConsumerWidget {
+  const _LiveDistanceChip({required this.target, required this.fallbackMeters});
+  final LatLng target;
+  final int? fallbackMeters;
+
+  static const _distanceCalculator = Distance();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final locationPort = ref.watch(locationPortProvider);
+    return StreamBuilder<(double, double)>(
+      stream: locationPort.positionStream,
+      builder: (context, snapshot) {
+        final fix = snapshot.data;
+        final meters = fix == null
+            ? fallbackMeters
+            : _distanceCalculator
+                .as(LengthUnit.Meter, LatLng(fix.$1, fix.$2), target)
+                .round();
+        if (meters == null) return const SizedBox.shrink();
+        return InfoChip(
+          key: const ValueKey('active-ride-live-distance'),
+          label: '${_distance(meters)} ke jemput',
+        );
+      },
     );
   }
 }
@@ -1221,6 +1382,32 @@ class ActiveRideCard extends ConsumerWidget {
             const SizedBox(height: 12),
             Text(ride.reference,
                 style: const TextStyle(fontWeight: FontWeight.w800)),
+            if (ride.passengerName != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.person_outline_rounded,
+                      size: 20, color: Colors.black54),
+                  const SizedBox(width: 8),
+                  Text(
+                    ride.passengerName!,
+                    key: const ValueKey('active-ride-passenger-name'),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ],
+            if (!ride.isTerminal && ride.pickupLat != null && ride.pickupLng != null) ...[
+              const SizedBox(height: 16),
+              _ActiveRideMap(ride: ride),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                key: const ValueKey('trip-navigate-action'),
+                onPressed: () => _openExternalNavigation(_navigationTarget(ride)),
+                icon: const Icon(Icons.directions_rounded),
+                label: const Text('Buka di Google Maps'),
+              ),
+            ],
             const SizedBox(height: 16),
             _TimelineStep(
               icon: Icons.my_location_rounded,
@@ -1670,6 +1857,31 @@ String _scenarioLabel(DriverScenario value) {
     case DriverScenario.sessionExpired:
       return 'Session expired';
   }
+}
+
+/// Titik yang relevan untuk navigasi pada fase saat ini: masih menuju/di
+/// titik jemput -> pin jemput; sudah dalam perjalanan -> pin tujuan. Null
+/// bila koordinat yang relevan belum tersedia (order lama).
+LatLng? _navigationTarget(DriverRide ride) {
+  if (ride.status == RideStatus.inTrip) {
+    return ride.dropoffLat != null && ride.dropoffLng != null
+        ? LatLng(ride.dropoffLat!, ride.dropoffLng!)
+        : null;
+  }
+  return ride.pickupLat != null && ride.pickupLng != null
+      ? LatLng(ride.pickupLat!, ride.pickupLng!)
+      : null;
+}
+
+/// Mendelegasikan navigasi turn-by-turn ke Google Maps — driver_app sendiri
+/// hanya menampilkan ringkasan+pin (lihat _ActiveRideMap). Pola launchUrl +
+/// cek hasil boolean sama seperti _openTopUpWebsite di user_app.
+Future<void> _openExternalNavigation(LatLng? target) async {
+  if (target == null) return;
+  final uri = Uri.parse(
+    'https://www.google.com/maps/dir/?api=1&destination=${target.latitude},${target.longitude}',
+  );
+  await launchUrl(uri, mode: LaunchMode.externalApplication);
 }
 
 String _serviceLabel(String type) =>

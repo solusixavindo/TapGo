@@ -435,6 +435,11 @@ class DriverRide {
     required this.pickupAddress,
     required this.dropoffAddress,
     this.pickupNote,
+    this.pickupLat,
+    this.pickupLng,
+    this.dropoffLat,
+    this.dropoffLng,
+    this.passengerName,
     this.distanceMeters,
     this.durationSeconds,
     this.totalFare,
@@ -447,6 +452,7 @@ class DriverRide {
     final payment = json['payment'];
     final pickup = json['pickup'];
     final dropoff = json['dropoff'];
+    final passenger = json['passenger'];
     final fare = json['fare'];
     return DriverRide(
       reference: '${json['reference'] ?? json['publicReference'] ?? ''}',
@@ -455,6 +461,14 @@ class DriverRide {
       pickupAddress: _addressOf(pickup, json['pickupAddress']),
       dropoffAddress: _addressOf(dropoff, json['dropoffAddress']),
       pickupNote: json['pickupNote'] as String?,
+      // Nullable: order lama (sebelum field ini dikirim server) atau status
+      // yang belum boleh membuka lokasi tetap harus tampil tanpa peta,
+      // bukan error — lihat fail-soft di ActiveRideCard.
+      pickupLat: pickup is Map ? _doubleOf(pickup['lat']) : null,
+      pickupLng: pickup is Map ? _doubleOf(pickup['lng']) : null,
+      dropoffLat: dropoff is Map ? _doubleOf(dropoff['lat']) : null,
+      dropoffLng: dropoff is Map ? _doubleOf(dropoff['lng']) : null,
+      passengerName: passenger is Map ? passenger['displayName'] as String? : null,
       distanceMeters: _intOf(json['distanceMeters'] ?? json['distance']),
       durationSeconds: _intOf(json['durationSeconds'] ?? json['duration']),
       totalFare:
@@ -481,6 +495,11 @@ class DriverRide {
   final String pickupAddress;
   final String dropoffAddress;
   final String? pickupNote;
+  final double? pickupLat;
+  final double? pickupLng;
+  final double? dropoffLat;
+  final double? dropoffLng;
+  final String? passengerName;
   final int? distanceMeters;
   final int? durationSeconds;
   final int? totalFare;

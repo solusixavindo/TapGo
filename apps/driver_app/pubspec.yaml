@@ -46,6 +46,10 @@ dependencies:
   camera: ^0.11.0
   google_mlkit_face_detection: ^0.11.0
   tflite_flutter: ^0.11.0
+  # Tombol "Buka di Google Maps" pada kartu perjalanan aktif — men-delegasikan
+  # navigasi turn-by-turn ke aplikasi peta eksternal, persis pola Gojek/Grab.
+  # Versi disamakan dengan user_app.
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:

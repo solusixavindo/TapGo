@@ -16,9 +16,38 @@ class ApiDriverRepository implements DriverRepository {
   final SessionStore _storage;
   DriverSession? _session;
 
+  // SEMUA penukaran refresh token lewat koordinator ini (lihat
+  // token_refresh_coordinator.dart): satu penukaran pada satu waktu, token
+  // yang sudah dikonsumsi tidak pernah dikirim lagi, dan pasangan baru
+  // disimpan sebelum kunci dilepas. Ini menutup balapan antara poll tawaran
+  // (12 detik) dan kirim lokasi (15 detik) yang bisa membuat server mencabut
+  // seluruh sesi (driver dipaksa login ulang padahal tidak logout).
+  late final TokenRefreshCoordinator _refreshCoordinator =
+      TokenRefreshCoordinator(
+    network: _networkRefresh,
+    persist: (tokens) async {
+      final next = DriverSession(
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        driverName: _session?.driverName ?? 'Driver TapGo',
+      );
+      _session = next;
+      _applyToken();
+      await _storage.save(next);
+    },
+    readStored: () async {
+      final stored = await _storage.read();
+      if (stored == null) return null;
+      return (
+        accessToken: stored.accessToken,
+        refreshToken: stored.refreshToken,
+      );
+    },
+  );
+
   @override
   Future<DriverSession?> restoreSession() async {
-    _session = await _storage.read();
+    _session = await _restoreLocalSessionWithRetry(_storage);
     _applyToken();
     if (_session == null) return null;
     try {
@@ -113,14 +142,47 @@ class ApiDriverRepository implements DriverRepository {
 
   /// Menukar refresh token menjadi pasangan token baru (rotasi di server).
   /// Dipanggil otomatis oleh _request saat access token kedaluwarsa (401),
-  /// sehingga driver tidak dipaksa login ulang setiap ~15 menit.
-  /// Hasil: true = token baru tersimpan; false = server MENOLAK refresh token
-  /// (dicabut / ganti password) -> sesi boleh dikosongkan; null = gangguan
-  /// jaringan / 5xx -> sesi HARUS dipertahankan agar driver tidak dipaksa
-  /// login ulang hanya karena koneksi putus.
+  /// sehingga driver tidak dipaksa login ulang setiap ~15 menit. Penukaran
+  /// sesungguhnya dilakukan oleh _refreshCoordinator (single-flight — lihat
+  /// catatan di atasnya); method ini hanya menerjemahkan hasilnya.
+  /// Hasil: true = token baru tersimpan (dari jaringan ATAU dari storage bila
+  /// pemanggil lain sudah menukarnya lebih dulu); false = server MENOLAK
+  /// refresh token (dicabut / ganti password) -> sesi boleh dikosongkan;
+  /// null = gangguan jaringan / 5xx -> sesi HARUS dipertahankan agar driver
+  /// tidak dipaksa login ulang hanya karena koneksi putus.
   Future<bool?> _refreshSession() async {
     final refreshToken = _session?.refreshToken;
     if (refreshToken == null || refreshToken.isEmpty) return false;
+    final outcome = await _refreshCoordinator.refresh(refreshToken);
+    switch (outcome.status) {
+      case DriverRefreshStatus.refreshed:
+        final tokens = outcome.tokens;
+        if (tokens == null) return null;
+        // persist() pada koordinator sudah memperbarui _session bila
+        // penukaran ini yang menang; jaga-jaga bila hasilnya datang dari
+        // jalur token-basi/storage (persist tidak dipanggil ulang di sana).
+        if (_session?.accessToken != tokens.accessToken) {
+          _session = DriverSession(
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
+            driverName: _session?.driverName ?? 'Driver TapGo',
+          );
+          _applyToken();
+        }
+        return true;
+      case DriverRefreshStatus.rejected:
+        return false;
+      case DriverRefreshStatus.unreachable:
+      case DriverRefreshStatus.conflict:
+        return null;
+    }
+  }
+
+  /// Satu-satunya pemanggilan HTTP ke /auth/refresh (hanya dipanggil
+  /// koordinator). Header Authorization sengaja dikosongkan: endpoint ini
+  /// hanya butuh refreshToken di body, dan mengirim access token kedaluwarsa
+  /// bisa ikut ditolak 401.
+  Future<DriverRefreshOutcome> _networkRefresh(String refreshToken) async {
     try {
       final response = await _dio.post<dynamic>(
         '/auth/refresh',
@@ -128,27 +190,36 @@ class ApiDriverRepository implements DriverRepository {
         options: Options(headers: {'Authorization': null}),
       );
       final body = response.data;
-      if (body is! Map) return null;
+      if (body is! Map) {
+        return (status: DriverRefreshStatus.unreachable, tokens: null);
+      }
       final data = body['data'];
-      if (data is! Map) return null;
+      if (data is! Map) {
+        return (status: DriverRefreshStatus.unreachable, tokens: null);
+      }
       final access = '${data['accessToken'] ?? ''}';
       final refresh = '${data['refreshToken'] ?? ''}';
-      if (access.isEmpty || refresh.isEmpty) return null;
-      final next = DriverSession(
-        accessToken: access,
-        refreshToken: refresh,
-        driverName: _session?.driverName ?? 'Driver TapGo',
+      if (access.isEmpty || refresh.isEmpty) {
+        return (status: DriverRefreshStatus.unreachable, tokens: null);
+      }
+      return (
+        status: DriverRefreshStatus.refreshed,
+        tokens: (accessToken: access, refreshToken: refresh),
       );
-      _session = next;
-      _applyToken();
-      await _storage.save(next);
-      return true;
     } on DioException catch (error) {
       final status = error.response?.statusCode;
-      if (status == 401 || status == 403) return false;
-      return null;
+      if (status == 401 || status == 403) {
+        return (status: DriverRefreshStatus.rejected, tokens: null);
+      }
+      // 409 TOKEN_ROTATED: pemanggil lain sudah menukar token yang sama
+      // barusan — bukan kegagalan, koordinator akan memakai hasil yang
+      // sudah tersimpan (lihat token_refresh_coordinator.dart).
+      if (status == 409) {
+        return (status: DriverRefreshStatus.conflict, tokens: null);
+      }
+      return (status: DriverRefreshStatus.unreachable, tokens: null);
     } catch (_) {
-      return null;
+      return (status: DriverRefreshStatus.unreachable, tokens: null);
     }
   }
 
@@ -531,6 +602,27 @@ class ApiDriverRepository implements DriverRepository {
       _dio.options.headers.remove('Authorization');
     }
   }
+}
+
+/// Baca sesi awal dengan percobaan ulang + timeout longgar — dipakai HANYA
+/// untuk pemulihan sesi saat cold start.
+///
+/// Android bisa lambat menginisialisasi Keystore/EncryptedSharedPreferences
+/// saat plugin native lain (Geolocator, kamera, dll) ikut berebut inisialisasi
+/// di frame yang sama. Tanpa percobaan ulang, pembacaan yang lambat (BUKAN
+/// sesi yang benar-benar hilang) disalahartikan sebagai "belum pernah
+/// login", memaksa driver login ulang padahal sesinya masih sah. Pola sama
+/// dengan _restoreLocalStateWithRetry di user_app.
+Future<DriverSession?> _restoreLocalSessionWithRetry(SessionStore storage) async {
+  const timeout = Duration(seconds: 6);
+  for (var attempt = 1; attempt <= 2; attempt++) {
+    try {
+      return await storage.read().timeout(timeout);
+    } on TimeoutException {
+      // dicoba lagi pada iterasi berikutnya.
+    }
+  }
+  return null;
 }
 
 String _normalizeBaseUrl(String value) {

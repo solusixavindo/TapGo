@@ -16,6 +16,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io_client;
+import 'package:url_launcher/url_launcher.dart';
 
 part 'core/config/app_config.dart';
 part 'app/composition.dart';
@@ -26,6 +27,7 @@ part 'features/driver/domain/driver_models.dart';
 part 'features/driver/domain/vehicle_catalog.dart';
 part 'features/driver/data/driver_repository.dart';
 part 'features/driver/data/session_store.dart';
+part 'features/driver/data/token_refresh_coordinator.dart';
 part 'features/driver/data/api_driver_repository.dart';
 part 'features/driver/location/driver_location_port.dart';
 part 'demo/demo_driver_repository.dart';

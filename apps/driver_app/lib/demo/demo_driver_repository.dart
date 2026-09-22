@@ -393,6 +393,13 @@ DriverRide _demoRide(RideStatus status) => DriverRide(
       status: status,
       pickupAddress: 'LOKASI_DEMO_A',
       dropoffAddress: 'LOKASI_DEMO_B',
+      // Dekat _defaultCenter peta Beranda (-6.1754, 106.8272) supaya peta
+      // "Menuju Jemput" langsung tampil bermakna di demo tanpa GPS asli.
+      pickupLat: -6.1754,
+      pickupLng: 106.8272,
+      dropoffLat: -6.1854,
+      dropoffLng: 106.8372,
+      passengerName: 'Sari',
       distanceMeters: 2500,
       durationSeconds: 600,
       totalFare: 9000,
