@@ -17,6 +17,8 @@ TapGo may collect and process the following data:
 - Wallet data: application wallet balance, PPOB benefit balance, wallet transaction history, withdrawal request, and bank account data submitted by the user.
 - Transaction data: membership payment status, invoice number, payment reference, payment provider response, and payment callback status.
 - Contact/support data: messages, support requests, delete account requests, and related correspondence.
+- Location data: precise or approximate location, collected while using ride-hailing features (TapGo Ride/TapGo Car) to match trips and show pickup/drop-off points.
+- Photos: a profile picture voluntarily uploaded by the user via camera or photo gallery.
 - Technical data: device information, app diagnostics, error logs, and security logs needed to protect the service.
 
 TapGo only requests additional data when it is needed for service operation, account verification, support, fraud prevention, or compliance.
