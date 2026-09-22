@@ -1,6 +1,27 @@
 import type { Metadata } from "next";
 import { FloatingWhatsApp } from "./shared";
+import { SiteFooter } from "./site-footer";
+import { SiteHeader } from "./site-header";
 import "./globals.css";
+
+/**
+ * Dijalankan sinkron sebelum render pertama (lihat <head> di bawah), supaya:
+ * 1. Tema terang/gelap yang tersimpan langsung berlaku, tidak ada kedipan
+ *    warna gelap→terang sesaat setelah halaman termuat.
+ * 2. class "js" hanya ditambahkan bila skrip ini sungguh berjalan — animasi
+ *    scroll-reveal di globals.css (html.js .reveal-init) karena itu tidak
+ *    pernah membuat konten hilang permanen kalau JavaScript gagal dimuat.
+ */
+const themeInitScript = `
+(function () {
+  try {
+    var stored = window.localStorage.getItem("tapgo.theme");
+    var theme = stored === "light" || stored === "dark" ? stored : "dark";
+    document.documentElement.dataset.theme = theme;
+  } catch (e) {}
+  document.documentElement.classList.add("js");
+})();
+`;
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://tapgolion.id"),
@@ -70,9 +91,14 @@ const localBusinessSchema = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="id">
+    <html lang="id" className="no-js">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body>
-        {children}
+        <SiteHeader />
+        <div className="page-body">{children}</div>
+        <SiteFooter />
         <FloatingWhatsApp />
         <script
           type="application/ld+json"

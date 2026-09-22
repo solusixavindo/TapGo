@@ -66,75 +66,75 @@ export default function DeleteAccountForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="glass rounded-[2rem] p-6 shadow-glass md:p-8">
-      <h2 className="text-2xl font-black text-brand-navy">Form Pengajuan Hapus Akun</h2>
-      <p className="mt-3 leading-7 text-slate-600">
+    <form onSubmit={handleSubmit} className="themed-glass rounded-[2rem] p-6 md:p-8">
+      <h2 className="themed-text text-2xl font-black">Form Pengajuan Hapus Akun</h2>
+      <p className="themed-text-secondary mt-3 leading-7">
         Isi data akun yang ingin dihapus. Tim TapGo akan melakukan verifikasi sebelum memproses permintaan.
       </p>
 
       <div className="mt-6 grid gap-5">
         <label className="block">
-          <span className="text-sm font-bold text-brand-navy">Nama lengkap *</span>
+          <span className="themed-text text-sm font-bold">Nama lengkap *</span>
           <input
             value={form.name}
             onChange={(event) => updateField("name", event.target.value)}
-            className="mt-2 w-full rounded-2xl border border-brand-blue/10 bg-white px-4 py-3 text-brand-navy outline-none transition focus:border-brand-green focus:ring-4 focus:ring-brand-green/10"
+            className="mt-2 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
             placeholder="Nama lengkap"
           />
         </label>
 
         <label className="block">
-          <span className="text-sm font-bold text-brand-navy">Nomor WhatsApp terdaftar *</span>
+          <span className="themed-text text-sm font-bold">Nomor WhatsApp terdaftar *</span>
           <input
             value={form.whatsapp}
             onChange={(event) => updateField("whatsapp", event.target.value)}
-            className="mt-2 w-full rounded-2xl border border-brand-blue/10 bg-white px-4 py-3 text-brand-navy outline-none transition focus:border-brand-green focus:ring-4 focus:ring-brand-green/10"
+            className="mt-2 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
             placeholder="+62 atau 08..."
             inputMode="tel"
           />
         </label>
 
         <label className="block">
-          <span className="text-sm font-bold text-brand-navy">Email jika ada</span>
+          <span className="themed-text text-sm font-bold">Email jika ada</span>
           <input
             value={form.email}
             onChange={(event) => updateField("email", event.target.value)}
-            className="mt-2 w-full rounded-2xl border border-brand-blue/10 bg-white px-4 py-3 text-brand-navy outline-none transition focus:border-brand-green focus:ring-4 focus:ring-brand-green/10"
+            className="mt-2 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
             placeholder="nama@email.com"
             type="email"
           />
         </label>
 
         <label className="block">
-          <span className="text-sm font-bold text-brand-navy">Alasan penghapusan akun</span>
+          <span className="themed-text text-sm font-bold">Alasan penghapusan akun</span>
           <textarea
             value={form.reason}
             onChange={(event) => updateField("reason", event.target.value)}
-            className="mt-2 min-h-28 w-full rounded-2xl border border-brand-blue/10 bg-white px-4 py-3 text-brand-navy outline-none transition focus:border-brand-green focus:ring-4 focus:ring-brand-green/10"
+            className="mt-2 min-h-28 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
             placeholder="Opsional"
           />
         </label>
 
-        <label className="flex gap-3 rounded-2xl border border-brand-blue/10 bg-white p-4 text-sm font-semibold leading-6 text-slate-700">
+        <label className="themed-border themed-card-bg themed-text-secondary flex gap-3 rounded-2xl border p-4 text-sm font-semibold leading-6">
           <input
             checked={form.consent}
             onChange={(event) => updateField("consent", event.target.checked)}
             type="checkbox"
-            className="mt-1 h-4 w-4"
+            className="mt-1 h-4 w-4 accent-[#FFC857]"
           />
           <span>Saya memahami bahwa penghapusan akun dapat membuat saya tidak dapat mengakses layanan TapGo.</span>
         </label>
       </div>
 
       {error ? (
-        <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+        <div className="mt-5 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-bold text-rose-300">
           {error}
         </div>
       ) : null}
 
       <button
         type="submit"
-        className="mt-7 w-full rounded-full bg-gradient-to-r from-brand-blue to-brand-green px-7 py-4 text-center font-bold text-white shadow-glow transition hover:-translate-y-1"
+        className="mt-7 w-full rounded-full bg-brand-green px-7 py-4 text-center font-bold text-white shadow-lg transition hover:-translate-y-1"
       >
         Ajukan Hapus Akun
       </button>

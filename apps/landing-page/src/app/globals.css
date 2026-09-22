@@ -2,34 +2,185 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Token tema terang/gelap dipakai lewat kelas `themed-*` di SELURUH halaman
+ * yang dibangun dengan komponen bersama (Beranda, Kontak, Kebijakan, Mitra,
+ * header/footer). Halaman alur mandiri (daftar, upgrade/*, topup/*,
+ * delete-account) SENGAJA tetap navy gelap tetap — lihat body:not(:has(...))
+ * di bawah. Default token (tanpa atribut) sama persis dengan tampilan gelap
+ * yang sudah ada; [data-theme="light"] adalah tema terang barunya.
+ *
+ * Di dalam Beranda sendiri, beberapa elemen aksen SENGAJA tetap warna navy
+ * gelap tetap (bukan ikut tema): diagram orbit "Cara Kerja", kartu paket
+ * "Paling dipilih", dan banner CTA "Pasang dulu, putuskan nanti" — ini
+ * murni pilihan desain (aksen gelap+emas yang menonjol), sama seperti
+ * tombol WhatsApp/Google Play yang juga tidak ikut tema. Teks di dalam
+ * elemen-elemen itu memakai warna eksplisit (text-white dst), BUKAN
+ * `themed-text`, supaya tetap kontras terlepas dari tema halaman.
+ */
 :root {
-  color: #102033;
-  background: #f7fbfc;
+  color: #f4f6f9;
+  background: #04101c;
   scroll-behavior: smooth;
+  --themed-bg-1: rgba(255, 200, 87, 0.08);
+  --themed-bg-2: rgba(14, 44, 76, 0.6);
+  --themed-bg-3: #04101c;
+  --themed-bg-4: #071a2c;
+  --themed-surface: rgba(255, 255, 255, 0.05);
+  --themed-surface-soft: rgba(255, 255, 255, 0.03);
+  --themed-fill-1: rgba(255, 255, 255, 0.05);
+  --themed-fill-2: rgba(255, 255, 255, 0.1);
+  --themed-fill-2-hover: rgba(255, 255, 255, 0.15);
+  --themed-border: rgba(255, 255, 255, 0.1);
+  --themed-text-primary: #ffffff;
+  --themed-text-secondary: #cbd5e1;
+  --themed-text-muted: #94a3b8;
+  --themed-nav-bg: rgba(4, 16, 28, 0.85);
+  /* Emas terang (brand.gold) kontrasnya bagus di navy gelap tapi nyaris tak
+     terbaca di latar terang (rasio kontras ~1.4:1) — di tema terang dipakai
+     versi lebih gelap (amber-brown) yang tetap terasa "emas" tapi kontrasnya
+     memenuhi standar keterbacaan. */
+  --themed-accent-gold: #ffc857;
+}
+
+:root[data-theme="light"] {
+  --themed-bg-1: rgba(255, 200, 87, 0.14);
+  --themed-bg-2: rgba(11, 102, 228, 0.08);
+  --themed-bg-3: #f4faf9;
+  --themed-bg-4: #eef4fb;
+  --themed-surface: rgba(4, 16, 28, 0.04);
+  --themed-surface-soft: rgba(4, 16, 28, 0.02);
+  --themed-fill-1: rgba(4, 16, 28, 0.05);
+  --themed-fill-2: rgba(4, 16, 28, 0.08);
+  --themed-fill-2-hover: rgba(4, 16, 28, 0.13);
+  --themed-border: rgba(4, 16, 28, 0.1);
+  --themed-text-primary: #0a1a2c;
+  --themed-text-secondary: #33475b;
+  --themed-text-muted: #5b6b7d;
+  --themed-nav-bg: rgba(244, 250, 249, 0.88);
+  --themed-accent-gold: #8a5a00;
 }
 
 * {
   box-sizing: border-box;
 }
 
+/* Flex column + tinggi minimal 1 layar: footer (SiteFooter di layout.tsx)
+   ikut turun ke bawah konten pendek, bukan mengambang jauh di bawah area
+   kosong raksasa saat <main> halaman memakai min-h-screen sekaligus footer
+   baru ditambahkan setelahnya. Wrapper .page-body (lihat layout.tsx) yang
+   menyerap sisa ruang lewat flex: 1. */
 body {
   margin: 0;
-  background:
-    radial-gradient(circle at 15% 12%, rgba(19, 184, 200, 0.16), transparent 28rem),
-    radial-gradient(circle at 82% 8%, rgba(18, 185, 129, 0.14), transparent 24rem),
-    linear-gradient(180deg, #f7fbfc 0%, #ffffff 42%, #f4fafb 100%);
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.page-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+/* Menang atas util Tailwind min-h-screen (min-height:100vh) yang dipakai
+   hampir tiap <main> halaman: specificity ".page-body > main" (0,1,1) lebih
+   tinggi dari ".min-h-screen" (0,1,0), jadi <main> mengikuti tinggi flex
+   (mengisi sisa ruang di atas footer), bukan dipaksa 100vh penuh lagi. */
+.page-body > main {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Halaman ber-tema (data-themed="true" di <main>, termasuk Beranda) memakai
+   gradasi body yang ikut variabel --themed-*; halaman alur mandiri (upgrade,
+   topup, daftar, delete-account) tidak menandai <main>-nya sehingga jatuh ke
+   cabang :not() di bawah — tetap gradasi navy gelap tetap. */
+body:has(main[data-themed="true"]) {
+  background:
+    radial-gradient(circle at 15% 12%, var(--themed-bg-1), transparent 28rem),
+    radial-gradient(circle at 82% 8%, var(--themed-bg-2), transparent 24rem),
+    linear-gradient(180deg, var(--themed-bg-3) 0%, var(--themed-bg-4) 42%, var(--themed-bg-3) 100%);
+  color: var(--themed-text-primary);
+}
+
+body:not(:has(main[data-themed="true"])) {
+  background:
+    radial-gradient(circle at 15% 12%, rgba(255, 200, 87, 0.08), transparent 28rem),
+    radial-gradient(circle at 82% 8%, rgba(14, 44, 76, 0.6), transparent 24rem),
+    linear-gradient(180deg, #04101c 0%, #071a2c 42%, #04101c 100%);
 }
 
 ::selection {
-  background: rgba(18, 185, 129, 0.22);
+  background: rgba(255, 200, 87, 0.28);
 }
 
 .glass {
-  border: 1px solid rgba(255, 255, 255, 0.68);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.48));
-  box-shadow: 0 24px 70px rgba(8, 35, 63, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(20px);
+}
+
+/* Varian .glass yang ikut tema terang/gelap, dipakai halaman themed. */
+.themed-glass {
+  border: 1px solid var(--themed-border);
+  background: var(--themed-surface);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(20px);
+}
+
+.themed-surface {
+  border: 1px solid var(--themed-border);
+  background: var(--themed-surface-soft);
+}
+
+/* Latar polos (tanpa border) untuk dipasangkan dengan util Tailwind
+   "border border-white/10" yang sudah ada di markup — border-nya sendiri
+   diganti .themed-border secara terpisah, supaya tidak dobel dengan
+   .themed-surface yang sudah membawa border sendiri. */
+.themed-card-bg {
+  background: var(--themed-surface-soft);
+}
+
+.themed-fill {
+  background: var(--themed-fill-1);
+}
+
+.themed-fill-strong {
+  background: var(--themed-fill-2);
+  transition: background-color 0.2s;
+}
+
+.themed-fill-strong:hover {
+  background: var(--themed-fill-2-hover);
+}
+
+.themed-text {
+  color: var(--themed-text-primary);
+}
+
+.themed-text-secondary {
+  color: var(--themed-text-secondary);
+}
+
+.themed-text-muted {
+  color: var(--themed-text-muted);
+}
+
+.themed-accent {
+  color: var(--themed-accent-gold);
+}
+
+.themed-border {
+  border-color: var(--themed-border);
+}
+
+.themed-nav {
+  background: var(--themed-nav-bg);
+  border-color: var(--themed-border);
 }
 
 .mesh-grid {
@@ -58,11 +209,201 @@ body {
   animation: dash 14s linear infinite;
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   Orbit "Cara Kerja" — hanya dekoratif (aria-hidden), diporting dari
+   redesign/index.html. Empat node TIDAK berputar — masing-masing dikunci
+   di sudutnya (0/90/180/270deg) lewat custom property --a: diputar ke
+   sudutnya, digeser keluar sepanjang jari-jari, lalu diputar balik supaya
+   kontennya tetap tegak. Kesan "berputar" datang dari cincin (.spin/
+   .spin-rev, arah berlawanan) dan riak (.ripple) di sekitarnya, bukan dari
+   node itu sendiri.
+   ═══════════════════════════════════════════════════════════════════ */
+.orbit-wrap-pad {
+  /* Simpul menonjol keluar lingkaran, jadi ruang ekstra disediakan di sini
+     supaya simpul atas dan bawah tidak tertimpa bagian lain. */
+  padding-block: 52px;
+}
+
+/* Cincin dipersempit jadi klaster kecil di tengah (radius 100/120/140px dari
+   total lebar 520px), bukan memenuhi seluruh lingkaran — supaya tidak
+   tertutup ketika 4 kartu (radius 235px) melingkarinya. Garis tipis
+   (.orbit-spoke) mengisi jarak antara tepi cincin terluar dan kartu, jadi
+   hubungannya tetap terbaca meski kartu tidak lagi menumpuk di atas cincin. */
+.orbit {
+  position: relative;
+  width: min(520px, 72vw);
+  aspect-ratio: 1;
+  margin: 8px auto 0;
+}
+
+.orbit-ring {
+  position: absolute;
+  inset: 21%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+}
+
+.orbit-ring-2 {
+  inset: 25%;
+  border-style: dashed;
+  border-color: rgba(255, 200, 87, 0.35);
+  animation: orbitSpin 44s linear infinite;
+}
+
+.orbit-ring-3 {
+  inset: 29%;
+  animation: orbitSpin 66s linear infinite reverse;
+}
+
+@keyframes orbitSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.orbit-ripple {
+  position: absolute;
+  inset: 21%;
+  border-radius: 50%;
+  border: 1px solid #ffc857;
+  opacity: 0;
+  animation: orbitRipple 7.2s cubic-bezier(0.25, 0.6, 0.3, 1) infinite;
+}
+
+.orbit-ripple:nth-of-type(2) {
+  animation-delay: 2.4s;
+}
+
+.orbit-ripple:nth-of-type(3) {
+  animation-delay: 4.8s;
+}
+
+@keyframes orbitRipple {
+  0% {
+    transform: scale(0.34);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.05);
+    opacity: 0;
+  }
+}
+
+.orbit-core {
+  position: absolute;
+  inset: 34%;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  background: radial-gradient(circle at 35% 30%, #0e2c4c, #04101c);
+  border: 1px solid #ffc857;
+  box-shadow: 0 0 60px rgba(255, 200, 87, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  animation: orbitBreathe 6s ease-in-out infinite;
+}
+
+@keyframes orbitBreathe {
+  0%, 100% {
+    box-shadow: 0 0 44px rgba(255, 200, 87, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  }
+  50% {
+    box-shadow: 0 0 84px rgba(255, 200, 87, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  }
+}
+
+/* Kartu sengaja dibuat kecil (96px) dan ringkas (ikon + label pendek saja,
+   tanpa deskripsi) — versi lengkap dengan deskripsi ada di daftar fallback
+   untuk layar sempit. Ini supaya kartu tidak terlihat lebih besar/dominan
+   dibanding diagram orbitnya sendiri. Garis penghubung mengisi jarak dari
+   tepi cincin terluar (radius ~150px dari 520px, inset 21%) ke tepi dalam
+   kartu (radius 225-48=177px) — panjang ~27px. */
+.orbit-spoke {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5%;
+  height: 2px;
+  margin-top: -1px;
+  transform-origin: 0 50%;
+  transform: rotate(var(--a)) translateX(29%);
+  background: linear-gradient(to right, rgba(255, 200, 87, 0.05), rgba(255, 200, 87, 0.6));
+}
+
+.orbit-node {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 96px;
+  height: 96px;
+  margin: -48px 0 0 -48px;
+  transform: rotate(var(--a)) translateX(min(225px, 31vw)) rotate(calc(-1 * var(--a)));
+  display: grid;
+  place-items: center;
+}
+
+.orbit-node-in {
+  width: 96px;
+  text-align: center;
+  padding: 10px 6px;
+  border-radius: 1rem;
+  background: linear-gradient(165deg, #0f3059, #0a1f38);
+  border: 1px solid rgba(255, 200, 87, 0.22);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
+}
+
+.orbit-node-in:hover {
+  border-color: rgba(255, 200, 87, 0.55);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.45), 0 0 24px rgba(255, 200, 87, 0.16);
+  transform: translateY(-3px);
+}
+
+.orbit-node-icon {
+  border-radius: 999px !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbit-ring-2, .orbit-ring-3, .orbit-ripple, .orbit-core {
+    animation: none;
+  }
+}
+
 .legal-content h2 {
   margin-top: 2rem;
   font-size: 1.35rem;
   font-weight: 800;
-  color: #08233f;
+  color: var(--themed-text-primary);
+}
+
+/* Animasi masuk saat elemen tergulir ke pandangan, dipicu lewat Reveal
+   (reveal.tsx) yang menambah kelas .revealed setelah IntersectionObserver
+   melaporkan elemen terlihat. HANYA aktif di bawah html.js (diset oleh
+   skrip inline di layout.tsx sebelum render) — tanpa JS, html tetap
+   ber-class "no-js" dan kontennya langsung terlihat penuh, tidak pernah
+   tersembunyi permanen akibat animasi yang gagal dipicu. */
+html.js .reveal-init {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.6s cubic-bezier(0.2, 0.7, 0.3, 1), transform 0.6s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+html.js .reveal-init.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.js .reveal-init {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }
 
 .tilt-card {
@@ -71,8 +412,8 @@ body {
 }
 
 .tilt-card:hover {
-  border-color: rgba(19, 184, 200, 0.48);
-  box-shadow: 0 30px 80px rgba(11, 102, 228, 0.18);
+  border-color: rgba(255, 200, 87, 0.48);
+  box-shadow: 0 30px 80px rgba(255, 200, 87, 0.16);
   transform: translateY(-6px) rotateX(3deg) rotateY(-3deg);
 }
 

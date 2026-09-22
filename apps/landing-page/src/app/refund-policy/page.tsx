@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import { LegalShell } from "../shared";
 
 export const metadata: Metadata = {
-  title: "Refund/Cancellation Policy",
+  title: "Refund & Cancellation Policy",
   description: "Kebijakan refund dan pembatalan membership TapGo Lion."
 };
 
 export default function RefundPolicy() {
   return (
-    <LegalShell title="Refund/Cancellation Policy" updated="4 Juni 2026">
+    <LegalShell title="Refund & Cancellation Policy" updated="4 Juni 2026">
       <p>Kebijakan ini menjelaskan kondisi refund atau pembatalan pembayaran membership TapGo.</p>
       <h2>Pembayaran Membership</h2>
       <p>Pembayaran membership diproses melalui kanal resmi perusahaan atau payment gateway. Pengguna wajib memastikan paket dan data akun sudah benar sebelum melakukan pembayaran.</p>

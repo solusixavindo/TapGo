@@ -99,6 +99,7 @@ https://tapgolion.id/privacy-policy
 https://tapgolion.id/terms-and-conditions
 https://tapgolion.id/refund-policy
 https://tapgolion.id/contact
+https://tapgolion.id/mitra
 https://tapgolion.id/robots.txt
 https://tapgolion.id/sitemap.xml
 ```
@@ -137,9 +138,19 @@ Website menyatakan bahwa TapGo:
 - `/`
 - `/daftar`
 - `/delete-account`
+- `/mitra` — login mitra (channel WEB) untuk melihat tim referral dan riwayat komisi
 - `/privacy-policy`
 - `/terms-and-conditions`
 - `/refund-policy`
 - `/contact`
 - `/robots.txt`
 - `/sitemap.xml`
+
+## Tema, Menu Mobile, dan Animasi
+
+Sejak pembaruan ini, `layout.tsx` merender `<SiteHeader>` dan `<SiteFooter>` yang sama di SEMUA halaman:
+
+- Menu mobile (hamburger) dan tombol tema terang/gelap kini tampil di semua ukuran layar.
+- Beranda (`page.tsx`) SENGAJA tetap terkunci navy+emas mengikuti aplikasi mobile — toggle tema hanya mengubah tampilan halaman lain (Kontak, Kebijakan, Mitra, dll), tidak mengubah warna Beranda.
+- Elemen bertema memakai kelas `themed-*` (lihat `globals.css`) yang dikendalikan variabel CSS `--themed-*`, bukan warna Tailwind langsung — supaya konsisten dipakai di halaman baru.
+- Animasi scroll-reveal (`reveal.tsx`) hanya aktif setelah skrip di `layout.tsx` menambahkan class `js` ke `<html>`, sehingga konten tetap terlihat penuh bila JavaScript gagal dimuat.

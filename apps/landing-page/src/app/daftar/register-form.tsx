@@ -34,9 +34,9 @@ function WhatsAppIcon() {
 function LogoMark() {
   return (
     <img
-      src="/images/tapgo-logo.png"
+      src="/images/tapgo-mark.png"
       alt="TapGo Lion"
-      className="h-10 w-10 rounded-2xl object-cover shadow-sm"
+      className="h-10 w-10 object-contain"
       loading="eager"
     />
   );
@@ -108,80 +108,80 @@ export default function RegisterForm() {
   }
 
   return (
-    <main className="min-h-screen px-5 py-8">
+    <main data-themed="true" className="themed-text min-h-screen px-5 py-8">
       <nav className="mx-auto flex max-w-6xl items-center justify-between">
-        <a href="/" className="flex items-center gap-3 font-bold text-brand-navy" aria-label="TapGo Lion Indonesia">
+        <a href="/" className="themed-text flex items-center gap-3 font-bold" aria-label="TapGo Lion Indonesia">
           <LogoMark />
           <span>TapGo Lion</span>
         </a>
-        <a href="https://wa.me/6283800255588" className="hidden rounded-full border border-brand-blue/15 bg-white/80 px-5 py-2.5 text-sm font-bold text-brand-navy shadow-sm transition hover:-translate-y-0.5 hover:border-brand-green/40 sm:inline-flex">
+        <a href="https://wa.me/6283800255588" className="themed-border themed-fill themed-text hidden rounded-full border px-5 py-2.5 text-sm font-bold shadow-sm transition hover:-translate-y-0.5 hover:border-brand-gold/40 hover:text-[var(--themed-accent-gold)] sm:inline-flex">
           WhatsApp Resmi
         </a>
       </nav>
 
       <section className="mx-auto grid max-w-6xl gap-8 py-12 lg:grid-cols-[0.88fr_1.12fr] lg:py-16">
         <div className="lg:pt-8">
-          <div className="inline-flex rounded-full border border-brand-cyan/30 bg-white/70 px-4 py-2 text-sm font-bold text-brand-blue shadow-sm backdrop-blur">
+          <div className="themed-fill inline-flex rounded-full border border-brand-gold/30 px-4 py-2 text-sm font-bold text-[var(--themed-accent-gold)] backdrop-blur">
             PT. TapGo Lion Indonesia
           </div>
-          <h1 className="mt-6 text-4xl font-black tracking-tight text-brand-navy md:text-6xl">
+          <h1 className="themed-text mt-6 text-4xl font-black tracking-tight md:text-6xl">
             Daftar Membership TapGo Lion
           </h1>
-          <p className="mt-5 text-lg leading-8 text-slate-600">
+          <p className="themed-text-secondary mt-5 text-lg leading-8">
             Isi formulir berikut untuk mendapatkan informasi pendaftaran membership TapGo Lion.
           </p>
 
-          <div className="glass mt-8 rounded-[2rem] p-6">
-            <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-green to-brand-cyan text-white">
+          <div className="themed-glass mt-8 rounded-[2rem] p-6">
+            <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-green text-white">
               <WhatsAppIcon />
             </div>
-            <h2 className="text-2xl font-black text-brand-navy">Dilanjutkan via WhatsApp resmi</h2>
-            <p className="mt-3 leading-7 text-slate-600">
+            <h2 className="themed-text text-2xl font-black">Dilanjutkan via WhatsApp resmi</h2>
+            <p className="themed-text-secondary mt-3 leading-7">
               Setelah form valid, data pendaftaran akan dikirim sebagai pesan otomatis ke WhatsApp resmi TapGo Lion: +62 838-0025-5588.
             </p>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="glass rounded-[2rem] p-6 shadow-glass md:p-8">
+        <form onSubmit={handleSubmit} className="themed-glass rounded-[2rem] p-6 md:p-8">
           <div className="grid gap-5 md:grid-cols-2">
             <label className="block">
-              <span className="text-sm font-bold text-brand-navy">Nama lengkap *</span>
+              <span className="themed-text text-sm font-bold">Nama lengkap *</span>
               <input
                 value={form.name}
                 onChange={(event) => updateField("name", event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-brand-blue/10 bg-white px-4 py-3 text-brand-navy outline-none transition focus:border-brand-green focus:ring-4 focus:ring-brand-green/10"
+                className="mt-2 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
                 placeholder="Nama sesuai identitas"
               />
             </label>
 
             <label className="block">
-              <span className="text-sm font-bold text-brand-navy">Nomor WhatsApp *</span>
+              <span className="themed-text text-sm font-bold">Nomor WhatsApp *</span>
               <input
                 value={form.whatsapp}
                 onChange={(event) => updateField("whatsapp", event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-brand-blue/10 bg-white px-4 py-3 text-brand-navy outline-none transition focus:border-brand-green focus:ring-4 focus:ring-brand-green/10"
+                className="mt-2 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
                 placeholder="08xxxxxxxxxx"
                 inputMode="tel"
               />
             </label>
 
             <label className="block">
-              <span className="text-sm font-bold text-brand-navy">Email</span>
+              <span className="themed-text text-sm font-bold">Email</span>
               <input
                 value={form.email}
                 onChange={(event) => updateField("email", event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-brand-blue/10 bg-white px-4 py-3 text-brand-navy outline-none transition focus:border-brand-green focus:ring-4 focus:ring-brand-green/10"
+                className="mt-2 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
                 placeholder="nama@email.com"
                 type="email"
               />
             </label>
 
             <label className="block">
-              <span className="text-sm font-bold text-brand-navy">Pilih Paket Membership *</span>
+              <span className="themed-text text-sm font-bold">Pilih Paket Membership *</span>
               <select
                 value={form.packageName}
                 onChange={(event) => updateField("packageName", event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-brand-blue/10 bg-white px-4 py-3 text-brand-navy outline-none transition focus:border-brand-green focus:ring-4 focus:ring-brand-green/10"
+                className="mt-2 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
               >
                 <option value="">Pilih paket</option>
                 {packageOptions.map((item) => (
@@ -191,51 +191,51 @@ export default function RegisterForm() {
             </label>
 
             <label className="block md:col-span-2">
-              <span className="text-sm font-bold text-brand-navy">Alamat</span>
+              <span className="themed-text text-sm font-bold">Alamat</span>
               <textarea
                 value={form.address}
                 onChange={(event) => updateField("address", event.target.value)}
-                className="mt-2 min-h-24 w-full rounded-2xl border border-brand-blue/10 bg-white px-4 py-3 text-brand-navy outline-none transition focus:border-brand-green focus:ring-4 focus:ring-brand-green/10"
+                className="mt-2 min-h-24 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
                 placeholder="Alamat domisili"
               />
             </label>
 
             <label className="block">
-              <span className="text-sm font-bold text-brand-navy">Kode referral jika ada</span>
+              <span className="themed-text text-sm font-bold">Kode referral jika ada</span>
               <input
                 value={form.referral}
                 onChange={(event) => updateField("referral", event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-brand-blue/10 bg-white px-4 py-3 text-brand-navy outline-none transition focus:border-brand-green focus:ring-4 focus:ring-brand-green/10"
+                className="mt-2 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
                 placeholder="Opsional"
               />
             </label>
 
             <label className="block">
-              <span className="text-sm font-bold text-brand-navy">Catatan tambahan</span>
+              <span className="themed-text text-sm font-bold">Catatan tambahan</span>
               <input
                 value={form.notes}
                 onChange={(event) => updateField("notes", event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-brand-blue/10 bg-white px-4 py-3 text-brand-navy outline-none transition focus:border-brand-green focus:ring-4 focus:ring-brand-green/10"
+                className="mt-2 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
                 placeholder="Opsional"
               />
             </label>
           </div>
 
           {error ? (
-            <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+            <div className="mt-5 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-bold text-rose-300">
               {error}
             </div>
           ) : null}
 
           <button
             type="submit"
-            className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-brand-blue to-brand-green px-7 py-4 text-center font-bold text-white shadow-glow transition hover:-translate-y-1"
+            className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-full bg-brand-green px-7 py-4 text-center font-bold text-white shadow-lg transition hover:-translate-y-1"
           >
             <WhatsAppIcon />
             Kirim Pendaftaran
           </button>
 
-          <p className="mt-5 text-center text-sm leading-6 text-slate-600">
+          <p className="themed-text-muted mt-5 text-center text-sm leading-6">
             TapGo akan memproses informasi awal pendaftaran melalui WhatsApp resmi. Pastikan nomor yang dicantumkan aktif.
           </p>
         </form>

@@ -96,16 +96,16 @@ export default function PaymentSummary() {
   }
 
   if (loading) {
-    return <p className="text-sm font-semibold text-slate-500">Memuat ringkasan…</p>;
+    return <p className="text-sm font-semibold themed-text-muted">Memuat ringkasan…</p>;
   }
 
   if (!order) {
     return (
-      <div className="rounded-2xl bg-slate-50 px-5 py-6 text-center">
-        <p className="text-sm font-bold text-brand-navy">
+      <div className="rounded-2xl border themed-border themed-card-bg px-5 py-6 text-center">
+        <p className="text-sm font-bold themed-text">
           Ringkasan pembayaran belum tersedia
         </p>
-        <p className="mt-2 text-sm leading-7 text-slate-600">
+        <p className="mt-2 text-sm leading-7 themed-text-muted">
           {error || "Mulai dari langkah pertama agar pengajuan Anda terbentuk lebih dulu."}
         </p>
         <button
@@ -127,29 +127,29 @@ export default function PaymentSummary() {
 
   return (
     <div>
-      <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5">
+      <div className="rounded-[1.5rem] border themed-border themed-card-bg p-5">
         <dl className="space-y-3">
           {rows.map((row) => (
             <div key={row.label} className="flex items-start justify-between gap-6">
-              <dt className="text-sm text-slate-500">{row.label}</dt>
-              <dd className="text-right text-sm font-bold text-brand-navy">{row.value}</dd>
+              <dt className="text-sm themed-text-muted">{row.label}</dt>
+              <dd className="text-right text-sm font-bold themed-text">{row.value}</dd>
             </div>
           ))}
         </dl>
 
-        <div className="mt-5 border-t border-dashed border-slate-200 pt-5">
+        <div className="mt-5 border-t border-dashed themed-border pt-5">
           <div className="flex items-baseline justify-between gap-6">
-            <span className="text-sm font-bold text-slate-500">Total pembayaran</span>
-            <span className="text-3xl font-black text-brand-blue">
+            <span className="text-sm font-bold themed-text-muted">Total pembayaran</span>
+            <span className="text-3xl font-black themed-accent">
               {formatRupiah(order.amount)}
             </span>
           </div>
         </div>
       </div>
 
-      <div className="mt-5 flex items-start gap-3 rounded-2xl bg-brand-blue/5 px-4 py-3.5">
-        <span aria-hidden="true" className="mt-0.5 text-brand-blue">ⓘ</span>
-        <p className="text-xs leading-6 text-slate-600">
+      <div className="mt-5 flex items-start gap-3 rounded-2xl border border-brand-gold/20 bg-brand-gold/10 px-4 py-3.5">
+        <span aria-hidden="true" className="mt-0.5 themed-accent">ⓘ</span>
+        <p className="text-xs leading-6 themed-text-secondary">
           Setelah pembayaran diterima, dokumen Anda masuk antrean verifikasi tim
           TapGo. Bila dokumen tidak dapat diverifikasi, pembayaran dikembalikan
           penuh sesuai kebijakan pengembalian dana.
@@ -157,7 +157,7 @@ export default function PaymentSummary() {
       </div>
 
       {error ? (
-        <p role="alert" className="mt-5 rounded-2xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+        <p role="alert" className="mt-5 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-300">
           {error}
         </p>
       ) : null}

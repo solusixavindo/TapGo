@@ -9,12 +9,13 @@ import {
   TOKEN_KEY,
   createOrder,
   readSession,
+  uploadAvatar,
   uploadDocument,
   writeSession
 } from "../api";
 import { Field, inputClass, primaryButtonClass } from "../upgrade-shell";
 
-type DocumentSlot = "ktp" | "selfie";
+type DocumentSlot = "ktp" | "selfie" | "avatar";
 
 type PickedDocument = {
   name: string;
@@ -26,10 +27,15 @@ type PickedDocument = {
 
 const DOCUMENT_LABELS: Record<DocumentSlot, { title: string; hint: string }> = {
   ktp: { title: "Foto KTP", hint: "Pastikan NIK dan nama terbaca jelas." },
-  selfie: { title: "Swafoto dengan KTP", hint: "Wajah dan KTP terlihat dalam satu foto." }
+  selfie: { title: "Swafoto dengan KTP", hint: "Wajah dan KTP terlihat dalam satu foto." },
+  avatar: {
+    title: "Foto profil (opsional)",
+    hint: "Foto wajah Anda. Tampil di dashboard mitra dan di aplikasi TapGo."
+  }
 };
 
 const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
+const MAX_AVATAR_BYTES = 4 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/png", "image/jpeg"];
 
 function DocumentUpload({
@@ -49,15 +55,15 @@ function DocumentUpload({
       className={[
         "flex cursor-pointer items-center gap-4 rounded-2xl border-2 border-dashed p-4 transition",
         filled
-          ? "border-brand-green/50 bg-brand-green/5"
-          : "border-slate-200 bg-white hover:border-brand-blue/40"
+          ? "border-brand-green/50 bg-brand-green/10"
+          : "themed-border themed-card-bg hover:border-brand-gold/40"
       ].join(" ")}
     >
       <span
         aria-hidden="true"
         className={[
           "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl",
-          filled ? "bg-brand-green/15 text-brand-green" : "bg-slate-100 text-slate-400"
+          filled ? "bg-brand-green/15 text-brand-green" : "themed-fill themed-text-muted"
         ].join(" ")}
       >
         <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none">
@@ -67,12 +73,12 @@ function DocumentUpload({
         </svg>
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-bold text-brand-navy">{meta.title}</span>
-        <span className="mt-0.5 block truncate text-xs text-slate-500">
+        <span className="block text-sm font-bold themed-text">{meta.title}</span>
+        <span className="mt-0.5 block truncate text-xs themed-text-muted">
           {document ? document.name : meta.hint}
         </span>
       </span>
-      <span className="shrink-0 text-xs font-black uppercase tracking-wider text-brand-blue">
+      <span className="shrink-0 text-xs font-black uppercase tracking-wider themed-accent">
         {filled ? "Ganti" : "Pilih"}
       </span>
       <input
@@ -103,7 +109,8 @@ export default function RegistrationForm() {
       : null,
     selfie: PREVIEW_MODE
       ? { name: "swafoto-budi.jpg", size: 480000, type: "image/jpeg", file: null }
-      : null
+      : null,
+    avatar: null
   });
   const [consent, setConsent] = useState(PREVIEW_MODE);
   const [busy, setBusy] = useState(false);
@@ -136,6 +143,10 @@ export default function RegistrationForm() {
     // membayar, bukan setelah.
     if (!ALLOWED_TYPES.includes(file.type)) {
       setError("Dokumen harus berformat JPG atau PNG.");
+      return;
+    }
+    if (slot === "avatar" && file.size > MAX_AVATAR_BYTES) {
+      setError("Ukuran foto profil maksimal 4 MB.");
       return;
     }
     if (file.size > MAX_DOCUMENT_BYTES) {
@@ -186,6 +197,18 @@ export default function RegistrationForm() {
       await uploadDocument(token, order.id, "ktp", documents.ktp!.file!);
       await uploadDocument(token, order.id, "selfie", documents.selfie!.file!);
 
+      // Foto profil bersifat opsional dan TIDAK boleh menggagalkan pengajuan:
+      // bila unggahannya gagal, pengajuan tetap lanjut ke pembayaran dan foto
+      // dapat diganti kapan saja dari halaman Akun.
+      const avatarFile = documents.avatar?.file;
+      if (avatarFile) {
+        try {
+          await uploadAvatar(token, avatarFile);
+        } catch {
+          // sengaja diabaikan (lihat catatan di atas)
+        }
+      }
+
       router.push("/upgrade/bayar");
     } catch (caught) {
       setError(
@@ -220,26 +243,32 @@ export default function RegistrationForm() {
       </Field>
 
       <div className="space-y-3">
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+        <p className="text-xs font-bold uppercase tracking-wider themed-text-muted">
           Dokumen verifikasi
         </p>
         <DocumentUpload slot="ktp" document={documents.ktp} onPick={onPick} />
         <DocumentUpload slot="selfie" document={documents.selfie} onPick={onPick} />
-        <p className="rounded-2xl bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-600">
+        <p className="pt-2 text-xs font-bold uppercase tracking-wider themed-text-muted">
+          Foto profil
+        </p>
+        <DocumentUpload slot="avatar" document={documents.avatar} onPick={onPick} />
+        <p className="rounded-2xl border themed-border themed-card-bg px-4 py-3 text-xs leading-6 themed-text-muted">
           Dokumen disimpan terenkripsi dan otomatis dihapus dari sistem paling
           lama 24 jam setelah diunggah, setelah tim verifikasi selesai
-          memeriksanya.
+          memeriksanya. Foto profil tersimpan terpisah dari dokumen verifikasi dan
+          tidak dihapus otomatis; foto KTP dan swafoto tidak pernah dijadikan foto
+          profil.
         </p>
       </div>
 
-      <label className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3.5">
+      <label className="flex items-start gap-3 rounded-2xl border themed-border themed-card-bg px-4 py-3.5">
         <input
           type="checkbox"
           checked={consent}
           onChange={(event) => setConsent(event.target.checked)}
-          className="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-300 accent-[#0B66E4]"
+          className="mt-0.5 h-5 w-5 shrink-0 rounded border-white/20 accent-[#FFC857]"
         />
-        <span className="text-xs leading-6 text-slate-600">
+        <span className="text-xs leading-6 themed-text-muted">
           Saya menyatakan data dan dokumen di atas benar, serta menyetujui
           pemrosesan data untuk verifikasi keanggotaan sesuai Kebijakan Privasi
           TapGo.
@@ -247,7 +276,7 @@ export default function RegistrationForm() {
       </label>
 
       {error ? (
-        <p role="alert" className="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+        <p role="alert" className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-300">
           {error}
         </p>
       ) : null}

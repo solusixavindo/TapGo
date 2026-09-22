@@ -12,15 +12,15 @@ import {
   getOrder,
   readSession
 } from "../api";
-import { formatRupiah, secondaryButtonClass } from "../upgrade-shell";
+import { formatRupiah, primaryButtonClass, secondaryButtonClass } from "../upgrade-shell";
 
 type Tone = "wait" | "review" | "done" | "refund";
 
 const TONE_STYLE: Record<Tone, { bar: string; chip: string; icon: string }> = {
-  wait: { bar: "bg-amber-400", chip: "bg-amber-100 text-amber-800", icon: "⏳" },
-  review: { bar: "bg-brand-blue", chip: "bg-brand-blue/12 text-brand-blue", icon: "🔍" },
-  done: { bar: "bg-brand-green", chip: "bg-brand-green/12 text-brand-green", icon: "✓" },
-  refund: { bar: "bg-rose-400", chip: "bg-rose-100 text-rose-700", icon: "↩" }
+  wait: { bar: "bg-amber-400", chip: "bg-amber-400/15 text-amber-300", icon: "⏳" },
+  review: { bar: "bg-brand-gold", chip: "bg-brand-gold/15 themed-accent", icon: "🔍" },
+  done: { bar: "bg-brand-green", chip: "bg-brand-green/15 text-brand-green", icon: "✓" },
+  refund: { bar: "bg-rose-400", chip: "bg-rose-500/15 text-rose-300", icon: "↩" }
 };
 
 const STATUS_VIEW: Record<
@@ -144,14 +144,14 @@ export default function OrderStatus() {
   }, [status, refresh]);
 
   if (loading) {
-    return <p className="text-sm font-semibold text-slate-500">Memuat status…</p>;
+    return <p className="text-sm font-semibold themed-text-muted">Memuat status…</p>;
   }
 
   if (!order || !status) {
     return (
-      <div className="rounded-2xl bg-slate-50 px-5 py-6 text-center">
-        <p className="text-sm font-bold text-brand-navy">Status belum dapat dimuat</p>
-        <p className="mt-2 text-sm leading-7 text-slate-600">
+      <div className="rounded-2xl border themed-border themed-card-bg px-5 py-6 text-center">
+        <p className="text-sm font-bold themed-text">Status belum dapat dimuat</p>
+        <p className="mt-2 text-sm leading-7 themed-text-muted">
           {error ||
             "Muat ulang halaman ini beberapa saat lagi, atau buka kembali tautan status dari email konfirmasi Anda."}
         </p>
@@ -167,7 +167,7 @@ export default function OrderStatus() {
 
   return (
     <div>
-      <div className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white">
+      <div className="overflow-hidden rounded-[1.5rem] border themed-border themed-card-bg">
         <div className={`h-1.5 w-full ${tone.bar}`} />
         <div className="p-5">
           <span
@@ -177,40 +177,40 @@ export default function OrderStatus() {
             {view.label}
           </span>
 
-          <h2 className="mt-4 text-xl font-black leading-snug text-brand-navy">
+          <h2 className="mt-4 text-xl font-black leading-snug themed-text">
             {view.headline}
           </h2>
-          <p className="mt-2 text-sm leading-7 text-slate-600">{view.body}</p>
+          <p className="mt-2 text-sm leading-7 themed-text-muted">{view.body}</p>
 
-          <dl className="mt-5 space-y-3 border-t border-dashed border-slate-200 pt-5">
+          <dl className="mt-5 space-y-3 border-t border-dashed themed-border pt-5">
             <div className="flex items-start justify-between gap-6">
-              <dt className="text-sm text-slate-500">Nomor pengajuan</dt>
-              <dd className="text-right text-sm font-bold text-brand-navy">
+              <dt className="text-sm themed-text-muted">Nomor pengajuan</dt>
+              <dd className="text-right text-sm font-bold themed-text">
                 {order.reference}
               </dd>
             </div>
             <div className="flex items-start justify-between gap-6">
-              <dt className="text-sm text-slate-500">Paket</dt>
-              <dd className="text-right text-sm font-bold text-brand-navy">
+              <dt className="text-sm themed-text-muted">Paket</dt>
+              <dd className="text-right text-sm font-bold themed-text">
                 {order.packageName}
               </dd>
             </div>
             <div className="flex items-start justify-between gap-6">
-              <dt className="text-sm text-slate-500">Total</dt>
-              <dd className="text-right text-sm font-bold text-brand-navy">
+              <dt className="text-sm themed-text-muted">Total</dt>
+              <dd className="text-right text-sm font-bold themed-text">
                 {formatRupiah(order.amount)}
               </dd>
             </div>
             <div className="flex items-start justify-between gap-6">
-              <dt className="text-sm text-slate-500">Diajukan</dt>
-              <dd className="text-right text-sm font-bold text-brand-navy">
+              <dt className="text-sm themed-text-muted">Diajukan</dt>
+              <dd className="text-right text-sm font-bold themed-text">
                 {formatMoment(order.createdAt)}
               </dd>
             </div>
           </dl>
 
           {error ? (
-            <p className="mt-5 rounded-2xl bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900">
+            <p className="mt-5 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs font-semibold text-amber-300">
               Status terakhir yang berhasil dimuat ditampilkan di atas. {error}
             </p>
           ) : null}
@@ -218,8 +218,8 @@ export default function OrderStatus() {
       </div>
 
       {PREVIEW_MODE ? (
-        <div className="mt-5 rounded-2xl bg-slate-50 p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+        <div className="mt-5 rounded-2xl border themed-border themed-card-bg p-4">
+          <p className="text-xs font-bold uppercase tracking-wider themed-text-muted">
             Tinjauan tampilan — lihat kondisi lain
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -231,8 +231,8 @@ export default function OrderStatus() {
                 className={[
                   "rounded-full px-3 py-1.5 text-xs font-bold transition",
                   previewStatus === key
-                    ? "bg-brand-navy text-white"
-                    : "bg-white text-slate-500 hover:text-brand-navy"
+                    ? "bg-brand-gold text-brand-navyDeep"
+                    : "themed-fill themed-text-muted hover:text-[var(--themed-text-primary)]"
                 ].join(" ")}
               >
                 {STATUS_VIEW[key].label}
@@ -243,9 +243,15 @@ export default function OrderStatus() {
       ) : null}
 
       {LIVE_STATUSES.includes(status) && !PREVIEW_MODE ? (
-        <p className="mt-4 text-center text-xs text-slate-400">
+        <p className="mt-4 text-center text-xs themed-text-muted">
           Halaman ini menyegarkan status secara otomatis.
         </p>
+      ) : null}
+
+      {status === "ACTIVE" ? (
+        <Link href="/upgrade/tim-referral" className={`${primaryButtonClass} mt-6`}>
+          Lihat Daftar Referral
+        </Link>
       ) : null}
 
       <Link href="/" className={`${secondaryButtonClass} mt-6`}>

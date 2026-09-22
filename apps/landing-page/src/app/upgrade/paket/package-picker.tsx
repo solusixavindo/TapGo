@@ -9,6 +9,7 @@ import {
   PREVIEW_MODE,
   PREVIEW_PACKAGES,
   TOKEN_KEY,
+  getCurrentMembershipTier,
   listPackages,
   matchPackageByTier,
   readSession,
@@ -16,7 +17,12 @@ import {
 } from "../api";
 import { formatRupiah, primaryButtonClass } from "../upgrade-shell";
 
-const CURRENT_TIER_LABEL = "Basic";
+const TIER_LABEL: Record<string, string> = {
+  BASIC: "Basic",
+  SILVER: "Silver",
+  GOLD: "Gold",
+  PLATINUM: "Platinum"
+};
 
 export default function PackagePicker() {
   const router = useRouter();
@@ -28,11 +34,17 @@ export default function PackagePicker() {
   );
   const [loading, setLoading] = useState(!PREVIEW_MODE);
   const [error, setError] = useState("");
+  // Sebelumnya label ini di-hardcode "Basic" untuk semua orang, sehingga
+  // pengguna yang upgrade dari Silver->Gold tetap melihat "Basic" di sini.
+  const [currentTier, setCurrentTier] = useState<string>(
+    PREVIEW_MODE ? "BASIC" : ""
+  );
 
   useEffect(() => {
     if (PREVIEW_MODE) return;
     // Tanpa sesi, langkah ini tidak ada artinya: order tidak dapat dibuat.
-    if (!readSession(TOKEN_KEY)) {
+    const token = readSession(TOKEN_KEY);
+    if (!token) {
       router.replace("/upgrade");
       return;
     }
@@ -59,6 +71,11 @@ export default function PackagePicker() {
           : undefined
       )
       .finally(() => (alive ? setLoading(false) : undefined));
+    // Kegagalan mengambil tier aktif tidak boleh menghalangi alur upgrade —
+    // cukup sembunyikan label bila belum diketahui.
+    getCurrentMembershipTier(token)
+      .then((tier) => (alive ? setCurrentTier(tier) : undefined))
+      .catch(() => undefined);
     return () => {
       alive = false;
     };
@@ -71,17 +88,17 @@ export default function PackagePicker() {
   }
 
   if (loading) {
-    return <p className="text-sm font-semibold text-slate-500">Memuat paket…</p>;
+    return <p className="text-sm font-semibold themed-text-muted">Memuat paket…</p>;
   }
 
   if (error) {
     return (
-      <div className="rounded-2xl bg-rose-50 px-5 py-4">
-        <p className="text-sm font-bold text-rose-700">{error}</p>
+      <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-5 py-4">
+        <p className="text-sm font-bold text-rose-300">{error}</p>
         <button
           type="button"
           onClick={() => window.location.reload()}
-          className="mt-3 text-sm font-bold text-brand-blue"
+          className="mt-3 text-sm font-bold themed-accent"
         >
           Coba lagi
         </button>
@@ -91,9 +108,11 @@ export default function PackagePicker() {
 
   return (
     <div>
-      <p className="mb-5 inline-flex rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-500">
-        Paket aktif Anda saat ini: {CURRENT_TIER_LABEL}
-      </p>
+      {currentTier ? (
+        <p className="mb-5 inline-flex rounded-full themed-fill px-3 py-1.5 text-xs font-bold themed-text-muted">
+          Paket aktif Anda saat ini: {TIER_LABEL[currentTier] ?? currentTier}
+        </p>
+      ) : null}
 
       <div className="space-y-4">
         {packages.map((item) => {
@@ -107,14 +126,14 @@ export default function PackagePicker() {
               className={[
                 "block w-full rounded-[1.5rem] border-2 p-5 text-left transition",
                 active
-                  ? "border-brand-blue bg-brand-blue/5 shadow-glow"
-                  : "border-slate-200 bg-white hover:border-slate-300"
+                  ? "border-brand-gold bg-brand-gold/10 shadow-lg"
+                  : "themed-border themed-card-bg hover:border-white/20"
               ].join(" ")}
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xl font-black text-brand-navy">{item.name}</p>
-                  <p className="mt-1 text-2xl font-black text-brand-blue">
+                  <p className="text-xl font-black themed-text">{item.name}</p>
+                  <p className="mt-1 text-2xl font-black themed-accent">
                     {formatRupiah(item.price)}
                   </p>
                 </div>
@@ -122,16 +141,16 @@ export default function PackagePicker() {
                   aria-hidden="true"
                   className={[
                     "mt-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2",
-                    active ? "border-brand-blue bg-brand-blue" : "border-slate-300"
+                    active ? "border-brand-gold bg-brand-gold" : "border-white/20"
                   ].join(" ")}
                 >
-                  {active ? <span className="h-2 w-2 rounded-full bg-white" /> : null}
+                  {active ? <span className="h-2 w-2 rounded-full bg-brand-navyDeep" /> : null}
                 </span>
               </div>
 
               <ul className="mt-4 space-y-2">
                 {item.benefits.map((benefit) => (
-                  <li key={benefit} className="flex items-start gap-2 text-sm text-slate-600">
+                  <li key={benefit} className="flex items-start gap-2 text-sm themed-text-muted">
                     <span className="mt-0.5 text-brand-green" aria-hidden="true">
                       ✓
                     </span>
@@ -144,7 +163,7 @@ export default function PackagePicker() {
         })}
       </div>
 
-      <p className="mt-6 rounded-2xl bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-500">
+      <p className="mt-6 rounded-2xl border themed-border themed-card-bg px-4 py-3 text-xs leading-6 themed-text-muted">
         Harga sudah termasuk seluruh biaya. Pembayaran diproses payment gateway
         berlisensi. Manfaat aktif setelah dokumen identitas diverifikasi.
       </p>

@@ -1,0 +1,110 @@
+/* Dashboard mitra — warna semantik yang mengikuti tema situs (html[data-theme]).
+   Tailwind di proyek ini tidak memakai varian dark:, jadi warna status
+   didefinisikan di sini agar terbaca pada tema gelap maupun terang. */
+.m-scope {
+  --m-green: #34d399;
+  --m-green-bg: rgba(52, 211, 153, 0.14);
+  --m-amber: #fbbf24;
+  --m-amber-bg: rgba(251, 191, 36, 0.14);
+  --m-red: #fb7185;
+  --m-red-bg: rgba(251, 113, 133, 0.14);
+  --m-blue: #38bdf8;
+  --m-blue-bg: rgba(56, 189, 248, 0.14);
+  --m-gold: #ffc857;
+  --m-gold-bg: rgba(255, 200, 87, 0.16);
+  --m-chart-bar: #ffc857;
+  --m-chart-bar-dim: rgba(255, 200, 87, 0.28);
+  --m-hero-from: #0e2c4c;
+  --m-hero-to: #071a2c;
+  --m-hero-text: #ffffff;
+  --m-hero-muted: #b6c4d6;
+  --m-hero-line: rgba(255, 255, 255, 0.14);
+}
+
+html[data-theme="light"] .m-scope {
+  --m-green: #047857;
+  --m-green-bg: rgba(4, 120, 87, 0.12);
+  --m-amber: #a16207;
+  --m-amber-bg: rgba(202, 138, 4, 0.16);
+  --m-red: #be123c;
+  --m-red-bg: rgba(190, 18, 60, 0.1);
+  --m-blue: #0369a1;
+  --m-blue-bg: rgba(3, 105, 161, 0.1);
+  --m-gold: #8a5a00;
+  --m-gold-bg: rgba(224, 174, 63, 0.24);
+  --m-chart-bar: #e0ae3f;
+  --m-chart-bar-dim: rgba(224, 174, 63, 0.3);
+}
+
+.m-tone-green { color: var(--m-green); background: var(--m-green-bg); }
+.m-tone-amber { color: var(--m-amber); background: var(--m-amber-bg); }
+.m-tone-red { color: var(--m-red); background: var(--m-red-bg); }
+.m-tone-blue { color: var(--m-blue); background: var(--m-blue-bg); }
+.m-tone-gold { color: var(--m-gold); background: var(--m-gold-bg); }
+.m-text-green { color: var(--m-green); }
+.m-text-red { color: var(--m-red); }
+.m-text-amber { color: var(--m-amber); }
+
+.m-notice-blue { border-color: var(--m-blue); background: var(--m-blue-bg); }
+.m-notice-amber { border-color: var(--m-amber); background: var(--m-amber-bg); }
+.m-notice-red { border-color: var(--m-red); background: var(--m-red-bg); }
+.m-notice-green { border-color: var(--m-green); background: var(--m-green-bg); }
+
+.m-num { font-variant-numeric: tabular-nums; }
+
+/* Kartu saldo utama: selalu gelap agar teks putih kontras di kedua tema. */
+.m-hero {
+  background:
+    radial-gradient(circle at 92% 8%, rgba(255, 200, 87, 0.22), transparent 42%),
+    linear-gradient(135deg, var(--m-hero-from), var(--m-hero-to));
+  color: var(--m-hero-text);
+  border: 1px solid var(--m-hero-line);
+}
+.m-hero-muted { color: var(--m-hero-muted); }
+.m-hero-line { border-color: var(--m-hero-line); }
+
+.m-nav-item[aria-current="page"] {
+  background: var(--m-gold-bg);
+  color: var(--m-gold);
+}
+
+.m-bar { background: var(--m-chart-bar-dim); transition: background 0.15s; }
+.m-bar[data-active="true"], .m-bar:hover { background: var(--m-chart-bar); }
+
+@media (prefers-reduced-motion: reduce) {
+  .m-scope * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+.m-divide > :not([hidden]) ~ :not([hidden]) { border-color: var(--themed-border); }
+
+/* Di layar sempit tombol WhatsApp mengambang menutupi tab "Akun" pada bilah
+   navigasi bawah, jadi diangkat di atas bilah itu — hanya di halaman mitra. */
+@media (max-width: 1023px) {
+  body:has(.m-scope) a[aria-label="Chat WhatsApp TapGo Lion"] {
+    bottom: 5.25rem;
+    right: 1rem;
+    height: 3rem;
+    width: 3rem;
+  }
+}
+
+@media (max-width: 1023px) {
+  body:has(.m-scope) footer { padding-bottom: 5.5rem; }
+}
+
+/* Lipat/buka: tinggi dianimasikan lewat grid-template-rows supaya tidak perlu
+   mengukur tinggi isi. Isi yang tertutup disembunyikan dari fokus keyboard. */
+.m-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.26s ease;
+}
+.m-collapse[data-open="true"] { grid-template-rows: 1fr; }
+.m-collapse > div { min-height: 0; overflow: hidden; }
+.m-collapse[data-open="false"] > div { visibility: hidden; transition: visibility 0s linear 0.26s; }
+
+.m-chevron { transition: transform 0.26s ease; }
+[aria-expanded="true"] > .m-chevron, [aria-expanded="true"] .m-chevron-in { transform: rotate(180deg); }
+
+.m-avatar-stack > * + * { margin-left: -10px; }
+.m-avatar-ring { box-shadow: 0 0 0 2px var(--themed-bg-3); }

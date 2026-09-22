@@ -236,6 +236,24 @@ export async function uploadDocument(
   }
 }
 
+/**
+ * Mengunggah foto profil (opsional). Sumbernya SAMA dengan aplikasi Play Store
+ * (POST /account/avatar), sehingga foto ini juga tampil di aplikasi. Terpisah
+ * dari dokumen verifikasi: foto KTP/swafoto tidak pernah dijadikan foto profil.
+ */
+export async function uploadAvatar(token: string, file: File) {
+  const response = await fetch(`${API_BASE}/account/avatar`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": file.type },
+    body: file,
+    credentials: "omit"
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { message?: string };
+    throw new Error(payload.message ?? "Foto profil belum dapat diunggah.");
+  }
+}
+
 export async function payOrder(token: string, orderId: string): Promise<PaymentHandoff> {
   const result = await request<{ redirectUrl?: string | null; paid?: boolean }>(
     `/web/membership/orders/${orderId}/pay`,
@@ -251,11 +269,113 @@ export async function payOrder(token: string, orderId: string): Promise<PaymentH
   };
 }
 
+export type ReferralSummary = {
+  referralCode: string;
+  referralLink: string;
+  membershipTier: string;
+  directDownlines: number;
+  totalDownlines: number;
+  totalCommission: number;
+};
+
+export type ReferralTeamMember = {
+  userId: string;
+  fullName: string;
+  referralCode: string;
+  level: number;
+  membershipTier: string;
+  joinedAt: string;
+};
+
+type RawReferralSummary = {
+  referralCode: string;
+  referralLink: string;
+  membershipTier: string;
+  directDownlines: number;
+  totalDownlines: number;
+  totalCommission: unknown;
+};
+
+/**
+ * GET /referrals/summary dan /referrals/tree hidup di luar namespace
+ * /web/membership/*, tapi tetap satu backend yang sama dan tidak dibatasi
+ * channel (lihat referralRouter.use(requireAuth) tanpa requireChannel di
+ * apps/backend/src/modules/referrals/presentation/referral.routes.ts) —
+ * token WEB dari /web/auth/login sah dipakai di sini.
+ */
+export async function getReferralSummary(token: string): Promise<ReferralSummary> {
+  const result = await request<RawReferralSummary>("/referrals/summary", {
+    headers: { authorization: `Bearer ${token}` }
+  });
+  return { ...result, totalCommission: toNumber(result.totalCommission) };
+}
+
+export async function getReferralTeam(token: string): Promise<ReferralTeamMember[]> {
+  return request<ReferralTeamMember[]>("/referrals/tree?maxLevel=10", {
+    headers: { authorization: `Bearer ${token}` }
+  });
+}
+
+export type CommissionHistoryItem = {
+  id: string;
+  type: string;
+  status: string;
+  level: number;
+  amount: number;
+  createdAt: string;
+};
+
+type RawCommissionHistoryItem = {
+  id: string;
+  type: string;
+  status: string;
+  level: number;
+  amount: unknown;
+  createdAt: string;
+};
+
+/**
+ * GET /referrals/commissions — riwayat komisi milik pengguna yang login
+ * sendiri (beneficiaryId = user dari token), dipaginasi. Endpoint ini sudah
+ * ada di backend sejak lama untuk keperluan lain; dipakai apa adanya di sini,
+ * bukan endpoint baru.
+ */
+export async function getCommissionHistory(
+  token: string,
+  page: number,
+  pageSize: number
+): Promise<CommissionHistoryItem[]> {
+  const result = await request<RawCommissionHistoryItem[]>(
+    `/referrals/commissions?page=${page}&pageSize=${pageSize}`,
+    { headers: { authorization: `Bearer ${token}` } }
+  );
+  return result.map((item) => ({ ...item, amount: toNumber(item.amount) }));
+}
+
 export async function getOrder(token: string, orderId: string): Promise<UpgradeOrder> {
   const result = await request<RawOrder>(`/web/membership/orders/${orderId}`, {
     headers: { authorization: `Bearer ${token}` }
   });
   return toOrder(result);
+}
+
+type RawMyMembership = {
+  status: "ACTIVE" | "EMPTY";
+  membership: { membership?: { tier?: string; name?: string } | null } | null;
+};
+
+/**
+ * Tier keanggotaan yang sedang aktif untuk pengguna yang login.
+ *
+ * Setiap akun punya membership (default BASIC bila belum pernah upgrade),
+ * jadi "EMPTY" secara praktis tidak pernah terjadi untuk akun yang sudah
+ * berhasil login — tetap ditangani agar pemanggil tidak perlu menebak.
+ */
+export async function getCurrentMembershipTier(token: string): Promise<string> {
+  const result = await request<RawMyMembership>("/web/membership/me", {
+    headers: { authorization: `Bearer ${token}` }
+  });
+  return result.membership?.membership?.tier ?? "BASIC";
 }
 
 function toPackage(raw: RawMembership): MembershipPackage {
@@ -265,7 +385,7 @@ function toPackage(raw: RawMembership): MembershipPackage {
     benefits.push(`Saldo PPOB awal ${formatAmount(ppob)}`);
   }
   if (raw.activeLevels && raw.activeLevels > 0) {
-    benefits.push(`Insentif kemitraan sampai level ${raw.activeLevels}`);
+    benefits.push(`Bonus referral sampai tingkat ${raw.activeLevels}`);
   }
   if (raw.bpjsBenefit) {
     benefits.push(raw.bpjsBenefit);
@@ -351,9 +471,9 @@ export const PREVIEW_PACKAGES: MembershipPackage[] = [
     tier: "SILVER",
     price: 500000,
     benefits: [
-      "Kartu anggota digital Silver",
-      "Akses layanan PPOB sebagai agen",
-      "Insentif kemitraan level 1"
+      "Kaos TAPGO",
+      "Saldo PPOB awal Rp100.000",
+      "BPJS Ketenagakerjaan JKK dan JKM (gratis 1 bulan pertama)"
     ]
   },
   {
@@ -362,10 +482,11 @@ export const PREVIEW_PACKAGES: MembershipPackage[] = [
     tier: "GOLD",
     price: 3000000,
     benefits: [
-      "Seluruh manfaat Silver",
-      "Saldo PPOB awal lebih besar",
-      "Insentif kemitraan sampai level 2",
-      "Prioritas dukungan mitra"
+      "Kaos TAPGO",
+      "Rompi TAPGO",
+      "Banner TAPGO",
+      "Saldo PPOB awal Rp600.000",
+      "BPJS Ketenagakerjaan JKK dan JKM 1 tahun"
     ]
   },
   {
@@ -374,10 +495,35 @@ export const PREVIEW_PACKAGES: MembershipPackage[] = [
     tier: "PLATINUM",
     price: 5500000,
     benefits: [
-      "Seluruh manfaat Gold",
-      "Saldo PPOB awal tertinggi",
-      "Insentif kemitraan sampai level 3",
-      "Pendampingan mitra khusus"
+      "Kaos TAPGO",
+      "Rompi TAPGO",
+      "Banner TAPGO",
+      "Saldo PPOB awal Rp1.000.000",
+      "BPJS Ketenagakerjaan 1 tahun (JKK, JKM, JHT)"
     ]
   }
+];
+
+/** Data contoh untuk tinjauan tampilan. Tidak pernah dipakai di produksi. */
+export const PREVIEW_REFERRAL_SUMMARY: ReferralSummary = {
+  referralCode: "TAPGO-BUDI01",
+  referralLink: "https://tapgolion.id/r/TAPGO-BUDI01",
+  membershipTier: "GOLD",
+  directDownlines: 4,
+  totalDownlines: 11,
+  totalCommission: 850000
+};
+
+/** Data contoh untuk tinjauan tampilan. Tidak pernah dipakai di produksi. */
+export const PREVIEW_REFERRAL_TEAM: ReferralTeamMember[] = [
+  { userId: "u1", fullName: "Siti Aminah", referralCode: "TAPGO-SITI01", level: 1, membershipTier: "SILVER", joinedAt: "2026-07-02T09:00:00.000Z" },
+  { userId: "u2", fullName: "Ahmad Fauzi", referralCode: "TAPGO-AHMAD1", level: 1, membershipTier: "GOLD", joinedAt: "2026-07-15T09:00:00.000Z" },
+  { userId: "u3", fullName: "Dewi Lestari", referralCode: "TAPGO-DEWI01", level: 2, membershipTier: "SILVER", joinedAt: "2026-08-01T09:00:00.000Z" }
+];
+
+/** Data contoh untuk tinjauan tampilan. Tidak pernah dipakai di produksi. */
+export const PREVIEW_COMMISSIONS: CommissionHistoryItem[] = [
+  { id: "c1", type: "SPONSOR_BONUS", status: "PAID", level: 1, amount: 40000, createdAt: "2026-08-20T09:00:00.000Z" },
+  { id: "c2", type: "LEVEL_COMMISSION", status: "PAID", level: 2, amount: 15000, createdAt: "2026-08-15T09:00:00.000Z" },
+  { id: "c3", type: "REWARD_BONUS", status: "PENDING", level: 1, amount: 25000, createdAt: "2026-08-01T09:00:00.000Z" }
 ];

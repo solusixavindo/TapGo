@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function RegisterPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-brand-mist" />}>
+    <Suspense fallback={<div className="min-h-screen bg-brand-navyDeep" />}>
       <RegisterForm />
     </Suspense>
   );

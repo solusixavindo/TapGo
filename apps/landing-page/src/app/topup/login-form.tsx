@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { PREVIEW_MODE, TOKEN_KEY, login, writeSession } from "./api";
-import { Field, inputClass, primaryButtonClass } from "./upgrade-shell";
+import { Field, inputClass, primaryButtonClass } from "../upgrade/upgrade-shell";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -21,15 +21,11 @@ export default function LoginForm() {
     setError("");
     try {
       const result = await login(phone.trim(), password);
-      // Token disimpan hanya untuk sesi tab ini. Tidak ada data sensitif lain
-      // yang ditulis ke perangkat.
       writeSession(TOKEN_KEY, result.accessToken);
-      router.push("/upgrade/paket");
+      router.push("/topup/jumlah");
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : "Nomor HP atau password belum sesuai."
+        caught instanceof Error ? caught.message : "Nomor HP atau password belum sesuai."
       );
     } finally {
       setBusy(false);
@@ -76,9 +72,7 @@ export default function LoginForm() {
                 strokeLinejoin="round"
               />
               <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
-              {visible ? (
-                <path d="m4 20 16-16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              ) : null}
+              {visible ? <path d="m4 20 16-16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /> : null}
             </svg>
           </button>
         </div>

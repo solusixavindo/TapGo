@@ -18,7 +18,7 @@ export default function PrivacyPolicy() {
       <h2>Data yang Dikumpulkan</h2>
       <p>
         TapGo dapat mengumpulkan nama, nomor HP, data akun, kode referral, relasi sponsor atau
-        mitra, status membership, data wallet aplikasi, PPOB benefit, riwayat transaksi, invoice,
+        downline, status membership, data wallet aplikasi, PPOB benefit, riwayat transaksi, invoice,
         withdrawal, pesan kontak, dan permintaan dukungan. TapGo juga dapat mengumpulkan data lokasi
         (presisi atau perkiraan) saat pengguna menggunakan fitur Ojek Online (TapGo Ride/TapGo Car)
         untuk mencocokkan perjalanan dan menampilkan titik penjemputan/tujuan, serta foto profil

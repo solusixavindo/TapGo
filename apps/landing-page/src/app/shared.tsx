@@ -1,19 +1,20 @@
+import { Reveal } from "./reveal";
+
 const whatsappUrl =
   "https://wa.me/6283800255588?text=Halo%20TapGo%20Lion%2C%20saya%20ingin%20mendapatkan%20informasi%20mengenai%20membership%20TapGo.";
 
 export function LegalShell({ title, updated, children }: { title: string; updated: string; children: React.ReactNode }) {
   return (
-    <main className="min-h-screen px-5 py-10">
+    <main data-themed="true" className="min-h-screen px-5 py-10 themed-text">
       <article className="mx-auto max-w-4xl">
-        <a href="/" className="text-sm font-bold text-brand-blue">Kembali ke Home</a>
-        <div className="glass mt-8 rounded-[2rem] p-8 md:p-12">
+        <Reveal className="themed-glass mt-2 rounded-[2rem] p-8 md:p-12">
           <p className="text-sm font-bold uppercase tracking-[0.22em] text-brand-green">TapGo Lion</p>
-          <h1 className="mt-3 text-4xl font-black text-brand-navy md:text-6xl">{title}</h1>
-          <p className="mt-4 text-sm font-semibold text-slate-500">Terakhir diperbarui: {updated}</p>
-          <div className="legal-content mt-10 space-y-6 text-base leading-8 text-slate-700">
+          <h1 className="mt-3 break-words text-3xl font-black themed-text sm:text-4xl md:text-6xl">{title}</h1>
+          <p className="mt-4 text-sm font-semibold themed-text-muted">Terakhir diperbarui: {updated}</p>
+          <div className="legal-content mt-10 space-y-6 text-base leading-8 themed-text-secondary">
             {children}
           </div>
-        </div>
+        </Reveal>
       </article>
     </main>
   );
