@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/node";
+import { nodeProfilingIntegration } from "@sentry/profiling-node";
 
 /**
  * Fail-closed seperti PPOB_PROVIDER=disabled dan pola lain di codebase ini:
@@ -22,7 +23,13 @@ export function initSentry(): void {
     // 10%: cukup untuk gambaran performa tanpa membebani kuota Sentry.
     // Naikkan lewat env terpisah nanti bila benar-benar dibutuhkan analisis
     // performa yang lebih rinci — bukan keputusan yang perlu diambil sekarang.
-    tracesSampleRate: 0.1
+    tracesSampleRate: 0.1,
+    // Profiling hanya berjalan di dalam transaction yang sudah disample di
+    // atas (tracesSampleRate), jadi relatif ini terhadap traces — bukan 10%
+    // dari SELURUH request. Sama alasannya: cukup untuk gambaran fungsi mana
+    // yang lambat, tanpa membebani CPU produksi.
+    profilesSampleRate: 0.1,
+    integrations: [nodeProfilingIntegration()]
   });
 }
 
