@@ -77,23 +77,127 @@ Build dengan DSN:
 flutter build apk --dart-define=SENTRY_DSN=https://xxxxx@oXXXXXX.ingest.sentry.io/XXXXXXX
 ```
 
-## 4. Menangkap error yang sudah ditangani sendiri (opsional)
+## 4. ErrorBoundary / fallback UI — SUDAH ADA, tidak perlu dibuat lagi
 
-Untuk error yang di-`catch` tapi tetap ingin terlihat di Sentry (bukan cuma
-crash tak tertangani):
+Kedua app **sudah punya** mekanisme ini, independen dari Sentry — lihat
+`lib/tapgo_app_guards.dart` di masing-masing app (`installTapGoCrashGuards()`,
+dipanggil di baris pertama `main()`):
+- `FlutterError.onError` diganti di build produksi supaya error saat
+  membangun widget menampilkan `_CrashFallbackScreen` (pesan netral,
+  "Terjadi gangguan tampilan. Tutup lalu buka kembali aplikasi.") alih-alih
+  layar merah bawaan Flutter.
+- `PlatformDispatcher.instance.onError` menangkap error asinkron di luar
+  tangkapan framework, supaya jejaknya tetap ada (di debug) tanpa membocorkan
+  detail ke log perangkat pengguna nyata di production.
+
+Begitu Sentry benar-benar diaktifkan (langkah 3 di atas), tinggal tambahkan
+`Sentry.captureException` di DALAM kedua handler yang sudah ada ini — bukan
+membuat mekanisme fallback baru:
 
 ```dart
-try {
-  await someRiskyOperation();
-} catch (error, stackTrace) {
+// lib/tapgo_app_guards.dart — tambahan setelah SentryFlutter.init aktif
+FlutterError.onError = (details) {
+  FlutterError.presentError(details);
   if (kSentryDsn.isNotEmpty) {
-    await Sentry.captureException(error, stackTrace: stackTrace);
+    Sentry.captureException(details.exception, stackTrace: details.stack);
   }
-  // ... penanganan lokal yang sudah ada tetap jalan seperti biasa.
+  if (kDebugMode) return;
+  ErrorWidget.builder = (FlutterErrorDetails details) => const _CrashFallbackScreen();
+};
+
+PlatformDispatcher.instance.onError = (error, stack) {
+  if (kSentryDsn.isNotEmpty) {
+    Sentry.captureException(error, stackTrace: stack);
+  }
+  if (kDebugMode) {
+    debugPrint('[TapGo Crash] ${error.runtimeType}: $error\n$stack');
+  }
+  return true;
+};
+```
+
+## 5. Identifikasi akun tanpa data sensitif (`Sentry.setUser`)
+
+Supaya crash bisa ditelusuri ke akun yang mengalaminya TANPA mengirim PII
+(nama, telepon, NIK) ke Sentry — hanya ID internal + role:
+
+```dart
+// driver_app — dipanggil setelah login berhasil (mis. di driver_controller.dart
+// begitu DriverSession didapat), dan DIHAPUS lagi saat logout.
+if (kSentryDsn.isNotEmpty) {
+  Sentry.configureScope((scope) {
+    scope.setUser(SentryUser(id: session.driverId, data: {'role': 'driver'}));
+  });
+}
+
+// Saat logout — jangan biarkan sesi berikutnya (mis. akun lain di perangkat
+// yang sama, atau demo login) ikut membawa identitas akun sebelumnya.
+if (kSentryDsn.isNotEmpty) {
+  Sentry.configureScope((scope) => scope.setUser(null));
 }
 ```
 
-## 5. Catatan privasi
+`user_app` memakai pola yang sama dengan `userId`/`role: 'user'` — cek
+`session.userId` yang sudah ada di sesi login (`_TapGoPersistentStore`).
+
+## 6. Kegagalan transaksi PPOB / checkout trip Ojol
+
+Dua titik tangkap yang SUDAH ADA di `user_app` dan cocok ditambahi
+`Sentry.captureException` — bukan mengganti alur error yang sudah berjalan,
+hanya MENAMBAH pelaporan di sampingnya:
+
+**PPOB** — `lib/features/ppob/presentation/ppob_checkout_screen.dart`, method
+`_pay()` (sekitar baris 122–147), sudah membungkus `createOrder(...)` dengan
+try/catch:
+
+```dart
+} catch (error, stackTrace) {
+  if (!mounted) return;
+  if (kSentryDsn.isNotEmpty) {
+    Sentry.captureException(
+      error,
+      stackTrace: stackTrace,
+      withScope: (scope) {
+        scope.setContexts('ppob_order', {
+          'sku': widget.product.sku,
+          // JANGAN sertakan targetNumber mentah (nomor tujuan pelanggan) —
+          // itu identifier pribadi, sama alasannya dengan redaksi "phone" di
+          // logger backend.
+        });
+      },
+    );
+  }
+  setState(() {
+    _result = null;
+    _errorMessage = ppobErrorMessage(error);
+  });
+}
+```
+
+**Trip Ojol** — `lib/screens/ride_customer_screens.dart`, method `_guarded()`
+(sekitar baris 523+), pembungkus bersama untuk seluruh aksi ride (booking,
+cancel, dll) di layar itu:
+
+```dart
+} catch (error, stackTrace) {
+  if (!mounted) return;
+  if (kSentryDsn.isNotEmpty && !tapGoRideIsSessionExpired(error)) {
+    // Sesi kedaluwarsa BUKAN bug — jangan penuhi Sentry dengan noise untuk
+    // sesuatu yang sudah punya penanganan pemulihan sendiri di bawah.
+    Sentry.captureException(
+      error,
+      stackTrace: stackTrace,
+      withScope: (scope) => scope.setContexts('ride_action', {
+        'service': _service.name,
+      }),
+    );
+  }
+  // ... penanganan tapGoRideIsSessionExpired dkk yang sudah ada tetap jalan
+  // persis seperti sekarang, tidak diubah.
+}
+```
+
+## 7. Catatan privasi
 
 Sentry SDK Flutter secara default mengirim breadcrumb navigasi & device info.
 **Jangan** aktifkan `options.sendDefaultPii = true` di app ini — data pribadi

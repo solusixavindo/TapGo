@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import pino from "pino";
+import { Sentry } from "../monitoring/sentry.js";
 
 /**
  * Logger sengaja TIDAK bergantung pada config/env.ts.
@@ -98,12 +99,68 @@ const levelFormatter = {
   }
 };
 
+/**
+ * Level numerik Pino: fatal=60, error=50 (lihat dokumentasi Pino). >=50
+ * mencakup keduanya tanpa perlu membandingkan string label.
+ */
+const SENTRY_LEVEL_THRESHOLD = 50;
+
+/**
+ * Nilai error dari argumen mergingObject sebuah pemanggilan log, mengikuti
+ * DUA konvensi field yang keduanya sudah dipakai di codebase ini
+ * (`{ err: error }` di beberapa tempat, `{ error }` di tempat lain) —
+ * fallback ini menghindari perlu menyeragamkan seluruh pemanggil logger.error
+ * lebih dulu sebelum forwarding ke Sentry bisa aktif. Sengaja TIDAK menuntut
+ * `instanceof Error` — kode ini boleh saja melempar nilai bukan Error (mis.
+ * string), dan Sentry.captureException menerima `unknown` apa adanya.
+ */
+function extractError(args: unknown[]): unknown {
+  const first = args[0];
+  if (first instanceof Error) return first;
+  if (first && typeof first === "object") {
+    const obj = first as Record<string, unknown>;
+    if (obj.err !== undefined) return obj.err;
+    if (obj.error !== undefined) return obj.error;
+  }
+  return undefined;
+}
+
+function extractMessage(args: unknown[]): string | undefined {
+  return args.find((a): a is string => typeof a === "string");
+}
+
+/**
+ * Forwarding otomatis SEMUA log level error/fatal ke Sentry — bukan hanya
+ * error yang lewat errorHandler.ts. Sebelum ini, logger.error(...) yang
+ * dipanggil langsung di berbagai service (mis. siklus rekonsiliasi PPOB,
+ * sinkronisasi harga Digiflazz) tidak pernah terlihat di Sentry sama sekali,
+ * hanya tercatat di log biasa. No-op tanpa SENTRY_DSN (lihat
+ * core/monitoring/sentry.ts) — aman dipasang di sini terlepas environment.
+ *
+ * method.apply(this, args) TETAP dipanggil di semua kasus: hook ini murni
+ * menambah efek samping, tidak pernah menahan/mengubah log yang sesungguhnya
+ * ditulis pino.
+ */
+function sentryForwardingHook(this: pino.Logger, args: Parameters<pino.LogFn>, method: pino.LogFn, level: number) {
+  if (level >= SENTRY_LEVEL_THRESHOLD) {
+    const error = extractError(args);
+    if (error) {
+      Sentry.captureException(error);
+    } else {
+      const message = extractMessage(args);
+      if (message) Sentry.captureMessage(message, "error");
+    }
+  }
+  method.apply(this, args);
+}
+
 const errorFile = fileDestination("error.log");
 export const logger = pino(
   {
     level: process.env.NODE_ENV === "production" ? "info" : "debug",
     redact: redactConfig,
-    formatters: levelFormatter
+    formatters: levelFormatter,
+    hooks: { logMethod: sentryForwardingHook }
   },
   errorFile
     ? pino.multistream([{ stream: process.stdout }, { stream: errorFile, level: "error" }])

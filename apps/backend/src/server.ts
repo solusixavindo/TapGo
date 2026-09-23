@@ -4,7 +4,7 @@ import { env } from "./config/env.js";
 import { disconnectPrisma, prisma } from "./config/prisma.js";
 import { redis } from "./config/redis.js";
 import { logger } from "./core/logger/logger.js";
-import { Sentry, initSentry } from "./core/monitoring/sentry.js";
+import { initSentry } from "./core/monitoring/sentry.js";
 import { disconnectRateLimitStore } from "./core/security/rateLimitStore.js";
 import { DriverDocumentService } from "./modules/drivers/application/DriverDocumentService.js";
 import { MembershipDocumentService } from "./modules/memberships/application/MembershipDocumentService.js";
@@ -22,13 +22,13 @@ import { SmtpOtpProvider } from "./modules/auth/infrastructure/SmtpOtpProvider.j
 // core/monitoring/sentry.ts).
 initSentry();
 
+// logger.error/.fatal di sini otomatis diteruskan ke Sentry lewat hook di
+// core/logger/logger.ts — tidak perlu Sentry.captureException manual.
 process.on("uncaughtException", (error) => {
-  Sentry.captureException(error);
-  logger.error({ err: error }, "Uncaught exception — proses akan berhenti");
+  logger.fatal({ err: error }, "Uncaught exception — proses akan berhenti");
   process.exit(1);
 });
 process.on("unhandledRejection", (reason) => {
-  Sentry.captureException(reason);
   logger.error({ err: reason }, "Unhandled promise rejection");
 });
 

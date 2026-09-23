@@ -3,7 +3,6 @@ import { ZodError } from "zod";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "./AppError.js";
 import { logger } from "../logger/logger.js";
-import { Sentry } from "../monitoring/sentry.js";
 
 export function notFoundHandler(req: Request, _res: Response, next: NextFunction) {
   next(new AppError(`Route ${req.method} ${req.path} not found`, StatusCodes.NOT_FOUND, "ROUTE_NOT_FOUND"));
@@ -27,11 +26,11 @@ export function errorHandler(error: unknown, req: Request, res: Response, _next:
     });
   }
 
+  // logger.error otomatis meneruskan ke Sentry lewat hook di
+  // core/logger/logger.ts — hanya kegagalan tak terduga (bukan AppError/
+  // ZodError di atas, itu kegagalan bisnis yang memang terduga) yang sampai
+  // ke titik ini sama sekali.
   logger.error({ error, path: req.path }, "Unhandled application error");
-  // Hanya kegagalan yang benar-benar tak terduga (bukan AppError/ZodError —
-  // itu kegagalan bisnis yang memang terduga, sudah ditangani di atas)
-  // yang layak memicu alert Sentry.
-  Sentry.captureException(error);
 
   return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
     success: false,
