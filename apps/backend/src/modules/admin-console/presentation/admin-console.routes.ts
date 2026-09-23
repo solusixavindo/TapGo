@@ -1,10 +1,14 @@
 import { Router } from "express";
+import { env } from "../../../config/env.js";
 import { prisma } from "../../../config/prisma.js";
+import { redis } from "../../../config/redis.js";
 import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
 import { requireAuth, requireRoles } from "../../../core/security/authContext.js";
 import { maskForOperator } from "../../../core/security/adminMasking.js";
 import { AdminConsoleService } from "../application/AdminConsoleService.js";
+import { SystemHealthService } from "../application/SystemHealthService.js";
+import { ErrorMonitoringService } from "../application/ErrorMonitoringService.js";
 import { AdminConsoleController } from "./admin-console.controller.js";
 import { WalletService } from "../../wallets/application/WalletService.js";
 import { PrismaWalletRepository } from "../../wallets/infrastructure/PrismaWalletRepository.js";
@@ -54,12 +58,25 @@ const walletService = new WalletService(new PrismaWalletRepository(prisma));
 const membershipOrderService = new MembershipOrderService(prisma);
 const adminRoleService = new AdminRoleService(prisma);
 const membershipRefundService = new MembershipRefundService(prisma);
+const systemHealthService = new SystemHealthService(prisma, redis);
+const errorMonitoringService = new ErrorMonitoringService({
+  authToken: env.SENTRY_AUTH_TOKEN,
+  orgSlug: env.SENTRY_ORG_SLUG,
+  apiBaseUrl: env.SENTRY_API_BASE_URL,
+  projectSlugs: {
+    backend: env.SENTRY_PROJECT_SLUG_BACKEND,
+    driver_app: env.SENTRY_PROJECT_SLUG_DRIVER_APP,
+    user_app: env.SENTRY_PROJECT_SLUG_USER_APP
+  }
+});
 const controller = new AdminConsoleController(
   service,
   walletService,
   membershipOrderService,
   adminRoleService,
-  membershipRefundService
+  membershipRefundService,
+  systemHealthService,
+  errorMonitoringService
 );
 const documentController = new MembershipDocumentController(
   new MembershipDocumentService(prisma)
@@ -93,6 +110,20 @@ adminConsoleRouter.get(
   requireRoles("SUPER_ADMIN_VIP"),
   validateRequest(adminFinancialReportQuerySchema),
   asyncHandler(controller.profitLossReport)
+);
+// Diagnostik server (memori, disk, koneksi DB/Redis) — hanya pemilik, sama
+// seperti laba rugi: memperlihatkan kondisi infrastruktur yang sensitif.
+adminConsoleRouter.get(
+  "/system/health",
+  requireRoles("SUPER_ADMIN_VIP"),
+  asyncHandler(controller.systemHealth)
+);
+// Issue Sentry terbaru — sama-sama informasi infrastruktur/operasional
+// sensitif, gerbangnya sama seperti /system/health.
+adminConsoleRouter.get(
+  "/system/errors",
+  requireRoles("SUPER_ADMIN_VIP"),
+  asyncHandler(controller.errorMonitoring)
 );
 adminConsoleRouter.get(
   "/audit-logs",

@@ -6,6 +6,10 @@ import { WalletService } from "../../wallets/application/WalletService.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
 import { AdminRoleService } from "../application/AdminRoleService.js";
 import { MembershipRefundService } from "../../memberships/application/MembershipRefundService.js";
+import { SystemHealthService } from "../application/SystemHealthService.js";
+import { ErrorMonitoringService, SentryProjectKey } from "../application/ErrorMonitoringService.js";
+
+const SENTRY_PROJECT_KEYS: SentryProjectKey[] = ["backend", "driver_app", "user_app"];
 
 export class AdminConsoleController {
   constructor(
@@ -13,7 +17,9 @@ export class AdminConsoleController {
     private readonly walletService: WalletService,
     private readonly membershipOrderService: MembershipOrderService,
     private readonly adminRoleService: AdminRoleService,
-    private readonly membershipRefundService: MembershipRefundService
+    private readonly membershipRefundService: MembershipRefundService,
+    private readonly systemHealthService: SystemHealthService,
+    private readonly errorMonitoringService: ErrorMonitoringService
   ) {}
 
   summary = async (_req: Request, res: Response) => {
@@ -41,6 +47,20 @@ export class AdminConsoleController {
 
   profitLossReport = async (req: Request, res: Response) => {
     const result = await this.adminConsoleService.profitLossReport(this.dateRange(req));
+    res.json({ success: true, data: result });
+  };
+
+  systemHealth = async (_req: Request, res: Response) => {
+    const result = await this.systemHealthService.report();
+    res.json({ success: true, data: result });
+  };
+
+  errorMonitoring = async (req: Request, res: Response) => {
+    const statsPeriod = req.query.statsPeriod === "14d" ? "14d" : "24h";
+    const project = SENTRY_PROJECT_KEYS.includes(req.query.project as SentryProjectKey)
+      ? (req.query.project as SentryProjectKey)
+      : "backend";
+    const result = await this.errorMonitoringService.recentIssues(project, { statsPeriod });
     res.json({ success: true, data: result });
   };
 

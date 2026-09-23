@@ -40,6 +40,20 @@ const envSchema = z.object({
   // sendiri (dipanggil sebelum env.ts, lihat komentarnya), murni untuk
   // validasi bentuk URL bila memang diisi.
   SENTRY_DSN: z.string().url().optional(),
+  // Untuk menarik daftar issue Sentry ke konsol admin (bukan untuk mengirim
+  // error — itu SENTRY_DSN di atas). Ketiganya harus terisi bersama; bila
+  // salah satu kosong, fitur ini fail-closed (nonaktif), bukan diam-diam
+  // memakai default yang salah. Lihat SystemHealthService/ErrorMonitoring.
+  SENTRY_AUTH_TOKEN: z.string().optional(),
+  SENTRY_ORG_SLUG: z.string().optional(),
+  // Tiga project Sentry TERPISAH — backend, driver_app, user_app adalah tiga
+  // aplikasi berbeda dan sengaja tidak berbagi satu project. Masing-masing
+  // opsional secara independen: admin console menampilkan tab hanya untuk
+  // yang terisi (lihat ErrorMonitoringService).
+  SENTRY_PROJECT_SLUG_BACKEND: z.string().optional(),
+  SENTRY_PROJECT_SLUG_DRIVER_APP: z.string().optional(),
+  SENTRY_PROJECT_SLUG_USER_APP: z.string().optional(),
+  SENTRY_API_BASE_URL: z.string().url().default("https://sentry.io/api/0"),
   // Direktori file log tambahan (error.log, audit.log) di samping stdout —
   // lihat core/logger/logger.ts. Sama seperti SENTRY_DSN, dibaca langsung
   // dari process.env oleh logger.ts (bukan dari sini) karena logger tidak

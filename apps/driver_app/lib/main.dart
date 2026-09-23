@@ -14,6 +14,7 @@ import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io_client;
 import 'package:url_launcher/url_launcher.dart';
@@ -43,7 +44,7 @@ part 'features/driver/presentation/driver_application.dart';
 part 'features/driver/presentation/driver_application_wizard.dart';
 part 'tapgo_app_guards.dart';
 
-void main() {
+void _runTapGoDriverApp() {
   installTapGoCrashGuards();
   runApp(
     ProviderScope(
@@ -65,5 +66,30 @@ void main() {
       ],
       child: const TapGoDriverApp(),
     ),
+  );
+}
+
+Future<void> main() async {
+  if (kSentryDsn.isEmpty) {
+    // Tanpa DSN, Sentry tidak aktif sama sekali — jangan panggil
+    // SentryFlutter.init() dengan DSN kosong (SDK akan warning).
+    _runTapGoDriverApp();
+    return;
+  }
+  await SentryFlutter.init(
+    (options) {
+      options.dsn = kSentryDsn;
+      options.environment = const String.fromEnvironment(
+        'TAPGO_ENV',
+        defaultValue: 'production',
+      );
+      // 10%: sama seperti tracesSampleRate backend — cukup untuk gambaran
+      // performa tanpa membebani kuota Sentry.
+      options.tracesSampleRate = 0.1;
+      // Data pribadi pengguna (NIK, telepon, dsb.) tidak boleh terkirim ke
+      // Sentry — konsisten dengan redaksi ketat logger backend.
+      options.sendDefaultPii = false;
+    },
+    appRunner: _runTapGoDriverApp,
   );
 }

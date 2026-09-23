@@ -14,7 +14,7 @@ import { clearSession, readRole, roleAtLeast } from "../lib/api";
  */
 
 type Minimum = "ADMIN" | "SUPER_ADMIN" | "SUPER_ADMIN_VIP";
-type IconName = "home" | "badge" | "car" | "users" | "wallet" | "chart" | "scale" | "clipboard" | "shield";
+type IconName = "home" | "badge" | "car" | "users" | "wallet" | "chart" | "scale" | "clipboard" | "shield" | "route" | "pulse" | "bug";
 
 const NAV_GROUPS: Array<{
   title: string;
@@ -29,7 +29,8 @@ const NAV_GROUPS: Array<{
     items: [
       { href: "/member-requests", label: "Persetujuan Member", minimum: "ADMIN", icon: "badge" },
       { href: "/driver-documents", label: "Dokumen Driver", minimum: "ADMIN", icon: "car" },
-      { href: "/members", label: "Direktori Member", minimum: "ADMIN", icon: "users" }
+      { href: "/members", label: "Direktori Member", minimum: "ADMIN", icon: "users" },
+      { href: "/rides", label: "Monitoring Perjalanan", minimum: "ADMIN", icon: "route" }
     ]
   },
   {
@@ -45,6 +46,13 @@ const NAV_GROUPS: Array<{
     items: [
       { href: "/log-audit", label: "Log Audit", minimum: "SUPER_ADMIN", icon: "clipboard" },
       { href: "/roles", label: "Pengaturan Role", minimum: "SUPER_ADMIN_VIP", icon: "shield" }
+    ]
+  },
+  {
+    title: "Pemantauan Sistem",
+    items: [
+      { href: "/system-health", label: "Kesehatan Server", minimum: "SUPER_ADMIN_VIP", icon: "pulse" },
+      { href: "/error-monitoring", label: "Error & Bugs", minimum: "SUPER_ADMIN_VIP", icon: "bug" }
     ]
   }
 ];
@@ -74,7 +82,20 @@ const ICONS: Record<IconName, ReactNode> = {
   chart: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />,
   scale: <path d="M12 4v16M6 20h12M5 8h14M5 8l-3 7a3.5 3.5 0 0 0 6 0L5 8ZM19 8l-3 7a3.5 3.5 0 0 0 6 0L19 8Z" />,
   clipboard: <path d="M9 4h6v3H9V4ZM7 5.5H6a1 1 0 0 0-1 1V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1h-1M8.5 12h7M8.5 16h5" />,
-  shield: <path d="M12 3 5 6v5.5c0 4.3 2.9 8 7 9.5 4.1-1.5 7-5.2 7-9.5V6l-7-3Z" />
+  shield: <path d="M12 3 5 6v5.5c0 4.3 2.9 8 7 9.5 4.1-1.5 7-5.2 7-9.5V6l-7-3Z" />,
+  route: (
+    <>
+      <path d="M5 19a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM19 10a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+      <path d="M5 16.5V13a4 4 0 0 1 4-4h6a4 4 0 0 0 4-4" />
+    </>
+  ),
+  pulse: <path d="M3 12h4l2-7 4 14 2-7h6" />,
+  bug: (
+    <>
+      <path d="M9 8.5V6.5a3 3 0 1 1 6 0v2M6.5 11H4M20 11h-2.5M6.5 16H4M20 16h-2.5M8 20l-1.5 2M16 20l1.5 2" />
+      <path d="M8 11.5a4 4 0 0 1 8 0V16a4 4 0 0 1-8 0v-4.5Z" />
+    </>
+  )
 };
 
 function Icon({ name }: { name: IconName }) {

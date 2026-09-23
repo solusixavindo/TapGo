@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../application/ppob_providers.dart';
 import '../domain/ppob_models.dart';
@@ -144,7 +145,19 @@ class _PpobCheckoutScreenState extends ConsumerState<PpobCheckoutScreen> {
       setState(() => _result = order);
       // Riwayat di-refresh agar order baru langsung terlihat.
       ref.invalidate(ppobOrdersProvider);
-    } catch (error) {
+    } catch (error, stackTrace) {
+      if (Sentry.isEnabled) {
+        Sentry.captureException(
+          error,
+          stackTrace: stackTrace,
+          withScope: (scope) => scope.setContexts('ppob_order', {
+            'sku': widget.product.sku,
+            // JANGAN sertakan targetNumber mentah (nomor tujuan pelanggan) —
+            // itu identifier pribadi, sama alasannya dengan redaksi "phone"
+            // di logger backend.
+          }),
+        );
+      }
       if (!mounted) {
         return;
       }

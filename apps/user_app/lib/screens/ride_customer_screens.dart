@@ -531,11 +531,14 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     });
     try {
       await action();
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted) {
         return;
       }
       if (tapGoRideIsSessionExpired(error)) {
+        // Sesi kedaluwarsa BUKAN bug — jangan penuhi Sentry dengan noise
+        // untuk sesuatu yang sudah punya penanganan pemulihan sendiri di
+        // bawah, jadi TIDAK di-capture di cabang ini.
         // 401 dicoba dipulihkan lewat refresh token lebih dulu; logout hanya
         // bila server menegas menolak.
         final outcome = await _resolveRideSessionExpired(context, ref);
@@ -545,13 +548,22 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         if (outcome == TapGoSessionRefreshResult.refreshed) {
           try {
             await action();
-          } catch (retryError) {
+          } catch (retryError, retryStackTrace) {
             if (!mounted) {
               return;
             }
             if (tapGoRideIsSessionExpired(retryError)) {
               _handleRideSessionExpired(context, ref);
               return;
+            }
+            if (kSentryDsn.isNotEmpty) {
+              Sentry.captureException(
+                retryError,
+                stackTrace: retryStackTrace,
+                withScope: (scope) => scope.setContexts('ride_action', {
+                  'service': _service.name,
+                }),
+              );
             }
             setState(() => _errorMessage = tapGoRideErrorMessage(retryError));
           }
@@ -563,6 +575,15 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
           );
         }
         return;
+      }
+      if (kSentryDsn.isNotEmpty) {
+        Sentry.captureException(
+          error,
+          stackTrace: stackTrace,
+          withScope: (scope) => scope.setContexts('ride_action', {
+            'service': _service.name,
+          }),
+        );
       }
       setState(() => _errorMessage = tapGoRideErrorMessage(error));
     } finally {

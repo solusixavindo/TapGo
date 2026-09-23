@@ -3,6 +3,9 @@ part of 'main.dart';
 void installTapGoCrashGuards() {
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
+    if (kSentryDsn.isNotEmpty) {
+      Sentry.captureException(details.exception, stackTrace: details.stack);
+    }
     if (kDebugMode) return;
     // Produksi: jendela merah default diganti layar netral; crash tetap
     // tercatat di log, bukan hilang diam-diam.
@@ -17,6 +20,9 @@ void installTapGoCrashGuards() {
   // berarti isi error (berpotensi memuat data request/response) bocor ke
   // log perangkat (mis. adb logcat) pengguna nyata.
   PlatformDispatcher.instance.onError = (error, stack) {
+    if (kSentryDsn.isNotEmpty) {
+      Sentry.captureException(error, stackTrace: stack);
+    }
     if (kDebugMode) {
       debugPrint('[TapGo Crash] ${error.runtimeType}: $error\n$stack');
     }

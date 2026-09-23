@@ -17,3 +17,9 @@ const String kGoogleServerClientId = String.fromEnvironment(
   defaultValue:
       '637941236322-thr3677h1kqvpegan9lg7lr8pm7h9b7r.apps.googleusercontent.com',
 );
+
+// Kosong = Sentry tidak aktif sama sekali (fail-closed) — sama pola dengan
+// kDriverDemoMode dkk di atas. Diisi lewat --dart-define saat build, bukan
+// ditulis langsung di kode (DSN client Sentry bukan rahasia mutlak, tapi
+// tetap sebaiknya per-environment, bukan ditempel permanen).
+const String kSentryDsn = String.fromEnvironment('SENTRY_DSN', defaultValue: '');

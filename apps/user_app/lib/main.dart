@@ -16,6 +16,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io_client;
 import 'package:url_launcher/url_launcher.dart';
@@ -90,6 +91,10 @@ const _tapGoApiBaseUrl = String.fromEnvironment(
 const _isTapGoProductionBuild = _tapGoAppMode == 'production';
 const _isTapGoUatBuild = _tapGoAppMode == 'staging';
 const _isTapGoDevelopmentBuild = _tapGoAppMode == 'development';
+
+// Kosong = Sentry tidak aktif sama sekali (fail-closed) — sama pola dengan
+// _tapGoAppMode dkk di atas. Diisi lewat --dart-define saat build.
+const String kSentryDsn = String.fromEnvironment('SENTRY_DSN', defaultValue: '');
 bool tapGoEnablePaymentSimulatorForTests = false;
 Future<List<Map<String, dynamic>>> Function()?
     tapGoSupportTicketsLoaderForTests;
@@ -423,6 +428,28 @@ bool tapGoDisablePersistenceForTests = false;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (kSentryDsn.isEmpty) {
+    // Tanpa DSN, Sentry tidak aktif sama sekali — jangan panggil
+    // SentryFlutter.init() dengan DSN kosong (SDK akan warning).
+    await _runTapGoUserApp();
+    return;
+  }
+  await SentryFlutter.init(
+    (options) {
+      options.dsn = kSentryDsn;
+      options.environment = _tapGoAppMode;
+      // 10%: sama seperti tracesSampleRate backend — cukup untuk gambaran
+      // performa tanpa membebani kuota Sentry.
+      options.tracesSampleRate = 0.1;
+      // Data pribadi pengguna (NIK, telepon, dsb.) tidak boleh terkirim ke
+      // Sentry — konsisten dengan redaksi ketat logger backend.
+      options.sendDefaultPii = false;
+    },
+    appRunner: _runTapGoUserApp,
+  );
+}
+
+Future<void> _runTapGoUserApp() async {
   installTapGoCrashGuards();
   try {
     if (_isTapGoProductionBuild) {

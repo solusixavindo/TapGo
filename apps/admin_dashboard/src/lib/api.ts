@@ -463,6 +463,166 @@ export async function listMembers(params: {
   return { items: result.items, total: result.pagination?.total ?? result.total ?? result.items.length };
 }
 
+// --- Monitoring ride/trip (ADMIN ke atas) -----------------------------------
+
+export type AdminRideOrder = {
+  reference: string;
+  serviceType: "MOTORCYCLE" | "CAR";
+  status: string;
+  isFinal: boolean;
+  pickupAddress: string;
+  dropoffAddress: string;
+  distanceMeters: number;
+  durationSeconds: number;
+  totalFare: number;
+  currency: string;
+  payment: { method: string; state: string };
+  passenger: { name: string | null; phoneMasked: string | null };
+  driver: {
+    profileId: string;
+    name: string | null;
+    phoneMasked: string | null;
+    status: string;
+    availability: string;
+  } | null;
+  vehicle: {
+    id: string;
+    type: string;
+    plateNumberMasked: string;
+    verificationStatus: string;
+    isActive: boolean;
+  } | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminRideOrderDetail = AdminRideOrder & {
+  events: Array<{
+    type: string;
+    actorRole: string;
+    previousStatus: string | null;
+    newStatus: string;
+    metadata: Record<string, unknown> | null;
+    createdAt: string;
+  }>;
+};
+
+export type AdminRideDriver = {
+  profileId: string;
+  name: string | null;
+  phoneMasked: string | null;
+  status: string;
+  availability: string;
+  ratingAverage: string;
+  ratingCount: number;
+  lastSeenAt: string | null;
+  vehicles: Array<{
+    id: string;
+    type: string;
+    plateNumberMasked: string;
+    verificationStatus: string;
+    isActive: boolean;
+  }>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function listAdminRides(params: { status?: string; serviceType?: string; limit?: number }) {
+  const query = new URLSearchParams({ limit: String(params.limit ?? 100) });
+  if (params.status) query.set("status", params.status);
+  if (params.serviceType) query.set("serviceType", params.serviceType);
+  return request<AdminRideOrder[]>(`/admin/rides?${query.toString()}`);
+}
+
+export function getAdminRide(reference: string) {
+  return request<AdminRideOrderDetail>(`/admin/rides/${reference}`);
+}
+
+export function listAdminRideDrivers(params: { status?: string; limit?: number }) {
+  const query = new URLSearchParams({ limit: String(params.limit ?? 100) });
+  if (params.status) query.set("status", params.status);
+  return request<AdminRideDriver[]>(`/admin/rides/drivers?${query.toString()}`);
+}
+
+// --- Kesehatan server (SUPER_ADMIN_VIP) -------------------------------------
+
+export type SystemHealthReport = {
+  server: {
+    hostname: string;
+    platform: string;
+    nodeVersion: string;
+    processUptimeSeconds: number;
+    systemUptimeSeconds: number;
+    loadAverage: [number, number, number];
+    cpuCount: number;
+  };
+  memory: {
+    totalBytes: number;
+    freeBytes: number;
+    usedBytes: number;
+    usedPercent: number;
+    processRssBytes: number;
+    processHeapUsedBytes: number;
+  };
+  disk:
+    | { available: true; totalBytes: number; usedBytes: number; usedPercent: number }
+    | { available: false };
+  database: { connected: boolean; latencyMs: number | null; error?: string };
+  redis: { configured: boolean; connected: boolean; latencyMs: number | null; error?: string };
+  checkedAt: string;
+};
+
+export function systemHealthReport() {
+  return request<SystemHealthReport>("/admin/system/health");
+}
+
+export type SentryIssue = {
+  id: string;
+  shortId: string;
+  title: string;
+  culprit: string | null;
+  level: string;
+  status: string;
+  count: string;
+  userCount: number;
+  firstSeen: string;
+  lastSeen: string;
+  permalink: string;
+};
+
+export type SentryProjectKey = "backend" | "driver_app" | "user_app";
+
+export const SENTRY_PROJECT_LABEL: Record<SentryProjectKey, string> = {
+  backend: "Backend",
+  driver_app: "Driver App",
+  user_app: "User App"
+};
+
+export type ErrorMonitoringReport =
+  | { configured: false; configuredProjects: SentryProjectKey[] }
+  | { configured: true; configuredProjects: SentryProjectKey[]; issues: SentryIssue[]; fetchedAt: string };
+
+export function errorMonitoringReport(project: SentryProjectKey, statsPeriod: "24h" | "14d" = "24h") {
+  return request<ErrorMonitoringReport>(`/admin/system/errors?project=${project}&statsPeriod=${statsPeriod}`);
+}
+
+export function formatBytes(bytes: number) {
+  if (bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / Math.pow(1024, exponent);
+  return `${value.toFixed(exponent === 0 ? 0 : 1)} ${units[exponent]}`;
+}
+
+export function formatDuration(seconds: number) {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days} hari ${hours} jam`;
+  if (hours > 0) return `${hours} jam ${minutes} menit`;
+  return `${minutes} menit`;
+}
+
 export function formatRupiah(value: string | number) {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",

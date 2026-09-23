@@ -1,16 +1,45 @@
-# Sentry untuk driver_app & user_app (panduan + snippet)
+# Sentry untuk driver_app & user_app
 
-Dokumentasi ini **belum diterapkan** ke `pubspec.yaml`/`main.dart` kedua app —
-sesuai permintaan Owner ("panduan dan snippet"), bukan integrasi langsung.
-Alasan: menambah dependency + inisialisasi Sentry ke app produksi butuh DSN
-sungguhan per app (dua project Sentry terpisah — driver_app dan user_app
-adalah aplikasi berbeda, jangan berbagi satu DSN) dan menambah ukuran
-binary, keduanya keputusan yang lebih baik dikonfirmasi Owner dulu sebelum
-diterapkan ke app yang sudah berjalan di produksi.
+**Status: SUDAH diterapkan** ke `pubspec.yaml`/`main.dart` kedua app
+(2026-09-23, setelah Owner mendaftar di sentry.io). Kode di bawah bukan lagi
+sekadar contoh — ini menjelaskan integrasi yang sudah ada di repo.
 
-Backend Node.js SUDAH terintegrasi sungguhan (bukan cuma panduan) — lihat
+Yang masih perlu Owner lakukan: buat DUA project Sentry terpisah di
+[sentry.io](https://sentry.io) (org `xavindo-1i`), platform **Flutter** —
+`tapgo-driver-app` dan `tapgo-user-app`. driver_app dan user_app adalah
+aplikasi berbeda, JANGAN berbagi satu DSN. Tanpa DSN diisi saat build,
+Sentry tetap tidak aktif sama sekali (fail-closed) — app berjalan normal,
+hanya belum melaporkan apa pun.
+
+Backend Node.js SUDAH terintegrasi sungguhan juga — lihat
 `apps/backend/src/core/monitoring/sentry.ts`, `SENTRY_DSN` di
 `.env.production.example`.
+
+## Catatan implementasi (untuk siapa pun yang menyentuh kode ini nanti)
+
+- `kSentryDsn` didefinisikan di `apps/driver_app/lib/core/config/app_config.dart`
+  dan `apps/user_app/lib/main.dart` — `String.fromEnvironment('SENTRY_DSN')`,
+  kosong secara default.
+- `main()` di kedua app membungkus `runApp(...)` yang sudah ada (kini
+  diekstrak jadi `_runTapGoDriverApp()`/`_runTapGoUserApp()`) dengan
+  `SentryFlutter.init(...)` HANYA bila `kSentryDsn` terisi.
+- `lib/tapgo_app_guards.dart` (file yang sama, di-symlink dari
+  `driver_app` ke `user_app` — hanya SATU salinan sungguhan, di user_app)
+  memanggil `Sentry.captureException` di dalam `FlutterError.onError` dan
+  `PlatformDispatcher.instance.onError` yang SUDAH ADA sebelumnya — bukan
+  mekanisme fallback baru.
+- Dua titik tangkap transaksi-kritis (sudah punya try/catch sendiri, jadi
+  TIDAK pernah sampai ke handler global di atas) ditambahi
+  `Sentry.captureException` eksplisit: `ppob_checkout_screen.dart`'s
+  `_pay()`, dan `ride_customer_screens.dart`'s `_guarded()`. Sesi
+  kedaluwarsa (401) SENGAJA tidak di-capture di sana — itu bukan bug,
+  sudah punya alur pemulihan sendiri.
+- `Sentry.setUser` (identifikasi akun tanpa PII) **belum** dipasang — model
+  sesi klien (`DriverSession` dkk) tidak menyimpan ID stabil di sisi
+  Flutter saat ini (hanya token + nama). Menambahkannya butuh decode JWT
+  atau perubahan API, di luar cakupan permintaan "aktifkan monitoring" —
+  catatan untuk pekerjaan lanjutan bila dibutuhkan.
+- `options.sendDefaultPii = false` diset eksplisit di kedua app.
 
 ## 1. Buat project Sentry
 
