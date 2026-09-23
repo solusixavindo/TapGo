@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 /**
  * logDir dibaca SEKALI di top-level module logger.ts saat pertama diimpor —
@@ -55,7 +55,15 @@ describe("logger dengan LOG_DIR (pemisahan audit.log / error.log)", () => {
 describe("logger tanpa LOG_DIR (perilaku default tidak berubah)", () => {
   it("tidak melempar error dan tidak membuat direktori file apa pun", async () => {
     delete process.env.LOG_DIR;
-    const mod = await import("../../src/core/logger/logger.js?no-log-dir");
+    // vi.resetModules() memaksa import() berikutnya mengevaluasi ulang modul
+    // dari awal (logDir dibaca lagi, kali ini undefined) — tanpa ini, import
+    // dengan specifier yang SAMA akan mengembalikan modul yang sudah dicache
+    // dari describe block di atas (yang LOG_DIR-nya sudah terlanjur ke tmpDir).
+    // Query string (?no-log-dir) dihindari sengaja: valid di runtime tapi
+    // membuat tsc gagal resolve modul saat `npm run build` (tests/**
+    // ikut di-typecheck, lihat tsconfig.json include).
+    vi.resetModules();
+    const mod = await import("../../src/core/logger/logger.js");
     expect(() => mod.logger.info("halo")).not.toThrow();
     expect(() => mod.auditLogger.info("halo audit")).not.toThrow();
   });
