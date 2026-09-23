@@ -458,6 +458,7 @@ adminRideRouter.get(
 
 adminRideRouter.patch(
   "/:reference/status",
+  requireRoles("SUPER_ADMIN"),
   validateRequest(adminCorrectRideStatusSchema),
   asyncHandler(async (req, res) => {
     const data = await rideService.correctStatusByAdmin({
@@ -473,6 +474,7 @@ adminRideRouter.patch(
 
 adminRideRouter.patch(
   "/drivers/:driverProfileId/status",
+  requireRoles("SUPER_ADMIN"),
   validateRequest(adminDriverStatusSchema),
   asyncHandler(async (req, res) => {
     const data = await rideService.updateDriverStatusByAdmin({
@@ -487,7 +489,6 @@ adminRideRouter.patch(
 
 adminRideRouter.patch(
   "/vehicles/:vehicleId/verification",
-  requireRoles("SUPER_ADMIN"),
   validateRequest(adminVehicleVerificationSchema),
   asyncHandler(async (req, res) => {
     const data = await rideService.updateVehicleVerificationByAdmin({
@@ -503,7 +504,6 @@ adminRideRouter.patch(
 
 adminRideRouter.get(
   "/drivers/:driverProfileId",
-  requireRoles("SUPER_ADMIN"),
   validateRequest(adminDriverProfileSchema),
   asyncHandler(async (req, res) => {
     const data = await rideService.getAdminDriver(
