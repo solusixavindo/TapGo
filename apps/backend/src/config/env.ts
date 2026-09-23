@@ -35,6 +35,17 @@ const envSchema = z.object({
    * Opsional; tanpa nilai, rate limiter memakai penyimpanan dalam-memori
    * per-proses (hanya aman untuk deployment satu proses). */
   RATE_LIMIT_REDIS_URL: z.string().url().optional(),
+  // Kosong = Sentry tidak aktif sama sekali (fail-closed, lihat
+  // core/monitoring/sentry.ts) — TIDAK dibaca dari sini oleh sentry.ts
+  // sendiri (dipanggil sebelum env.ts, lihat komentarnya), murni untuk
+  // validasi bentuk URL bila memang diisi.
+  SENTRY_DSN: z.string().url().optional(),
+  // Direktori file log tambahan (error.log, audit.log) di samping stdout —
+  // lihat core/logger/logger.ts. Sama seperti SENTRY_DSN, dibaca langsung
+  // dari process.env oleh logger.ts (bukan dari sini) karena logger tidak
+  // boleh bergantung pada env.ts (lihat komentar di logger.ts) — field ini
+  // hanya dokumentasi/referensi skema, bukan sumber nilai yang dipakai.
+  LOG_DIR: z.string().optional(),
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
   JWT_ACCESS_TTL: z.string().default("15m"),

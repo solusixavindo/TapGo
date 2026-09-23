@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import pino from "pino";
 
 /**
@@ -7,12 +9,25 @@ import pino from "pino";
  * dsb. Logger diimpor hampir oleh semua modul — bila ia membaca env di tingkat
  * modul, maka setiap test/ tooling yang mengimpor logger (langsung maupun
  * transitif, mis. lewat rateLimitStore) ikut memaksa parse env sebelum env test
- * sempat disetel, dan gagal dimuat dengan ZodError. NODE_ENV adalah konvensi
- * Node yang aman dibaca langsung; tidak perlu lewat skema validasi penuh.
+ * sempat disetel, dan gagal dimuat dengan ZodError. NODE_ENV dan LOG_DIR adalah
+ * konvensi yang aman dibaca langsung; tidak perlu lewat skema validasi penuh.
  */
-export const logger = pino({
-  level: process.env.NODE_ENV === "production" ? "info" : "debug",
-  redact: {
+const logDir = process.env.LOG_DIR;
+
+/**
+ * Tanpa LOG_DIR (dev/test/CI — nilai default), null di sini membuat `logger`/
+ * `auditLogger` di bawah HANYA memakai stdout, identik dengan perilaku
+ * sebelum perubahan ini. Dengan LOG_DIR (production compose), buat file
+ * tujuan lewat pino.destination — sync:false supaya tidak memblokir event
+ * loop, sama seperti stdout bawaan pino.
+ */
+function fileDestination(filename: string): pino.DestinationStream | null {
+  if (!logDir) return null;
+  fs.mkdirSync(logDir, { recursive: true });
+  return pino.destination({ dest: path.join(logDir, filename), mkdir: true, sync: false });
+}
+
+const redactConfig = {
     paths: [
       "req.headers.authorization",
       "req.headers.cookie",
@@ -74,11 +89,43 @@ export const logger = pino({
       "req.body.email",
       "AUTH_RECOVERY_HMAC_SECRET"
     ],
-    censor: "[REDACTED]"
-  },
-  formatters: {
-    level(label) {
-      return { level: label };
-    }
+  censor: "[REDACTED]"
+};
+
+const levelFormatter = {
+  level(label: string) {
+    return { level: label };
   }
-});
+};
+
+const errorFile = fileDestination("error.log");
+export const logger = pino(
+  {
+    level: process.env.NODE_ENV === "production" ? "info" : "debug",
+    redact: redactConfig,
+    formatters: levelFormatter
+  },
+  errorFile
+    ? pino.multistream([{ stream: process.stdout }, { stream: errorFile, level: "error" }])
+    : process.stdout
+);
+
+/**
+ * Log audit tersendiri — TERPISAH dari error.log di atas, sesuai permintaan
+ * "log transaksi/audit dipisah dari log error harian". Melengkapi (bukan
+ * menggantikan) audit trail tabel AuditLog di database yang sudah jadi
+ * sumber kebenaran utama (lihat 16+ pemanggil `auditLog.create` di seluruh
+ * modul) — dipakai lewat auditRequestLogger di app.ts untuk mencatat semua
+ * request ke rute admin/driver-review dalam bentuk yang bisa di-tail
+ * langsung dari file, tanpa perlu query database.
+ */
+const auditFile = fileDestination("audit.log");
+export const auditLogger = pino(
+  {
+    level: "info",
+    redact: redactConfig,
+    formatters: levelFormatter,
+    base: { scope: "audit" }
+  },
+  auditFile ? pino.multistream([{ stream: process.stdout }, { stream: auditFile }]) : process.stdout
+);

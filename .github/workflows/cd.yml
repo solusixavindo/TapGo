@@ -1,0 +1,71 @@
+name: CD
+
+# Terpicu saat tag rilis baru didorong (mis. `git tag v1.2.0 && git push --tags`).
+# TIDAK otomatis pada setiap push ke main — deploy produksi harus sengaja.
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  deploy:
+    name: Deploy backend ke VPS
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH ke VPS dan deploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          # Semua nilai di atas & di bawah lewat GitHub Secrets — belum diisi
+          # sampai VPS produksi siap (lihat catatan Owner). Tanpa secrets ini,
+          # workflow gagal jelas di langkah SSH, bukan diam-diam salah target.
+          # Prasyarat di VPS: Node 20+ & npm terpasang di HOST (bukan cuma di
+          # dalam container) — dipakai untuk menjalankan `prisma migrate
+          # deploy` langsung, sebelum container backend baru mulai query.
+          # Docker + plugin Compose juga wajib sudah terpasang.
+          script: |
+            set -euo pipefail
+            cd "${{ secrets.VPS_PROJECT_PATH }}"
+
+            echo "==> git fetch tag ${{ github.ref_name }}"
+            git fetch --tags
+            git checkout "${{ github.ref_name }}"
+
+            echo "==> migrasi database (idempoten, aman diulang)"
+            npm ci
+            npx prisma migrate deploy --schema apps/backend/prisma/schema.prisma
+
+            echo "==> build image & restart hanya service backend"
+            # --no-deps: postgres/redis TIDAK direstart — migrasi di atas
+            # sudah jalan terhadap instance yang sedang hidup, merestart
+            # keduanya di sini cuma menambah downtime tanpa perlu.
+            docker compose -f infra/docker-compose.prod.yml up -d --build --no-deps backend
+
+            echo "==> tunggu container sehat (health check bawaan Docker)"
+            for i in $(seq 1 20); do
+              status=$(docker inspect --format='{{.State.Health.Status}}' tapgo-backend-prod 2>/dev/null || echo "starting")
+              if [ "$status" = "healthy" ]; then
+                echo "Container sehat."
+                exit 0
+              fi
+              echo "  percobaan $i/20: status=$status"
+              sleep 3
+            done
+            echo "GAGAL: container tidak sehat setelah 60 detik — cek log dengan:"
+            echo "  docker compose -f infra/docker-compose.prod.yml logs backend"
+            exit 1
+
+# CATATAN JUJUR soal "zero-downtime":
+# Backend sudah punya graceful shutdown yang benar (SIGTERM -> server.close()
+# -> drain koneksi -> disconnect Redis/Prisma, lihat src/server.ts) dan
+# healthcheck (/health). Kombinasi ini membuat jendela downtime restart
+# SANGAT singkat (durasi restart satu container, biasanya beberapa detik),
+# BUKAN nol mutlak. VPS tunggal tanpa load balancer/replica backend memang
+# tidak bisa zero-downtime sungguhan — request yang masuk PERSIS saat
+# container lama berhenti dan yang baru belum menerima trafik akan gagal.
+# Peningkatan ke zero-downtime penuh (2+ replica backend di belakang Nginx
+# upstream, rolling restart satu-per-satu) adalah pekerjaan terpisah,
+# bukan bagian dari setup ini.

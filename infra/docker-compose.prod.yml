@@ -1,0 +1,84 @@
+# Compose PRODUKSI — terpisah dari docker-compose.yml (dev/CI-adjacent).
+# Beda utama dari versi dev:
+#   - postgres & redis TIDAK di-expose ke host sama sekali (hanya lewat
+#     network internal Docker) — versi dev sengaja expose ke localhost:5433
+#     dst untuk kerja lokal, itu tidak boleh terulang di VPS produksi.
+#   - backend hanya expose ke 127.0.0.1 (Nginx di host yang menerima trafik
+#     publik dan reverse-proxy ke sini — lihat infra/nginx/).
+#   - kredensial lewat env_file (apps/backend/.env asli di VPS, TIDAK pernah
+#     masuk repo), bukan nilai hardcode seperti di compose dev.
+#
+# Jalankan dari root repo:
+#   docker compose -f infra/docker-compose.prod.yml up -d --build backend
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tapgo-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tapgo}
+      POSTGRES_USER: ${POSTGRES_USER:-tapgo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?wajib diisi di apps/backend/.env}
+    volumes:
+      - tapgo-postgres-prod-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tapgo} -d ${POSTGRES_DB:-tapgo}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: tapgo-redis-prod
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - tapgo-redis-prod-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ..
+      dockerfile: apps/backend/Dockerfile
+    container_name: tapgo-backend-prod
+    restart: unless-stopped
+    env_file:
+      - ../apps/backend/.env
+    environment:
+      # Nama service Docker, bukan localhost — backend bicara ke postgres/redis
+      # lewat network internal compose ini, terlepas dari apa pun DATABASE_URL/
+      # REDIS_URL di .env untuk konteks lain (mis. dev lokal).
+      DATABASE_URL: postgresql://${POSTGRES_USER:-tapgo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tapgo}?schema=public
+      REDIS_URL: redis://redis:6379
+      RATE_LIMIT_REDIS_URL: redis://redis:6379
+    ports:
+      # HANYA localhost — Nginx di host yang menerima trafik publik dan
+      # reverse-proxy ke sini (lihat infra/nginx/README.md).
+      - "127.0.0.1:${PORT:-4000}:${PORT:-4000}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Sama seperti docker-compose.yml (dev): opsional, butuh data hasil olahan
+  # osrm-extract/partition/customize di infra/osrm-data/ lebih dulu (jalankan
+  # scripts/osrm-setup.sh sekali). Tidak start otomatis tanpa nama service.
+  osrm:
+    image: osrm/osrm-backend:v5.27.1
+    container_name: tapgo-osrm-prod
+    profiles: ["osrm"]
+    restart: unless-stopped
+    command: ["osrm-routed", "--algorithm", "mld", "/data/indonesia-latest.osrm"]
+    ports:
+      - "127.0.0.1:5001:5000"
+    volumes:
+      - ./osrm-data:/data
+
+volumes:
+  tapgo-postgres-prod-data:
+  tapgo-redis-prod-data:

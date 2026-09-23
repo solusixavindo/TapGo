@@ -5,6 +5,7 @@ import helmet from "helmet";
 import { pinoHttp } from "pino-http";
 import { corsOrigins } from "./config/env.js";
 import { errorHandler, notFoundHandler } from "./core/errors/errorHandler.js";
+import { auditRequestLogger } from "./core/http/auditRequestLogger.js";
 import { logger } from "./core/logger/logger.js";
 import { adminRateLimiter, apiRateLimiter, paymentRateLimiter } from "./core/security/rateLimit.js";
 import { authRouter, webAuthRouter } from "./modules/auth/presentation/auth.routes.js";
@@ -66,6 +67,13 @@ export function createApp() {
   app.use(express.urlencoded({ extended: true }));
   app.use(pinoHttp({ logger }));
   app.use(apiRateLimiter);
+
+  // Dipasang di prefix, SEBELUM semua router /api/v1/admin/* di bawah
+  // (profit-sharing, rides, driver-review, scope-grants, support, ppob,
+  // admin console) — mencatat SETIAP request ke salah satunya ke audit.log,
+  // termasuk yang ditolak di tahap otorisasi, tanpa perlu didaftarkan
+  // berulang di tiap app.use() router individual.
+  app.use("/api/v1/admin", auditRequestLogger);
 
   app.get("/health", (_req, res) => {
     res.json(healthPayload());

@@ -1,0 +1,26 @@
+# Contoh cron job untuk backup-db.sh — jalan tiap hari jam 03:00 WIB.
+#
+# Cara pasang di VPS (pilih salah satu):
+#
+# 1) /etc/cron.d/tapgo-backup (perlu root, jalan sebagai user layanan):
+#      Copy baris di bawah ini (tanpa komentar) ke /etc/cron.d/tapgo-backup,
+#      pastikan diakhiri baris kosong.
+#
+# 2) crontab -e (sebagai user yang menjalankan backup):
+#      Copy baris di bawah (tanpa kolom user) ke crontab user tersebut.
+#
+# Variabel R2_*/DATABASE_URL TIDAK ditaruh langsung di file cron (bisa
+# terbaca user lain via /etc/cron.d) — taruh di /etc/tapgo-backup.env
+# (chmod 600, hanya bisa dibaca root/user layanan) dan source dari sana:
+#
+#   0 3 * * * www-data . /etc/tapgo-backup.env && /opt/tapgo/scripts/backup-db.sh >> /var/log/tapgo-backup.log 2>&1
+#
+# Contoh isi /etc/tapgo-backup.env:
+#   export DATABASE_URL="postgresql://tapgo:xxxxx@localhost:5432/tapgo?schema=public"
+#   export R2_ACCOUNT_ID="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+#   export R2_ACCESS_KEY_ID="xxxxxxxxxxxxxxxxxxxx"
+#   export R2_SECRET_ACCESS_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+#   export R2_BUCKET_NAME="tapgo-db-backups"
+#   export BACKUP_RETENTION_DAYS="7"
+
+0 3 * * * www-data . /etc/tapgo-backup.env && /opt/tapgo/scripts/backup-db.sh >> /var/log/tapgo-backup.log 2>&1

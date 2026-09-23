@@ -1,0 +1,21 @@
+# Contoh konfigurasi logrotate untuk error.log/audit.log (lihat
+# core/logger/logger.ts) — HANYA relevan bila LOG_DIR di-set di
+# apps/backend/.env produksi. Tanpa LOG_DIR, tidak ada file di sini sama
+# sekali (log tetap ke stdout, ditangkap `docker logs`/journald seperti
+# biasa) dan file konfigurasi ini tidak melakukan apa-apa.
+#
+# Cara pasang di VPS:
+#   sudo cp infra/logrotate/tapgo-backend /etc/logrotate.d/tapgo-backend
+#   sudo logrotate --debug /etc/logrotate.d/tapgo-backend   # simulasi, tanpa mengubah apa pun
+#
+# Sesuaikan path di bawah dengan LOG_DIR sungguhan di .env produksi Anda.
+
+/var/log/tapgo/*.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

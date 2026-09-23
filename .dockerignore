@@ -1,0 +1,21 @@
+# Berlaku untuk build context root (docker build dijalankan dari sini, lihat
+# komentar di apps/backend/Dockerfile). Mengecualikan seluruh app lain di
+# monorepo ini yang tidak dibutuhkan backend, plus artefak besar/berulang.
+node_modules
+**/node_modules
+**/dist
+**/build
+**/.next
+**/coverage
+.git
+apps/admin_dashboard
+apps/landing-page
+apps/driver_app
+apps/user_app
+apps/backend/tests
+apps/backend/.env
+apps/backend/.env.*
+!apps/backend/.env.example
+!apps/backend/.env.production.example
+!apps/backend/.env.test.example
+*.log
