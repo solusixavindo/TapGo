@@ -214,6 +214,11 @@ adminConsoleRouter.get("/reports/bonus.csv", requireRoles("SUPER_ADMIN"), valida
 adminConsoleRouter.get("/reports/bonus", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.bonusReport));
 adminConsoleRouter.get("/reports/ppob.csv", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.ppobReportCsv));
 adminConsoleRouter.get("/reports/ppob", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.ppobReport));
+// Transaksi PPOB sungguhan (beli pulsa/token/dll) — beda dari /reports/ppob
+// di atas, yang melaporkan kredit benefit PPOB gratis dari membership. Lihat
+// catatan di AdminConsoleService.ppobTransactionsReport().
+adminConsoleRouter.get("/reports/ppob-transactions.csv", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.ppobTransactionsReportCsv));
+adminConsoleRouter.get("/reports/ppob-transactions", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.ppobTransactionsReport));
 adminConsoleRouter.get("/reports/reward.csv", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.rewardReportCsv));
 adminConsoleRouter.get("/reports/reward", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.rewardReport));
 adminConsoleRouter.get(

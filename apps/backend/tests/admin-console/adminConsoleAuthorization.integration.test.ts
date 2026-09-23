@@ -73,6 +73,8 @@ const SUPER_ADMIN_ENDPOINTS: ReadonlyArray<Endpoint> = [
   { method: "GET", path: "/api/v1/admin/reports/bonus.csv" },
   { method: "GET", path: "/api/v1/admin/reports/ppob" },
   { method: "GET", path: "/api/v1/admin/reports/ppob.csv" },
+  { method: "GET", path: "/api/v1/admin/reports/ppob-transactions" },
+  { method: "GET", path: "/api/v1/admin/reports/ppob-transactions.csv" },
   { method: "GET", path: "/api/v1/admin/reports/reward" },
   { method: "GET", path: "/api/v1/admin/reports/reward.csv" },
 

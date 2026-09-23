@@ -46,6 +46,12 @@ const REASON_LABEL: Record<string, string> = {
   SECURITY_INCIDENT: "Insiden keamanan"
 };
 
+// "Angkat admin baru" hanya untuk mengangkat, bukan mengubah jadi USER biasa
+// (opsi itu tidak relevan di alur ini — kandidat memang sudah USER) — beda
+// dari ASSIGNABLE_ROLES penuh yang dipakai AccountRow untuk mengubah role
+// yang SUDAH ada (termasuk menurunkan kembali ke USER).
+const NEW_ASSIGNMENT_ROLES = ASSIGNABLE_ROLES.filter((role) => role !== "USER");
+
 function roleTone(role: string) {
   if (role === "SUPER_ADMIN_VIP") return "bg-amber-100 text-amber-900";
   if (role === "SUPER_ADMIN") return "bg-indigo-100 text-indigo-800";
@@ -188,25 +194,12 @@ export default function RolesPage() {
           {candidates.length > 0 ? (
             <ul className="mt-4 space-y-2">
               {candidates.map((candidate) => (
-                <li
+                <CandidateRow
                   key={candidate.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 px-4 py-3"
-                >
-                  <div>
-                    <p className="text-sm font-semibold">{candidate.fullName}</p>
-                    <p className="text-xs text-slate-500">
-                      {candidate.phone} · {candidate.referralCode}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={busyId === candidate.id}
-                    onClick={() => void change(candidate, "ADMIN", "NEW_ADMIN_ASSIGNMENT")}
-                    className="rounded-lg bg-brand-green px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                  >
-                    Jadikan Admin
-                  </button>
-                </li>
+                  candidate={candidate}
+                  busy={busyId === candidate.id}
+                  onChange={change}
+                />
               ))}
             </ul>
           ) : null}
@@ -237,6 +230,53 @@ export default function RolesPage() {
         </p>
       </div>
     </main>
+  );
+}
+
+function CandidateRow({
+  candidate,
+  busy,
+  onChange
+}: {
+  candidate: RoleCandidate;
+  busy: boolean;
+  onChange: (target: RoleCandidate, role: string, reasonCode: string) => void;
+}) {
+  // ADMIN sebagai default — kasus paling umum saat mengangkat admin baru,
+  // tapi SUPER_ADMIN tetap bisa dipilih langsung di sini alih-alih memaksa
+  // dua langkah (angkat ADMIN dulu, baru naikkan lewat AccountRow di bawah).
+  const [role, setRole] = useState("ADMIN");
+
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 px-4 py-3">
+      <div>
+        <p className="text-sm font-semibold">{candidate.fullName}</p>
+        <p className="text-xs text-slate-500">
+          {candidate.phone} · {candidate.referralCode}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={role}
+          onChange={(event) => setRole(event.target.value)}
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        >
+          {NEW_ASSIGNMENT_ROLES.map((option) => (
+            <option key={option} value={option}>
+              {ROLE_LABEL[option]}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onChange(candidate, role, "NEW_ADMIN_ASSIGNMENT")}
+          className="rounded-lg bg-brand-green px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        >
+          {busy ? "Memproses…" : `Jadikan ${ROLE_LABEL[role]}`}
+        </button>
+      </div>
+    </li>
   );
 }
 

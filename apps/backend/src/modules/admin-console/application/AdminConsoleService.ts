@@ -1469,6 +1469,50 @@ export class AdminConsoleService {
     };
   }
 
+  /**
+   * Transaksi PPOB SUNGGUHAN (beli pulsa/token/dll, tabel PpobTransaction) —
+   * berbeda dari ppobReport() di atas, yang melaporkan KREDIT BENEFIT PPOB
+   * gratis dari paket membership (tabel WalletTransaction tipe
+   * PPOB_BENEFIT). Keduanya laporan yang sah dan berbeda maknanya; sebelum
+   * method ini ada, satu-satunya "Laporan PPOB" di dashboard admin hanya
+   * memuat data benefit membership, membuat pemilik bisnis mengira itu
+   * laporan transaksi PPOB (Owner, 2026-09-23).
+   */
+  async ppobTransactionsReport(input: DateRangeInput) {
+    const where: Prisma.PpobTransactionWhereInput = {
+      ...(input.userId ? { userId: input.userId } : {}),
+      ...this.createdAtRange(input)
+    };
+    const [total, aggregate, pendingAggregate, successAggregate, items] = await Promise.all([
+      this.prisma.ppobTransaction.count({ where }),
+      this.prisma.ppobTransaction.aggregate({ where, _sum: { totalAmount: true } }),
+      this.prisma.ppobTransaction.aggregate({
+        where: { ...where, status: { in: ["PENDING", "PROCESSING"] } },
+        _sum: { totalAmount: true }
+      }),
+      this.prisma.ppobTransaction.aggregate({
+        where: { ...where, status: "SUCCESS" },
+        _sum: { totalAmount: true }
+      }),
+      this.prisma.ppobTransaction.findMany({
+        where,
+        include: {
+          user: { select: { id: true, fullName: true, phone: true } }
+        },
+        orderBy: { createdAt: "desc" },
+        skip: this.skip(input),
+        take: input.pageSize
+      })
+    ]);
+    return {
+      totalPpob: this.decimal(aggregate._sum.totalAmount),
+      transactionCount: total,
+      totalPending: this.decimal(pendingAggregate._sum.totalAmount),
+      totalApprovedPaid: this.decimal(successAggregate._sum.totalAmount),
+      ...this.page(items, total, input)
+    };
+  }
+
   async rewardReport(input: DateRangeInput) {
     return this.bonusReport({ ...input, type: "REWARD_BONUS" });
   }

@@ -497,6 +497,29 @@ export class AdminConsoleController {
     this.sendCsv(res, "tapgo-ppob-report.csv", this.ppobRows(result.items));
   };
 
+  /// Transaksi PPOB SUNGGUHAN (beli pulsa/token/dll) — beda dari ppobReport
+  /// di atas, yang melaporkan kredit benefit PPOB gratis dari membership.
+  /// Lihat catatan di AdminConsoleService.ppobTransactionsReport().
+  ppobTransactionsReport = async (req: Request, res: Response) => {
+    const result = await this.adminConsoleService.ppobTransactionsReport({
+      page: Number(req.query.page),
+      pageSize: Number(req.query.pageSize),
+      ...(typeof req.query.userId === "string" ? { userId: req.query.userId } : {}),
+      ...this.dateRange(req)
+    });
+    res.json({ success: true, data: result });
+  };
+
+  ppobTransactionsReportCsv = async (req: Request, res: Response) => {
+    const result = await this.adminConsoleService.ppobTransactionsReport({
+      page: 1,
+      pageSize: 100,
+      ...(typeof req.query.userId === "string" ? { userId: req.query.userId } : {}),
+      ...this.dateRange(req)
+    });
+    this.sendCsv(res, "tapgo-ppob-transactions-report.csv", this.ppobTransactionRows(result.items));
+  };
+
   rewardReportCsv = async (req: Request, res: Response) => {
     const result = await this.adminConsoleService.rewardReport({
       page: 1,
@@ -532,6 +555,26 @@ export class AdminConsoleController {
         type: String(item.type ?? ""),
         amount: String(item.amount ?? ""),
         status: "POSTED",
+        date: String(item.createdAt ?? "")
+      };
+    });
+  }
+
+  private ppobTransactionRows(items: Array<Record<string, unknown>>) {
+    return items.map((item) => {
+      const user = (item.user && typeof item.user === "object" ? item.user : {}) as Record<string, unknown>;
+      return {
+        user: String(user.fullName ?? ""),
+        phone: String(user.phone ?? ""),
+        // category (PULSA/DATA/PLN_PREPAID/dst) — field ASLI di
+        // PpobTransaction, bukan "type" (yang tidak ada di tabel ini,
+        // hanya ada di WalletTransaction).
+        type: String(item.category ?? ""),
+        // totalAmount = yang benar-benar dibayar pelanggan (harga + biaya
+        // admin), bukan `amount` (harga produk sebelum biaya admin) —
+        // lebih tepat untuk laporan finansial.
+        amount: String(item.totalAmount ?? ""),
+        status: String(item.status ?? ""),
         date: String(item.createdAt ?? "")
       };
     });

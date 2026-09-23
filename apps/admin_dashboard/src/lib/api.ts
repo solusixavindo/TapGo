@@ -398,7 +398,7 @@ export function ppobSummaryReportApi() {
  * sama dengan fetchDocumentObjectUrl — ambil sebagai blob lalu picu unduhan
  * lewat elemen <a> sementara.
  */
-export async function downloadReportCsv(kind: "bonus" | "ppob" | "reward") {
+export async function downloadReportCsv(kind: "bonus" | "ppob" | "ppob-transactions" | "reward") {
   const response = await fetch(`${API_BASE}/admin/reports/${kind}.csv`, {
     headers: { authorization: `Bearer ${readToken()}` },
     credentials: "omit"

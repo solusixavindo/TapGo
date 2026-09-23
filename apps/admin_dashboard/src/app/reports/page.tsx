@@ -14,9 +14,22 @@ import {
 } from "../../lib/api";
 import ConsoleHeader from "../console-header";
 
-const CSV_REPORTS: Array<{ kind: "bonus" | "ppob" | "reward"; label: string; description: string }> = [
+const CSV_REPORTS: Array<{
+  kind: "bonus" | "ppob" | "ppob-transactions" | "reward";
+  label: string;
+  description: string;
+}> = [
   { kind: "bonus", label: "Laporan Bonus/Komisi", description: "Seluruh baris bonus referral, tingkat, reward, dan bagi hasil." },
-  { kind: "ppob", label: "Laporan PPOB", description: "Transaksi wallet bertipe benefit PPOB per member." },
+  {
+    kind: "ppob-transactions",
+    label: "Laporan Transaksi PPOB",
+    description: "Transaksi beli pulsa/token/dll sungguhan per member — pulsa, listrik, BPJS, dsb."
+  },
+  {
+    kind: "ppob",
+    label: "Laporan Benefit PPOB Membership",
+    description: "Kredit PPOB GRATIS dari paket membership (Silver/Gold/Platinum) — bukan transaksi beli."
+  },
   { kind: "reward", label: "Laporan Reward", description: "Riwayat reward — pending, disetujui, dibayar, ditolak." }
 ];
 
@@ -54,7 +67,7 @@ export default function ReportsPage() {
     void refresh();
   }, [router, refresh]);
 
-  async function onDownload(kind: "bonus" | "ppob" | "reward") {
+  async function onDownload(kind: "bonus" | "ppob" | "ppob-transactions" | "reward") {
     if (downloading) return;
     setDownloading(kind);
     setError("");
@@ -125,7 +138,7 @@ export default function ReportsPage() {
 
             <section className="mt-6">
               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Unduh laporan (CSV)</h2>
-              <div className="mt-3 grid gap-3 md:grid-cols-3">
+              <div className="mt-3 grid gap-3 md:grid-cols-4">
                 {CSV_REPORTS.map((report) => (
                   <div key={report.kind} className="rounded-xl border border-slate-200 bg-white p-4">
                     <p className="text-sm font-semibold">{report.label}</p>
