@@ -9,7 +9,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'package:tapgo_user_app/demo/client_flow_models.dart';
 import 'package:tapgo_user_app/main.dart';
@@ -35,7 +34,6 @@ void main() {
 
   Future<void> openAuth(WidgetTester tester) async {
     tapGoDisablePersistenceForTests = true;
-    tapGoEnablePaymentSimulatorForTests = false;
     ImagePickerPlatform.instance = _FakeImagePickerPlatform();
     await tester.pumpWidget(const ProviderScope(child: TapGoUserApp()));
     await tester.pump();
@@ -44,12 +42,8 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Future<void> openDashboard(
-    WidgetTester tester, {
-    bool enablePaymentSimulator = false,
-  }) async {
+  Future<void> openDashboard(WidgetTester tester) async {
     tapGoDisablePersistenceForTests = true;
-    tapGoEnablePaymentSimulatorForTests = enablePaymentSimulator;
     ImagePickerPlatform.instance = _FakeImagePickerPlatform();
     await tester.pumpWidget(
       const ProviderScope(child: MaterialApp(home: TapGoDashboard())),
@@ -197,18 +191,12 @@ void main() {
   });
 
   test(
-    'Play service boundaries hide placeholder and referral destinations',
+    'Super Menu hanya memuat layanan Play: tanpa placeholder dan tujuan referral',
     () {
-      final playLabels = tapGoSuperMenuLabelsForDistributionForTests(
-        TapGoDistributionMode.play,
-      );
-      final directLabels = tapGoSuperMenuLabelsForDistributionForTests(
-        TapGoDistributionMode.direct,
-      );
+      final labels = tapGoSuperMenuLabelsForTests();
 
       // PPOB tidak lagi satu tile gabungan — semua kategorinya (fitur
-      // pembayaran tagihan biasa, bukan referral/MLM) tampil langsung di
-      // Super Menu pada kedua distribusi, lihat item 8.
+      // pembayaran tagihan biasa, bukan referral/MLM) tampil langsung.
       const ppobCategoryLabels = [
         'Pulsa',
         'Paket Data',
@@ -218,24 +206,17 @@ void main() {
         'PDAM',
       ];
 
-      expect(playLabels, contains('Kartu Anggota'));
-      expect(playLabels, contains('Tiket Bantuan'));
+      expect(labels, contains('Kartu Anggota'));
+      expect(labels, contains('Tiket Bantuan'));
       for (final label in ppobCategoryLabels) {
-        expect(playLabels, contains(label));
+        expect(labels, contains(label));
       }
-      expect(playLabels, isNot(contains('PPOB')));
-      expect(playLabels, isNot(contains('Referral')));
-      expect(playLabels, isNot(contains('TapGo Ride')));
-      expect(playLabels, isNot(contains('TapGo Car')));
-      expect(playLabels, isNot(contains('TapGo Food')));
-      expect(playLabels, isNot(contains('TapGo Mart')));
-
-      expect(directLabels, contains('Referral'));
-      expect(directLabels, contains('TapGo Ride'));
-      for (final label in ppobCategoryLabels) {
-        expect(directLabels, contains(label));
-      }
-      expect(directLabels, isNot(contains('PPOB')));
+      expect(labels, isNot(contains('PPOB')));
+      expect(labels, isNot(contains('Referral')));
+      expect(labels, isNot(contains('TapGo Ride')));
+      expect(labels, isNot(contains('TapGo Car')));
+      expect(labels, isNot(contains('TapGo Food')));
+      expect(labels, isNot(contains('TapGo Mart')));
 
       for (final entry in const {
         'Pulsa': 'PULSA',
@@ -428,20 +409,6 @@ void main() {
     expect(persistence.failedSteps, ['saveRegisteredUser']);
   });
 
-  test('referral claim failure does not invalidate registration', () async {
-    final result = await tapGoClaimReferralBestEffort(
-      referralCode: 'TAPG123456',
-      claimReferral: (_) async => throw DioException(
-        requestOptions: RequestOptions(path: '/referrals/claim'),
-        message: 'network unavailable',
-      ),
-    );
-
-    expect(result.success, isFalse);
-    expect(result.warningMessage, isNotNull);
-    expect(result.warningMessage, contains('Registrasi berhasil'));
-  });
-
   test('single flight guard prevents duplicate form actions', () async {
     final guard = TapGoSingleFlightGuard();
     final completer = Completer<bool>();
@@ -482,27 +449,6 @@ void main() {
     expect(runCount, 3);
   });
 
-  test('document upload only succeeds with a valid picked file path', () {
-    expect(tapGoIsValidPickedDocumentPathForTests(null), isFalse);
-    expect(tapGoIsValidPickedDocumentPathForTests(''), isFalse);
-    expect(tapGoIsValidPickedDocumentPathForTests('   '), isFalse);
-    expect(
-      tapGoIsValidPickedDocumentPathForTests(' /tmp/tapgo-ktp.jpg '),
-      isTrue,
-    );
-    expect(
-      tapGoUploadSuccessLabelForTests(ImageSource.gallery),
-      'Foto berhasil dipilih',
-    );
-    expect(
-      tapGoUploadSuccessLabelForTests(ImageSource.camera),
-      'Foto berhasil diambil',
-    );
-    expect(tapGoDocumentUploadFailureMessage, isNot(contains('Exception')));
-    expect(tapGoDocumentUploadFailureMessage, isNot(contains('/tmp')));
-    expect(tapGoDocumentUploadFailureMessage, isNot(contains('channel-error')));
-  });
-
   test('Indonesian phone input accepts supported formats safely', () {
     expect(tapGoPhoneValidatorMessage('0812 3456-7890'), isNull);
     expect(tapGoPhoneValidatorMessage('6281234567890'), isNull);
@@ -511,39 +457,6 @@ void main() {
     expect(tapGoSanitizePhoneInput('6281234567890'), '6281234567890');
     expect(tapGoPhoneValidatorMessage('12345'), 'Nomor HP tidak valid');
     expect(tapGoPhoneValidatorMessage(''), 'Nomor HP wajib diisi');
-  });
-
-  test(
-    'NIK input keeps digits only, caps length, and preserves leading zero',
-    () {
-      final formatted = _applyFormatters(
-        tapGoNikInputFormatters,
-        '00A1234567890123456789',
-      );
-
-      expect(formatted, '0012345678901234');
-      expect(formatted.length, 16);
-      expect(tapGoNikValidatorMessage('0012345678901234'), isNull);
-      expect(
-        tapGoNikValidatorMessage('001234567890123'),
-        'NIK harus terdiri dari 16 digit.',
-      );
-    },
-  );
-
-  test('bank account input keeps digit string and leading zero intact', () {
-    final formatted = _applyFormatters(
-      tapGoDigitsOnlyInputFormatters,
-      '0012 34-567A',
-    );
-
-    expect(formatted, '001234567');
-    expect(tapGoDigitsOnly(formatted), '001234567');
-    expect(tapGoBankAccountValidatorMessage('001234'), isNull);
-    expect(
-      tapGoBankAccountValidatorMessage('00123'),
-      'Nomor rekening tidak valid',
-    );
   });
 
   test('Rupiah formatter separates display from canonical integer value', () {
@@ -639,106 +552,6 @@ void main() {
 
     expect(find.text('Nomor HP tidak valid'), findsOneWidget);
     expect(find.text('TapGoPay'), findsNothing);
-  });
-
-  testWidgets(
-    'dashboard keeps Basic status and hides paid membership purchase',
-    (WidgetTester tester) async {
-      await openDashboard(tester);
-
-      // Kartu Membership biru dihapus dari Beranda (permintaan Owner) —
-      // slotnya kini selalu kartu wallet TapGoPay. Kartu status kuning
-      // (_MarketingPlanCard, tombol "Detail Basic") sendiri juga sudah
-      // dihapus dari Beranda Play dan digantikan _PpobBalanceCard (permintaan
-      // Owner berikutnya: Akun sudah menampilkan tier & status, kartu itu
-      // cuma mengulanginya) — jaminan yang benar-benar diuji tetap sama:
-      // dashboard menampilkan status Basic (via header akun) dan tidak ada
-      // ajakan pembelian berbayar di mana pun pada Beranda.
-      expect(find.text('TapGoPay'), findsOneWidget);
-      expect(find.text('Basic'), findsWidgets);
-      expect(find.text('Saldo PPOB'), findsOneWidget);
-      expect(find.textContaining('Paket aktif:'), findsNothing);
-      expect(find.text('Detail Basic'), findsNothing);
-      expect(find.text('Program Referral'), findsNothing);
-      expect(find.text('Bayar Sekarang'), findsNothing);
-      expect(find.text('Daftar'), findsNothing);
-
-      // Kartu anggota baca-saja (dibuka lewat Akun > Kartu Anggota, bukan
-      // lagi lewat Beranda) tetap tidak pernah menawarkan pembelian.
-      await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(home: BasicMemberCardScreen()),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.byType(BasicMemberCardScreen), findsOneWidget);
-      expect(find.byType(MembershipPackagesScreen), findsNothing);
-      expect(find.text('Bayar Sekarang'), findsNothing);
-      expect(find.text('Daftar'), findsNothing);
-      await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(home: MembershipPackagesScreen()),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('Kartu Anggota'), findsOneWidget);
-      expect(find.text('TAPGO MEMBER CARD'), findsOneWidget);
-      expect(find.text('BASIC'), findsWidgets);
-      expect(find.text('Gratis'), findsNothing);
-      expect(find.text('Silver'), findsNothing);
-      expect(find.text('Gold'), findsNothing);
-      expect(find.text('Platinum'), findsNothing);
-      expect(find.textContaining('Rp500.000'), findsNothing);
-      expect(find.textContaining('Rp3.000.000'), findsNothing);
-      expect(find.textContaining('Rp5.500.000'), findsNothing);
-      expect(find.text('Daftar'), findsNothing);
-
-      expect(find.text('Form Membership'), findsNothing);
-      expect(find.text('Paket Silver'), findsNothing);
-      expect(find.text('Bayar Sekarang'), findsNothing);
-    },
-  );
-
-  test('distribution mode defaults and fails closed to Play', () {
-    expect(tapGoDistributionModeFromValue(null), TapGoDistributionMode.play);
-    expect(tapGoDistributionModeFromValue(''), TapGoDistributionMode.play);
-    expect(tapGoDistributionModeFromValue('play'), TapGoDistributionMode.play);
-    expect(
-      tapGoDistributionModeFromValue('unexpected'),
-      TapGoDistributionMode.play,
-    );
-    expect(
-      tapGoDistributionModeFromValue('direct'),
-      TapGoDistributionMode.direct,
-    );
-    expect(tapGoIsPlayDistribution, isTrue);
-  });
-
-  test('payment provider copy follows gateway with neutral fallback', () {
-    expect(
-      tapGoPaymentStatusInstructionForTests('DOKU'),
-      'Selesaikan pembayaran di halaman DOKU, lalu cek status pembayaran Anda.',
-    );
-    expect(
-      tapGoPaymentStatusInstructionForTests('MIDTRANS'),
-      'Selesaikan pembayaran di halaman Midtrans, lalu cek status pembayaran Anda.',
-    );
-    expect(
-      tapGoPaymentStatusInstructionForTests(null),
-      'Selesaikan pembayaran di halaman pembayaran, lalu cek status pembayaran Anda.',
-    );
-    expect(
-      tapGoPaymentStatusInstructionForTests('unknown'),
-      isNot(contains('DOKU')),
-    );
-    expect(tapGoPaymentUrlDialogTitleForTests('DOKU'), 'Link Pembayaran DOKU');
-    expect(
-      tapGoPaymentUrlDialogTitleForTests('MIDTRANS'),
-      'Link Pembayaran Midtrans',
-    );
-    expect(tapGoPaymentUrlDialogTitleForTests(null), 'Link Pembayaran');
-    expect(tapGoCheckoutLaunchModeForTests(), LaunchMode.externalApplication);
   });
 
   testWidgets('bottom navigation tabs and super menu are clickable', (
@@ -994,7 +807,6 @@ void main() {
     WidgetTester tester,
   ) async {
     tapGoDisablePersistenceForTests = true;
-    tapGoEnablePaymentSimulatorForTests = false;
     ImagePickerPlatform.instance = _FakeImagePickerPlatform();
 
     await tester.pumpWidget(
@@ -1065,33 +877,18 @@ void main() {
     },
   );
 
-  testWidgets('bank account picker still opens directly without assertion', (
+  testWidgets('menu Akun menyediakan Ubah Password dan membukanya', (
     WidgetTester tester,
   ) async {
-    tapGoDisablePersistenceForTests = true;
-    tapGoEnablePaymentSimulatorForTests = false;
-    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
-    await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: BankAccountScreen())),
-    );
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Akun'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Ubah Password'));
+    await tester.tap(find.text('Ubah Password'));
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('Rekening Bank'));
-
-    expect(find.text('Rekening Bank'), findsWidgets);
-    expect(find.text('Nama bank'), findsOneWidget);
-
-    final bankFieldCenter = tester.getCenter(find.text('Pilih bank').last);
-    await tester.tapAt(Offset(120, bankFieldCenter.dy));
-    await tester.pumpAndSettle();
-    expect(find.text('Pilih Bank'), findsOneWidget);
-
-    await tester.tap(find.text('Bank Mandiri'));
-    await tester.pumpAndSettle();
-    await tester.pump();
-
-    expect(find.text('Bank Mandiri'), findsOneWidget);
-    expect(tester.takeException(), isNull);
+    expect(find.byType(ChangePasswordScreen), findsOneWidget);
   });
 
   testWidgets('account deletion request requires confirmation', (
@@ -1125,27 +922,51 @@ void main() {
     expect(find.text('Pengajuan hapus akun berhasil dikirim.'), findsNothing);
   });
 
-  testWidgets('Play membership flow does not open external checkout', (
-    WidgetTester tester,
-  ) async {
-    tapGoDisablePersistenceForTests = true;
-    tapGoEnablePaymentSimulatorForTests = true;
-    ImagePickerPlatform.instance = _FakeImagePickerPlatform();
-    await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: MembershipPackagesScreen())),
-    );
-    await tester.pumpAndSettle();
+  testWidgets(
+    'dashboard menampilkan status Basic dan tidak menawarkan pembelian',
+    (WidgetTester tester) async {
+      await openDashboard(tester);
 
-    expect(find.text('TAPGO MEMBER CARD'), findsOneWidget);
-    expect(find.text('Silver'), findsNothing);
-    expect(find.text('Gold'), findsNothing);
-    expect(find.text('Platinum'), findsNothing);
-    expect(find.text('Form Membership'), findsNothing);
-    expect(find.text('Menunggu Pembayaran'), findsNothing);
-    expect(find.text('Bayar Sekarang'), findsNothing);
-    expect(find.text('Pembayaran'), findsNothing);
-    expect(find.text('Pendaftaran Berhasil'), findsNothing);
-  });
+      // Akun sudah menampilkan tier & status, jadi Beranda hanya memuat kartu
+      // saldo TapGoPay dan saldo PPOB. Pembelian/upgrade membership tidak ada
+      // di aplikasi: dilakukan lewat web.
+      expect(find.text('TapGoPay'), findsOneWidget);
+      expect(find.text('Basic'), findsWidgets);
+      expect(find.text('Saldo PPOB'), findsOneWidget);
+      expect(find.textContaining('Paket aktif:'), findsNothing);
+      expect(find.text('Detail Basic'), findsNothing);
+      expect(find.text('Program Referral'), findsNothing);
+      expect(find.text('Bayar Sekarang'), findsNothing);
+      expect(find.text('Daftar'), findsNothing);
+
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(home: BasicMemberCardScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(BasicMemberCardScreen), findsOneWidget);
+      expect(find.text('Kartu Anggota'), findsOneWidget);
+      expect(find.text('TAPGO MEMBER CARD'), findsOneWidget);
+      expect(find.text('BASIC'), findsWidgets);
+      for (final offer in const [
+        'Gratis',
+        'Silver',
+        'Gold',
+        'Platinum',
+        'Daftar',
+        'Form Membership',
+        'Paket Silver',
+        'Bayar Sekarang',
+      ]) {
+        expect(find.text(offer), findsNothing, reason: offer);
+      }
+      expect(find.textContaining('Rp500.000'), findsNothing);
+      expect(find.textContaining('Rp3.000.000'), findsNothing);
+      expect(find.textContaining('Rp5.500.000'), findsNothing);
+    },
+  );
 
   testWidgets('Basic member card exposes only safe identity fields', (
     WidgetTester tester,

@@ -102,9 +102,7 @@ class _SplashGateState extends State<SplashGate>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    tapGoIsPlayDistribution
-                        ? 'Akun Basic • Membership • Bantuan'
-                        : 'Akun • Membership • Referral • Bantuan',
+                    'Akun Basic • Membership • Bantuan',
                     style: const TextStyle(
                       color: Color(0xDFFFFFFF),
                       fontSize: 14,

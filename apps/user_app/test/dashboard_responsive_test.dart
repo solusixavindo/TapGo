@@ -74,7 +74,6 @@ void main() {
     ]) {
       testWidgets('${viewport.$1.toInt()}x${viewport.$2.toInt()} dp bersih',
           (tester) async {
-        expect(tapGoIsPlayDistribution, isTrue);
         final overflows = await renderDashboard(
           tester,
           width: viewport.$1,
@@ -128,7 +127,7 @@ void main() {
       );
       expect(overflows, isEmpty);
     });
-  }, skip: tapGoIsPlayDistribution ? null : 'khusus TAPGO_DISTRIBUTION=play');
+  });
 
   group('entry Ride tetap utuh setelah perbaikan responsif', () {
     Future<void> tapTile(WidgetTester tester, String label) async {
@@ -175,7 +174,7 @@ void main() {
         expect(serviceTile(label), findsOneWidget, reason: 'hilang: $label');
       }
     });
-  }, skip: tapGoIsPlayDistribution ? null : 'khusus TAPGO_DISTRIBUTION=play');
+  });
 
   group('tap target minimum', () {
     testWidgets('kartu layanan minimal 48 dp pada 320 dp', (tester) async {
@@ -219,7 +218,7 @@ void main() {
         expect(w, greaterThanOrEqualTo(48));
       }
     });
-  }, skip: tapGoIsPlayDistribution ? null : 'khusus TAPGO_DISTRIBUTION=play');
+  });
 
   group('kartu saldo PPOB menggantikan kartu Paket aktif pada Play', () {
     testWidgets('kartu saldo PPOB tampil, kartu Paket aktif sudah hilang', (
@@ -245,29 +244,27 @@ void main() {
       // Akun (_AccountHero) sudah menampilkan tier & status; kartu ini dulu
       // mengulang info yang sama di Beranda, jadi dihapus atas permintaan
       // Owner. Kartu wallet TapGoPay menempati slot yang sama sekarang.
-      expect(find.text('Klik untuk detail'), findsNothing);
-      expect(find.text('Klik untuk riwayat'), findsOneWidget);
+      expect(find.text('Memuat membership'), findsNothing);
+      expect(find.text('Klik untuk detail'), findsOneWidget);
       expect(find.text('TapGoPay'), findsOneWidget);
     });
 
     testWidgets(
-      'tap card wallet membuka DemoWalletScreen, yang redirect ke membership pada Play',
+      'tap kartu saldo membuka Kartu Anggota (tidak ada layar wallet terpisah)',
       (tester) async {
         await renderDashboard(tester, width: 360, height: 800, fixture: true);
         // Pada viewport nyata kartu bisa berada di bawah lipatan atau tertutup
         // bottom navigation, jadi digulir dulu seperti pengguna.
-        await tester.ensureVisible(find.text('Klik untuk riwayat'));
+        await tester.ensureVisible(find.text('Klik untuk detail'));
         for (var index = 0; index < 8; index += 1) {
           await tester.pump(const Duration(milliseconds: 80));
         }
-        await tester.tap(find.text('Klik untuk riwayat'));
+        await tester.tap(find.text('Klik untuk detail'));
         for (var index = 0; index < 14; index += 1) {
           await tester.pump(const Duration(milliseconds: 80));
         }
-        // DemoWalletScreen redirect ke MembershipScreen pada distribusi Play
-        // (tidak ada layar wallet terpisah di sana) — perilaku ini sudah ada
-        // sebelum kartu Membership dihapus dari Beranda, bukan regresi baru.
-        expect(find.byType(MembershipScreen), findsOneWidget);
+        // Tidak ada layar wallet terpisah: kartu saldo membuka Kartu Anggota.
+        expect(find.byType(BasicMemberCardScreen), findsOneWidget);
       },
     );
 
@@ -295,7 +292,7 @@ void main() {
         reason: 'jarak menuju grid layanan tidak boleh menyisakan ruang kosong',
       );
     });
-  }, skip: tapGoIsPlayDistribution ? null : 'khusus TAPGO_DISTRIBUTION=play');
+  });
 
   group('viewport Android nyata', () {
     testWidgets('dashboard dapat digulir pada 320x640', (tester) async {
@@ -379,5 +376,5 @@ void main() {
       expect(find.text('TapGoPay'), findsOneWidget);
       expect(find.text('Saldo PPOB'), findsOneWidget);
     });
-  }, skip: tapGoIsPlayDistribution ? null : 'khusus TAPGO_DISTRIBUTION=play');
+  });
 }

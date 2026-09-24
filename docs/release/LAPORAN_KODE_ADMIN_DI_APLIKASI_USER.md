@@ -133,6 +133,32 @@ Pencegahan (berlapis):
   25 Juli (tidak bisa dibedakan server), sehingga pengguna Play di build 25 Juli
   s.d. 18 September ikut ditolak sampai memperbarui.
 
+### Distribusi direct dihapus (2026-09-24, keputusan Owner)
+
+Aplikasi hanya boleh beredar lewat Google Play; pendaftaran lewat aplikasi,
+upgrade membership lewat web. Pemindaian APK rilis menemukan seluruh alur
+distribusi *direct* ikut terkompilasi di build Play walau tak terjangkau dari UI
+(formulir membership, unggah KTP dan selfie, checkout, pembayaran, penarikan,
+rekening bank, pohon referral). Kelasnya sama dengan kebocoran kode admin.
+
+- Dihapus dari `user_app`: mode distribusi (`TapGoDistributionMode`,
+  `TAPGO_DISTRIBUTION`), 9 layar dan widget pendukungnya (registrasi membership,
+  checkout, pembayaran, sukses, pohon referral, bank, komisi, reward, wallet,
+  pengaturan), 9 metode API yang tak lagi dipanggil, katalog endpoint yang hanya
+  berfungsi sebagai penanda, bidang sesi referral/komisi/transaksi/KTP/selfie,
+  dan penyimpanan dokumen lokal. Sekitar 7.200 baris hilang.
+- Data lama di HP (daftar pendaftar dan lokasi dokumen KTP/selfie) dihapus sekali
+  saat aplikasi dibuka; berkas sesi ditulis ulang tanpa bidang itu.
+- Header `X-TapGo-Distribution: play` tetap dikirim (dibaca gerbang klien lama).
+- Ditemukan lewat penghapusan ini: menu **Ubah Password** dulu hanya ada di menu
+  Pengaturan distribusi direct, sehingga pengguna Play tidak punya cara mengganti
+  password. Kini ada di menu Akun (dengan tes).
+- Pencegahan: `guard-mobile-no-admin.sh` menolak penanda direct (mode distribusi,
+  endpoint pesanan/penarikan/rekening/klaim referral, jalur KTP/selfie);
+  `verify-mobile-artifact.sh` menolak string yang sama di APK/AAB. Kontrol positif
+  pemindai kini `/wallet/transfer` (sebelumnya `/wallet/withdrawals`, yang sudah
+  dihapus). Diuji: guard gagal pada kode lama (72 pelanggaran), lolos pada kode baru.
+
 Perbaikan yang menyertai: peringatan `_enabled` di `ewallet_visual_test.dart`
 (gerbang `skip` disambungkan sesuai maksud aslinya, sama seperti tes saudaranya),
 sehingga `user_app` kini bisa masuk CI.

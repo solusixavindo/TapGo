@@ -286,7 +286,6 @@ void main() {
   group('bukti visual r2.4', () {
     /// Menyiapkan dashboard Play yang deterministik.
     void useDashboardFixture(WidgetTester tester) {
-      expect(tapGoIsPlayDistribution, isTrue);
       tapGoRideHistoryLoaderForTests = () async => const [];
       addTearDown(() => tapGoRideHistoryLoaderForTests = null);
       tapGoDashboardVisualFixtureEnabledForTests = true;

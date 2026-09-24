@@ -24,10 +24,6 @@ String tapGoAuthErrorMessage(DioException error, {required bool isRegister}) {
       return 'Email sudah terdaftar. Gunakan email lain atau pilih Login.';
     case 'INVALID_CREDENTIALS':
       return 'Nomor HP atau password salah.';
-    case 'SPONSOR_NOT_FOUND':
-      return 'Kode referral tidak valid.';
-    case 'SELF_REFERRAL_BLOCKED':
-      return 'Kode referral tidak bisa memakai kode sendiri.';
     case 'ACCOUNT_INACTIVE':
       return 'Akun ini tidak aktif. Hubungi bantuan TapGo.';
     case 'APP_UPDATE_REQUIRED':
@@ -77,13 +73,6 @@ class TapGoSessionPersistStep {
   final Future<bool> Function(DemoClientSession session) persist;
 }
 
-class TapGoReferralClaimResult {
-  const TapGoReferralClaimResult({required this.success, this.warningMessage});
-
-  final bool success;
-  final String? warningMessage;
-}
-
 class TapGoSingleFlightGuard {
   bool _isRunning = false;
 
@@ -104,15 +93,6 @@ class TapGoSingleFlightGuard {
 
 final tapGoPhoneInputFormatters = <TextInputFormatter>[
   FilteringTextInputFormatter.allow(RegExp(r'[0-9+\s-]')),
-];
-
-final tapGoDigitsOnlyInputFormatters = <TextInputFormatter>[
-  FilteringTextInputFormatter.digitsOnly,
-];
-
-final tapGoNikInputFormatters = <TextInputFormatter>[
-  FilteringTextInputFormatter.digitsOnly,
-  LengthLimitingTextInputFormatter(16),
 ];
 
 final tapGoRupiahInputFormatters = <TextInputFormatter>[
@@ -148,16 +128,6 @@ String? tapGoPhoneValidatorMessage(String? value) {
     return 'Nomor HP wajib diisi';
   }
   return tapGoIsValidIndonesianPhone(phone) ? null : 'Nomor HP tidak valid';
-}
-
-String? tapGoNikValidatorMessage(String? value) {
-  final digits = tapGoDigitsOnly(value);
-  return digits.length == 16 ? null : 'NIK harus terdiri dari 16 digit.';
-}
-
-String? tapGoBankAccountValidatorMessage(String? value) {
-  final digits = tapGoDigitsOnly(value);
-  return digits.length >= 6 ? null : 'Nomor rekening tidak valid';
 }
 
 int tapGoCanonicalRupiahValue(String? value) {
@@ -296,41 +266,6 @@ Future<TapGoSessionPersistenceResult>
   );
 }
 
-@visibleForTesting
-Future<TapGoReferralClaimResult> tapGoClaimReferralBestEffort({
-  required String referralCode,
-  required Future<Object?> Function(String referralCode) claimReferral,
-}) async {
-  if (referralCode.trim().isEmpty) {
-    return const TapGoReferralClaimResult(success: true);
-  }
-  try {
-    await claimReferral(referralCode);
-    _tapGoDebugLog('[TapGo Auth] referral_claim success.');
-    return const TapGoReferralClaimResult(success: true);
-  } on DioException catch (error) {
-    final data = _authResponseDataMap(error.response?.data);
-    final code = data?['code']?.toString();
-    if (code == 'REFERRAL_ALREADY_CLAIMED') {
-      _tapGoDebugLog('[TapGo Auth] referral already persisted by backend.');
-      return const TapGoReferralClaimResult(success: true);
-    }
-    _tapGoDebugLog('[TapGo Auth] referral_claim skipped: ${error.message}');
-    return const TapGoReferralClaimResult(
-      success: false,
-      warningMessage:
-          'Registrasi berhasil. Kode referral belum dapat diproses saat ini.',
-    );
-  } catch (error) {
-    _tapGoDebugLog('[TapGo Auth] referral_claim skipped: $error');
-    return const TapGoReferralClaimResult(
-      success: false,
-      warningMessage:
-          'Registrasi berhasil. Kode referral belum dapat diproses saat ini.',
-    );
-  }
-}
-
 Map<String, dynamic>? _authResponseDataMap(Object? data) {
   if (data is Map<String, dynamic>) {
     return data;
@@ -376,12 +311,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _referralController = TextEditingController();
   final _nameFocusNode = FocusNode();
   final _phoneFocusNode = FocusNode();
   final _emailFocusNode = FocusNode();
   final _passwordFocusNode = FocusNode();
-  final _referralFocusNode = FocusNode();
   bool _isRegister = false;
   bool _isSubmitting = false;
   int _logoTapCount = 0;
@@ -406,9 +339,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               email: _emailController.text.trim().isEmpty
                   ? null
                   : _emailController.text.trim(),
-              referralCode: tapGoIsDirectDistribution
-                  ? _referralController.text.trim()
-                  : null,
             )
           : await _apiClient.login(
               phone: phone,
@@ -417,19 +347,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       _tapGoDebugLog('[TapGo Auth] auth_response_mapping:$authMode');
       _validateAuthResult(authResult);
       _apiClient.setAccessToken(authResult.accessToken);
-      final referralCode =
-          tapGoIsDirectDistribution ? _referralController.text.trim() : '';
-      if (_isRegister &&
-          referralCode.isNotEmpty &&
-          (authResult.accessToken ?? '').isNotEmpty) {
-        final referralResult = await tapGoClaimReferralBestEffort(
-          referralCode: referralCode,
-          claimReferral: _apiClient.claimReferral,
-        );
-        if (!referralResult.success && referralResult.warningMessage != null) {
-          _showAuthWarning(referralResult.warningMessage!);
-        }
-      }
       var session = _sessionFromAuthUser(
         authResult.user,
         accessToken: authResult.accessToken,
@@ -630,12 +547,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
-    _referralController.dispose();
     _nameFocusNode.dispose();
     _phoneFocusNode.dispose();
     _emailFocusNode.dispose();
     _passwordFocusNode.dispose();
-    _referralFocusNode.dispose();
     super.dispose();
   }
 
@@ -772,31 +687,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       hint: 'Minimal 8 karakter',
                       obscureText: true,
                       validator: _passwordValidator,
-                      textInputAction: _isRegister
-                          ? (tapGoIsDirectDistribution
-                              ? TextInputAction.next
-                              : TextInputAction.done)
-                          : TextInputAction.done,
-                      onFieldSubmitted: (_) {
-                        if (_isRegister && tapGoIsDirectDistribution) {
-                          _referralFocusNode.requestFocus();
-                        } else {
-                          _continueToDashboard();
-                        }
-                      },
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => _continueToDashboard(),
                     ),
-                    if (_isRegister && tapGoIsDirectDistribution) ...[
-                      const SizedBox(height: 12),
-                      _InputField(
-                        controller: _referralController,
-                        focusNode: _referralFocusNode,
-                        icon: Icons.badge_rounded,
-                        label: 'Kode referral optional',
-                        hint: 'TAPGO123',
-                        textInputAction: TextInputAction.done,
-                        onFieldSubmitted: (_) => _continueToDashboard(),
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -1118,7 +1011,6 @@ class _InputField extends StatelessWidget {
     this.validator,
     this.suffixIcon,
     this.readOnly = false,
-    this.onTap,
     this.focusNode,
     this.textInputAction,
     this.onFieldSubmitted,
@@ -1140,7 +1032,6 @@ class _InputField extends StatelessWidget {
   final String? Function(String?)? validator;
   final Widget? suffixIcon;
   final bool readOnly;
-  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1156,7 +1047,6 @@ class _InputField extends StatelessWidget {
       autofillHints: autofillHints,
       validator: validator,
       readOnly: readOnly,
-      onTap: onTap,
       style: TextStyle(
         color: colorScheme.onSurface,
         fontWeight: FontWeight.w700,

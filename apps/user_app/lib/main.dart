@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -30,24 +29,17 @@ import 'features/ppob/domain/ppob_models.dart';
 import 'features/ppob/presentation/ppob_category_screen.dart';
 import 'features/ppob/presentation/ppob_home_screen.dart';
 
-part 'data/demo_membership_data.dart';
-part 'data/demo_referral_tree_data.dart';
 part 'data/demo_user_session.dart';
 part 'data/demo_user_session_models.dart';
 part 'screens/auth_screen.dart';
 part 'screens/change_password_screen.dart';
-part 'screens/checkout_screen.dart';
 part 'screens/dashboard_screen.dart';
-part 'screens/membership_registration_screen.dart';
 part 'screens/membership_screen.dart';
 part 'screens/password_recovery_screen.dart';
-part 'screens/payment_demo_screen.dart';
-part 'screens/referral_tree_screen.dart';
 part 'screens/ride_chat_screen.dart';
 part 'screens/ride_customer_screens.dart';
 part 'screens/ride_location_picker.dart';
 part 'screens/splash_screen.dart';
-part 'screens/success_screen.dart';
 part 'screens/verification_gate_screen.dart';
 part 'screens/wallet_transfer_screen.dart';
 part 'services/persistent_demo_store.dart';
@@ -55,10 +47,6 @@ part 'services/ride_flow_controller.dart';
 part 'services/ride_location_port.dart';
 part 'services/tapgo_api_client.dart';
 part 'tapgo_app_guards.dart';
-part 'widgets/benefit_item.dart';
-part 'widgets/invoice_card.dart';
-part 'widgets/package_card.dart';
-part 'widgets/referral_tree_node_widget.dart';
 part 'widgets/stat_card.dart';
 part 'widgets/tapgo_service_illustration.dart';
 part 'widgets/tapgo_button.dart';
@@ -71,23 +59,17 @@ const _tapGoAppMode = String.fromEnvironment(
   'TAPGO_APP_MODE',
   defaultValue: 'production',
 );
-const _tapGoDistributionValue = String.fromEnvironment(
-  'TAPGO_DISTRIBUTION',
-  defaultValue: 'play',
-);
 const _tapGoApiBaseUrl = String.fromEnvironment(
   'TAPGO_API_BASE_URL',
   defaultValue: 'https://api.tapgolion.id/api/v1',
 );
 const _isTapGoProductionBuild = _tapGoAppMode == 'production';
-const _isTapGoUatBuild = _tapGoAppMode == 'staging';
 const _isTapGoDevelopmentBuild = _tapGoAppMode == 'development';
 
 // Kosong = Sentry tidak aktif sama sekali (fail-closed) — sama pola dengan
 // _tapGoAppMode dkk di atas. Diisi lewat --dart-define saat build.
 const String kSentryDsn =
     String.fromEnvironment('SENTRY_DSN', defaultValue: '');
-bool tapGoEnablePaymentSimulatorForTests = false;
 Future<List<Map<String, dynamic>>> Function()?
     tapGoSupportTicketsLoaderForTests;
 Future<Map<String, dynamic>> Function(String ticketId)?
@@ -116,29 +98,12 @@ const tapGoLocalSessionPersistenceWarning =
     'Anda berhasil masuk, tetapi sesi belum tersimpan di perangkat. '
     'Anda mungkin perlu login kembali saat aplikasi dibuka ulang.';
 
-enum TapGoDistributionMode { play, direct }
-
-TapGoDistributionMode tapGoDistributionModeFromValue(String? value) {
-  return value?.trim().toLowerCase() == 'direct'
-      ? TapGoDistributionMode.direct
-      : TapGoDistributionMode.play;
-}
-
-final _tapGoDistributionMode = tapGoDistributionModeFromValue(
-  _tapGoDistributionValue,
-);
-
-bool get tapGoIsPlayDistribution =>
-    _tapGoDistributionMode == TapGoDistributionMode.play;
-
-bool get tapGoIsDirectDistribution =>
-    _tapGoDistributionMode == TapGoDistributionMode.direct;
-
-/// Jenis build yang dilaporkan ke server ("play" / "direct"); kosong bila lain.
-Map<String, String> get _tapGoDistributionHeader => {
-      if (tapGoIsPlayDistribution) 'X-TapGo-Distribution': 'play',
-      if (tapGoIsDirectDistribution) 'X-TapGo-Distribution': 'direct',
-    };
+/// Aplikasi ini hanya didistribusikan lewat Google Play. Header ini dibaca
+/// server untuk membedakan build sejak 2026-09-19 dari build lama yang perlu
+/// diperbarui (lihat legacyMobileClientGate di backend).
+const Map<String, String> _tapGoDistributionHeader = {
+  'X-TapGo-Distribution': 'play',
+};
 
 /// Stage R2.7 — mode demo PPOB (UAT tanpa backend): katalog mini lokal dan
 /// order yang jujur mencerminkan fail-closed provider (REFUNDED).
@@ -274,11 +239,6 @@ Future<void> tapGoOpenPpobCategory(
   );
 }
 
-bool get _isPaymentSimulatorEnabled =>
-    tapGoEnablePaymentSimulatorForTests ||
-    _isTapGoDevelopmentBuild ||
-    _isTapGoUatBuild;
-
 enum TapGoThemePreference {
   system,
   light,
@@ -373,38 +333,6 @@ void tapGoSetHttpAdapterForTests(HttpClientAdapter? adapter) {
 const _productionApiRootUrl = 'https://api.tapgolion.id';
 const _productionFinalSyncResetKey =
     'tapgo.production.final_sync_cache_reset.v1';
-const _tapgoApiEndpoints = [
-  _TapGoEndpointCatalog.register,
-  _TapGoEndpointCatalog.login,
-  _TapGoEndpointCatalog.refresh,
-  _TapGoEndpointCatalog.logout,
-  _TapGoEndpointCatalog.me,
-  _TapGoEndpointCatalog.membershipPlans,
-  _TapGoEndpointCatalog.membershipMe,
-  _TapGoEndpointCatalog.membershipUpgrade,
-  _TapGoEndpointCatalog.membershipPackages,
-  _TapGoEndpointCatalog.membershipOrders,
-  _TapGoEndpointCatalog.membershipOrderPay,
-  _TapGoEndpointCatalog.invoiceDetail,
-  _TapGoEndpointCatalog.midtransNotification,
-  _TapGoEndpointCatalog.referralSummary,
-  _TapGoEndpointCatalog.referralTree,
-  _TapGoEndpointCatalog.referralCommissions,
-  _TapGoEndpointCatalog.wallet,
-  _TapGoEndpointCatalog.walletTransactions,
-  _TapGoEndpointCatalog.bankAccount,
-  _TapGoEndpointCatalog.bankAccountUpdate,
-  _TapGoEndpointCatalog.withdrawalRequest,
-  _TapGoEndpointCatalog.withdrawalHistory,
-  _TapGoEndpointCatalog.walletTransferRequest,
-  _TapGoEndpointCatalog.walletTransferHistory,
-  _TapGoEndpointCatalog.accountDeleteRequest,
-  _TapGoEndpointCatalog.contactMessage,
-  _TapGoEndpointCatalog.memberIdentity,
-  _TapGoEndpointCatalog.supportTickets,
-  _TapGoEndpointCatalog.supportTicketCreate,
-];
-
 bool tapGoDisablePersistenceForTests = false;
 
 Future<void> main() async {

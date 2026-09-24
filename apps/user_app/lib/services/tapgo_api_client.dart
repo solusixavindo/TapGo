@@ -271,7 +271,6 @@ class _TapGoApiClient {
     required String phone,
     required String password,
     String? email,
-    String? referralCode,
   }) async {
     final deviceContext = await _deviceContextStore.load().timeout(
           const Duration(seconds: 1),
@@ -285,8 +284,6 @@ class _TapGoApiClient {
       'deviceId': deviceContext.deviceId,
       'deviceFingerprint': deviceContext.deviceFingerprint,
       if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
-      if (referralCode != null && referralCode.trim().isNotEmpty)
-        'referralCode': referralCode.trim().toUpperCase(),
     };
     final safeBody = {
       ...body,
@@ -531,18 +528,6 @@ class _TapGoApiClient {
     );
   }
 
-  Future<Map<String, dynamic>> claimReferral(String referralCode) {
-    return post(
-      '/referrals/claim',
-      body: {
-        'sponsorCode': referralCode.trim().toUpperCase(),
-        'triggerType': 'REFERRAL_JOIN',
-        'triggerId': 'register:${DateTime.now().millisecondsSinceEpoch}',
-        'baseAmount': 0,
-      },
-    );
-  }
-
   Future<_TapGoAuthUser> me() async {
     final response = await _dio.get<Map<String, dynamic>>(_apiPath('auth/me'));
     _tapGoDebugLog(
@@ -640,55 +625,16 @@ class _TapGoApiClient {
   }
 
   Future<_TapGoProductionSnapshot> productionSnapshot() async {
-    if (tapGoIsPlayDistribution) {
-      // Dompet tetap dibaca di build Play: saldo PPOB tampil di Beranda dan
-      // saldo utama menentukan apakah TapGoPay bisa dipilih untuk ojek.
-      // Bagian ini opsional — bila gagal, app tetap jalan tanpa angka saldo.
-      final parts = await Future.wait([
-        _productionSnapshotPart('membership', () => get('/membership/me')),
-        _productionSnapshotPart('wallet', _walletForSnapshot),
-      ]);
-      return _TapGoProductionSnapshot.fromMaps(
-        membership: parts[0],
-        wallet: parts[1],
-        transactions: const {'items': []},
-        referralSummary: const {},
-        referralTree: const {},
-        commissions: const {'items': []},
-      );
-    }
-
-    final responses = await Future.wait([
+    // Dompet dibaca untuk saldo PPOB di Beranda dan untuk menentukan apakah
+    // TapGoPay bisa dipilih pada ojek. Bagian ini opsional — bila gagal, app
+    // tetap jalan tanpa angka saldo.
+    final parts = await Future.wait([
       _productionSnapshotPart('membership', () => get('/membership/me')),
-      _productionSnapshotPart('wallet', _walletForSnapshot, requiredPart: true),
-      _productionSnapshotPart(
-        'wallet transactions',
-        () => get('/wallet/transactions', query: {'page': 1, 'pageSize': 20}),
-      ),
-      _productionSnapshotPart(
-        'referral summary',
-        () => get('/referrals/summary'),
-      ),
-      _productionSnapshotPart(
-        'daftar referral',
-        () => get(
-          '/referrals/downlines',
-          query: {'maxLevel': 10, 'page': 1, 'pageSize': 100},
-        ),
-      ),
-      _productionSnapshotPart(
-        'referral commissions',
-        () => get('/referrals/commissions', query: {'page': 1, 'pageSize': 50}),
-      ),
+      _productionSnapshotPart('wallet', _walletForSnapshot),
     ]);
-
     return _TapGoProductionSnapshot.fromMaps(
-      membership: responses[0],
-      wallet: responses[1],
-      transactions: responses[2],
-      referralSummary: responses[3],
-      referralTree: responses[4],
-      commissions: responses[5],
+      membership: parts[0],
+      wallet: parts[1],
     );
   }
 
@@ -712,51 +658,6 @@ class _TapGoApiClient {
     }
   }
 
-  Future<List<Map<String, dynamic>>> membershipPackages() async {
-    final data = await get('/membership/packages');
-    return _items(data);
-  }
-
-  Future<Map<String, dynamic>> createMembershipOrder({
-    required String packageId,
-    required Map<String, dynamic> registrationData,
-  }) {
-    return post(
-      '/membership/orders',
-      body: {'packageId': packageId, 'registrationData': registrationData},
-    );
-  }
-
-  Future<_TapGoPaymentIntent> payMembershipOrder(String orderId) async {
-    final data = await post('/membership/orders/$orderId/pay');
-    return _TapGoPaymentIntent.fromMap(data);
-  }
-
-  Future<Map<String, dynamic>> membershipOrder(String orderId) {
-    return get('/membership/orders/$orderId');
-  }
-
-  Future<List<Map<String, dynamic>>> membershipOrders() async {
-    final data = await get('/membership/orders/me');
-    return _items(data);
-  }
-
-  Future<Map<String, dynamic>> invoice(String invoiceIdOrNumber) {
-    return get('/invoices/$invoiceIdOrNumber');
-  }
-
-  Future<List<Map<String, dynamic>>> withdrawals() async {
-    final data = await get(
-      '/wallet/withdrawals',
-      query: {'page': 1, 'pageSize': 50},
-    );
-    return _items(data);
-  }
-
-  Future<Map<String, dynamic>> bankAccount() {
-    return get('/wallet/bank-account');
-  }
-
   Future<Map<String, dynamic>> transferWallet({
     required String recipientPhone,
     required int amount,
@@ -772,14 +673,6 @@ class _TapGoApiClient {
         'idempotencyKey': idempotencyKey,
       },
     );
-  }
-
-  Future<List<Map<String, dynamic>>> walletTransfers() async {
-    final data = await get(
-      '/wallet/transfers',
-      query: {'page': 1, 'pageSize': 50},
-    );
-    return _items(data);
   }
 
   Future<List<Map<String, dynamic>>> chatMessages(String rideRef) async {
@@ -798,42 +691,6 @@ class _TapGoApiClient {
     return post('/chat/rides/$rideRef/read');
   }
 
-  Future<Map<String, dynamic>> updateBankAccount({
-    required String bankName,
-    String? bankCode,
-    required String accountNumber,
-    required String accountHolderName,
-  }) {
-    return put(
-      '/wallet/bank-account',
-      body: {
-        'bankName': bankName,
-        if (bankCode != null && bankCode.isNotEmpty) 'bankCode': bankCode,
-        'accountNumber': accountNumber,
-        'accountHolderName': accountHolderName,
-      },
-    );
-  }
-
-  Future<Map<String, dynamic>> requestWithdrawal({
-    required int amount,
-    required String bankName,
-    String? bankCode,
-    required String accountNumber,
-    required String accountHolderName,
-  }) {
-    return post(
-      '/wallet/withdrawals',
-      body: {
-        'amount': amount,
-        'bankName': bankName,
-        if (bankCode != null && bankCode.isNotEmpty) 'bankCode': bankCode,
-        'accountNumber': accountNumber,
-        'accountHolderName': accountHolderName,
-      },
-    );
-  }
-
   Future<Map<String, dynamic>> accountDeletionRequest() {
     return get('/account/delete-request');
   }
@@ -843,23 +700,6 @@ class _TapGoApiClient {
       '/account/delete-request',
       body: {
         if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
-      },
-    );
-  }
-
-  Future<Map<String, dynamic>> submitContactMessage({
-    required String name,
-    required String contact,
-    required String category,
-    required String message,
-  }) {
-    return post(
-      '/contact',
-      body: {
-        'name': name,
-        'contact': contact,
-        'category': category,
-        'message': message,
       },
     );
   }
@@ -886,16 +726,6 @@ class _TapGoApiClient {
       '/support/tickets',
       body: {'category': category, 'subject': subject, 'message': message},
     );
-  }
-
-  Future<List<Map<String, dynamic>>> referralUplink() async {
-    final data = await get('/referrals/uplink', query: {'maxLevel': 10});
-    return _items(data);
-  }
-
-  Future<List<Map<String, dynamic>>> membershipOrdersMe() async {
-    final data = await get('/membership/orders/me');
-    return _items(data);
   }
 
   Map<String, dynamic> _unwrap(Map<String, dynamic>? data) {
@@ -1089,23 +919,15 @@ class _TapGoDeviceContextStore {
 class _TapGoProductionSnapshot {
   const _TapGoProductionSnapshot({
     required this.sessionPatch,
-    required this.referralTree,
-    required this.commissionTransactions,
     required this.loadedAt,
   });
 
   final DemoClientSession sessionPatch;
-  final DemoReferralNode? referralTree;
-  final List<WalletTransactionModel> commissionTransactions;
   final DateTime loadedAt;
 
   factory _TapGoProductionSnapshot.fromMaps({
     required Map<String, dynamic> membership,
     required Map<String, dynamic> wallet,
-    required Map<String, dynamic> transactions,
-    required Map<String, dynamic> referralSummary,
-    required Map<String, dynamic> referralTree,
-    required Map<String, dynamic> commissions,
   }) {
     final membershipData =
         (membership['membership'] as Map?)?.cast<String, dynamic>();
@@ -1116,19 +938,6 @@ class _TapGoProductionSnapshot {
     final invoiceData =
         (orderData?['invoice'] as Map?)?.cast<String, dynamic>();
     final walletBalance = _intFrom(wallet['balance']);
-    final txItems = _listFromPayload(
-      transactions,
-    ).map(_walletTransactionFromApi).toList(growable: false);
-    final commissionItems = _listFromPayload(commissions);
-    final commissionLedgerItems = commissionItems
-        .map(_commissionTransactionFromApi)
-        .toList(growable: false);
-    final directSponsor = _intFrom(
-      referralSummary['directDownlines'] ?? referralSummary['directSponsor'],
-    );
-    final totalDownline = _intFrom(
-      referralSummary['totalDownlines'] ?? referralSummary['totalDownline'],
-    );
     final activePackageName = _titleCase(
       packageData?['tier']?.toString() ??
           packageData?['name']?.toString() ??
@@ -1140,23 +949,15 @@ class _TapGoProductionSnapshot {
     final ppobBalance = wallet.containsKey('ppobBalance')
         ? _intFrom(wallet['ppobBalance'])
         : _intFrom(packageData?['ppobBalance']);
-    final todayBonus = _todayBonusFrom(commissionItems);
 
     return _TapGoProductionSnapshot(
       sessionPatch: DemoClientSession.initial().copyWith(
         activePackageName: activePackageName,
         walletBalance: walletBalance,
         ppobBalance: ppobBalance,
-        directSponsor: directSponsor,
-        downline: totalDownline,
-        activeLevel: _activeLevelFromDirectSponsor(directSponsor),
-        todayBonus: todayBonus,
         lastInvoiceNumber: invoiceData?['number']?.toString(),
         membershipJoinedAt: _dateLabel(membershipData?['activeAt']),
-        transactions: txItems,
       ),
-      referralTree: _referralTreeFromApi(referralTree),
-      commissionTransactions: commissionLedgerItems,
       loadedAt: DateTime.now(),
     );
   }
@@ -1193,10 +994,6 @@ _TapGoProductionSnapshot _tapGoDashboardVisualSnapshot() {
       },
     },
     wallet: const {'balance': 125000},
-    transactions: const {'items': <Map<String, dynamic>>[]},
-    referralSummary: const {'directDownlines': 3, 'totalDownlines': 8},
-    referralTree: const {},
-    commissions: const {'items': <Map<String, dynamic>>[]},
   );
 }
 
@@ -1242,13 +1039,8 @@ final _productionSnapshotProvider = FutureProvider<_TapGoProductionSnapshot>((
     activePackageName: snapshot.sessionPatch.activePackageName,
     walletBalance: snapshot.sessionPatch.walletBalance,
     ppobBalance: snapshot.sessionPatch.ppobBalance,
-    directSponsor: snapshot.sessionPatch.directSponsor,
-    downline: snapshot.sessionPatch.downline,
-    activeLevel: snapshot.sessionPatch.activeLevel,
-    todayBonus: snapshot.sessionPatch.todayBonus,
     lastInvoiceNumber: snapshot.sessionPatch.lastInvoiceNumber,
     membershipJoinedAt: snapshot.sessionPatch.membershipJoinedAt,
-    transactions: snapshot.sessionPatch.transactions,
     isDemoMode: false,
   );
   ref.read(_demoSessionProvider.notifier).state = patched;
@@ -1272,41 +1064,6 @@ Future<Map<String, dynamic>> _productionSnapshotPart(
   }
 }
 
-class _TapGoPaymentIntent {
-  const _TapGoPaymentIntent({
-    required this.snapToken,
-    required this.redirectUrl,
-    required this.orderId,
-    required this.invoiceNumber,
-    required this.paid,
-    this.referenceId,
-    this.expiredAt,
-    this.gateway,
-  });
-
-  final String snapToken;
-  final String redirectUrl;
-  final String orderId;
-  final String invoiceNumber;
-  final bool paid;
-  final String? referenceId;
-  final String? expiredAt;
-  final String? gateway;
-
-  factory _TapGoPaymentIntent.fromMap(Map<String, dynamic> map) {
-    final paymentUrl = map['paymentUrl']?.toString();
-    return _TapGoPaymentIntent(
-      snapToken: map['snapToken']?.toString() ?? '',
-      redirectUrl: paymentUrl ?? map['redirectUrl']?.toString() ?? '',
-      orderId: map['orderId']?.toString() ?? '',
-      invoiceNumber: map['invoiceNumber']?.toString() ?? '',
-      paid: map['paid'] == true,
-      referenceId: map['referenceId']?.toString(),
-      expiredAt: map['expiredAt']?.toString(),
-      gateway: map['gateway']?.toString(),
-    );
-  }
-}
 
 class _TapGoAuthResult {
   const _TapGoAuthResult({
@@ -1498,57 +1255,6 @@ DemoClientSession _sessionFromAuthUser(
   );
 }
 
-class _TapGoEndpointCatalog {
-  const _TapGoEndpointCatalog._();
-
-  static const register = 'POST /api/v1/auth/register';
-  static const login = 'POST /api/v1/auth/login';
-  static const refresh = 'POST /api/v1/auth/refresh';
-  static const logout = 'POST /api/v1/auth/logout';
-  static const me = 'GET /api/v1/auth/me';
-  static const membershipPlans = 'GET /api/v1/memberships/plans';
-  static const membershipMe = 'GET /api/v1/membership/me';
-  static const membershipUpgrade = 'POST /api/v1/memberships/upgrade';
-  static const membershipPackages = 'GET /api/v1/membership/packages';
-  static const membershipOrders = 'POST /api/v1/membership/orders';
-  static const invoiceDetail = 'GET /api/v1/invoices/:id';
-  static const membershipOrderPay = 'POST /api/v1/membership/orders/:id/pay';
-  static const midtransNotification =
-      'POST /api/v1/payments/midtrans/notification';
-  static const referralSummary = 'GET /api/v1/referrals/summary';
-  static const referralTree = 'GET /api/v1/referrals/downlines';
-  static const referralCommissions = 'GET /api/v1/referrals/commissions';
-  static const wallet = 'GET /api/v1/wallet';
-  static const walletTransactions = 'GET /api/v1/wallet/transactions';
-  static const bankAccount = 'GET /api/v1/wallet/bank-account';
-  static const bankAccountUpdate = 'PUT /api/v1/wallet/bank-account';
-  static const withdrawalRequest = 'POST /api/v1/wallet/withdrawals';
-  static const withdrawalHistory = 'GET /api/v1/wallet/withdrawals';
-  static const walletTransferRequest = 'POST /api/v1/wallet/transfer';
-  static const walletTransferHistory = 'GET /api/v1/wallet/transfers';
-  static const accountDeleteRequest = 'POST /api/v1/account/delete-request';
-  static const contactMessage = 'POST /api/v1/contact';
-  static const memberIdentity = 'GET /api/v1/member-identity/me';
-  static const supportTickets = 'GET /api/v1/support/tickets';
-  static const supportTicketCreate = 'POST /api/v1/support/tickets';
-}
-
-List<Map<String, dynamic>> _listFromPayload(Map<String, dynamic> payload) {
-  final items = payload['items'] ??
-      payload['data'] ??
-      payload['downlines'] ??
-      payload['nodes'] ??
-      payload['rows'] ??
-      payload['results'];
-  if (items is List) {
-    return items
-        .whereType<Map>()
-        .map((item) => item.cast<String, dynamic>())
-        .toList();
-  }
-  return const [];
-}
-
 int _intFrom(Object? value) {
   if (value is num) {
     return value.round();
@@ -1568,69 +1274,10 @@ String _titleCase(String value) {
   return lower[0].toUpperCase() + lower.substring(1);
 }
 
-int _activeLevelFromDirectSponsor(int directSponsor) {
-  if (directSponsor >= 10) {
-    return 10;
-  }
-  if (directSponsor >= 5) {
-    return 5;
-  }
-  if (directSponsor >= 3) {
-    return 3;
-  }
-  return 0;
-}
 
-int _todayBonusFrom(List<Map<String, dynamic>> commissions) {
-  final now = DateTime.now();
-  return commissions.fold<int>(0, (total, item) {
-    final createdAt = DateTime.tryParse(item['createdAt']?.toString() ?? '');
-    if (createdAt == null ||
-        createdAt.year != now.year ||
-        createdAt.month != now.month ||
-        createdAt.day != now.day) {
-      return total;
-    }
-    return total + _intFrom(item['amount']);
-  });
-}
 
-WalletTransactionModel _walletTransactionFromApi(Map<String, dynamic> item) {
-  final type = item['type']?.toString() ?? 'TRANSAKSI';
-  return WalletTransactionModel(
-    title: _labelFromType(type),
-    description: item['referenceType']?.toString() ?? 'Ledger TapGo',
-    amount: _intFrom(item['amount']),
-    status: 'Sukses',
-  );
-}
 
-WalletTransactionModel _commissionTransactionFromApi(
-  Map<String, dynamic> item,
-) {
-  final type = item['type']?.toString() ?? 'KOMISI';
-  return WalletTransactionModel(
-    title: _labelFromType(type),
-    description: item['triggerType']?.toString() ?? 'Komisi TapGo',
-    amount: _intFrom(item['amount']),
-    status: item['status']?.toString() ?? 'POSTED',
-  );
-}
 
-String _labelFromType(String type) {
-  return switch (type) {
-    'REGISTRATION_BONUS' => 'Bonus Registrasi',
-    'BASIC_REGISTER_BONUS' => 'Bonus Registrasi',
-    'PPOB_BENEFIT' => 'Saldo PPOB',
-    'SPONSOR_BONUS' => 'Bonus Referral',
-    'BASIC_SPONSOR_BONUS' => 'Bonus Referral',
-    'LEVEL_BONUS' => 'Bonus Tingkat',
-    'REWARD_BONUS' => 'Reward Bonus',
-    'PROFIT_SHARING' => 'Profit Sharing',
-    'WITHDRAWAL' => 'Withdraw',
-    _ => type.replaceAll('_', ' '),
-  };
-}
 
 String? _dateLabel(Object? value) {
   final parsed = DateTime.tryParse(value?.toString() ?? '');
@@ -1640,99 +1287,6 @@ String? _dateLabel(Object? value) {
   return '${parsed.day}/${parsed.month}/${parsed.year}';
 }
 
-DemoReferralNode? _referralTreeFromApi(Map<String, dynamic> payload) {
-  final rows = _listFromPayload(payload);
-  if (rows.isEmpty) {
-    return null;
-  }
-  final rootMap = (payload['root'] as Map?)?.cast<String, dynamic>();
-  final rootId = rootMap?['userId']?.toString() ??
-      rootMap?['id']?.toString() ??
-      rows
-          .map((item) => item['sponsorId']?.toString())
-          .firstWhere((id) => id != null && id.isNotEmpty, orElse: () => null);
-  final childrenBySponsor = <String, List<Map<String, dynamic>>>{};
-  for (final item in rows) {
-    final sponsorMap = (item['sponsor'] as Map?)?.cast<String, dynamic>();
-    final sponsorId = item['sponsorId']?.toString() ??
-        item['sponsor_id']?.toString() ??
-        sponsorMap?['id']?.toString() ??
-        sponsorMap?['userId']?.toString();
-    if (sponsorId == null || sponsorId.isEmpty) {
-      continue;
-    }
-    childrenBySponsor.putIfAbsent(sponsorId, () => []).add(item);
-  }
-
-  DemoReferralNode nodeFromItem(Map<String, dynamic> item) {
-    final userMap = (item['user'] as Map?)?.cast<String, dynamic>();
-    final memberMap = (item['member'] as Map?)?.cast<String, dynamic>();
-    final userId = item['userId']?.toString() ??
-        item['user_id']?.toString() ??
-        item['id']?.toString() ??
-        userMap?['id']?.toString() ??
-        memberMap?['id']?.toString() ??
-        'api-${DateTime.now().microsecondsSinceEpoch}';
-    final level = _intFrom(item['level'] ?? item['depth']);
-    final children =
-        (childrenBySponsor[userId] ?? const <Map<String, dynamic>>[])
-            .map(nodeFromItem)
-            .toList(growable: false);
-    return DemoReferralNode(
-      id: userId,
-      name: item['fullName']?.toString() ??
-          item['full_name']?.toString() ??
-          item['name']?.toString() ??
-          userMap?['fullName']?.toString() ??
-          userMap?['name']?.toString() ??
-          memberMap?['fullName']?.toString() ??
-          memberMap?['name']?.toString() ??
-          'Member TapGo',
-      packageName: _titleCase(
-        item['membershipTier']?.toString() ??
-            item['membership_tier']?.toString() ??
-            item['packageName']?.toString() ??
-            'Basic',
-      ),
-      level: level == 0 ? 1 : level,
-      bonus: _intFrom(item['bonus'] ?? item['totalBonus']),
-      totalDownline: _intFrom(
-        item['totalDownline'] ??
-            item['totalDownlines'] ??
-            item['downlineCount'] ??
-            children.length,
-      ),
-      isExpanded: level <= 2,
-      children: children,
-    );
-  }
-
-  final nestedChildren = rootId == null
-      ? const <DemoReferralNode>[]
-      : (childrenBySponsor[rootId] ?? const <Map<String, dynamic>>[])
-          .map(nodeFromItem)
-          .toList(growable: false);
-  final flatChildren = rows.take(20).map(nodeFromItem).toList(growable: false);
-
-  return DemoReferralNode(
-    id: rootId ?? 'backend-root',
-    name: rootMap?['fullName']?.toString() ??
-        rootMap?['name']?.toString() ??
-        'Referral Anda',
-    packageName: _titleCase(
-      rootMap?['membershipTier']?.toString() ??
-          rootMap?['packageName']?.toString() ??
-          'Basic',
-    ),
-    level: 0,
-    bonus: _intFrom(rootMap?['bonus']),
-    totalDownline: _intFrom(
-      rootMap?['totalDownline'] ?? rootMap?['totalDownlines'],
-    ),
-    isExpanded: true,
-    children: nestedChildren.isEmpty ? flatChildren : nestedChildren,
-  );
-}
 
 /// Pesan umum untuk kegagalan API. Pesan mentah server TIDAK dipakai: sekitar
 /// separuh pesan error backend berbahasa Inggris (mis. "Request validation

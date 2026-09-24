@@ -10,7 +10,7 @@ class _TapGoPersistentStore {
   static const _authKey = 'tapgo.demo.authenticated.v1';
   static const _accessTokenKey = 'tapgo.auth.access_token.v1';
   static const _refreshTokenKey = 'tapgo.auth.refresh_token.v1';
-  static const _documentsKey = 'tapgo.demo.documents.v1';
+  static const _legacyDocumentsKey = 'tapgo.demo.documents.v1';
   static const _legacyRegisteredUsersKey = 'tapgo.auth.registered_users.v1';
   static const _membershipPrefix = 'tapgo.membership.snapshot.v1.';
 
@@ -134,15 +134,8 @@ class _TapGoPersistentStore {
           activePackageName: membership.activePackageName,
           walletBalance: membership.walletBalance,
           ppobBalance: membership.ppobBalance,
-          directSponsor: membership.directSponsor,
-          downline: membership.downline,
-          activeLevel: membership.activeLevel,
-          todayBonus: membership.todayBonus,
-          selfieImagePath: membership.selfieImagePath,
-          ktpImagePath: membership.ktpImagePath,
           lastInvoiceNumber: membership.lastInvoiceNumber,
           membershipJoinedAt: membership.membershipJoinedAt,
-          transactions: membership.transactions,
         );
       } catch (_) {}
     }
@@ -157,35 +150,9 @@ class _TapGoPersistentStore {
     if (tapGoDisablePersistenceForTests) {
       return;
     }
+    // Lokasi foto KTP/selfie dari pendaftaran lama di HP juga dihapus.
     await _safeDelete(_legacyRegisteredUsersKey);
-  }
-
-  Future<void> saveDocument(String key, _PickedDemoDocument document) async {
-    if (tapGoDisablePersistenceForTests) {
-      return;
-    }
-    final documents = await restoreDocuments();
-    documents[key] = {
-      'path': document.path,
-      'fileName': document.fileName,
-      'statusLabel': document.statusLabel,
-    };
-    await _safeWrite(_documentsKey, jsonEncode(documents));
-  }
-
-  Future<Map<String, dynamic>> restoreDocuments() async {
-    if (tapGoDisablePersistenceForTests) {
-      return {};
-    }
-    final raw = await _safeRead(_documentsKey);
-    if (raw == null || raw.isEmpty) {
-      return {};
-    }
-    try {
-      return jsonDecode(raw) as Map<String, dynamic>;
-    } catch (_) {
-      return {};
-    }
+    await _safeDelete(_legacyDocumentsKey);
   }
 
   Future<void> clearSession() async {
@@ -323,7 +290,7 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
   @override
   void initState() {
     super.initState();
-    assert(_apiClient.baseUrl.isNotEmpty && _tapgoApiEndpoints.isNotEmpty);
+    assert(_apiClient.baseUrl.isNotEmpty);
     _restore();
   }
 
@@ -441,13 +408,8 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
               activePackageName: production.sessionPatch.activePackageName,
               walletBalance: production.sessionPatch.walletBalance,
               ppobBalance: production.sessionPatch.ppobBalance,
-              directSponsor: production.sessionPatch.directSponsor,
-              downline: production.sessionPatch.downline,
-              activeLevel: production.sessionPatch.activeLevel,
-              todayBonus: production.sessionPatch.todayBonus,
               lastInvoiceNumber: production.sessionPatch.lastInvoiceNumber,
               membershipJoinedAt: production.sessionPatch.membershipJoinedAt,
-              transactions: production.sessionPatch.transactions,
               isDemoMode: false,
             );
           } catch (error) {
@@ -471,59 +433,60 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
             );
             auth = true;
           } else {
-          // Access token kedaluwarsa (~15 mnt) belum berarti sesi mati: bila
-          // refresh token masih hidup, tukar jadi pasangan baru lalu coba lagi.
-          // Hanya bila refresh ikut ditolak (dicabut / ganti password) sesi
-          // dikosongkan dan user diminta login ulang.
-          var recovered = false;
-          var refreshUnreachable = false;
-          final refreshToken = tokens.refreshToken;
-          if (refreshToken != null && refreshToken.isNotEmpty) {
-            try {
-              final (refreshResult, refreshed) =
-                  await _apiClient.refreshSession(refreshToken);
-              if (refreshResult == TapGoSessionRefreshResult.refreshed &&
-                  refreshed != null) {
-                _apiClient.setAccessToken(refreshed.accessToken);
-                final user = await _apiClient.me();
-                restoredSession = _sessionFromAuthUser(
-                  user,
-                  accessToken: refreshed.accessToken,
-                  refreshToken: refreshed.refreshToken,
-                  fallback: session,
-                );
-                await _persistentStore.saveTokens(
-                  accessToken: refreshed.accessToken,
-                  refreshToken: refreshed.refreshToken,
-                );
-                auth = true;
-                recovered = true;
-                _tapGoDebugLog('[TapGo Auth] session refreshed on restore.');
-              } else if (refreshResult ==
-                  TapGoSessionRefreshResult.unreachable) {
-                refreshUnreachable = true;
-              }
-            } catch (refreshError) {
-              _tapGoDebugLog('[TapGo Auth] refresh-on-restore failed: $refreshError');
-              if (!_isAuthRejection(refreshError)) {
-                refreshUnreachable = true;
+            // Access token kedaluwarsa (~15 mnt) belum berarti sesi mati: bila
+            // refresh token masih hidup, tukar jadi pasangan baru lalu coba lagi.
+            // Hanya bila refresh ikut ditolak (dicabut / ganti password) sesi
+            // dikosongkan dan user diminta login ulang.
+            var recovered = false;
+            var refreshUnreachable = false;
+            final refreshToken = tokens.refreshToken;
+            if (refreshToken != null && refreshToken.isNotEmpty) {
+              try {
+                final (refreshResult, refreshed) =
+                    await _apiClient.refreshSession(refreshToken);
+                if (refreshResult == TapGoSessionRefreshResult.refreshed &&
+                    refreshed != null) {
+                  _apiClient.setAccessToken(refreshed.accessToken);
+                  final user = await _apiClient.me();
+                  restoredSession = _sessionFromAuthUser(
+                    user,
+                    accessToken: refreshed.accessToken,
+                    refreshToken: refreshed.refreshToken,
+                    fallback: session,
+                  );
+                  await _persistentStore.saveTokens(
+                    accessToken: refreshed.accessToken,
+                    refreshToken: refreshed.refreshToken,
+                  );
+                  auth = true;
+                  recovered = true;
+                  _tapGoDebugLog('[TapGo Auth] session refreshed on restore.');
+                } else if (refreshResult ==
+                    TapGoSessionRefreshResult.unreachable) {
+                  refreshUnreachable = true;
+                }
+              } catch (refreshError) {
+                _tapGoDebugLog(
+                    '[TapGo Auth] refresh-on-restore failed: $refreshError');
+                if (!_isAuthRejection(refreshError)) {
+                  refreshUnreachable = true;
+                }
               }
             }
-          }
-          if (!recovered && refreshUnreachable) {
-            // Server menolak access token TAPI refresh tidak dapat diverifikasi
-            // karena jaringan putus — pertahankan sesi, coba lagi saat app
-            // dibuka berikutnya.
-            auth = true;
-          } else if (!recovered) {
-            await _persistentStore.clearSession().timeout(
-                  const Duration(seconds: 2),
-                  onTimeout: () {},
-                );
-            _apiClient.setAccessToken(null);
-            auth = false;
-            restoredSession = null;
-          }
+            if (!recovered && refreshUnreachable) {
+              // Server menolak access token TAPI refresh tidak dapat diverifikasi
+              // karena jaringan putus — pertahankan sesi, coba lagi saat app
+              // dibuka berikutnya.
+              auth = true;
+            } else if (!recovered) {
+              await _persistentStore.clearSession().timeout(
+                    const Duration(seconds: 2),
+                    onTimeout: () {},
+                  );
+              _apiClient.setAccessToken(null);
+              auth = false;
+              restoredSession = null;
+            }
           }
         }
       }
@@ -587,7 +550,8 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
     if (!mounted || !_loaded) {
       return;
     }
-    _tapGoDebugLog('[TapGo Auth] session expired confirmed by server; signing out.');
+    _tapGoDebugLog(
+        '[TapGo Auth] session expired confirmed by server; signing out.');
     _apiClient.setAccessToken(null);
     try {
       await _persistentStore.clearSession().timeout(
@@ -613,6 +577,7 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
     );
   }
 }
+
 /// True hanya bila server dengan tegas menolak kredensial (401/403).
 /// Gangguan jaringan, timeout, dan 5xx mengembalikan false sehingga sesi
 /// pengguna dipertahankan alih-alih dipaksa login ulang.
@@ -643,8 +608,6 @@ Map<String, dynamic> _sessionToJson(DemoClientSession session) {
     'accessToken': session.accessToken,
     'refreshToken': session.refreshToken,
     'isDemoMode': session.isDemoMode,
-    'selfieImagePath': session.selfieImagePath,
-    'ktpImagePath': session.ktpImagePath,
     'lastInvoiceNumber': session.lastInvoiceNumber,
     'membershipJoinedAt': session.membershipJoinedAt,
     'userName': session.userName,
@@ -653,20 +616,6 @@ Map<String, dynamic> _sessionToJson(DemoClientSession session) {
     'walletBalance': session.walletBalance,
     'ppobBalance': session.ppobBalance,
     'referralCode': session.referralCode,
-    'directSponsor': session.directSponsor,
-    'downline': session.downline,
-    'activeLevel': session.activeLevel,
-    'todayBonus': session.todayBonus,
-    'transactions': session.transactions
-        .map(
-          (transaction) => {
-            'title': transaction.title,
-            'description': transaction.description,
-            'amount': transaction.amount,
-            'status': transaction.status,
-          },
-        )
-        .toList(),
   };
 }
 
@@ -678,8 +627,6 @@ DemoClientSession _sessionFromJson(Map<String, dynamic> json) {
     accessToken: json['accessToken']?.toString(),
     refreshToken: json['refreshToken']?.toString(),
     isDemoMode: json['isDemoMode'] as bool? ?? true,
-    selfieImagePath: json['selfieImagePath']?.toString(),
-    ktpImagePath: json['ktpImagePath']?.toString(),
     lastInvoiceNumber: json['lastInvoiceNumber']?.toString(),
     membershipJoinedAt: json['membershipJoinedAt']?.toString(),
     userName: json['userName']?.toString() ?? 'Member TapGo',
@@ -688,20 +635,5 @@ DemoClientSession _sessionFromJson(Map<String, dynamic> json) {
     walletBalance: (json['walletBalance'] as num?)?.toInt() ?? 0,
     ppobBalance: (json['ppobBalance'] as num?)?.toInt() ?? 0,
     referralCode: json['referralCode']?.toString() ?? '-',
-    directSponsor: (json['directSponsor'] as num?)?.toInt() ?? 0,
-    downline: (json['downline'] as num?)?.toInt() ?? 0,
-    activeLevel: (json['activeLevel'] as num?)?.toInt() ?? 0,
-    todayBonus: (json['todayBonus'] as num?)?.toInt() ?? 0,
-    transactions: ((json['transactions'] as List?) ?? const [])
-        .whereType<Map>()
-        .map(
-          (item) => WalletTransactionModel(
-            title: item['title']?.toString() ?? 'Transaksi',
-            description: item['description']?.toString() ?? 'Ledger TapGo',
-            amount: (item['amount'] as num?)?.toInt() ?? 0,
-            status: item['status']?.toString() ?? 'Sukses',
-          ),
-        )
-        .toList(),
   );
 }

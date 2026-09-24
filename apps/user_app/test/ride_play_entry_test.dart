@@ -125,14 +125,12 @@ void main() {
     }
 
     testWidgets('1. distribusi Play menampilkan entry Motor', (tester) async {
-      expect(tapGoIsPlayDistribution, isTrue);
       await openDashboard(tester);
 
       expect(serviceTile('Motor'), findsOneWidget);
     });
 
     testWidgets('2. distribusi Play menampilkan entry Mobil', (tester) async {
-      expect(tapGoIsPlayDistribution, isTrue);
       await openDashboard(tester);
 
       expect(serviceTile('Mobil'), findsOneWidget);
@@ -141,7 +139,6 @@ void main() {
     testWidgets('3. tap widget Motor nyata membuka layanan MOTORCYCLE', (
       tester,
     ) async {
-      expect(tapGoIsPlayDistribution, isTrue);
       tapGoRideHistoryLoaderForTests = () async => const [];
 
       await openDashboard(tester);
@@ -155,7 +152,6 @@ void main() {
     testWidgets('4. tap widget Mobil nyata membuka layanan CAR', (
       tester,
     ) async {
-      expect(tapGoIsPlayDistribution, isTrue);
       tapGoRideHistoryLoaderForTests = () async => const [];
 
       await openDashboard(tester);

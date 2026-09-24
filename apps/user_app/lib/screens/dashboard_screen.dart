@@ -148,37 +148,27 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                 ),
               ),
               const SizedBox(height: 14),
-              // Mode Play: kartu Membership biru yang dulu ada di sini dihapus
-              // (permintaan Owner) — Akun sudah menampilkan tier & status, dan
-              // kartu ini hanya mengulanginya. forceWallet:true membuatnya
-              // selalu tampil sebagai kartu saldo TapGoPay, sama seperti
-              // distribusi direct.
+              // Kartu Membership biru dihapus (permintaan Owner) — Akun sudah
+              // menampilkan tier & status. Beranda selalu menampilkan kartu
+              // saldo TapGoPay.
               _DashboardEntrance(
                 order: 3,
                 child: _WalletCard(
                   session: session,
                   state: production,
-                  forceWallet: true,
                 ),
               ),
               // Play: kartu "Paket aktif: Basic" dihapus (permintaan Owner —
               // Akun sudah menampilkan tier & status, kartu ini cuma
               // mengulanginya) dan digantikan kartu saldo PPOB yang lebih
-              // berguna di Beranda. Direct tetap memakai _MarketingPlanCard
-              // karena baris Referral/Mitra di sana masih relevan untuk
-              // distribusi itu.
+              // berguna di Beranda.
               const SizedBox(height: 16),
               _DashboardEntrance(
                 order: 4,
-                child: tapGoIsPlayDistribution
-                    ? _PpobBalanceCard(
-                        session: session,
-                        isLoading: production.isLoading,
-                      )
-                    : _MarketingPlanCard(
-                        session: session,
-                        isLoading: production.isLoading,
-                      ),
+                child: _PpobBalanceCard(
+                  session: session,
+                  isLoading: production.isLoading,
+                ),
               ),
               const SizedBox(height: 22),
               const _DashboardEntrance(
@@ -637,10 +627,11 @@ class _TopBar extends ConsumerWidget {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(17),
-              child: _TapGoProfileImage(
-                imagePath: session.selfieImagePath,
+              child: Image.asset(
+                'assets/images/tapgo_logo.jpeg',
                 width: 50,
                 height: 50,
+                fit: BoxFit.cover,
               ),
             ),
           ),
@@ -771,14 +762,7 @@ class _SearchRow extends StatefulWidget {
 }
 
 class _SearchRowState extends State<_SearchRow> {
-  static const _directPlaceholders = [
-    'Cari layanan TapGo',
-    'Cari Membership Saya',
-    'Cari Referral',
-    'Cari PPOB',
-    'Cari Bantuan',
-  ];
-  static const _playPlaceholders = [
+  static const _placeholders = [
     'Cari layanan TapGo',
     'Cari Kartu Anggota',
     'Cari PPOB',
@@ -792,10 +776,8 @@ class _SearchRowState extends State<_SearchRow> {
     super.initState();
     _placeholderTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!mounted) return;
-      final placeholders =
-          tapGoIsPlayDistribution ? _playPlaceholders : _directPlaceholders;
       setState(() {
-        _placeholderIndex = (_placeholderIndex + 1) % placeholders.length;
+        _placeholderIndex = (_placeholderIndex + 1) % _placeholders.length;
       });
     });
   }
@@ -808,8 +790,7 @@ class _SearchRowState extends State<_SearchRow> {
 
   @override
   Widget build(BuildContext context) {
-    final placeholders =
-        tapGoIsPlayDistribution ? _playPlaceholders : _directPlaceholders;
+    const placeholders = _placeholders;
     final colorScheme = Theme.of(context).colorScheme;
     if (_placeholderIndex >= placeholders.length) {
       _placeholderIndex = 0;
@@ -905,10 +886,6 @@ class _SearchPulseIcon extends StatelessWidget {
   }
 }
 
-void _showSoon(BuildContext context) {
-  _TapGoSnackbar.info(context, 'Layanan belum dapat dibuka saat ini');
-}
-
 void _showInfoSnack(BuildContext context, String message) {
   _TapGoSnackbar.info(context, message);
 }
@@ -926,54 +903,14 @@ Future<void> _openTopUpWebsite(BuildContext context) async {
 }
 
 void _showSearchMenu(BuildContext context) {
-  final items = tapGoIsPlayDistribution
-      ? const [
-          _ServiceItem(
-            'Kartu Anggota',
-            Icons.badge_rounded,
-            Color(0xFFF59E0B),
-            null,
-          ),
-        ]
-      : const [
-          _ServiceItem(
-            'TapGo Ride',
-            Icons.two_wheeler_rounded,
-            Color(0xFF006AF5),
-            null,
-          ),
-          _ServiceItem(
-            'TapGo Car',
-            Icons.local_taxi_rounded,
-            Color(0xFF006AF5),
-            null,
-          ),
-          _ServiceItem(
-            'TapGo Food',
-            Icons.restaurant_menu_rounded,
-            Color(0xFFFF6B00),
-            null,
-          ),
-          _ServiceItem(
-            'TapGo Mart',
-            Icons.storefront_rounded,
-            Color(0xFF0097A7),
-            null,
-          ),
-          _ServiceItem('Referral', Icons.hub_rounded, Color(0xFF006AF5), null),
-          _ServiceItem(
-            'Membership',
-            Icons.workspace_premium_rounded,
-            Color(0xFFF59E0B),
-            null,
-          ),
-          _ServiceItem(
-            'Reward',
-            Icons.emoji_events_rounded,
-            Color(0xFFF59E0B),
-            null,
-          ),
-        ];
+  const items = [
+    _ServiceItem(
+      'Kartu Anggota',
+      Icons.badge_rounded,
+      Color(0xFFF59E0B),
+      null,
+    ),
+  ];
 
   _showTapGoBottomSheet<void>(
     context: context,
@@ -1015,25 +952,9 @@ void _showSearchMenu(BuildContext context) {
                     borderRadius: BorderRadius.circular(18),
                     onTap: () {
                       Navigator.of(context).pop();
-                      if (tapGoIsPlayDistribution) {
-                        if (item.label == 'Kartu Anggota') {
-                          _openDemo(context, const BasicMemberCardScreen());
-                        } else if (item.label == 'Profil') {
-                          _openDemo(context, const ProfileDetailsScreen());
-                        } else if (item.label == 'Tiket Bantuan') {
-                          _openDemo(context, const ContactUsScreen());
-                        } else if (item.label == 'Hapus Akun') {
-                          _openDemo(
-                            context,
-                            const DeleteAccountRequestScreen(),
-                          );
-                        }
-                        return;
+                      if (item.label == 'Kartu Anggota') {
+                        _openDemo(context, const BasicMemberCardScreen());
                       }
-                      _showInfoSnack(
-                        context,
-                        '${item.label} belum dapat dibuka saat ini',
-                      );
                     },
                     child: _SearchServiceTile(item: item),
                   );
@@ -1464,42 +1385,25 @@ class _HeroMiniIcon extends StatelessWidget {
 }
 
 class _WalletCard extends ConsumerWidget {
-  const _WalletCard(
-      {required this.session, required this.state, this.forceWallet = false});
+  const _WalletCard({required this.session, required this.state});
 
   final DemoClientSession session;
   final AsyncValue<_TapGoProductionSnapshot> state;
-
-  /// Jika true, tampilkan sebagai kartu wallet TapGoPay meskipun mode Play.
-  /// Beranda selalu memakai forceWallet:true sekarang — kartu Membership
-  /// (forceWallet:false, defaultnya) sudah dihapus dari Beranda karena
-  /// mengulang info yang sama dengan header Akun.
-  final bool forceWallet;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final hasError = state.hasError;
     final isLoading = state.isLoading;
-    final isPlayDistribution = tapGoIsPlayDistribution && !forceWallet;
     final caption = hasError
         ? 'Muat ulang'
         : isLoading
-            ? isPlayDistribution
-                ? 'Memuat membership'
-                : 'Menghubungkan wallet'
-            : isPlayDistribution
-                ? 'Klik untuk detail'
-                : 'Klik untuk riwayat';
+            ? 'Menghubungkan wallet'
+            : 'Klik untuk detail';
     return _TapScale(
       borderRadius: BorderRadius.circular(28),
       onTap: hasError
           ? () => ref.invalidate(_productionSnapshotProvider)
-          : () => _openDemo(
-                context,
-                isPlayDistribution
-                    ? const MembershipScreen()
-                    : const DemoWalletScreen(),
-              ),
+          : () => _openDemo(context, const BasicMemberCardScreen()),
       child: DecoratedBox(
         decoration: BoxDecoration(
           gradient: const LinearGradient(
@@ -1566,7 +1470,7 @@ class _WalletCard extends ConsumerWidget {
                             // meluber saat teks diperbesar.
                             Flexible(
                               child: Text(
-                                isPlayDistribution ? 'Membership' : 'TapGoPay',
+                                'TapGoPay',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
@@ -1594,26 +1498,16 @@ class _WalletCard extends ConsumerWidget {
                                         fontWeight: FontWeight.w900,
                                       ),
                                     )
-                                  : isPlayDistribution
-                                      ? _DashboardValueSwitcher(
-                                          value: session.activePackageName,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 31,
-                                            height: 1,
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                        )
-                                      : _DashboardAnimatedValue(
-                                          value: session.walletBalance,
-                                          formatter: formatRupiah,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 31,
-                                            height: 1,
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                        ),
+                                  : _DashboardAnimatedValue(
+                                      value: session.walletBalance,
+                                      formatter: formatRupiah,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 31,
+                                        height: 1,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
                         ),
                         const SizedBox(height: 10),
                         Container(
@@ -1640,215 +1534,15 @@ class _WalletCard extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  if (!isPlayDistribution) ...[
-                    _WalletAction(
-                      icon: Icons.add_rounded,
-                      onTap: () => _openTopUpWebsite(context),
-                    ),
-                    const SizedBox(width: 12),
-                    _WalletAction(
-                      icon: Icons.near_me_rounded,
-                      onTap: () => _openDemo(context, const WalletTransferScreen()),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MarketingPlanCard extends StatelessWidget {
-  const _MarketingPlanCard({required this.session, required this.isLoading});
-
-  final DemoClientSession session;
-  final bool isLoading;
-
-  @override
-  Widget build(BuildContext context) {
-    final packageColor = _packagePrimary(session.activePackageName);
-    final premiumPackage = session.activePackageName.toLowerCase().contains(
-          'platinum',
-        );
-    final titleColor = premiumPackage ? Colors.white : const Color(0xFF0A2A43);
-    final mutedColor =
-        premiumPackage ? const Color(0xDDEAF7FF) : const Color(0xFF718096);
-    return Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFF2B8), Color(0xFFFFB000), Color(0xFFFFFFFF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: packageColor.withValues(alpha: 0.20),
-            blurRadius: 22,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(1.4),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(23),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: _packageGradient(session.activePackageName),
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+                  _WalletAction(
+                    icon: Icons.add_rounded,
+                    onTap: () => _openTopUpWebsite(context),
                   ),
-                ),
-              ),
-            ),
-            const Positioned.fill(child: _ShineSweep()),
-            Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      _ServiceAssetIcon(
-                        label: 'Kartu Anggota',
-                        icon: Icons.workspace_premium_rounded,
-                        style: _serviceIconStyle('Membership'),
-                        size: 52,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Paket aktif: ${session.activePackageName}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: titleColor,
-                                fontSize: 17,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              tapGoIsPlayDistribution
-                                  ? 'Status akun ${session.activePackageName} aktif'
-                                  : 'Kode ${session.referralCode} | Tingkat aktif ${session.activeLevel}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: mutedColor, fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _MiniMetric(
-                          label:
-                              tapGoIsPlayDistribution ? 'Membership' : 'Wallet',
-                          value: tapGoIsPlayDistribution
-                              ? session.activePackageName
-                              : _formatCompactRupiah(session.walletBalance),
-                          animatedValue: tapGoIsPlayDistribution
-                              ? null
-                              : session.walletBalance,
-                          formatter: _formatCompactRupiah,
-                          isLoading: isLoading,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _MiniMetric(
-                          label: tapGoIsPlayDistribution
-                              ? 'Benefit'
-                              : 'Bonus hari ini',
-                          value: tapGoIsPlayDistribution
-                              ? 'Aktif'
-                              : _formatCompactRupiah(session.todayBonus),
-                          animatedValue: tapGoIsPlayDistribution
-                              ? null
-                              : session.todayBonus,
-                          formatter: _formatCompactRupiah,
-                          isLoading: isLoading,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (tapGoIsDirectDistribution) ...[
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _MiniMetric(
-                            label: 'Referral Saya',
-                            value: '${session.directSponsor} langsung',
-                            animatedValue: session.directSponsor,
-                            formatter: (value) => '$value langsung',
-                            isLoading: isLoading,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _MiniMetric(
-                            label: 'Seluruh Referral',
-                            value: '${session.downline} user',
-                            animatedValue: session.downline,
-                            formatter: (value) => '$value user',
-                            isLoading: isLoading,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Referral Saya adalah jumlah orang yang memakai kode referral Anda.',
-                      style: TextStyle(
-                        color: mutedColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () => _openDemo(
-                        context,
-                        tapGoIsPlayDistribution
-                            ? const BasicMemberCardScreen()
-                            : const MembershipPackagesScreen(),
-                      ),
-                      icon: const Icon(Icons.workspace_premium_rounded),
-                      label: FittedBox(
-                        child: Text(
-                          tapGoIsPlayDistribution
-                              ? 'Detail ${session.activePackageName}'
-                              : 'Membership',
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: _brandBlue,
-                        backgroundColor: Colors.white.withValues(alpha: 0.72),
-                        side: const BorderSide(color: _brandBlue),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                    ),
+                  const SizedBox(width: 12),
+                  _WalletAction(
+                    icon: Icons.near_me_rounded,
+                    onTap: () =>
+                        _openDemo(context, const WalletTransferScreen()),
                   ),
                 ],
               ),
@@ -2071,57 +1765,12 @@ class _ShineSweepState extends State<_ShineSweep>
   }
 }
 
-Color _packagePrimary(String packageName) {
-  final name = packageName.toLowerCase();
-  if (name.contains('platinum')) return const Color(0xFF06284A);
-  if (name.contains('gold')) return const Color(0xFFFFB000);
-  if (name.contains('silver')) return const Color(0xFF94A3B8);
-  return const Color(0xFFF59E0B);
-}
-
-List<Color> _packageGradient(String packageName) {
-  final name = packageName.toLowerCase();
-  if (name.contains('platinum')) {
-    return const [Color(0xFF06172A), Color(0xFF0B4EA2), Color(0xFFFFB000)];
-  }
-  if (name.contains('gold')) {
-    return const [Color(0xFFFFF7D6), Color(0xFFFFC94A)];
-  }
-  if (name.contains('silver')) {
-    return const [Color(0xFFF8FAFC), Color(0xFFCBD5E1)];
-  }
-  return const [Color(0xFFFFFBEB), Color(0xFFFFE8A3)];
-}
-
 class _ServiceGrid extends StatelessWidget {
   const _ServiceGrid();
 
-  static const _directServices = [
-    // Badge 'Segera' dilepas karena layanan sudah dapat dibuka; badge apa pun
-    // membuat onTap bernilai null pada _tapGoServiceActionFor.
-    //
-    // TapGo Food, TapGo Mart, Jasa, TapGo Bantu, dan Lainnya dihapus total
-    // dari grid ini (kedua distribusi) atas permintaan owner — belum ada
-    // implementasi layanan sungguhan di baliknya, jadi menampilkannya hanya
-    // mengarah ke pesan "belum dapat dibuka".
-    _ServiceItem(
-      'TapGo Ride',
-      Icons.two_wheeler_rounded,
-      Color(0xFF0569E8),
-      null,
-    ),
-    _ServiceItem(
-      'TapGo Car',
-      Icons.local_taxi_rounded,
-      Color(0xFF0B7A75),
-      null,
-    ),
-    _ServiceItem('PPOB', Icons.receipt_long_rounded, Color(0xFF1486B8), null),
-  ];
-
   static const _playServices = [
     // Release 2 yang diunggah ke Play Store memuat Ojek Online, sehingga entry
-    // point Motor dan Mobil hadir di sini — bukan hanya pada distribusi direct.
+    // point Motor dan Mobil hadir di sini.
     // Keduanya tidak bergantung pada flag demo: menu tetap terlihat, dan yang
     // fail closed adalah penyedia lokasi di dalam alurnya.
     _ServiceItem('Motor', Icons.two_wheeler_rounded, Color(0xFF0569E8), null),
@@ -2135,7 +1784,7 @@ class _ServiceGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final services = tapGoIsPlayDistribution ? _playServices : _directServices;
+    const services = _playServices;
 
     // Tinggi sel sebelumnya diturunkan semata dari childAspectRatio, sehingga
     // ikut mengecil bersama lebar layar. Pada 320 dp sel menjadi lebih pendek
@@ -2197,28 +1846,23 @@ VoidCallback? _tapGoServiceActionFor(BuildContext context, _ServiceItem item) {
   }
   // PPOB (Stage R2.7) berlaku pada kedua distribusi: pembelian pulsa/data/
   // token memakai saldo internal TapGo, bukan pembayaran eksternal, sehingga
-  // sah pada build Play. 'Pulsa' adalah label lama grid direct.
+  // sah pada build Play. 'Pulsa' adalah label lama.
   if (item.label == 'PPOB' || item.label == 'Pulsa') {
     return () => tapGoOpenPpobHome(context);
   }
-  if (tapGoIsPlayDistribution) {
-    return switch (item.label) {
-      'Kartu Anggota' => () => _openDemo(
-            context,
-            const BasicMemberCardScreen(),
-          ),
-      'Profil' => () => _openDemo(context, const ProfileDetailsScreen()),
-      'Tiket Bantuan' => () => _openDemo(context, const ContactUsScreen()),
-      'Hapus Akun' => () => _openDemo(
-            context,
-            const DeleteAccountRequestScreen(),
-          ),
-      _ => null,
-    };
-  }
-  // Layanan lain belum tersedia dan tetap memakai pesan "belum dapat dibuka"
-  // yang jujur.
-  return () => _showSoon(context);
+  return switch (item.label) {
+    'Kartu Anggota' => () => _openDemo(
+          context,
+          const BasicMemberCardScreen(),
+        ),
+    'Profil' => () => _openDemo(context, const ProfileDetailsScreen()),
+    'Tiket Bantuan' => () => _openDemo(context, const ContactUsScreen()),
+    'Hapus Akun' => () => _openDemo(
+          context,
+          const DeleteAccountRequestScreen(),
+        ),
+    _ => null,
+  };
 }
 
 /// Memetakan label kartu layanan dashboard ke jenis layanan Ojek Online.
@@ -2549,44 +2193,13 @@ class ActivityScreen extends ConsumerStatefulWidget {
 class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   int _tabIndex = 0;
 
-  static const _directTabs = [
-    'Semua',
-    'Bonus',
-    'Referral',
-    'Layanan',
-    'Withdraw',
-  ];
-  static const _playTabs = ['Semua', 'Layanan'];
+  static const _tabs = ['Semua', 'Layanan'];
 
   @override
   Widget build(BuildContext context) {
     final production = ref.watch(_productionSnapshotProvider);
-    final session = ref.watch(_demoSessionProvider);
-    final tabs = tapGoIsPlayDistribution ? _playTabs : _directTabs;
-    final sourceItems = tapGoIsPlayDistribution
-        ? const <_ActivityItem>[]
-        : session.transactions
-            .map(
-              (transaction) => _ActivityItem(
-                _activityCategoryFromTitle(transaction.title),
-                _activityIconFromTitle(transaction.title),
-                transaction.title,
-                transaction.description,
-                transaction.amount == 0
-                    ? null
-                    : '${transaction.amount > 0 ? '+' : '-'}${formatRupiah(transaction.amount.abs())}',
-                transaction.status,
-                'Terbaru',
-              ),
-            )
-            .where(
-              (item) =>
-                  !tapGoIsPlayDistribution ||
-                  (item.category != 'Bonus' &&
-                      item.category != 'Withdraw' &&
-                      item.category != 'Referral'),
-            )
-            .toList(growable: false);
+    const tabs = _tabs;
+    const sourceItems = <_ActivityItem>[];
     if (_tabIndex >= tabs.length) {
       _tabIndex = 0;
     }
@@ -2602,9 +2215,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         children: [
           _SectionHeader(
             title: 'Aktivitas',
-            subtitle: tapGoIsPlayDistribution
-                ? 'Aktivitas layanan TapGo'
-                : 'Bonus, referral, layanan, dan withdraw',
+            subtitle: 'Aktivitas layanan TapGo',
           ),
           const SizedBox(height: 16),
           SingleChildScrollView(
@@ -2658,37 +2269,6 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   }
 }
 
-String _activityCategoryFromTitle(String title) {
-  final lower = title.toLowerCase();
-  if (lower.contains('bonus') || lower.contains('reward')) {
-    return 'Bonus';
-  }
-  if (lower.contains('referral') || lower.contains('sponsor')) {
-    return 'Referral';
-  }
-  if (lower.contains('withdraw')) {
-    return 'Withdraw';
-  }
-  return 'Layanan';
-}
-
-IconData _activityIconFromTitle(String title) {
-  final lower = title.toLowerCase();
-  if (lower.contains('level') || lower.contains('tingkat')) {
-    return Icons.layers_rounded;
-  }
-  if (lower.contains('reward')) {
-    return Icons.emoji_events_rounded;
-  }
-  if (lower.contains('withdraw')) {
-    return Icons.account_balance_rounded;
-  }
-  if (lower.contains('ppob') || lower.contains('saldo')) {
-    return Icons.receipt_long_rounded;
-  }
-  return Icons.payments_rounded;
-}
-
 class ChatScreen extends StatelessWidget {
   const ChatScreen({super.key});
 
@@ -2730,71 +2310,23 @@ class AccountScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _AccountHero(session: session, avatarBytes: avatarBytes),
-          // _AccountHero (mode Play) sudah menampilkan nama, tier, dan status
-          // aktif — kartu "Membership Basic" yang dulu dirender di sini hanya
-          // mengulang dua fakta yang sama, jadi tidak dirender lagi di sini.
-          if (!tapGoIsPlayDistribution) ...[
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _StatCard(
-                    label: 'Wallet',
-                    value: _formatCompactRupiah(session.walletBalance),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _StatCard(
-                    label: 'PPOB',
-                    value: _formatCompactRupiah(session.ppobBalance),
-                  ),
-                ),
-              ],
-            ),
-          ],
-          if (tapGoIsDirectDistribution) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _StatCard(
-                    label: 'Referral Langsung',
-                    value: '${session.directSponsor}',
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _StatCard(
-                    label: 'Tingkat aktif',
-                    value: '${session.activeLevel}',
-                  ),
-                ),
-              ],
-            ),
-          ],
+          // _AccountHero sudah menampilkan nama, tier, dan status aktif.
           const SizedBox(height: 16),
           _AccountMenuTile(
             'Kartu Anggota',
             Icons.badge_rounded,
             () => _openDemo(context, const BasicMemberCardScreen()),
           ),
-          // Permintaan Owner: struktur Referal Tim dihapus dari APLIKASI demi
-          // proses review Play Store — tetap tersedia di web (landing page),
-          // hanya tidak lagi jadi entry point di dalam app. Tetap tampil pada
-          // distribusi Direct karena bukan bagian dari build yang diajukan
-          // ke Play Store.
-          if (tapGoIsDirectDistribution)
-            _AccountMenuTile(
-              'Daftar Referral',
-              Icons.account_tree_rounded,
-              () => _openDemo(context, const ReferralTreeScreen()),
-              subtitle: 'Daftar referral per tingkat, tingkat 1 sampai 10',
-            ),
           _AccountMenuTile(
             'Profil',
             Icons.person_rounded,
             () => _openDemo(context, const ProfileDetailsScreen()),
+          ),
+          _AccountMenuTile(
+            'Ubah Password',
+            Icons.password_rounded,
+            () => _openDemo(context, const ChangePasswordScreen()),
+            subtitle: 'Ganti password akun Anda',
           ),
           _AccountMenuTile(
             'Tampilan',
@@ -2807,22 +2339,6 @@ class AccountScreen extends ConsumerWidget {
             Icons.volunteer_activism_rounded,
             () => _openDemo(context, const ContactUsScreen()),
           ),
-          if (tapGoIsDirectDistribution)
-            _AccountMenuTile(
-              'Wallet & Withdraw',
-              Icons.account_balance_wallet_rounded,
-              () => _openDemo(context, const DemoWalletScreen()),
-            ),
-          // Permintaan Owner: Rekening Bank dihapus dari build Play demi
-          // proses review Play Store (mengurangi permukaan fitur terkait
-          // pencairan dana). Tetap tampil pada distribusi Direct — tidak
-          // berubah dari perilaku sebelumnya di sana.
-          if (tapGoIsDirectDistribution)
-            _AccountMenuTile(
-              'Rekening Bank',
-              Icons.account_balance_rounded,
-              () => _openDemo(context, const BankAccountScreen()),
-            ),
           _AccountMenuTile(
             'Kebijakan Privasi',
             Icons.privacy_tip_rounded,
@@ -3181,7 +2697,8 @@ class _ProfileAvatarEditorState extends ConsumerState<_ProfileAvatarEditor> {
                 leading:
                     const Icon(Icons.photo_library_rounded, color: _brandBlue),
                 title: const Text('Pilih dari Galeri'),
-                onTap: () => Navigator.of(sheetContext).pop(ImageSource.gallery),
+                onTap: () =>
+                    Navigator.of(sheetContext).pop(ImageSource.gallery),
               ),
               ListTile(
                 leading:
@@ -3190,7 +2707,8 @@ class _ProfileAvatarEditorState extends ConsumerState<_ProfileAvatarEditor> {
                 onTap: () => Navigator.of(sheetContext).pop(ImageSource.camera),
               ),
               ListTile(
-                leading: const Icon(Icons.close_rounded, color: Color(0xFF697386)),
+                leading:
+                    const Icon(Icons.close_rounded, color: Color(0xFF697386)),
                 title: const Text('Batal'),
                 onTap: () => Navigator.of(sheetContext).pop(),
               ),
@@ -3248,7 +2766,8 @@ class _ProfileAvatarEditorState extends ConsumerState<_ProfileAvatarEditor> {
     } catch (_) {
       if (mounted) {
         setState(() => _isUploading = false);
-        _TapGoSnackbar.error(context, 'Gagal mengunggah foto profil. Coba lagi.');
+        _TapGoSnackbar.error(
+            context, 'Gagal mengunggah foto profil. Coba lagi.');
       }
     }
   }
@@ -3373,7 +2892,8 @@ Future<void> _showPhoneEditSheet(
               ref.read(_demoSessionProvider.notifier).state = updated;
               unawaited(_persistentStore.saveSession(updated));
               if (context.mounted) {
-                _TapGoSnackbar.success(context, 'Nomor HP berhasil diperbarui.');
+                _TapGoSnackbar.success(
+                    context, 'Nomor HP berhasil diperbarui.');
               }
             } on DioException catch (error) {
               final code = _authResponseDataMap(error.response?.data)?['code']
@@ -3600,30 +3120,12 @@ class HelpCenterScreen extends StatelessWidget {
     final helpItems = [
       (
         'Cara daftar',
-        tapGoIsPlayDistribution
-            ? 'Isi nama, nomor HP, dan password untuk membuat akun Basic.'
-            : 'Isi nama, nomor HP, password, lalu gunakan kode referral jika ada.',
+        'Isi nama, nomor HP, dan password untuk membuat akun Basic.',
       ),
       (
         'Membership',
-        tapGoIsPlayDistribution
-            ? 'Akun baru aktif otomatis sebagai Basic setelah registrasi.'
-            : 'Pilih paket Silver, Gold, atau Platinum lalu selesaikan invoice.',
+        'Akun baru aktif otomatis sebagai Basic setelah registrasi.',
       ),
-      if (tapGoIsDirectDistribution) ...[
-        (
-          'Kode referral',
-          'Bagikan kode referral Anda agar referral dan bonus tercatat otomatis.',
-        ),
-        (
-          'Saldo TapGoPay',
-          'Saldo berasal dari bonus registrasi, bonus referral, komisi, dan reward.',
-        ),
-        (
-          'Ajukan withdraw',
-          'Lengkapi rekening bank lalu ajukan penarikan dari halaman Wallet.',
-        ),
-      ],
       (
         'FAQ singkat',
         'Jika data belum tampil, pastikan koneksi internet dan coba muat ulang.',
@@ -4144,83 +3646,6 @@ String _formatMemberDate(DateTime value) {
   return '${value.day} ${months[value.month - 1]} ${value.year}';
 }
 
-class SettingsScreen extends ConsumerWidget {
-  const SettingsScreen({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final session = ref.watch(_demoSessionProvider);
-    return Scaffold(
-      appBar: AppBar(title: const Text('Pengaturan')),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          _InfoCard(
-            icon: Icons.person_rounded,
-            title: 'Profil Saya',
-            subtitle: session.userName,
-          ),
-          const SizedBox(height: 10),
-          _InfoCard(
-            icon: Icons.phone_android_rounded,
-            title: 'Nomor HP',
-            subtitle: session.phone,
-          ),
-          const SizedBox(height: 10),
-          _SettingsTile(
-            icon: Icons.lock_rounded,
-            title: 'Keamanan akun',
-            onTap: () => _showSoon(context),
-          ),
-          _SettingsTile(
-            icon: Icons.password_rounded,
-            title: 'Ubah password',
-            onTap: () => _openDemo(context, const ChangePasswordScreen()),
-          ),
-          _SettingsTile(
-            icon: Icons.language_rounded,
-            title: 'Bahasa',
-            subtitle: 'Indonesia',
-            onTap: () => _showSoon(context),
-          ),
-          _SettingsTile(
-            icon: Icons.dark_mode_rounded,
-            title: 'Tema aplikasi',
-            subtitle: 'Ikuti pengaturan sistem',
-            onTap: () => _showSoon(context),
-          ),
-          _SettingsTile(
-            icon: Icons.notifications_rounded,
-            title: 'Notifikasi',
-            onTap: () => _showSoon(context),
-          ),
-          _SettingsTile(
-            icon: Icons.delete_outline_rounded,
-            title: 'Hapus akun',
-            onTap: () => _openDemo(context, const DeleteAccountRequestScreen()),
-          ),
-          _SettingsTile(
-            icon: Icons.info_outline_rounded,
-            title: 'Tentang TapGo',
-            subtitle: 'PT. TapGo Lion Indonesia',
-            onTap: () => _showInfoSnack(context, 'TapGo Membership'),
-          ),
-          const _SettingsTile(
-            icon: Icons.verified_rounded,
-            title: 'Versi aplikasi',
-            subtitle: '2.0.0+14',
-          ),
-          _SettingsTile(
-            icon: Icons.logout_rounded,
-            title: 'Logout',
-            onTap: () => _confirmAndLogout(context, ref),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _InfoCard extends StatelessWidget {
   const _InfoCard({
     required this.icon,
@@ -4274,32 +3699,6 @@ class _InfoCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _SettingsTile extends StatelessWidget {
-  const _SettingsTile({
-    required this.icon,
-    required this.title,
-    this.subtitle,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-      leading: Icon(icon, color: _brandBlue),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-      subtitle: subtitle == null ? null : Text(subtitle!),
-      trailing: onTap == null ? null : const Icon(Icons.chevron_right_rounded),
-      onTap: onTap,
     );
   }
 }

@@ -31,6 +31,19 @@ PATTERNS=(
   "(admin|update)Founder"             # metode klien API admin Founder
 )
 
+# Hanya user_app: alur distribusi direct sudah dihapus. Aplikasi hanya beredar
+# lewat Google Play; pendaftaran lewat aplikasi, upgrade membership lewat web.
+USER_APP_ONLY_PATTERNS=(
+  "tapGoIsDirectDistribution"
+  "TapGoDistributionMode"
+  "TAPGO_DISTRIBUTION"
+  "['\"]/?membership/orders"
+  "wallet/withdrawals"
+  "wallet/bank-account"
+  "referrals/(claim|summary|downlines|commissions|uplink)"
+  "\b(ktpImagePath|selfieImagePath)\b"
+)
+
 violations=0
 
 for app in "${APPS[@]}"; do
@@ -51,6 +64,16 @@ for app in "${APPS[@]}"; do
     done < <(grep -rEn --include='*.dart' -e "$pattern" "$dir" || true)
   done
 done
+
+user_dir="$ROOT/apps/user_app/lib"
+if [ -d "$user_dir" ]; then
+  for pattern in "${USER_APP_ONLY_PATTERNS[@]}"; do
+    while IFS= read -r hit; do
+      echo "PELANGGARAN [direct: $pattern] ${hit#"$ROOT"/}"
+      violations=$((violations + 1))
+    done < <(grep -rEn --include='*.dart' -e "$pattern" "$user_dir" || true)
+  done
+fi
 
 if [ "$violations" -gt 0 ]; then
   echo

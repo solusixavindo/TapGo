@@ -45,11 +45,19 @@ MARKERS=(
   "Founder Program"
   "Super Admin Dashboard"
   "SUPER_ADMIN"
+  # Alur distribusi direct (pembelian membership, KTP, penarikan) sudah dihapus:
+  # aplikasi hanya beredar lewat Google Play, upgrade membership lewat web.
+  "/membership/orders"
+  "/wallet/withdrawals"
+  "/wallet/bank-account"
+  "/referrals/claim"
+  "Form Membership"
+  "Upload KTP dan foto diri"
 )
 # Kontrol positif: string yang PASTI ada di aplikasi user. Bila tidak ditemukan,
 # artinya pemindaian ini tidak bekerja (mis. build diobfuscate) — jangan
 # mengaku lolos tanpa bukti.
-CONTROL="${VERIFY_CONTROL_STRING:-/wallet/withdrawals}"
+CONTROL="${VERIFY_CONTROL_STRING:-/wallet/transfer}"
 
 violations=0
 control_seen=0
