@@ -219,9 +219,13 @@ describe.skipIf(!runIntegration)("Tahap B1 — posisi driver untuk penumpang", (
     ]) {
       expect(serialized).not.toContain(forbidden);
     }
-    expect(Object.keys(res.body.data).sort()).toEqual(
-      ["accuracyMeters", "ageSeconds", "available", "capturedAt", "distanceMeters", "etaSeconds", "lat", "lng", "stale", "target"].sort().filter((k) => k in res.body.data),
-    );
+    const allowed = [
+      "accuracyMeters", "ageSeconds", "available", "capturedAt", "distanceMeters",
+      "etaSeconds", "lat", "lng", "routePolyline", "stale", "target",
+    ];
+    for (const key of Object.keys(res.body.data)) {
+      expect(allowed, `kolom tak terduga: ${key}`).toContain(key);
+    }
   });
 
   it("dibatasi laju: permintaan ke-61 dalam semenit ditolak 429", async () => {
@@ -348,7 +352,7 @@ async function createRideOrder(
   const plateHash = driver.plateHash;
   const order = await prisma.rideOrder.create({
     data: {
-      publicReference: `RID-${String(sequence).replace(/\d/g, (d) => "ABCDEFGHJK"[Number(d)]).padStart(10, "M").slice(-10)}`,
+      publicReference: `RID-${String(sequence).replace(/\d/g, (d) => "ABCDEFGHJK".charAt(Number(d))).padStart(10, "M").slice(-10)}`,
       passengerId: passenger.id,
       ...(assigned || cancelled
         ? {
