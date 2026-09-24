@@ -245,7 +245,8 @@ void main() {
       // mengulang info yang sama di Beranda, jadi dihapus atas permintaan
       // Owner. Kartu wallet TapGoPay menempati slot yang sama sekarang.
       expect(find.text('Memuat membership'), findsNothing);
-      expect(find.text('Klik untuk detail'), findsOneWidget);
+      expect(find.text('Klik untuk detail'), findsNothing);
+      expect(find.text('Klik untuk riwayat'), findsOneWidget);
       expect(find.text('TapGoPay'), findsOneWidget);
     });
 
@@ -255,11 +256,11 @@ void main() {
         await renderDashboard(tester, width: 360, height: 800, fixture: true);
         // Pada viewport nyata kartu bisa berada di bawah lipatan atau tertutup
         // bottom navigation, jadi digulir dulu seperti pengguna.
-        await tester.ensureVisible(find.text('Klik untuk detail'));
+        await tester.ensureVisible(find.text('Klik untuk riwayat'));
         for (var index = 0; index < 8; index += 1) {
           await tester.pump(const Duration(milliseconds: 80));
         }
-        await tester.tap(find.text('Klik untuk detail'));
+        await tester.tap(find.text('Klik untuk riwayat'));
         for (var index = 0; index < 14; index += 1) {
           await tester.pump(const Duration(milliseconds: 80));
         }

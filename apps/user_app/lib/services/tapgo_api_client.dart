@@ -856,6 +856,9 @@ class _TapGoDeviceContextStore {
   }
 
   Future<void> _readAppVersion() async {
+    if (_appVersion != 'unknown') {
+      return; // sudah terbaca: tidak perlu memanggil platform pada tiap request
+    }
     try {
       final info =
           await PackageInfo.fromPlatform().timeout(const Duration(seconds: 2));
@@ -1063,7 +1066,6 @@ Future<Map<String, dynamic>> _productionSnapshotPart(
     return const <String, dynamic>{};
   }
 }
-
 
 class _TapGoAuthResult {
   const _TapGoAuthResult({
@@ -1274,11 +1276,6 @@ String _titleCase(String value) {
   return lower[0].toUpperCase() + lower.substring(1);
 }
 
-
-
-
-
-
 String? _dateLabel(Object? value) {
   final parsed = DateTime.tryParse(value?.toString() ?? '');
   if (parsed == null) {
@@ -1286,7 +1283,6 @@ String? _dateLabel(Object? value) {
   }
   return '${parsed.day}/${parsed.month}/${parsed.year}';
 }
-
 
 /// Pesan umum untuk kegagalan API. Pesan mentah server TIDAK dipakai: sekitar
 /// separuh pesan error backend berbahasa Inggris (mis. "Request validation

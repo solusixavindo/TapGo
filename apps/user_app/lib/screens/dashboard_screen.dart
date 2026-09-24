@@ -1398,7 +1398,7 @@ class _WalletCard extends ConsumerWidget {
         ? 'Muat ulang'
         : isLoading
             ? 'Menghubungkan wallet'
-            : 'Klik untuk detail';
+            : 'Klik untuk riwayat';
     return _TapScale(
       borderRadius: BorderRadius.circular(28),
       onTap: hasError
