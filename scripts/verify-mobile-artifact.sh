@@ -53,6 +53,10 @@ MARKERS=(
   "/referrals/claim"
   "Form Membership"
   "Upload KTP dan foto diri"
+  # Mode demo hanya untuk UAT/tes dan dibuang kompilator dari build rilis;
+  # bila teksnya muncul, ada yang menyalakan mode demo di build yang dikirim.
+  "DEMO DATA"
+  "lokasi sintetis"
 )
 # Kontrol positif: string yang PASTI ada di aplikasi user. Bila tidak ditemukan,
 # artinya pemindaian ini tidak bekerja (mis. build diobfuscate) — jangan

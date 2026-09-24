@@ -109,6 +109,10 @@ const Map<String, String> _tapGoDistributionHeader = {
 /// order yang jujur mencerminkan fail-closed provider (REFUNDED).
 const tapGoPpobDemoMode = bool.fromEnvironment('TAPGO_PPOB_DEMO_MODE');
 
+/// Hook uji: repositori PPOB nyata (adaptor ke klien API) tanpa provider.
+@visibleForTesting
+PpobRepository tapGoBuildPpobRepositoryForTests() => _buildPpobRepository();
+
 /// Menjembatani fitur PPOB (library berdiri sendiri di lib/features/ppob/)
 /// dengan _apiClient privat milik library ini. Error Dio dinormalisasi
 /// menjadi PpobApiException agar lapisan UI tidak bergantung pada Dio.

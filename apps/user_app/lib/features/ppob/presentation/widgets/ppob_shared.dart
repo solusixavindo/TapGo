@@ -210,10 +210,13 @@ String ppobErrorMessage(Object error) {
         'Saldo Anda tidak cukup. Silakan gunakan nominal lain.',
       'PPOB_IDEMPOTENCY_CONFLICT' =>
         'Permintaan duplikat terdeteksi. Periksa riwayat transaksi Anda.',
-      // Hanya kode domain PPOB_* yang pesannya dijamin berbahasa Indonesia;
-      // pesan umum server (mis. "Request validation failed") tidak boleh
-      // sampai ke pengguna.
-      _ when error.code.startsWith('PPOB_') && error.message.isNotEmpty =>
+      // Hanya kode domain PPOB_* dan pesan jaringan bawaan adaptor yang
+      // dijamin berbahasa Indonesia; pesan umum server (mis. "Request
+      // validation failed") tidak boleh sampai ke pengguna.
+      _
+          when (error.code.startsWith('PPOB_') ||
+                  error.code == 'NETWORK_ERROR') &&
+              error.message.isNotEmpty =>
         error.message,
       _ when error.statusCode == 429 =>
         'Terlalu banyak percobaan. Coba lagi beberapa saat lagi.',
