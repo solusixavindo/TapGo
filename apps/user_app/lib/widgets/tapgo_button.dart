@@ -561,13 +561,11 @@ class _DemoScaffold extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.child,
-    this.showBackButton = true,
   });
 
   final String title;
   final String subtitle;
   final Widget child;
-  final bool showBackButton;
 
   @override
   Widget build(BuildContext context) {
@@ -581,13 +579,11 @@ class _DemoScaffold extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  if (showBackButton) ...[
-                    IconButton.filledTonal(
-                      onPressed: () => _safeBack(context),
-                      icon: const Icon(Icons.arrow_back_rounded),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
+                  IconButton.filledTonal(
+                    onPressed: () => _safeBack(context),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                  ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

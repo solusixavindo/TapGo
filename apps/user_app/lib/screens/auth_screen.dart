@@ -509,10 +509,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           ),
         ),
         TapGoSessionPersistStep(
-          name: 'saveRegisteredUser',
-          persist: (value) => _persistentStore.saveRegisteredUser(value),
-        ),
-        TapGoSessionPersistStep(
           name: 'saveAuth',
           persist: (_) => _persistentStore.saveAuth(true),
         ),

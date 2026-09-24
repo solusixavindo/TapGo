@@ -5,6 +5,8 @@ import helmet from "helmet";
 import { pinoHttp } from "pino-http";
 import { corsOrigins } from "./config/env.js";
 import { errorHandler, notFoundHandler } from "./core/errors/errorHandler.js";
+import { adminWebOnly } from "./core/http/adminWebOnly.js";
+import { legacyMobileClientGate } from "./core/http/legacyMobileClientGate.js";
 import { auditRequestLogger } from "./core/http/auditRequestLogger.js";
 import { logger } from "./core/logger/logger.js";
 import { adminRateLimiter, apiRateLimiter, paymentRateLimiter } from "./core/security/rateLimit.js";
@@ -75,6 +77,10 @@ export function createApp() {
   // berulang di tiap app.use() router individual.
   app.use("/api/v1/admin", auditRequestLogger);
 
+  // Setelah audit log (percobaan dari klien mobile tetap tercatat), sebelum
+  // semua router admin: admin hanya untuk konsol web. Lihat adminWebOnly.ts.
+  app.use("/api/v1/admin", adminWebOnly);
+
   app.get("/health", (_req, res) => {
     res.json(healthPayload());
   });
@@ -82,6 +88,9 @@ export function createApp() {
   app.get("/api/v1/health", (_req, res) => {
     res.json(healthPayload());
   });
+
+  // Setelah health check (harus tetap terjangkau), sebelum semua router API.
+  app.use("/api/v1", legacyMobileClientGate);
 
   app.use("/legal", legalRouter);
   app.use("/", legalRouter);

@@ -27,6 +27,7 @@ Google Play final release boleh lanjut hanya setelah DOKU production webhook UAT
 | Website | `https://tapgolion.id` | Required | Verify live |
 | Internal testing | Smoke test and install test | Pending final AAB | Required |
 | Closed testing | Tester onboarding and bug channel | Prepared | Execute after build |
+| Tanpa kode admin/Founder di artefak | `scripts/verify-mobile-artifact.sh <aab/apk>` menyatakan OK pada berkas yang AKAN diunggah | Wajib tiap rilis | Jalankan pada AAB final; jangan unggah bila GAGAL. Lihat `LAPORAN_KODE_ADMIN_DI_APLIKASI_USER.md` |
 
 ## Payment Declaration
 

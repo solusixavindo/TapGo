@@ -738,14 +738,6 @@ class _TapGoApiClient {
     return get('/invoices/$invoiceIdOrNumber');
   }
 
-  Future<List<Map<String, dynamic>>> adminWithdrawals() async {
-    final data = await get(
-      '/admin/withdrawals',
-      query: {'page': 1, 'pageSize': 50},
-    );
-    return _items(data);
-  }
-
   Future<List<Map<String, dynamic>>> withdrawals() async {
     final data = await get(
       '/wallet/withdrawals',
@@ -889,11 +881,6 @@ class _TapGoApiClient {
     );
   }
 
-  Future<List<Map<String, dynamic>>> adminProfitSharingPeriods() async {
-    final data = await get('/admin/profit-sharing/periods');
-    return _items(data);
-  }
-
   Future<List<Map<String, dynamic>>> referralUplink() async {
     final data = await get('/referrals/uplink', query: {'maxLevel': 10});
     return _items(data);
@@ -902,169 +889,6 @@ class _TapGoApiClient {
   Future<List<Map<String, dynamic>>> membershipOrdersMe() async {
     final data = await get('/membership/orders/me');
     return _items(data);
-  }
-
-  Future<Map<String, dynamic>> adminDashboardSummary() {
-    return get('/admin/dashboard/summary');
-  }
-
-  Future<List<Map<String, dynamic>>> adminMembers() async {
-    final data = await get(
-      '/admin/members',
-      query: {'page': 1, 'pageSize': 50},
-    );
-    return _items(data);
-  }
-
-  Future<List<Map<String, dynamic>>> adminPayments() async {
-    final data = await get(
-      '/admin/payments',
-      query: {'page': 1, 'pageSize': 50},
-    );
-    return _items(data);
-  }
-
-  Future<List<Map<String, dynamic>>> adminInvoices() async {
-    final data = await get(
-      '/admin/invoices',
-      query: {'page': 1, 'pageSize': 50},
-    );
-    return _items(data);
-  }
-
-  Future<List<Map<String, dynamic>>> adminCommissions() async {
-    final data = await get(
-      '/admin/commissions',
-      query: {'page': 1, 'pageSize': 50},
-    );
-    return _items(data);
-  }
-
-  Future<Map<String, dynamic>> adminFounderPlatinum() {
-    return get('/admin/founder-platinum');
-  }
-
-  Future<Map<String, dynamic>> adminFounderChairman() {
-    return get('/admin/founder-chairman');
-  }
-
-  Future<Map<String, dynamic>> adminFounderPlatinumDetail(String founderId) {
-    return get('/admin/founder-platinum/$founderId');
-  }
-
-  Future<Map<String, dynamic>> adminFounderChairmanDetail(String founderId) {
-    return get('/admin/founder-chairman/$founderId');
-  }
-
-  Future<Map<String, dynamic>> updateFounderPlatinumStatus({
-    required String founderId,
-    required String status,
-    String? reason,
-  }) {
-    return patch(
-      '/admin/founder-platinum/$founderId/status',
-      body: {
-        'status': status,
-        if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
-      },
-    );
-  }
-
-  Future<Map<String, dynamic>> updateFounderChairmanStatus({
-    required String founderId,
-    required String status,
-    String? reason,
-  }) {
-    return patch(
-      '/admin/founder-chairman/$founderId/status',
-      body: {
-        'status': status,
-        if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
-      },
-    );
-  }
-
-  Future<List<Map<String, dynamic>>> adminMemberRequests() async {
-    final data = await get(
-      '/admin/member-requests',
-      query: {'page': 1, 'pageSize': 50},
-    );
-    return _items(data);
-  }
-
-  Future<Map<String, dynamic>> approveMemberRequest(String id) {
-    return post('/admin/member-requests/$id/approve');
-  }
-
-  Future<Map<String, dynamic>> rejectMemberRequest(
-    String id, {
-    String? reason,
-  }) {
-    return post(
-      '/admin/member-requests/$id/reject',
-      body: {
-        if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
-      },
-    );
-  }
-
-  Future<Map<String, dynamic>> adminBonusReport({Map<String, dynamic>? query}) {
-    return get(
-      '/admin/reports/bonus',
-      query: {'page': 1, 'pageSize': 50, ...?query},
-    );
-  }
-
-  Future<Map<String, dynamic>> adminPpobReport({Map<String, dynamic>? query}) {
-    return get(
-      '/admin/reports/ppob',
-      query: {'page': 1, 'pageSize': 50, ...?query},
-    );
-  }
-
-  Future<Map<String, dynamic>> adminRewardReport({
-    Map<String, dynamic>? query,
-  }) {
-    return get(
-      '/admin/reports/reward',
-      query: {'page': 1, 'pageSize': 50, ...?query},
-    );
-  }
-
-  Future<List<Map<String, dynamic>>> adminDeleteRequests() async {
-    final data = await get(
-      '/admin/delete-requests',
-      query: {'page': 1, 'pageSize': 50},
-    );
-    return _items(data);
-  }
-
-  Future<List<Map<String, dynamic>>> adminContactMessages() async {
-    final data = await get(
-      '/admin/contact-messages',
-      query: {'page': 1, 'pageSize': 50},
-    );
-    return _items(data);
-  }
-
-  Future<List<Map<String, dynamic>>> adminWallets() async {
-    final data = await get(
-      '/admin/wallets',
-      query: {'page': 1, 'pageSize': 50},
-    );
-    return _items(data);
-  }
-
-  Future<Map<String, dynamic>> approveWithdrawal(String id) {
-    return post('/admin/withdrawals/$id/approve');
-  }
-
-  Future<Map<String, dynamic>> rejectWithdrawal(String id) {
-    return post('/admin/withdrawals/$id/reject');
-  }
-
-  Future<Map<String, dynamic>> markWithdrawalPaid(String id) {
-    return post('/admin/withdrawals/$id/paid');
   }
 
   Map<String, dynamic> _unwrap(Map<String, dynamic>? data) {
@@ -1146,7 +970,10 @@ class _TapGoDeviceContextStore {
 
   static const _deviceIdKey = 'tapgo.device_id.v1';
   static const _deviceFingerprintKey = 'tapgo.device_fingerprint.v1';
-  static const _appVersion = '1.0.3+4';
+  /// Versi nyata aplikasi (`versi+build`) dari PackageInfo. Sebelumnya konstanta
+  /// '1.0.3+4' terkirim dari SEMUA build sehingga server tidak bisa membedakan
+  /// versi lama dari baru. Diisi saat load() pertama; 'unknown' sebelum itu.
+  static String _appVersion = 'unknown';
 
   static _TapGoDeviceContext fallbackContext() => _TapGoDeviceContext(
         deviceId: 'tapgo-session-${DateTime.now().millisecondsSinceEpoch}',
@@ -1167,7 +994,7 @@ class _TapGoDeviceContextStore {
 
   Future<_TapGoDeviceContext> load() async {
     if (tapGoDisablePersistenceForTests) {
-      return const _TapGoDeviceContext(
+      return _TapGoDeviceContext(
         deviceId: 'tapgo-test-installation',
         deviceFingerprint: 'tapgo-test-fingerprint',
         appVersion: _appVersion,
@@ -1175,6 +1002,7 @@ class _TapGoDeviceContextStore {
       );
     }
 
+    await _readAppVersion();
     final deviceId = await _readOrCreate(_deviceIdKey, _newDeviceId);
     final fingerprint = await _readOrCreate(
       _deviceFingerprintKey,
@@ -1187,6 +1015,18 @@ class _TapGoDeviceContextStore {
       platform: Platform.operatingSystem,
       installer: await _readInstaller(),
     );
+  }
+
+  Future<void> _readAppVersion() async {
+    try {
+      final info =
+          await PackageInfo.fromPlatform().timeout(const Duration(seconds: 2));
+      if (info.version.isNotEmpty) {
+        _appVersion = '${info.version}+${info.buildNumber}';
+      }
+    } catch (error) {
+      _tapGoDebugLog('[TapGo Device] app version unavailable: $error');
+    }
   }
 
   /// Paket installer aplikasi. Kegagalan membaca tidak boleh mengganggu
@@ -1267,8 +1107,6 @@ class _TapGoProductionSnapshot {
         (membershipData?['order'] as Map?)?.cast<String, dynamic>();
     final invoiceData =
         (orderData?['invoice'] as Map?)?.cast<String, dynamic>();
-    final membershipMetadata =
-        (membershipData?['metadata'] as Map?)?.cast<String, dynamic>();
     final walletBalance = _intFrom(wallet['balance']);
     final txItems = _listFromPayload(
       transactions,
@@ -1295,19 +1133,10 @@ class _TapGoProductionSnapshot {
         ? _intFrom(wallet['ppobBalance'])
         : _intFrom(packageData?['ppobBalance']);
     final todayBonus = _todayBonusFrom(commissionItems);
-    final founderRole = (membershipData?['founderRole'] ??
-            membershipMetadata?['founderRole'] ??
-            membershipData?['founderProgramRole'])
-        ?.toString()
-        .toUpperCase();
-    final isFounderChairman = founderRole == 'FOUNDER_CHAIRMAN';
-    final isFounderPlatinum = founderRole == 'FOUNDER_PLATINUM';
 
     return _TapGoProductionSnapshot(
       sessionPatch: DemoClientSession.initial().copyWith(
         activePackageName: activePackageName,
-        isFounderChairman: isFounderChairman,
-        isFounderPlatinum: isFounderPlatinum,
         walletBalance: walletBalance,
         ppobBalance: ppobBalance,
         directSponsor: directSponsor,
@@ -1405,8 +1234,6 @@ final _productionSnapshotProvider = FutureProvider<_TapGoProductionSnapshot>((
     activePackageName: snapshot.sessionPatch.activePackageName,
     walletBalance: snapshot.sessionPatch.walletBalance,
     ppobBalance: snapshot.sessionPatch.ppobBalance,
-    isFounderPlatinum: snapshot.sessionPatch.isFounderPlatinum,
-    isFounderChairman: snapshot.sessionPatch.isFounderChairman,
     directSponsor: snapshot.sessionPatch.directSponsor,
     downline: snapshot.sessionPatch.downline,
     activeLevel: snapshot.sessionPatch.activeLevel,
@@ -1435,115 +1262,6 @@ Future<Map<String, dynamic>> _productionSnapshotPart(
     }
     return const <String, dynamic>{};
   }
-}
-
-final _adminConsoleSnapshotProvider = FutureProvider<_AdminConsoleApiSnapshot>((
-  ref,
-) async {
-  final session = ref.read(_demoSessionProvider);
-  if (session.accessToken == null || session.accessToken!.isEmpty) {
-    throw StateError('Belum ada token admin backend.');
-  }
-  if (!session.isAdmin) {
-    throw StateError('Anda tidak memiliki akses admin.');
-  }
-  _apiClient.setAccessToken(session.accessToken);
-  final summary = await _apiClient.adminDashboardSummary();
-  final results = await Future.wait<Object>([
-    _adminSnapshotPart(
-      label: 'admin members',
-      loader: _apiClient.adminMembers,
-      fallback: const <Map<String, dynamic>>[],
-    ),
-    _adminSnapshotPart(
-      label: 'admin payments',
-      loader: _apiClient.adminPayments,
-      fallback: const <Map<String, dynamic>>[],
-    ),
-    _adminSnapshotPart(
-      label: 'admin invoices',
-      loader: _apiClient.adminInvoices,
-      fallback: const <Map<String, dynamic>>[],
-    ),
-    _adminSnapshotPart(
-      label: 'admin commissions',
-      loader: _apiClient.adminCommissions,
-      fallback: const <Map<String, dynamic>>[],
-    ),
-    _adminSnapshotPart(
-      label: 'admin wallets',
-      loader: _apiClient.adminWallets,
-      fallback: const <Map<String, dynamic>>[],
-    ),
-    _adminSnapshotPart(
-      label: 'admin withdrawals',
-      loader: _apiClient.adminWithdrawals,
-      fallback: const <Map<String, dynamic>>[],
-    ),
-    _adminSnapshotPart(
-      label: 'admin profit sharing periods',
-      loader: _apiClient.adminProfitSharingPeriods,
-      fallback: const <Map<String, dynamic>>[],
-    ),
-    session.isSuperAdmin
-        ? _adminSnapshotPart(
-            label: 'founder platinum',
-            loader: _apiClient.adminFounderPlatinum,
-            fallback: const <String, dynamic>{},
-          )
-        : Future.value(const <String, dynamic>{}),
-  ]);
-  return _AdminConsoleApiSnapshot(
-    summary: summary,
-    members: results[0] as List<Map<String, dynamic>>,
-    payments: results[1] as List<Map<String, dynamic>>,
-    invoices: results[2] as List<Map<String, dynamic>>,
-    commissions: results[3] as List<Map<String, dynamic>>,
-    wallets: results[4] as List<Map<String, dynamic>>,
-    withdrawals: results[5] as List<Map<String, dynamic>>,
-    profitSharingPeriods: results[6] as List<Map<String, dynamic>>,
-    founderProgram: results[7] as Map<String, dynamic>,
-  );
-});
-
-Future<T> _adminSnapshotPart<T>({
-  required String label,
-  required Future<T> Function() loader,
-  required T fallback,
-}) async {
-  try {
-    return await loader();
-  } catch (error) {
-    _tapGoDebugLog('[TapGo Admin] $label unavailable: $error');
-    if (!_isTapGoDevelopmentBuild) {
-      rethrow;
-    }
-    return fallback;
-  }
-}
-
-class _AdminConsoleApiSnapshot {
-  const _AdminConsoleApiSnapshot({
-    required this.summary,
-    required this.members,
-    required this.payments,
-    required this.invoices,
-    required this.commissions,
-    required this.wallets,
-    required this.withdrawals,
-    required this.profitSharingPeriods,
-    required this.founderProgram,
-  });
-
-  final Map<String, dynamic> summary;
-  final List<Map<String, dynamic>> members;
-  final List<Map<String, dynamic>> payments;
-  final List<Map<String, dynamic>> invoices;
-  final List<Map<String, dynamic>> commissions;
-  final List<Map<String, dynamic>> wallets;
-  final List<Map<String, dynamic>> withdrawals;
-  final List<Map<String, dynamic>> profitSharingPeriods;
-  final Map<String, dynamic> founderProgram;
 }
 
 class _TapGoPaymentIntent {
@@ -1624,8 +1342,6 @@ class _TapGoAuthUser {
     required this.role,
     this.email,
     this.referralCode,
-    this.isFounderChairman = false,
-    this.isFounderPlatinum = false,
   });
 
   final String id;
@@ -1634,8 +1350,6 @@ class _TapGoAuthUser {
   final String role;
   final String? email;
   final String? referralCode;
-  final bool isFounderChairman;
-  final bool isFounderPlatinum;
 
   factory _TapGoAuthUser.fromMap(Map<String, dynamic> map) {
     return _TapGoAuthUser(
@@ -1645,12 +1359,6 @@ class _TapGoAuthUser {
       role: _normalizeUserRole(map['role']?.toString()),
       email: map['email']?.toString(),
       referralCode: map['referralCode']?.toString(),
-      isFounderChairman:
-          map['founderRole']?.toString().toUpperCase() == 'FOUNDER_CHAIRMAN' ||
-              map['isFounderChairman'] == true,
-      isFounderPlatinum:
-          map['founderRole']?.toString().toUpperCase() == 'FOUNDER_PLATINUM' ||
-              map['isFounderPlatinum'] == true,
     );
   }
 }
@@ -1759,16 +1467,9 @@ class _TapGoServerConfigStore {
   }
 }
 
-String _normalizeUserRole(String? role) {
-  final normalized = (role ?? 'USER').trim().toUpperCase();
-  if (normalized == 'SUPER_ADMIN' ||
-      normalized == 'ADMIN' ||
-      normalized == 'MEMBER' ||
-      normalized == 'USER') {
-    return normalized == 'MEMBER' ? 'USER' : normalized;
-  }
-  return 'USER';
-}
+// Aplikasi user tidak mengenal peran admin (konsol admin hanya di web): peran
+// apa pun dinormalkan menjadi USER.
+String _normalizeUserRole(String? role) => 'USER';
 
 DemoClientSession _sessionFromAuthUser(
   _TapGoAuthUser user, {
@@ -1786,10 +1487,6 @@ DemoClientSession _sessionFromAuthUser(
     userName: user.name,
     phone: user.phone.isEmpty ? fallback?.phone : user.phone,
     referralCode: user.referralCode ?? fallback?.referralCode ?? '-',
-    isFounderChairman:
-        user.isFounderChairman || (fallback?.isFounderChairman ?? false),
-    isFounderPlatinum:
-        user.isFounderPlatinum || (fallback?.isFounderPlatinum ?? false),
   );
 }
 
@@ -1826,37 +1523,6 @@ class _TapGoEndpointCatalog {
   static const memberIdentity = 'GET /api/v1/member-identity/me';
   static const supportTickets = 'GET /api/v1/support/tickets';
   static const supportTicketCreate = 'POST /api/v1/support/tickets';
-  static const adminMemberRequests = 'GET /api/v1/admin/member-requests';
-  static const adminBonusReport = 'GET /api/v1/admin/reports/bonus';
-  static const adminPpobReport = 'GET /api/v1/admin/reports/ppob';
-  static const adminRewardReport = 'GET /api/v1/admin/reports/reward';
-  static const adminWithdrawals = 'GET /api/v1/admin/withdrawals';
-  static const adminDashboardSummary = 'GET /api/v1/admin/dashboard/summary';
-  static const adminMembers = 'GET /api/v1/admin/members';
-  static const adminMemberDetail = 'GET /api/v1/admin/members/:id';
-  static const adminPayments = 'GET /api/v1/admin/payments';
-  static const adminInvoices = 'GET /api/v1/admin/invoices';
-  static const adminCommissions = 'GET /api/v1/admin/commissions';
-  static const adminCommissionSettings =
-      'GET /api/v1/admin/commission-settings';
-  static const adminWallets = 'GET /api/v1/admin/wallets';
-  static const adminWalletTransactions =
-      'GET /api/v1/admin/wallets/:userId/transactions';
-  static const adminApproveWithdrawal =
-      'POST /api/v1/admin/withdrawals/:id/approve';
-  static const adminRejectWithdrawal =
-      'POST /api/v1/admin/withdrawals/:id/reject';
-  static const adminPaidWithdrawal = 'POST /api/v1/admin/withdrawals/:id/paid';
-  static const adminProfitSharingPeriods =
-      'GET /api/v1/admin/profit-sharing/periods';
-  static const adminProfitSharingApprove =
-      'POST /api/v1/admin/profit-sharing/periods/:id/approve';
-  static const adminProfitSharingDistribute =
-      'POST /api/v1/admin/profit-sharing/periods/:id/distribute';
-  static const adminRoleManagement = 'PUT /api/v1/admin/roles/:userId';
-  static const adminAppSettings = 'PUT /api/v1/admin/app-settings';
-  static const membershipPackageSettings =
-      'PUT /api/v1/memberships/admin/plans/:tier';
 }
 
 List<Map<String, dynamic>> _listFromPayload(Map<String, dynamic> payload) {

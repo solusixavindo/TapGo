@@ -10,9 +10,8 @@ class _TapGoPersistentStore {
   static const _authKey = 'tapgo.demo.authenticated.v1';
   static const _accessTokenKey = 'tapgo.auth.access_token.v1';
   static const _refreshTokenKey = 'tapgo.auth.refresh_token.v1';
-  static const _adminWithdrawalKey = 'tapgo.demo.admin.withdrawals.v1';
   static const _documentsKey = 'tapgo.demo.documents.v1';
-  static const _registeredUsersKey = 'tapgo.auth.registered_users.v1';
+  static const _legacyRegisteredUsersKey = 'tapgo.auth.registered_users.v1';
   static const _membershipPrefix = 'tapgo.membership.snapshot.v1.';
 
   final FlutterSecureStorage _storage;
@@ -98,19 +97,6 @@ class _TapGoPersistentStore {
     );
   }
 
-  Future<bool> saveRegisteredUser(DemoClientSession session) async {
-    if (tapGoDisablePersistenceForTests) {
-      return true;
-    }
-    final users = await restoreRegisteredUsers();
-    users.removeWhere((user) => user.phone == session.phone);
-    users.insert(0, DemoAdminMember.fromSession(session));
-    return _safeWrite(
-      _registeredUsersKey,
-      jsonEncode(users.map((user) => _adminMemberToJson(user)).toList()),
-    );
-  }
-
   Future<bool> saveMembershipSnapshot(DemoClientSession session) async {
     if (tapGoDisablePersistenceForTests) {
       return true;
@@ -163,22 +149,15 @@ class _TapGoPersistentStore {
     return baseSession;
   }
 
-  Future<List<DemoAdminMember>> restoreRegisteredUsers() async {
+  /// Daftar pendaftar lokal (termasuk lokasi foto KTP/selfie) sudah dihapus
+  /// dari aplikasi: pendaftaran hanya lewat aplikasi resmi Play Store dan
+  /// peningkatan member lewat web. Data yang tertinggal di HP dari versi lama
+  /// dibersihkan sekali saat aplikasi dibuka.
+  Future<void> purgeLegacyRegisteredUsers() async {
     if (tapGoDisablePersistenceForTests) {
-      return [];
+      return;
     }
-    final raw = await _safeRead(_registeredUsersKey);
-    if (raw == null || raw.isEmpty) {
-      return [];
-    }
-    try {
-      return (jsonDecode(raw) as List)
-          .whereType<Map>()
-          .map((item) => _adminMemberFromJson(item.cast<String, dynamic>()))
-          .toList();
-    } catch (_) {
-      return [];
-    }
+    await _safeDelete(_legacyRegisteredUsersKey);
   }
 
   Future<void> saveDocument(String key, _PickedDemoDocument document) async {
@@ -207,29 +186,6 @@ class _TapGoPersistentStore {
     } catch (_) {
       return {};
     }
-  }
-
-  Future<Map<String, String>> restoreWithdrawalStatuses() async {
-    if (tapGoDisablePersistenceForTests) {
-      return {};
-    }
-    final raw = await _safeRead(_adminWithdrawalKey);
-    if (raw == null || raw.isEmpty) {
-      return {};
-    }
-    try {
-      final map = jsonDecode(raw) as Map<String, dynamic>;
-      return map.map((key, value) => MapEntry(key, value.toString()));
-    } catch (_) {
-      return {};
-    }
-  }
-
-  Future<void> saveWithdrawalStatuses(Map<String, String> statuses) async {
-    if (tapGoDisablePersistenceForTests) {
-      return;
-    }
-    await _safeWrite(_adminWithdrawalKey, jsonEncode(statuses));
   }
 
   Future<void> clearSession() async {
@@ -398,6 +354,7 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
       // dari "memang belum pernah login", lalu cabang di bawah menghapus
       // sesi yang SEBENARNYA MASIH VALID (dibuktikan: file storage terenkripsi
       // masih utuh persis sebelum baca ini, lalu terhapus tepat sesudahnya).
+      unawaited(_persistentStore.purgeLegacyRegisteredUsers());
       final storedAuth = await _restoreLocalStateWithRetry(
         _persistentStore.restoreAuth,
         false,
@@ -690,8 +647,6 @@ Map<String, dynamic> _sessionToJson(DemoClientSession session) {
     'ktpImagePath': session.ktpImagePath,
     'lastInvoiceNumber': session.lastInvoiceNumber,
     'membershipJoinedAt': session.membershipJoinedAt,
-    'isFounderChairman': session.isFounderChairman,
-    'isFounderPlatinum': session.isFounderPlatinum,
     'userName': session.userName,
     'phone': session.phone,
     'activePackageName': session.activePackageName,
@@ -727,8 +682,6 @@ DemoClientSession _sessionFromJson(Map<String, dynamic> json) {
     ktpImagePath: json['ktpImagePath']?.toString(),
     lastInvoiceNumber: json['lastInvoiceNumber']?.toString(),
     membershipJoinedAt: json['membershipJoinedAt']?.toString(),
-    isFounderChairman: json['isFounderChairman'] == true,
-    isFounderPlatinum: json['isFounderPlatinum'] == true,
     userName: json['userName']?.toString() ?? 'Member TapGo',
     phone: json['phone']?.toString() ?? '',
     activePackageName: json['activePackageName']?.toString() ?? 'Basic',
@@ -750,40 +703,5 @@ DemoClientSession _sessionFromJson(Map<String, dynamic> json) {
           ),
         )
         .toList(),
-  );
-}
-
-Map<String, dynamic> _adminMemberToJson(DemoAdminMember member) {
-  return {
-    'id': member.id,
-    'name': member.name,
-    'phone': member.phone,
-    'packageName': member.packageName,
-    'paymentStatus': member.paymentStatus,
-    'sponsor': member.sponsor,
-    'totalDownline': member.totalDownline,
-    'walletBalance': member.walletBalance,
-    'totalCommission': member.totalCommission,
-    'joinedAt': member.joinedAt,
-    'selfieImagePath': member.selfieImagePath,
-    'ktpImagePath': member.ktpImagePath,
-  };
-}
-
-DemoAdminMember _adminMemberFromJson(Map<String, dynamic> json) {
-  return DemoAdminMember(
-    id: json['id']?.toString() ??
-        'LOCAL-${DateTime.now().millisecondsSinceEpoch}',
-    name: json['name']?.toString() ?? 'Member TapGo',
-    phone: json['phone']?.toString() ?? '-',
-    packageName: json['packageName']?.toString() ?? 'Basic',
-    paymentStatus: json['paymentStatus']?.toString() ?? 'Registered',
-    sponsor: json['sponsor']?.toString() ?? '-',
-    totalDownline: (json['totalDownline'] as num?)?.toInt() ?? 0,
-    walletBalance: (json['walletBalance'] as num?)?.toInt() ?? 0,
-    totalCommission: (json['totalCommission'] as num?)?.toInt() ?? 0,
-    joinedAt: json['joinedAt']?.toString() ?? 'Hari ini',
-    selfieImagePath: json['selfieImagePath']?.toString(),
-    ktpImagePath: json['ktpImagePath']?.toString(),
   );
 }

@@ -31,19 +31,10 @@ import 'features/ppob/presentation/ppob_category_screen.dart';
 import 'features/ppob/presentation/ppob_home_screen.dart';
 
 part 'data/demo_membership_data.dart';
-part 'data/demo_admin_data.dart';
 part 'data/demo_referral_tree_data.dart';
 part 'data/demo_user_session.dart';
 part 'data/demo_user_session_models.dart';
 part 'screens/auth_screen.dart';
-part 'screens/admin_broadcast_screen.dart';
-part 'screens/admin_dashboard_screen.dart';
-part 'screens/admin_member_detail_screen.dart';
-part 'screens/admin_member_list_screen.dart';
-part 'screens/admin_payment_screen.dart';
-part 'screens/admin_referral_analytics_screen.dart';
-part 'screens/admin_wallet_screen.dart';
-part 'screens/admin_withdrawal_screen.dart';
 part 'screens/change_password_screen.dart';
 part 'screens/checkout_screen.dart';
 part 'screens/dashboard_screen.dart';
@@ -399,29 +390,6 @@ const _tapgoApiEndpoints = [
   _TapGoEndpointCatalog.memberIdentity,
   _TapGoEndpointCatalog.supportTickets,
   _TapGoEndpointCatalog.supportTicketCreate,
-  _TapGoEndpointCatalog.adminMemberRequests,
-  _TapGoEndpointCatalog.adminBonusReport,
-  _TapGoEndpointCatalog.adminPpobReport,
-  _TapGoEndpointCatalog.adminRewardReport,
-  _TapGoEndpointCatalog.adminWithdrawals,
-  _TapGoEndpointCatalog.adminDashboardSummary,
-  _TapGoEndpointCatalog.adminMembers,
-  _TapGoEndpointCatalog.adminMemberDetail,
-  _TapGoEndpointCatalog.adminPayments,
-  _TapGoEndpointCatalog.adminInvoices,
-  _TapGoEndpointCatalog.adminCommissions,
-  _TapGoEndpointCatalog.adminCommissionSettings,
-  _TapGoEndpointCatalog.adminWallets,
-  _TapGoEndpointCatalog.adminWalletTransactions,
-  _TapGoEndpointCatalog.adminApproveWithdrawal,
-  _TapGoEndpointCatalog.adminRejectWithdrawal,
-  _TapGoEndpointCatalog.adminPaidWithdrawal,
-  _TapGoEndpointCatalog.adminProfitSharingPeriods,
-  _TapGoEndpointCatalog.adminProfitSharingApprove,
-  _TapGoEndpointCatalog.adminProfitSharingDistribute,
-  _TapGoEndpointCatalog.adminRoleManagement,
-  _TapGoEndpointCatalog.adminAppSettings,
-  _TapGoEndpointCatalog.membershipPackageSettings,
 ];
 
 bool tapGoDisablePersistenceForTests = false;
@@ -670,23 +638,6 @@ class _RoleDashboardGate extends ConsumerWidget {
         });
       },
       child: dashboard,
-    );
-  }
-}
-
-class _AccessDeniedScreen extends StatelessWidget {
-  const _AccessDeniedScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return const _DemoScaffold(
-      title: 'Akses Ditolak',
-      subtitle: 'Role akun tidak memiliki izin untuk route ini.',
-      child: _StatusSurface(
-        icon: Icons.lock_rounded,
-        title: 'Anda tidak memiliki akses admin.',
-        subtitle: 'Silakan kembali ke dashboard akun Anda.',
-      ),
     );
   }
 }

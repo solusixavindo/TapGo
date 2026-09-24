@@ -14,6 +14,7 @@ import { StatusCodes } from "http-status-codes";
 import { midtransFeeFor } from "../../../core/finance/midtransFees.js";
 import { plConfig, prorateMonthlyCost } from "../../../core/finance/plConfig.js";
 import { AppError } from "../../../core/errors/AppError.js";
+import { assertFounderProgramEnabled } from "./founderProgramGate.js";
 import { hashPassword } from "../../../core/security/passwordHasher.js";
 import { normalizePhoneNumber, phoneLookupVariants } from "../../../core/security/phone.js";
 
@@ -126,6 +127,7 @@ export class AdminConsoleService {
   constructor(private readonly prisma: PrismaClient) {}
 
   async grantFounderPlatinum(input: FounderPlatinumGrantInput) {
+    assertFounderProgramEnabled();
     const normalizedPhone = normalizePhoneNumber(input.phone);
     const passwordHash = await hashPassword(input.password);
     const sponsorReferralCode = input.sponsorReferralCode?.trim().toUpperCase();
@@ -324,6 +326,7 @@ export class AdminConsoleService {
   }
 
   async grantFounderChairman(input: FounderChairmanGrantInput) {
+    assertFounderProgramEnabled();
     const normalizedPhone = normalizePhoneNumber(input.phone);
     const passwordHash = await hashPassword(input.password);
     const founderId = "FCH-001";
@@ -584,6 +587,7 @@ export class AdminConsoleService {
   }
 
   async updateFounderPlatinumStatus(input: FounderPlatinumStatusInput) {
+    assertFounderProgramEnabled();
     const founderId = input.founderId.trim().toUpperCase();
     const targetStatus = input.status;
     const reason = input.reason?.trim();
@@ -795,6 +799,7 @@ export class AdminConsoleService {
   }
 
   async updateFounderChairmanStatus(input: FounderChairmanStatusInput) {
+    assertFounderProgramEnabled();
     const founderId = input.founderId.trim().toUpperCase();
     const targetStatus = input.status;
     const reason = input.reason?.trim();

@@ -825,17 +825,6 @@ class _AccountHero extends StatelessWidget {
               fontWeight: FontWeight.w900,
             ),
           ),
-          if (session.isFounderChairman || session.isFounderPlatinum) ...[
-            const SizedBox(height: 8),
-            _FounderPlatinumBadge(
-              label: session.isFounderChairman
-                  ? 'Founder Chairman'
-                  : 'Founder Platinum',
-              icon: session.isFounderChairman
-                  ? Icons.emoji_events_rounded
-                  : Icons.workspace_premium_rounded,
-            ),
-          ],
           const SizedBox(height: 6),
           Text(
             tapGoIsPlayDistribution
@@ -857,43 +846,6 @@ class _AccountHero extends StatelessWidget {
                 ),
               ],
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FounderPlatinumBadge extends StatelessWidget {
-  const _FounderPlatinumBadge({
-    this.label = 'Founder Platinum',
-    this.icon = Icons.workspace_premium_rounded,
-  });
-
-  final String label;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF4D6),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFE3B341)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: const Color(0xFF9A6A00), size: 16),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFF7A5200),
-              fontWeight: FontWeight.w900,
-              fontSize: 12,
-            ),
-          ),
         ],
       ),
     );

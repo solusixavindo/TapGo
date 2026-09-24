@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { NextFunction, Request, Response, Router } from "express";
 import { env } from "../../../config/env.js";
 import { prisma } from "../../../config/prisma.js";
 import { redis } from "../../../config/redis.js";
@@ -8,6 +8,7 @@ import { requireAuth, requireRoles } from "../../../core/security/authContext.js
 import { maskForOperator } from "../../../core/security/adminMasking.js";
 import { AdminConsoleService } from "../application/AdminConsoleService.js";
 import { SystemHealthService } from "../application/SystemHealthService.js";
+import { assertFounderProgramEnabled } from "../application/founderProgramGate.js";
 import { ErrorMonitoringService } from "../application/ErrorMonitoringService.js";
 import { AdminConsoleController } from "./admin-console.controller.js";
 import { WalletService } from "../../wallets/application/WalletService.js";
@@ -84,6 +85,18 @@ const documentController = new MembershipDocumentController(
 const driverDocumentController = new DriverDocumentController(
   new DriverDocumentService(prisma)
 );
+
+// Gagal cepat di rute (sebelum validasi body). Gerbang yang sama juga dipasang di
+// AdminConsoleService karena skrip operasi memanggil service tanpa lewat rute.
+// Dipasang SETELAH requireRoles supaya penolakan izin tetap didahulukan.
+function requireFounderProgramEnabled(_req: Request, _res: Response, next: NextFunction) {
+  try {
+    assertFounderProgramEnabled();
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
 
 export const adminConsoleRouter = Router();
 
@@ -195,6 +208,7 @@ adminConsoleRouter.post(
 adminConsoleRouter.post(
   "/founder-chairman/grant",
   requireRoles("SUPER_ADMIN"),
+  requireFounderProgramEnabled,
   validateRequest(adminFounderChairmanGrantSchema),
   asyncHandler(controller.grantFounderChairman)
 );
@@ -212,12 +226,14 @@ adminConsoleRouter.get(
 adminConsoleRouter.patch(
   "/founder-chairman/:founderId/status",
   requireRoles("SUPER_ADMIN"),
+  requireFounderProgramEnabled,
   validateRequest(adminFounderChairmanStatusSchema),
   asyncHandler(controller.updateFounderChairmanStatus)
 );
 adminConsoleRouter.post(
   "/founder-platinum/grants",
   requireRoles("SUPER_ADMIN"),
+  requireFounderProgramEnabled,
   validateRequest(adminFounderPlatinumGrantSchema),
   asyncHandler(controller.grantFounderPlatinum)
 );
@@ -235,6 +251,7 @@ adminConsoleRouter.get(
 adminConsoleRouter.patch(
   "/founder-platinum/:founderId/status",
   requireRoles("SUPER_ADMIN"),
+  requireFounderProgramEnabled,
   validateRequest(adminFounderPlatinumStatusSchema),
   asyncHandler(controller.updateFounderPlatinumStatus)
 );

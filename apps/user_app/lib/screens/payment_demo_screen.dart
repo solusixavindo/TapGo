@@ -395,7 +395,6 @@ class _PaymentMethodScreenState extends ConsumerState<PaymentMethodScreen> {
     ref.read(_demoSessionProvider.notifier).state = session;
     await _persistentStore.saveSession(session);
     await _persistentStore.saveMembershipSnapshot(session);
-    await _persistentStore.saveRegisteredUser(session);
     await _persistentStore.saveAuth(true);
     if (!mounted) {
       return;

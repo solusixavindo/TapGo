@@ -107,6 +107,9 @@ describeIntegration("Stage R2.1A — founder and chairman protection", () => {
       process.env.JWT_ACCESS_SECRET ?? "test-access-secret-please-change-000000";
     process.env.JWT_REFRESH_SECRET =
       process.env.JWT_REFRESH_SECRET ?? "test-refresh-secret-please-change-00000";
+    // Program Founder default-nya mati (fail closed); tes ini menguji perlindungan
+    // Founder saat program dinyalakan.
+    process.env.FOUNDER_PROGRAM_ENABLED = "true";
 
     const [{ createApp }, tokenService] = await Promise.all([
       import("../../src/app.js"),

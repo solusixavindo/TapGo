@@ -100,8 +100,88 @@ jobs:
         working-directory: apps/driver_app
         run: flutter test
 
-  # user_app sengaja belum dimasukkan: `flutter analyze` saat ini gagal di
-  # test/ewallet_visual_test.dart (deklarasi `_enabled` yang tidak dipakai —
-  # tampak seperti gating visual-test yang belum selesai disambungkan, bukan
-  # masalah trivial untuk diperbaiki tanpa memahami maksud aslinya). Setelah
-  # itu dibereskan, tambahkan job serupa job driver_app di atas.
+  # ---------------------------------------------------------------------------
+  # Aplikasi MOBILE tidak boleh memuat fungsi admin/Founder (konsol admin hanya
+  # di web). Tiga lapis, dari murah ke mahal:
+  #   1. mobile_surface_guard      — pola di KODE SUMBER (detik)
+  #   2. user_app                  — analyze + test (user_app dulu tidak dijaga
+  #                                  CI sama sekali, sehingga kode admin yang
+  #                                  "disembunyikan" tak pernah ada yang menegur)
+  #   3. user_app_release_artifact — build APK RILIS sungguhan lalu periksa ISI
+  #                                  binernya, karena yang penting adalah apa
+  #                                  yang sampai ke pengguna, bukan apa yang
+  #                                  tertulis di repo.
+  # Latar belakang: docs/release/LAPORAN_KODE_ADMIN_DI_APLIKASI_USER.md
+  # ---------------------------------------------------------------------------
+  mobile_surface_guard:
+    name: mobile (tanpa kode admin/Founder)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Aplikasi mobile tidak boleh memuat kode admin/Founder
+        run: bash scripts/guard-mobile-no-admin.sh
+
+  user_app:
+    name: user_app (analyze, test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.6"
+          channel: stable
+
+      - name: flutter pub get
+        working-directory: apps/user_app
+        run: flutter pub get
+
+      - name: flutter analyze
+        working-directory: apps/user_app
+        run: flutter analyze
+
+      - name: flutter test
+        working-directory: apps/user_app
+        run: flutter test
+
+  user_app_release_artifact:
+    name: user_app (build rilis + periksa artefak)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.6"
+          channel: stable
+
+      - name: flutter pub get
+        working-directory: apps/user_app
+        run: flutter pub get
+
+      # Build rilis mewajibkan key.properties + keystore. Di CI dipakai keystore
+      # SEMENTARA yang dibuat saat itu juga dan dibuang bersama runner — BUKAN
+      # kunci unggah Play. APK ini hanya dipakai untuk diperiksa isinya.
+      - name: Keystore sementara khusus CI
+        working-directory: apps/user_app/android
+        run: |
+          mkdir -p keystore
+          PASS="$(openssl rand -hex 16)"
+          keytool -genkeypair -keystore keystore/ci-throwaway.jks -alias ci \
+            -keyalg RSA -keysize 2048 -validity 2 \
+            -storepass "$PASS" -keypass "$PASS" -dname "CN=tapgo-ci"
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=ci\nstoreFile=../keystore/ci-throwaway.jks\n' \
+            "$PASS" "$PASS" > key.properties
+
+      - name: Build APK rilis
+        working-directory: apps/user_app
+        run: flutter build apk --release --target-platform android-arm64
+
+      - name: Periksa isi APK (tidak ada jejak admin/Founder)
+        run: bash scripts/verify-mobile-artifact.sh apps/user_app/build/app/outputs/flutter-apk/app-release.apk

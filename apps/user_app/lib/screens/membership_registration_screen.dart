@@ -603,7 +603,6 @@ class _MembershipRegistrationScreenState
     _persistentStore.saveDocument(kind.name, document);
     _persistentStore.saveSession(updatedSession);
     _persistentStore.saveMembershipSnapshot(updatedSession);
-    _persistentStore.saveRegisteredUser(updatedSession);
   }
 
   void _showUploadMessage(String message) {

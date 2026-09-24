@@ -120,6 +120,13 @@ const envSchema = z.object({
   MEMBERSHIP_PURCHASE_APP_ENABLED: strictEnvBoolean(false),
   /// Pencairan saldo wallet. Terpisah penuh dari pembelian membership.
   WALLET_CASH_OUT_ENABLED: strictEnvBoolean(false),
+  /// Program Founder Chairman & Founder Platinum. Fail closed: bila false,
+  /// pemberian (grant) dan perubahan status Founder ditolak. Pembacaan tetap
+  /// terbuka untuk audit. Dimatikan sementara atas keputusan Owner (2026-09-24).
+  FOUNDER_PROGRAM_ENABLED: strictEnvBoolean(false),
+  /// Bila true, klien android/ios tanpa header X-TapGo-Distribution (build
+  /// user_app sebelum 2026-09-19) ditolak 426 APP_UPDATE_REQUIRED. Default mati.
+  MOBILE_LEGACY_CLIENT_BLOCK_ENABLED: strictEnvBoolean(false),
   /// Pencairan saldo lewat dashboard mitra (kanal WEB saja). Terpisah dari
   /// WALLET_CASH_OUT_ENABLED agar rilis Google Play tetap tertutup walau
   /// pencairan web dinyalakan.

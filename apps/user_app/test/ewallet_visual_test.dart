@@ -193,7 +193,7 @@ void main() {
   testWidgets('01 beranda PPOB — E-Wallet kini muncul sebagai kategori aktif',
       (tester) async {
     await _shoot(tester, '01_ppob_home_with_ewallet', const PpobHomeScreen());
-  });
+  }, skip: !_enabled);
 
   testWidgets(
       '00 tile Super Menu "BPJS" (belum tersedia) — layar jujur, bukan lagi jatuh ke PPOB umum',
@@ -203,7 +203,7 @@ void main() {
       '00_super_menu_bpjs_unavailable',
       const PpobCategoryUnavailableScreen(label: 'BPJS'),
     );
-  });
+  }, skip: !_enabled);
 
   testWidgets('02 kategori E-Wallet — DANA/GoPay/OVO/ShopeePay nyata',
       (tester) async {
@@ -215,5 +215,5 @@ void main() {
       '02_ppob_category_ewallet',
       PpobCategoryScreen(category: category),
     );
-  });
+  }, skip: !_enabled);
 }

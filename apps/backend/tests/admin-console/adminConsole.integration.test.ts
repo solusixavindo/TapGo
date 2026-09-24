@@ -34,6 +34,9 @@ describe.skipIf(!runIntegration)("Admin console API", () => {
       process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED;
     process.env.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = "true";
     process.env.MEMBERSHIP_PURCHASE_APP_ENABLED = "true";
+    // Program Founder default-nya mati (fail closed); tes ini menguji perilaku
+    // program saat dinyalakan.
+    process.env.FOUNDER_PROGRAM_ENABLED = "true";
 
     const [{ createApp }, tokenService, envModule] = await Promise.all([
       import("../../src/app.js"),

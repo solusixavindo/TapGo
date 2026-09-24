@@ -122,8 +122,6 @@ class DemoClientSession {
     this.ktpImagePath,
     this.lastInvoiceNumber,
     this.membershipJoinedAt,
-    this.isFounderChairman = false,
-    this.isFounderPlatinum = false,
     required this.userName,
     required this.phone,
     required this.activePackageName,
@@ -163,8 +161,6 @@ class DemoClientSession {
   final String? ktpImagePath;
   final String? lastInvoiceNumber;
   final String? membershipJoinedAt;
-  final bool isFounderChairman;
-  final bool isFounderPlatinum;
   final String userName;
   final String phone;
   final String activePackageName;
@@ -177,11 +173,6 @@ class DemoClientSession {
   final int todayBonus;
   final List<WalletTransactionModel> transactions;
 
-  // Peran admin tidak punya tampilan di aplikasi user (keputusan owner):
-  // konsol admin hanya di web. Getter dipertahankan agar kode lama tetap
-  // terkompilasi, tetapi selalu false sehingga tidak ada jalur ke layar admin.
-  bool get isSuperAdmin => false;
-  bool get isAdmin => false;
   bool get isMember => true;
 
   DemoClientSession copyWith({
@@ -195,8 +186,6 @@ class DemoClientSession {
     String? ktpImagePath,
     String? lastInvoiceNumber,
     String? membershipJoinedAt,
-    bool? isFounderChairman,
-    bool? isFounderPlatinum,
     String? userName,
     String? phone,
     String? activePackageName,
@@ -220,8 +209,6 @@ class DemoClientSession {
       ktpImagePath: ktpImagePath ?? this.ktpImagePath,
       lastInvoiceNumber: lastInvoiceNumber ?? this.lastInvoiceNumber,
       membershipJoinedAt: membershipJoinedAt ?? this.membershipJoinedAt,
-      isFounderChairman: isFounderChairman ?? this.isFounderChairman,
-      isFounderPlatinum: isFounderPlatinum ?? this.isFounderPlatinum,
       userName: userName ?? this.userName,
       phone: phone ?? this.phone,
       activePackageName: activePackageName ?? this.activePackageName,
