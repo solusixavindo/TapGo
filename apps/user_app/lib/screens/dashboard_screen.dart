@@ -2206,7 +2206,12 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         : all.where((item) => item.category == selected).toList();
 
     return RefreshIndicator(
-      onRefresh: () => ref.refresh(_activityFeedProvider.future).then((_) {}),
+      // Kegagalan muat ulang ditampilkan lewat state error provider, bukan
+      // dilempar ke RefreshIndicator sebagai error tak tertangani.
+      onRefresh: () => ref
+          .refresh(_activityFeedProvider.future)
+          .then((_) {})
+          .catchError((_) {}),
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 176),

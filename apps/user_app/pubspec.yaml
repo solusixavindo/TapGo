@@ -1,7 +1,7 @@
 name: tapgo_user_app
 description: TapGo customer super app.
 publish_to: "none"
-version: 2.0.1+28
+version: 2.0.2+29
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -14,8 +14,6 @@ dependencies:
   flutter_map: ^7.0.2
   latlong2: ^0.9.1
   geolocator: ^13.0.1
-  google_maps_flutter: ^2.9.0
-  firebase_messaging: ^15.1.3
   flutter_secure_storage: ^9.2.2
   flutter_svg: ^2.0.17
   shared_preferences: ^2.3.3

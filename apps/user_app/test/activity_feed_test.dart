@@ -222,5 +222,36 @@ void main() {
 
       expect(find.text('Belum ada aktivitas'), findsOneWidget);
     });
+
+    testWidgets(
+        'tarik untuk muat ulang saat semua sumber gagal tidak melempar error',
+        (tester) async {
+      var online = true;
+      final api = FakeApi({
+        'GET /ppob/orders': (_) =>
+            online ? FakeReply.ok({'items': <Object>[]}) : FakeReply.network(),
+        'GET /rides': (_) =>
+            online ? FakeReply.ok(<Object>[]) : FakeReply.network(),
+        'GET /wallet/transactions': (_) => online
+            ? FakeReply.ok(
+                [walletTx('TOPUP', '50000.00', '2026-09-21T09:00:00Z')])
+            : FakeReply.network(),
+      });
+      await openActivity(tester, api);
+      expect(find.text('Top up saldo'), findsOneWidget);
+
+      final before = api.callsTo('GET /rides').length;
+      online = false;
+      await tester.fling(
+          find.byType(SingleChildScrollView).first, const Offset(0, 400), 1000);
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(api.callsTo('GET /rides').length, greaterThan(before),
+          reason: 'muat ulang benar-benar terjadi');
+      expect(tester.takeException(), isNull);
+      // Data lama tetap tampil; pengguna tidak dihadapkan pada layar kosong.
+      expect(find.text('Top up saldo'), findsOneWidget);
+    });
   });
 }
