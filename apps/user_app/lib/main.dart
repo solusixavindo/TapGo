@@ -34,6 +34,7 @@ import 'features/ppob/presentation/ppob_home_screen.dart';
 part 'data/demo_user_session.dart';
 part 'data/demo_user_session_models.dart';
 part 'services/activity_feed.dart';
+part 'services/ride_tracking.dart';
 part 'services/saved_places.dart';
 part 'screens/auth_screen.dart';
 part 'screens/change_password_screen.dart';
@@ -57,6 +58,7 @@ part 'widgets/stat_card.dart';
 part 'widgets/tapgo_service_illustration.dart';
 part 'widgets/tapgo_button.dart';
 part 'widgets/tapgo_polish.dart';
+part 'widgets/ride_live_map.dart';
 part 'widgets/map_user_location.dart';
 
 const _brandBlue = Color(0xFF0569E8);

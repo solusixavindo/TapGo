@@ -393,6 +393,12 @@ class _TapGoApiClient {
     return get('rides/$reference');
   }
 
+  /// Posisi driver untuk perjalanan aktif milik penumpang. Data bergerak:
+  /// tidak disimpan di cache dan hanya tersedia selama driver terlibat.
+  Future<Map<String, dynamic>> rideDriverLocation(String reference) {
+    return get('/rides/$reference/driver-location');
+  }
+
   Future<List<Map<String, dynamic>>> rideHistory({int limit = 20}) async {
     final response = await _dio.get<dynamic>(
       _apiPath('rides'),

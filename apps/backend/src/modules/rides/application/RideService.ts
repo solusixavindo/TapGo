@@ -34,7 +34,9 @@ import {
   isLocationFresh,
   isValidCoordinate,
   LOCATION_MAX_ACCURACY_METERS,
+  LOCATION_MAX_AGE_SECONDS,
 } from "../domain/ridePorts.js";
+import { haversineMeters } from "../infrastructure/LocalDistanceAdapter.js";
 import {
   AdminCorrectableStatus,
   assertTransition,
@@ -64,6 +66,14 @@ const DRIVER_ACTIVE_RIDE_STATUSES: RideOrderStatus[] = [
  * - setiap transisi material menulis RideEvent (audit immutable);
  * - koordinat presisi tidak pernah dimasukkan ke log atau pesan error.
  */
+/** Status saat posisi driver boleh dilihat penumpang. */
+const TRACKABLE_STATUSES: ReadonlySet<string> = new Set([
+  "DRIVER_ASSIGNED",
+  "DRIVER_TO_PICKUP",
+  "DRIVER_ARRIVED",
+  "IN_TRIP",
+]);
+
 export class RideService {
   constructor(
     private readonly prisma: PrismaClient,
@@ -351,6 +361,101 @@ export class RideService {
       );
     }
     return this.toOrderView(order);
+  }
+
+  /**
+   * Posisi driver terkini untuk penumpang pemilik perjalanan.
+   *
+   * Aturan privasi (fail closed):
+   * - hanya penumpang pemilik order; selain itu 404 seperti resource tidak ada;
+   * - hanya selama driver benar-benar terlibat (ditugaskan sampai perjalanan
+   *   berlangsung). Di luar itu posisi TIDAK diungkap;
+   * - hanya titik terakhir milik order ini, tanpa identitas driver, riwayat
+   *   titik, arah, atau kecepatan.
+   * Titik yang lebih tua dari LOCATION_MAX_AGE_SECONDS ditandai `stale` agar
+   * klien tidak menampilkannya sebagai posisi "langsung".
+   */
+  async getDriverLocationForPassenger(
+    userId: string,
+    publicReference: string,
+    now: Date = new Date(),
+  ) {
+    const order = await this.prisma.rideOrder.findUnique({
+      where: { publicReference },
+      select: {
+        id: true,
+        passengerId: true,
+        status: true,
+        serviceType: true,
+        driverProfileId: true,
+        pickupLat: true,
+        pickupLng: true,
+        dropoffLat: true,
+        dropoffLng: true,
+      },
+    });
+    if (!order || order.passengerId !== userId) {
+      throw new AppError(
+        "Perjalanan tidak ditemukan",
+        StatusCodes.NOT_FOUND,
+        "RIDE_ORDER_NOT_FOUND",
+      );
+    }
+
+    if (!order.driverProfileId || !TRACKABLE_STATUSES.has(order.status)) {
+      return { available: false as const, reason: "NOT_ACTIVE" as const };
+    }
+
+    const fix = await this.prisma.rideDriverLocation.findFirst({
+      where: { rideOrderId: order.id, driverProfileId: order.driverProfileId },
+      orderBy: { capturedAt: "desc" },
+      select: { lat: true, lng: true, accuracyMeters: true, capturedAt: true },
+    });
+    if (!fix) {
+      return { available: false as const, reason: "NO_FIX" as const };
+    }
+
+    const driverPoint: GeoPoint = { lat: fix.lat.toNumber(), lng: fix.lng.toNumber() };
+    const toDropoff = order.status === "IN_TRIP";
+    const target: GeoPoint = toDropoff
+      ? { lat: order.dropoffLat.toNumber(), lng: order.dropoffLng.toNumber() }
+      : { lat: order.pickupLat.toNumber(), lng: order.pickupLng.toNumber() };
+
+    let distanceMeters: number;
+    let etaSeconds: number;
+    let routePolyline: string | undefined;
+    try {
+      const estimate = await this.distance.estimate({
+        pickup: driverPoint,
+        dropoff: target,
+        serviceType: order.serviceType,
+      });
+      distanceMeters = estimate.distanceMeters;
+      etaSeconds = estimate.etaSeconds;
+      routePolyline = estimate.routePolyline;
+    } catch {
+      // Estimasi hanya pelengkap: bila penyedia rute gagal, pakai garis lurus.
+      distanceMeters = Math.round(haversineMeters(driverPoint, target) * 1.35);
+      etaSeconds = Math.round(distanceMeters / (25_000 / 3600));
+    }
+
+    const ageSeconds = Math.max(
+      0,
+      Math.floor((now.getTime() - fix.capturedAt.getTime()) / 1000),
+    );
+    return {
+      available: true as const,
+      lat: Number(driverPoint.lat.toFixed(6)),
+      lng: Number(driverPoint.lng.toFixed(6)),
+      accuracyMeters: fix.accuracyMeters,
+      capturedAt: fix.capturedAt.toISOString(),
+      ageSeconds,
+      stale: ageSeconds > LOCATION_MAX_AGE_SECONDS,
+      target: toDropoff ? ("DROPOFF" as const) : ("PICKUP" as const),
+      distanceMeters,
+      etaSeconds,
+      ...(routePolyline ? { routePolyline } : {}),
+    };
   }
 
   async cancelByPassenger(input: {

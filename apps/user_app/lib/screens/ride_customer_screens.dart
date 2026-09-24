@@ -1499,11 +1499,19 @@ class RideStatusScreen extends ConsumerStatefulWidget {
     this.autoStart = true,
     this.detailRequest,
     this.cancelRequest,
+    this.driverLocationRequest,
+    this.trackInterval = const Duration(seconds: 5),
   });
 
   final String reference;
   final RideOrderView? initialOrder;
   final Duration pollInterval;
+
+  /// Pemuat posisi driver; null = API sungguhan. Bila diberikan, pelacakan
+  /// juga berjalan pada layar yang autoStart-nya dimatikan (dipakai uji).
+  final Future<Map<String, dynamic>> Function(String reference)?
+      driverLocationRequest;
+  final Duration trackInterval;
 
   /// Test merender layar tanpa menyalakan polling.
   final bool autoStart;
@@ -1518,9 +1526,47 @@ class RideStatusScreen extends ConsumerStatefulWidget {
 class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
     with WidgetsBindingObserver {
   RideStatusPoller? _poller;
+  RideDriverTracker? _tracker;
+  RideDriverFix? _fix;
   RideOrderView? _order;
   String? _errorMessage;
   bool _isCancelling = false;
+
+  static bool _isTrackingPhase(RideUiPhase phase) =>
+      phase == RideUiPhase.assigned ||
+      phase == RideUiPhase.arrived ||
+      phase == RideUiPhase.inTrip;
+
+  /// Pelacakan posisi driver hanya berjalan selama driver terlibat dan layar
+  /// terlihat; di luar itu dihentikan sehingga tidak ada polling yang menggantung.
+  void _syncTracker() {
+    final order = _order;
+    final shouldTrack = order != null &&
+        _isTrackingPhase(order.phase) &&
+        order.hasRouteCoordinates &&
+        (widget.autoStart || widget.driverLocationRequest != null);
+    if (!shouldTrack) {
+      _tracker?.dispose();
+      _tracker = null;
+      if (_fix != null) {
+        _fix = null;
+      }
+      return;
+    }
+    _tracker ??= RideDriverTracker(
+      reference: widget.reference,
+      interval: widget.trackInterval,
+      fetch: widget.driverLocationRequest,
+      onFix: (fix) {
+        if (mounted) {
+          setState(() => _fix = fix);
+        }
+      },
+    );
+    if (!_tracker!.isRunning) {
+      _tracker!.start();
+    }
+  }
 
   @override
   void initState() {
@@ -1538,6 +1584,7 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
             setState(() {
               _order = order;
               _errorMessage = null;
+              _syncTracker();
             });
           }
         },
@@ -1564,6 +1611,7 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
         },
       )..start();
     }
+    _syncTracker();
   }
 
   /// Getar halus hanya pada perubahan tahap yang berarti bagi penumpang
@@ -1589,11 +1637,19 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
     WidgetsBinding.instance.removeObserver(this);
     // Polling berhenti bersama widget: tidak ada timer yang menggantung.
     _poller?.dispose();
+    _tracker?.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Pelacakan posisi berhenti di latar belakang dan lanjut saat kembali.
+    if (state == AppLifecycleState.resumed) {
+      _syncTracker();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      _tracker?.pause();
+    }
     final poller = _poller;
     if (poller == null) {
       return;
@@ -1701,6 +1757,11 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
               else if (order != null) ...[
                 _statusCard(colorScheme, order),
                 const SizedBox(height: 14),
+                if (_isTrackingPhase(order.phase) &&
+                    order.hasRouteCoordinates) ...[
+                  _trackingCard(colorScheme, order),
+                  const SizedBox(height: 14),
+                ],
                 if (order.phase == RideUiPhase.searching ||
                     order.phase == RideUiPhase.created)
                   _searchingCard(colorScheme, order),
@@ -1857,6 +1918,67 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
             'Kode perjalanan ${order.reference}',
             style:
                 TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12.5),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _trackingSummary(RideOrderView order) {
+    final fix = _fix;
+    if (fix == null) {
+      return 'Menunggu lokasi driver…';
+    }
+    if (fix.stale) {
+      return 'Menunggu sinyal terbaru dari driver…';
+    }
+    if (order.phase == RideUiPhase.arrived) {
+      return 'Driver sudah di titik jemput.';
+    }
+    final eta = tapGoRideEtaLabel(fix.etaSeconds);
+    final distance = tapGoRideDistanceLabel(fix.distanceMeters);
+    return fix.toDropoff
+        ? 'Menuju tujuan • $eta • $distance'
+        : 'Menuju titik jemput • $eta • $distance';
+  }
+
+  Widget _trackingCard(ColorScheme colorScheme, RideOrderView order) {
+    final summary = _trackingSummary(order);
+    return Semantics(
+      label: 'Peta perjalanan. $summary',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _RideLiveMap(
+            pickup: LatLng(order.pickupLat!, order.pickupLng!),
+            dropoff: LatLng(order.dropoffLat!, order.dropoffLng!),
+            fix: _fix,
+            isCar: order.serviceType == 'CAR',
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: colorScheme.outlineVariant),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.route_rounded, size: 20, color: _brandBlue),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    summary,
+                    style: TextStyle(
+                      color: colorScheme.onSurface,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

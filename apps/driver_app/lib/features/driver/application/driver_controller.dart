@@ -560,12 +560,18 @@ class DriverController extends StateNotifier<DriverState>
   /// Kirim lokasi berkala selama driver online/punya perjalanan aktif —
   /// tepat mengikuti kondisi yang sama dengan polling tawaran di atas, jadi
   /// dimulai/dihentikan dari titik yang sama (bukan orkestrasi terpisah).
+  ///
+  /// Detak 5 detik: saat ada perjalanan aktif lokasi dikirim tiap detak agar
+  /// penumpang melihat posisi bergerak; saat hanya online tanpa perjalanan,
+  /// dikirim tiap 3 detak (15 detik) seperti sebelumnya.
   void _startLocationUpdates() {
     _locationTimer ??= Timer.periodic(
-      const Duration(seconds: 15),
+      const Duration(seconds: 5),
       (_) => unawaited(_sendLocationSilently()),
     );
   }
+
+  int _locationTicks = 0;
 
   void _stopLocationUpdates() {
     _locationTimer?.cancel();
@@ -578,6 +584,10 @@ class DriverController extends StateNotifier<DriverState>
   /// lain yang lebih penting (mis. galat tawaran) setiap 15 detik. Lokasi
   /// bersifat best-effort.
   Future<void> _sendLocationSilently() async {
+    final ride = state.activeRide;
+    final onRide = ride != null && !ride.isTerminal;
+    final tick = _locationTicks++;
+    if (!onRide && tick % 3 != 0) return;
     try {
       if (!await _locationPort.isAvailable) return;
       await _locationPort.sendCurrentLocation();

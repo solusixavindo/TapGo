@@ -1191,6 +1191,26 @@ void main() {
       expect(location.sendCalls, 2);
     });
 
+    testWidgets('saat ada perjalanan aktif lokasi terkirim tiap 5 detik',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        current: demoRide(RideStatus.inTrip),
+      );
+      final location = RecordingLocationPort(available: true);
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, locationPort: location));
+      await tester.pumpAndSettle();
+      final before = location.sendCalls;
+
+      await tester.pump(const Duration(seconds: 5));
+      expect(location.sendCalls, before + 1);
+      await tester.pump(const Duration(seconds: 5));
+      expect(location.sendCalls, before + 2);
+      await tester.pump(const Duration(seconds: 5));
+      expect(location.sendCalls, before + 3);
+    });
+
     testWidgets(
         'responsive 320, 360, 390, 412 dan text scale 1.8 tanpa overflow',
         (tester) async {

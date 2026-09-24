@@ -1,0 +1,50 @@
+{
+ "success": true,
+ "data": {
+  "reference": "RID-MKKTRKAAAA",
+  "serviceType": "MOTORCYCLE",
+  "status": "DRIVER_TO_PICKUP",
+  "isFinal": false,
+  "pickup": {
+   "lat": -6.12,
+   "lng": 106.15
+  },
+  "pickupAddress": "Jl. Melati 1, Serang",
+  "dropoff": {
+   "lat": -6.131,
+   "lng": 106.141
+  },
+  "dropoffAddress": "Stasiun Serang",
+  "pickupNote": null,
+  "distanceMeters": 2500,
+  "durationSeconds": 600,
+  "fare": {
+   "baseFare": 5000,
+   "distanceFare": 3000,
+   "serviceFee": 1000,
+   "subtotalFare": 9000,
+   "totalFare": 9000,
+   "currency": "IDR"
+  },
+  "payment": {
+   "method": "CASH",
+   "state": "CASH_EXPECTED"
+  },
+  "cancellation": null,
+  "timeline": {
+   "assignedAt": "2026-09-24T14:24:17.038Z",
+   "arrivedAt": null,
+   "startedAt": null,
+   "completedAt": null
+  },
+  "driver": {
+   "displayName": "Driver"
+  },
+  "vehicle": {
+   "serviceType": "MOTORCYCLE",
+   "maskedPlate": "Plat terverifikasi"
+  },
+  "passenger": null,
+  "createdAt": "2026-09-24T14:26:17.039Z"
+ }
+}

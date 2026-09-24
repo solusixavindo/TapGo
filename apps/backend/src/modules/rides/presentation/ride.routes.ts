@@ -11,6 +11,7 @@ import { maskForOperator } from "../../../core/security/adminMasking.js";
 import {
   faceCheckRateLimiter,
   rideLocationRateLimiter,
+  rideTrackingRateLimiter,
   rideWriteRateLimiter,
 } from "../../../core/security/rateLimit.js";
 import { RideService } from "../application/RideService.js";
@@ -169,6 +170,21 @@ rideRouter.get(
       req.auth!.userId,
       referenceParam(req.params.reference),
     );
+    res.json({ success: true, data });
+  }),
+);
+
+rideRouter.get(
+  "/:reference/driver-location",
+  rideTrackingRateLimiter,
+  validateRequest(rideReferenceSchema),
+  asyncHandler(async (req, res) => {
+    const data = await rideService.getDriverLocationForPassenger(
+      req.auth!.userId,
+      referenceParam(req.params.reference),
+    );
+    // Posisi bergerak: jangan pernah disimpan cache di perantara atau klien.
+    res.setHeader("Cache-Control", "no-store");
     res.json({ success: true, data });
   }),
 );

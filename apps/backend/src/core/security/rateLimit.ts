@@ -191,6 +191,20 @@ export const rideLocationRateLimiter = rateLimit({
   }
 });
 
+/** Penumpang memantau posisi driver (polling tiap beberapa detik). */
+export const rideTrackingRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  ...rateLimitStore("ride-tracking", "open"),
+  message: {
+    success: false,
+    code: "RIDE_TRACKING_RATE_LIMITED",
+    message: "Terlalu banyak permintaan posisi driver. Silakan coba lagi sebentar lagi."
+  }
+});
+
 /**
  * Transfer P2P TapGoPay memindahkan uang sungguhan antar akun — postur
  * "closed" yang sama dengan auth/recovery, bukan "open" seperti limiter lalu

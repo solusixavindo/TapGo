@@ -101,4 +101,54 @@ void main() {
     expect(wallet['balance'], '125000');
     expect(wallet.containsKey('ppobBalance'), isTrue);
   });
+
+  test('posisi driver dan detail perjalanan nyata: koordinat dan ETA terbaca',
+      () {
+    final ride = RideOrderView.fromJson(
+        data('backend_ride_active.json') as Map<String, dynamic>);
+    expect(ride.phase, RideUiPhase.assigned);
+    expect(ride.hasRouteCoordinates, isTrue);
+    expect(ride.pickupLat, -6.12);
+    expect(ride.dropoffLng, 106.141);
+
+    final fix =
+        RideDriverFix.tryFromJson(data('backend_driver_location.json'))!;
+    expect(fix.lat, -6.123457);
+    expect(fix.lng, 106.154321);
+    expect(fix.toDropoff, isFalse);
+    expect(fix.stale, isFalse);
+    expect(fix.distanceMeters, 828);
+    expect(fix.etaSeconds, 60);
+    expect(tapGoRideEtaLabel(fix.etaSeconds), 'sekitar 1 menit');
+    expect(tapGoRideDistanceLabel(fix.distanceMeters), '830 m');
+  });
+
+  testWidgets('layar status dengan perjalanan dan posisi driver nyata',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2600);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: RideStatusScreen(
+            reference: 'RID-MKKTRKAAAA',
+            initialOrder: RideOrderView.fromJson(
+                data('backend_ride_active.json') as Map<String, dynamic>),
+            autoStart: false,
+            trackInterval: const Duration(seconds: 1),
+            driverLocationRequest: (_) async =>
+                data('backend_driver_location.json') as Map<String, dynamic>,
+          ),
+        ),
+      ),
+    );
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('Menuju titik jemput • sekitar 1 menit • 830 m'),
+        findsOneWidget);
+    expect(find.text('Driver menuju titik jemput'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
 }
