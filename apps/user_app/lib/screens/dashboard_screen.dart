@@ -1403,7 +1403,7 @@ class _WalletCard extends ConsumerWidget {
       borderRadius: BorderRadius.circular(28),
       onTap: hasError
           ? () => ref.invalidate(_productionSnapshotProvider)
-          : () => _openDemo(context, const BasicMemberCardScreen()),
+          : () => _openDemo(context, const WalletScreen()),
       child: DecoratedBox(
         decoration: BoxDecoration(
           gradient: const LinearGradient(
@@ -2193,105 +2193,185 @@ class ActivityScreen extends ConsumerStatefulWidget {
 class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   int _tabIndex = 0;
 
-  static const _tabs = ['Semua', 'Layanan'];
+  static const _tabs = ['Semua', 'Layanan', 'Saldo'];
 
   @override
   Widget build(BuildContext context) {
-    final production = ref.watch(_productionSnapshotProvider);
+    final feed = ref.watch(_activityFeedProvider);
     const tabs = _tabs;
-    const sourceItems = <_ActivityItem>[];
-    if (_tabIndex >= tabs.length) {
-      _tabIndex = 0;
-    }
     final selected = tabs[_tabIndex];
+    final all = feed.valueOrNull?.items ?? const <ActivityItem>[];
     final items = selected == 'Semua'
-        ? sourceItems
-        : sourceItems.where((item) => item.category == selected).toList();
+        ? all
+        : all.where((item) => item.category == selected).toList();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 176),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _SectionHeader(
-            title: 'Aktivitas',
-            subtitle: 'Aktivitas layanan TapGo',
-          ),
-          const SizedBox(height: 16),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: List.generate(
-                tabs.length,
-                (index) => Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(tabs[index]),
-                    selected: _tabIndex == index,
-                    selectedColor: _brandBlue,
-                    labelStyle: TextStyle(
-                      color: _tabIndex == index
-                          ? Colors.white
-                          : Theme.of(context).colorScheme.onSurface,
-                      fontWeight: FontWeight.w800,
+    return RefreshIndicator(
+      onRefresh: () => ref.refresh(_activityFeedProvider.future).then((_) {}),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 176),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _SectionHeader(
+              title: 'Aktivitas',
+              subtitle: 'Pembelian, perjalanan, dan transaksi saldo',
+            ),
+            const SizedBox(height: 16),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: List.generate(
+                  tabs.length,
+                  (index) => Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(tabs[index]),
+                      selected: _tabIndex == index,
+                      selectedColor: _brandBlue,
+                      labelStyle: TextStyle(
+                        color: _tabIndex == index
+                            ? Colors.white
+                            : Theme.of(context).colorScheme.onSurface,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      onSelected: (_) => setState(() => _tabIndex = index),
                     ),
-                    onSelected: (_) => setState(() => _tabIndex = index),
                   ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          if (production.isLoading)
-            const _StatusSurface(
-              icon: Icons.sync_rounded,
-              title: 'Memuat aktivitas',
-              subtitle: 'Mengambil histori transaksi TapGo...',
-            )
-          else if (production.hasError)
-            _RetryStatusSurface(
-              icon: Icons.cloud_off_rounded,
-              title: 'Data belum tersedia',
-              subtitle: 'Silakan muat ulang aktivitas.',
-              onRetry: () => ref.invalidate(_productionSnapshotProvider),
-            )
-          else if (items.isEmpty)
-            const _EmptyState(
-              icon: Icons.inbox_rounded,
-              title: 'Belum ada transaksi',
-              subtitle: 'Aktivitas akan muncul setelah ada transaksi.',
-            )
-          else
-            ...items.map((item) => _ActivityTile(item: item)),
-        ],
+            const SizedBox(height: 16),
+            if (feed.isLoading && !feed.hasValue)
+              const _StatusSurface(
+                icon: Icons.sync_rounded,
+                title: 'Memuat aktivitas',
+                subtitle: 'Mengambil riwayat transaksi TapGo...',
+              )
+            else if (feed.hasError && !feed.hasValue)
+              _RetryStatusSurface(
+                icon: Icons.cloud_off_rounded,
+                title: 'Data belum tersedia',
+                subtitle: 'Silakan muat ulang aktivitas.',
+                onRetry: () => ref.invalidate(_activityFeedProvider),
+              )
+            else ...[
+              if ((feed.valueOrNull?.failedSources ?? 0) > 0 &&
+                  items.isNotEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    'Sebagian riwayat belum termuat. Tarik ke bawah untuk memuat ulang.',
+                    style: TextStyle(
+                      color: Color(0xFF718096),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              if (items.isEmpty)
+                const _EmptyState(
+                  icon: Icons.inbox_rounded,
+                  title: 'Belum ada aktivitas',
+                  subtitle:
+                      'Pembelian PPOB, perjalanan, dan transaksi saldo akan muncul di sini.',
+                )
+              else
+                ...items.map((item) => _ActivityTile(item: item)),
+            ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class ChatScreen extends StatelessWidget {
+/// Tiket bantuan terbaru untuk tab Chat. Memakai pemuat yang sama dengan layar
+/// Tiket Bantuan sehingga perilaku (dan hook uji) tidak bercabang.
+final _supportPreviewProvider =
+    FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
+  final loader = tapGoSupportTicketsLoaderForTests;
+  if (loader != null) {
+    return loader();
+  }
+  if (tapGoDisablePersistenceForTests) {
+    return const [];
+  }
+  final session = ref.read(_demoSessionProvider);
+  if (session.accessToken == null || session.accessToken!.isEmpty) {
+    throw StateError('Belum ada token backend.');
+  }
+  _apiClient.setAccessToken(session.accessToken);
+  return _apiClient.supportTickets();
+});
+
+/// Tab Chat: percakapan bantuan dengan tim TapGo (tiket dukungan). Notifikasi
+/// dan pesan lain belum ada di aplikasi, jadi tidak dijanjikan di sini.
+class ChatScreen extends ConsumerWidget {
   const ChatScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return const SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(20, 12, 20, 176),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionHeader(
-            title: 'Chat',
-            subtitle: 'Pesan, bantuan CS, dan notifikasi',
-          ),
-          SizedBox(height: 16),
-          _SearchBox(hint: 'Cari chat atau notifikasi...'),
-          SizedBox(height: 16),
-          _EmptyState(
-            icon: Icons.chat_bubble_outline_rounded,
-            title: 'Belum ada pesan',
-            subtitle: 'Pesan dan notifikasi real akan muncul di sini.',
-          ),
-        ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tickets = ref.watch(_supportPreviewProvider);
+    return RefreshIndicator(
+      onRefresh: () =>
+          ref.refresh(_supportPreviewProvider.future).then((_) {}).catchError(
+                (_) {},
+              ),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 176),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _SectionHeader(
+              title: 'Chat',
+              subtitle: 'Percakapan bantuan dengan tim TapGo',
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => _openDemo(context, const ContactUsScreen()),
+                icon: const Icon(Icons.support_agent_rounded),
+                label: const Text('Hubungi Bantuan'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: _brandBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (tickets.isLoading && !tickets.hasValue)
+              const _StatusSurface(
+                icon: Icons.sync_rounded,
+                title: 'Memuat percakapan',
+                subtitle: 'Mengambil tiket bantuan Anda...',
+              )
+            else if (tickets.hasError && !tickets.hasValue)
+              _RetryStatusSurface(
+                icon: Icons.cloud_off_rounded,
+                title: 'Percakapan belum tersedia',
+                subtitle: 'Silakan muat ulang.',
+                onRetry: () => ref.invalidate(_supportPreviewProvider),
+              )
+            else if ((tickets.valueOrNull ?? const []).isEmpty)
+              const _EmptyState(
+                icon: Icons.chat_bubble_outline_rounded,
+                title: 'Belum ada percakapan',
+                subtitle:
+                    'Ada kendala? Tekan Hubungi Bantuan dan tim TapGo akan membalas di sini.',
+              )
+            else
+              ...tickets.valueOrNull!
+                  .take(10)
+                  .map((ticket) => _SupportTicketCard(ticket)),
+          ],
+        ),
       ),
     );
   }
@@ -2381,8 +2461,48 @@ class AccountScreen extends ConsumerWidget {
             Icons.logout_rounded,
             () => _confirmAndLogout(context, ref),
           ),
+          const SizedBox(height: 12),
+          const _AppVersionLabel(),
         ],
       ),
+    );
+  }
+}
+
+/// Versi aplikasi di kaki menu Akun: memudahkan pengguna dan tim bantuan
+/// memastikan build yang terpasang. Tidak tampil bila versi tak terbaca.
+class _AppVersionLabel extends StatelessWidget {
+  const _AppVersionLabel();
+
+  static Future<String?> _load() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      return 'TapGo versi ${info.version} (${info.buildNumber})';
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String?>(
+      future: _load(),
+      builder: (context, snapshot) {
+        final label = snapshot.data;
+        if (label == null) {
+          return const SizedBox.shrink();
+        }
+        return Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        );
+      },
     );
   }
 }

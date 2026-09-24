@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:tapgo_user_app/main.dart';
 
 /// Menu Akun (dengan tile Ubah Password) tidak boleh overflow pada layar kecil,
@@ -73,9 +74,27 @@ void main() {
         brightness: config.$5,
       );
       expect(overflows, isEmpty);
-      for (final label in const ['Kartu Anggota', 'Profil', 'Ubah Password', 'Tiket Bantuan']) {
+      for (final label in const [
+        'Kartu Anggota',
+        'Profil',
+        'Ubah Password',
+        'Tiket Bantuan'
+      ]) {
         expect(find.text(label), findsOneWidget, reason: label);
       }
     });
   }
+
+  testWidgets('menu Akun menampilkan versi aplikasi', (tester) async {
+    PackageInfo.setMockInitialValues(
+      appName: 'TapGo',
+      packageName: 'com.xavindo.tapgo',
+      version: '2.0.1',
+      buildNumber: '28',
+      buildSignature: '',
+    );
+    await renderAccount(tester, width: 360, height: 800);
+    await tester.ensureVisible(find.textContaining('TapGo versi'));
+    expect(find.text('TapGo versi 2.0.1 (28)'), findsOneWidget);
+  });
 }

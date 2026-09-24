@@ -1,15 +1,16 @@
 part of '../main.dart';
 
-class _ActivityItem {
-  const _ActivityItem(
+class ActivityItem {
+  const ActivityItem(
     this.category,
     this.icon,
     this.title,
     this.description,
     this.amount,
     this.status,
-    this.date,
-  );
+    this.date, [
+    this.at,
+  ]);
 
   final String category;
   final IconData icon;
@@ -18,6 +19,9 @@ class _ActivityItem {
   final String? amount;
   final String status;
   final String date;
+
+  /// Waktu kejadian untuk mengurutkan; null bila server tidak mengirimnya.
+  final DateTime? at;
 }
 
 class _SuperMenuGroup {

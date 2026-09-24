@@ -251,7 +251,7 @@ void main() {
     });
 
     testWidgets(
-      'tap kartu saldo membuka Kartu Anggota (tidak ada layar wallet terpisah)',
+      'tap kartu saldo membuka layar saldo TapGoPay dengan riwayat',
       (tester) async {
         await renderDashboard(tester, width: 360, height: 800, fixture: true);
         // Pada viewport nyata kartu bisa berada di bawah lipatan atau tertutup
@@ -264,8 +264,7 @@ void main() {
         for (var index = 0; index < 14; index += 1) {
           await tester.pump(const Duration(milliseconds: 80));
         }
-        // Tidak ada layar wallet terpisah: kartu saldo membuka Kartu Anggota.
-        expect(find.byType(BasicMemberCardScreen), findsOneWidget);
+        expect(find.byType(WalletScreen), findsOneWidget);
       },
     );
 

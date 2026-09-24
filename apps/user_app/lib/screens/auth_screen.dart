@@ -684,7 +684,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       focusNode: _passwordFocusNode,
                       icon: Icons.lock_rounded,
                       label: 'Password',
-                      hint: 'Minimal 8 karakter',
+                      hint: 'Minimal 6 karakter',
                       obscureText: true,
                       validator: _passwordValidator,
                       textInputAction: TextInputAction.done,

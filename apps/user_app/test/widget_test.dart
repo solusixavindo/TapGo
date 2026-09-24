@@ -566,7 +566,7 @@ void main() {
 
     await tester.tap(find.text('Chat'));
     await tester.pumpAndSettle();
-    expect(find.text('Belum ada pesan'), findsOneWidget);
+    expect(find.text('Belum ada percakapan'), findsOneWidget);
     expect(find.text('2'), findsNothing);
 
     await tester.tap(find.text('Akun'));

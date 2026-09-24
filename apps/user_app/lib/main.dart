@@ -27,10 +27,13 @@ import 'features/ppob/data/ppob_demo_repository.dart';
 import 'features/ppob/data/ppob_repository.dart';
 import 'features/ppob/domain/ppob_models.dart';
 import 'features/ppob/presentation/ppob_category_screen.dart';
+import 'features/ppob/presentation/widgets/ppob_shared.dart'
+    show ppobCategoryIcon, ppobStatusLabel;
 import 'features/ppob/presentation/ppob_home_screen.dart';
 
 part 'data/demo_user_session.dart';
 part 'data/demo_user_session_models.dart';
+part 'services/activity_feed.dart';
 part 'screens/auth_screen.dart';
 part 'screens/change_password_screen.dart';
 part 'screens/dashboard_screen.dart';
@@ -41,6 +44,7 @@ part 'screens/ride_customer_screens.dart';
 part 'screens/ride_location_picker.dart';
 part 'screens/splash_screen.dart';
 part 'screens/verification_gate_screen.dart';
+part 'screens/wallet_screen.dart';
 part 'screens/wallet_transfer_screen.dart';
 part 'services/persistent_demo_store.dart';
 part 'services/ride_flow_controller.dart';

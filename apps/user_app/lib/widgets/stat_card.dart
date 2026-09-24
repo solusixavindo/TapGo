@@ -88,38 +88,10 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-class _SearchBox extends StatelessWidget {
-  const _SearchBox({required this.hint});
-
-  final String hint;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 54,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.search_rounded, color: _brandBlue),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(hint, style: const TextStyle(color: Color(0xFF718096))),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ActivityTile extends StatelessWidget {
   const _ActivityTile({required this.item});
 
-  final _ActivityItem item;
+  final ActivityItem item;
 
   @override
   Widget build(BuildContext context) {
@@ -395,7 +367,6 @@ class _AccountMenuTile extends StatelessWidget {
     );
   }
 }
-
 
 class _SuperMenuTile extends StatelessWidget {
   const _SuperMenuTile({required this.item, required this.onTap});

@@ -704,6 +704,17 @@ class _TapGoApiClient {
     );
   }
 
+  /// Mutasi saldo terbaru (server mengirim daftar; debit bernilai negatif).
+  Future<List<Map<String, dynamic>>> walletTransactions({
+    int pageSize = 30,
+  }) async {
+    final data = await get(
+      '/wallet/transactions',
+      query: {'page': 1, 'pageSize': pageSize},
+    );
+    return _items(data);
+  }
+
   Future<Map<String, dynamic>> memberIdentity() {
     return get('/member-identity/me');
   }
