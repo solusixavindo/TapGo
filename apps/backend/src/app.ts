@@ -14,6 +14,7 @@ import { authRouter, webAuthRouter } from "./modules/auth/presentation/auth.rout
 import { accountRouter } from "./modules/account/presentation/account.routes.js";
 import { adminConsoleRouter } from "./modules/admin-console/presentation/admin-console.routes.js";
 import { adminScopeRouter } from "./modules/admin-console/presentation/admin-scope.routes.js";
+import { notificationsRouter } from "./modules/notifications/presentation/notifications.routes.js";
 import { contactRouter } from "./modules/contact/presentation/contact.routes.js";
 import { invoiceRouter } from "./modules/invoices/presentation/invoice.routes.js";
 import { legalRouter } from "./modules/legal/presentation/legal.routes.js";
@@ -98,6 +99,7 @@ export function createApp() {
   app.use("/api/v1/auth", authRouter);
   app.use("/api/v1/web/auth", webAuthRouter);
   app.use("/api/v1/account", accountRouter);
+  app.use("/api/v1/notifications", notificationsRouter);
   app.use("/api/v1/contact", contactRouter);
   app.use("/api/v1/invoices", invoiceRouter);
   app.use("/api/v1/member-identity", memberIdentityRouter);

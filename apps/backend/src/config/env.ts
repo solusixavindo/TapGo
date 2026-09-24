@@ -227,6 +227,10 @@ const envSchema = z.object({
   CLOUDINARY_API_KEY: z.string().optional(),
   CLOUDINARY_API_SECRET: z.string().optional(),
   FIREBASE_PROJECT_ID: z.string().optional(),
+  // Kunci service account Firebase (JSON mentah, atau base64 dari JSON itu).
+  // Tanpa nilai ini push notification mati total (fail-closed): tidak ada
+  // permintaan keluar dan tidak ada galat, hanya tidak terkirim.
+  FIREBASE_SERVICE_ACCOUNT_JSON: z.string().optional(),
   GOOGLE_MAPS_API_KEY: z.string().optional(),
   // Identifier blind index (HMAC-SHA256). Backend-only, terpisah dari secret
   // JWT/payment/storage. Sengaja optional pada schema: kegagalan bersifat
