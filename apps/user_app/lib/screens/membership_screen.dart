@@ -1999,8 +1999,7 @@ class SupportTicketDetailScreen extends StatefulWidget {
       _SupportTicketDetailScreenState();
 }
 
-class _SupportTicketDetailScreenState
-    extends State<SupportTicketDetailScreen> {
+class _SupportTicketDetailScreenState extends State<SupportTicketDetailScreen> {
   // Future di-cache sekali di initState (pola sama seperti perbaikan
   // ProfileDetailsScreen): sebelumnya widget ini StatelessWidget yang
   // memanggil _load() langsung di dalam build(), sehingga SETIAP rebuild
@@ -2118,7 +2117,6 @@ String _friendlyApiError(Object error) {
     final responseData = error.response?.data;
     if (responseData is Map) {
       final code = responseData['code']?.toString();
-      final message = responseData['message']?.toString();
       if (code == 'INSUFFICIENT_BALANCE') {
         return tapGoIsPlayDistribution
             ? 'Saldo belum cukup untuk melanjutkan.'
@@ -2127,18 +2125,12 @@ String _friendlyApiError(Object error) {
       if (code == 'WITHDRAWAL_MINIMUM_NOT_MET') {
         return 'Minimal withdraw Rp50.000.';
       }
-      if (message != null && message.trim().isNotEmpty) {
-        return message;
-      }
-    }
-    if (error.type == DioExceptionType.connectionTimeout ||
-        error.type == DioExceptionType.receiveTimeout ||
-        error.type == DioExceptionType.sendTimeout ||
-        error.type == DioExceptionType.connectionError) {
-      return 'Server TapGo belum dapat dihubungi. Silakan coba lagi.';
     }
   }
-  return 'Pengajuan withdraw belum berhasil. Silakan coba lagi.';
+  return tapGoGenericErrorMessage(
+    error,
+    fallback: 'Pengajuan withdraw belum berhasil. Silakan coba lagi.',
+  );
 }
 
 class _InfoRow extends StatelessWidget {

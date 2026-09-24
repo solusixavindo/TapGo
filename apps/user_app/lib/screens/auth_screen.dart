@@ -1,5 +1,59 @@
 part of '../main.dart';
 
+bool _tapGoIsNetworkFailure(DioException error) {
+  return error.type == DioExceptionType.connectionError ||
+      error.type == DioExceptionType.connectionTimeout ||
+      error.type == DioExceptionType.receiveTimeout ||
+      error.type == DioExceptionType.sendTimeout ||
+      error.error is SocketException ||
+      error.error is TimeoutException ||
+      (error.response == null && error.type == DioExceptionType.unknown);
+}
+
+/// Pesan error masuk/daftar untuk pengguna. Pesan mentah server (berbahasa
+/// Inggris, mis. "Request validation failed") TIDAK pernah ditampilkan:
+/// setiap kode dan kelas status dipetakan ke kalimat Indonesia yang memberi
+/// tahu apa yang harus dilakukan.
+String tapGoAuthErrorMessage(DioException error, {required bool isRegister}) {
+  final code = _authResponseDataMap(error.response?.data)?['code']?.toString();
+  final status = error.response?.statusCode;
+  switch (code) {
+    case 'PHONE_ALREADY_REGISTERED':
+      return 'Nomor HP sudah terdaftar. Silakan pilih Login.';
+    case 'EMAIL_ALREADY_REGISTERED':
+      return 'Email sudah terdaftar. Gunakan email lain atau pilih Login.';
+    case 'INVALID_CREDENTIALS':
+      return 'Nomor HP atau password salah.';
+    case 'SPONSOR_NOT_FOUND':
+      return 'Kode referral tidak valid.';
+    case 'SELF_REFERRAL_BLOCKED':
+      return 'Kode referral tidak bisa memakai kode sendiri.';
+    case 'ACCOUNT_INACTIVE':
+      return 'Akun ini tidak aktif. Hubungi bantuan TapGo.';
+    case 'APP_UPDATE_REQUIRED':
+      return 'Versi aplikasi ini sudah tidak didukung. Silakan perbarui TapGo dari Google Play.';
+    case 'VALIDATION_ERROR':
+      return isRegister
+          ? 'Data belum sesuai. Periksa nomor HP dan password (minimal 6 karakter).'
+          : 'Nomor HP atau password belum sesuai format.';
+  }
+  if (_tapGoIsNetworkFailure(error)) {
+    return 'Server TapGo belum dapat dihubungi. Silakan coba beberapa saat lagi.';
+  }
+  if (status == 426) {
+    return 'Versi aplikasi ini sudah tidak didukung. Silakan perbarui TapGo dari Google Play.';
+  }
+  if (status == 429) {
+    return 'Terlalu banyak percobaan. Coba lagi beberapa saat lagi.';
+  }
+  if (status != null && status >= 500) {
+    return 'Server TapGo sedang bermasalah. Silakan coba beberapa saat lagi.';
+  }
+  return isRegister
+      ? 'Registrasi gagal. Periksa data lalu coba lagi.'
+      : 'Login gagal. Periksa data lalu coba lagi.';
+}
+
 class TapGoRuntimeActivationResult {
   const TapGoRuntimeActivationResult({required this.authenticated});
 
@@ -522,44 +576,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
-  bool _isNetworkFailure(DioException error) {
-    return error.type == DioExceptionType.connectionError ||
-        error.type == DioExceptionType.connectionTimeout ||
-        error.type == DioExceptionType.receiveTimeout ||
-        error.type == DioExceptionType.sendTimeout ||
-        error.error is SocketException ||
-        error.error is TimeoutException ||
-        (error.response == null && error.type == DioExceptionType.unknown);
-  }
-
-  String _authErrorMessage(DioException error, {required bool isRegister}) {
-    final data = _dioResponseDataMap(error.response?.data);
-    final message = data?['message']?.toString();
-    final code = data?['code']?.toString();
-    if (code == 'PHONE_ALREADY_REGISTERED') {
-      return 'Nomor HP sudah terdaftar. Silakan pilih Login.';
-    }
-    if (code == 'INVALID_CREDENTIALS') {
-      return 'Nomor HP atau password salah.';
-    }
-    if (code == 'SPONSOR_NOT_FOUND') {
-      return 'Kode referral tidak valid.';
-    }
-    if (code == 'SELF_REFERRAL_BLOCKED') {
-      return 'Kode referral tidak bisa memakai kode sendiri.';
-    }
-    if (_isNetworkFailure(error)) {
-      return 'Server TapGo belum dapat dihubungi. Silakan coba beberapa saat lagi.';
-    }
-    return message ??
-        (isRegister
-            ? 'Registrasi gagal. Periksa data lalu coba lagi.'
-            : 'Login gagal. Periksa data lalu coba lagi.');
-  }
-
-  Map<String, dynamic>? _dioResponseDataMap(Object? data) {
-    return _authResponseDataMap(data);
-  }
+  String _authErrorMessage(DioException error, {required bool isRegister}) =>
+      tapGoAuthErrorMessage(error, isRegister: isRegister);
 
   void _showAuthError(String message) {
     if (!mounted) {

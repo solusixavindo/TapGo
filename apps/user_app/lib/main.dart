@@ -85,7 +85,8 @@ const _isTapGoDevelopmentBuild = _tapGoAppMode == 'development';
 
 // Kosong = Sentry tidak aktif sama sekali (fail-closed) — sama pola dengan
 // _tapGoAppMode dkk di atas. Diisi lewat --dart-define saat build.
-const String kSentryDsn = String.fromEnvironment('SENTRY_DSN', defaultValue: '');
+const String kSentryDsn =
+    String.fromEnvironment('SENTRY_DSN', defaultValue: '');
 bool tapGoEnablePaymentSimulatorForTests = false;
 Future<List<Map<String, dynamic>>> Function()?
     tapGoSupportTicketsLoaderForTests;
@@ -357,6 +358,18 @@ final _tapGoNavigatorKey = GlobalKey<NavigatorState>();
 @visibleForTesting
 void tapGoTriggerSessionExpiredForTests() =>
     _apiClient.onSessionExpired?.call();
+
+/// Hook uji: mengganti adaptor HTTP klien API sehingga SELURUH kode klien
+/// nyata (pemetaan request, header, penanganan error) ikut teruji terhadap
+/// server palsu, tanpa jaringan. Berikan null untuk mengembalikan aslinya.
+final HttpClientAdapter _tapGoOriginalHttpAdapter =
+    _apiClient._dio.httpClientAdapter;
+@visibleForTesting
+void tapGoSetHttpAdapterForTests(HttpClientAdapter? adapter) {
+  final original = _tapGoOriginalHttpAdapter; // ditangkap sebelum diganti
+  _apiClient._dio.httpClientAdapter = adapter ?? original;
+}
+
 const _productionApiRootUrl = 'https://api.tapgolion.id';
 const _productionFinalSyncResetKey =
     'tapgo.production.final_sync_cache_reset.v1';

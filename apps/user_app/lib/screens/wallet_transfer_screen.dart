@@ -213,17 +213,10 @@ String _friendlyTransferError(Object error) {
         case 'WALLET_TRANSFER_DISABLED':
           return 'Fitur transfer belum tersedia saat ini.';
       }
-      final message = responseData['message']?.toString();
-      if (message != null && message.trim().isNotEmpty) {
-        return message;
-      }
-    }
-    if (error.type == DioExceptionType.connectionTimeout ||
-        error.type == DioExceptionType.receiveTimeout ||
-        error.type == DioExceptionType.sendTimeout ||
-        error.type == DioExceptionType.connectionError) {
-      return 'Server TapGo belum dapat dihubungi. Silakan coba lagi.';
     }
   }
-  return 'Transfer belum berhasil. Silakan coba lagi.';
+  return tapGoGenericErrorMessage(
+    error,
+    fallback: 'Transfer belum berhasil. Silakan coba lagi.',
+  );
 }

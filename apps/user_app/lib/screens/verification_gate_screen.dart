@@ -1,5 +1,29 @@
 part of '../main.dart';
 
+/// Pesan error layar verifikasi. Memakai pemetaan pemulihan untuk kode yang
+/// sama, tetapi kata "pemulihan" tidak boleh muncul di layar verifikasi, dan
+/// kode khusus alur tambah-email dipetakan di sini.
+String tapGoVerificationErrorMessage(Object error) {
+  if (error is DioException) {
+    final code =
+        _authResponseDataMap(error.response?.data)?['code']?.toString();
+    switch (code) {
+      case 'EMAIL_ALREADY_IN_USE':
+      case 'EMAIL_ALREADY_REGISTERED':
+        return 'Email ini sudah dipakai akun lain.';
+      case 'INVALID_CREDENTIALS':
+        return 'Password saat ini salah.';
+      case 'AUTH_RECOVERY_CHANNEL_UNAVAILABLE':
+      case 'AUTH_RECOVERY_SECRET_UNAVAILABLE':
+        return 'Layanan verifikasi belum tersedia. Hubungi bantuan TapGo.';
+    }
+  }
+  final message = tapGoRecoveryErrorMessage(error);
+  return message == 'Pemulihan gagal. Silakan coba lagi.'
+      ? 'Verifikasi belum berhasil. Silakan coba lagi.'
+      : message;
+}
+
 /// Gate verifikasi kontak untuk akun yang belum membuktikan kepemilikan
 /// nomor telepon.
 ///
@@ -91,7 +115,7 @@ class _VerificationGateScreenState
     } catch (error) {
       if (mounted) {
         setState(() {
-          _errorMessage = tapGoRecoveryErrorMessage(error);
+          _errorMessage = tapGoVerificationErrorMessage(error);
           _isLoading = false;
         });
       }
@@ -128,7 +152,7 @@ class _VerificationGateScreenState
       await action();
     } catch (error) {
       if (mounted) {
-        setState(() => _errorMessage = tapGoRecoveryErrorMessage(error));
+        setState(() => _errorMessage = tapGoVerificationErrorMessage(error));
       }
     } finally {
       if (mounted) {

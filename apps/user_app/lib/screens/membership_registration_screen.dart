@@ -427,7 +427,11 @@ class _MembershipRegistrationScreenState
       if (mounted) {
         _TapGoSnackbar.error(
           context,
-          'Pembayaran belum dapat disiapkan. Silakan ulangi beberapa saat lagi. ${responseData?['message'] ?? error.message}',
+          tapGoGenericErrorMessage(
+            error,
+            fallback:
+                'Pembayaran belum dapat disiapkan. Silakan ulangi beberapa saat lagi.',
+          ),
         );
       }
       return fallbackInvoice;

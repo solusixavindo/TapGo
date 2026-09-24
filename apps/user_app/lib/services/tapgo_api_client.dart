@@ -60,7 +60,8 @@ class _TapGoApiClient {
           // tidak ada gunanya refresh. Keluarkan pengguna dengan rapi ke layar
           // masuk, bukan membiarkan tiap layar menampilkan error mentah.
           if (hadAuthorization &&
-              (code == 'AUTH_SESSION_REVOKED' || code == 'AUTH_TOKEN_INVALID')) {
+              (code == 'AUTH_SESSION_REVOKED' ||
+                  code == 'AUTH_TOKEN_INVALID')) {
             _notifySessionExpired();
             return handler.next(error);
           }
@@ -85,7 +86,8 @@ class _TapGoApiClient {
             '[TapGo Auth] access token auto-refreshed after 401; retrying request.',
           );
           final retryOptions = error.requestOptions;
-          retryOptions.headers['Authorization'] = 'Bearer ${refreshed.accessToken}';
+          retryOptions.headers['Authorization'] =
+              'Bearer ${refreshed.accessToken}';
           retryOptions.extra['tapgoTokenRetried'] = true;
           try {
             final retryResponse = await _dio.fetch(retryOptions);
@@ -134,7 +136,10 @@ class _TapGoApiClient {
       final stored = await _persistentStore.restoreTokens();
       final access = stored.accessToken;
       final refresh = stored.refreshToken;
-      if (access == null || access.isEmpty || refresh == null || refresh.isEmpty) {
+      if (access == null ||
+          access.isEmpty ||
+          refresh == null ||
+          refresh.isEmpty) {
         return null;
       }
       return (accessToken: access, refreshToken: refresh);
@@ -175,9 +180,10 @@ class _TapGoApiClient {
           ? (TapGoSessionRefreshResult.unreachable, null)
           : (TapGoSessionRefreshResult.refreshed, outcome.tokens),
       RefreshStatus.rejected => (TapGoSessionRefreshResult.rejected, null),
-      RefreshStatus.unreachable ||
-      RefreshStatus.conflict =>
-        (TapGoSessionRefreshResult.unreachable, null),
+      RefreshStatus.unreachable || RefreshStatus.conflict => (
+          TapGoSessionRefreshResult.unreachable,
+          null
+        ),
     };
   }
 
@@ -597,7 +603,8 @@ class _TapGoApiClient {
 
   /// Mengunggah foto profil (JPG/PNG mentah, bukan multipart) dan
   /// mengembalikan path relatif yang dipakai [fetchAvatarBytes].
-  Future<String> uploadAvatar(List<int> bytes, {required String contentType}) async {
+  Future<String> uploadAvatar(List<int> bytes,
+      {required String contentType}) async {
     // Dio menghitung Content-Length otomatis untuk body List<int>/Uint8List
     // mentah. Sebelumnya kode ini membungkus bytes ke dalam Stream lalu
     // menyetel Content-Length manual (dengan nilai int, bukan String) —
@@ -970,6 +977,7 @@ class _TapGoDeviceContextStore {
 
   static const _deviceIdKey = 'tapgo.device_id.v1';
   static const _deviceFingerprintKey = 'tapgo.device_fingerprint.v1';
+
   /// Versi nyata aplikasi (`versi+build`) dari PackageInfo. Sebelumnya konstanta
   /// '1.0.3+4' terkirim dari SEMUA build sehingga server tidak bisa membedakan
   /// versi lama dari baru. Diisi saat load() pertama; 'unknown' sebelum itu.
@@ -1724,4 +1732,39 @@ DemoReferralNode? _referralTreeFromApi(Map<String, dynamic> payload) {
     isExpanded: true,
     children: nestedChildren.isEmpty ? flatChildren : nestedChildren,
   );
+}
+
+/// Pesan umum untuk kegagalan API. Pesan mentah server TIDAK dipakai: sekitar
+/// separuh pesan error backend berbahasa Inggris (mis. "Request validation
+/// failed"), sehingga menampilkannya apa adanya ke pengguna Indonesia adalah
+/// cacat. Layar yang punya pemetaan kode khusus memanggil ini sebagai lapis
+/// terakhir, dengan [fallback] yang menjelaskan tindakan yang gagal.
+String tapGoGenericErrorMessage(Object error, {required String fallback}) {
+  if (error is DioException) {
+    final code =
+        _authResponseDataMap(error.response?.data)?['code']?.toString();
+    final status = error.response?.statusCode;
+    if (code == 'APP_UPDATE_REQUIRED' || status == 426) {
+      return 'Versi aplikasi ini sudah tidak didukung. Silakan perbarui TapGo dari Google Play.';
+    }
+    if (_tapGoIsNetworkFailure(error)) {
+      return 'Server TapGo belum dapat dihubungi. Silakan coba lagi.';
+    }
+    if (code == 'VALIDATION_ERROR') {
+      return 'Data belum sesuai. Periksa isian lalu coba lagi.';
+    }
+    if (code == 'ACCOUNT_INACTIVE') {
+      return 'Akun ini tidak aktif. Hubungi bantuan TapGo.';
+    }
+    if (status == 401) {
+      return 'Sesi Anda berakhir. Silakan masuk kembali.';
+    }
+    if (status == 429) {
+      return 'Terlalu banyak percobaan. Coba lagi beberapa saat lagi.';
+    }
+    if (status != null && status >= 500) {
+      return 'Server TapGo sedang bermasalah. Silakan coba beberapa saat lagi.';
+    }
+  }
+  return fallback;
 }

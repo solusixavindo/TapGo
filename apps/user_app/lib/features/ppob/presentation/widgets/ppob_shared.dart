@@ -100,10 +100,14 @@ class PpobStatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (color, icon) = switch (status) {
-      PpobOrderStatus.success => (const Color(0xFF0B7A75), Icons.check_circle_rounded),
-      PpobOrderStatus.processing ||
-      PpobOrderStatus.pending =>
-        (const Color(0xFFD97706), Icons.schedule_rounded),
+      PpobOrderStatus.success => (
+          const Color(0xFF0B7A75),
+          Icons.check_circle_rounded
+        ),
+      PpobOrderStatus.processing || PpobOrderStatus.pending => (
+          const Color(0xFFD97706),
+          Icons.schedule_rounded
+        ),
       PpobOrderStatus.failed => (const Color(0xFFEF4444), Icons.error_rounded),
       PpobOrderStatus.refunded => (const Color(0xFF697386), Icons.undo_rounded),
       PpobOrderStatus.unknown => (const Color(0xFF697386), Icons.help_rounded),
@@ -206,9 +210,16 @@ String ppobErrorMessage(Object error) {
         'Saldo Anda tidak cukup. Silakan gunakan nominal lain.',
       'PPOB_IDEMPOTENCY_CONFLICT' =>
         'Permintaan duplikat terdeteksi. Periksa riwayat transaksi Anda.',
-      _ => error.message.isNotEmpty
-          ? error.message
-          : 'Terjadi kesalahan. Silakan coba lagi.',
+      // Hanya kode domain PPOB_* yang pesannya dijamin berbahasa Indonesia;
+      // pesan umum server (mis. "Request validation failed") tidak boleh
+      // sampai ke pengguna.
+      _ when error.code.startsWith('PPOB_') && error.message.isNotEmpty =>
+        error.message,
+      _ when error.statusCode == 429 =>
+        'Terlalu banyak percobaan. Coba lagi beberapa saat lagi.',
+      _ when (error.statusCode ?? 0) >= 500 =>
+        'Server TapGo sedang bermasalah. Silakan coba beberapa saat lagi.',
+      _ => 'Terjadi kesalahan. Silakan coba lagi.',
     };
   }
   return 'Koneksi bermasalah. Periksa jaringan Anda dan coba lagi.';
