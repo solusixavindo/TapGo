@@ -286,7 +286,24 @@ class RideOrderView {
     required this.createdAt,
     this.paymentMethod = 'CASH',
     this.paymentState = '',
+    this.pickupLat,
+    this.pickupLng,
+    this.dropoffLat,
+    this.dropoffLng,
   });
+
+  /// Koordinat dari server; null bila tidak dikirim. Dipakai untuk "Pesan
+  /// lagi" dan tempat terakhir.
+  final double? pickupLat;
+  final double? pickupLng;
+  final double? dropoffLat;
+  final double? dropoffLng;
+
+  bool get hasRouteCoordinates =>
+      pickupLat != null &&
+      pickupLng != null &&
+      dropoffLat != null &&
+      dropoffLng != null;
 
   final String reference;
   final String serviceType;
@@ -414,7 +431,26 @@ class RideOrderView {
     final fare = (json['fare'] as Map<String, dynamic>?) ?? const {};
     final cancellation = json['cancellation'] as Map<String, dynamic>?;
     final payment = json['payment'] as Map<String, dynamic>?;
+    final pickup = json['pickup'];
+    final dropoff = json['dropoff'];
+    double? coord(dynamic point, String key) {
+      if (point is! Map) {
+        return null;
+      }
+      final value = point[key];
+      final number =
+          value is num ? value.toDouble() : double.tryParse('${value ?? ''}');
+      if (number == null || number.isNaN || number.isInfinite) {
+        return null;
+      }
+      return number;
+    }
+
     return RideOrderView(
+      pickupLat: coord(pickup, 'lat'),
+      pickupLng: coord(pickup, 'lng'),
+      dropoffLat: coord(dropoff, 'lat'),
+      dropoffLng: coord(dropoff, 'lng'),
       paymentMethod: '${payment?['method'] ?? 'CASH'}',
       paymentState: '${payment?['state'] ?? ''}',
       reference: '${json['reference'] ?? ''}',

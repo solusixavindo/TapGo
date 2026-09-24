@@ -2248,11 +2248,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
             ),
             const SizedBox(height: 16),
             if (feed.isLoading && !feed.hasValue)
-              const _StatusSurface(
-                icon: Icons.sync_rounded,
-                title: 'Memuat aktivitas',
-                subtitle: 'Mengambil riwayat transaksi TapGo...',
-              )
+              const _SkeletonList(count: 5, label: 'Memuat aktivitas')
             else if (feed.hasError && !feed.hasValue)
               _RetryStatusSurface(
                 icon: Icons.cloud_off_rounded,
@@ -2352,11 +2348,7 @@ class ChatScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             if (tickets.isLoading && !tickets.hasValue)
-              const _StatusSurface(
-                icon: Icons.sync_rounded,
-                title: 'Memuat percakapan',
-                subtitle: 'Mengambil tiket bantuan Anda...',
-              )
+              const _SkeletonList(count: 3, label: 'Memuat percakapan')
             else if (tickets.hasError && !tickets.hasValue)
               _RetryStatusSurface(
                 icon: Icons.cloud_off_rounded,

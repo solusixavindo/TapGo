@@ -125,11 +125,7 @@ class WalletScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
             if (history.isLoading && !history.hasValue)
-              const _StatusSurface(
-                icon: Icons.sync_rounded,
-                title: 'Memuat riwayat',
-                subtitle: 'Mengambil mutasi saldo TapGoPay...',
-              )
+              const _SkeletonList(count: 4, label: 'Memuat riwayat saldo')
             else if (history.hasError && !history.hasValue)
               _RetryStatusSurface(
                 icon: Icons.cloud_off_rounded,

@@ -165,6 +165,8 @@ class _TapGoPersistentStore {
       await _storage.delete(key: _accessTokenKey);
       await _storage.delete(key: _refreshTokenKey);
     } catch (_) {}
+    // Tempat tersimpan milik pengguna yang keluar tidak boleh terbaca akun lain.
+    await _savedPlacesStore.clear();
   }
 
   Future<void> clearProductionRuntimeCache() async {

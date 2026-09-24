@@ -462,6 +462,8 @@ class RideBookingScreen extends ConsumerStatefulWidget {
   const RideBookingScreen({
     super.key,
     required this.initialService,
+    this.initialPickup,
+    this.initialDropoff,
     this.locationPort,
     this.quoteRequest,
     this.orderRequest,
@@ -470,6 +472,10 @@ class RideBookingScreen extends ConsumerStatefulWidget {
   });
 
   final RideServiceKind initialService;
+
+  /// Titik awal untuk "Pesan lagi" dari riwayat. Pengguna tetap bisa mengubah.
+  final RideLocation? initialPickup;
+  final RideLocation? initialDropoff;
 
   /// Port lokasi. Bila null, dipilih dari flag compile-time — sehingga
   /// produksi selalu memakai adapter yang fail-closed.
@@ -510,7 +516,115 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   void initState() {
     super.initState();
     _service = widget.initialService;
+    _pickup = widget.initialPickup;
+    _dropoff = widget.initialDropoff;
     _port = widget.locationPort ?? tapGoRideLocationPort();
+  }
+
+  void _useDropoff(RideLocation place) {
+    _TapGoHaptic.tap();
+    setState(() {
+      _dropoff = place;
+      _quote = null;
+    });
+  }
+
+  Future<void> _saveDropoffAs(String slot) async {
+    final place = _dropoff;
+    if (place == null) {
+      return;
+    }
+    await _savedPlacesStore.upsert(
+      RideSavedPlace(
+        slot: slot,
+        label: slot == 'home' ? 'Rumah' : 'Kantor',
+        address: place.address,
+        lat: place.lat,
+        lng: place.lng,
+      ),
+    );
+    ref.invalidate(_savedPlacesProvider);
+    if (mounted) {
+      _TapGoHaptic.success();
+      _TapGoSnackbar.success(
+        context,
+        'Tujuan disimpan sebagai ${slot == 'home' ? 'Rumah' : 'Kantor'}.',
+      );
+    }
+  }
+
+  /// Tempat cepat: Rumah/Kantor tersimpan dan tujuan terakhir, plus tombol
+  /// untuk menyimpan tujuan yang sedang dipilih.
+  Widget _quickPlaces(ColorScheme colorScheme) {
+    final saved =
+        ref.watch(_savedPlacesProvider).valueOrNull ?? const <RideSavedPlace>[];
+    final recent =
+        ref.watch(_recentPlacesProvider).valueOrNull ?? const <RideLocation>[];
+    final current = _dropoff;
+    final canSave = current != null && !current.id.startsWith('saved-');
+    if (saved.isEmpty && recent.isEmpty && !canSave) {
+      return const SizedBox.shrink();
+    }
+
+    Widget chip(IconData icon, String label, RideLocation place) {
+      return ActionChip(
+        avatar: Icon(icon, size: 18, color: _brandBlue),
+        label: Text(label, overflow: TextOverflow.ellipsis),
+        onPressed: _isBusy ? null : () => _useDropoff(place),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (saved.isNotEmpty || recent.isNotEmpty) ...[
+            Text(
+              'Tempat cepat',
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                for (final place in saved)
+                  chip(
+                    place.slot == 'home'
+                        ? Icons.home_rounded
+                        : Icons.work_rounded,
+                    place.label,
+                    place.toLocation(),
+                  ),
+                for (final place in recent)
+                  chip(Icons.history_rounded, place.label, place),
+              ],
+            ),
+          ],
+          if (canSave)
+            Wrap(
+              spacing: 4,
+              children: [
+                TextButton.icon(
+                  onPressed: () => _saveDropoffAs('home'),
+                  icon: const Icon(Icons.home_rounded, size: 18),
+                  label: const Text('Simpan sebagai Rumah'),
+                ),
+                TextButton.icon(
+                  onPressed: () => _saveDropoffAs('work'),
+                  icon: const Icon(Icons.work_rounded, size: 18),
+                  label: const Text('Simpan sebagai Kantor'),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -733,6 +847,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                     _quote = null;
                   }),
                 ),
+                _quickPlaces(colorScheme),
                 const SizedBox(height: 18),
                 RidePrimaryButton(
                   label: 'Cek Harga',
@@ -839,8 +954,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
             borderRadius: BorderRadius.circular(14),
             child: Container(
               constraints: const BoxConstraints(minHeight: 56),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
                 color: colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(14),
@@ -903,56 +1017,57 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
           children: [
             Positioned.fill(
               child: IgnorePointer(
-          child: FlutterMap(
-            options: MapOptions(
-              initialCameraFit: CameraFit.bounds(
-                bounds: bounds,
-                padding: const EdgeInsets.all(28),
-              ),
-              interactionOptions: const InteractionOptions(
-                flags: InteractiveFlag.none,
-              ),
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.xavindo.tapgo',
-              ),
-              PolylineLayer(
-                polylines: [
-                  Polyline(
-                    points: points,
-                    strokeWidth: 4,
-                    color: _brandBlue,
-                  ),
-                ],
-              ),
-              MarkerLayer(
-                markers: [
-                  Marker(
-                    point: LatLng(pickup.lat, pickup.lng),
-                    width: 28,
-                    height: 28,
-                    child: const Icon(
-                      Icons.trip_origin_rounded,
-                      size: 20,
-                      color: Color(0xFF16A66A),
+                child: FlutterMap(
+                  options: MapOptions(
+                    initialCameraFit: CameraFit.bounds(
+                      bounds: bounds,
+                      padding: const EdgeInsets.all(28),
+                    ),
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.none,
                     ),
                   ),
-                  Marker(
-                    point: LatLng(dropoff.lat, dropoff.lng),
-                    width: 28,
-                    height: 28,
-                    child: const Icon(
-                      Icons.location_on_rounded,
-                      size: 28,
-                      color: Color(0xFFEC3F54),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.xavindo.tapgo',
                     ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: points,
+                          strokeWidth: 4,
+                          color: _brandBlue,
+                        ),
+                      ],
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: LatLng(pickup.lat, pickup.lng),
+                          width: 28,
+                          height: 28,
+                          child: const Icon(
+                            Icons.trip_origin_rounded,
+                            size: 20,
+                            color: Color(0xFF16A66A),
+                          ),
+                        ),
+                        Marker(
+                          point: LatLng(dropoff.lat, dropoff.lng),
+                          width: 28,
+                          height: 28,
+                          child: const Icon(
+                            Icons.location_on_rounded,
+                            size: 28,
+                            color: Color(0xFFEC3F54),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
             // Atribusi peta di balik satu ketukan (di luar IgnorePointer agar bisa diketuk).
@@ -1288,8 +1403,7 @@ class _ServiceSelectorTileState extends State<_ServiceSelectorTile> {
             children: [
               Icon(widget.kind.icon,
                   size: 22,
-                  color:
-                      selected ? _brandBlue : colorScheme.onSurfaceVariant),
+                  color: selected ? _brandBlue : colorScheme.onSurfaceVariant),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1420,6 +1534,7 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
         fetch: widget.detailRequest ?? tapGoRideDetailLoaderForTests,
         onUpdate: (order) {
           if (mounted) {
+            _hapticForTransition(_order?.phase, order.phase);
             setState(() {
               _order = order;
               _errorMessage = null;
@@ -1439,8 +1554,8 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
                 return;
               }
               if (outcome == TapGoSessionRefreshResult.unreachable) {
-                setState(() => _errorMessage =
-                    'Koneksi belum stabil. Silakan coba lagi.');
+                setState(() =>
+                    _errorMessage = 'Koneksi belum stabil. Silakan coba lagi.');
               }
             }));
             return;
@@ -1448,6 +1563,24 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
           setState(() => _errorMessage = tapGoRideErrorMessage(error));
         },
       )..start();
+    }
+  }
+
+  /// Getar halus hanya pada perubahan tahap yang berarti bagi penumpang
+  /// (driver ditemukan, tiba, selesai, batal) — bukan pada tiap polling.
+  void _hapticForTransition(RideUiPhase? from, RideUiPhase to) {
+    if (from == null || from == to) {
+      return;
+    }
+    switch (to) {
+      case RideUiPhase.assigned:
+      case RideUiPhase.arrived:
+      case RideUiPhase.completed:
+        _TapGoHaptic.success();
+      case RideUiPhase.cancelled:
+        _TapGoHaptic.warning();
+      default:
+        break;
     }
   }
 
@@ -1514,8 +1647,8 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
           return;
         }
         if (outcome == TapGoSessionRefreshResult.unreachable) {
-          setState(() => _errorMessage =
-              'Koneksi belum stabil. Silakan coba lagi.');
+          setState(
+              () => _errorMessage = 'Koneksi belum stabil. Silakan coba lagi.');
         }
         return;
       }
@@ -1570,7 +1703,7 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
                 const SizedBox(height: 14),
                 if (order.phase == RideUiPhase.searching ||
                     order.phase == RideUiPhase.created)
-                  _searchingCard(colorScheme),
+                  _searchingCard(colorScheme, order),
                 if (order.driver != null && order.vehicle != null) ...[
                   _driverCard(colorScheme, order.driver!, order.vehicle!),
                   const SizedBox(height: 10),
@@ -1639,29 +1772,87 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
     );
   }
 
+  static IconData _phaseIcon(RideOrderView order) => switch (order.phase) {
+        RideUiPhase.created || RideUiPhase.searching => Icons.search_rounded,
+        RideUiPhase.assigned => order.serviceType == 'CAR'
+            ? Icons.local_taxi_rounded
+            : Icons.two_wheeler_rounded,
+        RideUiPhase.arrived => Icons.place_rounded,
+        RideUiPhase.inTrip => Icons.navigation_rounded,
+        RideUiPhase.completed => Icons.check_circle_rounded,
+        RideUiPhase.cancelled => Icons.cancel_rounded,
+        RideUiPhase.unknown => Icons.help_outline_rounded,
+      };
+
+  static String? _phaseSubtitle(RideUiPhase phase) => switch (phase) {
+        RideUiPhase.assigned => 'Driver sedang menuju titik jemput.',
+        RideUiPhase.arrived => 'Driver menunggu di titik jemput.',
+        RideUiPhase.inTrip => 'Selamat menikmati perjalanan.',
+        RideUiPhase.completed => 'Terima kasih sudah memakai TapGo.',
+        _ => null,
+      };
+
   Widget _statusCard(ColorScheme colorScheme, RideOrderView order) {
     final isUnknown = order.phase == RideUiPhase.unknown;
+    final isCancelled = order.phase == RideUiPhase.cancelled;
+    final accent =
+        isUnknown || isCancelled ? const Color(0xFFB3261E) : _brandBlue;
+    final subtitle = _phaseSubtitle(order.phase);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isUnknown
-            ? const Color(0x14B3261E)
-            : _brandBlue.withValues(alpha: 0.08),
+        color: accent.withValues(alpha: isUnknown ? 0.08 : 0.08),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            order.statusTitle,
-            style: TextStyle(
-              color:
-                  isUnknown ? const Color(0xFFB3261E) : colorScheme.onSurface,
-              fontSize: 17,
-              fontWeight: FontWeight.w900,
-            ),
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.14),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(_phaseIcon(order), color: accent),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      order.statusTitle,
+                      style: TextStyle(
+                        color: isUnknown
+                            ? const Color(0xFFB3261E)
+                            : colorScheme.onSurface,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: colorScheme.onSurfaceVariant,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 6),
+          if (_RideProgressStepper.indexFor(order.phase) != null) ...[
+            const SizedBox(height: 16),
+            _RideProgressStepper(phase: order.phase),
+          ],
+          const SizedBox(height: 12),
           Text(
             'Kode perjalanan ${order.reference}',
             style:
@@ -1672,22 +1863,28 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
     );
   }
 
-  Widget _searchingCard(ColorScheme colorScheme) {
+  Widget _searchingCard(ColorScheme colorScheme, RideOrderView order) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 18),
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
+      child: Column(
         children: [
-          const _TapGoLoading(color: _brandBlue),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              'Menghubungkan dengan driver terdekat…',
-              style: TextStyle(
-                  color: colorScheme.onSurfaceVariant, fontSize: 13.5),
+          _RadarPulse(
+            icon: order.serviceType == 'CAR'
+                ? Icons.local_taxi_rounded
+                : Icons.two_wheeler_rounded,
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Menghubungkan dengan driver terdekat…',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: colorScheme.onSurfaceVariant,
+              fontSize: 13.5,
             ),
           ),
         ],
@@ -2007,8 +2204,8 @@ class _RideHistoryScreenState extends ConsumerState<RideHistoryScreen> {
           return;
         }
         if (outcome == TapGoSessionRefreshResult.unreachable) {
-          setState(() => _errorMessage =
-              'Koneksi belum stabil. Silakan coba lagi.');
+          setState(
+              () => _errorMessage = 'Koneksi belum stabil. Silakan coba lagi.');
         }
         return;
       }
@@ -2047,11 +2244,8 @@ class _RideHistoryScreenState extends ConsumerState<RideHistoryScreen> {
                   onAction: _load,
                 )
               else if (items == null)
-                const Center(
-                    child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 40),
-                  child: _TapGoLoading(color: _brandBlue),
-                ))
+                const _SkeletonList(
+                    count: 4, label: 'Memuat riwayat perjalanan')
               else if (items.isEmpty)
                 const RideNoticeCard(
                   icon: Icons.receipt_long_rounded,
@@ -2061,63 +2255,90 @@ class _RideHistoryScreenState extends ConsumerState<RideHistoryScreen> {
               else
                 ...items.map((order) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surface,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: const [
-                            BoxShadow(
-                                color: Color(0x11000000),
-                                blurRadius: 12,
-                                offset: Offset(0, 5)),
-                          ],
+                      child: _TapScale(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () => Navigator.of(context).push(
+                          _tapGoPageRoute(
+                            (_) => RideReceiptScreen(order: order),
+                          ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    order.statusTitle,
-                                    overflow: TextOverflow.ellipsis,
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: const [
+                              BoxShadow(
+                                  color: Color(0x11000000),
+                                  blurRadius: 12,
+                                  offset: Offset(0, 5)),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      order.statusTitle,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: colorScheme.onSurface,
+                                        fontSize: 14.5,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    tapGoFormatRideRupiah(order.totalFare),
                                     style: TextStyle(
                                       color: colorScheme.onSurface,
-                                      fontSize: 14.5,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                '${order.pickupAddress} → ${order.dropoffAddress}',
+                                style: TextStyle(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      order.reference,
+                                      style: TextStyle(
+                                        color: colorScheme.onSurfaceVariant,
+                                        fontSize: 11.5,
+                                        letterSpacing: 0.4,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    'Lihat struk',
+                                    style: TextStyle(
+                                      color: colorScheme.primary,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  tapGoFormatRideRupiah(order.totalFare),
-                                  style: TextStyle(
-                                    color: colorScheme.onSurface,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w900,
+                                  Icon(
+                                    Icons.chevron_right_rounded,
+                                    size: 18,
+                                    color: colorScheme.primary,
                                   ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              '${order.pickupAddress} → ${order.dropoffAddress}',
-                              style: TextStyle(
-                                color: colorScheme.onSurfaceVariant,
-                                fontSize: 12.5,
+                                ],
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              order.reference,
-                              style: TextStyle(
-                                color: colorScheme.onSurfaceVariant,
-                                fontSize: 11.5,
-                                letterSpacing: 0.4,
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     )),
