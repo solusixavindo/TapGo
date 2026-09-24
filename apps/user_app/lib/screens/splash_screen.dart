@@ -101,9 +101,9 @@ class _SplashGateState extends State<SplashGate>
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
+                  const Text(
                     'Akun Basic • Membership • Bantuan',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Color(0xDFFFFFFF),
                       fontSize: 14,
                       fontWeight: FontWeight.w700,

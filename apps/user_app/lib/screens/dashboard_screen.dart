@@ -1468,12 +1468,12 @@ class _WalletCard extends ConsumerWidget {
                             const SizedBox(width: 9),
                             // Judul dibatasi ruang yang ada supaya tidak
                             // meluber saat teks diperbesar.
-                            Flexible(
+                            const Flexible(
                               child: Text(
                                 'TapGoPay',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 15,
                                   fontWeight: FontWeight.w800,
@@ -2213,7 +2213,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionHeader(
+          const _SectionHeader(
             title: 'Aktivitas',
             subtitle: 'Aktivitas layanan TapGo',
           ),
@@ -2344,7 +2344,7 @@ class AccountScreen extends ConsumerWidget {
             Icons.privacy_tip_rounded,
             () => _openDemo(
               context,
-              LegalInfoScreen(
+              const LegalInfoScreen(
                 title: 'Kebijakan Privasi',
                 content: _tapGoPrivacyPolicyContent,
               ),
@@ -2355,7 +2355,7 @@ class AccountScreen extends ConsumerWidget {
             Icons.gavel_rounded,
             () => _openDemo(
               context,
-              LegalInfoScreen(
+              const LegalInfoScreen(
                 title: 'Syarat & Ketentuan',
                 content: _tapGoTermsContent,
               ),
