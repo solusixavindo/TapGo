@@ -8,6 +8,9 @@ import {
 } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../core/errors/AppError.js";
+import { lazyPushNotifier } from "../../notifications/application/pushServiceFactory.js";
+import { accountPushMessages, pushQuietly } from "../../notifications/application/accountNotifications.js";
+import type { PushNotifier } from "../../notifications/application/rideNotifications.js";
 import { isAdminRole } from "../../../core/security/roleHierarchy.js";
 
 type PrismaTransaction = Prisma.TransactionClient;
@@ -58,7 +61,10 @@ const activationOrderInclude = {
 type ActivationOrder = Prisma.MembershipOrderGetPayload<{ include: typeof activationOrderInclude }>;
 
 export class MembershipOrderService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly push: PushNotifier = lazyPushNotifier
+  ) {}
 
   listPackages() {
     return this.prisma.membership.findMany({
@@ -165,6 +171,22 @@ export class MembershipOrderService {
   }
 
   async markPaymentSuccess(input: {
+    userId: string;
+    role: UserRole;
+    orderId: string;
+    paymentReference?: string;
+  }) {
+    // Gagal (mis. invoice sudah lunas) melempar sebelum baris berikut, jadi
+    // callback ganda tidak menggandakan notifikasi.
+    const order = await this.markPaymentSuccessTransaction(input);
+    const message = this.requiresDocumentVerification(order.channel)
+      ? accountPushMessages.membershipUnderReview
+      : accountPushMessages.membershipActive;
+    pushQuietly(this.push, order.userId, message, { type: "membership_order", orderId: order.id });
+    return order;
+  }
+
+  private async markPaymentSuccessTransaction(input: {
     userId: string;
     role: UserRole;
     orderId: string;
@@ -278,6 +300,12 @@ export class MembershipOrderService {
   /// efek Business Engine yang sama persis dengan pembelian kanal lain, hanya
   /// waktunya yang ditunda sampai verifikasi selesai.
   async activateVerifiedOrder(input: { orderId: string; adminId: string }) {
+    const order = await this.activateVerifiedOrderTransaction(input);
+    pushQuietly(this.push, order.userId, accountPushMessages.membershipActive, { type: "membership_order", orderId: order.id });
+    return order;
+  }
+
+  private async activateVerifiedOrderTransaction(input: { orderId: string; adminId: string }) {
     return this.prisma.$transaction(async (tx) => {
       const order = await tx.membershipOrder.findUnique({
         where: { id: input.orderId },
@@ -385,6 +413,12 @@ export class MembershipOrderService {
   /// sini selalu bersih: tidak ada satu pun catatan Business Engine yang perlu
   /// dibatalkan.
   async rejectOrderDocuments(input: { orderId: string; adminId: string; reason?: string }) {
+    const order = await this.rejectOrderDocumentsTransaction(input);
+    pushQuietly(this.push, order.userId, accountPushMessages.membershipRejected, { type: "membership_order", orderId: order.id });
+    return order;
+  }
+
+  private async rejectOrderDocumentsTransaction(input: { orderId: string; adminId: string; reason?: string }) {
     return this.prisma.$transaction(async (tx) => {
       const order = await tx.membershipOrder.findUnique({
         where: { id: input.orderId },

@@ -45,7 +45,7 @@ import {
   passengerCancellationHasFee,
   RIDE_DRIVER_ENGAGED_STATUSES,
 } from "../domain/rideStateMachine.js";
-import { getPushService } from "../../notifications/application/pushServiceFactory.js";
+import { lazyPushNotifier } from "../../notifications/application/pushServiceFactory.js";
 import { ridePushMessage, type PushNotifier } from "../../notifications/application/rideNotifications.js";
 
 const CANCELLATION_POLICY_VERSION = "RIDE_CANCEL_POLICY_V1";
@@ -82,7 +82,7 @@ export class RideService {
     private readonly distance: DistancePort,
     private readonly matching: MatchingPort,
     private readonly faceCheck: DriverFaceCheckService = new DriverFaceCheckService(prisma),
-    private readonly push: PushNotifier = getPushService(),
+    private readonly push: PushNotifier = lazyPushNotifier,
   ) {}
 
   /**

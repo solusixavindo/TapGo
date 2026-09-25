@@ -8,6 +8,9 @@ import { DokuNotificationPayload } from "../../../lib/doku/types.js";
 import { assertAuthoritativeAmount } from "../../payments/application/authoritativeAmount.js";
 import { REFUNDABLE_PAYMENT_METHODS } from "../../payments/application/MidtransPaymentService.js";
 import { verifyMidtransSignature } from "../../payments/application/midtransSignature.js";
+import { lazyPushNotifier } from "../../notifications/application/pushServiceFactory.js";
+import { accountPushMessages, pushQuietly } from "../../notifications/application/accountNotifications.js";
+import type { PushNotifier } from "../../notifications/application/rideNotifications.js";
 import { PrismaWalletRepository } from "../infrastructure/PrismaWalletRepository.js";
 
 type MidtransNotificationPayload = {
@@ -45,7 +48,13 @@ export class WalletTopUpPaymentService {
     private readonly prisma: PrismaClient,
     private readonly walletRepository = new PrismaWalletRepository(prisma),
     private readonly dokuClient = new DokuClient(),
+    private readonly push: PushNotifier = lazyPushNotifier,
   ) {}
+
+  /** Hanya saat saldo benar-benar bertambah (bukan callback ulang). */
+  private notifyTopUpPaid(paid: { userId: string } | null) {
+    if (paid) pushQuietly(this.push, paid.userId, accountPushMessages.topUpSuccess, { type: "wallet_topup" });
+  }
 
   private assertCanRead(role: UserRole, requesterId: string, ownerId: string) {
     if (requesterId !== ownerId && !isAdminRole(role)) {
@@ -214,6 +223,7 @@ export class WalletTopUpPaymentService {
         providerReference: paymentReference,
         ...(payload.payment_type ? { paymentType: payload.payment_type } : {})
       });
+      this.notifyTopUpPaid(paid);
       return { status: "PAID", idempotent: paid === null, order: paid };
     }
 
@@ -265,6 +275,7 @@ export class WalletTopUpPaymentService {
         ...(input.payload.order?.currency !== undefined ? { providedCurrency: input.payload.order.currency } : {}),
       });
       const paid = await this.walletRepository.markTopUpOrderPaid({ orderId: order.id, providerReference: paymentReference });
+      this.notifyTopUpPaid(paid);
       return { status: "PAID", idempotent: paid === null, order: paid };
     }
 

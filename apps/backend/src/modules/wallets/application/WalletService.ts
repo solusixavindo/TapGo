@@ -1,6 +1,9 @@
 import { Prisma, UserRole, WithdrawalStatus } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../core/errors/AppError.js";
+import { lazyPushNotifier } from "../../notifications/application/pushServiceFactory.js";
+import { accountPushMessages, pushQuietly } from "../../notifications/application/accountNotifications.js";
+import type { PushNotifier } from "../../notifications/application/rideNotifications.js";
 import { WalletRepository } from "../domain/WalletRepository.js";
 
 /**
@@ -15,7 +18,10 @@ const MAX_TRANSFER_PER_TRANSACTION = new Prisma.Decimal(2_000_000);
 const MAX_TRANSFER_PER_DAY = new Prisma.Decimal(5_000_000);
 
 export class WalletService {
-  constructor(private readonly walletRepository: WalletRepository) {}
+  constructor(
+    private readonly walletRepository: WalletRepository,
+    private readonly push: PushNotifier = lazyPushNotifier
+  ) {}
 
   getWallet(userId: string) {
     return this.walletRepository.getWalletByUserId(userId);
@@ -154,6 +160,8 @@ export class WalletService {
           tx
         );
       });
+      // Setelah commit; replay idempoten tidak sampai sini, jadi tidak menggandakan.
+      pushQuietly(this.push, recipient.id, accountPushMessages.transferReceived, { type: "wallet_transfer" });
       return { transfer, replayed: false };
     } catch (error) {
       // Dua permintaan ber-Idempotency-Key sama dapat lolos pre-check di atas
