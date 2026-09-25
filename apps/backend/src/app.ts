@@ -35,7 +35,7 @@ import { adminRideRouter, driverRideRouter, rideRouter } from "./modules/rides/p
 import { driverDocumentRouter } from "./modules/drivers/presentation/driver-document.routes.js";
 import { driverApplicationRouter } from "./modules/drivers/presentation/driver-application.routes.js";
 import { adminSupportRouter, supportRouter } from "./modules/support/presentation/support.routes.js";
-import { chatRouter } from "./modules/chat/presentation/chat.routes.js";
+import { chatInboxRouter, chatRouter } from "./modules/chat/presentation/chat.routes.js";
 import { walletRouter } from "./modules/wallets/presentation/wallet.routes.js";
 
 function healthPayload() {
@@ -142,6 +142,7 @@ export function createApp() {
   app.use("/api/v1/driver", driverRideRouter);
   app.use("/api/v1/support", supportRouter);
   app.use("/api/v1/chat/rides", chatRouter);
+  app.use("/api/v1/chat/conversations", chatInboxRouter);
   app.use("/api/v1/wallet", walletRouter);
   app.use("/api/v1/web/wallet", webWalletRouter);
 

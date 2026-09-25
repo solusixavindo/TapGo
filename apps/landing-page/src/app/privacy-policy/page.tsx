@@ -23,7 +23,8 @@ export default function PrivacyPolicy() {
         hanya saat pengguna memakai layanan Ojek Online (TapGo Ride/TapGo Car), untuk mencocokkan
         perjalanan dan menampilkan titik jemput, tujuan, serta posisi driver; aplikasi tidak
         melacak lokasi saat layanan itu tidak dipakai. Aplikasi juga menyimpan riwayat saldo
-        TapGoPay, transfer, dan pembelian PPOB, pesan chat dengan driver selama perjalanan aktif,
+        TapGoPay, transfer, dan pembelian PPOB, pesan chat dengan driver selama perjalanan aktif
+        (dapat dibaca hingga 7 hari setelah perjalanan selesai dan dibalas hingga 2 jam setelahnya),
         tiket bantuan, serta foto profil yang diunggah pengguna secara sukarela melalui kamera atau
         galeri. Untuk keamanan akun, aplikasi mengirim ID dan sidik perangkat serta versi aplikasi.
       </p>

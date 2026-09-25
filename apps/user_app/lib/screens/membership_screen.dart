@@ -135,7 +135,7 @@ DATA YANG DIKUMPULKAN APLIKASI
 - Akun: nama, nomor HP, email (bila Anda menambahkannya), dan password (disimpan dalam bentuk hash, bukan teks asli).
 - Lokasi: lokasi perangkat hanya saat Anda memakai layanan Ojek, untuk menentukan titik jemput dan tujuan serta memantau perjalanan. Aplikasi tidak melacak lokasi Anda saat layanan itu tidak dipakai.
 - Transaksi: riwayat saldo TapGoPay, transfer, dan pembelian PPOB.
-- Pesan: chat dengan driver selama perjalanan aktif dan tiket bantuan ke tim TapGo.
+- Pesan: chat dengan driver selama perjalanan aktif (dapat dibaca hingga 7 hari setelah perjalanan selesai, dan dapat dibalas hingga 2 jam setelahnya) dan tiket bantuan ke tim TapGo.
 - Foto profil: hanya bila Anda memilih mengunggahnya lewat kamera atau galeri.
 - Perangkat: ID dan sidik perangkat serta versi aplikasi, untuk keamanan akun dan mencegah penyalahgunaan.
 

@@ -6,9 +6,21 @@ part of '../main.dart';
 /// keduanya melewati ChatService yang sama di backend, jadi aturan
 /// partisipan & jendela status ride selalu konsisten.
 class RideChatScreen extends ConsumerStatefulWidget {
-  const RideChatScreen({super.key, required this.rideReference});
+  const RideChatScreen({
+    super.key,
+    required this.rideReference,
+    this.canSend = true,
+    this.pollInterval = const Duration(seconds: 4),
+  });
 
   final String rideReference;
+
+  /// false = percakapan hanya dapat dibaca (perjalanan selesai > 2 jam).
+  final bool canSend;
+
+  /// Selang polling REST. Socket.IO nonaktif di produksi (REALTIME_ENABLED),
+  /// jadi polling adalah jalur utama pesan masuk; socket hanya mempercepat.
+  final Duration pollInterval;
 
   @override
   ConsumerState<RideChatScreen> createState() => _RideChatScreenState();
@@ -24,16 +36,23 @@ class _RideChatScreenState extends ConsumerState<RideChatScreen> {
   bool _sending = false;
   bool _socketConnected = false;
   String? _historyError;
+  late bool _canSend = widget.canSend;
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     _loadHistory();
     _connectSocket();
+    if (!_tapGoRunningUnderTest ||
+        widget.pollInterval < const Duration(seconds: 1)) {
+      _pollTimer = Timer.periodic(widget.pollInterval, (_) => _poll());
+    }
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _socket?.dispose();
     _textController.dispose();
     _scrollController.dispose();
@@ -63,7 +82,53 @@ class _RideChatScreenState extends ConsumerState<RideChatScreen> {
     }
   }
 
+  /// Menggabungkan pesan ke daftar tanpa duplikasi (socket, polling, dan
+  /// pengiriman REST dapat membawa pesan yang sama). Mengembalikan true bila
+  /// ada pesan lawan bicara yang baru.
+  bool _mergeMessages(Iterable<Map<String, dynamic>> incoming) {
+    final known = {for (final m in _messages) m['id']?.toString()};
+    var addedFromOther = false;
+    for (final message in incoming) {
+      final id = message['id']?.toString();
+      if (id != null && known.contains(id)) continue;
+      _messages.add(message);
+      if (id != null) known.add(id);
+      if (message['senderType'] != 'USER') addedFromOther = true;
+    }
+    return addedFromOther;
+  }
+
+  bool _polling = false;
+
+  Future<void> _poll() async {
+    if (_polling || !mounted || _loadingHistory) return;
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (lifecycle != null && lifecycle != AppLifecycleState.resumed) return;
+    _polling = true;
+    try {
+      final items = await _apiClient.chatMessages(widget.rideReference);
+      if (!mounted) return;
+      var fromOther = false;
+      setState(() => fromOther = _mergeMessages(items));
+      if (fromOther) {
+        _scrollToBottom();
+        unawaited(_apiClient.markChatRead(widget.rideReference));
+        ref.invalidate(_chatConversationsProvider);
+      }
+    } catch (error) {
+      _tapGoDebugLog('[TapGo Chat] polling dilewati: $error');
+    } finally {
+      _polling = false;
+    }
+  }
+
   void _connectSocket() {
+    // Socket hanya mempercepat; polling REST adalah jalur utama. Tidak dicoba di
+    // uji, dan dibatasi 3 percobaan sambung ulang agar tidak berputar tanpa akhir
+    // bila realtime dinonaktifkan di server.
+    if (_tapGoRunningUnderTest) {
+      return;
+    }
     final session = ref.read(_demoSessionProvider);
     final token = session.accessToken;
     if (token == null || token.isEmpty) {
@@ -74,6 +139,7 @@ class _RideChatScreenState extends ConsumerState<RideChatScreen> {
       io_client.OptionBuilder()
           .setTransports(['websocket'])
           .setAuth({'token': token})
+          .setReconnectionAttempts(3)
           .disableAutoConnect()
           .build(),
     );
@@ -91,9 +157,7 @@ class _RideChatScreenState extends ConsumerState<RideChatScreen> {
     // menghindari duplikasi. Lihat realtime/socket.ts di backend.
     socket.on('chat:message', (data) {
       if (!mounted || data is! Map) return;
-      setState(() {
-        _messages.add(Map<String, dynamic>.from(data));
-      });
+      setState(() => _mergeMessages([Map<String, dynamic>.from(data)]));
       _scrollToBottom();
       unawaited(_apiClient.markChatRead(widget.rideReference));
     });
@@ -112,11 +176,11 @@ class _RideChatScreenState extends ConsumerState<RideChatScreen> {
     });
   }
 
-  Future<void> _send() async {
-    final text = _textController.text.trim();
-    if (text.isEmpty || _sending) return;
+  Future<void> _send([String? quickReply]) async {
+    final text = (quickReply ?? _textController.text).trim();
+    if (text.isEmpty || _sending || !_canSend) return;
     setState(() => _sending = true);
-    _textController.clear();
+    if (quickReply == null) _textController.clear();
     try {
       final socket = _socket;
       if (socket != null && _socketConnected) {
@@ -134,16 +198,23 @@ class _RideChatScreenState extends ConsumerState<RideChatScreen> {
           widget.rideReference,
           text,
         );
-        if (mounted && result['data'] is Map) {
-          setState(() {
-            _messages.add(Map<String, dynamic>.from(result['data'] as Map));
-          });
+        // post() sudah membuka pembungkus `data`: hasilnya adalah pesan itu sendiri.
+        if (mounted && result['id'] != null) {
+          setState(() => _mergeMessages([Map<String, dynamic>.from(result)]));
           _scrollToBottom();
         }
       }
     } catch (error) {
       if (mounted) {
-        _TapGoSnackbar.error(context, 'Pesan belum terkirim. Coba lagi.');
+        if (_isChatClosedError(error)) {
+          setState(() => _canSend = false);
+          _TapGoSnackbar.info(
+            context,
+            'Percakapan ini sudah ditutup dan hanya dapat dibaca.',
+          );
+        } else {
+          _TapGoSnackbar.error(context, 'Pesan belum terkirim. Coba lagi.');
+        }
       }
     } finally {
       if (mounted) {
@@ -157,29 +228,6 @@ class _RideChatScreenState extends ConsumerState<RideChatScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Chat Perjalanan'),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: (_socketConnected ? _brandGreenTone : Colors.grey)
-                      .withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  _socketConnected ? 'Live' : 'Offline',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: _socketConnected ? _brandGreenTone : Colors.grey,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
       body: Column(
         children: [
@@ -221,70 +269,137 @@ class _RideChatScreenState extends ConsumerState<RideChatScreen> {
                             },
                           ),
           ),
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Builder(
-                      builder: (context) {
-                        // fillColor putih tanpa style teks eksplisit
-                        // sebelumnya mewarisi warna teks default tema — di
-                        // mode gelap itu terang, sehingga teks nyaris tak
-                        // terlihat di atas kotak putih. Disamakan ke pola
-                        // colorScheme seperti _InputField.
-                        final colorScheme = Theme.of(context).colorScheme;
-                        return TextField(
-                          controller: _textController,
-                          textInputAction: TextInputAction.send,
-                          onSubmitted: (_) => _send(),
-                          maxLength: 1000,
-                          buildCounter: (context,
-                                  {required currentLength,
-                                  required isFocused,
-                                  maxLength}) =>
-                              null,
-                          style: TextStyle(color: colorScheme.onSurface),
-                          decoration: InputDecoration(
-                            hintText: 'Tulis pesan...',
-                            hintStyle:
-                                TextStyle(color: colorScheme.onSurfaceVariant),
-                            filled: true,
-                            fillColor: colorScheme.surface,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
+          if (!_canSend)
+            _closedBanner()
+          else ...[
+            _quickReplies(),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Builder(
+                        builder: (context) {
+                          // fillColor putih tanpa style teks eksplisit
+                          // sebelumnya mewarisi warna teks default tema — di
+                          // mode gelap itu terang, sehingga teks nyaris tak
+                          // terlihat di atas kotak putih. Disamakan ke pola
+                          // colorScheme seperti _InputField.
+                          final colorScheme = Theme.of(context).colorScheme;
+                          return TextField(
+                            controller: _textController,
+                            textInputAction: TextInputAction.send,
+                            onSubmitted: (_) => _send(),
+                            maxLength: 1000,
+                            buildCounter: (context,
+                                    {required currentLength,
+                                    required isFocused,
+                                    maxLength}) =>
+                                null,
+                            style: TextStyle(color: colorScheme.onSurface),
+                            decoration: InputDecoration(
+                              hintText: 'Tulis pesan...',
+                              hintStyle: TextStyle(
+                                  color: colorScheme.onSurfaceVariant),
+                              filled: true,
+                              fillColor: colorScheme.surface,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(24),
+                                borderSide: BorderSide.none,
+                              ),
                             ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(24),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                        );
-                      },
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    onPressed: _sending ? null : _send,
-                    icon: _sending
-                        ? const _TapGoLoading(size: 18, strokeWidth: 2)
-                        : const Icon(Icons.send_rounded),
-                    style: IconButton.styleFrom(backgroundColor: _brandBlue),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    IconButton.filled(
+                      onPressed: _sending ? null : _send,
+                      icon: _sending
+                          ? const _TapGoLoading(size: 18, strokeWidth: 2)
+                          : const Icon(Icons.send_rounded),
+                      style: IconButton.styleFrom(backgroundColor: _brandBlue),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _quickReplies() {
+    return SizedBox(
+      height: 44,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 2),
+        itemCount: tapGoQuickReplies.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final text = tapGoQuickReplies[index];
+          final colorScheme = Theme.of(context).colorScheme;
+          return ActionChip(
+            key: ValueKey('quick_reply_$index'),
+            label: Text(text),
+            backgroundColor: colorScheme.surface,
+            side: BorderSide(color: _brandBlue.withValues(alpha: 0.55)),
+            shape: const StadiumBorder(),
+            onPressed: _sending ? null : () => _send(text),
+            labelStyle: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _closedBanner() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return SafeArea(
+      top: false,
+      child: Container(
+        key: const ValueKey('chat_read_only_banner'),
+        width: double.infinity,
+        margin: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: colorScheme.outlineVariant),
+        ),
+        child: Text(
+          'Percakapan ini sudah ditutup dan hanya dapat dibaca.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ),
     );
   }
 }
 
-const _brandGreenTone = Color(0xFF00A86B);
+/// Server menolak pengiriman karena jendela balas sudah lewat.
+bool _isChatClosedError(Object error) {
+  if (error is DioException) {
+    final data = error.response?.data;
+    return data is Map && data['code'] == 'CHAT_RIDE_NOT_ACTIVE';
+  }
+  return false;
+}
 
 class _ChatBubble extends StatelessWidget {
   const _ChatBubble({required this.message, required this.isMine});
@@ -303,13 +418,14 @@ class _ChatBubble extends StatelessWidget {
           maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
         decoration: BoxDecoration(
-          color: isMine ? _brandBlue : Colors.white,
+          color: isMine ? _brandBlue : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Text(
           message,
           style: TextStyle(
-            color: isMine ? Colors.white : const Color(0xFF263241),
+            color:
+                isMine ? Colors.white : Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w600,
           ),
         ),

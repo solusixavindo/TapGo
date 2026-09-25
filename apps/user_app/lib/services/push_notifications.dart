@@ -249,17 +249,39 @@ void _tapGoShowForegroundPush(TapGoPushMessage message) {
             ? null
             : SnackBarAction(
                 label: 'Lihat',
-                onPressed: () => _tapGoOpenRide(reference),
+                onPressed: () => message.data['type'] == 'chat_message'
+                    ? _tapGoOpenChat(reference)
+                    : _tapGoOpenRide(reference),
               ),
       ),
     );
+  // Pesan chat baru: segarkan kotak masuk agar lencana ikut naik.
+  if (message.data['type'] == 'chat_message') {
+    _tapGoPushInvalidateChat?.call();
+  }
 }
+
+/// Diisi TapGoUserApp; dipakai push latar depan untuk menyegarkan lencana chat.
+void Function()? _tapGoPushInvalidateChat;
 
 void _tapGoOpenFromPush(TapGoPushMessage message) {
   final reference = tapGoRideReferenceFromPush(message.data);
-  if (reference != null) {
+  if (reference == null) {
+    return;
+  }
+  if (message.data['type'] == 'chat_message') {
+    _tapGoOpenChat(reference);
+  } else {
     _tapGoOpenRide(reference);
   }
+}
+
+void _tapGoOpenChat(String reference) {
+  _tapGoNavigatorKey.currentState?.push(
+    MaterialPageRoute<void>(
+      builder: (_) => RideChatScreen(rideReference: reference),
+    ),
+  );
 }
 
 void _tapGoOpenRide(String reference) {

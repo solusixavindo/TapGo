@@ -18,6 +18,11 @@ export class ChatController {
     res.status(StatusCodes.CREATED).json({ success: true, data: result });
   };
 
+  conversations = async (req: Request, res: Response) => {
+    const result = await this.chatService.listConversations(req.auth!.userId);
+    res.json({ success: true, data: result });
+  };
+
   list = async (req: Request, res: Response) => {
     const result = await this.chatService.listMessages({
       rideRef: String(req.params.rideRef),

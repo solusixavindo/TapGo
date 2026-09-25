@@ -17,6 +17,9 @@ diserahkan bila salah satunya gagal. **Laporan baru wajib menambah baris di sini
 | 2.0.x | Diminta login padahal tidak logout | Refresh token berlomba | `test/upgrade_from_28_test.dart`, `token_refresh_coordinator` |
 | 2.0.5+32 | Build lama tetap diterima server | Build sebelum 2.0.5 mengirim header distribusi | `legacyMobileClientGate.integration.test.ts` (batas build minimum) |
 | 2.0.5+32 | Akun admin/super admin dapat masuk APK | Hanya `/admin/*` yang dijaga | `adminMobileBlock.integration.test.ts` |
+| 2.0.5+32 | Pesan chat dari driver tidak muncul sampai layar dibuka ulang | Layar hanya mengandalkan Socket.IO, yang nonaktif di produksi (`REALTIME_ENABLED=false`); tanpa polling | `test/chat_inbox_test.dart` (polling memasukkan pesan baru tanpa duplikasi) |
+| 2.0.5+32 | Pesan yang dikirim lewat REST tidak tampil di layar pengirim | `post()` sudah membuka pembungkus `data`, kode mencari `result['data']` | `test/chat_inbox_test.dart` (balasan cepat tampil sekali) |
+| 2.0.5+32 | Pesan chat baru tidak memicu notifikasi | Push hanya untuk status perjalanan | `chatConversationsPush.integration.test.ts` (dua arah, tanpa isi pesan, dibatasi 20 detik) |
 | backend | Penghapusan Founder dikhawatirkan memengaruhi mesin bisnis | Hanya gerbang bonus Founder yang dihapus (tanpa grant selalu `true`) | `businessEngineGolden.integration.test.ts` (seluruh komisi, bonus level, dompet, mutasi identik byte-demi-byte dengan kode sebelumnya) |
 | backend | Uji recovery/admin gagal setelah pemuat push diimpor statis | `env` ter-parse saat impor modul | seluruh suite backend (pemuat push kini malas) |
 

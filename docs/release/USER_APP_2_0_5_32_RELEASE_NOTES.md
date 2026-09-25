@@ -19,6 +19,20 @@ Tanggal: 2026-09-25. Dasar: hasil uji HP pada 2.0.4+31.
 - Akun ber-peran ADMIN/SUPER_ADMIN/SUPER_ADMIN_VIP ditolak 403 `ADMIN_WEB_ONLY` dari klien mobile.
 - Founder Program: tidak ada satu pun jejaknya di user_app, driver_app, maupun APK (dipindai).
 
+## Chat penumpang-driver (baru di 2.0.5)
+- Tab **Chat** kini kotak masuk: bagian **Perjalanan** (percakapan dengan driver, pesan terakhir, lencana pesan belum dibaca)
+  dan bagian **Bantuan TapGo** (tiket bantuan seperti sebelumnya). Ikon tab Chat menampilkan lencana jumlah pesan baru.
+- **Notifikasi "Pesan baru dari driver/penumpang"** (tanpa isi pesan), maksimal satu per 20 detik per percakapan.
+  Mengetuknya membuka layar chat.
+- **Balasan cepat** satu ketukan: "Saya sudah di titik jemput", "Tunggu sebentar ya", "Saya di seberang jalan", "Terima kasih".
+- Aturan waktu: bisa membalas selama perjalanan dan 2 jam setelah selesai; bisa dibaca 7 hari; setelah itu hilang dari kotak masuk.
+  Percakapan yang sudah tertutup tampil dengan ikon kunci dan tanpa kolom tulis.
+- Perbaikan tersembunyi: pesan baru kini muncul lewat polling tiap 4 detik (Socket.IO nonaktif di produksi sehingga
+  sebelumnya pesan masuk tidak tampil sampai layar dibuka ulang); pesan yang dikirim lewat REST kini tampil di layar pengirim;
+  socket dibatasi 3 kali percobaan sambung ulang; gelembung chat mengikuti tema gelap.
+- Notifikasi chat ke **driver** butuh Firebase di aplikasi driver (belum dipasang); sisi penumpang sudah lengkap.
+- Server: endpoint baru `GET /api/v1/chat/conversations`; **wajib di-deploy** agar tab Chat menampilkan kotak masuk.
+
 ## Notifikasi push (FCM) — baru
 - Aplikasi meminta izin notifikasi setelah masuk dan mendaftarkan token perangkat; token dicabut saat keluar, sesi berakhir, atau ganti password.
 - Backend (sudah di produksi) mengirim: driver ditemukan / tiba / perjalanan selesai / dibatalkan driver; transfer masuk; top up berhasil; pembayaran, aktivasi, dan penolakan dokumen membership. Teks tanpa nominal, nama, atau alamat.

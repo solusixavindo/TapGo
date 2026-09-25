@@ -198,7 +198,8 @@ async function seedRideOrder(status: RideOrderStatus, suffix = "1") {
       totalFare: quote.totalFare,
       fareRuleVersion: quote.fareRuleVersion,
       paymentMethod: "CASH",
-      paymentState: "CASH_EXPECTED"
+      paymentState: "CASH_EXPECTED",
+      ...(status === "COMPLETED" ? { completedAt: new Date() } : {})
     }
   });
 

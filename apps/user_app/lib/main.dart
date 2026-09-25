@@ -36,6 +36,7 @@ import 'features/ppob/presentation/ppob_home_screen.dart';
 part 'data/demo_user_session.dart';
 part 'data/demo_user_session_models.dart';
 part 'services/activity_feed.dart';
+part 'services/chat_inbox.dart';
 part 'services/push_notifications.dart';
 part 'services/ride_tracking.dart';
 part 'services/saved_places.dart';
@@ -462,8 +463,11 @@ class TapGoUserApp extends ConsumerWidget {
     void refetchPpob(Object? previous, Object? next) {
       ref.invalidate(ppobCatalogProvider);
       ref.invalidate(ppobOrdersProvider);
+      ref.invalidate(_chatConversationsProvider);
     }
 
+    _tapGoPushInvalidateChat =
+        () => ref.invalidate(_chatConversationsProvider);
     ref.listen<bool>(_isAuthenticatedProvider, refetchPpob);
     ref.listen<bool>(_isAuthenticatedProvider, (previous, next) {
       if (next) {

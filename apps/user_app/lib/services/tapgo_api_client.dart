@@ -697,6 +697,12 @@ class _TapGoApiClient {
     );
   }
 
+  /// Kotak masuk chat perjalanan milik akun yang sedang masuk.
+  Future<List<Map<String, dynamic>>> chatConversations() async {
+    final data = await get('/chat/conversations');
+    return _items(data);
+  }
+
   Future<List<Map<String, dynamic>>> chatMessages(String rideRef) async {
     final data = await get(
       '/chat/rides/$rideRef/messages',

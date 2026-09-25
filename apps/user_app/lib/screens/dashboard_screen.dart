@@ -29,7 +29,8 @@ class _TapGoDashboardState extends State<TapGoDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return _ChatInboxPoller(
+        child: Scaffold(
       body: SafeArea(
         child: Stack(
           children: [
@@ -53,7 +54,7 @@ class _TapGoDashboardState extends State<TapGoDashboard> {
           ],
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -1721,6 +1722,8 @@ class _BottomNav extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final avatarBytes = ref.watch(_accountAvatarBytesProvider).valueOrNull;
+    final unreadChat =
+        _tapGoUnreadChatCount(ref.watch(_chatConversationsProvider));
     final screenWidth = MediaQuery.sizeOf(context).width;
     final centerGap = screenWidth < 380 ? 60.0 : 74.0;
     final colorScheme = Theme.of(context).colorScheme;
@@ -1783,6 +1786,7 @@ class _BottomNav extends ConsumerWidget {
                     _NavItem(
                       icon: Icons.chat_bubble_outline_rounded,
                       label: 'Chat',
+                      badgeCount: unreadChat,
                       width: navItemWidth,
                       active: selectedIndex == 2,
                       onTap: () => onTabSelected(2),
@@ -1867,6 +1871,7 @@ class _NavItem extends StatelessWidget {
     this.active = false,
     this.width = _navItemPreferredWidth,
     this.avatarBytes,
+    this.badgeCount = 0,
   });
 
   final IconData icon;
@@ -1874,6 +1879,9 @@ class _NavItem extends StatelessWidget {
   final VoidCallback onTap;
   final bool active;
   final double width;
+
+  /// Lencana jumlah pesan belum dibaca (hanya item Chat yang mengisinya).
+  final int badgeCount;
   // Dipakai HANYA oleh item "Akun" — bila terisi, foto profil ditampilkan
   // menggantikan ikon generik. Item lain tidak pernah mengisi ini.
   final Uint8List? avatarBytes;
@@ -1911,7 +1919,12 @@ class _NavItem extends StatelessWidget {
                         radius: 13,
                         backgroundImage: MemoryImage(avatarBytes!),
                       )
-                    : Icon(icon, color: color, size: 26),
+                    : Badge(
+                        isLabelVisible: badgeCount > 0,
+                        label: Text(badgeCount > 9 ? '9+' : '$badgeCount'),
+                        backgroundColor: const Color(0xFFE51E3E),
+                        child: Icon(icon, color: color, size: 26),
+                      ),
               ),
             ),
             const SizedBox(height: 5),
@@ -2081,11 +2094,15 @@ class ChatScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tickets = ref.watch(_supportPreviewProvider);
+    final conversations = ref.watch(_chatConversationsProvider);
     return RefreshIndicator(
-      onRefresh: () =>
-          ref.refresh(_supportPreviewProvider.future).then((_) {}).catchError(
-                (_) {},
-              ),
+      onRefresh: () async {
+        ref.invalidate(_chatConversationsProvider);
+        await ref
+            .refresh(_supportPreviewProvider.future)
+            .then((_) {})
+            .catchError((_) {});
+      },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 176),
@@ -2094,9 +2111,15 @@ class ChatScreen extends ConsumerWidget {
           children: [
             const _SectionHeader(
               title: 'Chat',
-              subtitle: 'Percakapan bantuan dengan tim TapGo',
+              subtitle: 'Driver Anda dan tim bantuan TapGo',
             ),
             const SizedBox(height: 16),
+            ..._conversationSection(context, ref, conversations),
+            const Text(
+              'Bantuan TapGo',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
@@ -4042,6 +4065,172 @@ class _ServiceIcon3D extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Bagian "Perjalanan" pada tab Chat: percakapan dengan driver, terbaru di atas.
+/// Tidak menampilkan apa pun bila tidak ada percakapan yang relevan.
+List<Widget> _conversationSection(
+  BuildContext context,
+  WidgetRef ref,
+  AsyncValue<List<TapGoChatConversation>> conversations,
+) {
+  final items = conversations.valueOrNull ?? const <TapGoChatConversation>[];
+  if (items.isEmpty) {
+    return const [];
+  }
+  return [
+    Text(
+      'Perjalanan',
+      style: TextStyle(
+        color: Theme.of(context).colorScheme.onSurface,
+        fontSize: 16,
+        fontWeight: FontWeight.w900,
+      ),
+    ),
+    const SizedBox(height: 10),
+    for (final conversation in items)
+      _ConversationCard(
+        conversation: conversation,
+        onTap: () async {
+          await Navigator.of(context).push<void>(
+            _tapGoPageRoute(
+              (_) => RideChatScreen(
+                rideReference: conversation.rideReference,
+                canSend: conversation.canSend,
+              ),
+            ),
+          );
+          ref.invalidate(_chatConversationsProvider);
+        },
+      ),
+    const SizedBox(height: 12),
+  ];
+}
+
+class _ConversationCard extends StatelessWidget {
+  const _ConversationCard({required this.conversation, required this.onTap});
+
+  final TapGoChatConversation conversation;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final unread = conversation.unreadCount;
+    final preview = conversation.lastText == null
+        ? 'Belum ada pesan. Sapa driver Anda.'
+        : '${conversation.lastFromMe ? 'Anda: ' : ''}${conversation.lastText}';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          key: ValueKey('chat_conversation_${conversation.rideReference}'),
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: colorScheme.outlineVariant),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: _brandBlue.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.two_wheeler_rounded,
+                    color: _brandBlue,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        conversation.isActive
+                            ? 'Driver Anda'
+                            : 'Perjalanan selesai',
+                        style: TextStyle(
+                          color: colorScheme.onSurface,
+                          fontSize: 14,
+                          fontWeight:
+                              unread > 0 ? FontWeight.w900 : FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        preview,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: unread > 0
+                              ? colorScheme.onSurface
+                              : colorScheme.onSurfaceVariant,
+                          fontSize: 12.5,
+                          fontWeight:
+                              unread > 0 ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      tapGoChatTimeLabel(conversation.lastAt),
+                      style: TextStyle(
+                        color: colorScheme.onSurfaceVariant,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    if (unread > 0)
+                      Container(
+                        key: const ValueKey('chat_unread_badge'),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _brandBlue,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          unread > 99 ? '99+' : '$unread',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      )
+                    else if (!conversation.canSend)
+                      Icon(
+                        Icons.lock_outline_rounded,
+                        size: 14,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

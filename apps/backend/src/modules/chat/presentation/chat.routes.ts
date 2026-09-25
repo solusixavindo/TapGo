@@ -29,3 +29,8 @@ chatRouter.post(
   asyncHandler(controller.send)
 );
 chatRouter.post("/:rideRef/read", validateRequest(chatMarkReadSchema), asyncHandler(controller.markRead));
+
+/** Kotak masuk chat milik pemanggil: GET /api/v1/chat/conversations. */
+export const chatInboxRouter = Router();
+chatInboxRouter.use(requireAuth);
+chatInboxRouter.get("/", asyncHandler(controller.conversations));
