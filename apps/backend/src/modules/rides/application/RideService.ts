@@ -45,6 +45,8 @@ import {
   passengerCancellationHasFee,
   RIDE_DRIVER_ENGAGED_STATUSES,
 } from "../domain/rideStateMachine.js";
+import { getPushService } from "../../notifications/application/pushServiceFactory.js";
+import { ridePushMessage, type PushNotifier } from "../../notifications/application/rideNotifications.js";
 
 const CANCELLATION_POLICY_VERSION = "RIDE_CANCEL_POLICY_V1";
 const CANCELLATION_FEE = 2_000; // integer rupiah
@@ -80,7 +82,29 @@ export class RideService {
     private readonly distance: DistancePort,
     private readonly matching: MatchingPort,
     private readonly faceCheck: DriverFaceCheckService = new DriverFaceCheckService(prisma),
+    private readonly push: PushNotifier = getPushService(),
   ) {}
+
+  /**
+   * Memberi tahu penumpang bahwa status perjalanannya berubah. Dipanggil HANYA
+   * setelah transaksi commit dan tidak pernah ditunggu: kegagalan push tidak
+   * boleh mengubah hasil perubahan status.
+   */
+  private notifyPassengerOfStatus(publicReference: string, status: RideOrderStatus) {
+    const message = ridePushMessage(status);
+    if (!message || !this.push.enabled) return;
+    void this.prisma.rideOrder
+      .findUnique({ where: { publicReference }, select: { passengerId: true } })
+      .then((row) =>
+        row
+          ? this.push.notifyUser(row.passengerId, {
+              ...message,
+              data: { type: "ride_status", rideReference: publicReference, status },
+            })
+          : undefined,
+      )
+      .catch(() => undefined);
+  }
 
   // -------------------------------------------------------------------------
   // Quote
@@ -731,7 +755,8 @@ export class RideService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    let transitioned = false;
+    const view = await this.prisma.$transaction(async (tx) => {
       const order = await tx.rideOrder.findUnique({
         where: { publicReference: input.publicReference },
         include: DRIVER_DISCLOSURE_INCLUDE,
@@ -788,6 +813,7 @@ export class RideService {
         );
       }
       // ----------------------------------------------------
+      transitioned = true;
 
       await tx.rideDriverProfile.update({
         where: { id: profile.id },
@@ -809,6 +835,8 @@ export class RideService {
       });
       return this.toOrderView(updated);
     });
+    if (transitioned) this.notifyPassengerOfStatus(input.publicReference, "DRIVER_ASSIGNED");
+    return view;
   }
 
   async rejectOffer(input: { userId: string; publicReference: string }) {
@@ -847,7 +875,8 @@ export class RideService {
   }) {
     const profile = await this.requireDriverProfile(input.userId);
 
-    return this.prisma.$transaction(async (tx) => {
+    let transitioned = false;
+    const view = await this.prisma.$transaction(async (tx) => {
       const order = await tx.rideOrder.findUnique({
         where: { publicReference: input.publicReference },
         include: DRIVER_DISCLOSURE_INCLUDE,
@@ -900,6 +929,8 @@ export class RideService {
         );
       }
 
+      transitioned = true;
+
       if (input.next === "COMPLETED") {
         await this.releaseDriver(tx, profile.id);
         // Stage 5.2 mengisolasi ride tunai dari Business Engine sepenuhnya
@@ -933,6 +964,8 @@ export class RideService {
       });
       return this.toOrderView(updated);
     });
+    if (transitioned) this.notifyPassengerOfStatus(input.publicReference, input.next);
+    return view;
   }
 
   async cancelByDriver(input: {
@@ -943,7 +976,7 @@ export class RideService {
   }) {
     const profile = await this.requireDriverProfile(input.userId);
 
-    return this.prisma.$transaction(async (tx) => {
+    const view = await this.prisma.$transaction(async (tx) => {
       const order = await tx.rideOrder.findUnique({
         where: { publicReference: input.publicReference },
       });
@@ -993,6 +1026,8 @@ export class RideService {
 
       return this.toOrderView(updated);
     });
+    this.notifyPassengerOfStatus(input.publicReference, "CANCELLED_BY_DRIVER");
+    return view;
   }
 
   /** Menyimpan lokasi driver; menolak data basi/tidak valid/mundur. */
