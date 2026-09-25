@@ -8,6 +8,17 @@ Tanggal: 2026-09-25. Dasar: hasil uji HP pada 2.0.4+31.
 3. **Latar tema terang** tidak lagi hampir putih: dari `#F4F8FB` menjadi `#E8EFF6`, sehingga kartu putih terlihat terangkat. Teks sekunder digelapkan (`#94A3B8` menjadi `#64748B`) agar kontras tetap >= 4:1.
 4. **Aktivitas**: kartu diringkas menjadi judul + satu baris "status • tanggal" (+ nominal). Tinggi kartu dari ~90 menjadi ~62 dp. Nomor tujuan/alamat tidak lagi ditampilkan di daftar. Kartu dan keadaan kosong kini mengikuti tema (tidak lagi kotak putih di tema gelap). Tanda centang filter menjadi putih.
 
+## Perbaikan galat "Terjadi gangguan tampilan" saat ganti tema
+- Akar masalah: grid layanan di Beranda menghitung lebar sel negatif saat sesaat mendapat lebar ~0, sehingga
+  membangun kotak berlebar negatif. Diperbaiki (lebar dijepit >= 0) dan dijaga uji regresi.
+- Diverifikasi di emulator: buka Tampilan, ganti terang/gelap enam kali, konsol bebas galat.
+
+## Server (produksi, butuh langkah Owner)
+- `MOBILE_LEGACY_CLIENT_BLOCK_ENABLED=true` + `MOBILE_MIN_APP_BUILD=32`: build user_app di bawah 2.0.5+32
+  ditolak 426 dengan pesan memperbarui dari Google Play.
+- Akun ber-peran ADMIN/SUPER_ADMIN/SUPER_ADMIN_VIP ditolak 403 `ADMIN_WEB_ONLY` dari klien mobile.
+- Founder Program: tidak ada satu pun jejaknya di user_app, driver_app, maupun APK (dipindai).
+
 ## Notifikasi push (FCM) — baru
 - Aplikasi meminta izin notifikasi setelah masuk dan mendaftarkan token perangkat; token dicabut saat keluar, sesi berakhir, atau ganti password.
 - Backend (sudah di produksi) mengirim: driver ditemukan / tiba / perjalanan selesai / dibatalkan driver; transfer masuk; top up berhasil; pembayaran, aktivasi, dan penolakan dokumen membership. Teks tanpa nominal, nama, atau alamat.

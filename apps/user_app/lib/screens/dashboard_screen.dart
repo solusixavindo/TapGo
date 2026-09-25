@@ -1559,9 +1559,14 @@ class _ServiceGrid extends StatelessWidget {
       builder: (context, constraints) {
         const crossAxisCount = 4;
         const crossAxisSpacing = 12.0;
-        final tileWidth =
-            (constraints.maxWidth - crossAxisSpacing * (crossAxisCount - 1)) /
-                crossAxisCount;
+        // Dijepit >= 0: bila grid sesaat mendapat lebar 0 (mis. halaman di
+        // bawah rute yang sedang dibuka), lebar negatif membuat SizedBox label
+        // melempar galat dan seluruh layar berubah menjadi "gangguan tampilan".
+        final tileWidth = max(
+          0.0,
+          (constraints.maxWidth - crossAxisSpacing * (crossAxisCount - 1)) /
+              crossAxisCount,
+        );
         final ratioHeight = tileWidth / 0.66;
         final contentHeight = _serviceTileContentHeight(context);
 
