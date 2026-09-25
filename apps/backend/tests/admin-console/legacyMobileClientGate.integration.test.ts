@@ -6,7 +6,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * Build user_app sebelum 2026-09-19 tidak mengirim X-TapGo-Distribution.
  * Gerbang ini tidak butuh database: ditolak sebelum router mana pun.
  */
-async function startApp(flag: "true" | undefined) {
+async function startApp(flag: "true" | undefined, minBuild?: string) {
+  if (minBuild) process.env.MOBILE_MIN_APP_BUILD = minBuild;
+  else delete process.env.MOBILE_MIN_APP_BUILD;
   process.env.NODE_ENV = "test";
   if (flag) process.env.MOBILE_LEGACY_CLIENT_BLOCK_ENABLED = flag;
   else delete process.env.MOBILE_LEGACY_CLIENT_BLOCK_ENABLED;
@@ -69,5 +71,52 @@ describe("Gerbang klien mobile lama — default mati", () => {
       headers: { "x-tapgo-platform": "android" }
     });
     expect(response.status).not.toBe(426);
+  });
+});
+
+describe("Gerbang klien mobile lama — batas build minimum", () => {
+  let server: Server;
+  let baseUrl = "";
+  beforeAll(async () => ({ server, baseUrl } = await startApp("true", "32")));
+  afterAll(async () => {
+    delete process.env.MOBILE_LEGACY_CLIENT_BLOCK_ENABLED;
+    delete process.env.MOBILE_MIN_APP_BUILD;
+    await stop(server);
+  });
+
+  const get = (version: string | undefined) =>
+    fetch(`${baseUrl}/api/v1/membership/current`, {
+      headers: {
+        "x-tapgo-platform": "android",
+        "x-tapgo-distribution": "play",
+        ...(version ? { "x-tapgo-app-version": version } : {})
+      }
+    });
+
+  it("menolak build di bawah batas walau sudah mengirim header distribusi", async () => {
+    for (const version of ["2.0.4+31", "2.0.3+30", "2.0.0+28", "1.0.3+4"]) {
+      const response = await get(version);
+      expect(response.status, version).toBe(426);
+      expect(((await response.json()) as { code?: string }).code, version).toBe("APP_UPDATE_REQUIRED");
+    }
+  });
+
+  it("menerima build pada dan di atas batas", async () => {
+    for (const version of ["2.0.5+32", "2.0.5+33", "2.1.0+100"]) {
+      expect((await get(version)).status, version).not.toBe(426);
+    }
+  });
+
+  it("tidak menolak versi 'unknown' atau tak terbaca yang sudah berheader distribusi", async () => {
+    for (const version of ["unknown", "garbage", "2.0.5", undefined]) {
+      expect((await get(version)).status, String(version)).not.toBe(426);
+    }
+  });
+
+  it("tetap tidak menyentuh driver_app dan web", async () => {
+    const asDriver = await fetch(`${baseUrl}/api/v1/membership/current`, {
+      headers: { "x-tapgo-app-version": "0.1.0+1" }
+    });
+    expect(asDriver.status).not.toBe(426);
   });
 });

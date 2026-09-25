@@ -3,7 +3,7 @@ import { StatusCodes } from "http-status-codes";
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../errors/AppError.js";
 import { INITIAL_AUTH_VERSION, JwtRole, TokenChannel, verifyAccessToken } from "./tokenService.js";
-import { roleSatisfiesAny } from "./roleHierarchy.js";
+import { isAdminRole, roleSatisfiesAny } from "./roleHierarchy.js";
 
 declare global {
   namespace Express {
@@ -152,6 +152,20 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
 
   resolveAuthFromToken(token)
     .then((auth) => {
+      // Akun ber-peran admin tidak boleh memakai aplikasi mobile sama sekali
+      // (Owner, 2026-09-25): konsol web adalah satu-satunya tempatnya. Klien
+      // mobile selalu mengirim X-TapGo-Platform android|ios; konsol web tidak.
+      // Ini menutup akses akun admin dari APK lama maupun baru, tanpa
+      // bergantung pada isi aplikasi. Bukan pertahanan terhadap pemalsu header;
+      // kontrol akses sesungguhnya tetap token + peran.
+      const platform = req.header("x-tapgo-platform")?.trim().toLowerCase();
+      if ((platform === "android" || platform === "ios") && isAdminRole(auth.role)) {
+        throw new AppError(
+          "Akun admin hanya dapat digunakan di konsol web",
+          StatusCodes.FORBIDDEN,
+          "ADMIN_WEB_ONLY"
+        );
+      }
       req.auth = auth;
       next();
     })

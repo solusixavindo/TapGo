@@ -127,6 +127,10 @@ const envSchema = z.object({
   /// Bila true, klien android/ios tanpa header X-TapGo-Distribution (build
   /// user_app sebelum 2026-09-19) ditolak 426 APP_UPDATE_REQUIRED. Default mati.
   MOBILE_LEGACY_CLIENT_BLOCK_ENABLED: strictEnvBoolean(false),
+  // Nomor build minimum user_app (angka setelah '+' pada versi, mis. 32 untuk
+  // 2.0.5+32). 0 = tidak ada batas. Hanya berlaku bila
+  // MOBILE_LEGACY_CLIENT_BLOCK_ENABLED=true.
+  MOBILE_MIN_APP_BUILD: z.coerce.number().int().min(0).default(0),
   /// Pencairan saldo lewat dashboard mitra (kanal WEB saja). Terpisah dari
   /// WALLET_CASH_OUT_ENABLED agar rilis Google Play tetap tertutup walau
   /// pencairan web dinyalakan.
