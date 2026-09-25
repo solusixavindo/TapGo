@@ -135,8 +135,6 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                 ),
               ),
               const SizedBox(height: 18),
-              const _DashboardEntrance(order: 1, child: _SearchRow()),
-              const SizedBox(height: 18),
               _DashboardEntrance(
                 order: 2,
                 child: Transform.translate(
@@ -754,138 +752,6 @@ class _TapScale extends StatelessWidget {
   }
 }
 
-class _SearchRow extends StatefulWidget {
-  const _SearchRow();
-
-  @override
-  State<_SearchRow> createState() => _SearchRowState();
-}
-
-class _SearchRowState extends State<_SearchRow> {
-  static const _placeholders = [
-    'Cari layanan TapGo',
-    'Cari Kartu Anggota',
-    'Cari PPOB',
-  ];
-
-  int _placeholderIndex = 0;
-  Timer? _placeholderTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    _placeholderTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (!mounted) return;
-      setState(() {
-        _placeholderIndex = (_placeholderIndex + 1) % _placeholders.length;
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _placeholderTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const placeholders = _placeholders;
-    final colorScheme = Theme.of(context).colorScheme;
-    if (_placeholderIndex >= placeholders.length) {
-      _placeholderIndex = 0;
-    }
-    return Material(
-      color: colorScheme.surface,
-      borderRadius: BorderRadius.circular(26),
-      child: InkWell(
-        onTap: () => _showSearchMenu(context),
-        borderRadius: BorderRadius.circular(26),
-        child: Container(
-          height: 58,
-          padding: const EdgeInsets.only(left: 18, right: 6),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(26),
-            border: Border.all(color: colorScheme.outlineVariant),
-            boxShadow: [
-              BoxShadow(
-                color: _brandBlue.withValues(alpha: 0.10),
-                blurRadius: 22,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 360),
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, 0.25),
-                        end: Offset.zero,
-                      ).animate(animation),
-                      child: child,
-                    ),
-                  ),
-                  child: Text(
-                    placeholders[_placeholderIndex],
-                    key: ValueKey(placeholders[_placeholderIndex]),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: colorScheme.onSurfaceVariant,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-              ),
-              const _SearchPulseIcon(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SearchPulseIcon extends StatelessWidget {
-  const _SearchPulseIcon();
-
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.96, end: 1.04),
-      duration: const Duration(milliseconds: 850),
-      curve: Curves.easeOutBack,
-      builder: (context, scale, child) =>
-          Transform.scale(scale: scale, child: child),
-      child: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF0B5FC7), Color(0xFF06284A)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: _brandBlue.withValues(alpha: 0.22),
-              blurRadius: 14,
-              offset: const Offset(0, 7),
-            ),
-          ],
-        ),
-        child: const Icon(Icons.search_rounded, color: Colors.white),
-      ),
-    );
-  }
-}
-
 void _showInfoSnack(BuildContext context, String message) {
   _TapGoSnackbar.info(context, message);
 }
@@ -899,111 +765,6 @@ Future<void> _openTopUpWebsite(BuildContext context) async {
     if (context.mounted) {
       _showInfoSnack(context, 'Halaman top up belum dapat dibuka.');
     }
-  }
-}
-
-void _showSearchMenu(BuildContext context) {
-  const items = [
-    _ServiceItem(
-      'Kartu Anggota',
-      Icons.badge_rounded,
-      Color(0xFFF59E0B),
-      null,
-    ),
-  ];
-
-  _showTapGoBottomSheet<void>(
-    context: context,
-    showDragHandle: true,
-    backgroundColor: const Color(0xFFF4F8FB),
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-    ),
-    builder: (context) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Cari cepat',
-                style: TextStyle(
-                  color: Color(0xFF0A2A43),
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 14),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: items.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4,
-                  mainAxisSpacing: 14,
-                  crossAxisSpacing: 8,
-                  childAspectRatio: 0.70,
-                ),
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  return InkWell(
-                    borderRadius: BorderRadius.circular(18),
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      if (item.label == 'Kartu Anggota') {
-                        _openDemo(context, const BasicMemberCardScreen());
-                      }
-                    },
-                    child: _SearchServiceTile(item: item),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      );
-    },
-  );
-}
-
-class _SearchServiceTile extends StatelessWidget {
-  const _SearchServiceTile({required this.item});
-
-  final _ServiceItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _ServiceAssetIcon(
-          label: item.label,
-          icon: item.icon,
-          style: _serviceIconStyle(item.label),
-          size: 56,
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: 76,
-          height: 17,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              item.label,
-              maxLines: 1,
-              softWrap: false,
-              style: const TextStyle(
-                color: Color(0xFF263241),
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
   }
 }
 
@@ -2234,6 +1995,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                       label: Text(tabs[index]),
                       selected: _tabIndex == index,
                       selectedColor: _brandBlue,
+                      checkmarkColor: Colors.white,
                       labelStyle: TextStyle(
                         color: _tabIndex == index
                             ? Colors.white
@@ -2401,7 +2163,7 @@ class AccountScreen extends ConsumerWidget {
           ),
           _AccountMenuTile(
             'Ubah Password',
-            Icons.password_rounded,
+            Icons.lock_rounded,
             () => _openDemo(context, const ChangePasswordScreen()),
             subtitle: 'Ganti password akun Anda',
           ),

@@ -115,6 +115,7 @@ enum PremiumTapGoIconAction {
   contactUs,
   help,
   themeSettings,
+  changePassword,
   logout,
 }
 
@@ -132,6 +133,8 @@ extension PremiumTapGoIconActionAsset on PremiumTapGoIconAction {
         PremiumTapGoIconAction.contactUs => '$_basePath/contact_us.png',
         PremiumTapGoIconAction.help => '$_basePath/help.png',
         PremiumTapGoIconAction.themeSettings => '$_basePath/help.png',
+        PremiumTapGoIconAction.changePassword =>
+          '$_basePath/change_password.png',
         PremiumTapGoIconAction.logout => '$_basePath/logout.png',
       };
 }
@@ -160,6 +163,7 @@ class PremiumTapGoIcon extends StatelessWidget {
     'Hubungi Kami': PremiumTapGoIconAction.contactUs,
     'Bantuan': PremiumTapGoIconAction.help,
     'Tampilan': PremiumTapGoIconAction.themeSettings,
+    'Ubah Password': PremiumTapGoIconAction.changePassword,
     'Logout': PremiumTapGoIconAction.logout,
     'Keluar': PremiumTapGoIconAction.logout,
   };

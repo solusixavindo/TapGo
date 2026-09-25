@@ -66,7 +66,7 @@ part 'widgets/map_user_location.dart';
 
 const _brandBlue = Color(0xFF0569E8);
 const _brandOrange = Color(0xFFFF8A00);
-const _softBackground = Color(0xFFF4F8FB);
+const _softBackground = Color(0xFFE8EFF6);
 const _tapGoAppMode = String.fromEnvironment(
   'TAPGO_APP_MODE',
   defaultValue: 'production',
@@ -509,8 +509,10 @@ ThemeData tapGoReadableTheme({Brightness brightness = Brightness.light}) {
       isDark ? const Color(0xFF29445F) : const Color(0xFFEAF0F6);
   final inputTextColor =
       isDark ? const Color(0xFFEAF7FF) : const Color(0xFF172033);
+  // Abu-abu sekunder terang digelapkan sedikit (94A3B8 -> 64748B) agar tetap
+  // terbaca di atas latar yang kini lebih pekat.
   final inputHintColor =
-      isDark ? const Color(0xFFA9B8C9) : const Color(0xFF94A3B8);
+      isDark ? const Color(0xFFA9B8C9) : const Color(0xFF64748B);
   final scheme = ColorScheme.fromSeed(
     seedColor: _brandBlue,
     brightness: brightness,

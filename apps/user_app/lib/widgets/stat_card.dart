@@ -95,28 +95,32 @@ class _ActivityTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final amountColor = item.amount?.startsWith('-') ?? false
         ? const Color(0xFFE51E3E)
         : const Color(0xFF00A86B);
 
+    // Ringkas: satu judul, satu baris keterangan (status dan tanggal). Rincian
+    // seperti nomor tujuan atau alamat ada di layar rincian masing-masing.
+    // Warna mengikuti tema agar kartu tidak menjadi kotak putih di tema gelap.
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Row(
         children: [
           Container(
-            width: 46,
-            height: 46,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
-              color: _brandBlue.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(15),
+              color: _brandBlue.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(item.icon, color: _brandBlue),
+            child: Icon(item.icon, color: _brandBlue, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -125,36 +129,39 @@ class _ActivityTile extends StatelessWidget {
               children: [
                 Text(
                   item.title,
-                  style: const TextStyle(
-                    color: Color(0xFF0A2A43),
-                    fontWeight: FontWeight.w900,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: colorScheme.onSurface,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  item.description,
-                  style: const TextStyle(
-                    color: Color(0xFF718096),
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 2),
                 Text(
                   '${item.status} • ${item.date}',
-                  style: const TextStyle(
-                    color: Color(0xFF718096),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
             ),
           ),
-          if (item.amount != null)
+          if (item.amount != null) ...[
+            const SizedBox(width: 8),
             Text(
               item.amount!,
-              style: TextStyle(color: amountColor, fontWeight: FontWeight.w900),
+              style: TextStyle(
+                color: amountColor,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w900,
+              ),
             ),
+          ],
         ],
       ),
     );
@@ -452,7 +459,7 @@ class _EmptyState extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(22),
           border:
               Border.all(color: Theme.of(context).colorScheme.outlineVariant),
@@ -464,8 +471,8 @@ class _EmptyState extends StatelessWidget {
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFF0A2A43),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
                 fontSize: 18,
                 fontWeight: FontWeight.w900,
               ),
@@ -474,7 +481,9 @@ class _EmptyState extends StatelessWidget {
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFF718096)),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
