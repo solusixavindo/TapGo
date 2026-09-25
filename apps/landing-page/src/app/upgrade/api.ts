@@ -150,6 +150,32 @@ function toNumber(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+/**
+ * Galat dari server dengan kode stabilnya. Halaman memakai [code] untuk
+ * menentukan tindakan (mis. melanjutkan pengajuan yang menggantung) dan
+ * pesan berbahasa Indonesia untuk tampilan.
+ */
+export class UpgradeApiError extends Error {
+  readonly code: string;
+  readonly status: number;
+
+  constructor(message: string, code = "", status = 0) {
+    super(message);
+    this.name = "UpgradeApiError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
+/** Kode server yang pesannya berbahasa Inggris dipetakan ke kalimat Indonesia. */
+const FRIENDLY_MESSAGES: Record<string, string> = {
+  MEMBERSHIP_ORDER_PENDING:
+    "Anda masih memiliki pengajuan membership yang belum dibayar.",
+  MEMBERSHIP_ALREADY_ACTIVATED: "Paket membership ini sudah aktif.",
+  VALIDATION_ERROR: "Data belum sesuai. Periksa isian lalu coba lagi.",
+  RATE_LIMITED: "Terlalu banyak percobaan. Coba lagi beberapa saat lagi."
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -163,11 +189,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     success?: boolean;
     data?: T;
     message?: string;
+    code?: string;
   };
   if (!response.ok || payload.success === false) {
-    // Pesan dari server dipakai apa adanya; tidak pernah menampilkan exception
-    // mentah atau detail internal kepada pengguna.
-    throw new Error(payload.message ?? "Permintaan belum dapat diproses.");
+    // Kode yang dikenal dipetakan ke kalimat Indonesia; selebihnya pesan server
+    // dipakai apa adanya. Tidak pernah menampilkan exception mentah atau detail
+    // internal kepada pengguna.
+    const code = payload.code ?? "";
+    throw new UpgradeApiError(
+      FRIENDLY_MESSAGES[code] ?? payload.message ?? "Permintaan belum dapat diproses.",
+      code,
+      response.status
+    );
   }
   return payload.data as T;
 }
@@ -211,6 +244,23 @@ export async function createOrder(
  * Berkasnya dikirim mentah, bukan base64 di dalam JSON: base64 membengkakkan
  * muatan sekitar sepertiga tanpa memberi keuntungan apa pun di sini.
  */
+/** Daftar pengajuan milik akun yang sedang masuk, terbaru dulu. */
+export async function listMyOrders(token: string): Promise<UpgradeOrder[]> {
+  const result = await request<RawOrder[] | { items?: RawOrder[] }>(
+    "/web/membership/orders/me",
+    { headers: { authorization: `Bearer ${token}` } }
+  );
+  const rows = Array.isArray(result) ? result : (result.items ?? []);
+  return rows
+    .map(toOrder)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+}
+
+/** Pengajuan terbaru yang masih menunggu pembayaran, atau null. */
+export function pickPendingOrder(orders: UpgradeOrder[]): UpgradeOrder | null {
+  return orders.find((order) => order.status === "PENDING") ?? null;
+}
+
 export async function uploadDocument(
   token: string,
   orderId: string,

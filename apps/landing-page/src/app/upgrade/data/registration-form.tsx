@@ -7,7 +7,10 @@ import {
   PACKAGE_KEY,
   PREVIEW_MODE,
   TOKEN_KEY,
+  UpgradeApiError,
   createOrder,
+  listMyOrders,
+  pickPendingOrder,
   readSession,
   uploadAvatar,
   uploadDocument,
@@ -176,26 +179,39 @@ export default function RegistrationForm() {
 
     setBusy(true);
     try {
-      const order = await createOrder(readSession(TOKEN_KEY), readSession(PACKAGE_KEY), {
-        fullName: fullName.trim(),
-        address: address.trim(),
-        consentAt: new Date().toISOString(),
-        // Hanya keterangan berkasnya. Gambarnya dikirim terpisah di bawah,
-        // sebagai berkas mentah ke endpoint dokumen, dan tersimpan terenkripsi
-        // dengan masa simpan terbatas.
-        documents: {
-          ktp: describe(documents.ktp),
-          selfie: describe(documents.selfie)
+      const token = readSession(TOKEN_KEY);
+      let orderId: string;
+      try {
+        const order = await createOrder(token, readSession(PACKAGE_KEY), {
+          fullName: fullName.trim(),
+          address: address.trim(),
+          consentAt: new Date().toISOString(),
+          // Hanya keterangan berkasnya. Gambarnya dikirim terpisah di bawah,
+          // sebagai berkas mentah ke endpoint dokumen, dan tersimpan terenkripsi
+          // dengan masa simpan terbatas.
+          documents: {
+            ktp: describe(documents.ktp),
+            selfie: describe(documents.selfie)
+          }
+        });
+        orderId = order.id;
+      } catch (caught) {
+        // Pengajuan sebelumnya belum dibayar: lanjutkan pengajuan itu, jangan
+        // membuntukan pemohon. Dokumen yang baru dipilih menggantikan yang lama.
+        if (!(caught instanceof UpgradeApiError) || caught.code !== "MEMBERSHIP_ORDER_PENDING") {
+          throw caught;
         }
-      });
-      writeSession(ORDER_KEY, order.id);
+        const pending = pickPendingOrder(await listMyOrders(token));
+        if (!pending) throw caught;
+        orderId = pending.id;
+      }
+      writeSession(ORDER_KEY, orderId);
 
       // Berkas diunggah setelah pengajuan terbentuk karena dokumen menempel
       // pada satu pengajuan tertentu. Bila unggahan gagal, pengajuannya tetap
       // ada dan pemohon dapat mengulang tanpa kehilangan nomor invoice.
-      const token = readSession(TOKEN_KEY);
-      await uploadDocument(token, order.id, "ktp", documents.ktp!.file!);
-      await uploadDocument(token, order.id, "selfie", documents.selfie!.file!);
+      await uploadDocument(token, orderId, "ktp", documents.ktp!.file!);
+      await uploadDocument(token, orderId, "selfie", documents.selfie!.file!);
 
       // Foto profil bersifat opsional dan TIDAK boleh menggagalkan pengajuan:
       // bila unggahannya gagal, pengajuan tetap lanjut ke pembayaran dan foto
