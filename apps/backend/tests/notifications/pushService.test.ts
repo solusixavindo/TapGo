@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { PushService, type PushTokenStore } from "../../src/modules/notifications/application/PushService.js";
+import { generateKeyPairSync, createVerify } from "node:crypto";
 import {
   FcmClient,
+  ServiceAccountTokenProvider,
   parseServiceAccount,
   type PushSender
 } from "../../src/modules/notifications/infrastructure/FcmClient.js";
@@ -94,5 +96,46 @@ describe("FcmClient", () => {
     ).toBe("invalid_token");
     expect(await clientWith(500).client.send("t", { title: "a", body: "b" })).toBe("failed");
     expect(await clientWith(429).client.send("t", { title: "a", body: "b" })).toBe("failed");
+  });
+});
+
+describe("ServiceAccountTokenProvider", () => {
+  const { privateKey, publicKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+    publicKeyEncoding: { type: "spki", format: "pem" }
+  });
+  const account = { client_email: "svc@p.iam.gserviceaccount.com", private_key: privateKey };
+
+  it("menandatangani JWT RS256 yang sah dan menyimpan token sampai hampir kedaluwarsa", async () => {
+    let now = 1_700_000_000_000;
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ access_token: "tok-1", expires_in: 3600 }), { status: 200 })
+    ) as unknown as typeof fetch;
+    const provider = new ServiceAccountTokenProvider(account, "scope-x", fetchImpl, () => now);
+
+    expect(await provider.getAccessToken()).toBe("tok-1");
+    expect(await provider.getAccessToken()).toBe("tok-1");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    const body = (fetchImpl as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls[0]![1].body as URLSearchParams;
+    expect(body.get("grant_type")).toBe("urn:ietf:params:oauth:grant-type:jwt-bearer");
+    const [header, claims, signature] = body.get("assertion")!.split(".") as [string, string, string];
+    expect(JSON.parse(Buffer.from(header, "base64url").toString()).alg).toBe("RS256");
+    const parsed = JSON.parse(Buffer.from(claims, "base64url").toString());
+    expect(parsed.iss).toBe(account.client_email);
+    expect(parsed.scope).toBe("scope-x");
+    expect(parsed.exp - parsed.iat).toBe(3600);
+    const verifier = createVerify("RSA-SHA256").update(`${header}.${claims}`);
+    expect(verifier.verify(publicKey, Buffer.from(signature, "base64url"))).toBe(true);
+
+    now += 3_600_000; // lewat masa berlaku -> minta token baru
+    await provider.getAccessToken();
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("mengembalikan null saat Google menolak", async () => {
+    const fetchImpl = vi.fn(async () => new Response("{}", { status: 400 })) as unknown as typeof fetch;
+    expect(await new ServiceAccountTokenProvider(account, "s", fetchImpl).getAccessToken()).toBeNull();
   });
 });

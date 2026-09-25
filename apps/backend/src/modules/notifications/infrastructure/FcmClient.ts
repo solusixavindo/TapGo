@@ -1,4 +1,4 @@
-import { GoogleAuth } from "google-auth-library";
+import { createSign } from "node:crypto";
 
 export type PushMessage = {
   title: string;
@@ -14,7 +14,12 @@ export interface PushSender {
   send(token: string, message: PushMessage): Promise<PushSendResult>;
 }
 
-type ServiceAccount = { project_id?: string; client_email?: string; private_key?: string };
+type ServiceAccount = {
+  project_id?: string;
+  client_email?: string;
+  private_key?: string;
+  token_uri?: string;
+};
 
 /** Menerima JSON mentah atau base64-nya. Mengembalikan null bila tidak valid. */
 export function parseServiceAccount(raw: string | undefined): ServiceAccount | null {
@@ -33,7 +38,67 @@ export function parseServiceAccount(raw: string | undefined): ServiceAccount | n
 }
 
 const FCM_SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
+const DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token";
 const REQUEST_TIMEOUT_MS = 8000;
+
+const base64url = (input: Buffer | string) => Buffer.from(input).toString("base64url");
+
+/**
+ * Token akses OAuth2 dari service account (alur JWT-bearer Google), memakai
+ * node:crypto saja. Sengaja tanpa google-auth-library: pustaka itu menuntut
+ * Node 22+, sedangkan proyek ini menyatakan Node 20+. Token disimpan sampai
+ * hampir kedaluwarsa. Tidak pernah mencatat kunci atau token.
+ */
+export class ServiceAccountTokenProvider {
+  private cached: { token: string; expiresAtMs: number } | null = null;
+
+  constructor(
+    private readonly account: ServiceAccount,
+    private readonly scope: string,
+    private readonly fetchImpl: typeof fetch = fetch,
+    private readonly now: () => number = Date.now
+  ) {}
+
+  async getAccessToken(): Promise<string | null> {
+    if (this.cached && this.cached.expiresAtMs - 60_000 > this.now()) {
+      return this.cached.token;
+    }
+    const tokenUri = this.account.token_uri ?? DEFAULT_TOKEN_URI;
+    const issuedAt = Math.floor(this.now() / 1000);
+    const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+    const claims = base64url(
+      JSON.stringify({
+        iss: this.account.client_email,
+        scope: this.scope,
+        aud: tokenUri,
+        iat: issuedAt,
+        exp: issuedAt + 3600
+      })
+    );
+    const signature = createSign("RSA-SHA256")
+      .update(`${header}.${claims}`)
+      .sign(this.account.private_key!)
+      .toString("base64url");
+
+    const response = await this.fetchImpl(tokenUri, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion: `${header}.${claims}.${signature}`
+      }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+    });
+    if (!response.ok) return null;
+    const payload = (await response.json()) as { access_token?: string; expires_in?: number };
+    if (!payload.access_token) return null;
+    this.cached = {
+      token: payload.access_token,
+      expiresAtMs: this.now() + (payload.expires_in ?? 3600) * 1000
+    };
+    return payload.access_token;
+  }
+}
 
 /**
  * Pengirim FCM HTTP v1 memakai google-auth-library yang sudah menjadi
@@ -41,14 +106,14 @@ const REQUEST_TIMEOUT_MS = 8000;
  * kegagalan jaringan atau respons tak terduga menjadi "failed".
  */
 export class FcmClient implements PushSender {
-  private readonly auth: GoogleAuth;
+  private readonly auth: { getAccessToken(): Promise<string | null> };
 
   constructor(
     private readonly projectId: string,
     credentials: ServiceAccount,
     private readonly fetchImpl: typeof fetch = fetch
   ) {
-    this.auth = new GoogleAuth({ credentials, scopes: [FCM_SCOPE] });
+    this.auth = new ServiceAccountTokenProvider(credentials, FCM_SCOPE, fetchImpl);
   }
 
   async send(token: string, message: PushMessage): Promise<PushSendResult> {
