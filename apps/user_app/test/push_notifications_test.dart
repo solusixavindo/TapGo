@@ -105,6 +105,22 @@ void main() {
       expect(platform.deleted, isTrue);
     });
 
+    test('stop tetap menghapus token lokal walau pencabutan di server gagal',
+        () async {
+      platform = _FakePlatform();
+      registered = [];
+      final controller = TapGoPushController(
+        platform: platform,
+        register: (token) async => registered.add(token),
+        unregister: (token) async => throw StateError('401'),
+        onForeground: (_) {},
+        onOpened: (_) {},
+      );
+      await controller.start();
+      await controller.stop();
+      expect(platform.deleted, isTrue);
+    });
+
     test('stop mencabut token terdaftar dan berhenti mendengar', () async {
       platform = _FakePlatform();
       final controller = build();

@@ -468,6 +468,12 @@ class TapGoUserApp extends ConsumerWidget {
     ref.listen<bool>(_isAuthenticatedProvider, (previous, next) {
       if (next) {
         tapGoStartPush();
+      } else if (previous == true) {
+        // Semua jalur keluar (logout, sesi berakhir, ganti password) lewat
+        // sini: token lokal dihapus agar HP tak lagi menerima notifikasi akun
+        // yang sudah keluar. Logout manual sudah mencabut token lebih dulu;
+        // panggilan ini idempoten.
+        unawaited(tapGoStopPush());
       }
     });
     ref.listen<String?>(

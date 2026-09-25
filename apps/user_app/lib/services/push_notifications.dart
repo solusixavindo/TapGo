@@ -184,13 +184,20 @@ class TapGoPushController {
     _subscriptions.clear();
     final token = _token;
     _token = null;
-    try {
-      if (token != null) {
+    // Dua langkah terpisah: bila pencabutan di server gagal (sesi sudah mati,
+    // offline), token lokal tetap dihapus supaya FCM menganggapnya tidak
+    // berlaku dan HP ini berhenti menerima notifikasi akun tersebut.
+    if (token != null) {
+      try {
         await unregister(token);
+      } catch (error) {
+        _tapGoDebugLog('[TapGo Push] pencabutan di server dilewati: $error');
       }
+    }
+    try {
       await platform.deleteToken();
     } catch (error) {
-      _tapGoDebugLog('[TapGo Push] stop dilewati: $error');
+      _tapGoDebugLog('[TapGo Push] hapus token lokal dilewati: $error');
     }
   }
 }
