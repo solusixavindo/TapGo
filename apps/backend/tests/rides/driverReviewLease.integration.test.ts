@@ -709,17 +709,11 @@ describeIntegration("Stage R2.2 — driver review scope and lease", () => {
     expect(quote.id).toBeTruthy();
   });
 
-  it("35-40. founder, membership, finansial, dan auth state identik", async () => {
+  it("35-40. membership, finansial, dan auth state identik", async () => {
     const { token } = await createReviewer();
     const application = await createApplication();
 
     const snapshot = async () => ({
-      founderPlatinum: await prisma.founderProgramGrant.count({
-        where: { founderRole: "FOUNDER_PLATINUM", revokedAt: null }
-      }),
-      chairman: await prisma.founderProgramGrant.count({
-        where: { founderRole: "FOUNDER_CHAIRMAN", revokedAt: null }
-      }),
       userMemberships: await prisma.userMembership.count(),
       memberships: await prisma.membership.count(),
       wallets: await prisma.wallet.count(),
@@ -756,7 +750,5 @@ describeIntegration("Stage R2.2 — driver review scope and lease", () => {
         orderBy: { id: "asc" }
       })
     ).toEqual(authBefore);
-    expect(before.founderPlatinum).toBeLessThanOrEqual(10);
-    expect(before.chairman).toBeLessThanOrEqual(1);
   });
 });

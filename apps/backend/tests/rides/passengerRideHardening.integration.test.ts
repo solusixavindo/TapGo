@@ -419,7 +419,20 @@ async function cleanRideTables() {
   await prisma.rideDriverProfile.deleteMany();
   await prisma.rideIdempotencyRecord.deleteMany();
   await prisma.rideDriverApplication.deleteMany();
+  // Berkas uji lain (urutan berkas berubah mengikuti durasi) dapat meninggalkan
+  // baris bisnis yang menahan penghapusan user lewat foreign key RESTRICT.
+  await prisma.auditLog.deleteMany();
+  await prisma.commission.deleteMany();
+  await prisma.rewardTransaction.deleteMany();
+  await prisma.profitSharingDistribution.deleteMany();
   await prisma.walletTransaction.deleteMany();
+  await prisma.withdrawal.deleteMany();
+  await prisma.referralLevel.deleteMany();
+  await prisma.referral.deleteMany();
   await prisma.wallet.deleteMany();
+  await prisma.userMembership.deleteMany();
+  await prisma.membershipPayment.deleteMany();
+  await prisma.invoice.deleteMany();
+  await prisma.membershipOrder.deleteMany();
   await prisma.user.deleteMany();
 }

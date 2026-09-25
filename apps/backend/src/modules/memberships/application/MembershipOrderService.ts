@@ -918,10 +918,6 @@ export class MembershipOrderService {
       return;
     }
 
-    if (!(await this.canReceiveNewFounderBonus(tx, referral.sponsorId))) {
-      return;
-    }
-
     const sponsorTier = await this.getUserCurrentTier(tx, referral.sponsorId);
     const isBasicSponsor = sponsorTier === "BASIC";
     const commissionType = isBasicSponsor ? "BASIC_SPONSOR_BONUS" : "SPONSOR_BONUS";
@@ -1053,10 +1049,6 @@ export class MembershipOrderService {
         continue;
       }
 
-      if (!(await this.canReceiveNewFounderBonus(tx, upline.ancestorId))) {
-        continue;
-      }
-
       const uplineTier = await this.getUserCurrentTier(tx, upline.ancestorId);
       const unlockedLevel = levelLimitByTier[uplineTier];
 
@@ -1164,10 +1156,6 @@ export class MembershipOrderService {
     sourceUserId: string;
     membershipTier: "BASIC" | "SILVER" | "GOLD" | "PLATINUM";
   }) {
-    if (!(await this.canReceiveNewFounderBonus(tx, input.userId))) {
-      return;
-    }
-
     const directSilverCount = await tx.referral.count({
       where: {
         sponsorId: input.userId,
@@ -1345,22 +1333,6 @@ export class MembershipOrderService {
     });
 
     return user?.membership?.tier ?? "BASIC";
-  }
-
-  private async canReceiveNewFounderBonus(tx: PrismaTransaction, userId: string) {
-    const founderGrant = await tx.founderProgramGrant.findFirst({
-      where: {
-        userId
-      },
-      orderBy: { createdAt: "desc" },
-      include: { user: { select: { status: true } } }
-    });
-
-    if (!founderGrant) {
-      return true;
-    }
-
-    return !founderGrant.revokedAt && founderGrant.user.status === "ACTIVE";
   }
 
   private assertNoDowngrade(currentTier: MembershipTier, targetTier: MembershipTier) {

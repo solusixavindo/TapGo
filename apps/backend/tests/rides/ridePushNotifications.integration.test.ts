@@ -164,7 +164,6 @@ async function cleanTables() {
   await prisma.referralLevel.deleteMany();
   await prisma.referral.deleteMany();
   await prisma.wallet.deleteMany();
-  await prisma.founderProgramGrant.deleteMany();
   await prisma.userMembership.deleteMany();
   await prisma.membershipPayment.deleteMany();
   await prisma.invoice.deleteMany();

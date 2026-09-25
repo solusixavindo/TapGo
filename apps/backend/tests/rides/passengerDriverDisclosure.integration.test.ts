@@ -542,8 +542,7 @@ describeIntegration("Stage R2.4A — passenger driver disclosure", () => {
       userMemberships: await prisma.userMembership.count(),
       rewardTransactions: await prisma.rewardTransaction.count(),
       profitSharing: await prisma.profitSharingDistribution.count(),
-      referrals: await prisma.referral.count(),
-      founderGrants: await prisma.founderProgramGrant.count()
+      referrals: await prisma.referral.count()
     });
 
     const before = await snapshot();

@@ -63,7 +63,6 @@ export async function cleanDatabase() {
   await prisma.supportTicketMessage.deleteMany();
   await prisma.supportTicket.deleteMany();
   await prisma.memberIdentity.deleteMany();
-  await prisma.founderProgramGrant.deleteMany();
   await prisma.membershipDocument.deleteMany();
   await prisma.membershipPayment.deleteMany();
   await prisma.invoice.deleteMany();

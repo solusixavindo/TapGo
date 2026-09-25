@@ -17,8 +17,6 @@
     "db:seed": "tsx prisma/seed.ts",
     "seed:admin": "tsx prisma/seed-admin.ts",
     "seed:uat": "tsx prisma/seed-uat-credentials.ts",
-    "seed:founder-platinum": "tsx ../../scripts/seed-founder-platinum.ts",
-    "seed:founder-chairman": "tsx ../../scripts/seed-founder-chairman.ts",
     "promote:admin": "tsx prisma/promote-admin.ts",
     "audit:production-data": "tsx ../../scripts/audit-production-data.ts",
     "cleanup:prelaunch": "tsx ../../scripts/pre-launch-cleanup.ts",

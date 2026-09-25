@@ -8,7 +8,6 @@ import { requireAuth, requireRoles } from "../../../core/security/authContext.js
 import { maskForOperator } from "../../../core/security/adminMasking.js";
 import { AdminConsoleService } from "../application/AdminConsoleService.js";
 import { SystemHealthService } from "../application/SystemHealthService.js";
-import { assertFounderProgramEnabled } from "../application/founderProgramGate.js";
 import { ErrorMonitoringService } from "../application/ErrorMonitoringService.js";
 import { AdminConsoleController } from "./admin-console.controller.js";
 import { WalletService } from "../../wallets/application/WalletService.js";
@@ -26,12 +25,6 @@ import {
 } from "../../memberships/presentation/membership.validators.js";
 import {
   adminCommissionQuerySchema,
-  adminFounderChairmanDetailSchema,
-  adminFounderChairmanGrantSchema,
-  adminFounderChairmanStatusSchema,
-  adminFounderPlatinumDetailSchema,
-  adminFounderPlatinumGrantSchema,
-  adminFounderPlatinumStatusSchema,
   adminGenericStatusQuerySchema,
   adminInvoiceQuerySchema,
   adminAuditLogQuerySchema,
@@ -85,18 +78,6 @@ const documentController = new MembershipDocumentController(
 const driverDocumentController = new DriverDocumentController(
   new DriverDocumentService(prisma)
 );
-
-// Gagal cepat di rute (sebelum validasi body). Gerbang yang sama juga dipasang di
-// AdminConsoleService karena skrip operasi memanggil service tanpa lewat rute.
-// Dipasang SETELAH requireRoles supaya penolakan izin tetap didahulukan.
-function requireFounderProgramEnabled(_req: Request, _res: Response, next: NextFunction) {
-  try {
-    assertFounderProgramEnabled();
-    next();
-  } catch (error) {
-    next(error);
-  }
-}
 
 export const adminConsoleRouter = Router();
 
@@ -204,56 +185,6 @@ adminConsoleRouter.post(
   requireRoles("SUPER_ADMIN"),
   validateRequest(adminMemberRequestActionSchema),
   asyncHandler(controller.rejectMemberRequest)
-);
-adminConsoleRouter.post(
-  "/founder-chairman/grant",
-  requireRoles("SUPER_ADMIN"),
-  requireFounderProgramEnabled,
-  validateRequest(adminFounderChairmanGrantSchema),
-  asyncHandler(controller.grantFounderChairman)
-);
-adminConsoleRouter.get(
-  "/founder-chairman",
-  requireRoles("SUPER_ADMIN"),
-  asyncHandler(controller.founderChairman)
-);
-adminConsoleRouter.get(
-  "/founder-chairman/:founderId",
-  requireRoles("SUPER_ADMIN"),
-  validateRequest(adminFounderChairmanDetailSchema),
-  asyncHandler(controller.founderChairmanDetail)
-);
-adminConsoleRouter.patch(
-  "/founder-chairman/:founderId/status",
-  requireRoles("SUPER_ADMIN"),
-  requireFounderProgramEnabled,
-  validateRequest(adminFounderChairmanStatusSchema),
-  asyncHandler(controller.updateFounderChairmanStatus)
-);
-adminConsoleRouter.post(
-  "/founder-platinum/grants",
-  requireRoles("SUPER_ADMIN"),
-  requireFounderProgramEnabled,
-  validateRequest(adminFounderPlatinumGrantSchema),
-  asyncHandler(controller.grantFounderPlatinum)
-);
-adminConsoleRouter.get(
-  "/founder-platinum",
-  requireRoles("SUPER_ADMIN"),
-  asyncHandler(controller.founderPlatinumList)
-);
-adminConsoleRouter.get(
-  "/founder-platinum/:founderId",
-  requireRoles("SUPER_ADMIN"),
-  validateRequest(adminFounderPlatinumDetailSchema),
-  asyncHandler(controller.founderPlatinumDetail)
-);
-adminConsoleRouter.patch(
-  "/founder-platinum/:founderId/status",
-  requireRoles("SUPER_ADMIN"),
-  requireFounderProgramEnabled,
-  validateRequest(adminFounderPlatinumStatusSchema),
-  asyncHandler(controller.updateFounderPlatinumStatus)
 );
 adminConsoleRouter.get("/payments", requireRoles("SUPER_ADMIN"), validateRequest(adminPaymentQuerySchema), asyncHandler(controller.payments));
 adminConsoleRouter.get("/invoices", requireRoles("SUPER_ADMIN"), validateRequest(adminInvoiceQuerySchema), asyncHandler(controller.invoices));

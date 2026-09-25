@@ -11,9 +11,6 @@ import { isAdminRole, isTopLevelRole, roleSatisfies } from "../../../core/securi
  * pernah diberikan otomatis — tidak oleh migration, tidak oleh seed, tidak
  * oleh startup. Pemegang pertama hanya lahir dari CLI bootstrap sekali pakai.
  *
- * Founder Platinum dan Chairman BUKAN otoritas keamanan sistem dan tidak
- * pernah menjadi syarat di berkas ini.
- *
  * Seluruh pemeriksaan membaca database pada setiap permintaan, sehingga
  * pencabutan maupun penurunan role berlaku pada request berikutnya meski
  * token lama masih sah. JWT tidak pernah menjadi sumber kebenaran scope.

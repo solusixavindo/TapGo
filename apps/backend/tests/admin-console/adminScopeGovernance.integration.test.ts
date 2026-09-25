@@ -754,7 +754,7 @@ describeIntegration("Stage R2.3 — admin scope governance", () => {
     expect(quote.id).toBeTruthy();
   });
 
-  it("42-46,49,50. founder, membership, finansial, lease, dan auth state identik", async () => {
+  it("42-46,49,50. membership, finansial, lease, dan auth state identik", async () => {
     const manager = await createManager();
     const admin = await createUser("ADMIN");
     const applicant = await createUser("USER");
@@ -763,12 +763,6 @@ describeIntegration("Stage R2.3 — admin scope governance", () => {
     });
 
     const snapshot = async () => ({
-      founderPlatinum: await prisma.founderProgramGrant.count({
-        where: { founderRole: "FOUNDER_PLATINUM", revokedAt: null }
-      }),
-      chairman: await prisma.founderProgramGrant.count({
-        where: { founderRole: "FOUNDER_CHAIRMAN", revokedAt: null }
-      }),
       userMemberships: await prisma.userMembership.count(),
       memberships: await prisma.membership.count(),
       wallets: await prisma.wallet.count(),
@@ -811,8 +805,6 @@ describeIntegration("Stage R2.3 — admin scope governance", () => {
         orderBy: { id: "asc" }
       })
     ).toEqual(authBefore);
-    expect(before.founderPlatinum).toBeLessThanOrEqual(10);
-    expect(before.chairman).toBeLessThanOrEqual(1);
   });
 
   it("metadata audit governance hanya memuat kunci yang di-allowlist", async () => {

@@ -245,11 +245,6 @@ enum AbuseFlagSeverity {
   HIGH
 }
 
-enum FounderRole {
-  FOUNDER_CHAIRMAN
-  FOUNDER_PLATINUM
-}
-
 model User {
   id           String        @id @default(uuid()) @db.Uuid
   role         UserRole      @default(USER)
@@ -315,8 +310,6 @@ model User {
   supportTicketMessages      SupportTicketMessage[]
   registrationEvents         RegistrationEvent[]         @relation("RegistrationEventUser")
   abuseFlags                 AbuseFlag[]                 @relation("AbuseFlagUser")
-  founderProgramGrants       FounderProgramGrant[]       @relation("FounderGrantUser")
-  founderProgramGrantActions FounderProgramGrant[]       @relation("FounderGrantActor")
   authChallenges             AuthChallenge[]
   adminScopeGrants           AdminScopeGrant[]           @relation("AdminScopeSubject")
   adminScopeGrantsIssued     AdminScopeGrant[]           @relation("AdminScopeGrantor")
@@ -501,7 +494,6 @@ model Membership {
   benefits             MembershipBenefit[]
   userMemberships      UserMembership[]
   orders               MembershipOrder[]
-  founderProgramGrants FounderProgramGrant[]
 
   @@index([tier, isActive])
   @@map("memberships")
@@ -513,7 +505,6 @@ model UserMembership {
   membershipId String               @map("membership_id") @db.Uuid
   orderId      String?              @unique @map("order_id") @db.Uuid
   status       UserMembershipStatus @default(ACTIVE)
-  founderRole  FounderRole?         @map("founder_role")
   activeAt     DateTime             @default(now()) @map("active_at")
   expiresAt    DateTime?            @map("expires_at")
   metadata     Json?
@@ -523,37 +514,10 @@ model UserMembership {
   user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   membership          Membership           @relation(fields: [membershipId], references: [id])
   order               MembershipOrder?     @relation(fields: [orderId], references: [id])
-  founderProgramGrant FounderProgramGrant?
 
   @@index([userId, status])
   @@index([membershipId, status])
-  @@index([founderRole, status])
   @@map("user_memberships")
-}
-
-model FounderProgramGrant {
-  id               String      @id @default(uuid()) @db.Uuid
-  userId           String      @map("user_id") @db.Uuid
-  membershipId     String      @map("membership_id") @db.Uuid
-  userMembershipId String      @unique @map("user_membership_id") @db.Uuid
-  founderRole      FounderRole @map("founder_role")
-  grantedBy        String?     @map("granted_by") @db.Uuid
-  reason           String?
-  revokedAt        DateTime?   @map("revoked_at")
-  revokedBy        String?     @map("revoked_by") @db.Uuid
-  metadata         Json?
-  createdAt        DateTime    @default(now()) @map("created_at")
-  updatedAt        DateTime    @updatedAt @map("updated_at")
-
-  user           User           @relation("FounderGrantUser", fields: [userId], references: [id], onDelete: Cascade)
-  actor          User?          @relation("FounderGrantActor", fields: [grantedBy], references: [id], onDelete: SetNull)
-  membership     Membership     @relation(fields: [membershipId], references: [id])
-  userMembership UserMembership @relation(fields: [userMembershipId], references: [id], onDelete: Cascade)
-
-  @@index([founderRole, revokedAt])
-  @@index([userId, founderRole])
-  @@index([grantedBy, createdAt])
-  @@map("founder_program_grants")
 }
 
 model MembershipOrder {

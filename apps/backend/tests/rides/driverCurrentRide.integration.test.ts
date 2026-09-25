@@ -298,7 +298,7 @@ describe.skipIf(!runIntegration)("Stage R2.5A — current ride driver restoratio
     expect(quote.status).toBe(201);
   });
 
-  it("Membership/Founder/Chairman dan financial Business Engine tidak berubah", async () => {
+  it("Membership dan financial Business Engine tidak berubah", async () => {
     const before = await businessSnapshot();
     const driver = await createDriver({ status: "ACTIVE" });
     await createRideOrder(driver, "IN_TRIP");
@@ -333,7 +333,6 @@ async function cleanTables() {
   await prisma.referralLevel.deleteMany();
   await prisma.referral.deleteMany();
   await prisma.wallet.deleteMany();
-  await prisma.founderProgramGrant.deleteMany();
   await prisma.userMembership.deleteMany();
   await prisma.membershipPayment.deleteMany();
   await prisma.invoice.deleteMany();
@@ -499,7 +498,6 @@ async function businessSnapshot() {
     rewards,
     profitSharing,
     referrals,
-    founderProgramGrants,
     userMemberships,
     membershipOrders,
     invoices,
@@ -511,7 +509,6 @@ async function businessSnapshot() {
     prisma.rewardTransaction.count(),
     prisma.profitSharingDistribution.count(),
     prisma.referral.count(),
-    prisma.founderProgramGrant.count(),
     prisma.userMembership.count(),
     prisma.membershipOrder.count(),
     prisma.invoice.count(),
@@ -524,7 +521,6 @@ async function businessSnapshot() {
     rewards,
     profitSharing,
     referrals,
-    founderProgramGrants,
     userMemberships,
     membershipOrders,
     invoices,

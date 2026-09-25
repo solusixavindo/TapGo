@@ -31,8 +31,6 @@ const ACTION_LABELS: Record<string, string> = {
   DRIVER_APPLICATION_REJECTED: "Pendaftaran driver ditolak",
   RIDE_DRIVER_STATUS_CHANGED: "Status driver diubah",
   RIDE_VEHICLE_VERIFICATION_CHANGED: "Verifikasi kendaraan diubah",
-  FOUNDER_PLATINUM_GRANTED: "Founder Platinum diberikan",
-  FOUNDER_CHAIRMAN_GRANTED: "Founder Chairman diberikan",
   SUPPORT_TICKET_UPDATED: "Tiket bantuan diperbarui",
   ADMIN_ROLE_ASSIGNED: "Peran admin diberikan"
 };
