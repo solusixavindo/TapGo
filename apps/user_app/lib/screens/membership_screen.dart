@@ -129,17 +129,36 @@ Widget? tapGoSuperMenuDestinationForLabelForTests(String label) =>
     _superMenuDestinationForLabel(label);
 
 const _tapGoPrivacyPolicyContent = '''
-PT. TapGo Lion Indonesia mengumpulkan data yang diperlukan untuk menjalankan akun Basic dan layanan digital TapGo.
+PT. TapGo Lion Indonesia (TapGo) menjelaskan data yang dikumpulkan oleh aplikasi TapGo untuk Android. Terakhir diperbarui 25 September 2026.
 
-Data yang dikumpulkan dapat meliputi nama, nomor HP, alamat, nomor KTP jika digunakan, foto KTP jika digunakan, foto diri jika digunakan, serta riwayat permintaan layanan akun.
+DATA YANG DIKUMPULKAN APLIKASI
+- Akun: nama, nomor HP, email (bila Anda menambahkannya), dan password (disimpan dalam bentuk hash, bukan teks asli).
+- Lokasi: lokasi perangkat hanya saat Anda memakai layanan Ojek, untuk menentukan titik jemput dan tujuan serta memantau perjalanan. Aplikasi tidak melacak lokasi Anda saat layanan itu tidak dipakai.
+- Transaksi: riwayat saldo TapGoPay, transfer, dan pembelian PPOB.
+- Pesan: chat dengan driver selama perjalanan aktif dan tiket bantuan ke tim TapGo.
+- Foto profil: hanya bila Anda memilih mengunggahnya lewat kamera atau galeri.
+- Perangkat: ID dan sidik perangkat serta versi aplikasi, untuk keamanan akun dan mencegah penyalahgunaan.
 
-Data digunakan untuk registrasi, verifikasi akun, pengelolaan status Basic, keamanan akun, serta customer support.
+NOTIFIKASI
+Aplikasi meminta izin notifikasi. Bila Anda mengizinkan, token perangkat yang dibuat oleh Firebase Cloud Messaging (Google) disimpan pada akun Anda untuk mengirim notifikasi perjalanan, saldo, dan pembayaran. Isi notifikasi tidak memuat nominal, nama, atau alamat. Token dihapus dari akun saat Anda keluar. Anda dapat menolak atau mematikan notifikasi kapan saja di pengaturan HP tanpa mengurangi fungsi lain.
 
-TapGo menerapkan pembatasan akses, autentikasi, dan pencatatan transaksi untuk menjaga keamanan data. Data transaksi penting dapat disimpan sesuai kebutuhan hukum, audit, dan penyelesaian kewajiban layanan.
+DOKUMEN IDENTITAS
+Aplikasi Android tidak mengumpulkan KTP maupun swafoto. Dokumen tersebut hanya diminta di situs https://tapgolion.id saat membeli membership; perlakuannya dijelaskan di kebijakan privasi situs tersebut.
 
-Pengguna dapat meminta penghapusan atau penonaktifan akun melalui menu Hapus Akun. Permintaan akan ditinjau agar tidak menghapus data transaksi penting yang wajib dipertahankan untuk audit dan kepatuhan.
+TUJUAN PENGGUNAAN
+Data dipakai untuk registrasi dan login, keamanan akun, menjalankan layanan Ojek, saldo, dan PPOB, pengiriman notifikasi, serta dukungan pelanggan.
 
-Kontak support: support@tapgolion.id, WhatsApp +62 838-0025-5588, alamat Jalan Kp. Pasir Gendok No. 11, Desa Bojongleles, Kecamatan Rangkasbitung, Kabupaten Lebak, Banten, Indonesia.
+PIHAK KETIGA
+Google Firebase untuk pengiriman notifikasi, dan penyedia layanan PPOB untuk memproses pembelian Anda. Pihak tersebut hanya menerima data yang diperlukan. TapGo tidak menjual data pribadi Anda.
+
+KEAMANAN DAN PENYIMPANAN
+TapGo menerapkan autentikasi, pembatasan akses, dan pencatatan transaksi untuk menjaga keamanan data. Data transaksi penting disimpan sesuai kebutuhan hukum, audit, dan penyelesaian kewajiban layanan.
+
+PENGHAPUSAN AKUN
+Anda dapat meminta penghapusan atau penonaktifan akun melalui menu Hapus Akun. Permintaan ditinjau agar tidak menghapus data transaksi yang wajib dipertahankan untuk audit dan kepatuhan.
+
+KONTAK
+support@tapgolion.id, WhatsApp +62 838-0025-5588, Jalan Kp. Pasir Gendok No. 11, Desa Bojongleles, Kecamatan Rangkasbitung, Kabupaten Lebak, Banten, Indonesia.
 ''';
 
 const _tapGoTermsContent = '''

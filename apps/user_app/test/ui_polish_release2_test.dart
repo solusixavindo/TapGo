@@ -151,4 +151,28 @@ void main() {
           tapGoReadableTheme(brightness: Brightness.dark).colorScheme.surface);
     });
   });
+
+  testWidgets(
+      'kebijakan privasi: menjelaskan notifikasi dan tidak mengaku mengumpulkan KTP',
+      (tester) async {
+    await pumpDashboard(tester);
+    await tester.tap(find.text('Akun').last);
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await tester.ensureVisible(find.text('Kebijakan Privasi'));
+    await tester.tap(find.text('Kebijakan Privasi'));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.textContaining('NOTIFIKASI'), findsOneWidget);
+    expect(find.textContaining('Firebase Cloud Messaging'), findsOneWidget);
+    expect(find.textContaining('Token dihapus dari akun saat Anda keluar'),
+        findsOneWidget);
+    expect(find.textContaining('Aplikasi Android tidak mengumpulkan KTP'),
+        findsOneWidget);
+    // Klaim lama yang tidak sesuai kenyataan aplikasi.
+    expect(find.textContaining('foto KTP jika digunakan'), findsNothing);
+    expect(find.textContaining('nomor KTP jika digunakan'), findsNothing);
+  });
 }
