@@ -3,6 +3,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -34,6 +36,7 @@ import 'features/ppob/presentation/ppob_home_screen.dart';
 part 'data/demo_user_session.dart';
 part 'data/demo_user_session_models.dart';
 part 'services/activity_feed.dart';
+part 'services/push_notifications.dart';
 part 'services/ride_tracking.dart';
 part 'services/saved_places.dart';
 part 'screens/auth_screen.dart';
@@ -462,6 +465,11 @@ class TapGoUserApp extends ConsumerWidget {
     }
 
     ref.listen<bool>(_isAuthenticatedProvider, refetchPpob);
+    ref.listen<bool>(_isAuthenticatedProvider, (previous, next) {
+      if (next) {
+        tapGoStartPush();
+      }
+    });
     ref.listen<String?>(
       _demoSessionProvider.select((session) => session.userId),
       refetchPpob,

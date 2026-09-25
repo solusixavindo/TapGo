@@ -26,6 +26,8 @@ plugins {
     // Studio/Flutter bawaan.
     id("com.android.application") version "8.13.2" apply false
     id("org.jetbrains.kotlin.android") version "2.3.20" apply false
+    // Membaca app/google-services.json untuk konfigurasi FCM.
+    id("com.google.gms.google-services") version "4.4.3" apply false
 }
 
 include(":app")

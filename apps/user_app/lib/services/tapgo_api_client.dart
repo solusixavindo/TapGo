@@ -550,6 +550,22 @@ class _TapGoApiClient {
     await _dio.post<void>(_apiPath('auth/logout'));
   }
 
+  /// Mendaftarkan token push perangkat ini ke akun yang sedang masuk.
+  Future<void> registerPushToken(String token) async {
+    await _dio.post<void>(
+      _apiPath('notifications/push-token'),
+      data: {'token': token, 'platform': 'android'},
+    );
+  }
+
+  /// Mencabut token push perangkat ini dari akun. Best-effort saat logout.
+  Future<void> unregisterPushToken(String token) async {
+    await _dio.delete<void>(
+      _apiPath('notifications/push-token'),
+      data: {'token': token},
+    );
+  }
+
   /// Mengganti password akun yang sedang masuk. Backend menjawab 204 tanpa
   /// badan dan mencabut SEMUA sesi — termasuk sesi pemanggil — sehingga
   /// pemanggil wajib membersihkan sesi lokal segera setelah sukses.

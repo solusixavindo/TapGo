@@ -301,6 +301,9 @@ Future<void> _confirmAndLogout(BuildContext context, WidgetRef ref) async {
   // Best-effort: kegagalan jaringan tidak boleh mencegah pengguna keluar di
   // perangkatnya sendiri, tapi kita tetap mencoba supaya refresh token yang
   // mungkin sudah bocor tidak bisa dipakai lagi setelah pengguna logout.
+  // Token push dicabut lebih dulu, selagi masih login, agar HP ini berhenti
+  // menerima notifikasi akun tersebut.
+  await tapGoStopPush();
   try {
     await _apiClient.logout();
   } catch (error) {
