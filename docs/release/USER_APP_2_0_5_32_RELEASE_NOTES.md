@@ -25,6 +25,8 @@ Tanggal: 2026-09-25. Dasar: hasil uji HP pada 2.0.4+31.
 - **Notifikasi "Pesan baru dari driver/penumpang"** (tanpa isi pesan), maksimal satu per 20 detik per percakapan.
   Mengetuknya membuka layar chat.
 - **Balasan cepat** satu ketukan: "Saya sudah di titik jemput", "Tunggu sebentar ya", "Saya di seberang jalan", "Terima kasih".
+- **Pintasan chat di Beranda** selama perjalanan berjalan: strip tipis "Chat dengan driver" (tanpa pesan baru) atau kartu
+  menonjol dengan lencana, cuplikan pesan, dan dua balasan cepat (ada pesan baru dari driver). Tidak tampil bila tidak ada perjalanan berjalan.
 - Aturan waktu: bisa membalas selama perjalanan dan 2 jam setelah selesai; bisa dibaca 7 hari; setelah itu hilang dari kotak masuk.
   Percakapan yang sudah tertutup tampil dengan ikon kunci dan tanpa kolom tulis.
 - Perbaikan tersembunyi: pesan baru kini muncul lewat polling tiap 4 detik (Socket.IO nonaktif di produksi sehingga

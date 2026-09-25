@@ -136,6 +136,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                 ),
               ),
               const SizedBox(height: 18),
+              const _ChatShortcut(),
               _DashboardEntrance(
                 order: 2,
                 child: Transform.translate(
@@ -4229,6 +4230,212 @@ class _ConversationCard extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Pintasan chat di Beranda selama ada perjalanan yang sedang berjalan.
+///
+/// - Tanpa pesan baru: strip tipis "Chat dengan driver".
+/// - Ada pesan baru dari driver: kartu menonjol dengan lencana, cuplikan pesan,
+///   dan dua balasan cepat yang terkirim tanpa membuka chat.
+/// - Tidak ada perjalanan berjalan: tidak menampilkan apa pun (tata letak Beranda
+///   tidak berubah).
+class _ChatShortcut extends ConsumerStatefulWidget {
+  const _ChatShortcut();
+
+  @override
+  ConsumerState<_ChatShortcut> createState() => _ChatShortcutState();
+}
+
+class _ChatShortcutState extends ConsumerState<_ChatShortcut> {
+  bool _sending = false;
+
+  TapGoChatConversation? _current(List<TapGoChatConversation> items) {
+    for (final item in items) {
+      if (item.isActive && item.canSend) return item;
+    }
+    return null;
+  }
+
+  Future<void> _open(TapGoChatConversation conversation) async {
+    await Navigator.of(context).push<void>(
+      _tapGoPageRoute(
+        (_) => RideChatScreen(
+          rideReference: conversation.rideReference,
+          canSend: conversation.canSend,
+        ),
+      ),
+    );
+    if (mounted) ref.invalidate(_chatConversationsProvider);
+  }
+
+  Future<void> _quickReply(
+    TapGoChatConversation conversation,
+    String text,
+  ) async {
+    if (_sending) return;
+    setState(() => _sending = true);
+    try {
+      final session = ref.read(_demoSessionProvider);
+      _apiClient.setAccessToken(session.accessToken);
+      await _apiClient.sendChatMessage(conversation.rideReference, text);
+      unawaited(_apiClient.markChatRead(conversation.rideReference));
+      if (mounted) {
+        _TapGoSnackbar.success(context, 'Balasan terkirim.');
+        ref.invalidate(_chatConversationsProvider);
+      }
+    } catch (error) {
+      if (mounted) {
+        _TapGoSnackbar.error(context, 'Balasan belum terkirim. Coba lagi.');
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = ref.watch(_chatConversationsProvider).valueOrNull ??
+        const <TapGoChatConversation>[];
+    final conversation = _current(items);
+    if (conversation == null) {
+      return const SizedBox.shrink();
+    }
+    final colorScheme = Theme.of(context).colorScheme;
+    final unread = conversation.unreadCount;
+    final hasNew = unread > 0 && !conversation.lastFromMe;
+
+    final header = Row(
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: _brandBlue.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(
+            Icons.chat_bubble_outline_rounded,
+            color: _brandBlue,
+            size: 19,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                hasNew ? 'Driver Anda' : 'Chat dengan driver',
+                style: TextStyle(
+                  color: colorScheme.onSurface,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                hasNew
+                    ? (conversation.lastText ?? '')
+                    : 'Ketuk untuk menyapa atau memberi arahan.',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: hasNew
+                      ? colorScheme.onSurface
+                      : colorScheme.onSurfaceVariant,
+                  fontSize: 12.5,
+                  fontWeight: hasNew ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (hasNew)
+          Container(
+            key: const ValueKey('chat_shortcut_badge'),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE51E3E),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              unread > 99 ? '99+' : '$unread',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          )
+        else
+          Icon(
+            Icons.chevron_right_rounded,
+            color: colorScheme.onSurfaceVariant,
+          ),
+      ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Material(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          key: ValueKey(hasNew ? 'chat_shortcut_card' : 'chat_shortcut_strip'),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: hasNew ? _brandBlue : colorScheme.outlineVariant,
+              width: hasNew ? 1.5 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () => _open(conversation),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                  child: header,
+                ),
+              ),
+              if (hasNew)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                  child: Wrap(
+                    spacing: 8,
+                    children: [
+                      for (var i = 0; i < 2; i++)
+                        ActionChip(
+                          key: ValueKey('chat_shortcut_chip_$i'),
+                          label: Text(tapGoQuickReplies[i]),
+                          backgroundColor: colorScheme.surface,
+                          side: BorderSide(
+                            color: _brandBlue.withValues(alpha: 0.55),
+                          ),
+                          shape: const StadiumBorder(),
+                          labelStyle: TextStyle(
+                            color: colorScheme.onSurface,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          onPressed: _sending
+                              ? null
+                              : () => _quickReply(
+                                    conversation,
+                                    tapGoQuickReplies[i],
+                                  ),
+                        ),
+                    ],
+                  ),
+                ),
+            ],
           ),
         ),
       ),

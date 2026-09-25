@@ -301,4 +301,116 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
   });
+
+  group('pintasan chat di Beranda', () {
+    Future<FakeApi> pumpHome(
+      WidgetTester tester,
+      List<Map<String, dynamic>> conversations, {
+      Brightness brightness = Brightness.light,
+    }) async {
+      final api = FakeApi({
+        'GET /chat/conversations': (_) => FakeReply.ok(conversations),
+        'GET /support/tickets': (_) => FakeReply.ok([]),
+        'POST /chat/rides/RID-A2B3C4D5E6/messages': (call) => FakeReply.ok(
+              msg('m9', (call.body as Map)['message'] as String, 'USER'),
+            ),
+        'POST /chat/rides/RID-A2B3C4D5E6/read': (_) =>
+            FakeReply.ok({'updated': 1}),
+      });
+      tapGoSetHttpAdapterForTests(api);
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            tapGoSessionProviderForTest.overrideWith(
+              (ref) => DemoClientSession.initial().copyWith(
+                accessToken: 'token-uji',
+                isDemoMode: false,
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            theme: tapGoReadableTheme(brightness: brightness),
+            home: const TapGoDashboard(),
+          ),
+        ),
+      );
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      return api;
+    }
+
+    testWidgets('A. tanpa perjalanan berjalan: tidak ada pintasan',
+        (tester) async {
+      await pumpHome(tester, []);
+      expect(find.byKey(const ValueKey('chat_shortcut_strip')), findsNothing);
+      expect(find.byKey(const ValueKey('chat_shortcut_card')), findsNothing);
+    });
+
+    testWidgets('A. hanya perjalanan selesai/tertutup: tidak ada pintasan',
+        (tester) async {
+      await pumpHome(tester, [
+        conversation(status: 'COMPLETED', canSend: false, unread: 0),
+      ]);
+      expect(find.byKey(const ValueKey('chat_shortcut_strip')), findsNothing);
+      expect(find.byKey(const ValueKey('chat_shortcut_card')), findsNothing);
+    });
+
+    testWidgets('B. perjalanan berjalan tanpa pesan baru: strip tipis',
+        (tester) async {
+      await pumpHome(tester, [conversation(unread: 0, text: null)]);
+      expect(find.byKey(const ValueKey('chat_shortcut_strip')), findsOneWidget);
+      expect(find.text('Chat dengan driver'), findsOneWidget);
+      expect(find.byKey(const ValueKey('chat_shortcut_card')), findsNothing);
+      expect(find.byKey(const ValueKey('chat_shortcut_badge')), findsNothing);
+    });
+
+    testWidgets(
+        'C. pesan baru dari driver: kartu dengan lencana, cuplikan, dan chip',
+        (tester) async {
+      await pumpHome(tester, [conversation()]);
+      expect(find.byKey(const ValueKey('chat_shortcut_card')), findsOneWidget);
+      expect(find.byKey(const ValueKey('chat_shortcut_badge')), findsOneWidget);
+      expect(find.text('Saya sudah di depan'), findsOneWidget);
+      expect(
+          find.byKey(const ValueKey('chat_shortcut_chip_0')), findsOneWidget);
+      expect(
+          find.byKey(const ValueKey('chat_shortcut_chip_1')), findsOneWidget);
+    });
+
+    testWidgets('C. mengetuk chip mengirim balasan sekali tanpa membuka chat',
+        (tester) async {
+      final api = await pumpHome(tester, [conversation()]);
+      await tester.tap(find.byKey(const ValueKey('chat_shortcut_chip_0')));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      final sends = api.callsTo('POST /chat/rides/RID-A2B3C4D5E6/messages');
+      expect(sends, hasLength(1));
+      expect((sends.single.body as Map)['message'], tapGoQuickReplies[0]);
+      expect(find.text('Chat Perjalanan'), findsNothing);
+    });
+
+    testWidgets('C. mengetuk kartu membuka layar chat', (tester) async {
+      final api = await pumpHome(tester, [conversation()]);
+      api.calls.clear();
+      await tester.tap(find.text('Driver Anda'));
+      for (var i = 0; i < 15; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.text('Chat Perjalanan'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets(
+        'tema gelap: kartu memakai warna permukaan tema dan tanpa galat',
+        (tester) async {
+      await pumpHome(tester, [conversation()], brightness: Brightness.dark);
+      expect(find.byKey(const ValueKey('chat_shortcut_card')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
 }
