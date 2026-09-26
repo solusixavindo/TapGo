@@ -45,6 +45,10 @@ android {
 
     buildTypes {
         release {
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             // Signing release dipasang HANYA bila materialnya benar-benar ada.
             if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")
