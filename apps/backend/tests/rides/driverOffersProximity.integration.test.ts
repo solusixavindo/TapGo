@@ -26,8 +26,8 @@ let expireStaleRideSearches: typeof import("../../src/modules/rides/application/
 let backendEnv: typeof import("../../src/config/env.js").env;
 let sequence = 0;
 
-function service() {
-  return new RideServiceClass(prisma as never, {} as never, {} as never);
+function service(push?: PushNotifier) {
+  return new RideServiceClass(prisma as never, {} as never, {} as never, undefined, push);
 }
 
 describe.skipIf(!runIntegration)("Tawaran berbasis jarak dan batas waktu pencarian (D2)", () => {
@@ -254,5 +254,49 @@ describe.skipIf(!runIntegration)("Tawaran berbasis jarak dan batas waktu pencari
     } finally {
       backendEnv.RIDE_OFFER_PROXIMITY_ENABLED = true;
     }
+  });
+
+  it("pesanan baru: hanya driver ONLINE terdekat yang sesuai yang dapat push, tanpa alamat", async () => {
+    const near = await createDriver();
+    const far = await createDriver();
+    await prisma.rideDriverLocation.updateMany({
+      where: { driverProfileId: far.profile.id },
+      data: { lat: new Prisma.Decimal(north(30).lat.toFixed(7)) }
+    });
+    const offline = await createDriver();
+    await prisma.rideDriverProfile.update({ where: { id: offline.profile.id }, data: { availability: "OFFLINE" } });
+    const stale = await createDriver(300);
+    const passenger = await createUser();
+    const pickup = north(1);
+    const quote = await prisma.rideQuote.create({
+      data: {
+        userId: passenger.id, serviceType: "MOTORCYCLE",
+        pickupLat: new Prisma.Decimal(pickup.lat.toFixed(7)), pickupLng: new Prisma.Decimal(pickup.lng.toFixed(7)),
+        pickupAddress: "Jalan Rahasia 1", dropoffLat: new Prisma.Decimal("-6.1000000"), dropoffLng: new Prisma.Decimal("106.9000000"),
+        dropoffAddress: "Tujuan", distanceMeters: 3000, durationSeconds: 600, etaSeconds: 300,
+        baseFare: 5000, distanceFare: 3000, serviceFee: 1000, subtotalFare: 9000, totalFare: 9000,
+        fareRuleVersion: "RIDE_FARE_RULE_V1", roundingRule: "ROUND_TO_NEAREST_100_HALF_UP", distanceSource: "HAVERSINE_LOCAL_V1",
+        expiresAt: new Date(Date.now() + 3600_000)
+      }
+    });
+    const push = new RecordingPush();
+    await service(push).createOrder({ userId: passenger.id, quoteId: quote.id, paymentMethod: "CASH" });
+    await flush();
+    expect(push.sent.map((p) => p.userId)).toEqual([near.user.id]);
+    expect(push.sent[0]!.message.data?.type).toBe("ride_offer");
+    expect(JSON.stringify(push.sent[0]!.message)).not.toContain("Rahasia");
+    expect([far.user.id, offline.user.id, stale.user.id]).not.toContain(push.sent[0]!.userId);
+  });
+
+  it("penumpang membatalkan pesanan yang sudah diterima: driver mendapat push", async () => {
+    const { user } = await createDriver();
+    const { order, passenger } = await createOrder(north(1));
+    await service().acceptOrder({ userId: user.id, publicReference: order.publicReference });
+    const push = new RecordingPush();
+    await service(push).cancelByPassenger({ userId: passenger.id, publicReference: order.publicReference, reason: "CHANGE_OF_PLAN" });
+    await flush();
+    expect(push.sent).toHaveLength(1);
+    expect(push.sent[0]!.userId).toBe(user.id);
+    expect(push.sent[0]!.message.data?.type).toBe("ride_cancelled");
   });
 });

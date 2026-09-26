@@ -106,6 +106,74 @@ export class RideService {
       .catch(() => undefined);
   }
 
+  /**
+   * Memberi tahu driver ONLINE terdekat (posisi segar, dalam radius, kendaraan
+   * sesuai) bahwa ada pesanan baru. Tanpa alamat/nominal di teks; maksimal 10
+   * driver terdekat. Dipanggil setelah commit, tidak pernah ditunggu.
+   */
+  private notifyNearbyDrivers(order: {
+    publicReference: string;
+    serviceType: RideServiceType;
+    pickupLat: Prisma.Decimal;
+    pickupLng: Prisma.Decimal;
+  }) {
+    if (!this.push.enabled || !env.RIDE_OFFER_PROXIMITY_ENABLED) return;
+    const now = Date.now();
+    void (async () => {
+      const fixes = await this.prisma.rideDriverLocation.findMany({
+        where: {
+          capturedAt: { gte: new Date(now - LOCATION_MAX_AGE_SECONDS * 1000) },
+          driverProfile: {
+            status: "ACTIVE",
+            availability: "ONLINE",
+            vehicles: {
+              some: { type: order.serviceType, isActive: true, verificationStatus: "VERIFIED" },
+            },
+          },
+        },
+        orderBy: { capturedAt: "desc" },
+        take: 500,
+        select: { driverProfileId: true, lat: true, lng: true, driverProfile: { select: { userId: true } } },
+      });
+      const pickup = { lat: Number(order.pickupLat), lng: Number(order.pickupLng) };
+      const seen = new Set<string>();
+      const nearby: Array<{ userId: string; meters: number }> = [];
+      for (const fix of fixes) {
+        if (seen.has(fix.driverProfileId)) continue;
+        seen.add(fix.driverProfileId);
+        const meters = haversineMeters(pickup, { lat: Number(fix.lat), lng: Number(fix.lng) });
+        if (meters <= env.RIDE_OFFER_RADIUS_METERS) nearby.push({ userId: fix.driverProfile.userId, meters });
+      }
+      nearby.sort((a, b) => a.meters - b.meters);
+      for (const target of nearby.slice(0, 10)) {
+        await this.push
+          .notifyUser(target.userId, {
+            title: "Pesanan baru di dekat Anda",
+            body: "Buka aplikasi untuk melihat dan menerima pesanan.",
+            data: { type: "ride_offer", rideReference: order.publicReference },
+          })
+          .catch(() => undefined);
+      }
+    })().catch(() => undefined);
+  }
+
+  /** Memberi tahu driver bahwa penumpang membatalkan perjalanan yang sudah ia terima. */
+  private notifyDriverOfPassengerCancel(driverProfileId: string | null, publicReference: string) {
+    if (!driverProfileId || !this.push.enabled) return;
+    void this.prisma.rideDriverProfile
+      .findUnique({ where: { id: driverProfileId }, select: { userId: true } })
+      .then((row) =>
+        row
+          ? this.push.notifyUser(row.userId, {
+              title: "Pesanan dibatalkan",
+              body: "Penumpang membatalkan pesanan. Anda kembali tersedia untuk pesanan baru.",
+              data: { type: "ride_cancelled", rideReference: publicReference },
+            })
+          : undefined,
+      )
+      .catch(() => undefined);
+  }
+
   // -------------------------------------------------------------------------
   // Quote
   // -------------------------------------------------------------------------
@@ -356,6 +424,7 @@ export class RideService {
       );
     }
 
+    this.notifyNearbyDrivers(order);
     return this.toOrderView(order);
   }
 
@@ -488,7 +557,8 @@ export class RideService {
     reason: RideCancellationReason;
     note?: string;
   }) {
-    return this.prisma.$transaction(async (tx) => {
+    let assignedDriverProfileId: string | null = null;
+    const view = await this.prisma.$transaction(async (tx) => {
       const order = await tx.rideOrder.findUnique({
         where: { publicReference: input.publicReference },
       });
@@ -532,8 +602,11 @@ export class RideService {
         metadata: { reason: input.reason, fee, policy: CANCELLATION_POLICY_VERSION },
       });
 
+      assignedDriverProfileId = order.driverProfileId;
       return this.toOrderView(updated);
     });
+    this.notifyDriverOfPassengerCancel(assignedDriverProfileId, input.publicReference);
+    return view;
   }
 
   // -------------------------------------------------------------------------
