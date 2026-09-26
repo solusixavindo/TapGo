@@ -19,8 +19,6 @@ import { AuthController } from "./auth.controller.js";
 import { RecoveryController } from "./recovery.controller.js";
 import {
   changePasswordSchema,
-  googleAuthSchema,
-  googleCompleteSchema,
   loginSchema,
   refreshSchema,
   registerSchema
@@ -73,22 +71,6 @@ authRouter.post(
   asyncHandler(controller.register)
 );
 authRouter.post("/login", authRateLimiter, validateRequest(loginSchema), asyncHandler(controller.login));
-// Daftar/masuk dengan Google (driver_app). authRateLimiter di sini juga —
-// endpoint ini menerima token yang dapat dicoba berulang, sama seperti
-// login phone+password.
-authRouter.post(
-  "/google",
-  authRateLimiter,
-  validateRequest(googleAuthSchema),
-  asyncHandler(controller.googleAuth)
-);
-authRouter.post(
-  "/google/complete",
-  authRateLimiter,
-  registerPhoneRateLimiter,
-  validateRequest(googleCompleteSchema),
-  asyncHandler(controller.googleComplete)
-);
 authRouter.post("/refresh", authRateLimiter, validateRequest(refreshSchema), asyncHandler(controller.refresh));
 authRouter.post("/logout", requireAuth, asyncHandler(controller.logout));
 authRouter.get("/me", requireAuth, asyncHandler(controller.me));
