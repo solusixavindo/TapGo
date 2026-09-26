@@ -3,6 +3,14 @@ import { AccountStatus, User, UserRole } from "@prisma/client";
 export type CreateUserInput = {
   fullName: string;
   email?: string;
+  /**
+   * Diisi HANYA saat pendaftaran lewat penyedia identitas yang sudah
+   * membuktikan kepemilikan email (mis. Google Sign-In) — lihat
+   * AuthService.completeGoogleRegistration. Pendaftaran phone+password biasa
+   * tidak pernah mengisi ini; email di jalur itu tetap tidak terverifikasi
+   * sampai pemilik menuntaskan alur /auth/verification/*.
+   */
+  emailVerifiedAt?: Date;
   phone: string;
   passwordHash?: string;
   role: UserRole;
@@ -12,6 +20,8 @@ export type CreateUserInput = {
     deviceFingerprintHash?: string;
     ipAddress?: string;
     userAgent?: string;
+    distribution?: string;
+    installer?: string;
   };
 };
 
@@ -20,8 +30,6 @@ export type CreateSessionInput = {
   refreshTokenHash: string;
   userAgent?: string;
   ipAddress?: string;
-    distribution?: string;
-    installer?: string;
   expiresAt: Date;
 };
 
@@ -49,6 +57,7 @@ export type PublicUser = {
 
 export interface AuthRepository {
   findUserByPhone(phone: string): Promise<User | null>;
+  findUserByEmail(email: string): Promise<User | null>;
   findUserByReferralCode(referralCode: string): Promise<User | null>;
   findUserById(id: string): Promise<User | null>;
   createUser(input: CreateUserInput): Promise<User>;
