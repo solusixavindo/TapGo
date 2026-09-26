@@ -209,7 +209,7 @@ export class DriverDocumentService {
    * jalan keluarnya tetap readForAdmin, dan hanya di sanalah pembukaan dokumen
    * dicatat.
    */
-  async queueForAdmin(input: { page: number; pageSize: number }) {
+  async queueForAdmin(input: { page: number; pageSize: number; actorId?: string }) {
     // Hanya driver yang benar-benar punya dokumen. Baris tanpa dokumen berarti
     // tidak ada pekerjaan, dan hanya membuat antrian sulit dibaca.
     const where = { documents: { some: {} } };
@@ -223,6 +223,7 @@ export class DriverDocumentService {
         take: input.pageSize,
         select: {
           id: true,
+          userId: true,
           kycStatus: true,
           vehicleType: true,
           vehiclePlate: true,
@@ -244,7 +245,43 @@ export class DriverDocumentService {
     ]);
 
     const now = new Date();
-    const items = drivers.map((driver) => ({
+    // Pengajuan yang sedang terbuka untuk ditinjau, per pemohon. Hanya metadata
+    // review (tanpa dokumen), supaya layar admin dapat menampilkan tombol
+    // keputusan pada baris yang tepat.
+    const openApplications = await this.prisma.rideDriverApplication.findMany({
+      where: {
+        userId: { in: drivers.map((driver) => driver.userId) },
+        status: { in: ["SUBMITTED", "UNDER_REVIEW"] },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, userId: true, status: true, claimedById: true, claimExpiresAt: true, submittedAt: true },
+    });
+    const applicationByUser = new Map<string, (typeof openApplications)[number]>();
+    for (const application of openApplications) {
+      if (!applicationByUser.has(application.userId)) applicationByUser.set(application.userId, application);
+    }
+    // Profil operasional (dibuat saat pengajuan disetujui, status awal PENDING).
+    const profiles = await this.prisma.rideDriverProfile.findMany({
+      where: { userId: { in: drivers.map((driver) => driver.userId) } },
+      select: { id: true, userId: true, status: true },
+    });
+    const profileByUser = new Map(profiles.map((profile) => [profile.userId, profile]));
+    const items = drivers.map((driver) => {
+      const application = applicationByUser.get(driver.userId);
+      const profile = profileByUser.get(driver.userId);
+      const claimActive = !!application?.claimExpiresAt && application.claimExpiresAt > now;
+      return {
+      profile: profile ? { id: profile.id, status: profile.status } : null,
+      application: application
+        ? {
+            id: application.id,
+            status: application.status,
+            submittedAt: application.submittedAt,
+            claimActive,
+            claimedByMe: claimActive && !!input.actorId && application.claimedById === input.actorId,
+            claimExpiresAt: claimActive ? application.claimExpiresAt : null,
+          }
+        : null,
       driverId: driver.id,
       fullName: driver.user.fullName,
       phone: driver.user.phone,
@@ -256,7 +293,8 @@ export class DriverDocumentService {
         // Sama seperti list(): waktu yang menentukan, bukan kolom purgedAt.
         available: this.isReadable(document.expiresAt, purgedAt, now)
       }))
-    }));
+      };
+    });
 
     return {
       items,

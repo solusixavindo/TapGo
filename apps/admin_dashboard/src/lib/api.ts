@@ -199,7 +199,63 @@ export type DriverDocumentQueueRow = {
   vehicleType: string | null;
   vehiclePlate: string | null;
   documents: DriverDocumentSummary[];
+  /** Pengajuan driver yang sedang terbuka untuk ditinjau; null bila tidak ada. */
+  application: DriverApplicationReview | null;
+  /** Profil operasional; ada setelah pengajuan disetujui. Harus ACTIVE agar driver dapat menerima pesanan. */
+  profile: { id: string; status: "PENDING" | "ACTIVE" | "SUSPENDED" | "REJECTED" } | null;
 };
+
+export type DriverApplicationReview = {
+  id: string;
+  status: "SUBMITTED" | "UNDER_REVIEW";
+  submittedAt: string | null;
+  claimActive: boolean;
+  claimedByMe: boolean;
+  claimExpiresAt: string | null;
+};
+
+export const DRIVER_REJECT_REASONS: Array<{ code: string; label: string }> = [
+  { code: "DOCUMENTS_UNREADABLE", label: "Dokumen tidak terbaca / buram" },
+  { code: "DOCUMENTS_MISMATCH", label: "Data dokumen tidak sesuai" },
+  { code: "VEHICLE_NOT_ELIGIBLE", label: "Kendaraan tidak memenuhi syarat" },
+  { code: "INCOMPLETE_REQUIREMENTS", label: "Persyaratan belum lengkap" },
+  { code: "OTHER", label: "Alasan lain" }
+];
+
+function postJson<T>(path: string, body: unknown = {}) {
+  return request<T>(path, { method: "POST", body: JSON.stringify(body) });
+}
+
+export const claimDriverApplication = (id: string) =>
+  postJson(`/admin/driver-review/applications/${id}/claim`);
+export const renewDriverApplication = (id: string) =>
+  postJson(`/admin/driver-review/applications/${id}/renew`);
+export const releaseDriverApplication = (id: string) =>
+  postJson(`/admin/driver-review/applications/${id}/release`, { reasonCode: "REVIEW_POSTPONED" });
+export const activateDriverProfile = (profileId: string) =>
+  request(`/admin/rides/drivers/${profileId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status: "ACTIVE", reason: "Dokumen disetujui" })
+  });
+export const approveDriverApplication = (id: string) =>
+  postJson(`/admin/driver-review/applications/${id}/approve`);
+export const rejectDriverApplication = (id: string, reasonCode: string) =>
+  postJson(`/admin/driver-review/applications/${id}/reject`, { reasonCode });
+
+/** Scope review milik akun yang sedang masuk (tanpa PII). */
+export function listOwnReviewScopes() {
+  return request<{ userId: string; scopes: Array<{ scope: string }> }>("/admin/scope-grants/me");
+}
+
+/**
+ * Memberi diri sendiri kewenangan review driver. Hanya berhasil bagi pemegang
+ * ADMIN_SCOPE_MANAGE; server mencatatnya sebagai pemberian-diri di log audit.
+ */
+export async function grantSelfReviewScopes(userId: string) {
+  for (const scope of ["DRIVER_APPLICATION_QUEUE_READ", "DRIVER_APPLICATION_CLAIM", "DRIVER_APPLICATION_RENEW", "DRIVER_APPLICATION_RELEASE"]) {
+    await postJson("/admin/scope-grants", { targetUserId: userId, scope, reasonCode: "OPERATIONAL_ASSIGNMENT" });
+  }
+}
 
 export function listDriverDocumentQueue() {
   const query = new URLSearchParams({ page: "1", pageSize: "50" });

@@ -13,6 +13,7 @@ import {
   remainingRetention
 } from "../../lib/api";
 import ConsoleHeader from "../console-header";
+import DriverDecisionPanel from "./driver-decision-panel";
 import DriverDocumentViewer from "./driver-document-viewer";
 
 /**
@@ -260,10 +261,7 @@ export default function DriverDocumentsPage() {
                 </div>
               </dl>
 
-              <p className="mt-4 text-[11px] leading-5 text-slate-400 print:mt-6 print:text-slate-600">
-                Keputusan menyetujui atau menolak mitra dilakukan melalui alur
-                peninjauan pengajuan, bukan dari layar ini.
-              </p>
+              <DriverDecisionPanel row={selected} onChanged={() => void refresh()} />
             </article>
           )}
         </div>

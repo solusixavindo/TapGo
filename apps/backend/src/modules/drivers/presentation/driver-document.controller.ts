@@ -71,7 +71,7 @@ export class DriverDocumentController {
   adminQueue = async (req: Request, res: Response) => {
     const page = Math.max(1, Number(req.query.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize ?? 20) || 20));
-    const result = await this.documentService.queueForAdmin({ page, pageSize });
+    const result = await this.documentService.queueForAdmin({ page, pageSize, actorId: req.auth!.userId });
     res.json({ success: true, data: result });
   };
 

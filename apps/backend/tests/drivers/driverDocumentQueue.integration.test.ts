@@ -124,6 +124,85 @@ describe.skipIf(!runIntegration)("Antrian dokumen mitra driver", () => {
     expect(respons.status).toBe(403);
   });
 
+  it("bisa menyetujui pengajuan dari layar admin: antrian memuat pengajuan, klaim, setujui, lalu aktifkan driver", async () => {
+    const driver = await createDriver();
+    await upload(driver, "ktp", PNG);
+    await prisma.driver.update({ where: { id: driver.driverId }, data: { vehicleType: "MOTORCYCLE", vehiclePlate: "B 1234 XYZ", kycStatus: "PENDING" } });
+    const application = await prisma.rideDriverApplication.create({
+      data: { userId: driver.user.id, cycleNumber: 1, status: "SUBMITTED", submittedAt: new Date() }
+    });
+    // Pemberian scope khusus SUPER_ADMIN_VIP pemegang ADMIN_SCOPE_MANAGE.
+    const admin = await createUserOnly("VIP", "SUPER_ADMIN_VIP");
+    const call = (method: string, path: string, body: unknown = {}) =>
+      fetch(`${baseUrl}/api/v1${path}`, {
+        method,
+        headers: { authorization: `Bearer ${admin.token}`, "content-type": "application/json" },
+        body: JSON.stringify(body)
+      });
+
+    // Tanpa kewenangan review: klaim ditolak dengan pesan yang dikenali layar admin.
+    const denied = await call("POST", `/admin/driver-review/applications/${application.id}/claim`);
+    expect(denied.status).toBe(403);
+
+    // Pemegang ADMIN_SCOPE_MANAGE memberi kewenangan ke dirinya lewat API yang sama dengan tombol di layar.
+    await prisma.adminScopeGrant.create({ data: { userId: admin.user.id, scope: "ADMIN_SCOPE_MANAGE", grantedById: admin.user.id, status: "ACTIVE" } });
+    for (const scope of ["DRIVER_APPLICATION_QUEUE_READ", "DRIVER_APPLICATION_CLAIM", "DRIVER_APPLICATION_RENEW", "DRIVER_APPLICATION_RELEASE"]) {
+      const granted = await call("POST", "/admin/scope-grants", { targetUserId: admin.user.id, scope, reasonCode: "OPERATIONAL_ASSIGNMENT" });
+      expect([200, 201]).toContain(granted.status);
+    }
+
+    const before = (await ambilAntrian(admin.token)).find((row) => row.driverId === driver.driverId) as unknown as {
+      application: { id: string; status: string; claimActive: boolean; claimedByMe: boolean } | null;
+      profile: unknown;
+    };
+    expect(before.application).toMatchObject({ id: application.id, status: "SUBMITTED", claimActive: false, claimedByMe: false });
+    expect(before.profile).toBeNull();
+
+    expect((await call("POST", `/admin/driver-review/applications/${application.id}/claim`)).status).toBe(200);
+    const claimed = (await ambilAntrian(admin.token)).find((row) => row.driverId === driver.driverId) as unknown as {
+      application: { claimedByMe: boolean };
+    };
+    expect(claimed.application.claimedByMe).toBe(true);
+
+    const approved = await call("POST", `/admin/driver-review/applications/${application.id}/approve`);
+    expect(approved.status).toBe(200);
+
+    const after = (await ambilAntrian(admin.token)).find((row) => row.driverId === driver.driverId) as unknown as {
+      kycStatus: string;
+      application: unknown;
+      profile: { id: string; status: string };
+    };
+    expect(after.kycStatus).toBe("APPROVED");
+    expect(after.application).toBeNull();
+    expect(after.profile.status).toBe("PENDING");
+
+    const activated = await call("PATCH", `/admin/rides/drivers/${after.profile.id}/status`, { status: "ACTIVE", reason: "Dokumen disetujui" });
+    expect(activated.status).toBe(200);
+    expect((await prisma.rideDriverProfile.findUniqueOrThrow({ where: { id: after.profile.id } })).status).toBe("ACTIVE");
+  });
+
+  it("menolak pengajuan dengan alasan: status KYC menjadi REJECTED dan pengajuan tidak lagi terbuka", async () => {
+    const driver = await createDriver();
+    await upload(driver, "ktp", PNG);
+    await prisma.driver.update({ where: { id: driver.driverId }, data: { kycStatus: "PENDING" } });
+    const application = await prisma.rideDriverApplication.create({
+      data: { userId: driver.user.id, cycleNumber: 1, status: "SUBMITTED", submittedAt: new Date() }
+    });
+    const admin = await createAdmin();
+    await prisma.adminScopeGrant.create({ data: { userId: admin.user.id, scope: "DRIVER_APPLICATION_CLAIM", grantedById: admin.user.id, status: "ACTIVE" } });
+    const call = (path: string, body: unknown = {}) =>
+      fetch(`${baseUrl}/api/v1${path}`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${admin.token}`, "content-type": "application/json" },
+        body: JSON.stringify(body)
+      });
+    expect((await call(`/admin/driver-review/applications/${application.id}/claim`)).status).toBe(200);
+    expect((await call(`/admin/driver-review/applications/${application.id}/reject`, { reasonCode: "DOCUMENTS_UNREADABLE" })).status).toBe(200);
+    const row = (await ambilAntrian(admin.token)).find((r) => r.driverId === driver.driverId) as unknown as { kycStatus: string; application: unknown };
+    expect(row.kycStatus).toBe("REJECTED");
+    expect(row.application).toBeNull();
+  });
+
   it("hanya menampilkan driver yang benar-benar punya dokumen", async () => {
     const berdokumen = await createDriver();
     await upload(berdokumen, "ktp", PNG);
