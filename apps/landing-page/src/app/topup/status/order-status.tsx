@@ -27,8 +27,8 @@ const STATUS_VIEW: Record<TopUpOrderStatus, { tone: Tone; label: string; headlin
   PENDING: {
     tone: "wait",
     label: "Menunggu pembayaran",
-    headline: "Pembayaran belum kami terima",
-    body: "Selesaikan pembayaran sebelum batas waktu."
+    headline: "Transfer belum kami konfirmasi",
+    body: "Setelah Anda transfer, tim TapGo mencocokkan dengan mutasi bank dan mengonfirmasi, biasanya dalam 1×24 jam kerja. Saldo bertambah otomatis begitu dikonfirmasi."
   },
   AUTHORIZED: {
     tone: "wait",

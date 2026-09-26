@@ -775,3 +775,30 @@ export function profitLossReport(params: { dateFrom?: string; dateTo?: string })
   const suffix = query.toString();
   return request<ProfitLossReport>(`/admin/reports/profit-loss${suffix ? `?${suffix}` : ""}`);
 }
+
+export type ManualTopUpStatus = "PENDING" | "PAID" | "CANCELLED";
+
+export type ManualTopUp = {
+  id: string;
+  reference: string;
+  status: ManualTopUpStatus;
+  transferAmount: number;
+  baseAmount: number | null;
+  memberName: string;
+  memberPhone: string;
+  createdAt: string;
+  expiresAt: string | null;
+  expired: boolean;
+  paidAt: string | null;
+};
+
+export function listManualTopUps(status: ManualTopUpStatus) {
+  return request<ManualTopUp[]>(`/admin/manual-topups?status=${status}`);
+}
+
+export function actOnManualTopUp(id: string, action: "confirm" | "reject", reason?: string) {
+  return request<{ id: string; status: string }>(`/admin/manual-topups/${id}/${action}`, {
+    method: "POST",
+    body: JSON.stringify(reason ? { reason } : {})
+  });
+}

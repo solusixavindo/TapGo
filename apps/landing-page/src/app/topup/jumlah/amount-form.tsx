@@ -9,7 +9,7 @@ import {
   TOPUP_MIN_AMOUNT,
   TOPUP_ORDER_KEY,
   TOPUP_QUICK_AMOUNTS,
-  createTopUpOrder,
+  createManualTopUp,
   readSession,
   writeSession
 } from "../api";
@@ -42,7 +42,7 @@ export default function AmountForm() {
         return;
       }
       const token = readSession(TOKEN_KEY);
-      const order = await createTopUpOrder(token, amount);
+      const order = await createManualTopUp(token, amount);
       writeSession(TOPUP_ORDER_KEY, order.id);
       router.push("/topup/bayar");
     } catch (caught) {

@@ -3,22 +3,44 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
+  ManualTopUpOrder,
+  PREVIEW_MANUAL_TOPUP,
   PREVIEW_MODE,
-  PREVIEW_TOPUP_ORDER,
   TOKEN_KEY,
   TOPUP_ORDER_KEY,
-  TopUpOrder,
-  getTopUpOrder,
-  payTopUpOrder,
+  getManualTopUp,
   readSession
 } from "../api";
 import { formatRupiah, primaryButtonClass, secondaryButtonClass } from "../../upgrade/upgrade-shell";
 
+function CopyRow({ label, value, shown }: { label: string; value: string; shown?: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  }
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="min-w-0">
+        <dt className="text-xs themed-text-muted">{label}</dt>
+        <dd className="mt-0.5 break-all text-base font-black themed-text">{shown ?? value}</dd>
+      </div>
+      <button type="button" onClick={copy} className="shrink-0 rounded-full border themed-border px-3 py-1.5 text-xs font-bold themed-text">
+        {copied ? "Tersalin" : "Salin"}
+      </button>
+    </div>
+  );
+}
+
 export default function PaymentSummary() {
   const router = useRouter();
-  const [order, setOrder] = useState<TopUpOrder | null>(PREVIEW_MODE ? PREVIEW_TOPUP_ORDER : null);
+  const [order, setOrder] = useState<ManualTopUpOrder | null>(PREVIEW_MODE ? PREVIEW_MANUAL_TOPUP : null);
   const [loading, setLoading] = useState(!PREVIEW_MODE);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -33,16 +55,15 @@ export default function PaymentSummary() {
       router.replace("/topup/jumlah");
       return;
     }
-
     let alive = true;
-    getTopUpOrder(token, orderId)
+    getManualTopUp(token, orderId)
       .then((result) => {
         if (!alive) return;
         setOrder(result);
         setError("");
       })
       .catch((caught: unknown) =>
-        alive ? setError(caught instanceof Error ? caught.message : "Ringkasan pembayaran belum dapat dimuat.") : undefined
+        alive ? setError(caught instanceof Error ? caught.message : "Petunjuk transfer belum dapat dimuat.") : undefined
       )
       .finally(() => (alive ? setLoading(false) : undefined));
     return () => {
@@ -50,41 +71,15 @@ export default function PaymentSummary() {
     };
   }, [router]);
 
-  async function onPay() {
-    if (busy || !order) return;
-    setBusy(true);
-    setError("");
-    try {
-      if (PREVIEW_MODE) {
-        router.push(`/topup/status?id=${encodeURIComponent(order.id)}`);
-        return;
-      }
-
-      const handoff = await payTopUpOrder(readSession(TOKEN_KEY), order.id);
-      if (handoff.redirectUrl) {
-        // Saldo hanya bertambah lewat webhook penyedia pembayaran, bukan dari
-        // kembalinya pengguna ke situs ini — sama seperti alur upgrade.
-        window.location.assign(handoff.redirectUrl);
-        return;
-      }
-      router.push(`/topup/status?id=${encodeURIComponent(order.id)}`);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Pembayaran belum dapat diproses.");
-      setBusy(false);
-    }
-  }
-
   if (loading) {
-    return <p className="text-sm font-semibold themed-text-muted">Memuat ringkasan…</p>;
+    return <p className="text-sm font-semibold themed-text-muted">Memuat petunjuk transfer…</p>;
   }
 
   if (!order) {
     return (
       <div className="rounded-2xl border themed-border themed-card-bg px-5 py-6 text-center">
-        <p className="text-sm font-bold themed-text">Ringkasan pembayaran belum tersedia</p>
-        <p className="mt-2 text-sm leading-7 themed-text-muted">
-          {error || "Mulai dari langkah pertama agar pengajuan Anda terbentuk lebih dulu."}
-        </p>
+        <p className="text-sm font-bold themed-text">Petunjuk transfer belum tersedia</p>
+        <p className="mt-2 text-sm leading-7 themed-text-muted">{error || "Mulai dari langkah pertama agar pengajuan Anda terbentuk lebih dulu."}</p>
         <button type="button" onClick={() => router.push("/topup")} className={`${secondaryButtonClass} mt-5`}>
           Mulai dari awal
         </button>
@@ -92,22 +87,34 @@ export default function PaymentSummary() {
     );
   }
 
+  const expires = new Date(order.expiresAt);
+  const expiresLabel = Number.isNaN(expires.getTime())
+    ? ""
+    : expires.toLocaleString("id-ID", { dateStyle: "long", timeStyle: "short" });
+
   return (
     <div>
       <div className="rounded-[1.5rem] border themed-border themed-card-bg p-5">
-        <dl className="space-y-3">
-          <div className="flex items-start justify-between gap-6">
-            <dt className="text-sm themed-text-muted">Nomor pengajuan</dt>
-            <dd className="text-right text-sm font-bold themed-text">{order.reference}</dd>
-          </div>
+        <p className="text-sm themed-text-muted">Transfer tepat sebesar</p>
+        <p className="mt-1 text-3xl font-black themed-accent">{formatRupiah(order.transferAmount)}</p>
+        <p className="mt-2 text-xs leading-6 themed-text-muted">
+          {"Tiga digit terakhir ("}
+          <strong className="themed-text">{String(order.uniqueCode).padStart(3, "0")}</strong>
+          {") adalah kode unik agar transfer Anda mudah dikenali. Saldo yang masuk: "}
+          <strong className="themed-text">{formatRupiah(order.baseAmount)}</strong>. Jangan dibulatkan.
+        </p>
+
+        <dl className="mt-5 space-y-4 border-t border-dashed themed-border pt-5">
+          <CopyRow label="Bank" value={order.bank.bankName} />
+          <CopyRow label="Nomor rekening" value={order.bank.accountNumber} />
+          <CopyRow label="Atas nama" value={order.bank.accountHolder} />
+          <CopyRow label="Nominal transfer" value={String(order.transferAmount)} shown={formatRupiah(order.transferAmount)} />
         </dl>
 
-        <div className="mt-5 border-t border-dashed themed-border pt-5">
-          <div className="flex items-baseline justify-between gap-6">
-            <span className="text-sm font-bold themed-text-muted">Jumlah top up</span>
-            <span className="text-3xl font-black themed-accent">{formatRupiah(order.amount)}</span>
-          </div>
-        </div>
+        <p className="mt-5 text-xs themed-text-muted">
+          Nomor pengajuan {order.reference}
+          {expiresLabel ? ` · berlaku sampai ${expiresLabel}` : ""}
+        </p>
       </div>
 
       {error ? (
@@ -116,10 +123,9 @@ export default function PaymentSummary() {
         </p>
       ) : null}
 
-      <button type="button" onClick={onPay} disabled={busy} className={`${primaryButtonClass} mt-6`}>
-        {busy ? "Menyiapkan pembayaran…" : `Bayar ${formatRupiah(order.amount)}`}
+      <button type="button" onClick={() => router.push(`/topup/status?id=${encodeURIComponent(order.id)}`)} className={`${primaryButtonClass} mt-6`}>
+        Saya sudah transfer
       </button>
-
       <button type="button" onClick={() => router.push("/topup/jumlah")} className={`${secondaryButtonClass} mt-3`}>
         Ubah jumlah
       </button>

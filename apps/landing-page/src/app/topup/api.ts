@@ -78,6 +78,43 @@ export async function createTopUpOrder(token: string, amount: number): Promise<T
   return toOrder(result);
 }
 
+export type ManualTopUpOrder = {
+  id: string;
+  reference: string;
+  status: TopUpOrderStatus;
+  transferAmount: number;
+  baseAmount: number;
+  uniqueCode: number;
+  expiresAt: string;
+  bank: { bankName: string; accountNumber: string; accountHolder: string };
+};
+
+/** Top up lewat transfer bank: nominal transfer = jumlah + kode unik. */
+export async function createManualTopUp(token: string, amount: number): Promise<ManualTopUpOrder> {
+  return request<ManualTopUpOrder>("/web/wallet/topup/manual", {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+    body: JSON.stringify({ amount })
+  });
+}
+
+export async function getManualTopUp(token: string, orderId: string): Promise<ManualTopUpOrder> {
+  return request<ManualTopUpOrder>(`/web/wallet/topup/manual/${orderId}`, {
+    headers: { authorization: `Bearer ${token}` }
+  });
+}
+
+export const PREVIEW_MANUAL_TOPUP: ManualTopUpOrder = {
+  id: "preview-topup-order",
+  reference: "MTOP-CONTOH01",
+  status: "PENDING",
+  transferAmount: 100347,
+  baseAmount: 100000,
+  uniqueCode: 347,
+  expiresAt: new Date(Date.now() + 24 * 3600_000).toISOString(),
+  bank: { bankName: "BRI", accountNumber: "0000000000", accountHolder: "PT Contoh" }
+};
+
 export async function getTopUpOrder(token: string, orderId: string): Promise<TopUpOrder> {
   const result = await request<RawTopUpOrder>(`/web/wallet/topup/orders/${orderId}`, {
     headers: { authorization: `Bearer ${token}` }
@@ -105,5 +142,5 @@ export const PREVIEW_TOPUP_ORDER: TopUpOrder = {
 
 /** Nominal top up cepat yang ditawarkan di langkah pertama. */
 export const TOPUP_QUICK_AMOUNTS = [50000, 100000, 200000, 500000, 1000000];
-export const TOPUP_MIN_AMOUNT = 10000;
-export const TOPUP_MAX_AMOUNT = 10000000;
+export const TOPUP_MIN_AMOUNT = 50000;
+export const TOPUP_MAX_AMOUNT = 5000000;
