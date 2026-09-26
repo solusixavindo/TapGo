@@ -21,6 +21,10 @@ diserahkan bila salah satunya gagal. **Laporan baru wajib menambah baris di sini
 | 2.0.5+32 | Pesan yang dikirim lewat REST tidak tampil di layar pengirim | `post()` sudah membuka pembungkus `data`, kode mencari `result['data']` | `test/chat_inbox_test.dart` (balasan cepat tampil sekali) |
 | 2.0.5+32 | Pesan chat baru tidak memicu notifikasi | Push hanya untuk status perjalanan | `chatConversationsPush.integration.test.ts` (dua arah, tanpa isi pesan, dibatasi 20 detik) |
 | backend | Penghapusan Founder dikhawatirkan memengaruhi mesin bisnis | Hanya gerbang bonus Founder yang dihapus (tanpa grant selalu `true`) | `businessEngineGolden.integration.test.ts` (seluruh komisi, bonus level, dompet, mutasi identik byte-demi-byte dengan kode sebelumnya) |
+| 1.0.0+3 | Pesanan jauh tetap tampil ke semua driver | Daftar tawaran tidak memakai jarak | `driverOffersProximity.integration.test.ts` (radius, urutan, posisi basi, kedaluwarsa, race) |
+| 1.0.0+3 | Push driver tidak boleh menggagalkan alur utama | Firebase opsional per build | `widget_test.dart` grup "push notifikasi driver" (token null, jenis pesan tak dikenal diabaikan) |
+| 1.0.0+3 | Komisi tunai bisa menggandakan potongan atau membuat saldo negatif | Potongan terjadi pada transisi COMPLETED | `driverCashCommission.integration.test.ts` (sekali saja, dibulatkan ke atas, batas saldo, batal tanpa komisi) |
+| 1.0.0+3 | Top up manual: konfirmasi ganda / peran salah | Pembukuan lewat markTopUpOrderPaid bersyarat | `manualTopUp.integration.test.ts` (idempoten, hanya Super Admin, token APP ditolak) |
 | backend | Uji recovery/admin gagal setelah pemuat push diimpor statis | `env` ter-parse saat impor modul | seluruh suite backend (pemuat push kini malas) |
 
 ## Prosedur sebelum menyerahkan paket
