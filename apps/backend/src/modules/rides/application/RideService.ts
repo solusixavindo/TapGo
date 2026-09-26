@@ -912,6 +912,10 @@ export class RideService {
         }
       }
 
+      if (order.paymentMethod === "CASH") {
+        await this.assertCommissionCovered(tx, profile.userId, order.totalFare);
+      }
+
       const vehicle = await tx.rideVehicle.findFirst({
         where: {
           driverProfileId: profile.id,
@@ -1081,6 +1085,8 @@ export class RideService {
         // digital diaktifkan.
         if (order.paymentMethod === "DIGITAL") {
           await this.settleDigitalPayment(tx, order, profile.id);
+        } else {
+          await this.chargeCashCommission(tx, order, profile.userId);
         }
       }
 
@@ -1910,6 +1916,90 @@ export class RideService {
       { id: order.id, driverProfileId, totalFare: order.totalFare },
       driverProfileId,
     );
+  }
+
+  /** Komisi platform atas pesanan tunai, dibulatkan ke atas ke rupiah penuh. */
+  private cashCommissionFee(totalFare: number): Prisma.Decimal {
+    return new Prisma.Decimal(totalFare)
+      .mul(env.DRIVER_COMMISSION_PERCENT)
+      .div(100)
+      .toDecimalPlaces(0, Prisma.Decimal.ROUND_UP);
+  }
+
+  /**
+   * Driver hanya boleh menerima pesanan tunai bila saldo TapGo-nya menutup
+   * komisi. Tidak berlaku bila DRIVER_COMMISSION_ENABLED mati.
+   */
+  private async assertCommissionCovered(
+    tx: Prisma.TransactionClient,
+    driverUserId: string,
+    totalFare: number,
+  ) {
+    if (!env.DRIVER_COMMISSION_ENABLED) return;
+    const fee = this.cashCommissionFee(totalFare);
+    const wallet = await tx.wallet.findUnique({
+      where: { userId: driverUserId },
+      select: { balance: true },
+    });
+    const balance = wallet?.balance ?? new Prisma.Decimal(0);
+    if (balance.lt(fee)) {
+      const shortBy = fee.minus(balance).toNumber();
+      throw new AppError(
+        `Saldo TapGo Anda kurang Rp${shortBy.toLocaleString("id-ID")} untuk komisi ${env.DRIVER_COMMISSION_PERCENT}% pesanan tunai ini. Isi saldo di tapgolion.id lalu coba lagi.`,
+        StatusCodes.PAYMENT_REQUIRED,
+        "RIDE_COMMISSION_BALANCE_INSUFFICIENT",
+      );
+    }
+  }
+
+  /**
+   * Memotong komisi pesanan tunai dari saldo driver saat perjalanan selesai.
+   * Tidak menyentuh tabel Commission/Business Engine: hanya satu baris ledger
+   * debit. Bila saldo ternyata kurang (mis. ditarik selama perjalanan), yang
+   * dipotong sebatas saldo tersedia dan selisihnya dicatat di metadata; sisa
+   * itu ditagih lewat syarat saldo pada pesanan tunai berikutnya. Dipanggil
+   * tepat sekali karena hanya dari transisi COMPLETED yang bersyarat.
+   */
+  private async chargeCashCommission(
+    tx: Prisma.TransactionClient,
+    order: { id: string; totalFare: number },
+    driverUserId: string,
+  ) {
+    if (!env.DRIVER_COMMISSION_ENABLED) return;
+    if (!Number.isFinite(order.totalFare) || order.totalFare <= 0) return;
+    const fee = this.cashCommissionFee(order.totalFare);
+    const wallet = await tx.wallet.upsert({
+      where: { userId: driverUserId },
+      update: {},
+      create: { userId: driverUserId },
+      select: { id: true, balance: true, cashBalance: true },
+    });
+    let charged = Prisma.Decimal.min(fee, wallet.balance);
+    if (charged.gt(0)) {
+      const applied = await tx.wallet.updateMany({
+        where: { id: wallet.id, balance: { gte: charged } },
+        data: {
+          balance: { decrement: charged },
+          cashBalance: { decrement: Prisma.Decimal.min(charged, wallet.cashBalance) },
+        },
+      });
+      if (applied.count !== 1) charged = new Prisma.Decimal(0);
+    }
+    await tx.walletTransaction.create({
+      data: {
+        walletId: wallet.id,
+        type: "PAYMENT",
+        amount: charged.neg(),
+        referenceType: "RIDE_COMMISSION_FEE",
+        referenceId: order.id,
+        metadata: {
+          percent: env.DRIVER_COMMISSION_PERCENT,
+          fare: order.totalFare,
+          fee: fee.toString(),
+          shortfall: fee.minus(charged).toString(),
+        },
+      },
+    });
   }
 
   /**

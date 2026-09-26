@@ -5,6 +5,7 @@ import { validateRequest } from "../../../core/http/validateRequest.js";
 import { requireAuth, requireChannel } from "../../../core/security/authContext.js";
 import { paymentRateLimiter, withdrawalRateLimiter } from "../../../core/security/rateLimit.js";
 import { WalletService } from "../application/WalletService.js";
+import { webManualTopUpRouter } from "./manual-topup.routes.js";
 import { WalletTopUpPaymentService } from "../application/WalletTopUpPaymentService.js";
 import { PrismaWalletRepository } from "../infrastructure/PrismaWalletRepository.js";
 import { verifyPassword } from "../../../core/security/passwordHasher.js";
@@ -48,6 +49,7 @@ const controller = new WebWalletController(
 export const webWalletRouter = Router();
 
 webWalletRouter.use(requireAuth, requireChannel("WEB"));
+webWalletRouter.use(webManualTopUpRouter);
 webWalletRouter.post(
   "/topup/orders",
   paymentRateLimiter,

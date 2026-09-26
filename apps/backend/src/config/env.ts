@@ -143,6 +143,15 @@ const envSchema = z.object({
   /// MEMBERSHIP_PURCHASE_APP_ENABLED: tetap false untuk aplikasi Play karena
   /// pembayaran eksternal in-app menuntut Play Billing.
   WALLET_TOPUP_ENABLED: strictEnvBoolean(false),
+  /// Top up saldo lewat transfer bank manual (kode unik + konfirmasi Super
+  /// Admin), kanal WEB saja. Independen dari WALLET_TOPUP_ENABLED (gateway).
+  MANUAL_TOPUP_ENABLED: strictEnvBoolean(false),
+  MANUAL_TOPUP_BANK_NAME: z.string().trim().max(60).optional(),
+  MANUAL_TOPUP_ACCOUNT_NUMBER: z.string().trim().max(40).optional(),
+  MANUAL_TOPUP_ACCOUNT_HOLDER: z.string().trim().max(120).optional(),
+  MANUAL_TOPUP_MIN_AMOUNT: z.coerce.number().int().min(1000).default(50000),
+  MANUAL_TOPUP_MAX_AMOUNT: z.coerce.number().int().max(50000000).default(5000000),
+  MANUAL_TOPUP_EXPIRY_HOURS: z.coerce.number().int().min(1).max(168).default(24),
   /// Verifikasi wajah harian driver sebelum online. Default mati: pencocokan
   /// terjadi di HP driver (tidak ada API pihak ketiga), server hanya melacak
   /// hari/percobaan dan menegakkan ambang batas — lihat DriverFaceCheckService.
@@ -162,6 +171,12 @@ const envSchema = z.object({
   /// diterima. Bila false, perilaku lama (semua pesanan sejenis tampil) dipakai —
   /// hanya untuk uji lama; produksi memakai true.
   RIDE_OFFER_PROXIMITY_ENABLED: strictEnvBoolean(true),
+  /// Komisi platform atas pesanan TUNAI (mulai Stage D4): dipotong dari saldo
+  /// TapGo driver saat perjalanan selesai, dan driver hanya dapat menerima
+  /// pesanan tunai bila saldonya cukup. Default mati — nyalakan setelah jalur
+  /// isi saldo driver siap.
+  DRIVER_COMMISSION_ENABLED: strictEnvBoolean(false),
+  DRIVER_COMMISSION_PERCENT: z.coerce.number().int().min(1).max(50).default(8),
   RIDE_OFFER_RADIUS_METERS: z.coerce.number().int().min(500).max(50000).default(5000),
   /// Pesanan yang belum mendapat driver setelah selama ini otomatis menjadi NO_DRIVER.
   RIDE_SEARCH_TIMEOUT_SECONDS: z.coerce.number().int().min(30).max(1800).default(180),

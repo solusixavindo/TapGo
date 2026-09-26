@@ -72,6 +72,9 @@ export class WalletTopUpPaymentService {
       throw new AppError("Wallet top-up order not found", StatusCodes.NOT_FOUND, "WALLET_TOPUP_ORDER_NOT_FOUND");
     }
     this.assertCanRead(input.role, input.userId, order.userId);
+    if (order.provider === "MANUAL_BANK") {
+      throw new AppError("Top up manual dibayar lewat transfer bank, bukan gateway.", StatusCodes.CONFLICT, "WALLET_TOPUP_ORDER_NOT_PAYABLE");
+    }
     if (order.status !== "PENDING") {
       throw new AppError("Only pending top-up orders can be paid", StatusCodes.CONFLICT, "WALLET_TOPUP_ORDER_NOT_PAYABLE");
     }

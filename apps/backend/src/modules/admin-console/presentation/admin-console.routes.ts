@@ -6,6 +6,7 @@ import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
 import { requireAuth, requireRoles } from "../../../core/security/authContext.js";
 import { maskForOperator } from "../../../core/security/adminMasking.js";
+import { adminManualTopUpRouter } from "../../wallets/presentation/manual-topup.routes.js";
 import { AdminConsoleService } from "../application/AdminConsoleService.js";
 import { SystemHealthService } from "../application/SystemHealthService.js";
 import { ErrorMonitoringService } from "../application/ErrorMonitoringService.js";
@@ -82,6 +83,7 @@ const driverDocumentController = new DriverDocumentController(
 export const adminConsoleRouter = Router();
 
 adminConsoleRouter.use(requireAuth, requireRoles("ADMIN", "SUPER_ADMIN"), maskForOperator);
+adminConsoleRouter.use(adminManualTopUpRouter);
 
 adminConsoleRouter.get("/dashboard/summary", asyncHandler(controller.summary));
 adminConsoleRouter.get("/dashboard", asyncHandler(controller.summary));
