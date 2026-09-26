@@ -446,6 +446,7 @@ class DriverRide {
     this.currency = 'IDR',
     this.updatedAt,
     this.paymentMethod = 'CASH',
+    this.distanceToPickupMeters,
   });
 
   factory DriverRide.fromJson(Map<String, dynamic> json) {
@@ -481,8 +482,13 @@ class DriverRide {
       paymentMethod: payment is Map && payment['method'] == 'DIGITAL'
           ? 'DIGITAL'
           : 'CASH',
+      distanceToPickupMeters: _intOf(json['distanceToPickupMeters']),
     );
   }
+
+  /// Jarak dari posisi driver ke titik jemput, dihitung server saat tawaran
+  /// dimuat (hanya ada pada daftar tawaran).
+  final int? distanceToPickupMeters;
 
   /// 'DIGITAL' = penumpang sudah membayar lewat TapGoPay: driver TIDAK boleh
   /// menagih tunai. Nilai selain DIGITAL diperlakukan sebagai tunai.

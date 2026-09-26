@@ -862,7 +862,38 @@ void main() {
       final cancelAction = find.byKey(const ValueKey('trip-cancel-action'));
       await tapReachable(tester, cancelAction);
       await tester.pumpAndSettle();
+      // Dialog alasan: tombol konfirmasi mati sampai satu alasan dipilih.
+      final confirm = find.byKey(const ValueKey('cancel-confirm'));
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+      await tester.tap(find.byKey(const ValueKey('cancel-reason-PASSENGER_UNREACHABLE')));
+      await tester.pumpAndSettle();
+      await tester.tap(confirm);
+      await tester.pumpAndSettle();
       expect(cancelRepo.cancelCalls, 1);
+      expect(cancelRepo.lastCancelReason, 'PASSENGER_UNREACHABLE');
+    });
+
+    testWidgets('kartu tawaran menampilkan jarak ke titik jemput', (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        availability: DriverAvailability.online,
+        offerItems: [
+          const DriverRide(
+            reference: 'RIDE-DEMO-001',
+            serviceType: 'MOTORCYCLE',
+            status: RideStatus.searchingDriver,
+            pickupAddress: 'LOKASI_DEMO_A',
+            dropoffAddress: 'LOKASI_DEMO_B',
+            distanceMeters: 2500,
+            durationSeconds: 600,
+            totalFare: 9000,
+            distanceToPickupMeters: 1800,
+          ),
+        ],
+      );
+      await pumpDriverOrders(tester, repo);
+      expect(find.byKey(const ValueKey('offer-distance-to-pickup')), findsOneWidget);
+      expect(find.textContaining('dari Anda'), findsOneWidget);
     });
 
     testWidgets('unknown/terminal status menghentikan action primer',
@@ -1428,6 +1459,7 @@ DriverRide demoRideWithLocation(RideStatus status) => DriverRide(
     );
 
 class FakeDriverRepository implements DriverRepository {
+  String? lastCancelReason;
   final List<String> registeredPushTokens = [];
   final List<String> unregisteredPushTokens = [];
 
@@ -1632,6 +1664,7 @@ class FakeDriverRepository implements DriverRepository {
   @override
   Future<DriverRide> cancel(String reference, String reason) async {
     cancelCalls += 1;
+    lastCancelReason = reason;
     current = demoRide(RideStatus.cancelledByDriver);
     return current!;
   }

@@ -1287,6 +1287,12 @@ class _RideSummary extends ConsumerWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
+            if (ride.distanceToPickupMeters != null &&
+                ride.status == RideStatus.searchingDriver)
+              InfoChip(
+                key: const ValueKey('offer-distance-to-pickup'),
+                label: '${_distance(ride.distanceToPickupMeters!)} dari Anda',
+              ),
             if (showLiveDistance)
               _LiveDistanceChip(
                 target: LatLng(ride.pickupLat!, ride.pickupLng!),
@@ -1458,7 +1464,14 @@ class ActiveRideCard extends ConsumerWidget {
               const SizedBox(height: 10),
               OutlinedButton(
                 key: const ValueKey('trip-cancel-action'),
-                onPressed: state.isBusy ? null : controller.cancelRide,
+                onPressed: state.isBusy
+                    ? null
+                    : () async {
+                        final reason = await _pickCancelReason(context);
+                        if (reason != null) {
+                          await controller.cancelRide(reason: reason);
+                        }
+                      },
                 child: const Text('Batalkan Perjalanan'),
               ),
             ],
@@ -1957,4 +1970,59 @@ class DriverOverlay extends ConsumerWidget {
       ],
     );
   }
+}
+
+
+/// Alasan yang bisa dipilih driver saat membatalkan perjalanan; kode sama
+/// dengan enum RideCancellationReason di server.
+const _driverCancelReasons = <(String, String)>[
+  ('PASSENGER_UNREACHABLE', 'Penumpang tidak bisa dihubungi'),
+  ('WRONG_PICKUP', 'Titik jemput tidak sesuai'),
+  ('VEHICLE_PROBLEM', 'Kendaraan bermasalah'),
+  ('WAIT_TOO_LONG', 'Menunggu terlalu lama'),
+  ('OTHER', 'Alasan lain'),
+];
+
+Future<String?> _pickCancelReason(BuildContext context) {
+  return showDialog<String>(
+    context: context,
+    builder: (dialogContext) {
+      String? selected;
+      return StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Batalkan perjalanan?'),
+          content: SingleChildScrollView(
+            child: RadioGroup<String>(
+              groupValue: selected,
+              onChanged: (value) => setState(() => selected = value),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final (code, label) in _driverCancelReasons)
+                    RadioListTile<String>(
+                      key: ValueKey('cancel-reason-$code'),
+                      value: code,
+                      title: Text(label),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Kembali'),
+            ),
+            FilledButton(
+              key: const ValueKey('cancel-confirm'),
+              onPressed: selected == null
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(selected),
+              child: const Text('Batalkan'),
+            ),
+          ],
+        ),
+      );
+    },
+  );
 }

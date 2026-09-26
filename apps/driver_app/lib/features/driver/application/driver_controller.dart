@@ -464,6 +464,15 @@ class DriverController extends StateNotifier<DriverState>
       _startPolling();
     } on DriverApiException catch (error) {
       state = state.copyWith(message: error.message);
+      // Tawaran sudah tidak berlaku (diambil driver lain, kedaluwarsa, atau
+      // di luar jangkauan): tutup detailnya dan muat ulang daftar.
+      if (const {
+        'RIDE_OFFER_EXPIRED',
+        'RIDE_OFFER_OUT_OF_RANGE',
+      }.contains(error.code)) {
+        state = state.copyWith(clearSelectedOffer: true);
+        unawaited(refreshWorkspace());
+      }
     } finally {
       _endFlight('accept:${offer.reference}');
       state = state.copyWith(isBusy: false);
@@ -516,13 +525,13 @@ class DriverController extends StateNotifier<DriverState>
     }
   }
 
-  Future<void> cancelRide() async {
+  Future<void> cancelRide({String reason = 'OTHER'}) async {
     final ride = state.activeRide;
     if (ride == null || ride.isTerminal) return;
     if (!_startFlight('cancel:${ride.reference}')) return;
     state = state.copyWith(isBusy: true, clearMessage: true);
     try {
-      final cancelled = await _repository.cancel(ride.reference, 'OTHER');
+      final cancelled = await _repository.cancel(ride.reference, reason);
       state = state.copyWith(
           activeRide: cancelled, availability: DriverAvailability.offline);
       _stopPolling();
