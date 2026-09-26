@@ -41,6 +41,9 @@ abstract class DriverRepository {
   /// 'month').
   Future<DriverEarningsSummary> earningsSummary({String range = 'today'});
 
+  /// Saldo TapGo dan riwayat isi saldo / potongan komisi driver.
+  Future<DriverWalletSummary> walletSummary();
+
   /// Statistik objektif (acceptance/completion/cancellation rate) — bukan
   /// rating bintang, lihat catatan di [DriverPerformanceSummary].
   Future<DriverPerformanceSummary> performanceSummary();

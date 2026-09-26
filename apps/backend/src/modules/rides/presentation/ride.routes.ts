@@ -264,6 +264,14 @@ driverRideRouter.get(
 );
 
 driverRideRouter.get(
+  "/wallet",
+  asyncHandler(async (req, res) => {
+    const data = await rideService.walletSummary(req.auth!.userId);
+    res.json({ success: true, data });
+  }),
+);
+
+driverRideRouter.get(
   "/performance",
   asyncHandler(async (req, res) => {
     const data = await rideService.performanceSummary(req.auth!.userId);

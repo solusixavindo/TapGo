@@ -873,6 +873,48 @@ void main() {
       expect(cancelRepo.lastCancelReason, 'PASSENGER_UNREACHABLE');
     });
 
+    testWidgets('tab pendapatan menampilkan saldo TapGo, catatan komisi, dan riwayat',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession)
+        ..walletResult = DriverWalletSummary(
+          balance: 84280,
+          commissionEnabled: true,
+          commissionPercent: 8,
+          topUpUrl: 'https://tapgolion.id/topup',
+          entries: [
+            DriverWalletEntry(
+                id: 'e1',
+                kind: 'COMMISSION',
+                amount: -720,
+                createdAt: DateTime(2026, 9, 10, 9, 30),
+                rideReference: 'RID-ABC12345',
+                shortfall: 300),
+            const DriverWalletEntry(id: 'e2', kind: 'TOPUP', amount: 100000),
+          ],
+        );
+      await pumpDriver(tester, repo);
+      await tester.tap(find.byIcon(Icons.savings_rounded));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('wallet-card')), findsOneWidget);
+      expect(find.text('Rp84.280'), findsOneWidget);
+      expect(find.byKey(const ValueKey('wallet-commission-note')), findsOneWidget);
+      expect(find.text('-Rp720'), findsOneWidget);
+      expect(find.text('+Rp100.000'), findsOneWidget);
+      expect(find.textContaining('kurang Rp300'), findsOneWidget);
+      expect(find.byKey(const ValueKey('wallet-topup-button')), findsOneWidget);
+    });
+
+    testWidgets('komisi mati: tidak ada catatan komisi, saldo nol tetap tampil',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+      await tester.tap(find.byIcon(Icons.savings_rounded));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('wallet-balance')), findsOneWidget);
+      expect(find.byKey(const ValueKey('wallet-commission-note')), findsNothing);
+    });
+
     testWidgets('kartu tawaran menampilkan jarak ke titik jemput', (tester) async {
       final repo = FakeDriverRepository(
         session: demoSession,
@@ -1592,6 +1634,22 @@ class FakeDriverRepository implements DriverRepository {
   DriverEarningsSummary? earningsSummaryResult;
   Object? earningsError;
   int earningsCalls = 0;
+
+  DriverWalletSummary? walletResult;
+  Object? walletError;
+
+  @override
+  Future<DriverWalletSummary> walletSummary() async {
+    if (walletError != null) throw walletError!;
+    return walletResult ??
+        const DriverWalletSummary(
+          balance: 0,
+          commissionEnabled: false,
+          commissionPercent: 8,
+          topUpUrl: 'https://tapgolion.id/topup',
+          entries: [],
+        );
+  }
 
   @override
   Future<DriverEarningsSummary> earningsSummary({String range = 'today'}) async {

@@ -813,6 +813,54 @@ export class RideService {
    *   driver, karena bukan keputusan driver.
    * - Penyebut nol menghasilkan null (belum ada data), bukan NaN/Infinity.
    */
+  /**
+   * Saldo TapGo driver dan riwayat yang relevan bagi driver: isi saldo (TOPUP)
+   * dan potongan komisi pesanan tunai. Hanya baca; tidak membuat dompet.
+   */
+  async walletSummary(userId: string) {
+    await this.requireDriverProfile(userId);
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+      select: { id: true, balance: true },
+    });
+    const rows = wallet
+      ? await this.prisma.walletTransaction.findMany({
+          where: {
+            walletId: wallet.id,
+            OR: [{ type: "TOPUP" }, { referenceType: "RIDE_COMMISSION_FEE" }],
+          },
+          orderBy: { createdAt: "desc" },
+          take: 30,
+          select: { id: true, type: true, amount: true, referenceType: true, referenceId: true, createdAt: true, metadata: true },
+        })
+      : [];
+    const orderIds = rows.filter((r) => r.referenceType === "RIDE_COMMISSION_FEE" && r.referenceId).map((r) => r.referenceId!);
+    const orders = orderIds.length
+      ? await this.prisma.rideOrder.findMany({ where: { id: { in: orderIds } }, select: { id: true, publicReference: true, totalFare: true } })
+      : [];
+    const byId = new Map(orders.map((o) => [o.id, o]));
+    return {
+      balance: wallet?.balance.toNumber() ?? 0,
+      commissionEnabled: env.DRIVER_COMMISSION_ENABLED,
+      commissionPercent: env.DRIVER_COMMISSION_PERCENT,
+      topUpUrl: "https://tapgolion.id/topup",
+      entries: rows.map((r) => {
+        const isFee = r.referenceType === "RIDE_COMMISSION_FEE";
+        const meta = (r.metadata ?? {}) as { shortfall?: string };
+        const order = isFee && r.referenceId ? byId.get(r.referenceId) : undefined;
+        return {
+          id: r.id,
+          kind: isFee ? "COMMISSION" : "TOPUP",
+          amount: r.amount.toNumber(),
+          createdAt: r.createdAt,
+          rideReference: order?.publicReference ?? null,
+          fare: order?.totalFare ?? null,
+          shortfall: isFee ? Number(meta.shortfall ?? 0) : 0,
+        };
+      }),
+    };
+  }
+
   async performanceSummary(userId: string) {
     const profile = await this.requireDriverProfile(userId);
 

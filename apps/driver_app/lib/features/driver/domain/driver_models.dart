@@ -576,6 +576,74 @@ double? _doubleOf(Object? value) {
 /// karena backend belum memotong komisi apa pun dari nominal ini (lihat
 /// catatan grossFare di RideService.earningsSummary) — jangan diberi label
 /// "pendapatan bersih" di UI.
+/// Satu baris riwayat saldo driver: isi saldo (TOPUP) atau potongan komisi
+/// pesanan tunai (COMMISSION, amount negatif).
+class DriverWalletEntry {
+  const DriverWalletEntry({
+    required this.id,
+    required this.kind,
+    required this.amount,
+    this.createdAt,
+    this.rideReference,
+    this.fare,
+    this.shortfall = 0,
+  });
+
+  factory DriverWalletEntry.fromJson(Map<String, dynamic> json) =>
+      DriverWalletEntry(
+        id: '${json['id'] ?? ''}',
+        kind: json['kind'] == 'COMMISSION' ? 'COMMISSION' : 'TOPUP',
+        amount: _intOf(json['amount']) ?? 0,
+        createdAt: DateTime.tryParse('${json['createdAt'] ?? ''}'),
+        rideReference: json['rideReference'] as String?,
+        fare: _intOf(json['fare']),
+        shortfall: _intOf(json['shortfall']) ?? 0,
+      );
+
+  final String id;
+  final String kind;
+  final int amount;
+  final DateTime? createdAt;
+  final String? rideReference;
+  final int? fare;
+  final int shortfall;
+
+  bool get isCommission => kind == 'COMMISSION';
+}
+
+/// Saldo TapGo driver, aturan komisi, dan riwayatnya (GET /driver/wallet).
+class DriverWalletSummary {
+  const DriverWalletSummary({
+    required this.balance,
+    required this.commissionEnabled,
+    required this.commissionPercent,
+    required this.topUpUrl,
+    required this.entries,
+  });
+
+  factory DriverWalletSummary.fromJson(Map<String, dynamic> json) {
+    final raw = json['entries'];
+    return DriverWalletSummary(
+      balance: _intOf(json['balance']) ?? 0,
+      commissionEnabled: json['commissionEnabled'] == true,
+      commissionPercent: _intOf(json['commissionPercent']) ?? 8,
+      topUpUrl: '${json['topUpUrl'] ?? 'https://tapgolion.id/topup'}',
+      entries: raw is List
+          ? raw
+              .whereType<Map>()
+              .map((e) => DriverWalletEntry.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
+    );
+  }
+
+  final int balance;
+  final bool commissionEnabled;
+  final int commissionPercent;
+  final String topUpUrl;
+  final List<DriverWalletEntry> entries;
+}
+
 class DriverEarningsSummary {
   const DriverEarningsSummary({
     required this.range,

@@ -17,6 +17,11 @@ final driverPerformanceProvider =
   return repository.performanceSummary();
 });
 
+final driverWalletProvider =
+    FutureProvider.autoDispose<DriverWalletSummary>((ref) {
+  return ref.watch(driverRepositoryProvider).walletSummary();
+});
+
 const _earningsRanges = [
   ('today', 'Hari ini'),
   ('week', '7 hari'),
@@ -43,6 +48,15 @@ class _DriverEarningsScreenState extends ConsumerState<DriverEarningsScreen> {
       padding: EdgeInsets.fromLTRB(16, topPadding, 16, 120),
       children: [
         Text('Pendapatan', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 16),
+        ref.watch(driverWalletProvider).when(
+              loading: () => const SizedBox.shrink(),
+              error: (error, _) => _EarningsError(
+                error: error,
+                onRetry: () => ref.invalidate(driverWalletProvider),
+              ),
+              data: (wallet) => _WalletCard(wallet: wallet),
+            ),
         const SizedBox(height: 16),
         Wrap(
           spacing: 8,
@@ -87,6 +101,91 @@ class _DriverEarningsScreenState extends ConsumerState<DriverEarningsScreen> {
           const DemoScenarioSelector(),
         ],
       ],
+    );
+  }
+}
+
+String _signedRupiah(int amount) =>
+    amount < 0 ? '-${_rupiah(-amount)}' : '+${_rupiah(amount)}';
+
+String _shortDate(DateTime? value) {
+  if (value == null) return '';
+  final local = value.toLocal();
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${two(local.day)}/${two(local.month)}/${local.year} ${two(local.hour)}.${two(local.minute)}';
+}
+
+class _WalletCard extends StatelessWidget {
+  const _WalletCard({required this.wallet});
+  final DriverWalletSummary wallet;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      key: const ValueKey('wallet-card'),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('Saldo TapGo'),
+            const SizedBox(height: 4),
+            Text(_rupiah(wallet.balance),
+                key: const ValueKey('wallet-balance'),
+                style: theme.textTheme.headlineMedium),
+            if (wallet.commissionEnabled) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Pesanan tunai dikenai komisi ${wallet.commissionPercent}% dari tarif, '
+                'dipotong dari saldo ini saat perjalanan selesai. Saldo harus cukup '
+                'untuk menerima pesanan tunai.',
+                key: const ValueKey('wallet-commission-note'),
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              key: const ValueKey('wallet-topup-button'),
+              onPressed: () => launchUrl(
+                Uri.parse(wallet.topUpUrl),
+                mode: LaunchMode.externalApplication,
+              ),
+              icon: const Icon(Icons.add_card_rounded),
+              label: const Text('Isi saldo di tapgolion.id'),
+            ),
+            if (wallet.entries.isNotEmpty) ...[
+              const Divider(height: 28),
+              Text('Riwayat saldo', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 4),
+              for (final entry in wallet.entries)
+                ListTile(
+                  key: ValueKey('wallet-entry-${entry.id}'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text(entry.isCommission
+                      ? 'Komisi pesanan tunai'
+                      : 'Isi saldo'),
+                  subtitle: Text([
+                    _shortDate(entry.createdAt),
+                    if (entry.rideReference != null) entry.rideReference!,
+                    if (entry.shortfall > 0)
+                      'kurang ${_rupiah(entry.shortfall)}',
+                  ].where((s) => s.isNotEmpty).join(' · ')),
+                  trailing: Text(
+                    _signedRupiah(entry.amount),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: entry.amount < 0
+                          ? theme.colorScheme.error
+                          : theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

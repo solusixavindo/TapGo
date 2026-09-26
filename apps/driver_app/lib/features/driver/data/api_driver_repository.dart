@@ -285,6 +285,12 @@ class ApiDriverRepository implements DriverRepository {
   }
 
   @override
+  Future<DriverWalletSummary> walletSummary() async {
+    final data = await _request(() => _dio.get<dynamic>('/driver/wallet'));
+    return DriverWalletSummary.fromJson(data);
+  }
+
+  @override
   Future<DriverPerformanceSummary> performanceSummary() async {
     final data = await _request(() => _dio.get<dynamic>('/driver/performance'));
     return DriverPerformanceSummary.fromJson(data);

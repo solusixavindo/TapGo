@@ -258,4 +258,28 @@ describe.skipIf(!runIntegration)("Komisi pesanan tunai dari saldo driver (D4)", 
     expect(await prisma.wallet.count({ where: { userId: user.id } })).toBe(0);
     expect(await prisma.walletTransaction.count()).toBe(0);
   });
+
+  it("ringkasan saldo driver: saldo, aturan komisi, riwayat komisi dan isi saldo", async () => {
+    const { user } = await createDriver();
+    await fund(user.id, 10_000);
+    const wallet = await walletOf(user.id);
+    await prisma.walletTransaction.create({ data: { walletId: wallet.id, type: "TOPUP", amount: 10_000, referenceType: "WALLET_TOPUP", referenceId: "x" } });
+    const { order } = await createOrder(north(1));
+    await service().acceptOrder({ userId: user.id, publicReference: order.publicReference });
+    await drive(user.id, order.publicReference);
+    const summary = await service().walletSummary(user.id);
+    expect(summary.balance).toBe(9_280);
+    expect(summary.commissionEnabled).toBe(true);
+    expect(summary.commissionPercent).toBe(8);
+    const fee = summary.entries.find((e) => e.kind === "COMMISSION")!;
+    expect(fee.amount).toBe(-720);
+    expect(fee.rideReference).toBe(order.publicReference);
+    expect(fee.shortfall).toBe(0);
+    expect(summary.entries.some((e) => e.kind === "TOPUP" && e.amount === 10_000)).toBe(true);
+  });
+
+  it("ringkasan saldo untuk driver tanpa dompet: nol dan riwayat kosong", async () => {
+    const { user } = await createDriver();
+    expect(await service().walletSummary(user.id)).toMatchObject({ balance: 0, entries: [] });
+  });
 });

@@ -177,6 +177,28 @@ class DemoDriverRepository implements DriverRepository {
   }
 
   @override
+  Future<DriverWalletSummary> walletSummary() async => DriverWalletSummary(
+        balance: 84000,
+        commissionEnabled: true,
+        commissionPercent: 8,
+        topUpUrl: 'https://tapgolion.id/topup',
+        entries: [
+          DriverWalletEntry(
+              id: 'd1',
+              kind: 'COMMISSION',
+              amount: -720,
+              createdAt: DateTime(2026, 9, 10, 9, 30),
+              rideReference: 'RID-DEMO0001',
+              fare: 9000),
+          DriverWalletEntry(
+              id: 'd2',
+              kind: 'TOPUP',
+              amount: 100000,
+              createdAt: DateTime(2026, 9, 9, 18, 5)),
+        ],
+      );
+
+  @override
   Future<DriverEarningsSummary> earningsSummary({String range = 'today'}) async {
     if (_scenario == DriverScenario.networkError) {
       throw const DriverApiException(
