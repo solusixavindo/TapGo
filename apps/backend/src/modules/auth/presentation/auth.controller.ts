@@ -32,24 +32,6 @@ export class AuthController {
     res.json({ success: true, data: result });
   };
 
-  googleAuth = async (req: Request, res: Response) => {
-    const result = await this.authService.googleAuth({
-      idToken: req.body.idToken,
-      context: this.getContext(req)
-    });
-    res.json({ success: true, data: result });
-  };
-
-  googleComplete = async (req: Request, res: Response) => {
-    const result = await this.authService.completeGoogleRegistration({
-      idToken: req.body.idToken,
-      phone: req.body.phone,
-      ...(req.body.fullName !== undefined ? { fullName: req.body.fullName } : {}),
-      context: this.getContext(req)
-    });
-    res.status(StatusCodes.CREATED).json({ success: true, data: result });
-  };
-
   refresh = async (req: Request, res: Response) => {
     const result = await this.authService.refresh(req.body.refreshToken, this.getContext(req));
     res.json({ success: true, data: result });

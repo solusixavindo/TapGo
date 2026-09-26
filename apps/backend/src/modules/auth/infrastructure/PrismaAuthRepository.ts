@@ -46,10 +46,6 @@ export class PrismaAuthRepository implements AuthRepository {
     return this.prisma.user.findUnique({ where: { referralCode } });
   }
 
-  findUserByEmail(email: string) {
-    return this.prisma.user.findFirst({ where: { email: email.toLowerCase() } });
-  }
-
   async getAuthVersion(userId: string): Promise<number> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -101,7 +97,6 @@ export class PrismaAuthRepository implements AuthRepository {
         data: {
           fullName: input.fullName,
           ...(input.email !== undefined ? { email: input.email } : {}),
-          ...(input.emailVerifiedAt !== undefined ? { emailVerifiedAt: input.emailVerifiedAt } : {}),
           phone: input.phone,
           ...(input.passwordHash !== undefined ? { passwordHash: input.passwordHash } : {}),
           role: input.role,
