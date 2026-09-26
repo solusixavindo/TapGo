@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "796745727473",
+    "project_id": "tapgo-c7cb3",
+    "storage_bucket": "tapgo-c7cb3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:796745727473:android:246b65df6b48dad18c5850",
+        "android_client_info": {
+          "package_name": "com.xavindo.tapgo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCktRROM076e2UdyeN_HnzbGWRCvCkMlXs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:796745727473:android:6217155e83800f848c5850",
+        "android_client_info": {
+          "package_name": "com.xavindo.tapgo.driver"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCktRROM076e2UdyeN_HnzbGWRCvCkMlXs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
