@@ -7,6 +7,13 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// FCM: konfigurasi Firebase hanya dibaca bila berkasnya ada. Tanpa
+// google-services.json aplikasi tetap terbangun dan berjalan; push saja yang
+// tidak aktif (Firebase.initializeApp gagal diam-diam di sisi Dart).
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 val hasReleaseSigning = keystorePropertiesFile.exists()

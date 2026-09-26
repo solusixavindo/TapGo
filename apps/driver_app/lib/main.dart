@@ -3,6 +3,8 @@ import 'dart:math';
 
 import 'package:camera/camera.dart';
 import 'package:dio/dio.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
@@ -31,6 +33,7 @@ part 'features/driver/data/session_store.dart';
 part 'features/driver/data/token_refresh_coordinator.dart';
 part 'features/driver/data/api_driver_repository.dart';
 part 'features/driver/location/driver_location_port.dart';
+part 'features/driver/push/driver_push.dart';
 part 'demo/demo_driver_repository.dart';
 part 'features/driver/application/driver_controller.dart';
 part 'features/driver/presentation/driver_screens.dart';

@@ -91,6 +91,10 @@ abstract class DriverRepository {
   /// Beranda untuk penumpang/admin). Dipanggil oleh [DriverLocationPort],
   /// bukan langsung dari UI — port yang mengurus GPS/izin perangkat, repo
   /// ini hanya mengurus jalur HTTP-nya.
+  /// Mendaftarkan / mencabut token push perangkat ini pada akun yang masuk.
+  Future<void> registerPushToken(String token);
+  Future<void> unregisterPushToken(String token);
+
   Future<void> sendLocation({
     required double lat,
     required double lng,

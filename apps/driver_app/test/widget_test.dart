@@ -1211,6 +1211,93 @@ void main() {
       expect(location.sendCalls, before + 3);
     });
 
+    testWidgets('offline: layanan latar depan tidak menyala', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final location = RecordingLocationPort(available: true);
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, locationPort: location));
+      await tester.pumpAndSettle();
+      expect(location.startTrackingCalls, 0);
+    });
+
+    testWidgets(
+        'perjalanan aktif: layanan latar depan menyala dan tetap jalan saat aplikasi ke latar',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        current: demoRide(RideStatus.inTrip),
+      );
+      final location = RecordingLocationPort(available: true);
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, locationPort: location));
+      await tester.pumpAndSettle();
+      expect(location.startTrackingCalls, greaterThan(0));
+      final stopsBefore = location.stopTrackingCalls;
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      final sendsBefore = location.sendCalls;
+      await tester.pump(const Duration(seconds: 5));
+      expect(location.stopTrackingCalls, stopsBefore);
+      expect(location.sendCalls, sendsBefore + 1);
+    });
+
+  group('push notifikasi driver', () {
+    testWidgets(
+        'token didaftarkan setelah workspace aktif dan dicabut saat logout',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = FakePushPlatform(token: 'tok-123');
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, pushPlatform: platform));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 1));
+      expect(repo.registeredPushTokens, ['tok-123']);
+
+      final container = ProviderScope.containerOf(
+          tester.element(find.byType(TapGoDriverApp)));
+      unawaited(container.read(driverControllerProvider.notifier).logout());
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 1));
+      expect(repo.unregisteredPushTokens, ['tok-123']);
+      expect(platform.deleted, isTrue);
+    });
+
+    testWidgets(
+        'izin ditolak (token null): tidak ada pendaftaran, aplikasi tetap jalan',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await tester.pumpWidget(buildTestableDriverApp(
+          repository: repo, pushPlatform: FakePushPlatform(token: null)));
+      await tester.pumpAndSettle();
+      expect(repo.registeredPushTokens, isEmpty);
+      expect(find.byType(DriverShell), findsOneWidget);
+    });
+
+    testWidgets(
+        'pesan ride_offer memicu penyegaran; jenis tak dikenal diabaikan',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = FakePushPlatform(token: 'tok');
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, pushPlatform: platform));
+      await tester.pumpAndSettle();
+      final before = repo.offersCalls;
+
+      platform.foreground.add(const DriverPushMessage(
+          title: 'x', body: 'Pesanan baru', data: {'type': 'evil_action'}));
+      await tester.pumpAndSettle();
+      expect(repo.offersCalls, before);
+
+      platform.foreground.add(const DriverPushMessage(
+          title: 'x',
+          body: 'Pesanan baru',
+          data: {'type': 'ride_offer', 'rideReference': 'RID-ABCDEF12'}));
+      await tester.pumpAndSettle();
+      expect(repo.offersCalls, greaterThan(before));
+    });
+  });
+
     testWidgets(
         'responsive 320, 360, 390, 412 dan text scale 1.8 tanpa overflow',
         (tester) async {
@@ -1341,6 +1428,17 @@ DriverRide demoRideWithLocation(RideStatus status) => DriverRide(
     );
 
 class FakeDriverRepository implements DriverRepository {
+  final List<String> registeredPushTokens = [];
+  final List<String> unregisteredPushTokens = [];
+
+  @override
+  Future<void> registerPushToken(String token) async =>
+      registeredPushTokens.add(token);
+
+  @override
+  Future<void> unregisterPushToken(String token) async =>
+      unregisteredPushTokens.add(token);
+
   FakeDriverRepository({
     required this.session,
     this.current,
@@ -1693,6 +1791,18 @@ class RecordingLocationPort implements DriverLocationPort {
   }) : positionStream = fixes ?? const Stream.empty();
   final bool available;
   int sendCalls = 0;
+  int startTrackingCalls = 0;
+  int stopTrackingCalls = 0;
+
+  @override
+  Future<void> startTracking() async {
+    startTrackingCalls += 1;
+  }
+
+  @override
+  Future<void> stopTracking() async {
+    stopTrackingCalls += 1;
+  }
 
   @override
   Future<bool> get isAvailable async => available;
@@ -1704,4 +1814,22 @@ class RecordingLocationPort implements DriverLocationPort {
 
   @override
   final Stream<(double lat, double lng)> positionStream;
+}
+
+class FakePushPlatform implements DriverPushPlatform {
+  FakePushPlatform({required this.token});
+  final String? token;
+  bool deleted = false;
+  final foreground = StreamController<DriverPushMessage>.broadcast();
+
+  @override
+  Future<String?> obtainToken() async => token;
+  @override
+  Stream<String> get tokenRefreshes => const Stream.empty();
+  @override
+  Stream<DriverPushMessage> get foregroundMessages => foreground.stream;
+  @override
+  Stream<DriverPushMessage> get openedMessages => const Stream.empty();
+  @override
+  Future<void> deleteToken() async => deleted = true;
 }

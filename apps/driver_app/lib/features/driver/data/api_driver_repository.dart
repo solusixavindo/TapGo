@@ -484,6 +484,26 @@ class ApiDriverRepository implements DriverRepository {
   }
 
   @override
+  Future<void> registerPushToken(String token) async {
+    await _request(
+      () => _dio.post<dynamic>(
+        '/notifications/push-token',
+        data: {'token': token, 'platform': 'android'},
+      ),
+    );
+  }
+
+  @override
+  Future<void> unregisterPushToken(String token) async {
+    await _request(
+      () => _dio.delete<dynamic>(
+        '/notifications/push-token',
+        data: {'token': token},
+      ),
+    );
+  }
+
+  @override
   Future<void> sendLocation({
     required double lat,
     required double lng,

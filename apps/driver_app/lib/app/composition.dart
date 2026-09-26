@@ -4,6 +4,7 @@ part of '../main.dart';
 Widget buildTestableDriverApp({
   required DriverRepository repository,
   DriverLocationPort? locationPort,
+  DriverPushPlatform? pushPlatform,
   DriverScenario scenario = DriverScenario.homeOffline,
   ThemeMode themeMode = ThemeMode.light,
   // Splash bergantung pada SharedPreferences (kanal platform) dan jeda
@@ -18,6 +19,7 @@ Widget buildTestableDriverApp({
       driverRepositoryProvider.overrideWithValue(repository),
       locationPortProvider
           .overrideWithValue(locationPort ?? NoDriverLocationPort()),
+      pushPlatformProvider.overrideWithValue(pushPlatform),
       initialScenarioProvider.overrideWithValue(scenario),
       testThemeModeProvider.overrideWithValue(themeMode),
       testSkipSplashProvider.overrideWithValue(skipSplash),
@@ -40,6 +42,9 @@ final locationPortProvider = Provider<DriverLocationPort>((ref) {
   if (kDriverDemoMode) return NoDriverLocationPort();
   return GeolocatorDriverLocationPort(ref.watch(driverRepositoryProvider));
 });
+final pushPlatformProvider = Provider<DriverPushPlatform?>(
+  (_) => kDriverDemoMode || kIsWeb ? null : FirebaseDriverPushPlatform(),
+);
 final initialScenarioProvider =
     Provider<DriverScenario>((_) => _initialScenarioFromUri());
 final testThemeModeProvider = Provider<ThemeMode?>((_) => null);
@@ -49,6 +54,7 @@ final driverControllerProvider =
   return DriverController(
     repository: ref.watch(driverRepositoryProvider),
     locationPort: ref.watch(locationPortProvider),
+    pushPlatform: ref.watch(pushPlatformProvider),
     initialScenario: ref.watch(initialScenarioProvider),
   );
 });

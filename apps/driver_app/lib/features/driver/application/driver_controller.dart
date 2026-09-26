@@ -6,8 +6,10 @@ class DriverController extends StateNotifier<DriverState>
     required DriverRepository repository,
     required DriverLocationPort locationPort,
     required DriverScenario initialScenario,
+    DriverPushPlatform? pushPlatform,
   })  : _repository = repository,
         _locationPort = locationPort,
+        _pushPlatform = pushPlatform,
         super(DriverState.initial(initialScenario)) {
     WidgetsBinding.instance.addObserver(this);
     if (_repository case final DemoDriverRepository demo) {
@@ -18,6 +20,33 @@ class DriverController extends StateNotifier<DriverState>
 
   final DriverRepository _repository;
   final DriverLocationPort _locationPort;
+  final DriverPushPlatform? _pushPlatform;
+  DriverPushController? _push;
+
+  /// Mendaftarkan token push setelah workspace aktif (idempoten).
+  void _startPush() {
+    final platform = _pushPlatform;
+    if (platform == null || _push != null || state.session == null) return;
+    _push = DriverPushController(
+      platform: platform,
+      register: _repository.registerPushToken,
+      unregister: _repository.unregisterPushToken,
+      onMessage: (message, {required bool opened}) {
+        if (!mounted || message.type == null) return;
+        if (!opened && message.body.isNotEmpty) {
+          state = state.copyWith(message: message.body);
+        }
+        unawaited(refreshWorkspace());
+      },
+    );
+    unawaited(_push!.start());
+  }
+
+  Future<void> _stopPush() async {
+    final push = _push;
+    _push = null;
+    await push?.stop();
+  }
   Timer? _pollTimer;
   Timer? _locationTimer;
   bool _polling = false;
@@ -129,6 +158,7 @@ class DriverController extends StateNotifier<DriverState>
 
   Future<void> logout() async {
     _stopPolling();
+    await _stopPush();
     await _repository.logout();
     state = state.copyWith(
       status: DriverWorkspaceStatus.unauthenticated,
@@ -158,6 +188,8 @@ class DriverController extends StateNotifier<DriverState>
           clearMessage: true,
         );
         current.isTerminal ? _stopPolling() : _startPolling();
+        _syncTracking();
+        _startPush();
         return;
       }
       final offers = await _repository.offers();
@@ -173,6 +205,8 @@ class DriverController extends StateNotifier<DriverState>
         clearMessage: true,
       );
       _startPolling();
+      _syncTracking();
+      _startPush();
     } on DriverApiException catch (error) {
       _applyCapabilityError(error);
     } catch (_) {
@@ -555,6 +589,7 @@ class DriverController extends StateNotifier<DriverState>
     _pollTimer = null;
     if (mounted) state = state.copyWith(isPolling: false);
     _stopLocationUpdates();
+    unawaited(_locationPort.stopTracking());
   }
 
   /// Kirim lokasi berkala selama driver online/punya perjalanan aktif —
@@ -569,7 +604,22 @@ class DriverController extends StateNotifier<DriverState>
       const Duration(seconds: 5),
       (_) => unawaited(_sendLocationSilently()),
     );
+    _syncTracking();
   }
+
+  /// Foreground service hanya menyala saat driver ONLINE atau sedang
+  /// menjalankan perjalanan; offline = tidak ada notifikasi dan tidak ada
+  /// pelacakan latar belakang.
+  void _syncTracking() {
+    if (state.availability == DriverAvailability.offline) {
+      unawaited(_locationPort.stopTracking());
+    } else {
+      unawaited(_locationPort.startTracking());
+    }
+  }
+
+  bool get _keepAliveInBackground =>
+      state.availability != DriverAvailability.offline;
 
   int _locationTicks = 0;
 
@@ -616,8 +666,9 @@ class DriverController extends StateNotifier<DriverState>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
+    if ((state == AppLifecycleState.paused ||
+            state == AppLifecycleState.inactive) &&
+        !_keepAliveInBackground) {
       _stopPolling();
     }
     if (state == AppLifecycleState.resumed) {

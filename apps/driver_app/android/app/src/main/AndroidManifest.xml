@@ -12,10 +12,20 @@
          lokasi latar belakang. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Layanan latar depan (jenis lokasi) selama driver ONLINE atau punya
+         perjalanan aktif, dengan notifikasi permanen. Bukan akses lokasi latar
+         belakang saat offline. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <application
         android:label="TapGo Driver"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="tapgo_default" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
