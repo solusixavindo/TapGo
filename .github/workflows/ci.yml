@@ -225,4 +225,6 @@ jobs:
         run: flutter build apk --release --target-platform android-arm64
 
       - name: Periksa isi APK (tidak ada jejak admin/Founder)
+        env:
+          VERIFY_CONTROL_STRING: /driver/rides/offers
         run: bash scripts/verify-mobile-artifact.sh apps/driver_app/build/app/outputs/flutter-apk/app-release.apk

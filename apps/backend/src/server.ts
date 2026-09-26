@@ -7,6 +7,7 @@ import { logger } from "./core/logger/logger.js";
 import { initSentry } from "./core/monitoring/sentry.js";
 import { disconnectRateLimitStore } from "./core/security/rateLimitStore.js";
 import { DriverDocumentService } from "./modules/drivers/application/DriverDocumentService.js";
+import { expireStaleRideSearches } from "./modules/rides/application/rideSearchExpiry.js";
 import { MembershipDocumentService } from "./modules/memberships/application/MembershipDocumentService.js";
 import { PpobService } from "./modules/ppob/application/PpobService.js";
 import { PpobPriceSyncService } from "./modules/ppob/application/PpobPriceSyncService.js";
@@ -117,6 +118,23 @@ async function purgeExpiredDocuments() {
   }
 }
 
+const RIDE_SEARCH_SWEEP_INTERVAL_MS = 30 * 1000;
+
+/** Pesanan tanpa driver melewati batas waktu pencarian menjadi NO_DRIVER (Stage D2). */
+async function sweepStaleRideSearches() {
+  try {
+    const expired = await expireStaleRideSearches(prisma);
+    if (expired > 0) {
+      logger.info({ expired }, "Ride searches expired (NO_DRIVER)");
+    }
+  } catch (error) {
+    logger.error({ err: error }, "Failed to expire stale ride searches");
+  }
+}
+
+const rideSearchTimer = setInterval(() => void sweepStaleRideSearches(), RIDE_SEARCH_SWEEP_INTERVAL_MS);
+rideSearchTimer.unref();
+
 const purgeTimer = setInterval(() => void purgeExpiredDocuments(), PURGE_INTERVAL_MS);
 purgeTimer.unref();
 void purgeExpiredDocuments();
@@ -191,6 +209,7 @@ const server = httpServer.listen(env.PORT, env.HOST, () => {
 async function shutdown(signal: string) {
   logger.info({ signal }, "Shutting down server");
   clearInterval(purgeTimer);
+  clearInterval(rideSearchTimer);
   if (ppobReconcileTimer) {
     clearInterval(ppobReconcileTimer);
   }

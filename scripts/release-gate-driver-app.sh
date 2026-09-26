@@ -49,8 +49,8 @@ apk="$app/build/app/outputs/flutter-apk/app-release.apk"
 aab="$app/build/app/outputs/bundle/release/app-release.aab"
 
 step "5. Pemeriksa artefak dan identitas paket"
-"$root/scripts/verify-mobile-artifact.sh" "$apk"
-"$root/scripts/verify-mobile-artifact.sh" "$aab"
+VERIFY_CONTROL_STRING="/driver/rides/offers" "$root/scripts/verify-mobile-artifact.sh" "$apk"
+VERIFY_CONTROL_STRING="/driver/rides/offers" "$root/scripts/verify-mobile-artifact.sh" "$aab"
 aapt="$(ls -d "$HOME"/Library/Android/sdk/build-tools/*/aapt 2>/dev/null | tail -1)"
 if [ -n "$aapt" ]; then
   badging="$("$aapt" dump badging "$apk")"

@@ -157,6 +157,14 @@ const envSchema = z.object({
   // Release 1 tidak memakai realtime/chat. Fail-closed: Socket.IO hanya
   // di-attach bila diaktifkan eksplisit ("true"). Nilai lain -> false.
   REALTIME_ENABLED: strictEnvBoolean(false),
+  /// Tawaran pesanan ke driver berdasarkan jarak (Stage D2, 2026-09-26): hanya pesanan
+  /// dalam RIDE_OFFER_RADIUS_METERS dari posisi segar driver yang tampil dan dapat
+  /// diterima. Bila false, perilaku lama (semua pesanan sejenis tampil) dipakai —
+  /// hanya untuk uji lama; produksi memakai true.
+  RIDE_OFFER_PROXIMITY_ENABLED: strictEnvBoolean(true),
+  RIDE_OFFER_RADIUS_METERS: z.coerce.number().int().min(500).max(50000).default(5000),
+  /// Pesanan yang belum mendapat driver setelah selama ini otomatis menjadi NO_DRIVER.
+  RIDE_SEARCH_TIMEOUT_SECONDS: z.coerce.number().int().min(30).max(1800).default(180),
   /// Adapter provider PPOB (Stage R2.7/R2.8). Default "disabled": setiap
   /// pembelian dibatalkan dengan refund penuh dan 503 PPOB_PROVIDER_DISABLED.
   /// "stub" menyalakan adapter sintetis deterministik untuk UAT. "digiflazz"

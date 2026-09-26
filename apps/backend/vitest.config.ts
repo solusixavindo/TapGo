@@ -3,6 +3,9 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
+    // Uji lama (sebelum Stage D2) berasumsi semua pesanan tampil untuk semua driver.
+    // Uji D2 menyalakan proximity secara eksplisit lewat objek env.
+    env: { RIDE_OFFER_PROXIMITY_ENABLED: "false" },
     globals: false,
     include: ["tests/**/*.test.ts"],
     setupFiles: ["tests/setup/disconnectPrismaAfterFile.ts"],

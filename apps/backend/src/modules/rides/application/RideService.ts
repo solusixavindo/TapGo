@@ -574,6 +574,24 @@ export class RideService {
   }
 
   /** Tawaran yang layak untuk driver (hanya order yang masih mencari driver). */
+  /** Titik lokasi driver yang masih segar (<= LOCATION_MAX_AGE_SECONDS), atau null. */
+  private async freshDriverPoint(driverProfileId: string, now = new Date()) {
+    const fix = await this.prisma.rideDriverLocation.findFirst({
+      where: {
+        driverProfileId,
+        capturedAt: { gte: new Date(now.getTime() - LOCATION_MAX_AGE_SECONDS * 1000) },
+      },
+      orderBy: { capturedAt: "desc" },
+      select: { lat: true, lng: true },
+    });
+    return fix ? { lat: Number(fix.lat), lng: Number(fix.lng) } : null;
+  }
+
+  /**
+   * Tawaran untuk driver ONLINE. Dengan proximity aktif: hanya pesanan yang belum
+   * kedaluwarsa dan berada dalam radius dari posisi segar driver, terdekat lebih
+   * dulu, beserta jarak ke titik jemput. Tanpa posisi segar tidak ada tawaran.
+   */
   async listOffersForDriver(userId: string, limit = 10) {
     const profile = await this.requireDriverProfile(userId);
     // Kapabilitas (User.status + profile.status) sudah ditegakkan
@@ -594,26 +612,40 @@ export class RideService {
     });
     if (vehicleTypes.length === 0) return [];
 
+    const proximity = env.RIDE_OFFER_PROXIMITY_ENABLED;
+    const now = new Date();
+    const driverPoint = proximity ? await this.freshDriverPoint(profile.id, now) : null;
+    if (proximity && !driverPoint) return [];
+
     const orders = await this.prisma.rideOrder.findMany({
       where: {
         status: "SEARCHING_DRIVER",
         driverProfileId: null,
         serviceType: { in: vehicleTypes.map((v) => v.type) },
+        ...(proximity
+          ? { createdAt: { gte: new Date(now.getTime() - env.RIDE_SEARCH_TIMEOUT_SECONDS * 1000) } }
+          : {}),
       },
       orderBy: { createdAt: "asc" },
-      take: Math.max(1, Math.min(limit, 20)),
+      take: proximity ? 100 : Math.max(1, Math.min(limit, 20)),
     });
 
-    return orders.map((o) => this.toOfferView(o));
+    if (!proximity || !driverPoint) {
+      return orders.map((o) => this.toOfferView(o));
+    }
+    return orders
+      .map((order) => ({
+        order,
+        meters: Math.round(
+          haversineMeters(driverPoint, { lat: Number(order.pickupLat), lng: Number(order.pickupLng) }),
+        ),
+      }))
+      .filter((entry) => entry.meters <= env.RIDE_OFFER_RADIUS_METERS)
+      .sort((a, b) => a.meters - b.meters || a.order.createdAt.getTime() - b.order.createdAt.getTime())
+      .slice(0, Math.max(1, Math.min(limit, 20)))
+      .map((entry) => ({ ...this.toOfferView(entry.order), distanceToPickupMeters: entry.meters }));
   }
 
-  /**
-   * Memulihkan perjalanan aktif milik driver dari database.
-   *
-   * Tidak bergantung pada availability ONLINE/OFFLINE dan tidak menerima
-   * identitas driver dari client. Bila data ganda ditemukan, endpoint fail
-   * closed agar aplikasi driver tidak memilih perjalanan secara acak.
-   */
   async getCurrentRideForDriver(userId: string) {
     const profile = await this.requireDriverProfile(userId);
     const orders = await this.prisma.rideOrder.findMany({
@@ -755,6 +787,9 @@ export class RideService {
       );
     }
 
+    const driverPoint = env.RIDE_OFFER_PROXIMITY_ENABLED
+      ? await this.freshDriverPoint(profile.id)
+      : null;
     let transitioned = false;
     const view = await this.prisma.$transaction(async (tx) => {
       const order = await tx.rideOrder.findUnique({
@@ -772,6 +807,36 @@ export class RideService {
       // Idempoten: driver yang sama menerima ulang order miliknya.
       if (order.driverProfileId === profile.id) {
         return this.toOrderView(order);
+      }
+
+      if (env.RIDE_OFFER_PROXIMITY_ENABLED) {
+        if (!driverPoint) {
+          throw new AppError(
+            "Lokasi Anda belum terbaca. Pastikan GPS aktif lalu coba lagi.",
+            StatusCodes.CONFLICT,
+            "RIDE_DRIVER_LOCATION_REQUIRED",
+          );
+        }
+        const ageMs = Date.now() - order.createdAt.getTime();
+        if (order.status === "SEARCHING_DRIVER" && ageMs > env.RIDE_SEARCH_TIMEOUT_SECONDS * 1000) {
+          throw new AppError(
+            "Tawaran ini sudah kedaluwarsa",
+            StatusCodes.CONFLICT,
+            "RIDE_OFFER_EXPIRED",
+          );
+        }
+        const meters = haversineMeters(driverPoint, {
+          lat: Number(order.pickupLat),
+          lng: Number(order.pickupLng),
+        });
+        // Toleransi 25%: driver bergerak antara melihat tawaran dan menerimanya.
+        if (meters > env.RIDE_OFFER_RADIUS_METERS * 1.25) {
+          throw new AppError(
+            "Titik jemput terlalu jauh dari posisi Anda",
+            StatusCodes.CONFLICT,
+            "RIDE_OFFER_OUT_OF_RANGE",
+          );
+        }
       }
 
       const vehicle = await tx.rideVehicle.findFirst({
