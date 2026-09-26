@@ -118,6 +118,13 @@ export function verifyDocuments(orderId: string) {
   });
 }
 
+export function requestDocumentCorrection(orderId: string, reason: string) {
+  return request<{ id: string; correctionRequested: boolean }>(
+    `/admin/member-requests/${orderId}/request-correction`,
+    { method: "POST", body: JSON.stringify({ reason }) }
+  );
+}
+
 export function rejectDocuments(orderId: string, reason: string) {
   return request<MemberRequest>(`/admin/member-requests/${orderId}/reject-documents`, {
     method: "POST",

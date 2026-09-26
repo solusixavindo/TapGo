@@ -10,7 +10,8 @@ import {
   UpgradeOrder,
   UpgradeOrderStatus,
   getOrder,
-  readSession
+  readSession,
+  uploadDocument
 } from "../api";
 import { formatRupiah, primaryButtonClass, secondaryButtonClass } from "../upgrade-shell";
 
@@ -78,8 +79,77 @@ const PREVIEW_ORDER: UpgradeOrder = {
   status: "PAID_AWAITING_VERIFICATION",
   createdAt: "2026-08-12T09:20:00.000Z",
   invoiceNumber: "INV-2026-000481",
-  buyerName: "Budi Santoso"
+  buyerName: "Budi Santoso",
+  correction: { reason: "Foto KTP kurang jelas, mohon unggah ulang", resubmitted: false }
 };
+
+/**
+ * Admin meminta dokumen diperbaiki: tampilkan catatannya dan beri jalan
+ * mengunggah ulang tanpa mengulang pembayaran.
+ */
+function CorrectionPanel({ order, onDone }: { order: UpgradeOrder; onDone: () => void }) {
+  const [ktp, setKtp] = useState<File | null>(null);
+  const [selfie, setSelfie] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
+
+  async function submit() {
+    if (busy || (!ktp && !selfie)) return;
+    setBusy(true);
+    setError("");
+    try {
+      const token = readSession(TOKEN_KEY);
+      if (ktp) await uploadDocument(token, order.id, "ktp", ktp);
+      if (selfie) await uploadDocument(token, order.id, "selfie", selfie);
+      setDone(true);
+      onDone();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Dokumen belum dapat diunggah.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const pick = (setter: (file: File | null) => void) => (event: React.ChangeEvent<HTMLInputElement>) =>
+    setter(event.target.files?.[0] ?? null);
+
+  return (
+    <div className="mt-5 rounded-2xl border border-amber-400/40 bg-amber-400/10 p-4" data-testid="correction-panel">
+      <p className="text-sm font-black themed-accent">Dokumen perlu diperbaiki</p>
+      {order.correction?.reason ? (
+        <p className="mt-2 text-sm leading-7 themed-text">Catatan tim TapGo: “{order.correction.reason}”</p>
+      ) : null}
+      <p className="mt-2 text-xs leading-6 themed-text-muted">
+        Unggah ulang dokumen yang perlu diganti (JPG atau PNG, maksimal 5 MB). Pembayaran Anda tetap aman dan tidak perlu diulang.
+      </p>
+      {done ? (
+        <p role="status" className="mt-3 text-sm font-bold text-brand-green">
+          Dokumen perbaikan terkirim. Kami periksa kembali secepatnya.
+        </p>
+      ) : (
+        <>
+          <label className="mt-4 block text-xs font-bold uppercase tracking-wider themed-text-muted">
+            Foto KTP (opsional bila tidak diganti)
+            <input type="file" accept="image/png,image/jpeg" onChange={pick(setKtp)} className="mt-1 block w-full text-sm themed-text" />
+          </label>
+          <label className="mt-3 block text-xs font-bold uppercase tracking-wider themed-text-muted">
+            Swafoto dengan KTP (opsional bila tidak diganti)
+            <input type="file" accept="image/png,image/jpeg" onChange={pick(setSelfie)} className="mt-1 block w-full text-sm themed-text" />
+          </label>
+          {error ? (
+            <p role="alert" className="mt-3 text-sm font-semibold text-rose-300">
+              {error}
+            </p>
+          ) : null}
+          <button type="button" onClick={() => void submit()} disabled={busy || (!ktp && !selfie)} className={`${primaryButtonClass} mt-4`}>
+            {busy ? "Mengunggah…" : "Kirim dokumen perbaikan"}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
 
 function formatMoment(value: string) {
   const parsed = new Date(value);
@@ -208,6 +278,15 @@ export default function OrderStatus() {
               </dd>
             </div>
           </dl>
+
+          {status === "PAID_AWAITING_VERIFICATION" && order.correction && !order.correction.resubmitted ? (
+            <CorrectionPanel order={order} onDone={() => void refresh()} />
+          ) : null}
+          {status === "PAID_AWAITING_VERIFICATION" && order.correction?.resubmitted ? (
+            <p className="mt-5 rounded-2xl border border-brand-green/30 bg-brand-green/10 px-4 py-3 text-xs font-semibold text-brand-green">
+              Dokumen perbaikan Anda sudah kami terima dan sedang diperiksa ulang.
+            </p>
+          ) : null}
 
           {error ? (
             <p className="mt-5 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs font-semibold text-amber-300">

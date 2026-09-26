@@ -412,6 +412,80 @@ export class MembershipOrderService {
   /// Karena order WEB tidak pernah aktif sebelum diverifikasi, penolakan di
   /// sini selalu bersih: tidak ada satu pun catatan Business Engine yang perlu
   /// dibatalkan.
+  /**
+   * Admin meminta pemohon memperbaiki dokumen (mis. foto buram) tanpa menolak
+   * pengajuan: pesanan tetap PAID, dana tidak dikembalikan, dan pemohon dapat
+   * mengunggah ulang. Unggahan ulang menandai `documentCorrection.resubmittedAt`
+   * (lihat MembershipDocumentService.upload). Catatan wajib supaya pemohon tahu
+   * apa yang harus diperbaiki.
+   */
+  async requestOrderCorrection(input: { orderId: string; adminId: string; reason: string }) {
+    const reason = input.reason.trim();
+    if (reason.length < 3 || reason.length > 300) {
+      throw new AppError("Catatan perbaikan wajib diisi (3-300 karakter).", StatusCodes.BAD_REQUEST, "MEMBERSHIP_CORRECTION_REASON_INVALID");
+    }
+    const order = await this.prisma.$transaction(async (tx) => {
+      const found = await tx.membershipOrder.findUnique({
+        where: { id: input.orderId },
+        include: activationOrderInclude
+      });
+      if (!found) {
+        throw new AppError("Membership order not found", StatusCodes.NOT_FOUND, "MEMBERSHIP_ORDER_NOT_FOUND");
+      }
+      if (!this.requiresDocumentVerification(found.channel)) {
+        throw new AppError(
+          "Membership order for this channel has no document decision",
+          StatusCodes.CONFLICT,
+          "MEMBERSHIP_VERIFICATION_NOT_REQUIRED"
+        );
+      }
+      if (found.status !== "PAID") {
+        throw new AppError("Membership order must be paid before a document decision", StatusCodes.CONFLICT, "MEMBERSHIP_ORDER_NOT_PAID");
+      }
+      if (found.userMembership) {
+        throw new AppError("Membership order has already been activated", StatusCodes.CONFLICT, "MEMBERSHIP_ALREADY_ACTIVATED");
+      }
+
+      const now = new Date();
+      const data = this.asObject(found.registrationData);
+      const previous = this.asObject((data.documentCorrection ?? null) as Prisma.JsonValue);
+      const count = typeof previous.count === "number" ? previous.count + 1 : 1;
+      await tx.membershipOrder.update({
+        where: { id: found.id },
+        data: {
+          registrationData: {
+            ...data,
+            documentCorrection: {
+              requestedBy: input.adminId,
+              requestedAt: now.toISOString(),
+              reason,
+              count,
+              resubmittedAt: null
+            }
+          }
+        }
+      });
+      // Dokumen lama ditandai ditolak supaya jelas bahwa yang tampil di antrean
+      // admin belum diganti; unggahan ulang mengembalikannya ke PENDING.
+      await tx.membershipDocument.updateMany({
+        where: { orderId: found.id, status: "PENDING" },
+        data: { status: "REJECTED" }
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId: input.adminId,
+          action: "MEMBERSHIP_CORRECTION_REQUESTED",
+          entityType: "MembershipOrder",
+          entityId: found.id,
+          metadata: { count }
+        }
+      });
+      return found;
+    });
+    pushQuietly(this.push, order.userId, accountPushMessages.membershipCorrection, { type: "membership_order", orderId: order.id });
+    return { id: order.id, status: order.status, correctionRequested: true };
+  }
+
   async rejectOrderDocuments(input: { orderId: string; adminId: string; reason?: string }) {
     const order = await this.rejectOrderDocumentsTransaction(input);
     pushQuietly(this.push, order.userId, accountPushMessages.membershipRejected, { type: "membership_order", orderId: order.id });

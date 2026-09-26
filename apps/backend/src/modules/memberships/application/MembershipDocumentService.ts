@@ -1,4 +1,4 @@
-import { MembershipDocumentType, PrismaClient } from "@prisma/client";
+import { MembershipDocumentType, Prisma, PrismaClient } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { env } from "../../../config/env.js";
 import { AppError } from "../../../core/errors/AppError.js";
@@ -60,7 +60,7 @@ export class MembershipDocumentService {
 
     const order = await this.prisma.membershipOrder.findUnique({
       where: { id: input.orderId },
-      select: { id: true, userId: true, status: true, userMembership: { select: { id: true } } }
+      select: { id: true, userId: true, status: true, registrationData: true, userMembership: { select: { id: true } } }
     });
 
     if (!order) {
@@ -117,6 +117,28 @@ export class MembershipDocumentService {
       create: { orderId: order.id, userId: order.userId, type: input.type, ...stored },
       select: { id: true, type: true, sizeBytes: true, checksum: true, expiresAt: true }
     });
+
+    // Permintaan perbaikan yang sedang terbuka: unggahan ini menandainya sudah
+    // dijawab, sehingga admin melihat pengajuan sudah diperbaiki.
+    const registration =
+      order.registrationData && typeof order.registrationData === "object" && !Array.isArray(order.registrationData)
+        ? (order.registrationData as Record<string, unknown>)
+        : {};
+    const correction = registration.documentCorrection;
+    if (correction && typeof correction === "object" && !Array.isArray(correction)) {
+      const current = correction as Record<string, unknown>;
+      if (!current.resubmittedAt) {
+        await this.prisma.membershipOrder.update({
+          where: { id: order.id },
+          data: {
+            registrationData: {
+              ...registration,
+              documentCorrection: { ...current, resubmittedAt: now.toISOString() }
+            } as Prisma.InputJsonValue
+          }
+        });
+      }
+    }
 
     return document;
   }

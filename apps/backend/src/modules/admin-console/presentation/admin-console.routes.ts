@@ -177,6 +177,11 @@ adminConsoleRouter.post(
   asyncHandler(controller.rejectMemberRequestDocuments)
 );
 adminConsoleRouter.post(
+  "/member-requests/:id/request-correction",
+  validateRequest(adminMemberRequestActionSchema),
+  asyncHandler(controller.requestMemberRequestCorrection)
+);
+adminConsoleRouter.post(
   "/member-requests/:id/execute-refund",
   requireRoles("SUPER_ADMIN"),
   validateRequest(adminMemberRequestActionSchema),

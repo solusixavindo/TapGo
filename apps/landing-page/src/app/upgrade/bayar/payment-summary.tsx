@@ -23,7 +23,8 @@ const PREVIEW_ORDER: UpgradeOrder = {
   status: "PENDING",
   createdAt: new Date().toISOString(),
   invoiceNumber: "INV-MBR-20260812-CONTOH",
-  buyerName: "Budi Santoso"
+  buyerName: "Budi Santoso",
+  correction: null
 };
 
 export default function PaymentSummary() {

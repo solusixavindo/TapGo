@@ -14,6 +14,7 @@ import {
   readRole,
   readToken,
   rejectDocuments,
+  requestDocumentCorrection,
   setMemberAccountStatus,
   verifyDocuments
 } from "../../lib/api";
@@ -33,9 +34,21 @@ function isAwaitingVerification(request: MemberRequest) {
   return request.status === "PAID" && !request.userMembership;
 }
 
+type CorrectionInfo = { reason?: string; requestedAt?: string; resubmittedAt?: string | null; count?: number };
+
+/** Permintaan perbaikan dokumen yang pernah diajukan admin, bila ada. */
+function correctionOf(request: MemberRequest): CorrectionInfo | null {
+  const value = request.registrationData?.documentCorrection;
+  return value && typeof value === "object" ? (value as CorrectionInfo) : null;
+}
+
 function statusLabel(request: MemberRequest) {
   if (request.status === "PAID" && request.userMembership) return "Aktif";
-  if (request.status === "PAID") return "Menunggu verifikasi";
+  if (request.status === "PAID") {
+    const correction = correctionOf(request);
+    if (correction) return correction.resubmittedAt ? "Sudah diperbaiki, menunggu verifikasi" : "Menunggu perbaikan dari pemohon";
+    return "Menunggu verifikasi";
+  }
   if (request.status === "PENDING") return "Menunggu pembayaran";
   if (request.status === "CANCELLED") {
     const rejected = Boolean(request.registrationData?.documentRejection);
@@ -62,6 +75,7 @@ export default function MemberRequestsPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [rejectReason, setRejectReason] = useState("");
+  const [correctionReason, setCorrectionReason] = useState("");
   const [accountReason, setAccountReason] = useState("");
 
   const selected = useMemo(
@@ -104,8 +118,10 @@ export default function MemberRequestsPage() {
     };
   }, [selectedId]);
 
-  async function decide(action: "verify" | "reject") {
+  async function decide(action: "verify" | "reject" | "correct") {
     if (!selected || busy) return;
+    if (action === "verify" && !window.confirm(`Verifikasi dan aktifkan membership ${selected.user?.fullName ?? ""}? Bonus sponsor dan level akan diproses dan tidak dapat dibatalkan.`)) return;
+    if (action === "reject" && !window.confirm("Tolak pengajuan ini? Pengajuan dibatalkan dan pengembalian dana penuh dicatat.")) return;
     setBusy(true);
     setError("");
     setNotice("");
@@ -113,6 +129,10 @@ export default function MemberRequestsPage() {
       if (action === "verify") {
         await verifyDocuments(selected.id);
         setNotice("Dokumen diverifikasi. Membership sudah aktif.");
+      } else if (action === "correct") {
+        await requestDocumentCorrection(selected.id, correctionReason.trim());
+        setNotice("Permintaan perbaikan terkirim. Pemohon diberi tahu dan dapat mengunggah ulang dokumen.");
+        setCorrectionReason("");
       } else {
         await rejectDocuments(selected.id, rejectReason.trim());
         setNotice("Dokumen ditolak. Pengembalian dana penuh tercatat.");
@@ -351,39 +371,80 @@ export default function MemberRequestsPage() {
 
                 {isAwaitingVerification(selected) ? (
                   <div className="mt-6 border-t border-slate-200 pt-5 print:hidden">
-                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                      Keputusan
-                    </p>
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Keputusan</p>
                     <p className="mt-2 text-sm leading-6 text-slate-600">
-                      Cetak berkasnya lebih dulu. Menolak dokumen membatalkan pengajuan
-                      dan mencatat pengembalian dana penuh.
+                      Cetak berkasnya lebih dulu, lalu pilih satu: setujui, minta pemohon memperbaiki dokumen, atau tolak.
                     </p>
 
-                    <div className="mt-4 flex flex-wrap items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => void decide("verify")}
-                        disabled={busy}
-                        className="rounded-lg bg-brand-green px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-                      >
-                        {busy ? "Memproses…" : "Verifikasi dan aktifkan"}
-                      </button>
+                    {(() => {
+                      const correction = correctionOf(selected);
+                      if (!correction) return null;
+                      return (
+                        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                          {correction.resubmittedAt
+                            ? "Pemohon sudah mengunggah ulang dokumen. Periksa lagi lalu putuskan."
+                            : "Menunggu pemohon memperbaiki dokumen."}
+                          {correction.reason ? ` Catatan terakhir: “${correction.reason}”.` : ""}
+                          {correction.count && correction.count > 1 ? ` (permintaan ke-${correction.count})` : ""}
+                        </p>
+                      );
+                    })()}
 
-                      <input
-                        value={rejectReason}
-                        onChange={(event) => setRejectReason(event.target.value)}
-                        placeholder="Alasan penolakan"
-                        maxLength={500}
-                        className="min-w-[220px] flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-rose-400"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void decide("reject")}
-                        disabled={busy}
-                        className="rounded-lg border border-rose-300 px-4 py-2.5 text-sm font-semibold text-rose-700 disabled:opacity-50"
-                      >
-                        Tolak dan kembalikan dana
-                      </button>
+                    <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4">
+                        <p className="text-sm font-bold text-slate-800">Setujui</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">Membership langsung aktif dan bonus diproses.</p>
+                        <button
+                          type="button"
+                          onClick={() => void decide("verify")}
+                          disabled={busy}
+                          className="mt-3 w-full rounded-lg bg-brand-green px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                        >
+                          {busy ? "Memproses…" : "Verifikasi dan aktifkan"}
+                        </button>
+                      </div>
+
+                      <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+                        <p className="text-sm font-bold text-slate-800">Perbaiki</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                          Pemohon diberi tahu dan mengunggah ulang. Dana tidak dikembalikan.
+                        </p>
+                        <input
+                          value={correctionReason}
+                          onChange={(event) => setCorrectionReason(event.target.value)}
+                          placeholder="Apa yang perlu diperbaiki (wajib)"
+                          maxLength={300}
+                          className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-amber-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void decide("correct")}
+                          disabled={busy || correctionReason.trim().length < 3}
+                          className="mt-2 w-full rounded-lg border border-amber-400 bg-white px-4 py-2.5 text-sm font-semibold text-amber-800 disabled:opacity-50"
+                        >
+                          Minta perbaikan
+                        </button>
+                      </div>
+
+                      <div className="rounded-xl border border-rose-200 bg-rose-50/40 p-4">
+                        <p className="text-sm font-bold text-slate-800">Tolak</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">Pengajuan dibatalkan dan pengembalian dana penuh dicatat.</p>
+                        <input
+                          value={rejectReason}
+                          onChange={(event) => setRejectReason(event.target.value)}
+                          placeholder="Alasan penolakan"
+                          maxLength={500}
+                          className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void decide("reject")}
+                          disabled={busy}
+                          className="mt-2 w-full rounded-lg border border-rose-300 bg-white px-4 py-2.5 text-sm font-semibold text-rose-700 disabled:opacity-50"
+                        >
+                          Tolak dan kembalikan dana
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ) : null}

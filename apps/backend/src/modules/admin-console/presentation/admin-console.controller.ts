@@ -230,6 +230,16 @@ export class AdminConsoleController {
     res.json({ success: true, data: result });
   };
 
+  /// Meminta pemohon memperbaiki dokumen tanpa menolak pengajuan.
+  requestMemberRequestCorrection = async (req: Request, res: Response) => {
+    const result = await this.membershipOrderService.requestOrderCorrection({
+      orderId: String(req.params.id),
+      adminId: req.auth!.userId,
+      reason: typeof req.body.reason === "string" ? req.body.reason : ""
+    });
+    res.json({ success: true, data: result });
+  };
+
   /// Menjalankan pengembalian dana yang sudah diputuskan. Terpisah dari
   /// penolakan dokumen supaya kegagalan penyedia tidak membatalkan keputusan
   /// admin, dan supaya percobaannya dapat diulang.

@@ -2,6 +2,7 @@ import { MembershipOrderChannel, User, UserRole } from "@prisma/client";
 import http, { Server } from "node:http";
 import { AddressInfo } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { MembershipDocumentService } from "../../src/modules/memberships/application/MembershipDocumentService.js";
 import { MembershipOrderService } from "../../src/modules/memberships/application/MembershipOrderService.js";
 import {
   cleanDatabase,
@@ -29,6 +30,8 @@ type SignAccessToken = (payload: {
 
 const VERIFY_PATH = (orderId: string) =>
   `/api/v1/admin/member-requests/${orderId}/verify-documents`;
+const CORRECTION_PATH = (orderId: string) =>
+  `/api/v1/admin/member-requests/${orderId}/request-correction`;
 const REJECT_PATH = (orderId: string) =>
   `/api/v1/admin/member-requests/${orderId}/reject-documents`;
 
@@ -295,6 +298,81 @@ describe.skipIf(!runIntegration)("Admin membership document verification", () =>
     const response = await reject(order.id, admin);
     expect(response.status).toBe(409);
     expect(await codeOf(response)).toBe("MEMBERSHIP_VERIFICATION_NOT_REQUIRED");
+  });
+
+  describe("meminta perbaikan dokumen", () => {
+    const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("perbaikan")]);
+    let previousSecret: string | undefined;
+    beforeAll(async () => {
+      const { env } = await import("../../src/config/env.js");
+      previousSecret = env.MEMBERSHIP_DOCUMENT_SECRET;
+      env.MEMBERSHIP_DOCUMENT_SECRET = "kunci-uji-dokumen-tapgo-minimal-32-karakter";
+    });
+    afterAll(async () => {
+      const { env } = await import("../../src/config/env.js");
+      env.MEMBERSHIP_DOCUMENT_SECRET = previousSecret as string;
+    });
+
+    it("ADMIN meminta perbaikan: order tetap lunas tanpa refund, catatan tersimpan, audit dan dokumen ditandai", async () => {
+      const order = await createPaidWebOrder({ withDocuments: true });
+      const admin = await createUser("CORRADM", "ADMIN");
+
+      const response = await post(CORRECTION_PATH(order.id), admin, { reason: "Foto KTP buram, mohon unggah ulang" });
+      expect(response.status).toBe(200);
+
+      const stored = await prisma.membershipOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(stored.status).toBe("PAID");
+      const data = stored.registrationData as { documentCorrection?: { reason: string; resubmittedAt: string | null; count: number }; documentRejection?: unknown };
+      expect(data.documentCorrection).toMatchObject({ reason: "Foto KTP buram, mohon unggah ulang", resubmittedAt: null, count: 1 });
+      expect(data.documentRejection).toBeUndefined();
+      expect(await documentStatuses(order.id)).toEqual(["REJECTED", "REJECTED"]);
+      expect(await prisma.auditLog.count({ where: { action: "MEMBERSHIP_CORRECTION_REQUESTED", entityId: order.id } })).toBe(1);
+      await expectNotActivated(order.id);
+    });
+
+    it("catatan wajib; USER dan tanpa token ditolak; order APP tidak punya keputusan dokumen", async () => {
+      const order = await createPaidWebOrder({ withDocuments: true });
+      const admin = await createUser("CORRREQ", "ADMIN");
+      const outsider = await createUser("CORRUSR", "USER");
+
+      expect((await post(CORRECTION_PATH(order.id), admin, {})).status).toBe(400);
+      expect((await post(CORRECTION_PATH(order.id), admin, { reason: "ab" })).status).toBe(400);
+      expect((await post(CORRECTION_PATH(order.id), outsider, { reason: "Tolong perbaiki" })).status).toBe(403);
+      expect((await post(CORRECTION_PATH(order.id), undefined, { reason: "Tolong perbaiki" })).status).toBe(401);
+
+      const appOrder = await createPaidWebOrder({ channel: "APP" });
+      const response = await post(CORRECTION_PATH(appOrder.id), admin, { reason: "Tolong perbaiki" });
+      expect(response.status).toBe(409);
+      expect(await codeOf(response)).toBe("MEMBERSHIP_VERIFICATION_NOT_REQUIRED");
+    });
+
+    it("pemohon mengunggah ulang: penanda resubmittedAt terisi, dokumen kembali PENDING, lalu admin dapat memverifikasi", async () => {
+      const order = await createPaidWebOrder({ withDocuments: true });
+      const admin = await createUser("CORRFLOW", "ADMIN");
+      expect((await post(CORRECTION_PATH(order.id), admin, { reason: "Selfie gelap" })).status).toBe(200);
+
+      const documents = new MembershipDocumentService(prisma);
+      await documents.upload({ userId: order.buyerId, orderId: order.id, type: "SELFIE", contentType: "image/png", bytes: PNG });
+
+      const stored = await prisma.membershipOrder.findUniqueOrThrow({ where: { id: order.id } });
+      const correction = (stored.registrationData as { documentCorrection: { resubmittedAt: string | null } }).documentCorrection;
+      expect(correction.resubmittedAt).not.toBeNull();
+      const statuses = await prisma.membershipDocument.findMany({ where: { orderId: order.id }, orderBy: { type: "asc" }, select: { type: true, status: true } });
+      expect(statuses.find((d) => d.type === "SELFIE")?.status).toBe("PENDING");
+
+      expect((await verify(order.id, admin)).status).toBe(200);
+      expect(await prisma.userMembership.findUnique({ where: { orderId: order.id } })).not.toBeNull();
+    });
+
+    it("permintaan perbaikan kedua menaikkan hitungan dan mengosongkan penanda unggah ulang", async () => {
+      const order = await createPaidWebOrder({ withDocuments: true });
+      const admin = await createUser("CORRTWO", "ADMIN");
+      await post(CORRECTION_PATH(order.id), admin, { reason: "Pertama" });
+      await new MembershipDocumentService(prisma).upload({ userId: order.buyerId, orderId: order.id, type: "KTP", contentType: "image/png", bytes: PNG });
+      await post(CORRECTION_PATH(order.id), admin, { reason: "Kedua, masih buram" });
+      const stored = await prisma.membershipOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect((stored.registrationData as { documentCorrection: unknown }).documentCorrection).toMatchObject({ reason: "Kedua, masih buram", count: 2, resubmittedAt: null });
+    });
   });
 });
 

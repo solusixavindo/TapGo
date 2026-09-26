@@ -87,6 +87,8 @@ export type UpgradeOrder = {
   createdAt: string;
   invoiceNumber: string;
   buyerName: string;
+  /** Permintaan perbaikan dokumen dari admin; null bila tidak ada. */
+  correction: { reason: string; resubmitted: boolean } | null;
 };
 
 export type PaymentHandoff = {
@@ -460,6 +462,16 @@ function toPackage(raw: RawMembership): MembershipPackage {
   };
 }
 
+function toCorrection(raw: RawOrder): UpgradeOrder["correction"] {
+  const value = raw.registrationData?.documentCorrection;
+  if (!value || typeof value !== "object") return null;
+  const data = value as { reason?: unknown; resubmittedAt?: unknown };
+  return {
+    reason: typeof data.reason === "string" ? data.reason : "",
+    resubmitted: Boolean(data.resubmittedAt)
+  };
+}
+
 function toOrder(raw: RawOrder): UpgradeOrder {
   const invoiceNumber = raw.invoice?.number ?? "";
   return {
@@ -472,7 +484,8 @@ function toOrder(raw: RawOrder): UpgradeOrder {
     status: toViewStatus(raw),
     createdAt: raw.createdAt,
     invoiceNumber,
-    buyerName: raw.user?.fullName ?? ""
+    buyerName: raw.user?.fullName ?? "",
+    correction: toCorrection(raw)
   };
 }
 

@@ -9,6 +9,7 @@ export const accountPushMessages = {
   transferReceived: { title: "Saldo masuk", body: "Anda menerima transfer TapGoPay. Buka aplikasi untuk melihat rinciannya." },
   membershipUnderReview: { title: "Pembayaran diterima", body: "Dokumen Anda sedang diverifikasi. Kami kabari setelah selesai." },
   membershipActive: { title: "Membership aktif", body: "Paket membership Anda sudah aktif." },
+  membershipCorrection: { title: "Dokumen membership perlu diperbaiki", body: "Buka tapgolion.id/upgrade untuk melihat catatan dan mengunggah ulang dokumen." },
   membershipRejected: { title: "Dokumen membership ditolak", body: "Dana Anda akan dikembalikan. Buka aplikasi untuk detailnya." }
 } as const;
 
