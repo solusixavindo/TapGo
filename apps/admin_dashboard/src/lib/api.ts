@@ -118,6 +118,22 @@ export function verifyDocuments(orderId: string) {
   });
 }
 
+/** Super Admin mengonfirmasi bahwa pembayaran (mis. transfer manual) sudah diterima. */
+export function confirmMemberPayment(orderId: string) {
+  return request<MemberRequest>(`/admin/member-requests/${orderId}/approve`, {
+    method: "POST",
+    body: JSON.stringify({})
+  });
+}
+
+/** Super Admin membatalkan pengajuan yang belum dibayar. */
+export function cancelUnpaidMemberRequest(orderId: string, reason: string) {
+  return request<MemberRequest>(`/admin/member-requests/${orderId}/reject`, {
+    method: "POST",
+    body: JSON.stringify(reason ? { reason } : {})
+  });
+}
+
 export function requestDocumentCorrection(orderId: string, reason: string) {
   return request<{ id: string; correctionRequested: boolean }>(
     `/admin/member-requests/${orderId}/request-correction`,

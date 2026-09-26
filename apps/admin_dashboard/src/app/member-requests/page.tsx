@@ -14,6 +14,9 @@ import {
   readRole,
   readToken,
   rejectDocuments,
+  cancelUnpaidMemberRequest,
+  confirmMemberPayment,
+  roleAtLeast,
   requestDocumentCorrection,
   setMemberAccountStatus,
   verifyDocuments
@@ -76,6 +79,7 @@ export default function MemberRequestsPage() {
   const [notice, setNotice] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [correctionReason, setCorrectionReason] = useState("");
+  const [cancelReason, setCancelReason] = useState("");
   const [accountReason, setAccountReason] = useState("");
 
   const selected = useMemo(
@@ -141,6 +145,39 @@ export default function MemberRequestsPage() {
       await refresh();
       const fresh = await listDocuments(selected.id).catch(() => []);
       setDocuments(fresh);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Tindakan belum dapat diproses.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Pengajuan yang belum dibayar: konfirmasi pembayaran atau batalkan (Super Admin ke atas). */
+  async function decideUnpaid(action: "confirm" | "cancel") {
+    if (!selected || busy) return;
+    const name = selected.user?.fullName ?? "pemohon";
+    if (action === "confirm") {
+      const consequence =
+        selected.channel === "WEB"
+          ? "Pengajuan lanjut ke verifikasi dokumen; membership belum aktif."
+          : "Membership langsung aktif dan bonus sponsor/level diproses. Ini tidak dapat dibatalkan.";
+      if (!window.confirm(`Konfirmasi pembayaran ${name} sudah diterima? ${consequence}`)) return;
+    } else if (!window.confirm(`Batalkan pengajuan ${name}? Pengajuan ditutup dan pemohon dapat mengajukan lagi.`)) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      if (action === "confirm") {
+        await confirmMemberPayment(selected.id);
+        setNotice("Pembayaran dikonfirmasi.");
+      } else {
+        await cancelUnpaidMemberRequest(selected.id, cancelReason.trim());
+        setNotice("Pengajuan dibatalkan.");
+        setCancelReason("");
+      }
+      await refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Tindakan belum dapat diproses.");
     } finally {
@@ -365,6 +402,41 @@ export default function MemberRequestsPage() {
                           Nonaktifkan akun
                         </button>
                       )}
+                    </div>
+                  </div>
+                ) : null}
+
+                {selected.status === "PENDING" && roleAtLeast(role, "SUPER_ADMIN") ? (
+                  <div className="mt-6 border-t border-slate-200 pt-5 print:hidden" data-testid="unpaid-decision">
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Belum dibayar</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      Pengajuan ini menunggu pembayaran. Konfirmasi hanya bila dana sudah terlihat di rekening perusahaan. Verifikasi
+                      dokumen dan keputusan setujui / perbaiki / tolak dilakukan sesudah pembayaran dikonfirmasi.
+                    </p>
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => void decideUnpaid("confirm")}
+                        disabled={busy}
+                        className="rounded-lg bg-brand-green px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                      >
+                        Konfirmasi pembayaran
+                      </button>
+                      <input
+                        value={cancelReason}
+                        onChange={(event) => setCancelReason(event.target.value)}
+                        placeholder="Alasan pembatalan (opsional)"
+                        maxLength={500}
+                        className="min-w-[220px] flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-rose-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void decideUnpaid("cancel")}
+                        disabled={busy}
+                        className="rounded-lg border border-rose-300 px-4 py-2.5 text-sm font-semibold text-rose-700 disabled:opacity-50"
+                      >
+                        Batalkan pengajuan
+                      </button>
                     </div>
                   </div>
                 ) : null}

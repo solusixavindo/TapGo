@@ -300,6 +300,41 @@ describe.skipIf(!runIntegration)("Admin membership document verification", () =>
     expect(await codeOf(response)).toBe("MEMBERSHIP_VERIFICATION_NOT_REQUIRED");
   });
 
+  describe("pengajuan yang belum dibayar (layar admin)", () => {
+    const APPROVE = (id: string) => `/api/v1/admin/member-requests/${id}/approve`;
+    const CANCEL = (id: string) => `/api/v1/admin/member-requests/${id}/reject`;
+
+    it("Super Admin VIP mengonfirmasi pembayaran order WEB: menjadi PAID menunggu verifikasi dokumen, belum aktif", async () => {
+      const order = await createWebOrder();
+      const vip = await createUser("UNPAIDVIP", "SUPER_ADMIN_VIP");
+      const response = await post(APPROVE(order.id), vip);
+      expect(response.status).toBe(200);
+      const stored = await prisma.membershipOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(stored.status).toBe("PAID");
+      await expectNotActivated(order.id);
+    });
+
+    it("membatalkan pengajuan belum dibayar dengan alasan; tidak bisa dikonfirmasi sesudahnya", async () => {
+      const order = await createWebOrder();
+      const admin = await createUser("UNPAIDSA", "SUPER_ADMIN");
+      expect((await post(CANCEL(order.id), admin, { reason: "Tidak dibayar" })).status).toBe(200);
+      const stored = await prisma.membershipOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(stored.status).toBe("CANCELLED");
+      expect((await post(APPROVE(order.id), admin)).status).toBeGreaterThanOrEqual(400);
+    });
+
+    it("ADMIN biasa dan USER tidak dapat mengonfirmasi maupun membatalkan", async () => {
+      const order = await createWebOrder();
+      const operator = await createUser("UNPAIDADM", "ADMIN");
+      const outsider = await createUser("UNPAIDUSR", "USER");
+      expect((await post(APPROVE(order.id), operator)).status).toBe(403);
+      expect((await post(CANCEL(order.id), operator)).status).toBe(403);
+      expect((await post(APPROVE(order.id), outsider)).status).toBe(403);
+      const stored = await prisma.membershipOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(stored.status).toBe("PENDING");
+    });
+  });
+
   describe("meminta perbaikan dokumen", () => {
     const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("perbaikan")]);
     let previousSecret: string | undefined;
