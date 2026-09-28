@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Ikon adaptif (Android 8+, digunakan hampir semua peluncur di lapangan).
+  Peluncur sendiri yang memotong bentuknya (bulat, persegi membulat, tetesan
+  air di Samsung, dst) — bukan gambar ini yang menentukan sudutnya, jadi
+  konsisten benar di semua HP tanpa perlu tahu bentuk yang dipakai tiap merek.
+
+  Lapisan latar (background) HARUS mengisi penuh kanvas 108dp; lapisan depan
+  (foreground) sengaja diberi jarak dari tepi (zona aman ~66dp) supaya bagian
+  penting lambang tidak pernah terpotong oleh mask mana pun.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background"/>
+    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+</adaptive-icon>
