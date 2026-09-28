@@ -534,6 +534,21 @@ class DriverController extends StateNotifier<DriverState>
             .where((item) => item.reference != offer.reference)
             .toList(),
       );
+      // Regresi Owner 29 Sep 2026: "ketika driver tolak order tidak ada
+      // pesan apapun" — sebelumnya sheet tawaran hanya tertutup diam-diam,
+      // driver tidak tahu apakah penolakannya benar terkirim. Lewat
+      // SnackBar (pola sama dengan pesan push di atas), bukan state.message
+      // — supaya tidak ikut tertimpa panggilan lain. Sengaja TIDAK ada
+      // pemberitahuan ke penumpang: menolak satu tawaran TIDAK mengubah
+      // status order (order tetap dicari driver lain, lihat
+      // RideService.rejectOffer) — itu memang bukan peristiwa yang perlu
+      // diketahui penumpang, bukan celah yang diam-diam gagal.
+      driverScaffoldMessengerKey.currentState
+        ?..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+          content: Text('Tawaran ditolak.'),
+          duration: Duration(seconds: 3),
+        ));
     } on DriverApiException catch (error) {
       state = state.copyWith(message: error.message);
     } finally {

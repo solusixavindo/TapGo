@@ -31,9 +31,43 @@ abstract class DriverPushPlatform {
   Stream<DriverPushMessage> get foregroundMessages;
   Stream<DriverPushMessage> get openedMessages;
   Future<void> deleteToken();
+
+  /// Menampilkan notifikasi SISTEM (dengan suara) untuk pesan yang datang
+  /// SAAT APP DI DEPAN — regresi Owner 29 Sep 2026: "order masuk tapi tidak
+  /// ada suara dan tidak ada pop up". FCM HANYA menampilkan notifikasi
+  /// otomatis untuk kondisi LATAR BELAKANG; saat app di depan, pesan hanya
+  /// sampai ke [foregroundMessages] tanpa apa pun ditampilkan sistem —
+  /// itulah sebabnya SnackBar (lihat onMessage di driver_controller.dart)
+  /// sendirian tidak cukup, karena SnackBar tidak pernah bersuara. Dipanggil
+  /// TERPISAH dari onMessage, bukan menggantikannya: SnackBar tetap berguna
+  /// sebagai jejak visual di dalam app.
+  Future<void> showForegroundAlert(DriverPushMessage message);
 }
 
 class FirebaseDriverPushPlatform implements DriverPushPlatform {
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
+  bool _localNotificationsInitialized = false;
+  int _notificationId = 0;
+
+  Future<void> _ensureLocalNotificationsInitialized() async {
+    if (_localNotificationsInitialized) return;
+    try {
+      await _localNotifications.initialize(
+        const InitializationSettings(
+          // Ikon peluncur aplikasi — sama seperti yang FCM pakai otomatis
+          // untuk notifikasi latar belakang, bukan aset terpisah.
+          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        ),
+      );
+      _localNotificationsInitialized = true;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[TapGo Push] flutter_local_notifications gagal init: $error');
+      }
+    }
+  }
+
   Future<bool> _ensureInitialized() async {
     try {
       if (Firebase.apps.isEmpty) {
@@ -91,6 +125,39 @@ class FirebaseDriverPushPlatform implements DriverPushPlatform {
       await FirebaseMessaging.instance.deleteToken();
     }
   }
+
+  @override
+  Future<void> showForegroundAlert(DriverPushMessage message) async {
+    if (message.title.isEmpty && message.body.isEmpty) return;
+    try {
+      await _ensureLocalNotificationsInitialized();
+      if (!_localNotificationsInitialized) return;
+      // Channel ID SAMA PERSIS dengan yang dibuat MainActivity.kt untuk
+      // notifikasi latar belakang (IMPORTANCE_HIGH, sudah ada suaranya) —
+      // memakai channel yang sama, bukan channel baru, supaya driver hanya
+      // punya SATU pengaturan suara/getar untuk diatur, konsisten di kedua
+      // kondisi (app di depan maupun di belakang).
+      await _localNotifications.show(
+        _notificationId++,
+        message.title,
+        message.body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'tapgo_default',
+            'Pesanan dan pemberitahuan',
+            channelDescription:
+                'Pesanan baru di dekat Anda, pembatalan, dan pembaruan akun',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+        ),
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[TapGo Push] Gagal menampilkan notifikasi foreground: $error');
+      }
+    }
+  }
 }
 
 /// Siklus token push untuk satu sesi masuk. Semua langkah best-effort:
@@ -130,7 +197,10 @@ class DriverPushController {
           onError: (_) {},
         ))
         ..add(platform.foregroundMessages.listen(
-          (m) => onMessage(m, opened: false),
+          (m) {
+            onMessage(m, opened: false);
+            unawaited(platform.showForegroundAlert(m));
+          },
           onError: (_) {},
         ))
         ..add(platform.openedMessages.listen(

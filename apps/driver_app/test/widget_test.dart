@@ -832,6 +832,33 @@ void main() {
       expect(repo.rejectCalls, 1);
     });
 
+    testWidgets(
+        'menolak tawaran berhasil menampilkan konfirmasi, bukan diam total',
+        (tester) async {
+      // Regresi Owner 29 Sep 2026: "ketika driver tolak order tidak ada
+      // pesan apapun atau pemberitahuan apapun" — sheet tawaran sebelumnya
+      // hanya tertutup diam-diam saat berhasil, driver tidak tahu pasti
+      // penolakannya terkirim. Sengaja TIDAK menguji sisi penumpang di
+      // sini: menolak SATU tawaran tidak mengubah status order (order
+      // tetap dicari driver lain) — itu bukan peristiwa yang perlu
+      // diketahui penumpang.
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        availability: DriverAvailability.online,
+        offerItems: [demoOffer],
+      );
+      await pumpDriverOrders(tester, repo);
+      final offerTile = find.byKey(const ValueKey('offer-RIDE-DEMO-001'));
+      await tapReachable(tester, offerTile);
+      await tester.pumpAndSettle();
+      await tapReachable(
+          tester, find.byKey(const ValueKey('reject-offer-button')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(repo.rejectCalls, 1);
+      expect(find.text('Tawaran ditolak.'), findsOneWidget);
+    });
+
     testWidgets('catatan lokasi jemput tampil di detail tawaran dan perjalanan aktif',
         (tester) async {
       const offerWithNote = DriverRide(
@@ -1550,6 +1577,33 @@ void main() {
       expect(find.textContaining('Pesanan baru di dekat Anda'), findsOneWidget);
       expect(find.byType(SnackBar), findsOneWidget);
     });
+
+    testWidgets(
+        'pesan latar depan JUGA memicu notifikasi sistem (suara), bukan cuma SnackBar senyap',
+        (tester) async {
+      // Regresi Owner 29 Sep 2026: "order masuk tapi tidak ada suara dan
+      // tidak ada pop up". FCM tidak pernah menampilkan apa pun sendiri saat
+      // app di depan — itu perilaku LATAR BELAKANG saja. SnackBar (test di
+      // atas) tidak bersuara, jadi driver yang tidak sedang melihat layar
+      // tidak akan sadar ada order masuk. showForegroundAlert() menutup
+      // celah ini lewat notifikasi sistem asli di channel yang sama dengan
+      // notifikasi latar belakang (sudah IMPORTANCE_HIGH + bersuara).
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = FakePushPlatform(token: 'tok');
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, pushPlatform: platform));
+      await tester.pumpAndSettle();
+
+      platform.foreground.add(const DriverPushMessage(
+          title: 'Pesanan baru di dekat Anda',
+          body: 'Buka aplikasi untuk melihat dan menerima pesanan.',
+          data: {'type': 'ride_offer', 'rideReference': 'RID-ABCDEF12'}));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(platform.foregroundAlerts, hasLength(1));
+      expect(platform.foregroundAlerts.single.title, 'Pesanan baru di dekat Anda');
+    });
   });
 
     testWidgets(
@@ -2262,6 +2316,7 @@ class FakePushPlatform implements DriverPushPlatform {
   final String? token;
   bool deleted = false;
   final foreground = StreamController<DriverPushMessage>.broadcast();
+  final List<DriverPushMessage> foregroundAlerts = [];
 
   @override
   Future<String?> obtainToken() async => token;
@@ -2273,4 +2328,7 @@ class FakePushPlatform implements DriverPushPlatform {
   Stream<DriverPushMessage> get openedMessages => const Stream.empty();
   @override
   Future<void> deleteToken() async => deleted = true;
+  @override
+  Future<void> showForegroundAlert(DriverPushMessage message) async =>
+      foregroundAlerts.add(message);
 }

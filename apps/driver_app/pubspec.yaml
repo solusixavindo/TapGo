@@ -38,6 +38,15 @@ dependencies:
   geolocator: ^13.0.1
   firebase_core: ^4.15.0
   firebase_messaging: ^16.7.0
+  # Notifikasi order masuk SAAT APP DI DEPAN (foreground) — FCM tidak pernah
+  # menampilkan apa pun sendiri untuk kondisi ini (itu perilaku LATAR
+  # BELAKANG saja); tanpa ini driver yang sedang membuka app tidak dengar
+  # suara maupun lihat notifikasi sistem sama sekali saat order masuk,
+  # hanya SnackBar senyap di dalam app (temuan Owner 29 Sep 2026). Memakai
+  # channel Android "tapgo_default" yang SAMA dengan notifikasi latar
+  # belakang (lihat MainActivity.kt) supaya suara/prioritas konsisten di
+  # kedua kondisi, bukan pola baru yang belum teruji.
+  flutter_local_notifications: ^18.0.1
   # Verifikasi wajah harian sebelum online. camera = preview/tangkap kamera
   # depan live; google_mlkit_face_detection = deteksi wajah + sinyal liveness
   # dasar (mata terbuka, satu wajah, framing) — TIDAK melakukan pencocokan
