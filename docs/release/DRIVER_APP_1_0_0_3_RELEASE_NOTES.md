@@ -134,6 +134,25 @@ Owner meminta pemeriksaan ulang menyeluruh sebelum deploy. Satu temuan nyata:
   spesifikasi — sekarang bermargin 13px di dalam batas aman, diverifikasi ulang dengan pengukuran piksel
   yang sama. APK yang dikirim sudah memakai versi terkoreksi ini.
 
+## Tahap D4.4 (selesai): retest 2 HP setelah Google Sign-In berfungsi (29 Sep 2026)
+Owner konfirmasi Google Sign-In berhasil, lalu melaporkan 2 hal baru + 1 permintaan desain ulang:
+
+- **Order tidak masuk ke driver, walau driver sudah online duluan sesuai arahan sebelumnya** — dikonfirmasi
+  bug sungguhan lewat log produksi (bukan lagi soal urutan/timing seperti dugaan awal): driver online
+  >5 menit, polling tawaran berjalan normal terus, TAPI **tidak ada satu pun lokasi terkirim** sepanjang
+  sesi itu. Root cause: pemeriksaan izin lokasi cuma sekali saat tombol Online ditekan — izin/GPS yang
+  hilang SETELAH itu tidak pernah terdeteksi ulang, driver terlihat online tapi sebenarnya tidak terlihat
+  sistem pencocokan sama sekali, tanpa peringatan apa pun. Diperbaiki: pemeriksaan berkala sekarang
+  memunculkan banner "Buka Pengaturan Lokasi" yang sama seperti saat toggle, dan pulih otomatis begitu
+  izin kembali tersedia — tidak perlu toggle ulang.
+- **Ikon dirombak total ke gaya seamless seperti user_app** — Opsi "kartu navy dalam bingkai gold" (D4.3)
+  masih dinilai terlalu tebal setelah diperbesar ke batas maksimal safe-zone (~0.49, tidak bisa lebih
+  besar lagi tanpa melanggar spesifikasi). Dibandingkan langsung dengan ikon user_app dan Owner memilih
+  arahnya: satu bidang gold tanpa sambungan, lambang navy langsung di atasnya (gold tetap dominan,
+  membedakan dari user_app yang navy-dominan). Teks kecil "DRIVER" (nyaris menempel tepi kanvas di desain
+  asli) dipulihkan dengan teknik deteksi sambungan piksel + alpha halus berbasis kecerahan, setelah dua
+  percobaan awal kehilangannya.
+
 ## Belum tercakup (jujur)
 - Tidak ada uji di HP nyata untuk layanan latar depan, push, dan face check. Uji lapangan dua HP (lihat
   `DRIVER_APP_READINESS_PLAN.md`) wajib sebelum produksi.
