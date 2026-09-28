@@ -53,6 +53,29 @@ aplikasi yang dimodifikasi bisa melewati verifikasi tanpa wajah asli di depan ka
 butuh pemrosesan di server (perubahan arsitektur, bukan tambalan kecil) — belum dikerjakan, menunggu
 keputusan Owner, dan tidak mendesak selama `DRIVER_FACE_CHECK_ENABLED` masih mati.
 
+## Tahap D4.2 (selesai): perbaikan dari uji 2 HP kedua (28 Sep 2026)
+3 laporan Owner dari uji di 2 HP fisik berbeda, semuanya diperbaiki dengan akar masalah dibuktikan dan uji
+penjaga ditambahkan (lihat `REGRESSION_REGISTER.md`):
+- **Ikon masih bermasalah** (bingkai ganda, kotak putih di dalam bingkai gold): perbaikan D4.1 di atas SALAH
+  ARAH — Owner minta sudut kotak dihilangkan, BUKAN warna latar navy. PNG legacy transparan yang dibuat D4.1
+  justru menyebabkan launcher tertentu (gaya MIUI) menambah bentuk latarnya sendiri di atas ikon, jadi
+  bingkai ganda. Diperbaiki tuntas dengan Android Adaptive Icon sungguhan (layer foreground = lencana emas,
+  layer background = warna navy solid `#061A2F`) — setiap launcher memotong bentuknya sendiri tanpa
+  bingkai ganda, latar navy tetap ada.
+- **Tombol "Terima" tawaran mati total**: bug backend, bukan hanya tampilan — field `status` tidak pernah
+  dikirim pada objek tawaran, jadi driver_app menganggap statusnya "tidak dikenal" dan mengunci tombol untuk
+  SETIAP tawaran, di SEMUA driver. Diperbaiki di backend.
+- **Tidak ada notifikasi pop-up saat order masuk**: pesan push ditimpa dalam hitungan ratusan milidetik oleh
+  proses pemuatan ulang daftar tawaran yang berjalan tepat setelahnya. Diganti dengan SnackBar yang tidak
+  bergantung pada state Riverpod, pola sama yang sudah terbukti di user_app.
+
+**Belum tuntas, masih diselidiki:** masuk dengan akun Google masih gagal untuk 2 akun berbeda di 2 HP
+berbeda (`sandikanur404@gmail.com`, `febrina.delia...@gmail.com`), walau backend sudah dikonfirmasi hidup,
+`GOOGLE_OAUTH_CLIENT_ID` sudah cocok server-klien, dan SHA-1 kunci unggah driver sudah didaftarkan di
+Firebase Console. Dugaan utama saat ini (belum dikonfirmasi): status publikasi OAuth consent screen di
+Google Cloud Console masih "Testing" dengan daftar test-user terbatas yang tidak memasukkan kedua akun
+tersebut. Perlu Owner memeriksa Google Cloud Console → APIs & Services → OAuth consent screen.
+
 ## Belum tercakup (jujur)
 - Tidak ada uji di HP nyata untuk layanan latar depan, push, dan face check. Uji lapangan dua HP (lihat
   `DRIVER_APP_READINESS_PLAN.md`) wajib sebelum produksi.
