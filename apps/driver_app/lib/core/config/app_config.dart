@@ -12,10 +12,18 @@ const String kApiBaseUrl = String.fromEnvironment(
 // idToken hasil sign-in punya audience yang sama dengan GOOGLE_OAUTH_CLIENT_ID
 // di backend. Tanpa ini, GoogleSignIn di Android akan menerbitkan idToken
 // beraudience client Android, yang akan ditolak backend saat verifikasi.
+//
+// Client ID SEBELUMNYA (637941236322-...) adalah root cause Google Sign-In
+// gagal total selama ini (Owner 29 Sep 2026): client itu milik project
+// Google Cloud yang TIDAK BISA diakses sama sekali oleh akun Google TapGo —
+// bukan salah SHA-1, bukan salah OAuth consent screen, project-nya sendiri
+// tidak terjangkau. Diganti dengan Web OAuth client BARU yang dibuat di
+// project Firebase TapGo sendiri (tapgo-c7cb3 / 796745727473), tempat SHA-1
+// kunci unggah driver_app sudah benar terdaftar dan sepenuhnya dikuasai.
 const String kGoogleServerClientId = String.fromEnvironment(
   'TAPGO_GOOGLE_SERVER_CLIENT_ID',
   defaultValue:
-      '637941236322-thr3677h1kqvpegan9lg7lr8pm7h9b7r.apps.googleusercontent.com',
+      '796745727473-5ja3jdm01j8pnqh95gq92ju8agqdlapb.apps.googleusercontent.com',
 );
 
 // Kosong = Sentry tidak aktif sama sekali (fail-closed) — sama pola dengan
