@@ -720,6 +720,11 @@ String _friendlyMessage(String code, String fallback) {
       return 'Status perjalanan aktif perlu diperiksa admin.';
     case 'AUTH_REQUIRED':
       return 'Sesi berakhir. Silakan login kembali.';
+    // Sebelumnya jatuh ke pesan mentah server berbahasa Inggris ("Too many
+    // authentication attempts...") — regresi Owner 29 Sep 2026, muncul saat
+    // menguji login berulang dari 1 perangkat dalam waktu singkat.
+    case 'RATE_LIMITED':
+      return 'Terlalu banyak percobaan. Silakan tunggu beberapa menit lalu coba lagi.';
     // Kode di bawah datang dari jalur unggah dokumen. Pesannya ditulis ulang
     // agar menyebutkan apa yang harus driver lakukan, bukan sekadar menolak.
     case 'DRIVER_PROFILE_NOT_FOUND':

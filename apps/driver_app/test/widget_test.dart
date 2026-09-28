@@ -1166,6 +1166,41 @@ void main() {
       expect(find.byKey(const ValueKey('driver-home-map')), findsOneWidget);
       expect(find.byIcon(Icons.two_wheeler_rounded), findsOneWidget);
     });
+
+    testWidgets(
+        'kembali ke tab Beranda dari tab lain menyegarkan activeRide (regresi kartu basi)',
+        (tester) async {
+      // Regresi Owner 29 Sep 2026: ride sudah COMPLETED di server (tab
+      // Pesanan > Riwayat sudah benar), tapi kartu "Perjalanan aktif" di
+      // Beranda tetap menampilkan status lama ("Dalam Perjalanan") karena
+      // activeRide hanya disegarkan lewat polling 12 detik atau saat app
+      // resume dari background — TIDAK ada apa pun yang menyegarkannya saat
+      // driver sekadar berpindah tab. Perbaikan: DriverHomeScreen memanggil
+      // refreshWorkspace() di initState-nya sendiri, jadi AnimatedSwitcher
+      // yang membangunnya ulang setiap kali tab Beranda dipilih otomatis
+      // memicu penyegaran — dibuktikan di sini lewat hitungan currentRideCalls,
+      // BUKAN dengan menunggu timer poll.
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        current: demoRide(RideStatus.inTrip),
+      );
+      await pumpDriver(tester, repo);
+      expect(find.text('Dalam Perjalanan'), findsWidgets);
+
+      // Pindah ke tab lain lalu kembali ke Beranda — di dunia nyata, ride
+      // sudah berubah jadi COMPLETED di server pada titik ini.
+      await tester.tap(find.byIcon(Icons.receipt_long_rounded));
+      await tester.pumpAndSettle();
+      repo.current = demoRide(RideStatus.completed);
+      final beforeReturn = repo.currentRideCalls;
+
+      await tester.tap(find.byIcon(Icons.home_rounded));
+      await tester.pumpAndSettle();
+
+      expect(repo.currentRideCalls, greaterThan(beforeReturn));
+      expect(find.text('Selesai'), findsWidgets);
+      expect(find.text('Dalam Perjalanan'), findsNothing);
+    });
   });
 
   group('R2.5B earnings and performance', () {

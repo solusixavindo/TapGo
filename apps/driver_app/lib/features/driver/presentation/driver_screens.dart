@@ -639,11 +639,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 /// demo dan widget test) dengan kartu status/ketersediaan mengambang di
 /// atasnya. Tawaran, perjalanan aktif, dan riwayat sudah pindah ke tab
 /// "Pesanan" — beranda hanya menjawab "saya online atau tidak, dan di mana".
-class DriverHomeScreen extends ConsumerWidget {
+class DriverHomeScreen extends ConsumerStatefulWidget {
   const DriverHomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DriverHomeScreen> createState() => _DriverHomeScreenState();
+}
+
+class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Regresi Owner 29 Sep 2026: kartu "Perjalanan aktif" di Beranda basi
+    // (masih "Dalam Perjalanan" padahal tab Pesanan > Riwayat sudah
+    // menunjukkan "Selesai"). Root cause: activeRide di sini dan di tab
+    // Pesanan > Aktif berasal dari state SHARED yang sama (driverControllerProvider),
+    // diperbarui HANYA lewat polling 12 detik atau saat app kembali dari
+    // background — TIDAK ada apa pun yang menyegarkannya saat driver
+    // sekadar berpindah tab di dalam aplikasi. Tab Pesanan > Riwayat
+    // menampilkan status benar karena fetch sendiri yang selalu baru,
+    // tapi kunjungan itu tidak ikut menyegarkan activeRide yang dipakai
+    // Beranda. AnimatedSwitcher di DriverShell membangun ulang widget ini
+    // dari nol setiap kali tab Beranda dipilih, jadi initState di sini
+    // adalah titik yang tepat: setiap kali driver KEMBALI ke Beranda dari
+    // tab lain, activeRide disegarkan — bukan menunggu poll berikutnya.
+    unawaited(ref.read(driverControllerProvider.notifier).refreshWorkspace());
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(driverControllerProvider);
     final topPadding = kDriverDemoMode ? 52.0 : 20.0;
     // SizedBox.expand memaksa Stack di bawah ini menerima constraint tegas
