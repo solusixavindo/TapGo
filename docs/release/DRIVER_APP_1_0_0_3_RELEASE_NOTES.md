@@ -104,26 +104,22 @@ tindakan Owner di Firebase Console (belum bisa saya perbaiki sendiri), 1 permint
   "Selesai". `activeRide` hanya disegarkan lewat polling 12 detik atau app-resume — tidak ada apa pun yang
   menyegarkannya saat driver sekadar berpindah tab. Sekarang Beranda menyegarkan diri setiap kali dibuka
   (termasuk kembali dari tab lain), bukan hanya menunggu timer.
-- **Masuk dengan Google — DUA fakta konkret ditemukan kali ini** (belum pasti mana yang jadi penyebab
-  utama, keduanya perlu diperiksa Owner di Google Cloud Console, bukan sesuatu yang bisa saya perbaiki
-  dari kode):
-  1. `google-services.json` driver_app (dan user_app) punya `oauth_client` **KOSONG** untuk kedua
-     package. File itu didownload HANYA untuk mengaktifkan FCM (push notifikasi, commit bc8b7f7),
-     SEBELUM SHA-1 fingerprint pernah didaftarkan untuk Google Sign-In — mendaftarkan SHA-1 di Firebase
-     Console TIDAK otomatis memperbarui file yang sudah ada di repo, harus diunduh ulang.
-  2. **Temuan baru, lebih presisi**: `serverClientId` yang di-hardcode di kode
-     (`kGoogleServerClientId`, project Google `637941236322`) bukan project Google Cloud yang SAMA
-     dengan yang dipakai `google-services.json` (project `796745727473` / `tapgo-c7cb3`). Kredensial
-     "OAuth 2.0 Client ID" bertipe Android (SHA-1 + package `com.xavindo.tapgo.driver`) harus terdaftar
-     di project **637941236322** secara spesifik — mendaftarkan SHA-1 di Firebase Console project
-     `tapgo-c7cb3` saja TIDAK CUKUP kalau dua project ini memang berbeda.
-  **Butuh Owner**: buka Google Cloud Console (console.cloud.google.com) → pastikan dulu apakah project
-  `637941236322` dan `tapgo-c7cb3` itu SATU project yang sama atau dua project berbeda. Kalau berbeda,
-  buka APIs & Services → Credentials di project `637941236322`, tambahkan/periksa OAuth Client ID
-  bertipe Android dengan package `com.xavindo.tapgo.driver` dan SHA-1 kunci unggah driver di sana.
-  Lalu, terlepas dari itu, tetap unduh ulang `google-services.json` dari Firebase Console (app driver)
-  dan kirim ke saya (atau timpa `apps/driver_app/android/app/google-services.json`) — begitu ada
-  kemajuan di salah satu atau kedua sisi, saya build dan verifikasi.
+- **Masuk dengan Google — akar masalah SELESAI dikonfirmasi dan diperbaiki**, bersama Owner langsung
+  di Google Cloud Console: `kGoogleServerClientId` lama (project `637941236322`) bukan project yang bisa
+  diakses akun Google TapGo sama sekali — dikonfirmasi dua arah: project Firebase `tapgo-c7cb3` sendiri
+  "No OAuth clients to display", dan pencarian project `637941236322` di akun TapGo "No results found".
+  SHA-1 driver yang didaftarkan sebelumnya di Firebase Console SUDAH BENAR, tapi tidak relevan karena
+  Sign-In memakai client ID dari project lain yang tidak terjangkau siapa pun di TapGo. Ditemukan juga:
+  OAuth consent screen project `tapgo-c7cb3` masih "Testing" dengan **0 test user terdaftar** — akan
+  gagal untuk akun manapun terlepas dari benar-tidaknya kredensial.
+  Diperbaiki dengan membuat OAuth Client ID baru (Android + Web) di project `tapgo-c7cb3` yang sepenuhnya
+  dikuasai Owner, SHA-1 driver yang sudah dikonfirmasi cocok dengan keystore rilis sungguhan; kode
+  (`kGoogleServerClientId`) dan `.env` backend (`GOOGLE_OAUTH_CLIENT_ID`) diperbarui ke Web Client ID
+  baru; `sandikanur404@gmail.com` dan `febrina.delia@gmail.com` ditambahkan sebagai test user.
+  **Belum tuntas**: publikasi penuh OAuth consent screen (lepas dari daftar test user terbatas, supaya
+  SEMUA driver bisa pakai akun Google apa saja) — butuh melengkapi halaman Branding (logo, link
+  kebijakan privasi, dst) di Google Cloud Console, tugas terpisah berikutnya. Verifikasi akhir menunggu
+  Owner instal APK dan login sungguhan.
 - **"Perlu opsi jawaban otomatis untuk driver"**: permintaan fitur baru, belum jelas cakupannya (balasan
   otomatis untuk chat penumpang saat mengemudi? Sesuatu yang lain?) — ditanyakan ke Owner sebelum dibangun,
   supaya tidak salah arah.
