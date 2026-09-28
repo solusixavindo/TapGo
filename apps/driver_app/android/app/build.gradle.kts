@@ -29,6 +29,10 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // flutter_local_notifications (notifikasi order masuk saat app di
+        // depan, perbaikan Owner 29 Sep 2026 "tidak ada suara") mensyaratkan
+        // ini — build release gagal tanpanya (CheckAarMetadataWorkAction).
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -87,6 +91,12 @@ kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
+}
+
+dependencies {
+    // Pasangan dari isCoreLibraryDesugaringEnabled di atas — versi ini yang
+    // direkomendasikan flutter_local_notifications saat ini.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
 flutter {
