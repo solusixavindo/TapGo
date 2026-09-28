@@ -486,6 +486,19 @@ export class PrismaAuthRepository implements AuthRepository {
     });
   }
 
+  async revokeAllActiveSessions(userId: string, now: Date) {
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { authVersion: { increment: 1 } }
+      }),
+      this.prisma.session.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: now }
+      })
+    ]);
+  }
+
   async applyPasswordChange(input: {
     userId: string;
     passwordHash: string;

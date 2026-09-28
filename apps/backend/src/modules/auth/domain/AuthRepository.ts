@@ -75,6 +75,18 @@ export interface AuthRepository {
     expiresAt: Date
   ): Promise<boolean>;
   revokeSession(sessionId: string): Promise<void>;
+  /**
+   * Menaikkan authVersion SATU langkah dan mencabut seluruh baris Session
+   * aktif, dalam SATU transaksi — persis pola applyPasswordChange, tanpa
+   * menyentuh password. authVersion (bukan Session.revokedAt saja) yang
+   * membuat access token lama langsung ditolak pada request berikutnya,
+   * karena requireAuth tidak pernah membaca tabel Session (lihat
+   * resolveAuthFromToken). Dipakai saat login DRIVER lewat kanal APP (lihat
+   * AuthService.issueTokenPair) untuk menegakkan satu sesi aktif per akun
+   * driver — BUKAN dipakai untuk USER/ADMIN, dan tidak pernah dipanggil dari
+   * alur refresh (yang merotasi sesi yang sama, bukan menerbitkan sesi baru).
+   */
+  revokeAllActiveSessions(userId: string, now: Date): Promise<void>;
 
   /**
    * Menerapkan penggantian password dalam SATU transaksi.

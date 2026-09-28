@@ -427,13 +427,37 @@ export class AuthService {
   }
 
   private async issueTokenPair(userId: string, role: UserRole, context: AuthClientContext) {
-    // Versi otorisasi dibaca SEKARANG dan disematkan pada kedua token.
-    // Token yang lahir setelah pencabutan otomatis membawa versi baru dan
-    // langsung sah — termasuk bila diterbitkan pada detik yang sama.
-    const authVersion = await this.authRepository.getAuthVersion(userId);
     // Kanal distempel dari konteks login (server-stamped per endpoint, K1c).
     const channel = context.channel;
     const channelClaim = channel !== undefined ? { channel } : {};
+
+    // Satu sesi aktif per akun DRIVER di kanal APP (temuan Owner 28 Sep 2026:
+    // satu akun driver bisa aktif bersamaan di 2 HP berbeda). Login baru dari
+    // driver_app menaikkan authVersion DAN mencabut semua baris Session lama
+    // — authVersion, bukan Session.revokedAt saja, karena requireAuth/akses
+    // token TIDAK PERNAH membaca tabel Session (lihat resolveAuthFromToken di
+    // authContext.ts); ia hanya membandingkan authVersion pada token dengan
+    // users.auth_version. Sesi lama yang hanya ditandai revokedAt tanpa
+    // menaikkan authVersion baru benar-benar mati saat access token-nya
+    // kedaluwarsa dan mencoba refresh — jendela sampai 15 menit di mana KEDUA
+    // HP tetap bisa memakai API. Menaikkan authVersion membuat HP lama gagal
+    // pada request pertamanya berikutnya, seketika. Mencabut Session juga
+    // tetap dilakukan supaya refresh token lama pun tidak bisa dipakai.
+    // Termasuk mencabut sesi dashboard web mitra bila kebetulan sedang
+    // terbuka — hanya berarti login ulang sekali di sana, bukan masalah baru.
+    // Tidak berlaku untuk USER/ADMIN (belum ada laporan serupa, blast radius
+    // perlu dipahami terpisah sebelum diperluas), dan TIDAK dipanggil dari
+    // refresh() — jalur itu merotasi sesi yang sama, bukan menerbitkan sesi
+    // baru, sehingga tidak boleh pernah mencabut dirinya sendiri.
+    if (role === UserRole.DRIVER && channel === "APP") {
+      await this.authRepository.revokeAllActiveSessions(userId, new Date());
+    }
+
+    // Versi otorisasi dibaca SEKARANG (SETELAH pencabutan di atas, bila
+    // terjadi) dan disematkan pada kedua token, sehingga sesi yang baru saja
+    // diterbitkan ini sendiri selalu memakai versi terbaru dan langsung sah.
+    const authVersion = await this.authRepository.getAuthVersion(userId);
+
     const provisionalSessionId = crypto.randomUUID();
     const accessToken = signAccessToken({ sub: userId, role, sessionId: provisionalSessionId, authVersion, ...channelClaim });
     const refreshToken = signRefreshToken({ sub: userId, role, sessionId: provisionalSessionId, authVersion, ...channelClaim });
