@@ -25,7 +25,10 @@ export function wibCheckDate(now: Date): Date {
 }
 
 export type DriverFaceCheckSnapshot = {
-  status: "PENDING" | "PASSED" | "BLOCKED";
+  // "DISABLED" tidak ada di enum Prisma DriverFaceCheckStatus (itu murni catatan
+  // baris DB harian) — nilai ini sintetis, hanya untuk memberi tahu klien bahwa
+  // fitur mati di server sehingga TIDAK PERLU membuka layar kamera sama sekali.
+  status: "PENDING" | "PASSED" | "BLOCKED" | "DISABLED";
   attemptsRemaining: number;
 };
 
@@ -52,6 +55,16 @@ export class DriverFaceCheckService {
 
   /** Status verifikasi HARI INI (kalender WIB) untuk driver yang sedang login. */
   async getTodayStatus(userId: string): Promise<DriverFaceCheckSnapshot> {
+    // Fitur mati: jawab DISABLED tanpa menyentuh DB. Tanpa cabang ini, driver
+    // tanpa baris DriverFaceCheck hari ini (yaitu SEMUA driver saat fitur baru
+    // dimatikan) menerima "PENDING" yang sama seperti saat fitur menyala —
+    // klien lalu membuka DriverFaceCheckScreen, yang kemudian gagal memuat
+    // referensi wajah (getReference tetap menolak dengan DRIVER_FACE_CHECK_DISABLED)
+    // dan menampilkan "Verifikasi wajah belum diaktifkan" seolah error, padahal
+    // seharusnya driver langsung bisa online tanpa verifikasi sama sekali.
+    if (!env.DRIVER_FACE_CHECK_ENABLED) {
+      return { status: "DISABLED", attemptsRemaining: env.DRIVER_FACE_CHECK_MAX_ATTEMPTS_PER_DAY };
+    }
     const checkDate = wibCheckDate(new Date());
     const row = await this.prisma.driverFaceCheck.findUnique({
       where: { userId_checkDate: { userId, checkDate } },

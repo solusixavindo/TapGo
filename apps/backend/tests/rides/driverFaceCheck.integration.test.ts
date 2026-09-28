@@ -100,6 +100,26 @@ describe.skipIf(!runIntegration)("verifikasi wajah harian sebelum online", () =>
     expect(res.status).toBe(200);
   });
 
+  it("flag mati (default): GET today melaporkan DISABLED, bukan PENDING — klien tidak boleh disuruh buka kamera", async () => {
+    const driver = await createDriver({ status: "ACTIVE" });
+    const res = await fetch(`${baseUrl}/api/v1/driver/face-check/today`, {
+      headers: { authorization: `Bearer ${tokenFor(driver.user)}` },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { status: string } };
+    expect(body.data.status).toBe("DISABLED");
+  });
+
+  it("flag hidup: GET today untuk driver yang belum pernah verifikasi hari ini melaporkan PENDING (bukan DISABLED)", async () => {
+    env.DRIVER_FACE_CHECK_ENABLED = true;
+    const driver = await createDriver({ status: "ACTIVE" });
+    const res = await fetch(`${baseUrl}/api/v1/driver/face-check/today`, {
+      headers: { authorization: `Bearer ${tokenFor(driver.user)}` },
+    });
+    const body = (await res.json()) as { data: { status: string } };
+    expect(body.data.status).toBe("PENDING");
+  });
+
   // --- Flag hidup: gate sungguhan ---------------------------------------------
 
   it("flag hidup: offline->online tanpa verifikasi hari ini ditolak", async () => {

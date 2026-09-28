@@ -79,6 +79,26 @@ export const loginSchema = z.preprocess(
   })
 );
 
+export const googleAuthSchema = z.preprocess(
+  wrapBody,
+  z.object({
+    body: z.object({
+      idToken: z.string().min(20).max(4096)
+    })
+  })
+);
+
+export const googleCompleteSchema = z.preprocess(
+  wrapBody,
+  z.object({
+    body: z.object({
+      idToken: z.string().min(20).max(4096),
+      phone: phoneSchema,
+      fullName: z.string().trim().min(1).max(120).optional()
+    })
+  })
+);
+
 export const otpRequestSchema = z.preprocess(
   wrapBody,
   z.object({
