@@ -76,6 +76,20 @@ Firebase Console. Dugaan utama saat ini (belum dikonfirmasi): status publikasi O
 Google Cloud Console masih "Testing" dengan daftar test-user terbatas yang tidak memasukkan kedua akun
 tersebut. Perlu Owner memeriksa Google Cloud Console → APIs & Services → OAuth consent screen.
 
+## Perbaikan backend-only (tidak perlu APK baru)
+
+- **Error Sentry "No recipients defined"** (`TAPGO-BACKEND-1`, `POST /auth/verification/request`):
+  provider OTP produksi (email) menerima permintaan kanal PHONE tanpa diperiksa dulu, meneruskan nomor
+  HP sebagai alamat email ke nodemailer. Sekarang ditolak bersih (503) sebelum menyentuh nodemailer.
+  Verifikasi nomor HP lewat OTP **masih belum benar-benar berfungsi** di production — belum ada provider
+  SMS/WhatsApp, hanya email — perbaikan ini membuat kegagalannya terlihat jelas, bukan membuatnya bekerja.
+- **Satu akun DRIVER bisa aktif bersamaan di 2 HP** (temuan Owner, uji 2 HP 28 Sep 2026, akun "febrina"):
+  login tidak pernah mencabut sesi lama akun yang sama. Sekarang login DRIVER lewat driver_app mencabut
+  seketika seluruh sesi lama akun itu di HP lain — HP lama langsung diminta login ulang pada request
+  berikutnya, bukan menunggu token-nya kedaluwarsa. Dibatasi hanya role DRIVER dan kanal app (tidak
+  menyentuh USER maupun dashboard web mitra). driver_app sudah punya penanganan sesi-tercabut yang baik
+  sejak sebelumnya, jadi tidak perlu APK baru untuk perbaikan ini.
+
 ## Belum tercakup (jujur)
 - Tidak ada uji di HP nyata untuk layanan latar depan, push, dan face check. Uji lapangan dua HP (lihat
   `DRIVER_APP_READINESS_PLAN.md`) wajib sebelum produksi.
