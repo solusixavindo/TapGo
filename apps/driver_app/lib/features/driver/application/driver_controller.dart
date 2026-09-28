@@ -680,20 +680,44 @@ class DriverController extends StateNotifier<DriverState>
   }
 
   /// Berbeda dari [sendLocationIfAvailable]: dipanggil sendiri oleh timer,
-  /// bukan atas permintaan UI, jadi kegagalan (izin ditolak, GPS mati,
-  /// jaringan) tidak boleh menulis state.message — itu akan menimpa pesan
-  /// lain yang lebih penting (mis. galat tawaran) setiap 15 detik. Lokasi
-  /// bersifat best-effort.
+  /// bukan atas permintaan UI, jadi kegagalan JARINGAN/server tidak boleh
+  /// menulis state.message — itu akan menimpa pesan lain yang lebih penting
+  /// (mis. galat tawaran) setiap 15 detik. Lokasi bersifat best-effort untuk
+  /// itu.
+  ///
+  /// TAPI izin/GPS tidak lagi tersedia adalah kasus BERBEDA, dan HARUS
+  /// terlihat — regresi Owner 29 Sep 2026: driver online >5 menit, polling
+  /// tawaran terus berjalan normal (server membalas 200 terus-menerus),
+  /// tapi TIDAK ADA SATU PUN POST lokasi terkirim sepanjang sesi itu,
+  /// sehingga server tidak pernah tahu posisinya dan tidak pernah menawarkan
+  /// order — driver terlihat "Online" di layar tanpa tahu dirinya sebenarnya
+  /// tidak terlihat sama sekali oleh sistem pencocokan. Preflight di
+  /// checkAndGoOnline() HANYA memeriksa SEKALI saat tombol Online ditekan
+  /// (lihat catatan di sana) — izin/GPS yang hilang SETELAH itu (dicabut,
+  /// GPS dimatikan, mode "hanya saat digunakan" + app di background) tidak
+  /// pernah terdeteksi ulang. Diperiksa di sini juga sekarang, dan ditulis
+  /// ke locationIssue (BUKAN message, supaya tidak menimpa pesan lain tiap
+  /// 15 detik) — Beranda menampilkan tombol "Buka Pengaturan Lokasi" begitu
+  /// locationIssue terisi, independen dari state.message.
   Future<void> _sendLocationSilently() async {
     final ride = state.activeRide;
     final onRide = ride != null && !ride.isTerminal;
     final tick = _locationTicks++;
     if (!onRide && tick % 3 != 0) return;
     try {
-      if (!await _locationPort.isAvailable) return;
+      final status = await _locationPort.checkAvailability();
+      if (!status.isAvailable) {
+        if (state.locationIssue != status) {
+          state = state.copyWith(locationIssue: status);
+        }
+        return;
+      }
+      if (state.locationIssue != null) {
+        state = state.copyWith(clearLocationIssue: true);
+      }
       await _locationPort.sendCurrentLocation();
     } catch (_) {
-      // Diam sengaja — lihat catatan di atas.
+      // Kegagalan jaringan/server tetap diam sengaja — lihat catatan di atas.
     }
   }
 

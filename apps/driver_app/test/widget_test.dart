@@ -717,6 +717,56 @@ void main() {
     });
 
     testWidgets(
+        'izin lokasi hilang DI TENGAH sesi online memunculkan peringatan, bukan diam total',
+        (tester) async {
+      // Regresi Owner 29 Sep 2026: driver online >5 menit, polling tawaran
+      // terus berjalan normal, TAPI tidak ada satu pun lokasi terkirim
+      // sepanjang sesi itu — preflight di checkAndGoOnline() hanya memeriksa
+      // SEKALI saat tombol ditekan; izin yang hilang SETELAH itu (dicabut,
+      // GPS dimatikan) tidak pernah terdeteksi ulang, driver terlihat online
+      // tanpa tahu dirinya sebenarnya tidak terlihat oleh sistem pencocokan.
+      final repo = FakeDriverRepository(session: demoSession);
+      final location = RecordingLocationPort(available: true);
+      await pumpDriver(tester, repo, locationPort: location);
+
+      await tester.tap(find.byKey(const ValueKey('availability-toggle')));
+      await tester.pumpAndSettle();
+      expect(repo.availabilityRequests, [DriverAvailability.online]);
+      expect(find.text('Buka Pengaturan Lokasi'), findsNothing);
+
+      // Lewati beberapa detak (5 detik/detak, dikirim tiap detak ke-3 saat
+      // idle = 15 detik) sementara lokasi MASIH tersedia — lokasi terkirim
+      // normal, tidak ada peringatan.
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(seconds: 5));
+      }
+      final sentWhileAvailable = location.sendCalls;
+      expect(sentWhileAvailable, greaterThan(0));
+      expect(find.text('Buka Pengaturan Lokasi'), findsNothing);
+
+      // Izin dicabut PERSIS seperti yang terjadi di lapangan — bukan lewat
+      // toggle Online lagi (yang tidak pernah ditekan ulang oleh driver),
+      // tapi lewat detak berikutnya yang sekarang menemukan status berubah.
+      location.availabilityStatus = DriverLocationAvailability.permissionDeniedForever;
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(seconds: 5));
+      }
+      expect(location.sendCalls, sentWhileAvailable,
+          reason: 'tidak boleh mencoba kirim lokasi saat sudah diketahui tidak tersedia');
+      expect(find.text('Buka Pengaturan Lokasi'), findsOneWidget);
+      expect(find.byKey(const ValueKey('open-location-settings')), findsOneWidget);
+
+      // Izin dipulihkan (driver membuka pengaturan lalu kembali) — peringatan
+      // hilang lagi dan pengiriman lokasi berlanjut, tanpa perlu toggle ulang.
+      location.availabilityStatus = DriverLocationAvailability.available;
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(seconds: 5));
+      }
+      expect(find.text('Buka Pengaturan Lokasi'), findsNothing);
+      expect(location.sendCalls, greaterThan(sentWhileAvailable));
+    });
+
+    testWidgets(
         'loading, empty, error, retry, dan raw exception aman',
         (tester) async {
       final repo = FakeDriverRepository(
@@ -2174,7 +2224,10 @@ class RecordingLocationPort implements DriverLocationPort {
                 : DriverLocationAvailability.permissionDenied),
         positionStream = fixes ?? const Stream.empty();
   final bool available;
-  final DriverLocationAvailability availabilityStatus;
+  // BUKAN final — beberapa test mengubahnya di tengah jalan untuk meniru
+  // izin/GPS yang hilang SETELAH driver online (lihat test "izin lokasi
+  // hilang di tengah sesi online").
+  DriverLocationAvailability availabilityStatus;
   int sendCalls = 0;
   int startTrackingCalls = 0;
   int stopTrackingCalls = 0;
@@ -2190,7 +2243,7 @@ class RecordingLocationPort implements DriverLocationPort {
   }
 
   @override
-  Future<bool> get isAvailable async => available;
+  Future<bool> get isAvailable async => availabilityStatus.isAvailable;
 
   @override
   Future<DriverLocationAvailability> checkAvailability() async => availabilityStatus;
