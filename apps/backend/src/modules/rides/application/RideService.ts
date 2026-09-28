@@ -2445,6 +2445,13 @@ export class RideService {
   }) {
     return {
       reference: order.publicReference,
+      // Kedua caller listOffersForDriver() SELALU memfilter status:
+      // "SEARCHING_DRIVER" pada query-nya (lihat pemanggilnya) — nilai ini
+      // bukan tebakan, tapi invarian yang query itu sendiri jamin. Tanpa
+      // field ini, klien (driver_app) menganggap status "tidak dikenal" dan
+      // MENGUNCI tombol Terima secara permanen untuk SETIAP tawaran, karena
+      // tombolnya sengaja hanya aktif saat status == searchingDriver.
+      status: "SEARCHING_DRIVER" as const,
       serviceType: order.serviceType,
       pickupAddress: order.pickupAddress,
       dropoffAddress: order.dropoffAddress,

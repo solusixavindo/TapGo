@@ -166,12 +166,18 @@ describe.skipIf(!runIntegration)("Tawaran berbasis jarak dan batas waktu pencari
     const far = await createOrder(north(8));
     const edge = await createOrder(north(4.9));
     const near = await createOrder(north(2));
-    const offers = (await service().listOffersForDriver(user.id)) as unknown as Array<{ reference: string; distanceToPickupMeters: number }>;
+    const offers = (await service().listOffersForDriver(user.id)) as unknown as Array<{ reference: string; distanceToPickupMeters: number; status: string }>;
     expect(offers.map((o) => o.reference)).toEqual([near.order.publicReference, edge.order.publicReference]);
     expect(offers[0]!.distanceToPickupMeters).toBeGreaterThan(1800);
     expect(offers[0]!.distanceToPickupMeters).toBeLessThan(2200);
     expect(offers[1]!.distanceToPickupMeters).toBeLessThan(5000);
     expect(JSON.stringify(offers)).not.toContain(far.order.publicReference);
+    // Regresi nyata (uji driver 28 Sep): field ini HILANG total sebelumnya —
+    // driver_app menganggap status "tidak dikenal" dan mengunci tombol
+    // Terima secara PERMANEN untuk setiap tawaran, tidak ada satu pun yang
+    // bisa diterima. Diperiksa di sini, bukan cuma di Dart, karena celahnya
+    // ada di objek yang dikembalikan service ini, bukan di parsing klien.
+    expect(offers.every((o) => o.status === "SEARCHING_DRIVER")).toBe(true);
   });
 
   it("pesanan yang lebih tua dari batas waktu pencarian tidak tampil", async () => {
