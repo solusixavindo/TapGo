@@ -46,12 +46,59 @@ const recoveryRateLimitMessage = {
   message: "Terlalu banyak permintaan pemulihan. Silakan coba lagi nanti."
 };
 
+/**
+ * Owner 29 Sep 2026: log produksi mengonfirmasi 3 percobaan /login berturut
+ * kena 429 dalam satu jendela 15 menit dari satu perangkat — bukan serangan,
+ * driver terjebak tidak bisa masuk lagi setelah logout (dan akun ITU SENDIRI
+ * jadi tidak bisa menerima push, karena token push dihapus saat logout dan
+ * baru terdaftar ulang setelah login berhasil). 20/15 menit dibagi rata ke
+ * /login, /google, /google/complete, /register, /change-password — beberapa
+ * kali coba password salah + beberapa kali coba Google (yang gagal di sisi
+ * SDK sebelum sampai sini, TAPI retry tombol "Coba lagi" di UI tetap
+ * menembak /google) sudah cukup menghabiskannya dalam satu sesi uji wajar.
+ * Dinaikkan ke 30 — masih ketat untuk tebak-password (30 percobaan/15 menit
+ * per IP jauh dari cukup untuk brute force apa pun), tapi tidak lagi
+ * mengunci pengguna asli yang sekadar salah ketik beberapa kali.
+ */
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false,
   ...rateLimitStore("auth", "closed"),
+  message: {
+    success: false,
+    code: "RATE_LIMITED",
+    message: "Too many authentication attempts. Please try again later."
+  }
+});
+
+/**
+ * Rate limit KHUSUS /auth/refresh — TERPISAH dari authRateLimiter (temuan
+ * Owner 29 Sep 2026: pesan "too many attempt" muncul saat menguji dua HP).
+ *
+ * Root cause: /auth/refresh sebelumnya berbagi kuota 20/15 menit per IP yang
+ * SAMA dengan /login, /google, /register, /change-password — padahal refresh
+ * adalah trafik LATAR BELAKANG yang otomatis dan tidak terelakkan (dipicu
+ * app setiap access token kedaluwarsa DAN setiap kali menerima 401), bukan
+ * permukaan tebak-kredensial seperti login. Dua HP aktif dari satu IP rumah
+ * yang sama, masing-masing polling tawaran tiap 12 detik, dengan mudah
+ * menghabiskan kuota bersama itu sebelum driver sempat mencoba login sama
+ * sekali — makin parah saat satu sesi baru saja dicabut (satu-sesi-per-akun,
+ * lihat AuthService.issueTokenPair) dan memicu percobaan refresh tambahan.
+ *
+ * Refresh TIDAK meniru risiko brute-force login: refresh token adalah nilai
+ * acak panjang (bukan password pendek yang bisa ditebak), dan penyalahgunaan
+ * token yang sudah dipakai ulang sudah dideteksi & dicabut terpisah (lihat
+ * "Refresh token reuse detected" di AuthService.refresh). Nilai max di sini
+ * jauh lebih longgar karena melindungi dari VOLUME, bukan dari tebakan.
+ */
+export const refreshRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  ...rateLimitStore("auth-refresh", "closed"),
   message: {
     success: false,
     code: "RATE_LIMITED",

@@ -8,6 +8,7 @@ import {
   recoveryAccountRateLimiter,
   recoveryIpRateLimiter,
   recoveryVerifyRateLimiter,
+  refreshRateLimiter,
   registerPhoneRateLimiter,
   verificationRateLimiter
 } from "../../../core/security/rateLimit.js";
@@ -89,7 +90,7 @@ authRouter.post(
   validateRequest(googleCompleteSchema),
   asyncHandler(controller.googleComplete)
 );
-authRouter.post("/refresh", authRateLimiter, validateRequest(refreshSchema), asyncHandler(controller.refresh));
+authRouter.post("/refresh", refreshRateLimiter, validateRequest(refreshSchema), asyncHandler(controller.refresh));
 authRouter.post("/logout", requireAuth, asyncHandler(controller.logout));
 authRouter.get("/me", requireAuth, asyncHandler(controller.me));
 // Dibatasi authRateLimiter walau sudah memerlukan token: endpoint ini menerima
@@ -162,4 +163,4 @@ authRouter.post(
  */
 export const webAuthRouter = Router();
 webAuthRouter.post("/login", authRateLimiter, validateRequest(loginSchema), asyncHandler(webController.login));
-webAuthRouter.post("/refresh", authRateLimiter, validateRequest(refreshSchema), asyncHandler(webController.refresh));
+webAuthRouter.post("/refresh", refreshRateLimiter, validateRequest(refreshSchema), asyncHandler(webController.refresh));
