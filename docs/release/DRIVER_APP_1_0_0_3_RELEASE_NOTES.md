@@ -27,6 +27,32 @@ Tanggal mulai: 2026-09-26. Rencana lengkap: `DRIVER_APP_READINESS_PLAN.md`.
   saldo cukup. **Aktif hanya bila server memasang `DRIVER_COMMISSION_ENABLED=true`.**
 - Top up manual transfer bank di tapgolion.id/topup, dikonfirmasi Super Admin (server: `MANUAL_TOPUP_ENABLED=true`).
 
+## Tahap D4.1 (selesai): perbaikan dari uji HP pertama (27 Sep 2026)
+4 laporan Owner dari uji `tapgo-driver-1.0.0+3.apk` di HP asli, semuanya diperbaiki dengan akar masalah
+dibuktikan dan uji penjaga ditambahkan (lihat `REGRESSION_REGISTER.md`):
+- **Online selalu gagal** ("Verifikasi wajah belum diaktifkan"): bug server, bukan hanya tampilan. Setiap
+  driver, di setiap kondisi, tidak bisa online selama `DRIVER_FACE_CHECK_ENABLED=false` (nilai bawaan
+  sekarang) — diperbaiki di backend, sudah di-deploy terpisah dari paket ini (lihat percakapan deploy).
+- **Masuk dengan Google gagal**: server TIDAK PERNAH punya endpoint untuk ini (`/auth/google` 404 sejak awal),
+  bukan masalah satu akun. Diperbaiki dan di-deploy di backend; **butuh dua langkah manual dari Owner**
+  (`GOOGLE_OAUTH_CLIENT_ID` di `.env` VPS, dan SHA-1 kunci unggah driver didaftarkan di Google Cloud Console)
+  sebelum benar-benar berfungsi — lihat pesan terpisah.
+- **Kartu "Ajukan Jadi Mitra Driver" nyangkut** di tab Akun walau driver sudah aktif: disembunyikan otomatis
+  begitu driver punya kendaraan aktif.
+- **Ikon aplikasi**: latar kotak navy dihapus, tersisa lencana emas (bingkai + lambang) pada latar transparan.
+
+Sekaligus dikerjakan (bagian dari permintaan "menu selevel Gojek/Grab"): tab Akun sekarang punya kartu
+**Tampilan** (Terang/Gelap/Ikuti sistem, tersimpan permanen) dan **Notifikasi** (tombol ke pengaturan
+notifikasi bawaan Android — suara/getar diatur Android sejak versi 8, aplikasi tidak bisa mengubahnya
+langsung), serta kartu **Bantuan** (WhatsApp dan Kebijakan Privasi, kontak sama dengan aplikasi penumpang).
+
+**Temuan keamanan yang BELUM diperbaiki, dilaporkan ke Owner secara terpisah:** verifikasi wajah harian
+mempercayai skor kemiripan yang dihitung DAN dikirim oleh aplikasi sendiri — server tidak menghitung ulang
+dari foto. Ini desain lama (didokumentasikan di skema Prisma), bukan sesuatu yang baru rusak, tetapi berarti
+aplikasi yang dimodifikasi bisa melewati verifikasi tanpa wajah asli di depan kamera. Perbaikan penuhnya
+butuh pemrosesan di server (perubahan arsitektur, bukan tambalan kecil) — belum dikerjakan, menunggu
+keputusan Owner, dan tidak mendesak selama `DRIVER_FACE_CHECK_ENABLED` masih mati.
+
 ## Belum tercakup (jujur)
 - Tidak ada uji di HP nyata untuk layanan latar depan, push, dan face check. Uji lapangan dua HP (lihat
   `DRIVER_APP_READINESS_PLAN.md`) wajib sebelum produksi.
