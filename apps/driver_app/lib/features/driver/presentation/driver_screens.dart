@@ -668,6 +668,19 @@ class DriverHomeScreen extends ConsumerWidget {
                     const SizedBox(height: 12),
                     ErrorNotice(message: state.message!),
                   ],
+                  if (state.locationIssue != null) ...[
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      key: const ValueKey('open-location-settings'),
+                      onPressed: () => _openLocationSettingsFor(state.locationIssue!),
+                      icon: const Icon(Icons.location_on_outlined),
+                      label: Text(
+                        state.locationIssue == DriverLocationAvailability.serviceDisabled
+                            ? 'Buka Pengaturan GPS'
+                            : 'Buka Pengaturan Lokasi',
+                      ),
+                    ),
+                  ],
                   if (state.activeRide != null) ...[
                     const SizedBox(height: 12),
                     _ActiveRideBanner(ride: state.activeRide!),
@@ -2071,6 +2084,16 @@ Future<void> _openExternalNavigation(LatLng? target) async {
     'https://www.google.com/maps/dir/?api=1&destination=${target.latitude},${target.longitude}',
   );
   await launchUrl(uri, mode: LaunchMode.externalApplication);
+}
+
+/// Membuka layar Pengaturan Android yang tepat untuk memperbaiki alasan
+/// lokasi tidak tersedia — GPS mati butuh layar Pengaturan Lokasi perangkat,
+/// izin ditolak butuh layar Pengaturan Aplikasi (tempat driver mengubah izin
+/// TapGo Driver). Keduanya method bawaan paket geolocator, bukan channel baru.
+Future<void> _openLocationSettingsFor(DriverLocationAvailability status) {
+  return status == DriverLocationAvailability.serviceDisabled
+      ? Geolocator.openLocationSettings()
+      : Geolocator.openAppSettings();
 }
 
 String _serviceLabel(String type) =>

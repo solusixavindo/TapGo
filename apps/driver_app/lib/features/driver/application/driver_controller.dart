@@ -254,6 +254,20 @@ class DriverController extends StateNotifier<DriverState>
   Future<void> checkAndGoOnline(BuildContext context) async {
     if (!_startFlight('availability')) return;
     try {
+      // Diperiksa DI SINI, bukan hanya lewat pengiriman lokasi berkala nanti:
+      // sebelumnya driver bisa "berhasil" Online (tidak ada error) padahal
+      // izin lokasi belum pernah diberikan sama sekali — _sendLocationSilently
+      // diam-diam berhenti di await _locationPort.isAvailable tanpa jejak
+      // apa pun, driver online tapi tidak pernah punya posisi tersimpan di
+      // server, sehingga TIDAK PERNAH ditawari pesanan dan tidak tahu kenapa.
+      final locationStatus = await _locationPort.checkAvailability();
+      if (!locationStatus.isAvailable) {
+        state = state.copyWith(
+          message: _locationIssueMessage(locationStatus),
+          locationIssue: locationStatus,
+        );
+        return;
+      }
       final snapshot = await _repository.faceCheckToday();
       if (snapshot.status == DriverFaceCheckStatus.blocked) {
         state = state.copyWith(
@@ -280,6 +294,7 @@ class DriverController extends StateNotifier<DriverState>
     } finally {
       _endFlight('availability');
     }
+    state = state.copyWith(clearLocationIssue: true);
     await setAvailability(DriverAvailability.online);
   }
 
@@ -701,6 +716,23 @@ class DriverController extends StateNotifier<DriverState>
     _stopPolling();
     super.dispose();
   }
+}
+
+/// Pesan yang bisa ditindaklanjuti driver sendiri untuk tiap alasan lokasi
+/// tidak tersedia — bukan satu kalimat generik "lokasi tidak tersedia" yang
+/// tidak memberi tahu apa yang harus dilakukan.
+String _locationIssueMessage(DriverLocationAvailability status) {
+  return switch (status) {
+    DriverLocationAvailability.serviceDisabled =>
+      'GPS/Lokasi HP Anda sedang mati. Aktifkan lokasi, lalu coba Online lagi.',
+    DriverLocationAvailability.permissionDeniedForever =>
+      'Izin lokasi untuk TapGo Driver ditolak permanen. Ketuk "Buka Pengaturan Lokasi" '
+          'di bawah, pilih Izin > Lokasi > "Izinkan selalu" atau "Hanya saat menggunakan '
+          'aplikasi", lalu coba Online lagi.',
+    DriverLocationAvailability.permissionDenied =>
+      'TapGo Driver belum diberi izin lokasi. Izinkan saat diminta, lalu coba Online lagi.',
+    DriverLocationAvailability.available => '',
+  };
 }
 
 enum _TripAction { pickup, arrived, start, complete }

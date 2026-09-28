@@ -639,7 +639,8 @@ void main() {
         session: demoSession,
         availabilityCompleter: completer,
       );
-      await pumpDriver(tester, repo);
+      await pumpDriver(tester, repo,
+          locationPort: RecordingLocationPort(available: true));
       await tester.tap(find.byKey(const ValueKey('availability-toggle')));
       await tester.tap(find.byKey(const ValueKey('availability-toggle')));
       expect(repo.availabilityRequests, [DriverAvailability.online]);
@@ -653,7 +654,8 @@ void main() {
         (tester) async {
       final repo = FakeDriverRepository(session: demoSession)
         ..faceCheckStatus = DriverFaceCheckStatus.disabled;
-      await pumpDriver(tester, repo);
+      await pumpDriver(tester, repo,
+          locationPort: RecordingLocationPort(available: true));
       await tester.tap(find.byKey(const ValueKey('availability-toggle')));
       await tester.pumpAndSettle();
       expect(find.byType(DriverFaceCheckScreen), findsNothing);
@@ -666,7 +668,8 @@ void main() {
         (tester) async {
       final repo = FakeDriverRepository(session: demoSession)
         ..faceCheckStatus = DriverFaceCheckStatus.pending;
-      await pumpDriver(tester, repo);
+      await pumpDriver(tester, repo,
+          locationPort: RecordingLocationPort(available: true));
       await tester.tap(find.byKey(const ValueKey('availability-toggle')));
       // BUKAN pumpAndSettle: DriverFaceCheckScreen di luar mode demo memanggil
       // availableCameras() sungguhan, yang tidak pernah selesai di lingkungan
@@ -678,6 +681,39 @@ void main() {
       }
       expect(find.byType(DriverFaceCheckScreen), findsOneWidget);
       expect(repo.availabilityRequests, isEmpty);
+    });
+
+    testWidgets(
+        'checkAndGoOnline: GPS mati menampilkan pesan dan tombol "Buka Pengaturan GPS", tidak online',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo,
+          locationPort: RecordingLocationPort(
+            available: false,
+            availabilityStatus: DriverLocationAvailability.serviceDisabled,
+          ));
+      await tester.tap(find.byKey(const ValueKey('availability-toggle')));
+      await tester.pumpAndSettle();
+      expect(repo.availabilityRequests, isEmpty);
+      expect(find.textContaining('GPS/Lokasi HP Anda sedang mati'), findsOneWidget);
+      expect(find.byKey(const ValueKey('open-location-settings')), findsOneWidget);
+      expect(find.text('Buka Pengaturan GPS'), findsOneWidget);
+    });
+
+    testWidgets(
+        'checkAndGoOnline: izin lokasi ditolak permanen menampilkan tombol "Buka Pengaturan Lokasi", tidak online',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo,
+          locationPort: RecordingLocationPort(
+            available: false,
+            availabilityStatus: DriverLocationAvailability.permissionDeniedForever,
+          ));
+      await tester.tap(find.byKey(const ValueKey('availability-toggle')));
+      await tester.pumpAndSettle();
+      expect(repo.availabilityRequests, isEmpty);
+      expect(find.textContaining('ditolak permanen'), findsOneWidget);
+      expect(find.text('Buka Pengaturan Lokasi'), findsOneWidget);
     });
 
     testWidgets(
@@ -1606,9 +1642,14 @@ void main() {
   });
 }
 
-Future<void> pumpDriver(WidgetTester tester, FakeDriverRepository repo) async {
+Future<void> pumpDriver(
+  WidgetTester tester,
+  FakeDriverRepository repo, {
+  DriverLocationPort? locationPort,
+}) async {
   await tester.binding.setSurfaceSize(const Size(390, 844));
-  await tester.pumpWidget(buildTestableDriverApp(repository: repo));
+  await tester.pumpWidget(
+      buildTestableDriverApp(repository: repo, locationPort: locationPort));
   await tester.pumpAndSettle();
   addTearDown(() async {
     await tester.binding.setSurfaceSize(null);
@@ -2064,8 +2105,14 @@ class RecordingLocationPort implements DriverLocationPort {
   RecordingLocationPort({
     required this.available,
     Stream<(double, double)>? fixes,
-  }) : positionStream = fixes ?? const Stream.empty();
+    DriverLocationAvailability? availabilityStatus,
+  })  : availabilityStatus = availabilityStatus ??
+            (available
+                ? DriverLocationAvailability.available
+                : DriverLocationAvailability.permissionDenied),
+        positionStream = fixes ?? const Stream.empty();
   final bool available;
+  final DriverLocationAvailability availabilityStatus;
   int sendCalls = 0;
   int startTrackingCalls = 0;
   int stopTrackingCalls = 0;
@@ -2082,6 +2129,9 @@ class RecordingLocationPort implements DriverLocationPort {
 
   @override
   Future<bool> get isAvailable async => available;
+
+  @override
+  Future<DriverLocationAvailability> checkAvailability() async => availabilityStatus;
 
   @override
   Future<void> sendCurrentLocation() async {

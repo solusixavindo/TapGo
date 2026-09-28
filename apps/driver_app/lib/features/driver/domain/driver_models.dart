@@ -304,6 +304,7 @@ class DriverState {
     this.application,
     this.documentsComplete = false,
     this.vehiclePlateMasked,
+    this.locationIssue,
   });
 
   factory DriverState.initial(DriverScenario scenario) => DriverState(
@@ -337,6 +338,11 @@ class DriverState {
 
   /// Plat kendaraan ter-mask yang tersimpan saat pengajuan, bila ada.
   final String? vehiclePlateMasked;
+
+  /// Terisi HANYA saat percobaan Online terakhir gagal karena lokasi (lihat
+  /// checkAndGoOnline) — Beranda memakainya untuk menawarkan tombol "Buka
+  /// Pengaturan Lokasi" alih-alih pesan tanpa tindak lanjut.
+  final DriverLocationAvailability? locationIssue;
 
   DriverDocumentSummary? documentOf(DriverDocumentKind kind) {
     for (final item in documents) {
@@ -372,6 +378,8 @@ class DriverState {
     bool? documentsComplete,
     String? vehiclePlateMasked,
     bool clearVehiclePlate = false,
+    DriverLocationAvailability? locationIssue,
+    bool clearLocationIssue = false,
   }) {
     return DriverState(
       status: status ?? this.status,
@@ -394,6 +402,9 @@ class DriverState {
       vehiclePlateMasked: clearVehiclePlate
           ? null
           : vehiclePlateMasked ?? this.vehiclePlateMasked,
+      locationIssue: clearLocationIssue
+          ? null
+          : locationIssue ?? this.locationIssue,
     );
   }
 }

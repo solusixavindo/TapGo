@@ -1,7 +1,33 @@
 part of '../../../main.dart';
 
+/// Alasan lokasi tidak tersedia, cukup rinci untuk memandu driver
+/// memperbaikinya sendiri — bukan cuma "tidak tersedia" tanpa penjelasan.
+/// [available] TIDAK berarti fix GPS sudah didapat, hanya berarti layanan
+/// menyala dan izin diberikan sehingga PERCOBAAN mengambil fix boleh jalan.
+enum DriverLocationAvailability {
+  available,
+
+  /// GPS/Location Services perangkat sendiri sedang mati.
+  serviceDisabled,
+
+  /// Izin belum diberikan; masih boleh diminta lagi (dialog sistem akan tampil).
+  permissionDenied,
+
+  /// Ditolak permanen (Android menolak menampilkan dialog lagi setelah
+  /// penolakan sebelumnya) — satu-satunya jalan keluar adalah Pengaturan HP.
+  permissionDeniedForever;
+
+  bool get isAvailable => this == DriverLocationAvailability.available;
+}
+
 abstract class DriverLocationPort {
   Future<bool> get isAvailable;
+
+  /// Sama seperti [isAvailable] tapi membedakan ALASAN kegagalan, supaya
+  /// pemanggil (checkAndGoOnline) bisa menampilkan pesan yang benar-benar
+  /// bisa ditindaklanjuti driver, bukan pesan generik.
+  Future<DriverLocationAvailability> checkAvailability();
+
   Future<void> sendCurrentLocation();
 
   /// Aliran posisi live untuk marker peta di Beranda. Implementasi tanpa GPS
@@ -20,6 +46,10 @@ abstract class DriverLocationPort {
 class NoDriverLocationPort implements DriverLocationPort {
   @override
   Future<bool> get isAvailable async => false;
+
+  @override
+  Future<DriverLocationAvailability> checkAvailability() async =>
+      DriverLocationAvailability.permissionDenied;
 
   @override
   Future<void> sendCurrentLocation() async {
@@ -81,14 +111,25 @@ class GeolocatorDriverLocationPort implements DriverLocationPort {
   }
 
   @override
-  Future<bool> get isAvailable async {
-    if (!await Geolocator.isLocationServiceEnabled()) return false;
+  Future<bool> get isAvailable async => (await checkAvailability()).isAvailable;
+
+  @override
+  Future<DriverLocationAvailability> checkAvailability() async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      return DriverLocationAvailability.serviceDisabled;
+    }
     var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
-    return permission == LocationPermission.always ||
-        permission == LocationPermission.whileInUse;
+    if (permission == LocationPermission.always ||
+        permission == LocationPermission.whileInUse) {
+      return DriverLocationAvailability.available;
+    }
+    if (permission == LocationPermission.deniedForever) {
+      return DriverLocationAvailability.permissionDeniedForever;
+    }
+    return DriverLocationAvailability.permissionDenied;
   }
 
   @override
