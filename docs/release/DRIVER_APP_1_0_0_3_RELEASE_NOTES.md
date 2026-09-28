@@ -89,6 +89,32 @@ tersebut. Perlu Owner memeriksa Google Cloud Console → APIs & Services → OAu
   berikutnya, bukan menunggu token-nya kedaluwarsa. Dibatasi hanya role DRIVER dan kanal app (tidak
   menyentuh USER maupun dashboard web mitra). driver_app sudah punya penanganan sesi-tercabut yang baik
   sejak sebelumnya, jadi tidak perlu APK baru untuk perbaikan ini.
+- **"Too many attempt" saat login/pakai app normal**: `/auth/refresh` (trafik latar belakang otomatis)
+  berbagi kuota rate limit dengan `/login`/`/google` — dibuktikan langsung dari log produksi. Sekarang
+  `/refresh` punya kuota terpisah (100/15 menit) dan kuota login dinaikkan (20 → 30/15 menit, masih ketat
+  untuk brute force). Efek berantai yang ikut selesai: HP yang kena 429 tidak bisa login ulang untuk
+  mendaftarkan ulang token push — kemungkinan besar penyebab laporan "tidak ada popup notifikasi" di sesi
+  uji yang sama.
+
+## Tahap D4.3 (selesai sebagian): perbaikan dari uji 2 HP ketiga (29 Sep 2026)
+6 laporan Owner. 3 backend (di atas, live setelah deploy), 1 driver_app (di bawah, APK baru), 1 butuh
+tindakan Owner di Firebase Console (belum bisa saya perbaiki sendiri), 1 permintaan fitur (perlu klarifikasi):
+
+- **Kartu "Perjalanan aktif" di Beranda basi**: tetap "Dalam Perjalanan" walau tab Pesanan > Riwayat sudah
+  "Selesai". `activeRide` hanya disegarkan lewat polling 12 detik atau app-resume — tidak ada apa pun yang
+  menyegarkannya saat driver sekadar berpindah tab. Sekarang Beranda menyegarkan diri setiap kali dibuka
+  (termasuk kembali dari tab lain), bukan hanya menunggu timer.
+- **Masuk dengan Google — akar masalah SUNGGUH ditemukan kali ini**: `google-services.json` driver_app
+  (dan user_app) punya `oauth_client` **KOSONG** untuk kedua package. File itu didownload HANYA untuk
+  mengaktifkan FCM (push notifikasi), SEBELUM SHA-1 fingerprint pernah didaftarkan untuk Google Sign-In —
+  dan mendaftarkan SHA-1 di Firebase Console TIDAK otomatis memperbarui file yang sudah ada di repo.
+  **Butuh Owner**: buka Firebase Console → Project Settings → app driver (`com.xavindo.tapgo.driver`),
+  pastikan SHA-1 kunci unggah driver terdaftar di situ, lalu unduh ulang `google-services.json` dan kirim
+  ke saya (atau timpa langsung `apps/driver_app/android/app/google-services.json`) — begitu file itu punya
+  isi `oauth_client`, saya build dan verifikasi.
+- **"Perlu opsi jawaban otomatis untuk driver"**: permintaan fitur baru, belum jelas cakupannya (balasan
+  otomatis untuk chat penumpang saat mengemudi? Sesuatu yang lain?) — ditanyakan ke Owner sebelum dibangun,
+  supaya tidak salah arah.
 
 ## Belum tercakup (jujur)
 - Tidak ada uji di HP nyata untuk layanan latar depan, push, dan face check. Uji lapangan dua HP (lihat
