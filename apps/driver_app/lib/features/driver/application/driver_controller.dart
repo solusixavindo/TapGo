@@ -124,6 +124,15 @@ class DriverController extends StateNotifier<DriverState>
     }
   }
 
+  /// Menampilkan kegagalan Google Sign-In yang terjadi SEBELUM sempat
+  /// menghubungi backend (SDK Google sendiri yang menolak, mis. OAuth client
+  /// Android belum terdaftar/belum merambat) — lihat pemanggilnya di
+  /// LoginScreen._continueWithGoogle. Tidak mengubah status workspace,
+  /// hanya pesan, sama seperti kegagalan lain di layar login.
+  void reportClientSideAuthFailure(String message) {
+    state = state.copyWith(message: message);
+  }
+
   /// Langkah 2, dipanggil setelah [loginWithGoogle] mengembalikan
   /// needsPhone: true dan pengguna mengisi nomor HP-nya.
   Future<bool> completeGoogleRegistration({

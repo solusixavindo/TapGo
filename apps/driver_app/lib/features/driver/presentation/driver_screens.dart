@@ -225,6 +225,25 @@ class LoadingScreen extends StatelessWidget {
   }
 }
 
+/// Pesan yang tampil saat Google Sign-In gagal SEBELUM sempat menghubungi
+/// backend TapGo (SDK Google sendiri yang menolak). Kode mentahnya (dari
+/// `PlatformException.code` atau nama tipe exception) sengaja ikut
+/// ditampilkan, bukan disamarkan jadi satu kalimat generik — di tahap
+/// sekarang (baru diaktifkan, konfigurasi Google Cloud masih mungkin
+/// keliru) kode itu satu-satunya petunjuk untuk mendiagnosis dari laporan
+/// driver, tanpa perlu akses log server.
+@visibleForTesting
+String googleSignInFailureMessage(Object error) {
+  if (error is DriverApiException) return error.message;
+  final raw = error.toString();
+  final code = switch (error) {
+    PlatformException(:final code) => code,
+    _ => null,
+  };
+  final detail = code != null && code.isNotEmpty ? code : raw;
+  return 'Masuk dengan Google gagal ($detail). Coba lagi, atau gunakan nomor HP dan kata sandi.';
+}
+
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -292,10 +311,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           suggestedFullName: result.suggestedFullName,
         );
       }
-    } catch (_) {
-      // Kegagalan SDK Google (mis. OAuth client belum terdaftar) ditangkap
-      // di sini; state.message dari controller sudah menangani penolakan
-      // dari backend sendiri.
+    } catch (error) {
+      // Kegagalan SDK Google (mis. OAuth client belum terdaftar, SHA-1 belum
+      // terdaftar/belum merambat, akun ditolak layar consent) TIDAK PERNAH
+      // melewati controller.loginWithGoogle() — sebelumnya berhenti di sini
+      // dengan diam total, sehingga percobaan yang gagal terlihat seperti
+      // memilih akun lalu "tidak terjadi apa-apa", tanpa petunjuk sama
+      // sekali untuk didiagnosis. Ditampilkan lewat controller (satu-satunya
+      // yang boleh mengubah state) supaya tetap tampil lewat ErrorNotice
+      // yang sama dengan kegagalan backend di layar ini.
+      if (mounted) {
+        controller.reportClientSideAuthFailure(googleSignInFailureMessage(error));
+      }
     } finally {
       if (mounted) setState(() => _isGoogleBusy = false);
     }

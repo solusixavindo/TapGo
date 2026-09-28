@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tapgo_driver_app/main.dart';
@@ -1450,6 +1450,44 @@ void main() {
           tester.getSize(find.byKey(const ValueKey('availability-toggle')));
       expect(button.height, greaterThanOrEqualTo(48));
       expect(find.text('Ketersediaan'), findsOneWidget);
+    });
+  });
+
+  group('Google Sign-In: kegagalan sebelum sempat hubungi backend tetap tampil', () {
+    test('PlatformException menampilkan kode mentahnya, bukan pesan kosong', () {
+      final message = googleSignInFailureMessage(
+        PlatformException(code: 'sign_in_failed', message: 'DEVELOPER_ERROR'),
+      );
+      expect(message, contains('sign_in_failed'));
+      expect(message, contains('Masuk dengan Google gagal'));
+    });
+
+    test('DriverApiException (mis. token tidak dikembalikan Google) memakai pesannya sendiri', () {
+      final message = googleSignInFailureMessage(
+        const DriverApiException(code: 'GOOGLE_TOKEN_MISSING', message: 'Google tidak mengembalikan token yang valid.'),
+      );
+      expect(message, 'Google tidak mengembalikan token yang valid.');
+    });
+
+    test('exception tak dikenal tetap menghasilkan pesan (tidak pernah kosong)', () {
+      final message = googleSignInFailureMessage(Exception('kegagalan aneh'));
+      expect(message, isNotEmpty);
+      expect(message, contains('Masuk dengan Google gagal'));
+    });
+
+    testWidgets(
+        'reportClientSideAuthFailure menampilkan pesan di layar login lewat ErrorNotice yang sama',
+        (tester) async {
+      final repo = FakeDriverRepository(session: null);
+      await tester.pumpWidget(buildTestableDriverApp(repository: repo, scenario: DriverScenario.login));
+      await tester.pumpAndSettle();
+      expect(find.text('Pilih akun lalu tidak terjadi apa-apa sebelumnya — sekarang tampil.'), findsNothing);
+
+      final container = ProviderScope.containerOf(tester.element(find.byType(TapGoDriverApp)));
+      container.read(driverControllerProvider.notifier).reportClientSideAuthFailure(
+          'Pilih akun lalu tidak terjadi apa-apa sebelumnya — sekarang tampil.');
+      await tester.pumpAndSettle();
+      expect(find.text('Pilih akun lalu tidak terjadi apa-apa sebelumnya — sekarang tampil.'), findsOneWidget);
     });
   });
 
