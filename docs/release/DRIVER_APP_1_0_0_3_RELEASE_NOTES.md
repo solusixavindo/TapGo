@@ -104,17 +104,39 @@ tindakan Owner di Firebase Console (belum bisa saya perbaiki sendiri), 1 permint
   "Selesai". `activeRide` hanya disegarkan lewat polling 12 detik atau app-resume — tidak ada apa pun yang
   menyegarkannya saat driver sekadar berpindah tab. Sekarang Beranda menyegarkan diri setiap kali dibuka
   (termasuk kembali dari tab lain), bukan hanya menunggu timer.
-- **Masuk dengan Google — akar masalah SUNGGUH ditemukan kali ini**: `google-services.json` driver_app
-  (dan user_app) punya `oauth_client` **KOSONG** untuk kedua package. File itu didownload HANYA untuk
-  mengaktifkan FCM (push notifikasi), SEBELUM SHA-1 fingerprint pernah didaftarkan untuk Google Sign-In —
-  dan mendaftarkan SHA-1 di Firebase Console TIDAK otomatis memperbarui file yang sudah ada di repo.
-  **Butuh Owner**: buka Firebase Console → Project Settings → app driver (`com.xavindo.tapgo.driver`),
-  pastikan SHA-1 kunci unggah driver terdaftar di situ, lalu unduh ulang `google-services.json` dan kirim
-  ke saya (atau timpa langsung `apps/driver_app/android/app/google-services.json`) — begitu file itu punya
-  isi `oauth_client`, saya build dan verifikasi.
+- **Masuk dengan Google — DUA fakta konkret ditemukan kali ini** (belum pasti mana yang jadi penyebab
+  utama, keduanya perlu diperiksa Owner di Google Cloud Console, bukan sesuatu yang bisa saya perbaiki
+  dari kode):
+  1. `google-services.json` driver_app (dan user_app) punya `oauth_client` **KOSONG** untuk kedua
+     package. File itu didownload HANYA untuk mengaktifkan FCM (push notifikasi, commit bc8b7f7),
+     SEBELUM SHA-1 fingerprint pernah didaftarkan untuk Google Sign-In — mendaftarkan SHA-1 di Firebase
+     Console TIDAK otomatis memperbarui file yang sudah ada di repo, harus diunduh ulang.
+  2. **Temuan baru, lebih presisi**: `serverClientId` yang di-hardcode di kode
+     (`kGoogleServerClientId`, project Google `637941236322`) bukan project Google Cloud yang SAMA
+     dengan yang dipakai `google-services.json` (project `796745727473` / `tapgo-c7cb3`). Kredensial
+     "OAuth 2.0 Client ID" bertipe Android (SHA-1 + package `com.xavindo.tapgo.driver`) harus terdaftar
+     di project **637941236322** secara spesifik — mendaftarkan SHA-1 di Firebase Console project
+     `tapgo-c7cb3` saja TIDAK CUKUP kalau dua project ini memang berbeda.
+  **Butuh Owner**: buka Google Cloud Console (console.cloud.google.com) → pastikan dulu apakah project
+  `637941236322` dan `tapgo-c7cb3` itu SATU project yang sama atau dua project berbeda. Kalau berbeda,
+  buka APIs & Services → Credentials di project `637941236322`, tambahkan/periksa OAuth Client ID
+  bertipe Android dengan package `com.xavindo.tapgo.driver` dan SHA-1 kunci unggah driver di sana.
+  Lalu, terlepas dari itu, tetap unduh ulang `google-services.json` dari Firebase Console (app driver)
+  dan kirim ke saya (atau timpa `apps/driver_app/android/app/google-services.json`) — begitu ada
+  kemajuan di salah satu atau kedua sisi, saya build dan verifikasi.
 - **"Perlu opsi jawaban otomatis untuk driver"**: permintaan fitur baru, belum jelas cakupannya (balasan
   otomatis untuk chat penumpang saat mengemudi? Sesuatu yang lain?) — ditanyakan ke Owner sebelum dibangun,
   supaya tidak salah arah.
+
+## Perbaikan tambahan dari verifikasi ulang (sebelum deploy, bukan laporan baru)
+Owner meminta pemeriksaan ulang menyeluruh sebelum deploy. Satu temuan nyata:
+- **Ikon: kartu navy sedikit melewati safe-zone 66dp resmi Android.** Perbaikan bingkai gold sehari
+  sebelumnya menghitung rasio ukuran dengan cara yang salah (lebar konten vs diameter safe-zone, bukan
+  jarak sudut konten dari pusat). Diukur langsung dari piksel PNG sungguhan (bukan geometri kotak
+  pembatas): melewati 30px dari radius aman. TIDAK menimbulkan bug "terputus" seperti sebelumnya (gold
+  tetap solid sebagai background, jadi selalu utuh), tapi diperbaiki sampai benar-benar sesuai
+  spesifikasi — sekarang bermargin 13px di dalam batas aman, diverifikasi ulang dengan pengukuran piksel
+  yang sama. APK yang dikirim sudah memakai versi terkoreksi ini.
 
 ## Belum tercakup (jujur)
 - Tidak ada uji di HP nyata untuk layanan latar depan, push, dan face check. Uji lapangan dua HP (lihat
