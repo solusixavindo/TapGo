@@ -1438,6 +1438,33 @@ void main() {
       await tester.pumpAndSettle();
       expect(repo.offersCalls, greaterThan(before));
     });
+
+    testWidgets(
+        'pesan ride_offer tampil sebagai SnackBar dan TIDAK ikut tertimpa refreshWorkspace berikutnya',
+        (tester) async {
+      // Regresi nyata (uji driver 28 Sep): pesan sebelumnya lewat
+      // state.message, yang ditimpa clearMessage:true oleh refreshWorkspace()
+      // yang dipanggil di baris berikutnya — pada jaringan cepat pesan hilang
+      // sebelum driver sempat melihatnya. SnackBar (key global) tidak ikut
+      // tertimpa oleh perubahan state Riverpod apa pun.
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = FakePushPlatform(token: 'tok');
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, pushPlatform: platform));
+      await tester.pumpAndSettle();
+
+      platform.foreground.add(const DriverPushMessage(
+          title: 'Pesanan baru di dekat Anda',
+          body: 'Buka aplikasi untuk melihat dan menerima pesanan.',
+          data: {'type': 'ride_offer', 'rideReference': 'RID-ABCDEF12'}));
+      // BUKAN pumpAndSettle langsung: ingin membuktikan SnackBar masih ada
+      // SETELAH refreshWorkspace() yang dipicu pesan yang sama selesai
+      // (bukan diperiksa sebelum sempat tertimpa).
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.textContaining('Pesanan baru di dekat Anda'), findsOneWidget);
+      expect(find.byType(SnackBar), findsOneWidget);
+    });
   });
 
     testWidgets(

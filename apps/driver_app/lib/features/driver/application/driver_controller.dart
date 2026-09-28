@@ -33,8 +33,25 @@ class DriverController extends StateNotifier<DriverState>
       unregister: _repository.unregisterPushToken,
       onMessage: (message, {required bool opened}) {
         if (!mounted || message.type == null) return;
-        if (!opened && message.body.isNotEmpty) {
-          state = state.copyWith(message: message.body);
+        // SnackBar lewat key GLOBAL, BUKAN state.message: state.message
+        // sebelumnya ditimpa ulang oleh refreshWorkspace() di bawah (yang
+        // SELALU clearMessage: true) begitu offers berhasil dimuat — pada
+        // jaringan cepat itu terjadi dalam hitungan ratusan milidetik,
+        // sebelum driver sempat melihat pesannya sama sekali. SnackBar tidak
+        // ikut tertimpa oleh perubahan state Riverpod, dan tampil dari layar
+        // mana pun (bukan hanya Beranda) karena keynya global.
+        if (!opened) {
+          final text = [message.title, message.body]
+              .where((s) => s.isNotEmpty)
+              .join('\n');
+          if (text.isNotEmpty) {
+            driverScaffoldMessengerKey.currentState
+              ?..hideCurrentSnackBar()
+              ..showSnackBar(SnackBar(
+                content: Text(text),
+                duration: const Duration(seconds: 6),
+              ));
+          }
         }
         unawaited(refreshWorkspace());
       },

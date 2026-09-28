@@ -1,5 +1,13 @@
 part of '../main.dart';
 
+/// Sengaja GLOBAL (bukan diambil dari BuildContext di titik push tiba) —
+/// pesan pesanan baru harus tampil dari mana pun driver berada saat itu
+/// (kamera verifikasi wajah, sheet detail tawaran, tab lain), dan SnackBar
+/// yang ditampilkan lewat key ini tidak bergantung pada widget tree yang
+/// sedang aktif. Pola sama persis dengan _tapGoScaffoldMessengerKey di
+/// user_app — sudah terbukti, bukan pendekatan baru yang belum teruji.
+final driverScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
 class TapGoDriverApp extends ConsumerWidget {
   const TapGoDriverApp({super.key});
 
@@ -14,6 +22,7 @@ class TapGoDriverApp extends ConsumerWidget {
     return MaterialApp(
       title: 'TapGo Driver',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: driverScaffoldMessengerKey,
       themeMode: testOverride ?? userPreference ?? ThemeMode.system,
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
