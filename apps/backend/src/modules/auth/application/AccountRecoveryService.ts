@@ -327,6 +327,19 @@ export class AccountRecoveryService {
     userId: string;
     channel: AuthChallengeChannel;
   }) {
+    // Provider yang aktif (SmtpOtpProvider) HANYA mendukung EMAIL — belum ada
+    // provider SMS/WhatsApp produksi. Tanpa pemeriksaan ini, permintaan kanal
+    // PHONE tetap lolos ke issueChallenge() lalu ke provider.send() dengan
+    // destination berupa nomor HP; nodemailer gagal mem-parsingnya sebagai
+    // alamat email dan melempar "No recipients defined" — exception TAK
+    // TERTANGKAP yang sempat tercatat sebagai error Sentry produksi
+    // (TAPGO-BACKEND-1). Diperiksa di sini, sebelum lookup user pun lebih
+    // baik, tapi user sudah pasti ada (endpoint ini requireAuth) sehingga
+    // urutan ini tidak membocorkan apa pun.
+    if (!this.provider.supports(input.channel)) {
+      throw channelUnavailableError();
+    }
+
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: input.userId } });
 
     const destination = input.channel === "PHONE" ? user.phone : user.email;

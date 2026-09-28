@@ -75,4 +75,22 @@ describe("SmtpOtpProvider (unit)", () => {
 
     await expect(provider.send(makeRequest())).rejects.toThrow("connection refused");
   });
+
+  it("menolak permintaan kanal PHONE sebelum menyentuh nodemailer (regresi produksi TAPGO-BACKEND-1)", async () => {
+    // Root cause dari error Sentry "No recipients defined" di
+    // POST /api/v1/auth/verification/request: pemanggil (sebelum perbaikan
+    // ini) tidak memeriksa supports() sebelum memanggil send(), jadi
+    // destination berupa nomor HP diteruskan apa adanya sebagai `to:`
+    // nodemailer — nodemailer gagal mem-parsingnya sebagai alamat email,
+    // daftar penerima jadi kosong, dan ia melempar pesan yang membingungkan
+    // itu. Provider sekarang menolak sendiri, tanpa bergantung pada pemanggil
+    // memeriksa supports() lebih dulu, dan TANPA pernah memanggil sendMail.
+    const transporter = makeTransporter();
+    const provider = new SmtpOtpProvider(transporter as never, "TapGo <no-reply@tapgolion.id>");
+
+    await expect(
+      provider.send(makeRequest({ channel: "PHONE", destination: "081234567890" }))
+    ).rejects.toThrow(/tidak mendukung kanal PHONE/);
+    expect(transporter.sendMail).not.toHaveBeenCalled();
+  });
 });

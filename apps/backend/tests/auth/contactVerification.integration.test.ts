@@ -8,6 +8,37 @@ import {
   setOtpDeliveryProvider
 } from "../../src/modules/auth/infrastructure/otpProviderRegistry.js";
 import { hashPassword } from "../../src/core/security/passwordHasher.js";
+import type {
+  OtpChannel,
+  OtpDeliveryProvider,
+  OtpDeliveryRequest,
+  OtpDeliveryResult
+} from "../../src/modules/auth/domain/OtpDeliveryProvider.js";
+
+/**
+ * Meniru bentuk produksi sungguhan: hanya EMAIL yang didukung (SmtpOtpProvider
+ * adalah satu-satunya delegate yang pernah dipasang di production). Dipakai
+ * untuk membuktikan regresi TAPGO-BACKEND-1 (lihat test di bawah) — bukan
+ * RecordingOtpProvider biasa, yang sengaja `supports()` semua kanal sehingga
+ * tidak bisa mereproduksi bug channel-mismatch ini.
+ */
+class EmailOnlyOtpProvider implements OtpDeliveryProvider {
+  readonly name = "email-only-test-adapter";
+  private readonly deliveries: OtpDeliveryRequest[] = [];
+
+  supports(channel: OtpChannel): boolean {
+    return channel === "EMAIL";
+  }
+
+  async send(request: OtpDeliveryRequest): Promise<OtpDeliveryResult> {
+    this.deliveries.push({ ...request });
+    return { providerReference: "email-only-test-sent" };
+  }
+
+  count(): number {
+    return this.deliveries.length;
+  }
+}
 
 /**
  * Production hotfix — verifikasi nomor telepon dan email.
@@ -351,5 +382,34 @@ describeIntegration("Production hotfix — contact verification", () => {
     const stored = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
     expect(stored.role).toBe("USER");
     expect(stored.status).toBe("ACTIVE");
+  });
+
+  it("kanal PHONE dengan provider email-saja menjawab 503 bersih, bukan crash 'No recipients defined' (regresi TAPGO-BACKEND-1)", async () => {
+    // Reproduksi persis kondisi production: satu-satunya delegate yang
+    // pernah dipasang adalah SmtpOtpProvider (EMAIL saja), sementara
+    // user_app memanggil channel PHONE lebih dulu (nomor HP adalah primary
+    // identifier). Sebelum perbaikan ini, permintaan itu lolos sampai ke
+    // provider.send() lalu nodemailer melempar exception TAK TERTANGKAP
+    // ("No recipients defined") karena nomor HP bukan alamat email yang
+    // bisa di-parse — tercatat sebagai error Sentry produksi.
+    const emailOnly = new EmailOnlyOtpProvider();
+    setOtpDeliveryProvider(emailOnly);
+    try {
+      const { token } = await createAccountAndLogin();
+
+      const requested = await api(
+        "POST",
+        "/api/v1/auth/verification/request",
+        { channel: "PHONE" },
+        token
+      );
+
+      expect(requested.status).toBe(503);
+      expect(requested.body.code).toBe("AUTH_RECOVERY_CHANNEL_UNAVAILABLE");
+      expect(emailOnly.count()).toBe(0);
+    } finally {
+      // Test-test lain di file ini butuh provider yang mendukung PHONE.
+      setOtpDeliveryProvider(provider);
+    }
   });
 });

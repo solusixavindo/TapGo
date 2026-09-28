@@ -39,6 +39,18 @@ export class SmtpOtpProvider implements OtpDeliveryProvider {
   }
 
   async send(request: OtpDeliveryRequest): Promise<OtpDeliveryResult> {
+    // Lapis pertahanan kedua: pemanggil SEHARUSNYA sudah memeriksa supports()
+    // sebelum sampai sini (lihat AccountRecoveryService), tapi provider tidak
+    // boleh mempercayai itu buta-buta. Tanpa baris ini, destination kanal
+    // PHONE (nomor HP) diteruskan apa adanya ke `to:` nodemailer — nodemailer
+    // tidak bisa mem-parsingnya sebagai alamat email, daftar penerima jadi
+    // kosong, dan ia melempar "No recipients defined" yang membingungkan,
+    // bukan error yang menjelaskan akar masalahnya (root cause TAPGO-BACKEND-1).
+    if (!this.supports(request.channel)) {
+      throw new Error(
+        `SmtpOtpProvider tidak mendukung kanal ${request.channel} (hanya EMAIL).`
+      );
+    }
     const minutes = Math.max(
       1,
       Math.round((request.expiresAt.getTime() - Date.now()) / 60000)
