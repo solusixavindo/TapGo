@@ -648,7 +648,40 @@ void main() {
       expect(find.text('Status: Online'), findsOneWidget);
     });
 
-    testWidgets('loading, empty, error, retry, dan raw exception aman',
+    testWidgets(
+        'checkAndGoOnline: status DISABLED langsung online tanpa membuka layar verifikasi wajah',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession)
+        ..faceCheckStatus = DriverFaceCheckStatus.disabled;
+      await pumpDriver(tester, repo);
+      await tester.tap(find.byKey(const ValueKey('availability-toggle')));
+      await tester.pumpAndSettle();
+      expect(find.byType(DriverFaceCheckScreen), findsNothing);
+      expect(repo.availabilityRequests, [DriverAvailability.online]);
+      expect(find.text('Status: Online'), findsOneWidget);
+    });
+
+    testWidgets(
+        'checkAndGoOnline: status PENDING membuka layar verifikasi wajah (bukan langsung online)',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession)
+        ..faceCheckStatus = DriverFaceCheckStatus.pending;
+      await pumpDriver(tester, repo);
+      await tester.tap(find.byKey(const ValueKey('availability-toggle')));
+      // BUKAN pumpAndSettle: DriverFaceCheckScreen di luar mode demo memanggil
+      // availableCameras() sungguhan, yang tidak pernah selesai di lingkungan
+      // widget test (tidak ada platform channel kamera) — settle tidak akan
+      // pernah tercapai. Beberapa pump bertahap cukup untuk memastikan
+      // navigasinya terjadi, tanpa menunggu inisialisasi kamera selesai.
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(find.byType(DriverFaceCheckScreen), findsOneWidget);
+      expect(repo.availabilityRequests, isEmpty);
+    });
+
+    testWidgets(
+        'loading, empty, error, retry, dan raw exception aman',
         (tester) async {
       final repo = FakeDriverRepository(
         session: demoSession,
@@ -1417,6 +1450,120 @@ void main() {
           tester.getSize(find.byKey(const ValueKey('availability-toggle')));
       expect(button.height, greaterThanOrEqualTo(48));
       expect(find.text('Ketersediaan'), findsOneWidget);
+    });
+  });
+
+  group('tab Akun: preferensi, pengajuan mitra, dan bantuan', () {
+    testWidgets(
+        'driver aktif dengan kendaraan: kartu Kendaraan tampil, tombol "Ajukan Jadi Mitra Driver" TIDAK tampil',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession)
+        ..applicationInfo = const DriverApplicationInfo(
+            id: 'app-1', cycleNumber: 1, status: DriverApplicationStatus.approved);
+      await pumpDriver(tester, repo);
+      await tester.tap(find.byIcon(Icons.person_rounded));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Kendaraan'), findsOneWidget);
+      expect(find.textContaining('Plat:'), findsOneWidget);
+      expect(find.text('Ajukan Jadi Mitra Driver'), findsNothing);
+      expect(find.byKey(const ValueKey('driver-application-entry')), findsNothing);
+    });
+
+    testWidgets(
+        'driver tanpa kendaraan/pengajuan: tombol "Ajukan Jadi Mitra Driver" tetap tampil',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+      await tester.tap(find.byIcon(Icons.person_rounded));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ajukan Jadi Mitra Driver'), findsOneWidget);
+      expect(find.text('Kendaraan'), findsNothing);
+    });
+
+    testWidgets('kartu Tampilan: tiga pilihan tema, memilih Gelap langsung mengubah tema aplikasi',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          driverRepositoryProvider.overrideWithValue(repo),
+          locationPortProvider.overrideWithValue(NoDriverLocationPort()),
+          testSkipSplashProvider.overrideWithValue(true),
+          // testThemeModeProvider SENGAJA tidak di-override: test ini justru
+          // memeriksa preferensi tersimpan (driverThemePreferenceProvider),
+          // yang kalah dari override itu bila diisi.
+        ],
+        child: const TapGoDriverApp(),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.person_rounded));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('theme-choice-system')), findsOneWidget);
+      expect(find.byKey(const ValueKey('theme-choice-light')), findsOneWidget);
+      expect(find.byKey(const ValueKey('theme-choice-dark')), findsOneWidget);
+
+      final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+      expect(app.themeMode, ThemeMode.system);
+
+      await tester.tap(find.byKey(const ValueKey('theme-choice-dark')));
+      await tester.pumpAndSettle();
+
+      final updated = tester.widget<MaterialApp>(find.byType(MaterialApp));
+      expect(updated.themeMode, ThemeMode.dark);
+    });
+
+    testWidgets('Pengaturan Notifikasi: berhasil dibuka menampilkan pesan sesuai',
+        (tester) async {
+      tapGoOpenNotificationSettingsForTests = () async => true;
+      addTearDown(() => tapGoOpenNotificationSettingsForTests = null);
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+      await tester.tap(find.byIcon(Icons.person_rounded));
+      await tester.pumpAndSettle();
+
+      await tapReachable(tester, find.byKey(const ValueKey('open-notification-settings')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Atur suara dan getar'), findsOneWidget);
+    });
+
+    testWidgets('Pengaturan Notifikasi: gagal dibuka menampilkan panduan manual, bukan diam saja',
+        (tester) async {
+      tapGoOpenNotificationSettingsForTests = () async => false;
+      addTearDown(() => tapGoOpenNotificationSettingsForTests = null);
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+      await tester.tap(find.byIcon(Icons.person_rounded));
+      await tester.pumpAndSettle();
+
+      await tapReachable(tester, find.byKey(const ValueKey('open-notification-settings')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Pengaturan HP > Aplikasi'), findsOneWidget);
+    });
+
+    testWidgets('kartu Bantuan: WhatsApp, Kebijakan Privasi, dan Keluar tersedia',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+      await tester.tap(find.byIcon(Icons.person_rounded));
+      await tester.pumpAndSettle();
+
+      await tester.dragUntilVisible(
+        find.byKey(const ValueKey('support-whatsapp')),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('support-whatsapp')), findsOneWidget);
+      expect(find.text('+62 838-0025-5588'), findsOneWidget);
+      expect(find.byKey(const ValueKey('support-privacy-policy')), findsOneWidget);
+
+      await tapReachable(tester, find.byKey(const ValueKey('account-logout')));
+      await tester.pumpAndSettle();
+      expect(repo.logoutCalls, 1);
     });
   });
 }

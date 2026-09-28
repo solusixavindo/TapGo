@@ -33,6 +33,7 @@ part 'features/driver/data/session_store.dart';
 part 'features/driver/data/token_refresh_coordinator.dart';
 part 'features/driver/data/api_driver_repository.dart';
 part 'features/driver/location/driver_location_port.dart';
+part 'features/driver/application/system_settings.dart';
 part 'features/driver/push/driver_push.dart';
 part 'demo/demo_driver_repository.dart';
 part 'features/driver/application/driver_controller.dart';

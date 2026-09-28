@@ -1180,6 +1180,13 @@ class DriverAccountScreen extends ConsumerWidget {
       children: [
         Text('Akun Saya', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 16),
+        // SELALU dipasang (bukan disyaratkan oleh vehiclePlateMasked): widget
+        // inilah yang memicu refreshApplication() dan karenanya MENGISI
+        // vehiclePlateMasked sejak awal. Mitra yang sudah punya kendaraan
+        // aktif tidak melihat apa pun di sini — widget ini sendiri yang
+        // menyembunyikan kartu "Ajukan Jadi Mitra Driver" begitu itu diketahui
+        // (lihat DriverApplicationEntryPoint.build), bukan disembunyikan dari
+        // luar berdasarkan field yang justru baru terisi lewat widget ini.
         const DriverApplicationEntryPoint(),
         const SizedBox(height: 16),
         if (state.vehiclePlateMasked != null)
@@ -1197,8 +1204,150 @@ class DriverAccountScreen extends ConsumerWidget {
               ),
             ),
           ),
-        if (kDriverDemoMode) const DemoScenarioSelector(),
+        if (state.vehiclePlateMasked != null) const SizedBox(height: 16),
+        const _PreferencesCard(),
+        const SizedBox(height: 16),
+        const _SupportCard(),
+        if (kDriverDemoMode) ...[
+          const SizedBox(height: 16),
+          const DemoScenarioSelector(),
+        ],
       ],
+    );
+  }
+}
+
+const List<(ThemeMode?, String, IconData)> _themeChoices = [
+  (null, 'Ikuti sistem', Icons.brightness_auto_rounded),
+  (ThemeMode.light, 'Terang', Icons.light_mode_rounded),
+  (ThemeMode.dark, 'Gelap', Icons.dark_mode_rounded),
+];
+
+/// Preferensi tampilan aplikasi dan notifikasi — bagian dari tab Akun.
+class _PreferencesCard extends ConsumerWidget {
+  const _PreferencesCard();
+
+  Future<void> _openNotificationSettings(BuildContext context) async {
+    final opened = await openSystemNotificationSettings();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            opened
+                ? 'Atur suara dan getar notifikasi di sini.'
+                : 'Tidak dapat membuka pengaturan sistem. Buka manual: '
+                    'Pengaturan HP > Aplikasi > TapGo Driver > Notifikasi.',
+          ),
+        ),
+      );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(driverThemePreferenceProvider);
+    return Card(
+      key: const ValueKey('preferences-card'),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Tampilan', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 4),
+            const Text('Pilih tampilan terang, gelap, atau ikuti pengaturan HP Anda.'),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final (mode, label, icon) in _themeChoices)
+                  ChoiceChip(
+                    key: ValueKey(
+                        'theme-choice-${mode?.name ?? 'system'}'),
+                    avatar: Icon(icon, size: 18),
+                    label: Text(label),
+                    selected: selected == mode,
+                    onSelected: (_) => ref
+                        .read(driverThemePreferenceProvider.notifier)
+                        .setThemeMode(mode),
+                  ),
+              ],
+            ),
+            const Divider(height: 32),
+            Text('Notifikasi', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 4),
+            const Text(
+              'Suara, getar, dan prioritas notifikasi pesanan diatur lewat '
+              'pengaturan notifikasi bawaan Android.',
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              key: const ValueKey('open-notification-settings'),
+              onPressed: () => _openNotificationSettings(context),
+              icon: const Icon(Icons.notifications_active_outlined),
+              label: const Text('Buka Pengaturan Notifikasi'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bantuan dan tautan pendukung — kontak yang sama dengan yang dipakai
+/// aplikasi penumpang (lihat dashboard_screen.dart di user_app), supaya
+/// mitra driver dan penumpang dilayani satu kanal yang sama.
+class _SupportCard extends ConsumerWidget {
+  const _SupportCard();
+
+  Future<void> _openWhatsApp() =>
+      launchUrl(Uri.parse('https://wa.me/6283800255588'),
+          mode: LaunchMode.externalApplication);
+
+  Future<void> _openPrivacyPolicy() => launchUrl(
+      Uri.parse('https://tapgolion.id/privacy-policy'),
+      mode: LaunchMode.externalApplication);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(driverControllerProvider.notifier);
+    final state = ref.watch(driverControllerProvider);
+    return Card(
+      key: const ValueKey('support-card'),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Bantuan', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 12),
+            ListTile(
+              key: const ValueKey('support-whatsapp'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.chat_bubble_outline_rounded),
+              title: const Text('Hubungi TapGo (WhatsApp)'),
+              subtitle: const Text('+62 838-0025-5588'),
+              onTap: _openWhatsApp,
+            ),
+            ListTile(
+              key: const ValueKey('support-privacy-policy'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.privacy_tip_outlined),
+              title: const Text('Kebijakan Privasi'),
+              onTap: _openPrivacyPolicy,
+            ),
+            const Divider(height: 28),
+            OutlinedButton.icon(
+              key: const ValueKey('account-logout'),
+              onPressed: state.isBusy ? null : controller.logout,
+              icon: const Icon(Icons.logout_rounded),
+              label: const Text('Keluar'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

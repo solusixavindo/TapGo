@@ -58,11 +58,15 @@ enum DriverAvailability { offline, online, busy }
 enum DriverFaceCheckStatus {
   pending,
   passed,
-  blocked;
+  blocked,
+  /// Fitur dimatikan di server (DRIVER_FACE_CHECK_ENABLED=false). Diperlakukan
+  /// SAMA seperti [passed] oleh checkAndGoOnline: tidak perlu membuka kamera.
+  disabled;
 
   static DriverFaceCheckStatus fromApi(String? value) => switch (value) {
         'PASSED' => DriverFaceCheckStatus.passed,
         'BLOCKED' => DriverFaceCheckStatus.blocked,
+        'DISABLED' => DriverFaceCheckStatus.disabled,
         _ => DriverFaceCheckStatus.pending,
       };
 }

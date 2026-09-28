@@ -252,7 +252,8 @@ class DriverController extends StateNotifier<DriverState>
         );
         return;
       }
-      if (snapshot.status != DriverFaceCheckStatus.passed) {
+      if (snapshot.status != DriverFaceCheckStatus.passed &&
+          snapshot.status != DriverFaceCheckStatus.disabled) {
         if (!context.mounted) return;
         final passed = await Navigator.of(context).push<bool>(
           MaterialPageRoute(builder: (_) => const DriverFaceCheckScreen()),

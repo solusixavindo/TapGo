@@ -65,6 +65,18 @@ class _DriverApplicationEntryPointState
       );
     }
 
+    // Mitra yang sudah punya kendaraan aktif (disetujui, bukan pengajuan
+    // terbuka) tidak perlu diajak "mengajukan diri" lagi — sebelum perubahan
+    // ini kartunya tetap tampil di tab Akun meski driver sudah aktif, seolah
+    // ia belum pernah disetujui. Dicek DI SINI (bukan dari luar oleh
+    // pemanggil) karena widget inilah yang memicu refreshApplication() dan
+    // karenanya mengisi vehiclePlateMasked sejak awal — menyembunyikan
+    // widget ini dari luar berdasarkan field yang field itu sendiri yang
+    // mengisi akan membuatnya tidak pernah terisi sama sekali.
+    if (state.vehiclePlateMasked != null) {
+      return const SizedBox.shrink();
+    }
+
     return Card(
       key: const ValueKey('driver-application-entry'),
       child: Padding(

@@ -5,12 +5,16 @@ class TapGoDriverApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeMode = ref.watch(testThemeModeProvider);
+    final testOverride = ref.watch(testThemeModeProvider);
+    // testOverride SELALU menang bila diisi (widget test memaksa satu tema
+    // tertentu untuk diperiksa) — preferensi tersimpan hanya berlaku di luar
+    // itu, jadi urutan ini tidak pernah mengubah hasil test yang sudah ada.
+    final userPreference = ref.watch(driverThemePreferenceProvider);
     final skipSplash = ref.watch(testSkipSplashProvider);
     return MaterialApp(
       title: 'TapGo Driver',
       debugShowCheckedModeBanner: false,
-      themeMode: themeMode ?? ThemeMode.system,
+      themeMode: testOverride ?? userPreference ?? ThemeMode.system,
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
       home: skipSplash ? const DriverShell() : const SplashScreen(),
