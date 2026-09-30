@@ -116,6 +116,7 @@ export class RideService {
     serviceType: RideServiceType;
     pickupLat: Prisma.Decimal;
     pickupLng: Prisma.Decimal;
+    passengerId: string;
   }) {
     if (!this.push.enabled || !env.RIDE_OFFER_PROXIMITY_ENABLED) return;
     const now = Date.now();
@@ -126,6 +127,11 @@ export class RideService {
           driverProfile: {
             status: "ACTIVE",
             availability: "ONLINE",
+            // Celah fraud (Owner 30 Sep 2026): tanpa ini, akun yang punya
+            // profil driver bisa dapat push untuk order miliknya sendiri
+            // sebagai penumpang — lihat pemeriksaan yang sama di
+            // acceptOrder dan listOffersForDriver.
+            userId: { not: order.passengerId },
             vehicles: {
               some: { type: order.serviceType, isActive: true, verificationStatus: "VERIFIED" },
             },
@@ -695,6 +701,11 @@ export class RideService {
         status: "SEARCHING_DRIVER",
         driverProfileId: null,
         serviceType: { in: vehicleTypes.map((v) => v.type) },
+        // Pertahanan lapis pertama terhadap pesan-untuk-diri-sendiri (lihat
+        // pemeriksaan otoritatif di acceptOrder) — driver tidak pernah
+        // melihat order miliknya sendiri sebagai tawaran sama sekali,
+        // bukan hanya ditolak saat mencoba menerimanya.
+        passengerId: { not: userId },
         ...(proximity
           ? { createdAt: { gte: new Date(now.getTime() - env.RIDE_SEARCH_TIMEOUT_SECONDS * 1000) } }
           : {}),
@@ -928,6 +939,25 @@ export class RideService {
       // Idempoten: driver yang sama menerima ulang order miliknya.
       if (order.driverProfileId === profile.id) {
         return this.toOrderView(order);
+      }
+
+      // Celah keamanan nyata (Owner 30 Sep 2026): TIDAK ADA pemeriksaan ini
+      // sebelumnya — satu akun yang punya profil driver ACTIVE bisa memesan
+      // ojek untuk dirinya sendiri (sebagai penumpang) lalu MENERIMA order
+      // itu sendiri (sebagai driver), dari satu HP yang sama. Ini bukan
+      // sekadar aneh secara bisnis: order fiktif semacam ini bisa memicu
+      // komisi/insentif/statistik trip seolah-olah perjalanan sungguhan
+      // terjadi — vektor fraud terhadap Business Engine. Diperiksa di SINI
+      // (bukan hanya di listOffersForDriver) karena accept adalah gerbang
+      // yang benar-benar mengubah state; penyaringan di daftar tawaran
+      // hanyalah pertahanan lapis kedua yang bisa dilewati race/tebak
+      // reference langsung.
+      if (order.passengerId === input.userId) {
+        throw new AppError(
+          "Anda tidak dapat menerima pesanan milik akun Anda sendiri",
+          StatusCodes.FORBIDDEN,
+          "RIDE_SELF_ORDER_FORBIDDEN",
+        );
       }
 
       if (env.RIDE_OFFER_PROXIMITY_ENABLED) {

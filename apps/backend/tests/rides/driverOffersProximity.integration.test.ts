@@ -221,6 +221,80 @@ describe.skipIf(!runIntegration)("Tawaran berbasis jarak dan batas waktu pencari
     await expect(service().acceptOrder({ userId: user.id, publicReference: stale.order.publicReference })).rejects.toMatchObject({ code: "RIDE_OFFER_EXPIRED" });
   });
 
+  it("celah fraud (Owner 30 Sep 2026): akun yang juga driver TIDAK BOLEH menerima order miliknya sendiri", async () => {
+    // Sebelum perbaikan ini, TIDAK ADA pemeriksaan apa pun yang mencegah
+    // satu akun (dengan profil driver ACTIVE) memesan ojek untuk dirinya
+    // sendiri sebagai penumpang lalu menerima order itu sendiri sebagai
+    // driver — vektor fraud nyata terhadap komisi/insentif/statistik trip,
+    // ditemukan Owner lewat uji satu HP dengan satu akun.
+    const { user } = await createDriver();
+    const quote = await prisma.rideQuote.create({
+      data: {
+        userId: user.id,
+        serviceType: "MOTORCYCLE",
+        pickupLat: new Prisma.Decimal(north(1).lat.toFixed(7)),
+        pickupLng: new Prisma.Decimal(north(1).lng.toFixed(7)),
+        pickupAddress: "Titik jemput uji",
+        dropoffLat: new Prisma.Decimal("-6.1000000"),
+        dropoffLng: new Prisma.Decimal("106.9000000"),
+        dropoffAddress: "Tujuan uji",
+        distanceMeters: 3000,
+        durationSeconds: 600,
+        etaSeconds: 300,
+        baseFare: 5000,
+        distanceFare: 3000,
+        serviceFee: 1000,
+        subtotalFare: 9000,
+        totalFare: 9000,
+        fareRuleVersion: "RIDE_FARE_RULE_V1",
+        roundingRule: "ROUND_TO_NEAREST_100_HALF_UP",
+        distanceSource: "HAVERSINE_LOCAL_V1",
+        expiresAt: new Date(Date.now() + 3600_000)
+      }
+    });
+    const selfOrder = await prisma.rideOrder.create({
+      data: {
+        publicReference: "RID-SELFORDER1",
+        passengerId: user.id,
+        quoteId: quote.id,
+        serviceType: "MOTORCYCLE",
+        status: "SEARCHING_DRIVER",
+        pickupLat: quote.pickupLat,
+        pickupLng: quote.pickupLng,
+        pickupAddress: quote.pickupAddress,
+        dropoffLat: quote.dropoffLat,
+        dropoffLng: quote.dropoffLng,
+        dropoffAddress: quote.dropoffAddress,
+        distanceMeters: 3000,
+        durationSeconds: 600,
+        baseFare: 5000,
+        distanceFare: 3000,
+        serviceFee: 1000,
+        subtotalFare: 9000,
+        totalFare: 9000,
+        fareRuleVersion: "RIDE_FARE_RULE_V1",
+        paymentMethod: "CASH",
+        paymentState: "CASH_EXPECTED"
+      }
+    });
+
+    // Lapis pertama: tidak pernah muncul sebagai tawaran sama sekali.
+    const offers = (await service().listOffersForDriver(user.id)) as unknown as Array<{ reference: string }>;
+    expect(offers.map((o) => o.reference)).not.toContain(selfOrder.publicReference);
+
+    // Lapis kedua (otoritatif): ditolak tegas walau reference diketahui
+    // langsung (mis. lewat race atau tebakan), bukan cuma disembunyikan
+    // dari daftar.
+    await expect(
+      service().acceptOrder({ userId: user.id, publicReference: selfOrder.publicReference })
+    ).rejects.toMatchObject({ code: "RIDE_SELF_ORDER_FORBIDDEN" });
+
+    // Order tidak berubah status sama sekali — masih terbuka untuk driver LAIN.
+    const unchanged = await prisma.rideOrder.findUniqueOrThrow({ where: { id: selfOrder.id } });
+    expect(unchanged.status).toBe("SEARCHING_DRIVER");
+    expect(unchanged.driverProfileId).toBeNull();
+  });
+
   it("penyapu: pesanan tanpa driver lewat batas menjadi NO_DRIVER sekali, dengan event dan notifikasi ke penumpang", async () => {
     const stale = await createOrder(north(1), { ageSeconds: 300 });
     const fresh = await createOrder(north(1), { ageSeconds: 30 });
@@ -292,6 +366,32 @@ describe.skipIf(!runIntegration)("Tawaran berbasis jarak dan batas waktu pencari
     expect(push.sent[0]!.message.data?.type).toBe("ride_offer");
     expect(JSON.stringify(push.sent[0]!.message)).not.toContain("Rahasia");
     expect([far.user.id, offline.user.id, stale.user.id]).not.toContain(push.sent[0]!.userId);
+  });
+
+  it("celah fraud (Owner 30 Sep 2026): push order baru TIDAK dikirim ke akun yang memesan untuk dirinya sendiri", async () => {
+    // Pelengkap uji acceptOrder/listOffersForDriver di atas — jalur push
+    // proximity (notifyNearbyDrivers) adalah query TERPISAH sepenuhnya,
+    // sehingga butuh pengecualian sendiri; tanpa ini akun yang juga driver
+    // tetap dapat notifikasi "Pesanan baru di dekat Anda" untuk order
+    // miliknya sendiri walau tidak bisa menerimanya.
+    const selfDriver = await createDriver();
+    const otherNearby = await createDriver();
+    const quote = await prisma.rideQuote.create({
+      data: {
+        userId: selfDriver.user.id, serviceType: "MOTORCYCLE",
+        pickupLat: new Prisma.Decimal(north(1).lat.toFixed(7)), pickupLng: new Prisma.Decimal(north(1).lng.toFixed(7)),
+        pickupAddress: "Jalan Uji", dropoffLat: new Prisma.Decimal("-6.1000000"), dropoffLng: new Prisma.Decimal("106.9000000"),
+        dropoffAddress: "Tujuan", distanceMeters: 3000, durationSeconds: 600, etaSeconds: 300,
+        baseFare: 5000, distanceFare: 3000, serviceFee: 1000, subtotalFare: 9000, totalFare: 9000,
+        fareRuleVersion: "RIDE_FARE_RULE_V1", roundingRule: "ROUND_TO_NEAREST_100_HALF_UP", distanceSource: "HAVERSINE_LOCAL_V1",
+        expiresAt: new Date(Date.now() + 3600_000)
+      }
+    });
+    const push = new RecordingPush();
+    await service(push).createOrder({ userId: selfDriver.user.id, quoteId: quote.id, paymentMethod: "CASH" });
+    await flush();
+    expect(push.sent.map((p) => p.userId)).toEqual([otherNearby.user.id]);
+    expect(push.sent.map((p) => p.userId)).not.toContain(selfDriver.user.id);
   });
 
   it("penumpang membatalkan pesanan yang sudah diterima: driver mendapat push", async () => {
