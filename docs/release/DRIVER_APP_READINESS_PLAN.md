@@ -108,27 +108,47 @@ Owner memutuskan: kerjakan (a) sekarang sejajar dengan fase lain, atau ditunda s
    kurang → tawaran ditolak dengan pesan jelas, bukan error mentah.
 Selesai bila: satu driver menjalani satu hari kerja penuh dengan komisi menyala tanpa keluhan saldo salah.
 
-## E4. Gerbang versi minimum driver — ukuran S
-Sekarang **driver_app tidak mengirim header `X-TapGo-Platform`/`X-TapGo-App-Version`/`X-TapGo-Distribution`
-sama sekali** — `legacyMobileClientGate` di server hanya aktif bila header itu ada, jadi APK driver versi lama
-TIDAK PERNAH ditolak, untuk selamanya, sampai ini dikerjakan. Bukan sekadar mengaktifkan yang sudah ada.
-1. driver_app: tambahkan header yang sama seperti user_app ke setiap permintaan (`Dio` interceptor).
-2. Backend: env baru `DRIVER_MIN_APP_BUILD` terpisah dari `MOBILE_MIN_APP_BUILD` (menaikkan yang lama akan ikut
-   memblokir user_app) — gate membaca env yang sesuai berdasarkan payload klien.
-3. Uji: APK versi lama ditolak dengan pesan jelas ("Perbarui dari Play Store"), versi baru diterima.
-Selesai bila: uji di atas lolos, dan `versionCode` driver_app naik setiap rilis (bukan tetap 1.0.0+3 selamanya).
+## E4. Gerbang versi minimum driver — ukuran S — **SELESAI (kode), 30 Sep 2026**
+1. ✅ driver_app mengirim `X-TapGo-App: driver`, `X-TapGo-Platform`, `X-TapGo-App-Version`,
+   `X-TapGo-Distribution: play` di setiap permintaan (`ApiDriverRepository`, header default Dio +
+   `_loadAppVersionHeader()` async untuk versi sungguhan dari `package_info_plus`).
+2. ✅ Backend: env baru `DRIVER_MIN_APP_BUILD`/`DRIVER_LEGACY_CLIENT_BLOCK_ENABLED`, terpisah total dari
+   `MOBILE_MIN_APP_BUILD`/`MOBILE_LEGACY_CLIENT_BLOCK_ENABLED` milik user_app. `legacyMobileClientGate`
+   mencabang ke `driverMinAppBuildGate` SEBELUM logika user_app sempat jalan, berdasarkan header
+   `X-TapGo-App: driver` — driver_app dan user_app TIDAK PERNAH saling memakai ambang batas satu sama
+   lain walau sama-sama mengirim `x-tapgo-platform: android`.
+3. ✅ Uji: `driverMinAppBuildGate.integration.test.ts` (7 test) — build di bawah batas ditolak 426, versi
+   tak terbaca fail-open, dan dibuktikan eksplisit TIDAK PERNAH memakai `MOBILE_MIN_APP_BUILD`.
+4. Kedua env (`DRIVER_LEGACY_CLIENT_BLOCK_ENABLED`/`DRIVER_MIN_APP_BUILD`) default MATI di produksi —
+   **keputusan Owner**: nyalakan setelah build 1.0.0+4 sempat beredar beberapa waktu, supaya driver
+   yang masih di 1.0.0+3 tidak mendadak ditolak sebelum sempat update dari Play Store.
+Selesai bila: uji di atas lolos (SELESAI), dan `versionCode` driver_app naik setiap rilis — mulai dari
+1.0.0+4 rilis ini.
 
-## E5. Kesiapan Play Console — ukuran M
-1. **Data safety** khusus driver_app: lokasi latar depan saat online, kamera (verifikasi wajah), dokumen
-   identitas (KTP/SIM), kontak (WhatsApp support baru — lihat menu Bantuan).
-2. **Kebijakan privasi driver_app** dipastikan mencakup semua di atas plus retensi dokumen 24 jam.
-3. **Aset listing**: ikon baru (selesai 27 Sep), screenshot dari HP asli minimal 4 (bukan emulator), feature
-   graphic, deskripsi singkat/panjang.
-4. **Akun uji untuk reviewer Google**: satu akun driver ACTIVE dengan kendaraan terverifikasi, supaya reviewer
-   bisa login dan melihat alur kerja tanpa perlu Owner mendampingi.
-5. **Deklarasi foreground service (lokasi)** — Play Console punya form terpisah untuk ini sejak kebijakan 2024;
-   wajib diisi jujur sesuai yang sudah dibangun di D3.
-Selesai bila: semua deklarasi terisi tanpa peringatan merah di pre-launch report Play Console.
+## E5. Kesiapan Play Console — ukuran M — **sebagian besar SELESAI (kode+draf), 30 Sep 2026**
+1. ✅ **Data safety** khusus driver_app dipetakan lengkap ke draf siap-salin:
+   `docs/release/GOOGLE_PLAY_DRIVER_APP_DATA_SAFETY_MAPPING.md` — lokasi latar depan, verifikasi wajah
+   (on-device), dokumen identitas (KTP/SIM/STNK), kontak WhatsApp (tidak membaca daftar kontak), data
+   keuangan (saldo/komisi/withdrawal). **Owner masih harus menyalinnya ke form Play Console sungguhan.**
+2. ✅ **Kebijakan privasi driver_app** — ditambah bagian baru "Data yang Dikumpulkan oleh Aplikasi
+   TapGo Driver" di `apps/landing-page/src/app/privacy-policy/page.tsx` (live setelah landing-page
+   di-deploy ulang), termasuk koreksi klaim lama "tidak mengumpulkan KTP" yang sebelumnya cuma benar
+   untuk aplikasi penumpang.
+3. **Aset listing**: ikon 512×512 dan feature graphic 1024×500 SELESAI dibuat dari artwork ikon
+   adaptive yang sudah final (`google-play-assets/driver/`). Deskripsi singkat/panjang SELESAI di draf
+   `docs/release/GOOGLE_PLAY_DRIVER_APP_LISTING_DRAFT.md`. **Screenshot dari HP asli (minimal 4) BELUM
+   ADA — butuh HP Owner, tidak bisa dibuat dari sini.**
+4. ✅ **Akun uji untuk reviewer Google**: skrip `npm run driver:reviewer-bootstrap` (diuji terhadap
+   database uji, siap dipakai Owner di produksi) — lihat
+   `docs/release/DRIVER_APP_REVIEWER_TEST_ACCOUNT.md`. **Sengaja TANPA kendaraan terverifikasi**
+   (deviasi dari rencana awal "dengan kendaraan terverifikasi"): backend menolak menawarkan pesanan ke
+   driver tanpa kendaraan terverifikasi, jadi akun ini bisa dipakai reviewer login dan menjelajah
+   seluruh aplikasi TANPA risiko tidak sengaja menerima order penumpang sungguhan selama proses review.
+5. **Deklarasi foreground service (lokasi)** — form Play Console terpisah, hanya bisa diisi Owner di
+   dalam Play Console itu sendiri. Manifest sudah benar (FOREGROUND_SERVICE + FOREGROUND_SERVICE_LOCATION,
+   tanpa ACCESS_BACKGROUND_LOCATION) sehingga jawaban jujurnya sudah didukung kode.
+Selesai bila: semua deklarasi terisi tanpa peringatan merah di pre-launch report Play Console — **ini
+langkah Owner di Play Console, bukan langkah kode.**
 
 ## E6. Closed testing — ukuran M, minimal 1 minggu kalender
 1. 5-10 driver pilot + 2 penumpang (keputusan Owner 26 Sep), dengan face check TETAP MATI (lihat E2) kecuali
