@@ -1,5 +1,89 @@
 part of '../../../main.dart';
 
+// --- Certificate pinning (audit keamanan 30 September 2026, M4) -----------
+// Diisi lewat --dart-define=TAPGO_TLS_PIN_SHA256=hash1,hash2 saat build
+// rilis. Nilainya: hash SHA-256 (hex) dari SubjectPublicKeyInfo DER sertifikat
+// atau intermediate CA yang dipercaya — BUKAN hash seluruh sertifikat, supaya
+// perpanjangan sertifikat dengan kunci yang sama tidak memutus pin. Boleh
+// lebih dari satu (dipisah koma) untuk pin cadangan saat rotasi. Nilai ini
+// SENGAJA tidak diberi default di kode — lihat _applyTlsPinning.
+const String _tlsPinShaEnv = String.fromEnvironment('TAPGO_TLS_PIN_SHA256');
+
+Set<String> get _tlsPinnedSpkiSha256Hashes => _tlsPinShaEnv
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .where((value) => value.isNotEmpty)
+    .toSet();
+
+/// Memasang certificate pinning pada [dio] untuk build rilis.
+///
+/// Trik SecurityContext(withTrustedRoots: false): tanpa root CA bawaan,
+/// SETIAP sertifikat (termasuk yang sah dari CA publik) gagal validasi baku,
+/// sehingga badCertificateCallback SELALU dipanggil untuk SETIAP koneksi —
+/// bukan hanya untuk sertifikat yang sudah tidak valid. Di situlah keputusan
+/// terima/tolak SEBENARNYA dibuat lewat tapGoShouldAcceptPinnedCertificate
+/// (fungsi murni di tls_pinning.dart): host DAN SPKI harus cocok keduanya.
+///
+/// [expectedHost] dibaca ULANG setiap koneksi (bukan sekali saat pemasangan)
+/// supaya tetap benar walau baseUrl klien berubah setelah HttpClient ini
+/// dibuat.
+///
+/// Fail-closed PENUH: bila [allowedPins] kosong ATAU adapter bukan
+/// IOHttpClientAdapter (tidak bisa dipin sama sekali — mis. target web),
+/// SEMUA permintaan jaringan ditolak (lewat interceptor, sebelum TLS
+/// handshake pun dimulai) — bukan diam-diam berjalan tanpa proteksi. Ini
+/// berarti build rilis TANPA TAPGO_TLS_PIN_SHA256, atau di platform yang
+/// adapternya tidak mendukung pinning kustom, tidak bisa menghubungi server
+/// apa pun; nilai pin wajib diisi Owner sebelum build rilis diedarkan.
+void _applyTlsPinning(Dio dio, Set<String> allowedPins, String Function() expectedHost) {
+  if (allowedPins.isEmpty) {
+    _rejectAllRequestsForTlsPinning(
+      dio,
+      'TAPGO_TLS_PIN_SHA256 belum diisi pada build rilis ini — '
+      'permintaan jaringan ditolak (fail-closed) sampai pin diisi.',
+    );
+    return;
+  }
+  final adapter = dio.httpClientAdapter;
+  if (adapter is! IOHttpClientAdapter) {
+    _rejectAllRequestsForTlsPinning(
+      dio,
+      'Adapter jaringan build ini tidak mendukung certificate pinning — '
+      'permintaan jaringan ditolak (fail-closed) daripada berjalan tanpa '
+      'proteksi.',
+    );
+    return;
+  }
+  adapter.createHttpClient = () {
+    final client = HttpClient(context: SecurityContext(withTrustedRoots: false));
+    client.badCertificateCallback = (X509Certificate cert, String host, int port) {
+      return tapGoShouldAcceptPinnedCertificate(
+        host: host,
+        expectedHost: expectedHost(),
+        certificateDer: Uint8List.fromList(cert.der),
+        allowedSpkiSha256Hex: allowedPins,
+      );
+    };
+    return client;
+  };
+}
+
+void _rejectAllRequestsForTlsPinning(Dio dio, String message) {
+  dio.interceptors.add(
+    InterceptorsWrapper(
+      onRequest: (options, handler) {
+        handler.reject(
+          DioException(
+            requestOptions: options,
+            type: DioExceptionType.unknown,
+            error: StateError(message),
+          ),
+        );
+      },
+    ),
+  );
+}
+
 class ApiDriverRepository implements DriverRepository {
   ApiDriverRepository({required String baseUrl, required SessionStore storage})
       : _storage = storage,
@@ -8,9 +92,52 @@ class ApiDriverRepository implements DriverRepository {
             baseUrl: _normalizeBaseUrl(baseUrl),
             connectTimeout: const Duration(seconds: 8),
             receiveTimeout: const Duration(seconds: 12),
-            headers: {'Accept': 'application/json'},
+            headers: {
+              'Accept': 'application/json',
+              // E4 (DRIVER_APP_READINESS_PLAN.md): sebelum ini driver_app
+              // tidak mengirim header identitas sama sekali, jadi APK lama
+              // tidak pernah bisa ditolak server. 'X-TapGo-App': 'driver'
+              // membedakannya dari user_app di backend (lihat
+              // legacyMobileClientGate.ts) supaya nomor build driver TIDAK
+              // PERNAH dibandingkan dengan ambang batas milik user_app.
+              'X-TapGo-App': 'driver',
+              'X-TapGo-Platform': Platform.operatingSystem,
+              // Distribusi Play-saja (E5) — sama seperti user_app, lihat
+              // catatan _tapGoDistributionHeader di user_app/lib/main.dart.
+              'X-TapGo-Distribution': 'play',
+            },
           ),
-        );
+        ) {
+    // Audit keamanan 30 September 2026 (M4): sama seperti user_app, hanya
+    // ditegakkan pada build rilis. Lihat _applyTlsPinning untuk perilaku
+    // fail-closed saat TAPGO_TLS_PIN_SHA256 kosong pada rilis.
+    if (kReleaseMode) {
+      _applyTlsPinning(
+        _dio,
+        _tlsPinnedSpkiSha256Hashes,
+        () => Uri.parse(_dio.options.baseUrl).host,
+      );
+    }
+    unawaited(_loadAppVersionHeader());
+  }
+
+  /// Versi+build sungguhan dari APK terpasang. Dibaca sekali secara async
+  /// (PackageInfo tidak tersedia sinkron) dan ditempel ke header default —
+  /// permintaan yang terjadi SEBELUM ini selesai berjalan tanpa header versi,
+  /// yang oleh gerbang server diperlakukan sama seperti versi tak terbaca
+  /// (fail-open, tidak pernah salah tolak).
+  Future<void> _loadAppVersionHeader() async {
+    try {
+      final info =
+          await PackageInfo.fromPlatform().timeout(const Duration(seconds: 2));
+      if (info.version.isNotEmpty) {
+        _dio.options.headers['X-TapGo-App-Version'] =
+            '${info.version}+${info.buildNumber}';
+      }
+    } catch (_) {
+      // Diam-diam gagal: header versi opsional, tidak boleh menghalangi app.
+    }
+  }
 
   final Dio _dio;
   final SessionStore _storage;
