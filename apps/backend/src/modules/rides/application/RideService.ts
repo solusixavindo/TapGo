@@ -7,6 +7,7 @@ import {
   RideDriverStatus,
   RideOrderStatus,
   RideServiceType,
+  RideSosAlertStatus,
   RideVehicleVerificationStatus,
 } from "@prisma/client";
 import { createHash, randomBytes } from "node:crypto";
@@ -644,12 +645,69 @@ export class RideService {
     ) {
       await this.faceCheck.requirePassedToday(input.userId);
     }
+    // onlineSince menandai awal sesi kerja TANPA TERPUTUS (dasar pengingat
+    // kelelahan) — diisi hanya pada transisi OFFLINE->ONLINE sungguhan,
+    // dikosongkan hanya pada transisi ->OFFLINE. ONLINE<->BUSY (menerima
+    // atau menyelesaikan order) TIDAK menyentuh kolom ini: driver yang
+    // sedang menjalankan perjalanan tetap dianggap bekerja, bukan istirahat.
+    const onlineSinceUpdate =
+      input.availability === "ONLINE" && profile.availability === "OFFLINE"
+        ? { onlineSince: new Date() }
+        : input.availability === "OFFLINE"
+          ? { onlineSince: null }
+          : {};
     const updated = await this.prisma.rideDriverProfile.update({
       where: { id: profile.id },
-      data: { availability: input.availability, lastSeenAt: new Date() },
+      data: { availability: input.availability, lastSeenAt: new Date(), ...onlineSinceUpdate },
       select: { id: true, availability: true, status: true },
     });
     return updated;
+  }
+
+  /**
+   * Status keselamatan yang dipoll driver_app secara berkala SELAMA online
+   * (bukan sekali saat toggle) — pengingat kelelahan (nudge, tidak memaksa
+   * offline) dan kewajiban verifikasi ulang wajah acak (yang MEMAKSA offline
+   * bila gagal, lihat DriverFaceCheckService.submitRecheckAttempt).
+   *
+   * Ambang kelelahan dipilih dari kendaraan AKTIF driver — bila ia terdaftar
+   * di lebih dari satu jenis, dipakai yang PALING KETAT (lebih aman salah
+   * mengingatkan lebih awal daripada terlambat).
+   */
+  async getSafetyStatus(userId: string) {
+    const profile = await this.requireDriverProfile(userId);
+
+    let fatigue: {
+      continuousOnlineMinutes: number;
+      thresholdMinutes: number | null;
+      restRequired: boolean;
+    };
+    if (!profile.onlineSince) {
+      fatigue = { continuousOnlineMinutes: 0, thresholdMinutes: null, restRequired: false };
+    } else {
+      const vehicleTypes = await this.prisma.rideVehicle.findMany({
+        where: { driverProfileId: profile.id, isActive: true },
+        select: { type: true },
+      });
+      const thresholds = vehicleTypes.map((v) =>
+        v.type === "CAR"
+          ? env.DRIVER_FATIGUE_CAR_MAX_ONLINE_MINUTES
+          : env.DRIVER_FATIGUE_MOTORCYCLE_MAX_ONLINE_MINUTES,
+      );
+      const thresholdMinutes = thresholds.length > 0 ? Math.min(...thresholds) : null;
+      const continuousOnlineMinutes = Math.floor(
+        (Date.now() - profile.onlineSince.getTime()) / 60000,
+      );
+      fatigue = {
+        continuousOnlineMinutes,
+        thresholdMinutes,
+        restRequired: thresholdMinutes !== null && continuousOnlineMinutes >= thresholdMinutes,
+      };
+    }
+
+    const faceRecheckDue = await this.faceCheck.isRecheckDue(userId);
+
+    return { fatigue, faceRecheck: { due: faceRecheckDue } };
   }
 
   /** Tawaran yang layak untuk driver (hanya order yang masih mencari driver). */
@@ -690,6 +748,12 @@ export class RideService {
       select: { type: true },
     });
     if (vehicleTypes.length === 0) return [];
+
+    // Verifikasi ulang wajah acak (E2 mitigasi) belum diselesaikan hari ini —
+    // driver tidak melihat tawaran apa pun sampai lolos, persis pola yang
+    // sama dengan kendaraan tidak terverifikasi di atas. Otoritatif dari
+    // server, tidak bisa dilewati klien.
+    if (await this.faceCheck.isRecheckDue(userId)) return [];
 
     const proximity = env.RIDE_OFFER_PROXIMITY_ENABLED;
     const now = new Date();
@@ -916,6 +980,15 @@ export class RideService {
         "Akun driver belum aktif",
         StatusCodes.FORBIDDEN,
         "RIDE_DRIVER_NOT_ACTIVE",
+      );
+    }
+    // Lapis pertahanan KEDUA untuk gerbang recheck (lihat listOffersForDriver)
+    // — otoritatif di titik penerimaan sungguhan, bukan cuma di daftar tawaran.
+    if (await this.faceCheck.isRecheckDue(input.userId)) {
+      throw new AppError(
+        "Verifikasi ulang wajah diperlukan sebelum menerima pesanan.",
+        StatusCodes.FORBIDDEN,
+        "RIDE_DRIVER_FACE_RECHECK_REQUIRED",
       );
     }
 
@@ -1327,6 +1400,107 @@ export class RideService {
 
     // Respons sengaja tidak mengembalikan koordinat.
     return { accepted: true, sequence };
+  }
+
+  /**
+   * Tombol SOS driver.
+   *
+   * Prinsip: catat dulu, sebarkan setelahnya. Baris `RideSosAlert` di bawah
+   * adalah BUKTI bahwa sinyal darurat sampai ke server — ini harus berhasil
+   * walau setiap upaya pemberitahuan sesudahnya gagal total. Karena ini fitur
+   * keselamatan, pemeriksaan di sini SENGAJA lebih longgar daripada
+   * `requireDriverProfile()`: driver yang berstatus non-ACTIVE (mis. baru
+   * disuspend saat masih di tengah perjalanan aktif) tetap harus bisa memicu
+   * SOS. Otorisasi hanya menuntut profil driver ADA — bukan aktif.
+   *
+   * `rideReference`, bila dikirim, hanya diterima setelah dicocokkan sebagai
+   * milik driver ini sendiri; referensi ride milik orang lain diam-diam
+   * diabaikan (bukan error) supaya tombol darurat tidak pernah gagal hanya
+   * karena field opsional ini salah.
+   */
+  async triggerSos(input: {
+    userId: string;
+    lat: number;
+    lng: number;
+    accuracyMeters?: number;
+    rideReference?: string;
+  }) {
+    if (!isValidCoordinate({ lat: input.lat, lng: input.lng })) {
+      throw new AppError("Koordinat tidak valid", StatusCodes.BAD_REQUEST, "RIDE_COORDINATE_INVALID");
+    }
+
+    const profile = await this.prisma.rideDriverProfile.findUnique({
+      where: { userId: input.userId },
+      select: { id: true },
+    });
+    if (!profile) {
+      throw new AppError(
+        "Profil driver tidak ditemukan",
+        StatusCodes.FORBIDDEN,
+        "RIDE_DRIVER_PROFILE_REQUIRED",
+      );
+    }
+
+    let rideOrderId: string | null = null;
+    if (input.rideReference) {
+      const order = await this.prisma.rideOrder.findUnique({
+        where: { publicReference: input.rideReference },
+        select: { id: true, driverProfileId: true },
+      });
+      if (order && order.driverProfileId === profile.id) {
+        rideOrderId = order.id;
+      }
+    }
+
+    const alert = await this.prisma.rideSosAlert.create({
+      data: {
+        driverProfileId: profile.id,
+        rideOrderId,
+        lat: new Prisma.Decimal(input.lat),
+        lng: new Prisma.Decimal(input.lng),
+        ...(input.accuracyMeters !== undefined
+          ? { accuracyMeters: Math.trunc(input.accuracyMeters) }
+          : {}),
+      },
+    });
+
+    this.notifyAdminsOfSos(alert.id, profile.id);
+
+    return { alertId: alert.id, status: alert.status, createdAt: alert.createdAt };
+  }
+
+  /**
+   * Memberi tahu seluruh ADMIN/SUPER_ADMIN/SUPER_ADMIN_VIP aktif bahwa ada
+   * sinyal SOS baru. Dipanggil setelah alert ter-commit, tidak pernah
+   * ditunggu — kegagalan push tidak boleh membuat pemicu SOS tampak gagal.
+   *
+   * CATATAN: TapGo belum memiliki provider SMS/WhatsApp produksi (lihat
+   * komentar domain di OtpDeliveryProvider). Push ini HANYA menjangkau admin
+   * yang membuka aplikasi mobile dengan token push terdaftar — dashboard web
+   * admin tidak menerima FCM. Selama itu belum ada, baris `RideSosAlert` di
+   * atas tetap menjadi jalur keselamatan utama: admin yang memantau konsol
+   * secara berkala akan tetap melihatnya lewat `listSosAlerts`.
+   */
+  private notifyAdminsOfSos(alertId: string, driverProfileId: string) {
+    if (!this.push.enabled) return;
+    void (async () => {
+      const admins = await this.prisma.user.findMany({
+        where: {
+          role: { in: ["ADMIN", "SUPER_ADMIN", "SUPER_ADMIN_VIP"] },
+          status: "ACTIVE",
+        },
+        select: { id: true },
+      });
+      for (const admin of admins) {
+        await this.push
+          .notifyUser(admin.id, {
+            title: "SOS Driver",
+            body: "Seorang driver menekan tombol darurat. Buka konsol admin segera.",
+            data: { type: "driver_sos", alertId },
+          })
+          .catch(() => undefined);
+      }
+    })().catch(() => undefined);
   }
 
   // -------------------------------------------------------------------------
@@ -1788,6 +1962,79 @@ export class RideService {
       );
     }
     return vehicle;
+  }
+
+  /** Daftar sinyal SOS untuk konsol admin. Default: yang belum tuntas saja. */
+  async listSosAlerts(input: { status?: RideSosAlertStatus; limit?: number }) {
+    const alerts = await this.prisma.rideSosAlert.findMany({
+      where: { status: input.status ?? { in: ["OPEN", "ACKNOWLEDGED"] } },
+      orderBy: { createdAt: "desc" },
+      take: input.limit ?? 50,
+      select: {
+        id: true,
+        status: true,
+        lat: true,
+        lng: true,
+        accuracyMeters: true,
+        rideOrderId: true,
+        resolvedAt: true,
+        resolutionNote: true,
+        createdAt: true,
+        driverProfile: {
+          select: {
+            id: true,
+            user: { select: { id: true, fullName: true, phone: true } },
+          },
+        },
+      },
+    });
+    return alerts.map((alert) => ({
+      id: alert.id,
+      status: alert.status,
+      lat: Number(alert.lat),
+      lng: Number(alert.lng),
+      accuracyMeters: alert.accuracyMeters,
+      rideOrderId: alert.rideOrderId,
+      resolvedAt: alert.resolvedAt,
+      resolutionNote: alert.resolutionNote,
+      createdAt: alert.createdAt,
+      driver: {
+        driverProfileId: alert.driverProfile.id,
+        userId: alert.driverProfile.user.id,
+        fullName: alert.driverProfile.user.fullName,
+        phone: alert.driverProfile.user.phone,
+      },
+    }));
+  }
+
+  /**
+   * Menutup sinyal SOS lewat konsol admin — SATU-SATUNYA cara status berubah
+   * dari OPEN/ACKNOWLEDGED ke RESOLVED. Tidak ada penutupan otomatis: alert
+   * adalah bukti bahwa seseorang sungguh menanganinya, bukan sekadar sinyal
+   * yang kedaluwarsa sendiri.
+   */
+  async resolveSosAlert(input: { alertId: string; resolvedById: string; note: string }) {
+    const alert = await this.prisma.rideSosAlert.findUnique({ where: { id: input.alertId } });
+    if (!alert) {
+      throw new AppError("Sinyal SOS tidak ditemukan", StatusCodes.NOT_FOUND, "RIDE_SOS_NOT_FOUND");
+    }
+    if (alert.status === "RESOLVED") {
+      throw new AppError(
+        "Sinyal SOS ini sudah ditutup",
+        StatusCodes.CONFLICT,
+        "RIDE_SOS_ALREADY_RESOLVED",
+      );
+    }
+    const updated = await this.prisma.rideSosAlert.update({
+      where: { id: input.alertId },
+      data: {
+        status: "RESOLVED",
+        resolvedById: input.resolvedById,
+        resolvedAt: new Date(),
+        resolutionNote: input.note,
+      },
+    });
+    return { id: updated.id, status: updated.status, resolvedAt: updated.resolvedAt };
   }
 
   // -------------------------------------------------------------------------

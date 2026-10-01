@@ -911,6 +911,188 @@ void main() {
     });
   });
 
+  group('Tombol SOS darurat', () {
+    testWidgets(
+        'kirim SOS berhasil: lokasi terlampir, dialog tertutup, SnackBar tampil',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        availability: DriverAvailability.online,
+      );
+      final location = RecordingLocationPort(available: true)
+        ..fix = const DriverLocationFix(
+            lat: -6.2001, lng: 106.8167, accuracyMeters: 8);
+      await pumpDriver(tester, repo, locationPort: location);
+
+      await tapReachable(tester, find.byTooltip('SOS Darurat'));
+      await tester.pumpAndSettle();
+      expect(find.text('Kirim sinyal darurat?'), findsOneWidget);
+
+      await tapReachable(tester, find.text('Kirim SOS'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(repo.sosCalls, hasLength(1));
+      expect(repo.sosCalls.single['lat'], -6.2001);
+      expect(repo.sosCalls.single['lng'], 106.8167);
+      expect(repo.sosCalls.single['accuracyMeters'], 8);
+      expect(find.text('Kirim sinyal darurat?'), findsNothing);
+      expect(
+        find.text('Sinyal darurat terkirim. Tim TapGo akan segera menghubungi Anda.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets(
+        'ride aktif otomatis terlampir sebagai rideReference tanpa driver memilih',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        current: demoRide(RideStatus.inTrip),
+      );
+      final location = RecordingLocationPort(available: true)
+        ..fix = const DriverLocationFix(
+            lat: -6.2001, lng: 106.8167, accuracyMeters: 8);
+      await pumpDriver(tester, repo, locationPort: location);
+
+      await tapReachable(tester, find.byTooltip('SOS Darurat'));
+      await tester.pumpAndSettle();
+      await tapReachable(tester, find.text('Kirim SOS'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(repo.sosCalls.single['rideReference'], 'RIDE-DEMO-001');
+    });
+
+    testWidgets(
+        'lokasi tidak tersedia: dialog tetap terbuka dengan pesan, bukan mengirim koordinat kosong',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        availability: DriverAvailability.online,
+      );
+      final location = RecordingLocationPort(available: true);
+      // fix sengaja dibiarkan null (default) meniru GPS gagal mengambil titik.
+      await pumpDriver(tester, repo, locationPort: location);
+
+      await tapReachable(tester, find.byTooltip('SOS Darurat'));
+      await tester.pumpAndSettle();
+      await tapReachable(tester, find.text('Kirim SOS'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(repo.sosCalls, isEmpty);
+      expect(find.text('Kirim sinyal darurat?'), findsOneWidget);
+      // Bisa tampil dua kali (dialog + ErrorNotice tab di belakangnya,
+      // sama-sama membaca state.message) — yang penting pesannya ADA.
+      expect(
+        find.textContaining('Tidak bisa mendapatkan lokasi Anda'),
+        findsWidgets,
+      );
+    });
+
+    testWidgets('tombol WhatsApp CS selalu tersedia di dialog SOS sebagai cadangan',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        availability: DriverAvailability.online,
+      );
+      await pumpDriver(tester, repo);
+
+      await tapReachable(tester, find.byTooltip('SOS Darurat'));
+      await tester.pumpAndSettle();
+      expect(find.text('WhatsApp CS'), findsOneWidget);
+    });
+  });
+
+  group('Keselamatan selama online: kelelahan dan verifikasi ulang wajah', () {
+    testWidgets(
+        'banner kelelahan tampil saat restRequired true, hilang lagi saat pulih',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        availability: DriverAvailability.online,
+      );
+      await pumpDriver(tester, repo);
+      expect(find.byKey(const ValueKey('fatigue-banner')), findsNothing);
+
+      repo.fatigueStatus = const DriverFatigueStatus(
+        continuousOnlineMinutes: 665,
+        thresholdMinutes: 660,
+        restRequired: true,
+      );
+      // Poll pertama (saat _startPolling dipanggil dari restore()) sudah
+      // lewat sebelum repo.fatigueStatus diubah di atas — detak PERIODIK
+      // berikutnya (3 menit) yang membawa nilai baru ini ke state.
+      await tester.pump(const Duration(minutes: 3));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('fatigue-banner')), findsOneWidget);
+      expect(find.textContaining('11 jam 5 menit'), findsOneWidget);
+
+      repo.fatigueStatus = const DriverFatigueStatus(
+        continuousOnlineMinutes: 5,
+        thresholdMinutes: 660,
+        restRequired: false,
+      );
+      await tester.pump(const Duration(minutes: 3));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('fatigue-banner')), findsNothing);
+    });
+
+    testWidgets(
+        'banner verifikasi ulang tampil saat faceRecheckDue true dan membuka layar recheck saat ditekan',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        availability: DriverAvailability.online,
+      );
+      await pumpDriver(tester, repo);
+      expect(find.byKey(const ValueKey('face-recheck-banner')), findsNothing);
+
+      repo.faceRecheckDue = true;
+      await tester.pump(const Duration(minutes: 3));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('face-recheck-banner')), findsOneWidget);
+      expect(
+        find.textContaining('Anda tidak akan menerima pesanan baru'),
+        findsOneWidget,
+      );
+
+      await tapReachable(tester, find.text('Verifikasi Sekarang'));
+      // BUKAN pumpAndSettle: DriverFaceCheckScreen memanggil availableCameras()
+      // sungguhan yang tidak pernah selesai di lingkungan widget test — sama
+      // seperti pola pengujian checkAndGoOnline di atas.
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(find.byType(DriverFaceCheckScreen), findsOneWidget);
+      expect(find.text('Verifikasi Ulang Wajah'), findsOneWidget);
+      final screen = tester.widget<DriverFaceCheckScreen>(find.byType(DriverFaceCheckScreen));
+      expect(screen.isRecheck, isTrue);
+    });
+
+    testWidgets(
+        'faceRecheckDue diutamakan di atas fatigueWarning saat keduanya aktif bersamaan',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        availability: DriverAvailability.online,
+      );
+      await pumpDriver(tester, repo);
+
+      repo.faceRecheckDue = true;
+      repo.fatigueStatus = const DriverFatigueStatus(
+        continuousOnlineMinutes: 700,
+        thresholdMinutes: 660,
+        restRequired: true,
+      );
+      await tester.pump(const Duration(minutes: 3));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('face-recheck-banner')), findsOneWidget);
+      expect(find.byKey(const ValueKey('fatigue-banner')), findsNothing);
+    });
+  });
+
   group('R2.5B active ride lifecycle', () {
     testWidgets(
         'current ride dipulihkan dan offline driver tetap melihat active ride',
@@ -2246,6 +2428,25 @@ class FakeDriverRepository implements DriverRepository {
     sendLocationCalls += 1;
   }
 
+  final List<Map<String, dynamic>> sosCalls = [];
+  Object? sosError;
+
+  @override
+  Future<void> triggerSos({
+    required double lat,
+    required double lng,
+    int? accuracyMeters,
+    String? rideReference,
+  }) async {
+    if (sosError != null) throw sosError!;
+    sosCalls.add({
+      'lat': lat,
+      'lng': lng,
+      'accuracyMeters': accuracyMeters,
+      'rideReference': rideReference,
+    });
+  }
+
   DriverFaceCheckStatus faceCheckStatus = DriverFaceCheckStatus.passed;
 
   @override
@@ -2264,6 +2465,33 @@ class FakeDriverRepository implements DriverRepository {
   }) async {
     faceCheckStatus = DriverFaceCheckStatus.passed;
     return DriverFaceCheckSnapshot(status: faceCheckStatus, attemptsRemaining: 3);
+  }
+
+  // --- Keselamatan selama online (kelelahan + verifikasi ulang) ----------
+
+  DriverFatigueStatus fatigueStatus =
+      const DriverFatigueStatus(continuousOnlineMinutes: 0, thresholdMinutes: null, restRequired: false);
+  bool faceRecheckDue = false;
+  Object? recheckError;
+  int safetyStatusCalls = 0;
+  int recheckAttemptCalls = 0;
+
+  @override
+  Future<DriverSafetyStatus> safetyStatus() async {
+    safetyStatusCalls += 1;
+    return DriverSafetyStatus(fatigue: fatigueStatus, faceRecheckDue: faceRecheckDue);
+  }
+
+  @override
+  Future<DriverFaceCheckSnapshot> submitRecheckAttempt({
+    required double similarityScore,
+    required bool livenessPassed,
+    required String modelVersion,
+  }) async {
+    recheckAttemptCalls += 1;
+    if (recheckError != null) throw recheckError!;
+    faceRecheckDue = false;
+    return const DriverFaceCheckSnapshot(status: DriverFaceCheckStatus.passed, attemptsRemaining: 3);
   }
 }
 
@@ -2306,6 +2534,12 @@ class RecordingLocationPort implements DriverLocationPort {
   Future<void> sendCurrentLocation() async {
     sendCalls += 1;
   }
+
+  // Null secara default meniru GPS/izin belum siap; test SOS mengisinya.
+  DriverLocationFix? fix;
+
+  @override
+  Future<DriverLocationFix?> currentFix() async => fix;
 
   @override
   final Stream<(double lat, double lng)> positionStream;

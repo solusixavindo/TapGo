@@ -163,6 +163,22 @@ const envSchema = z.object({
   /// pernah cukup dipercaya mengirim {passed: true} begitu saja. Disetel ulang
   /// selama rollout berdasarkan similarityScore nyata yang tercatat.
   DRIVER_FACE_CHECK_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.75),
+  /// Verifikasi ulang ACAK selama sesi online (bukan sekali per hari saja) —
+  /// meniru pola Gojek yang memverifikasi ulang sewaktu-waktu, menutup celah
+  /// joki-akun-setelah-online. Jadwal berikutnya diacak di antara MIN..MAX
+  /// menit setelah PASSED (dan setelah setiap recheck yang lolos), supaya
+  /// waktunya tidak bisa ditebak driver. Tunduk pada DRIVER_FACE_CHECK_ENABLED
+  /// yang sama — mati total bila fitur induk mati.
+  DRIVER_FACE_CHECK_RECHECK_MIN_MINUTES: z.coerce.number().int().positive().default(120),
+  DRIVER_FACE_CHECK_RECHECK_MAX_MINUTES: z.coerce.number().int().positive().default(300),
+  /// Pengingat kelelahan (fatigue nudge, bukan penguncian) — ambang jam
+  /// online TANPA TERPUTUS sebelum driver diingatkan untuk istirahat. Angka
+  /// bawaan meniru ambang batas Grab yang sudah dipublikasikan: mobil 10 jam,
+  /// motor 11 jam. Sengaja hanya PENGINGAT (banner), tidak memaksa offline —
+  /// mengunci akses adalah keputusan bisnis yang mempengaruhi penghasilan
+  /// driver dan menuntut keputusan eksplisit Owner, bukan default teknis.
+  DRIVER_FATIGUE_CAR_MAX_ONLINE_MINUTES: z.coerce.number().int().positive().default(600),
+  DRIVER_FATIGUE_MOTORCYCLE_MAX_ONLINE_MINUTES: z.coerce.number().int().positive().default(660),
   // Release 1 tidak memakai realtime/chat. Fail-closed: Socket.IO hanya
   // di-attach bila diaktifkan eksplisit ("true"). Nilai lain -> false.
   REALTIME_ENABLED: strictEnvBoolean(false),

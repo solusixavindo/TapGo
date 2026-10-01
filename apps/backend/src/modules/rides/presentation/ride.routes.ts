@@ -1,4 +1,4 @@
-import { RideDriverStatus, RideOrderStatus, RideServiceType } from "@prisma/client";
+import { RideDriverStatus, RideOrderStatus, RideServiceType, RideSosAlertStatus } from "@prisma/client";
 import { NextFunction, Request, Response, Router } from "express";
 import { StatusCodes } from "http-status-codes";
 import { env } from "../../../config/env.js";
@@ -43,6 +43,8 @@ import {
   adminDriverStatusSchema,
   adminListDriversSchema,
   adminListRidesSchema,
+  adminListSosSchema,
+  adminResolveSosSchema,
   adminVehicleSchema,
   adminVehicleVerificationSchema,
   cancelRideSchema,
@@ -51,6 +53,7 @@ import {
   driverAvailabilitySchema,
   driverFaceCheckAttemptSchema,
   driverLocationSchema,
+  driverSosSchema,
   listRidesSchema,
   rideReferenceSchema,
 } from "./ride.validators.js";
@@ -319,6 +322,29 @@ driverRideRouter.post(
 );
 
 driverRideRouter.post(
+  "/face-check/recheck-attempt",
+  faceCheckRateLimiter,
+  validateRequest(driverFaceCheckAttemptSchema),
+  asyncHandler(async (req, res) => {
+    const data = await driverFaceCheckService.submitRecheckAttempt({
+      userId: req.auth!.userId,
+      similarityScore: req.body.similarityScore,
+      livenessPassed: req.body.livenessPassed,
+      modelVersion: req.body.modelVersion,
+    });
+    res.status(StatusCodes.CREATED).json({ success: true, data });
+  }),
+);
+
+driverRideRouter.get(
+  "/safety-status",
+  asyncHandler(async (req, res) => {
+    const data = await rideService.getSafetyStatus(req.auth!.userId);
+    res.json({ success: true, data });
+  }),
+);
+
+driverRideRouter.post(
   "/rides/:reference/accept",
   rideWriteRateLimiter,
   validateRequest(rideReferenceSchema),
@@ -432,11 +458,52 @@ driverRideRouter.post(
   }),
 );
 
+driverRideRouter.post(
+  "/sos",
+  rideWriteRateLimiter,
+  validateRequest(driverSosSchema),
+  asyncHandler(async (req, res) => {
+    const data = await rideService.triggerSos({
+      userId: req.auth!.userId,
+      lat: req.body.lat,
+      lng: req.body.lng,
+      ...(req.body.accuracyMeters !== undefined ? { accuracyMeters: req.body.accuracyMeters } : {}),
+      ...(req.body.rideReference !== undefined ? { rideReference: req.body.rideReference } : {}),
+    });
+    res.status(StatusCodes.CREATED).json({ success: true, data });
+  }),
+);
+
 // ---------------------------------------------------------------------------
 // Admin / Moderasi — /api/v1/admin/rides
 // ---------------------------------------------------------------------------
 
 adminRideRouter.use(requireAuth, requireRoles("ADMIN", "SUPER_ADMIN"), maskForOperator);
+
+adminRideRouter.get(
+  "/sos",
+  validateRequest(adminListSosSchema),
+  asyncHandler(async (req, res) => {
+    const data = await rideService.listSosAlerts({
+      ...(req.query.status ? { status: req.query.status as RideSosAlertStatus } : {}),
+      ...(req.query.limit ? { limit: Number(req.query.limit) } : {}),
+    });
+    res.json({ success: true, data });
+  }),
+);
+
+adminRideRouter.patch(
+  "/sos/:alertId/resolve",
+  validateRequest(adminResolveSosSchema),
+  asyncHandler(async (req, res) => {
+    const data = await rideService.resolveSosAlert({
+      alertId: referenceParam(req.params.alertId),
+      resolvedById: req.auth!.userId,
+      note: req.body.note,
+    });
+    res.json({ success: true, data });
+  }),
+);
 
 adminRideRouter.get(
   "/",

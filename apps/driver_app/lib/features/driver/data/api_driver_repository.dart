@@ -529,6 +529,51 @@ class ApiDriverRepository implements DriverRepository {
     );
   }
 
+  @override
+  Future<void> triggerSos({
+    required double lat,
+    required double lng,
+    int? accuracyMeters,
+    String? rideReference,
+  }) async {
+    await _request(
+      () => _dio.post<dynamic>(
+        '/driver/sos',
+        data: {
+          'lat': lat,
+          'lng': lng,
+          if (accuracyMeters != null) 'accuracyMeters': accuracyMeters,
+          if (rideReference != null) 'rideReference': rideReference,
+        },
+      ),
+    );
+  }
+
+  @override
+  Future<DriverSafetyStatus> safetyStatus() async {
+    final data = await _request(() => _dio.get<dynamic>('/driver/safety-status'));
+    return DriverSafetyStatus.fromJson(data);
+  }
+
+  @override
+  Future<DriverFaceCheckSnapshot> submitRecheckAttempt({
+    required double similarityScore,
+    required bool livenessPassed,
+    required String modelVersion,
+  }) async {
+    final data = await _request(
+      () => _dio.post<dynamic>(
+        '/driver/face-check/recheck-attempt',
+        data: {
+          'similarityScore': similarityScore,
+          'livenessPassed': livenessPassed,
+          'modelVersion': modelVersion,
+        },
+      ),
+    );
+    return DriverFaceCheckSnapshot.fromJson(data);
+  }
+
   DriverApplicationSnapshot _applicationSnapshotFrom(
       Map<String, dynamic> data) {
     final rawApplication = data['application'];

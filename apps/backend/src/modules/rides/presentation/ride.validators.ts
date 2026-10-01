@@ -162,3 +162,28 @@ export const adminVehicleVerificationSchema = z.object({
     reason: z.string().trim().min(3).max(120),
   }),
 });
+
+const sosAlertStatus = z.enum(["OPEN", "ACKNOWLEDGED", "RESOLVED"]);
+
+export const driverSosSchema = z.object({
+  body: z.object({
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+    accuracyMeters: z.number().int().min(0).max(500).optional(),
+    rideReference: publicReference.optional(),
+  }),
+});
+
+export const adminListSosSchema = z.object({
+  query: z.object({
+    status: sosAlertStatus.optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+  }),
+});
+
+export const adminResolveSosSchema = z.object({
+  params: z.object({ alertId: z.string().uuid() }),
+  body: z.object({
+    note: z.string().trim().min(3).max(500),
+  }),
+});

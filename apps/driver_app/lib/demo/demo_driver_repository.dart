@@ -371,6 +371,14 @@ class DemoDriverRepository implements DriverRepository {
     required DateTime capturedAt,
   }) async {}
 
+  @override
+  Future<void> triggerSos({
+    required double lat,
+    required double lng,
+    int? accuracyMeters,
+    String? rideReference,
+  }) async {}
+
   // --- Verifikasi wajah harian (mode demo — murni in-memory) --------------
   //
   // Stub ini TIDAK pernah menyentuh camera/google_mlkit_face_detection/
@@ -401,6 +409,23 @@ class DemoDriverRepository implements DriverRepository {
   }) async {
     _demoFaceCheckStatus = DriverFaceCheckStatus.passed;
     return DriverFaceCheckSnapshot(status: _demoFaceCheckStatus, attemptsRemaining: 3);
+  }
+
+  @override
+  Future<DriverSafetyStatus> safetyStatus() async {
+    return const DriverSafetyStatus(
+      fatigue: DriverFatigueStatus(continuousOnlineMinutes: 0, thresholdMinutes: null, restRequired: false),
+      faceRecheckDue: false,
+    );
+  }
+
+  @override
+  Future<DriverFaceCheckSnapshot> submitRecheckAttempt({
+    required double similarityScore,
+    required bool livenessPassed,
+    required String modelVersion,
+  }) async {
+    return const DriverFaceCheckSnapshot(status: DriverFaceCheckStatus.passed, attemptsRemaining: 3);
   }
 }
 
