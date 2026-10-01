@@ -17,7 +17,13 @@ class MemorySessionStore implements SessionStore {
 }
 
 class SecureSessionStore implements SessionStore {
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  // Audit keamanan 30 September 2026 (L3): tanpa AndroidOptions eksplisit,
+  // flutter_secure_storage jatuh ke backend lama (KeyStore RSA + SharedPreferences
+  // biasa) alih-alih EncryptedSharedPreferences (AES-256-GCM via Android
+  // Keystore) — sama seperti _TapGoDeviceContextStore di user_app.
+  final FlutterSecureStorage _storage = const FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
   static const _access = 'tapgo.driver.access.v1';
   static const _refresh = 'tapgo.driver.refresh.v1';
   static const _name = 'tapgo.driver.name.v1';

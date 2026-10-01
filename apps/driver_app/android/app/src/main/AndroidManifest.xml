@@ -22,7 +22,13 @@
     <application
         android:label="TapGo Driver"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false">
+        <!-- Audit keamanan 30 September 2026 (L3): tanpa ini, Android auto-backup
+             bisa menyalin SharedPreferences/berkas app (termasuk sisa sesi/token
+             sebelum EncryptedSharedPreferences berlaku penuh) ke cloud/adb backup
+             milik pengguna — sama seperti user_app. -->
+
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="tapgo_default" />
