@@ -8,15 +8,16 @@ export const metadata: Metadata = {
 
 export default function PrivacyPolicy() {
   return (
-    <LegalShell title="Privacy Policy" updated="25 September 2026">
+    <LegalShell title="Privacy Policy" updated="30 September 2026">
       <p>
         PT. TapGo Lion Indonesia menghormati privasi pengguna TapGo. Kebijakan ini menjelaskan data
-        yang dikumpulkan oleh aplikasi TapGo untuk Android dan oleh situs https://tapgolion.id,
-        tujuan penggunaan, penyimpanan, keamanan, pihak ketiga, serta cara pengguna menghubungi TapGo
-        untuk permintaan data atau penghapusan akun. TapGo tidak menjual data pribadi pengguna.
+        yang dikumpulkan oleh aplikasi TapGo Penumpang untuk Android, aplikasi TapGo Driver untuk
+        Android, dan oleh situs https://tapgolion.id, tujuan penggunaan, penyimpanan, keamanan,
+        pihak ketiga, serta cara pengguna menghubungi TapGo untuk permintaan data atau penghapusan
+        akun. TapGo tidak menjual data pribadi pengguna.
       </p>
 
-      <h2>Data yang Dikumpulkan oleh Aplikasi Android</h2>
+      <h2>Data yang Dikumpulkan oleh Aplikasi TapGo Penumpang (Android)</h2>
       <p>
         Aplikasi mengumpulkan nama, nomor HP, email (bila ditambahkan pengguna), dan password yang
         disimpan dalam bentuk hash. Aplikasi mengumpulkan lokasi perangkat (presisi atau perkiraan)
@@ -29,7 +30,54 @@ export default function PrivacyPolicy() {
         galeri. Untuk keamanan akun, aplikasi mengirim ID dan sidik perangkat serta versi aplikasi.
       </p>
       <p>
-        Aplikasi Android <strong>tidak</strong> mengumpulkan KTP maupun swafoto.
+        Aplikasi TapGo Penumpang <strong>tidak</strong> mengumpulkan KTP maupun swafoto verifikasi
+        wajah — persyaratan itu hanya berlaku untuk mitra driver, lihat bagian TapGo Driver di
+        bawah.
+      </p>
+
+      <h2>Data yang Dikumpulkan oleh Aplikasi TapGo Driver (Android)</h2>
+      <p>
+        Aplikasi mitra driver mengumpulkan nama, nomor HP, email (bila ditambahkan), dan password
+        dalam bentuk hash, sama seperti aplikasi penumpang. Karena sifat pekerjaannya, aplikasi ini
+        mengumpulkan data tambahan yang <strong>tidak</strong> diminta dari penumpang:
+      </p>
+      <p>
+        <strong>Lokasi latar depan selama online.</strong> Selama driver berstatus ONLINE atau
+        sedang menjalankan perjalanan, aplikasi mengirim lokasi perangkat secara berkala ke server
+        — termasuk saat layar terkunci, lewat layanan latar depan Android dengan notifikasi tetap
+        yang selalu terlihat ("Anda online"). Lokasi berhenti dikirim segera setelah driver
+        berstatus OFFLINE. Aplikasi ini <strong>tidak</strong> meminta maupun memakai izin lokasi
+        latar belakang (background location) — pengiriman lokasi hanya berjalan selama layanan
+        latar depan tersebut aktif.
+      </p>
+      <p>
+        <strong>Verifikasi wajah harian.</strong> Sebelum mengaktifkan status online, aplikasi dapat
+        meminta driver mengambil swafoto lewat kamera depan untuk pemeriksaan liveness (mata
+        terbuka, satu wajah, framing wajar) dan pencocokan kemiripan terhadap foto referensi KYC.
+        Seluruh pemrosesan berjalan di perangkat (on-device) memakai model pengenalan wajah lokal —
+        gambar wajah tidak dikirim ke server pihak ketiga mana pun untuk keperluan ini.
+      </p>
+      <p>
+        <strong>Dokumen identitas dan kendaraan.</strong> Untuk pengajuan dan verifikasi menjadi
+        mitra, aplikasi meminta foto KTP, SIM, STNK, dan swafoto memegang KTP. Dokumen ini disimpan
+        terenkripsi, hanya dilihat tim verifikasi TapGo yang berwenang, dan dihapus otomatis dalam
+        waktu terbatas setelah diunggah (paling lama 72 jam; umumnya 24 jam) — kebijakan yang sama
+        seperti dokumen KTP membership di situs web, lihat bagian "Perlakuan Dokumen Identitas" di
+        bawah.
+      </p>
+      <p>
+        <strong>Data penghasilan dan saldo.</strong> Aplikasi menyimpan riwayat perjalanan, komisi,
+        saldo dompet driver, riwayat top up, dan pencairan (withdrawal).
+      </p>
+      <p>
+        <strong>Kontak dukungan.</strong> Tombol Bantuan di aplikasi membuka WhatsApp resmi TapGo
+        (+62 838-0025-5588) lewat aplikasi WhatsApp driver sendiri — TapGo tidak membaca daftar
+        kontak perangkat untuk fitur ini.
+      </p>
+      <p>
+        Seperti aplikasi penumpang, aplikasi driver juga menyimpan pesan chat dengan penumpang
+        selama perjalanan aktif, serta mengirim ID dan sidik perangkat serta versi aplikasi untuk
+        keamanan akun.
       </p>
 
       <h2>Data yang Dikumpulkan oleh Situs Web</h2>
@@ -41,13 +89,15 @@ export default function PrivacyPolicy() {
         identitas, serta foto profil secara opsional.
       </p>
 
-      <h2>Perlakuan Dokumen Identitas (KTP dan Swafoto)</h2>
+      <h2>Perlakuan Dokumen Identitas (KTP, SIM, STNK, dan Swafoto)</h2>
       <p>
-        Dokumen identitas hanya digunakan untuk memverifikasi pembelian membership dan dilihat oleh
-        tim verifikasi TapGo yang berwenang. Berkas disimpan dalam bentuk terenkripsi, tidak pernah
-        tersimpan sebagai gambar mentah, dan dihapus otomatis dalam waktu terbatas setelah diunggah
-        (paling lama 72 jam; umumnya 24 jam). Bila dokumen ditolak, pembayaran pengguna
-        dikembalikan sesuai kebijakan pengembalian dana.
+        Dokumen identitas digunakan untuk memverifikasi pembelian membership (situs web) atau
+        pengajuan menjadi mitra driver (aplikasi TapGo Driver), dan hanya dilihat oleh tim verifikasi
+        TapGo yang berwenang. Berkas disimpan dalam bentuk terenkripsi, tidak pernah tersimpan
+        sebagai gambar mentah, dan dihapus otomatis dalam waktu terbatas setelah diunggah (paling
+        lama 72 jam; umumnya 24 jam). Bila dokumen ditolak, pembayaran pengguna dikembalikan sesuai
+        kebijakan pengembalian dana (membership), atau pengajuan mitra diberi tahu alasan penolakan
+        (driver).
       </p>
 
       <h2>Notifikasi dan Token Perangkat</h2>
