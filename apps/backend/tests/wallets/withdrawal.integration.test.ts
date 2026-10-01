@@ -10,6 +10,14 @@ import {
   seedMemberships,
   testDatabaseUrl
 } from "../helpers/referralWalletHarness.js";
+import { hashPassword } from "../../src/core/security/passwordHasher.js";
+
+/**
+ * Audit keamanan 30 September 2026 (H2): pencairan mobile kini menuntut
+ * password akun dan rekening TERSIMPAN (bukan lagi dari body) — lihat
+ * createWithdrawal/setBankAccount di bawah.
+ */
+const TEST_PASSWORD = "withdrawal-api-test-password-1";
 
 type SignAccessToken = (payload: { sub: string; role: UserRole; sessionId: string }) => string;
 
@@ -77,6 +85,7 @@ describe.skipIf(!runIntegration)("Withdrawal API", () => {
 
   it("creates a pending withdrawal and reserves wallet balance", async () => {
     const user = await createUser("WDUSER01", "USER", "150000.00");
+    await setBankAccount(user.id);
 
     const response = await createWithdrawal(user, 100000);
     const body = await response.json() as { data: { status: string; amount: string; bankName: string } };
@@ -90,15 +99,18 @@ describe.skipIf(!runIntegration)("Withdrawal API", () => {
 
   it("blocks insufficient balance", async () => {
     const user = await createUser("WDUSER02", "USER", "75000.00");
+    await setBankAccount(user.id);
 
     const response = await createWithdrawal(user, 100000);
 
     expect(response.status).toBe(400);
+    expect(((await response.json()) as { code?: string }).code).toBe("INSUFFICIENT_BALANCE");
     await expectWallet(user.id, "75000.00");
   });
 
   it("approves withdrawal without deducting wallet twice", async () => {
     const user = await createUser("WDUSER03", "USER", "150000.00");
+    await setBankAccount(user.id);
     const admin = await createUser("WDADMIN3", "SUPER_ADMIN", "0.00");
     const withdrawal = await createdWithdrawalId(user, 100000);
 
@@ -111,6 +123,7 @@ describe.skipIf(!runIntegration)("Withdrawal API", () => {
 
   it("rejects withdrawal and refunds balance once", async () => {
     const user = await createUser("WDUSER04", "USER", "150000.00");
+    await setBankAccount(user.id);
     const admin = await createUser("WDADMIN4", "SUPER_ADMIN", "0.00");
     const withdrawal = await createdWithdrawalId(user, 100000);
 
@@ -126,6 +139,7 @@ describe.skipIf(!runIntegration)("Withdrawal API", () => {
 
   it("marks approved withdrawal as paid", async () => {
     const user = await createUser("WDUSER05", "USER", "150000.00");
+    await setBankAccount(user.id);
     const admin = await createUser("WDADMIN5", "SUPER_ADMIN", "0.00");
     const withdrawal = await createdWithdrawalId(user, 100000);
     await adminAction(admin, withdrawal, "approve");
@@ -138,6 +152,7 @@ describe.skipIf(!runIntegration)("Withdrawal API", () => {
 
   it("blocks double approve and paid before approve", async () => {
     const user = await createUser("WDUSER06", "USER", "150000.00");
+    await setBankAccount(user.id);
     const admin = await createUser("WDADMIN6", "SUPER_ADMIN", "0.00");
     const withdrawal = await createdWithdrawalId(user, 100000);
 
@@ -174,7 +189,8 @@ async function createUser(referralCode: string, role: UserRole, walletBalance: s
       phone: `+628${referralCode.padStart(9, "0")}`,
       referralCode,
       role,
-      membershipId: basic.id
+      membershipId: basic.id,
+      passwordHash: await hashPassword(TEST_PASSWORD)
     }
   });
 
@@ -191,6 +207,21 @@ async function createUser(referralCode: string, role: UserRole, walletBalance: s
   return user;
 }
 
+/** Rekening "lama" (lolos jeda 24 jam) — dipanggil sebelum createWithdrawal. */
+async function setBankAccount(userId: string, accountNumber = "1234567890"): Promise<void> {
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      bankAccount: {
+        bankName: "BCA",
+        accountNumber,
+        accountHolderName: "Pemilik Sah",
+        updatedAt: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString()
+      }
+    }
+  });
+}
+
 function tokenFor(user: User) {
   return signAccessToken({
     sub: user.id,
@@ -205,9 +236,7 @@ function createWithdrawal(user: User, amount: number) {
     token: tokenFor(user),
     body: {
       amount,
-      bankName: "BCA",
-      accountNumber: "1234567890",
-      accountHolderName: user.fullName
+      password: TEST_PASSWORD
     }
   });
 }

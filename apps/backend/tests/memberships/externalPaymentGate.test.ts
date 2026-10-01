@@ -122,7 +122,11 @@ describe("External membership payment safety gate", () => {
       updateBankAccount: vi.fn(),
       requestWithdrawal: vi.fn(),
     };
-    const controller = new WalletController(walletService as never);
+    // Gerbang Play-safe (assertCashOutEnabledForPlay) melempar SEBELUM
+    // verifikasi password sempat dipanggil — verifier ini tidak pernah
+    // dieksekusi pada skenario ini, hanya memenuhi tanda tangan konstruktor.
+    const verifyUserPassword = vi.fn();
+    const controller = new WalletController(walletService as never, verifyUserPassword);
     const response = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
 
     await expect(
@@ -131,9 +135,7 @@ describe("External membership payment safety gate", () => {
           auth: { userId: "user-1", role: "USER" },
           body: {
             amount: 50000,
-            bankName: "Bank Mandiri",
-            accountNumber: "00123456",
-            accountHolderName: "Member TapGo",
+            password: "password-benar",
           },
         } as unknown as Request,
         response,
@@ -143,6 +145,7 @@ describe("External membership payment safety gate", () => {
       statusCode: 403,
     });
     expect(walletService.requestWithdrawal).not.toHaveBeenCalled();
+    expect(verifyUserPassword).not.toHaveBeenCalled();
   });
 
   it("allows bank account mutation in Play-safe mode — storing an account number is not a cash-out", async () => {
@@ -151,7 +154,7 @@ describe("External membership payment safety gate", () => {
       updateBankAccount: vi.fn().mockResolvedValue({ bankName: "Bank Mandiri" }),
       requestWithdrawal: vi.fn(),
     };
-    const controller = new WalletController(walletService as never);
+    const controller = new WalletController(walletService as never, vi.fn());
     const response = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
 
     await controller.updateBankAccount(

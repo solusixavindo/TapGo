@@ -139,12 +139,12 @@ describe.skipIf(!runIntegration)("Membership purchase channel isolation", () => 
         authorization: `Bearer ${tokenFor(user)}`,
         "content-type": "application/json"
       },
-      body: JSON.stringify({
-        amount: 100000,
-        bankName: "BCA",
-        accountNumber: "1234567890",
-        accountHolderName: user.fullName
-      })
+      // H2 (audit keamanan 30 September 2026): rute mobile tidak lagi
+      // menerima rekening dari body — password dikirim di sini murni supaya
+      // permintaan lolos validasi dan benar-benar menguji gerbang flag
+      // Play-safe di bawahnya (assertCashOutEnabledForPlay), bukan gagal
+      // duluan di validator karena body lama.
+      body: JSON.stringify({ amount: 100000, password: "tidak-relevan" })
     });
 
     expect(withdrawal.status).toBe(403);
@@ -370,12 +370,7 @@ describe.skipIf(!runIntegration)("Membership purchase channel isolation", () => 
         authorization: `Bearer ${tokenFor(user)}`,
         "content-type": "application/json"
       },
-      body: JSON.stringify({
-        amount: 100000,
-        bankName: "BCA",
-        accountNumber: "1234567890",
-        accountHolderName: user.fullName
-      })
+      body: JSON.stringify({ amount: 100000, password: "tidak-relevan" })
     });
     const after = await financialSnapshot(user.id);
 
@@ -442,7 +437,9 @@ async function setBankAccount(userId: string): Promise<void> {
       bankAccount: {
         bankName: "BCA",
         accountNumber: "1234567890",
-        accountHolderName: "Pemilik Sah"
+        accountHolderName: "Pemilik Sah",
+        // Lolos jeda 24 jam (H2, audit keamanan 30 September 2026).
+        updatedAt: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString()
       }
     }
   });
