@@ -265,9 +265,10 @@ function idempotencyKeyOf(headerValue: unknown): string | undefined {
 }
 
 /**
- * Idempotency-Key wajib untuk pembayaran tagihan pascabayar (retry jaringan atau
- * ketuk ganda tidak boleh mendebit dua kali). Hanya dipakai rute pascabayar di
- * cabang rilis ini; rute prabayar lama tidak diubah.
+ * Idempotency-Key wajib untuk SEMUA pembelian dan pembayaran PPOB, prabayar maupun
+ * pascabayar (audit keamanan 30 September, H1): retry jaringan atau ketuk ganda
+ * tidak boleh mendebit saldo dua kali. Diperiksa di sini, sebelum purchase()
+ * dipanggil; unique constraint dan logika P2002 di PpobService tetap apa adanya.
  */
 function requireIdempotencyKey(req: Request): string {
   const key = idempotencyKeyOf(req.headers["idempotency-key"]);
@@ -412,13 +413,12 @@ ppobRouter.post(
   paymentRateLimiter,
   validateRequest(ppobPurchaseSchema),
   asyncHandler(async (req, res) => {
+    const idempotencyKey = requireIdempotencyKey(req);
     const { transaction, replayed } = await getService().purchase({
       userId: req.auth!.userId,
       sku: req.body.sku,
       targetNumber: req.body.targetNumber,
-      ...(idempotencyKeyOf(req.headers["idempotency-key"])
-        ? { idempotencyKey: idempotencyKeyOf(req.headers["idempotency-key"])! }
-        : {})
+      idempotencyKey
     });
     const bills = await loadBills(req.auth!.userId, [transaction]);
     res.status(replayed ? 200 : 201).json({
@@ -486,13 +486,12 @@ ppobRouter.post(
   paymentRateLimiter,
   validateRequest(ppobPurchaseSchema),
   asyncHandler(async (req, res) => {
+    const idempotencyKey = requireIdempotencyKey(req);
     const { transaction, replayed } = await getService().purchase({
       userId: req.auth!.userId,
       sku: req.body.sku,
       targetNumber: req.body.targetNumber,
-      ...(idempotencyKeyOf(req.headers["idempotency-key"])
-        ? { idempotencyKey: idempotencyKeyOf(req.headers["idempotency-key"])! }
-        : {})
+      idempotencyKey
     });
     // Replay mengembalikan 200 (permintaan sudah pernah diproses), pembelian
     // baru 201 — klien dapat membedakan keduanya tanpa field tambahan.

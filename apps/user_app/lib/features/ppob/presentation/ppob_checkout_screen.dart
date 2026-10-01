@@ -253,8 +253,12 @@ class _PpobCheckoutScreenState extends ConsumerState<PpobCheckoutScreen> {
               ),
             const SizedBox(height: 8),
             Text(
-              'Pembayaran memakai saldo TapGo Anda (saldo utama + saldo benefit '
-              'PPOB). Tidak ada tautan pembayaran eksternal.',
+              // Audit keamanan 30 September 2026 (M1): sebelumnya tampilan
+              // ini menjanjikan campuran saldo utama + saldo benefit PPOB —
+              // debit sungguhan di server HANYA memotong saldo benefit PPOB,
+              // tidak pernah saldo utama. Teks disamakan dengan kenyataan itu.
+              'Pembayaran memakai saldo benefit PPOB Anda. Saldo utama tidak '
+              'ikut terpakai. Tidak ada tautan pembayaran eksternal.',
               style: theme.textTheme.bodySmall,
             ),
           ],
@@ -342,14 +346,22 @@ class _BreakdownCard extends StatelessWidget {
             _row(context, 'Total', ppobFormatRupiah(payment.amount), bold: true),
             _row(context, 'Dari saldo benefit PPOB',
                 ppobFormatRupiah(payment.benefitAmount)),
-            _row(context, 'Dari saldo utama',
-                ppobFormatRupiah(payment.balanceAmount)),
+            // Audit keamanan 30 September 2026 (M1): balanceAmount BUKAN lagi
+            // "akan diambil dari saldo utama" (itu tidak pernah terjadi di
+            // debit sungguhan) — sekarang murni menandai kekurangan saldo
+            // PPOB. Baris ini hanya tampil saat memang kurang, dengan label
+            // yang jujur soal artinya.
+            if (!payment.sufficient)
+              _row(context, 'Kekurangan saldo PPOB',
+                  ppobFormatRupiah(payment.balanceAmount)),
             const Divider(height: 20),
-            _row(context, 'Saldo Anda', ppobFormatRupiah(inquiry.walletBalance)),
+            _row(context, 'Saldo benefit PPOB Anda',
+                ppobFormatRupiah(inquiry.walletPpobBalance)),
             if (!payment.sufficient) ...[
               const SizedBox(height: 10),
               Text(
-                'Saldo tidak cukup untuk transaksi ini.',
+                'Saldo benefit PPOB tidak cukup untuk transaksi ini. Saldo utama '
+                'tidak dapat dipakai untuk menutup kekurangan ini.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: const Color(0xFFEF4444),
                   fontWeight: FontWeight.w700,

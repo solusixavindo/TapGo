@@ -198,6 +198,7 @@ describe.skipIf(!runIntegration)("Stage R2.7 — PPOB foundation", () => {
     const res = await api("/api/v1/ppob/transactions", {
       method: "POST",
       token: tokenFor(user),
+      idempotencyKey: "insufficient-balance-1",
       body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" }
     });
     expect(res.status).toBe(400);
@@ -215,6 +216,7 @@ describe.skipIf(!runIntegration)("Stage R2.7 — PPOB foundation", () => {
     const unknownSku = await api("/api/v1/ppob/transactions", {
       method: "POST",
       token: tokenFor(user),
+      idempotencyKey: "unknown-sku-1",
       body: { sku: "PULSA_HANTU_10", targetNumber: "085612345678" }
     });
     expect(unknownSku.status).toBe(404);
@@ -223,6 +225,7 @@ describe.skipIf(!runIntegration)("Stage R2.7 — PPOB foundation", () => {
     const badTarget = await api("/api/v1/ppob/transactions", {
       method: "POST",
       token: tokenFor(user),
+      idempotencyKey: "bad-target-1",
       body: { sku: "PULSA_TSEL_10", targetNumber: "0712345678" }
     });
     expect(badTarget.status).toBe(400);
@@ -231,6 +234,7 @@ describe.skipIf(!runIntegration)("Stage R2.7 — PPOB foundation", () => {
     const badPln = await api("/api/v1/ppob/transactions", {
       method: "POST",
       token: tokenFor(user),
+      idempotencyKey: "bad-pln-1",
       body: { sku: "PLN_TOKEN_20", targetNumber: "12345" }
     });
     expect(badPln.status).toBe(400);
@@ -373,6 +377,38 @@ describe.skipIf(!runIntegration)("Stage R2.7 — PPOB foundation", () => {
     expect(res.status).toBe(401);
   });
 
+  // --- H1 (audit keamanan 30 September 2026): Idempotency-Key wajib ------------
+
+  it("pembelian TANPA header Idempotency-Key ditolak 400, saldo dan ledger tidak berubah", async () => {
+    const user = await createUserWithPpobBalance("100000");
+
+    const withoutKey = await api("/api/v1/ppob/transactions", {
+      method: "POST",
+      token: tokenFor(user),
+      body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" }
+    });
+    expect(withoutKey.status).toBe(400);
+    expect(((await withoutKey.json()) as { code?: string }).code).toBe(
+      "PPOB_IDEMPOTENCY_REQUIRED"
+    );
+
+    // Alias /orders tunduk pada gerbang yang sama.
+    const withoutKeyOrders = await api("/api/v1/ppob/orders", {
+      method: "POST",
+      token: tokenFor(user),
+      body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" }
+    });
+    expect(withoutKeyOrders.status).toBe(400);
+    expect(((await withoutKeyOrders.json()) as { code?: string }).code).toBe(
+      "PPOB_IDEMPOTENCY_REQUIRED"
+    );
+
+    const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
+    expect(wallet.ppobBalance.toFixed(2)).toBe("100000.00");
+    expect(await prisma.ppobTransaction.count({ where: { userId: user.id } })).toBe(0);
+    expect(await prisma.walletTransaction.count({ where: { walletId: wallet.id } })).toBe(0);
+  });
+
   // --- Kontrak klien Release 2 (Flutter): /catalog, /orders/inquiry, /orders ---
   // App customer membaca path + bentuk payload ini; perubahan apa pun di sini
   // adalah perubahan kontrak — lihat ppob.routes.ts.
@@ -472,6 +508,11 @@ describe.skipIf(!runIntegration)("Stage R2.7 — PPOB foundation", () => {
     expect(body.data.targetNumber).toBe("085612345678");
     expect(body.data.amount).toBe(11500);
     expect(body.data.replayed).toBe(false);
+    // M1: transaksi yang SUDAH terjadi didebit 100% dari ppobBalance —
+    // benefitAmount selalu penuh, balanceAmount selalu 0, tidak pernah
+    // mengarang split ke saldo utama.
+    expect(body.data.benefitAmount).toBe(11500);
+    expect(body.data.balanceAmount).toBe(0);
 
     // Replay key yang sama: 200 + flag replayed.
     const replay = await api("/api/v1/ppob/orders", {

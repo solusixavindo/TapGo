@@ -93,9 +93,12 @@ PpobRepository _repoFrom(_FakePpobWires wires) {
           .expand((category) => category.products)
           .firstWhere((product) => product.sku == sku);
       final amount = product.price + product.adminFee;
-      final benefit = amount < wires.inquiryPpobBalance
-          ? amount
-          : wires.inquiryPpobBalance;
+      // Audit keamanan 30 September 2026 (M1): dicocokkan dengan
+      // buildInquiryPayload di backend — debit sungguhan HANYA memotong
+      // ppobBalance, tidak pernah saldo utama. sufficient dan benefitAmount
+      // tidak lagi memperhitungkan wires.inquiryWalletBalance sama sekali.
+      final sufficient = wires.inquiryPpobBalance >= amount;
+      final benefit = sufficient ? amount : 0.0;
       return {
         'product': {
           'id': product.id,
@@ -113,7 +116,7 @@ PpobRepository _repoFrom(_FakePpobWires wires) {
           'amount': amount,
           'benefitAmount': benefit,
           'balanceAmount': amount - benefit,
-          'sufficient': wires.inquiryWalletBalance >= amount,
+          'sufficient': sufficient,
         },
         'wallet': {
           'balance': wires.inquiryWalletBalance,
@@ -311,7 +314,13 @@ void main() {
       expect(find.text('Rp11.500'), findsWidgets);
       expect(find.text('Bayar Sekarang'), findsOneWidget);
       expect(find.text('Dari saldo benefit PPOB'), findsOneWidget);
-      expect(find.text('Dari saldo utama'), findsOneWidget);
+      // M1: saldo PPOB (50000) cukup sendirian untuk menutup total (11500) —
+      // baris "Kekurangan saldo PPOB" HANYA tampil saat tidak cukup, jadi
+      // tidak boleh muncul di sini. "Dari saldo utama" sudah tidak ada sama
+      // sekali karena debit tidak pernah menyentuh saldo utama.
+      expect(find.text('Kekurangan saldo PPOB'), findsNothing);
+      expect(find.text('Dari saldo utama'), findsNothing);
+      expect(find.text('Saldo benefit PPOB Anda'), findsOneWidget);
     });
 
     Future<void> pumpMultiOperator(WidgetTester tester, _FakePpobWires wires) async {
@@ -395,11 +404,16 @@ void main() {
 
     testWidgets('saldo tidak cukup: tombol bayar nonaktif + pesan jelas',
         (tester) async {
-      final wires = _FakePpobWires()..inquiryWalletBalance = 1000;
+      // M1: sufficient hanya bergantung pada saldo PPOB (bukan lagi saldo
+      // utama) — saldo utama besar (default 250000) TIDAK membuatnya cukup.
+      final wires = _FakePpobWires()..inquiryPpobBalance = 1000;
       await pumpCheckout(tester, wires);
       await fillTargetAndInquiry(tester);
 
-      expect(find.text('Saldo tidak cukup untuk transaksi ini.'),
+      expect(
+          find.text(
+              'Saldo benefit PPOB tidak cukup untuk transaksi ini. Saldo utama '
+              'tidak dapat dipakai untuk menutup kekurangan ini.'),
           findsOneWidget);
       // FilledButton.icon menghasilkan subclass _FilledButtonWithIcon, jadi
       // pencarian memakai predicate subtype, bukan byType.

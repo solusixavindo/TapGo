@@ -184,13 +184,18 @@ PpobRepository _buildPpobRepository() {
       required idempotencyKey,
     }) =>
         guard(
+      // Audit keamanan 30 September 2026 (H1): server HANYA membaca kunci
+      // idempotensi dari header `Idempotency-Key` (lihat idempotencyKeyOf
+      // di ppob.routes.ts) — sebelumnya field ini dikirim di dalam body JSON
+      // dan diam-diam diabaikan Zod (schema tidak strict), sehingga retry
+      // jaringan/tap ganda tidak pernah benar-benar terlindungi di produksi.
       () => _apiClient.post(
         'ppob/orders',
         body: {
           'sku': sku,
           'targetNumber': targetNumber,
-          'idempotencyKey': idempotencyKey,
         },
+        headers: {'Idempotency-Key': idempotencyKey},
       ),
     ),
     ordersRequest: () => guard(() async {

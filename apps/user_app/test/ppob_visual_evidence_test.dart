@@ -284,7 +284,7 @@ void main() {
       await shoot(
         tester,
         '06_ppob_checkout_insufficient',
-        repository: createPpobVisualRepository(walletBalance: 1000),
+        repository: createPpobVisualRepository(ppobBalanceOverride: 1000),
         child: PpobCheckoutScreen(
           categoryCode: 'PULSA',
           product: demoProduct('PULSA_10K'),
@@ -452,6 +452,10 @@ void main() {
 /// dapat diatur untuk memotret state accepted/rejected.
 PpobRepository createPpobVisualRepository({
   double walletBalance = 250000,
+  // M1: sufficient sekarang murni soal saldo PPOB — null berarti pakai
+  // saldo PPOB demo apa adanya (50000), diisi eksplisit untuk memotret
+  // skenario "tidak cukup".
+  double? ppobBalanceOverride,
   PpobApiException? catalogError,
 }) {
   final demo = createDemoPpobRepository();
@@ -490,9 +494,13 @@ PpobRepository createPpobVisualRepository({
     inquiryRequest: ({required sku, required targetNumber}) async {
       final result = await demo.inquiry(sku: sku, targetNumber: targetNumber);
       final amount = result.payment.amount;
-      final benefit = amount < result.walletPpobBalance
-          ? amount
-          : result.walletPpobBalance;
+      // Audit keamanan 30 September 2026 (M1): dicocokkan dengan
+      // buildInquiryPayload di backend — sufficient/benefitAmount hanya
+      // bergantung pada saldo PPOB, bukan lagi walletBalance (saldo utama
+      // tidak pernah ikut mendebit).
+      final ppobBalance = ppobBalanceOverride ?? result.walletPpobBalance;
+      final sufficient = ppobBalance >= amount;
+      final benefit = sufficient ? amount : 0.0;
       return {
         'product': {
           'id': result.product.id,
@@ -510,11 +518,11 @@ PpobRepository createPpobVisualRepository({
           'amount': amount,
           'benefitAmount': benefit,
           'balanceAmount': amount - benefit,
-          'sufficient': walletBalance >= amount,
+          'sufficient': sufficient,
         },
         'wallet': {
           'balance': walletBalance,
-          'ppobBalance': result.walletPpobBalance,
+          'ppobBalance': ppobBalance,
         },
       };
     },

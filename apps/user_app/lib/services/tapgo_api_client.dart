@@ -225,10 +225,12 @@ class _TapGoApiClient {
   Future<Map<String, dynamic>> post(
     String path, {
     Map<String, dynamic>? body,
+    Map<String, String>? headers,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       _apiPath(path),
       data: body,
+      options: headers != null ? Options(headers: headers) : null,
     );
     return _unwrap(response.data);
   }
