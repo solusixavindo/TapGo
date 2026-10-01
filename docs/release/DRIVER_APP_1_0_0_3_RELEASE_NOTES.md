@@ -158,3 +158,26 @@ Owner konfirmasi Google Sign-In berhasil, lalu melaporkan 2 hal baru + 1 permint
   `DRIVER_APP_READINESS_PLAN.md`) wajib sebelum produksi.
 - Penalti pembatalan driver belum ada (menunggu keputusan bisnis). Gerbang versi minimum untuk driver (D5) belum ada.
 - Pemeriksaan visual tema terang/gelap driver_app di emulator belum dilakukan pada tahap ini.
+
+## Fitur baru: Tombol SOS darurat (30 Sep 2026)
+Owner meminta 5 modul fitur besar sekaligus. Audit kode menemukan sebagian besar sudah ada (Auto-Accept,
+Max Radius, navigasi eksternal, dompet, quick-chat, dashboard performa) — sisa yang benar-benar baru
+ditawarkan ke Owner, dan **tombol SOS dipilih sebagai prioritas pertama**.
+
+- **Backend**: model `RideSosAlert` baru (status OPEN/ACKNOWLEDGED/RESOLVED). `POST /api/v1/driver/sos`
+  mencatat lokasi driver SEKETIKA (prinsip sama seperti RideEvent: baris di database adalah bukti sinyal
+  sampai, bukan bergantung pada pemberitahuan sesudahnya berhasil). Otorisasi SENGAJA lebih longgar dari
+  seluruh endpoint driver lain: cukup profil driver ADA, tidak perlu berstatus ACTIVE — driver yang baru
+  disuspend di tengah keadaan darurat tetap harus bisa memicu SOS. `GET`/`PATCH /api/v1/admin/rides/sos`
+  untuk konsol admin melihat dan menutup alert (wajib diisi catatan penyelesaian).
+- **driver_app**: ikon SOS merah di app bar global (terjangkau dari tab mana pun, bukan cuma Beranda),
+  dialog konfirmasi sebelum terkirim, ride aktif terlampir otomatis bila ada, dan tombol "WhatsApp CS"
+  selalu tersedia sebagai cadangan di dialog yang sama.
+- **Keterbatasan yang harus diketahui sebelum dianggap "selesai"**: TapGo **belum punya provider
+  SMS/WhatsApp produksi sama sekali**. Pemberitahuan admin saat ini HANYA lewat push notifikasi (tidak
+  menjangkau dashboard web admin, yang tidak menerima FCM) dan lewat `listSosAlerts` yang admin harus
+  buka sendiri. SMS/WhatsApp otomatis ke admin/keluarga driver butuh keputusan vendor (mis. Twilio,
+  Fonnte) dan kredensial dari Owner sebelum bisa dibangun — belum dibangun sebagai stub palsu yang
+  berpura-pura berhasil.
+- Uji: `driverSos.integration.test.ts` (backend, 7 test) + grup "Tombol SOS darurat" di `widget_test.dart`
+  (driver_app, 4 test). Lihat `REGRESSION_REGISTER.md` untuk rincian penuh.
