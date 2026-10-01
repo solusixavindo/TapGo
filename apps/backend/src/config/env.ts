@@ -127,6 +127,15 @@ const envSchema = z.object({
   // 2.0.5+32). 0 = tidak ada batas. Hanya berlaku bila
   // MOBILE_LEGACY_CLIENT_BLOCK_ENABLED=true.
   MOBILE_MIN_APP_BUILD: z.coerce.number().int().min(0).default(0),
+  /// Sama seperti MOBILE_LEGACY_CLIENT_BLOCK_ENABLED tapi KHUSUS driver_app —
+  /// env TERPISAH secara sengaja (E4, DRIVER_APP_READINESS_PLAN.md): sebelum
+  /// ini, driver_app tidak mengirim header identitas apa pun sehingga APK
+  /// lama tidak pernah bisa ditolak. Menaikkan MOBILE_MIN_APP_BUILD akan ikut
+  /// memblokir user_app — env ini menghindari itu sepenuhnya. Default mati.
+  DRIVER_LEGACY_CLIENT_BLOCK_ENABLED: strictEnvBoolean(false),
+  /// Nomor build minimum driver_app. 0 = tidak ada batas. Hanya berlaku bila
+  /// DRIVER_LEGACY_CLIENT_BLOCK_ENABLED=true.
+  DRIVER_MIN_APP_BUILD: z.coerce.number().int().min(0).default(0),
   /// Pencairan saldo lewat dashboard mitra (kanal WEB saja). Terpisah dari
   /// WALLET_CASH_OUT_ENABLED agar rilis Google Play tetap tertutup walau
   /// pencairan web dinyalakan.
