@@ -583,8 +583,14 @@ export class RideService {
         ? CANCELLATION_FEE
         : 0;
 
-      const updated = await tx.rideOrder.update({
-        where: { id: order.id },
+      // Audit keamanan 30 September 2026 (sisa review): klaim atomic bersyarat
+      // pada status yang baru dibaca — pola sama dengan acceptOrder dan
+      // correctStatusByAdmin. Dua pembatalan bersamaan (mis. passenger dan
+      // cancelByDriver/admin) tidak lagi bisa sama-sama lolos dan sama-sama
+      // memanggil releaseCashCommissionHold/refundDigitalPayment/releaseDriver
+      // — hanya transaksi yang MEMENANGKAN klaim ini yang boleh melepas dana.
+      const claim = await tx.rideOrder.updateMany({
+        where: { id: order.id, status: order.status },
         data: {
           status: "CANCELLED_BY_PASSENGER",
           cancelledByUserId: input.userId,
@@ -596,9 +602,26 @@ export class RideService {
           cancelledAt: new Date(),
         },
       });
+      if (claim.count !== 1) {
+        const current = await tx.rideOrder.findUniqueOrThrow({ where: { id: order.id } });
+        if (current.status === "CANCELLED_BY_PASSENGER") {
+          // Pemanggil lain (request duplikat/retry) sudah mencapai hasil yang
+          // SAMA PERSIS yang diminta pemanggil ini — idempoten, bukan gagal.
+          // Dana sudah dilepas oleh transaksi yang menang; tidak dilepas lagi.
+          return this.toOrderView(current);
+        }
+        throw new AppError(
+          "Status perjalanan berubah, silakan muat ulang",
+          StatusCodes.CONFLICT,
+          "RIDE_STATUS_CONFLICT",
+        );
+      }
+
+      const updated = await tx.rideOrder.findUniqueOrThrow({ where: { id: order.id } });
 
       await this.releaseDriver(tx, order.driverProfileId);
       await this.refundDigitalPayment(tx, order);
+      await this.releaseCashCommissionHold(tx, order.id);
       await this.writeEvent(tx, {
         rideOrderId: order.id,
         type: "CANCELLED",
@@ -1064,7 +1087,7 @@ export class RideService {
       }
 
       if (order.paymentMethod === "CASH") {
-        await this.assertCommissionCovered(tx, profile.userId, order.totalFare);
+        await this.holdCashCommission(tx, order, profile.userId);
       }
 
       const vehicle = await tx.rideVehicle.findFirst({
@@ -1237,7 +1260,7 @@ export class RideService {
         if (order.paymentMethod === "DIGITAL") {
           await this.settleDigitalPayment(tx, order, profile.id);
         } else {
-          await this.chargeCashCommission(tx, order, profile.userId);
+          await this.finalizeCashCommissionHold(tx, order);
         }
       }
 
@@ -1292,8 +1315,10 @@ export class RideService {
 
       assertTransition(order.status, "CANCELLED_BY_DRIVER", "DRIVER");
 
-      const updated = await tx.rideOrder.update({
-        where: { id: order.id },
+      // Audit keamanan 30 September 2026 (sisa review): klaim atomic bersyarat
+      // pada status yang baru dibaca — lihat catatan sama di cancelByPassenger.
+      const claim = await tx.rideOrder.updateMany({
+        where: { id: order.id, status: order.status },
         data: {
           status: "CANCELLED_BY_DRIVER",
           cancelledByUserId: input.userId,
@@ -1304,11 +1329,30 @@ export class RideService {
           cancellationPolicy: CANCELLATION_POLICY_VERSION,
           cancelledAt: new Date(),
         },
+      });
+      if (claim.count !== 1) {
+        const current = await tx.rideOrder.findUniqueOrThrow({
+          where: { id: order.id },
+          include: DRIVER_DISCLOSURE_INCLUDE,
+        });
+        if (current.status === "CANCELLED_BY_DRIVER") {
+          return this.toOrderView(current);
+        }
+        throw new AppError(
+          "Status perjalanan berubah, silakan muat ulang",
+          StatusCodes.CONFLICT,
+          "RIDE_STATUS_CONFLICT",
+        );
+      }
+
+      const updated = await tx.rideOrder.findUniqueOrThrow({
+        where: { id: order.id },
         include: DRIVER_DISCLOSURE_INCLUDE,
       });
 
       await this.releaseDriver(tx, profile.id);
       await this.refundDigitalPayment(tx, order);
+      await this.releaseCashCommissionHold(tx, order.id);
       await this.writeEvent(tx, {
         rideOrderId: order.id,
         type: "CANCELLED",
@@ -1663,6 +1707,7 @@ export class RideService {
 
       await this.releaseDriver(tx, order.driverProfileId);
       await this.refundDigitalPayment(tx, order);
+      await this.releaseCashCommissionHold(tx, order.id);
       await this.writeEvent(tx, {
         rideOrderId: order.id,
         type: input.status === "CANCELLED_BY_SYSTEM" ? "CANCELLED" : "STATUS_CHANGED",
@@ -2252,46 +2297,37 @@ export class RideService {
   }
 
   /**
-   * Driver hanya boleh menerima pesanan tunai bila saldo TapGo-nya menutup
-   * komisi. Tidak berlaku bila DRIVER_COMMISSION_ENABLED mati.
+   * Audit keamanan 30 September 2026 (M2): komisi pesanan tunai kini DITAHAN
+   * (didebit sungguhan, atomic) pada saat driver MENERIMA order, bukan
+   * sekadar diperiksa lalu didebit belakangan saat selesai. Tiga method
+   * berikut menggantikan assertCommissionCovered (hanya membaca, rawan race
+   * antara pemeriksaan dan keputusan) dan chargeCashCommission (memotong
+   * seadanya bila saldo kurang, menyisakan shortfall yang justru pernah jadi
+   * ladang selisih):
+   *
+   * - holdCashCommission (accept): debit ATOMIC bersyarat (updateMany WHERE
+   *   balance >= fee) — saldo yang dipakai untuk komisi seketika tidak bisa
+   *   ikut ditarik withdraw, dan tidak ada lagi jendela race antara dua accept
+   *   bersamaan memakai saldo yang sama.
+   * - finalizeCashCommissionHold (complete): hold BERUBAH jadi biaya final.
+   *   Tidak ada mutasi saldo tambahan — uangnya sudah berpindah saat accept —
+   *   cukup menandai baris ledger yang sama sebagai FINALIZED. Bila hold
+   *   tidak ditemukan/tidak utuh, complete DITOLAK (bukan diselesaikan dengan
+   *   shortfall diam-diam).
+   * - releaseCashCommissionHold (cancel/expire sebelum complete): mengembalikan
+   *   PERSIS jumlah yang ditahan, mekanisme sama dengan refundDigitalPayment.
+   *
+   * Idempoten by construction: acceptOrder sudah menolak accept kedua kali
+   * (early-return sebelum method ini terpanggil) dan advanceByDriver sudah
+   * menolak transisi berulang ke status yang sama — hold/finalize/release
+   * masing-masing hanya pernah terjadi tepat sekali per order.
    */
-  private async assertCommissionCovered(
-    tx: Prisma.TransactionClient,
-    driverUserId: string,
-    totalFare: number,
-  ) {
-    if (!env.DRIVER_COMMISSION_ENABLED) return;
-    const fee = this.cashCommissionFee(totalFare);
-    const wallet = await tx.wallet.findUnique({
-      where: { userId: driverUserId },
-      select: { balance: true },
-    });
-    const balance = wallet?.balance ?? new Prisma.Decimal(0);
-    if (balance.lt(fee)) {
-      const shortBy = fee.minus(balance).toNumber();
-      throw new AppError(
-        `Saldo TapGo Anda kurang Rp${shortBy.toLocaleString("id-ID")} untuk komisi ${env.DRIVER_COMMISSION_PERCENT}% pesanan tunai ini. Isi saldo di tapgolion.id lalu coba lagi.`,
-        StatusCodes.PAYMENT_REQUIRED,
-        "RIDE_COMMISSION_BALANCE_INSUFFICIENT",
-      );
-    }
-  }
-
-  /**
-   * Memotong komisi pesanan tunai dari saldo driver saat perjalanan selesai.
-   * Tidak menyentuh tabel Commission/Business Engine: hanya satu baris ledger
-   * debit. Bila saldo ternyata kurang (mis. ditarik selama perjalanan), yang
-   * dipotong sebatas saldo tersedia dan selisihnya dicatat di metadata; sisa
-   * itu ditagih lewat syarat saldo pada pesanan tunai berikutnya. Dipanggil
-   * tepat sekali karena hanya dari transisi COMPLETED yang bersyarat.
-   */
-  private async chargeCashCommission(
+  private async holdCashCommission(
     tx: Prisma.TransactionClient,
     order: { id: string; totalFare: number },
     driverUserId: string,
   ) {
     if (!env.DRIVER_COMMISSION_ENABLED) return;
-    if (!Number.isFinite(order.totalFare) || order.totalFare <= 0) return;
     const fee = this.cashCommissionFee(order.totalFare);
     const wallet = await tx.wallet.upsert({
       where: { userId: driverUserId },
@@ -2299,30 +2335,144 @@ export class RideService {
       create: { userId: driverUserId },
       select: { id: true, balance: true, cashBalance: true },
     });
-    let charged = Prisma.Decimal.min(fee, wallet.balance);
-    if (charged.gt(0)) {
-      const applied = await tx.wallet.updateMany({
-        where: { id: wallet.id, balance: { gte: charged } },
-        data: {
-          balance: { decrement: charged },
-          cashBalance: { decrement: Prisma.Decimal.min(charged, wallet.cashBalance) },
-        },
-      });
-      if (applied.count !== 1) charged = new Prisma.Decimal(0);
+    const fromCash = Prisma.Decimal.min(fee, wallet.cashBalance);
+    // Kurang dari bacaan ini saja sudah pasti kurang — ditolak SEBELUM
+    // updateMany, supaya tidak pernah mencoba tulisan yang dijamin melanggar
+    // CHECK constraint (L1) hanya untuk menangkap errornya belakangan.
+    if (wallet.balance.lt(fee)) {
+      const shortBy = fee.minus(wallet.balance).toNumber();
+      throw new AppError(
+        `Saldo TapGo Anda kurang Rp${shortBy.toLocaleString("id-ID")} untuk komisi ${env.DRIVER_COMMISSION_PERCENT}% pesanan tunai ini. Isi saldo di tapgolion.id lalu coba lagi.`,
+        StatusCodes.PAYMENT_REQUIRED,
+        "RIDE_COMMISSION_BALANCE_INSUFFICIENT",
+      );
+    }
+    // Audit keamanan 30 September 2026 (sisa review): compare-and-set PENUH
+    // (balance DAN cashBalance sama persis dengan yang baru dibaca) — pola
+    // sama dengan holdDigitalPayment, bukan hanya "balance >= fee". fromCash
+    // di atas dihitung dari wallet.cashBalance hasil BACAAN ini; syarat lama
+    // (cuma balance >= fee) tidak mendeteksi bila cashBalance berubah di
+    // antara baca dan tulis, sehingga decrement cashBalance bisa memakai
+    // fromCash yang sudah basi dan mendorong cashBalance ke bawah nol. Cek
+    // kecukupan di atas menutup kasus "memang kurang sejak awal"; CAS di
+    // bawah menutup kasus "berubah di tengah jalan" — keduanya perlu, bukan
+    // saling menggantikan.
+    const applied = await tx.wallet.updateMany({
+      where: { id: wallet.id, balance: wallet.balance, cashBalance: wallet.cashBalance },
+      data: {
+        balance: { decrement: fee },
+        cashBalance: { decrement: fromCash },
+      },
+    });
+    if (applied.count !== 1) {
+      const fresh = await tx.wallet.findUniqueOrThrow({ where: { id: wallet.id }, select: { balance: true } });
+      if (fresh.balance.lt(fee)) {
+        const shortBy = fee.minus(fresh.balance).toNumber();
+        throw new AppError(
+          `Saldo TapGo Anda kurang Rp${shortBy.toLocaleString("id-ID")} untuk komisi ${env.DRIVER_COMMISSION_PERCENT}% pesanan tunai ini. Isi saldo di tapgolion.id lalu coba lagi.`,
+          StatusCodes.PAYMENT_REQUIRED,
+          "RIDE_COMMISSION_BALANCE_INSUFFICIENT",
+        );
+      }
+      throw new AppError(
+        "Saldo berubah, silakan coba lagi",
+        StatusCodes.CONFLICT,
+        "RIDE_BALANCE_CHANGED",
+      );
     }
     await tx.walletTransaction.create({
       data: {
         walletId: wallet.id,
         type: "PAYMENT",
-        amount: charged.neg(),
+        amount: fee.neg(),
         referenceType: "RIDE_COMMISSION_FEE",
         referenceId: order.id,
         metadata: {
           percent: env.DRIVER_COMMISSION_PERCENT,
           fare: order.totalFare,
           fee: fee.toString(),
-          shortfall: fee.minus(charged).toString(),
+          fromCash: fromCash.toString(),
+          status: "HELD",
         },
+      },
+    });
+  }
+
+  private async findCommissionHold(tx: Prisma.TransactionClient, orderId: string) {
+    const row = await tx.walletTransaction.findFirst({
+      where: { referenceType: "RIDE_COMMISSION_FEE", referenceId: orderId, type: "PAYMENT" },
+    });
+    if (!row) return null;
+    const meta = (row.metadata ?? {}) as Record<string, unknown>;
+    if (meta.status !== "HELD") return null;
+    return { row, meta };
+  }
+
+  private async finalizeCashCommissionHold(
+    tx: Prisma.TransactionClient,
+    order: { id: string },
+  ) {
+    if (!env.DRIVER_COMMISSION_ENABLED) return;
+    const hold = await this.findCommissionHold(tx, order.id);
+    if (!hold) {
+      throw new AppError(
+        "Penahanan komisi tidak ditemukan atau tidak utuh untuk perjalanan ini",
+        StatusCodes.CONFLICT,
+        "RIDE_COMMISSION_HOLD_MISSING",
+      );
+    }
+    await tx.walletTransaction.update({
+      where: { id: hold.row.id },
+      data: { metadata: { ...hold.meta, status: "FINALIZED" } },
+    });
+  }
+
+  /**
+   * Melepaskan hold komisi tunai yang belum sempat difinalkan (cancel/expire
+   * sebelum complete) — mengembalikan PERSIS jumlah yang ditahan, pola sama
+   * dengan refundDigitalPayment. Tidak melakukan apa pun (no-op aman) bila
+   * tidak ada hold HELD untuk order ini: ride digital, komisi mati, atau
+   * hold sudah difinalkan/dilepas sebelumnya.
+   */
+  private async releaseCashCommissionHold(tx: Prisma.TransactionClient, orderId: string) {
+    const hold = await this.findCommissionHold(tx, orderId);
+    if (!hold) return;
+    const fee = hold.row.amount.abs();
+    const fromCash = new Prisma.Decimal(String(hold.meta.fromCash ?? "0"));
+
+    // Audit keamanan 30 September 2026 (sisa review): baris ledger HELD
+    // diKLAIM secara atomic SEBELUM saldo disentuh — pola sama dengan
+    // refundDigitalPayment (updateMany bersyarat, count === 1 baru boleh
+    // mengkredit). Sebelumnya method ini membaca status HELD lalu langsung
+    // mengkredit tanpa syarat; dua pembatalan bersamaan (mis. passenger dan
+    // driver/admin) yang sama-sama membaca HELD sebelum salah satu commit
+    // sama-sama mengkredit — komisi terklaim dua kali. Filter JSON path di
+    // WHERE memastikan hanya transaksi yang benar-benar mengubah status
+    // HELD->RELEASED yang boleh melanjutkan ke kredit saldo.
+    const claimed = await tx.walletTransaction.updateMany({
+      where: {
+        id: hold.row.id,
+        metadata: { path: ["status"], equals: "HELD" },
+      },
+      data: { metadata: { ...hold.meta, status: "RELEASED" } },
+    });
+    if (claimed.count !== 1) return;
+
+    await tx.wallet.update({
+      where: { id: hold.row.walletId },
+      data: {
+        balance: { increment: fee },
+        cashBalance: { increment: fromCash },
+      },
+    });
+    await tx.walletTransaction.create({
+      data: {
+        walletId: hold.row.walletId,
+        type: "REFUND",
+        amount: fee,
+        referenceType: "RIDE_COMMISSION_FEE",
+        referenceId: orderId,
+        metadata: { reversedFrom: hold.row.id },
       },
     });
   }
