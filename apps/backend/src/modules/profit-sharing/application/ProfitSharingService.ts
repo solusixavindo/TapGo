@@ -101,11 +101,16 @@ export class ProfitSharingService {
       const silverMembers = await this.findSilverQualifiedMembers(tx);
       const goldMembers = await this.findActiveMembersByTier(tx, "GOLD");
       const platinumMembers = await this.findActiveMembersByTier(tx, "PLATINUM");
-      let allocatedPaid = new Prisma.Decimal(0);
 
+      // Audit keamanan 30 September 2026 (M7): anggota yang SUDAH punya baris
+      // distribusi (mis. dari pemanggilan distribute() sebelumnya yang
+      // terputus) DILEWATI, bukan melempar error yang menggagalkan seluruh
+      // transaksi — unique (periodId, userId) tetap mencegah kredit ganda
+      // (lihat postDistributionIfMissing), tapi sekarang dengan cara yang
+      // membiarkan anggota LAIN yang belum dapat tetap diproses.
       for (const member of silverMembers) {
         const amount = period.silverAllocation.div(silverMembers.length);
-        await this.postDistribution(tx, {
+        await this.postDistributionIfMissing(tx, {
           periodId: period.id,
           userId: member.userId,
           amount,
@@ -114,12 +119,11 @@ export class ProfitSharingService {
           periodYear: period.periodYear,
           now
         });
-        allocatedPaid = allocatedPaid.plus(amount);
       }
 
       for (const member of goldMembers) {
         const amount = period.goldAllocation.div(goldMembers.length);
-        await this.postDistribution(tx, {
+        await this.postDistributionIfMissing(tx, {
           periodId: period.id,
           userId: member.userId,
           amount,
@@ -128,12 +132,11 @@ export class ProfitSharingService {
           periodYear: period.periodYear,
           now
         });
-        allocatedPaid = allocatedPaid.plus(amount);
       }
 
       for (const member of platinumMembers) {
         const amount = period.platinumAllocation.div(platinumMembers.length);
-        await this.postDistribution(tx, {
+        await this.postDistributionIfMissing(tx, {
           periodId: period.id,
           userId: member.userId,
           amount,
@@ -142,7 +145,30 @@ export class ProfitSharingService {
           periodYear: period.periodYear,
           now
         });
-        allocatedPaid = allocatedPaid.plus(amount);
+      }
+
+      // Dihitung ULANG dari baris distribusi sungguhan di database — bukan
+      // akumulasi lokal dalam loop di atas — supaya tetap benar walau
+      // sebagian anggota dilewati karena sudah tercatat sebelumnya (retry).
+      const expectedRecipients = silverMembers.length + goldMembers.length + platinumMembers.length;
+      const [paidAgg, actualCount] = await Promise.all([
+        tx.profitSharingDistribution.aggregate({
+          where: { periodId: period.id },
+          _sum: { amount: true }
+        }),
+        tx.profitSharingDistribution.count({ where: { periodId: period.id } })
+      ]);
+      const allocatedPaid = paidAgg._sum.amount ?? new Prisma.Decimal(0);
+
+      // Status hanya naik ke DISTRIBUTED bila SETIAP anggota yang berhak
+      // sudah punya baris distribusi — bukan sekadar "loop di atas selesai
+      // tanpa error" (yang sekarang bisa terjadi walau ada yang dilewati).
+      if (actualCount < expectedRecipients) {
+        throw new AppError(
+          "Sebagian anggota belum menerima distribusi; ulangi pemanggilan distribute()",
+          StatusCodes.CONFLICT,
+          "PROFIT_SHARING_INCOMPLETE_DISTRIBUTION"
+        );
       }
 
       await tx.profitSharingPeriod.update({
@@ -171,7 +197,15 @@ export class ProfitSharingService {
     });
   }
 
-  private async postDistribution(tx: Prisma.TransactionClient, input: {
+  /**
+   * Audit keamanan 30 September 2026 (M7): dulu bernama postDistribution dan
+   * MELEMPAR PROFIT_SHARING_DUPLICATE_DISTRIBUTION saat anggota sudah punya
+   * baris — itu menggagalkan SELURUH transaksi distribute() hanya karena satu
+   * anggota sudah tercatat. Sekarang dilewati secara diam-diam: unique index
+   * (periodId, userId) tetap jadi penjaga terakhir dari kredit ganda, tapi
+   * anggota lain yang belum dapat tetap diproses dalam pemanggilan yang sama.
+   */
+  private async postDistributionIfMissing(tx: Prisma.TransactionClient, input: {
     periodId: string;
     userId: string;
     amount: Prisma.Decimal;
@@ -191,7 +225,7 @@ export class ProfitSharingService {
     });
 
     if (existingDistribution) {
-      throw new AppError("Member already received profit sharing for this period", StatusCodes.CONFLICT, "PROFIT_SHARING_DUPLICATE_DISTRIBUTION");
+      return;
     }
 
     const wallet = await tx.wallet.upsert({

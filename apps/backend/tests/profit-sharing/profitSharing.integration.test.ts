@@ -141,6 +141,65 @@ describe.skipIf(!runIntegration)("Profit sharing admin API", () => {
     expect(body.code).toBe("PROFIT_SHARING_ALREADY_DISTRIBUTED");
   });
 
+  it("skips a member who already has a distribution row and only credits the remaining one (M7 retry safety)", async () => {
+    const admin = await createApiUser("ADMINPS7", "SUPER_ADMIN");
+    const alreadyPaid = await createActiveMember("PAIDGOLD", "GOLD");
+    const notYetPaid = await createActiveMember("NEWGOLD", "GOLD");
+    const period = await createPeriodData(admin, 100000);
+    await approvePeriod(admin, period.id);
+
+    // Simulasikan hasil pemanggilan distribute() sebelumnya yang terputus
+    // setelah satu anggota berhasil dikreditkan: baris distribusi DAN saldo
+    // wallet-nya sudah ada sebelum distribute() dipanggil lagi di sini.
+    const preExistingWallet = await prisma.wallet.create({
+      data: {
+        userId: alreadyPaid.id,
+        balance: "6000",
+        cashBalance: "6000",
+        ppobBalance: "0",
+        currency: "IDR"
+      }
+    });
+    await prisma.profitSharingDistribution.create({
+      data: {
+        periodId: period.id,
+        userId: alreadyPaid.id,
+        amount: "6000",
+        status: "POSTED",
+        postedAt: new Date()
+      }
+    });
+
+    const response = await distributePeriod(admin, period.id);
+    const body = await response.json() as {
+      data: { status: string; distributions: Array<{ userId: string; amount: string; status: string }> };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data.status).toBe("DISTRIBUTED");
+    expect(body.data.distributions).toHaveLength(2);
+
+    // Anggota yang sudah tercatat TIDAK dikreditkan ulang: masih tepat satu
+    // baris distribusi dan saldo wallet-nya tidak berlipat ganda.
+    const alreadyPaidDistributions = await prisma.profitSharingDistribution.findMany({
+      where: { periodId: period.id, userId: alreadyPaid.id }
+    });
+    expect(alreadyPaidDistributions).toHaveLength(1);
+    const alreadyPaidWallet = await prisma.wallet.findUniqueOrThrow({ where: { id: preExistingWallet.id } });
+    expect(alreadyPaidWallet.balance.toFixed(2)).toBe("6000.00");
+    expect(alreadyPaidWallet.cashBalance.toFixed(2)).toBe("6000.00");
+
+    // Anggota yang belum dapat menerima kredit baru senilai bagiannya.
+    const notYetPaidDistribution = await prisma.profitSharingDistribution.findUniqueOrThrow({
+      where: { periodId_userId: { periodId: period.id, userId: notYetPaid.id } }
+    });
+    expect(notYetPaidDistribution.amount.toFixed(2)).toBe("6000.00");
+    expect(notYetPaidDistribution.status).toBe("POSTED");
+    const notYetPaidWallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: notYetPaid.id } });
+    expect(notYetPaidWallet.balance.toFixed(2)).toBe("6000.00");
+    expect(notYetPaidWallet.cashBalance.toFixed(2)).toBe("6000.00");
+  });
+
   it("records wallet transactions and commission history", async () => {
     const admin = await createApiUser("ADMINPS6", "SUPER_ADMIN");
     const active = await createActiveMember("ACTIVEPS", "GOLD");
