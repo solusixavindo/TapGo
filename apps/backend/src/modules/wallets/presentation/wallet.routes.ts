@@ -4,7 +4,8 @@ import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
 import { requireAuth, requireRoles } from "../../../core/security/authContext.js";
 import { maskForOperator } from "../../../core/security/adminMasking.js";
-import { walletTransferRateLimiter } from "../../../core/security/rateLimit.js";
+import { verifyPassword } from "../../../core/security/passwordHasher.js";
+import { walletTransferRateLimiter, withdrawalRateLimiter } from "../../../core/security/rateLimit.js";
 import { WalletService } from "../application/WalletService.js";
 import { PrismaWalletRepository } from "../infrastructure/PrismaWalletRepository.js";
 import { WalletController } from "./wallet.controller.js";
@@ -22,7 +23,20 @@ import {
 
 const repository = new PrismaWalletRepository(prisma);
 const service = new WalletService(repository);
-const controller = new WalletController(service);
+// Pemeriksa password sama persis dengan kanal web (web-wallet.routes.ts) —
+// akun tanpa passwordHash (mis. Google-only) SENGAJA ditolak, bukan lolos.
+const controller = new WalletController(service, async (userId, password) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { passwordHash: true }
+  });
+  if (!user?.passwordHash) return false;
+  try {
+    return await verifyPassword(user.passwordHash, password);
+  } catch {
+    return false;
+  }
+});
 
 export const walletRouter = Router();
 
@@ -32,9 +46,9 @@ walletRouter.get("/transactions", validateRequest(walletTransactionQuerySchema),
 walletRouter.get("/bank-account", asyncHandler(controller.bankAccount));
 walletRouter.put("/bank-account", validateRequest(bankAccountSchema), asyncHandler(controller.updateBankAccount));
 walletRouter.get("/withdrawals", validateRequest(walletTransactionQuerySchema), asyncHandler(controller.withdrawals));
-walletRouter.post("/withdrawals", validateRequest(withdrawalRequestSchema), asyncHandler(controller.requestWithdrawal));
+walletRouter.post("/withdrawals", withdrawalRateLimiter, validateRequest(withdrawalRequestSchema), asyncHandler(controller.requestWithdrawal));
 walletRouter.get("/withdraws", validateRequest(walletTransactionQuerySchema), asyncHandler(controller.withdrawals));
-walletRouter.post("/withdraw", validateRequest(withdrawalRequestSchema), asyncHandler(controller.requestWithdrawal));
+walletRouter.post("/withdraw", withdrawalRateLimiter, validateRequest(withdrawalRequestSchema), asyncHandler(controller.requestWithdrawal));
 
 walletRouter.get("/transfers", validateRequest(transferListSchema), asyncHandler(controller.transfers));
 walletRouter.post(
