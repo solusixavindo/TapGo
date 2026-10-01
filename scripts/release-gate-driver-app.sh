@@ -42,9 +42,20 @@ tail -1 /tmp/gate-flutter-test.log
 
 [ "$skip_build" = 1 ] && { echo "OK (tanpa build)"; exit 0; }
 
+# Audit keamanan (1 Okt 2026): build rilis TANPA pin TLS menghasilkan
+# artefak yang menolak SEMUA permintaan jaringan (fail-closed by design —
+# lihat _applyTlsPinning di tapgo_api_client.dart/api_driver_repository.dart).
+# Skrip ini SENGAJA menolak lanjut ke step 4 bila env kosong, daripada
+# diam-diam menghasilkan APK/AAB yang "lolos" gerbang tapi tidak bisa
+# menghubungi server sama sekali. Nilai HANYA dari environment shell Owner,
+# TIDAK PERNAH dari file di repo.
+if [ -z "${TAPGO_TLS_PIN_SHA256:-}" ]; then
+  fail "TAPGO_TLS_PIN_SHA256 kosong di environment shell ini — build rilis dibatalkan (fail-closed). Jalankan: export TAPGO_TLS_PIN_SHA256=<hash SPKI produksi>, lalu ulangi skrip ini."
+fi
+
 step "4. Build rilis APK dan AAB"
-flutter build apk --release 2>&1 | tail -2
-flutter build appbundle --release 2>&1 | tail -2
+flutter build apk --release --dart-define=TAPGO_TLS_PIN_SHA256="$TAPGO_TLS_PIN_SHA256" 2>&1 | tail -2
+flutter build appbundle --release --dart-define=TAPGO_TLS_PIN_SHA256="$TAPGO_TLS_PIN_SHA256" 2>&1 | tail -2
 apk="$app/build/app/outputs/flutter-apk/app-release.apk"
 aab="$app/build/app/outputs/bundle/release/app-release.aab"
 
