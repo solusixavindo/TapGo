@@ -210,8 +210,83 @@ describe.skipIf(!runIntegration)("Komisi pesanan tunai dari saldo driver (D4)", 
     expect(rows).toHaveLength(1);
     expect(rows[0]!.amount.toNumber()).toBe(-720);
     expect(rows[0]!.referenceId).toBe(order.id);
-    expect((rows[0]!.metadata as { shortfall: string }).shortfall).toBe("0");
+    // M2: hold difinalkan (bukan lagi shortfall) — sekali terisi HELD saat
+    // accept, sekali FINALIZED saat complete, baris ledger yang SAMA.
+    expect((rows[0]!.metadata as { status: string }).status).toBe("FINALIZED");
     expect(await prisma.commission.count()).toBe(0);
+  });
+
+  // --- M2 (audit keamanan 30 September 2026): komisi ditahan saat ACCEPT ------
+
+  it("komisi ditahan (didebit) SAAT ACCEPT, bukan menunggu complete", async () => {
+    const { user } = await createDriver();
+    await fund(user.id, 10_000);
+    const { order } = await createOrder(north(1)); // tarif 9000 -> komisi 720
+    await service().acceptOrder({ userId: user.id, publicReference: order.publicReference });
+
+    // Saldo SUDAH berkurang tepat setelah accept — sebelum satu pun
+    // transisi perjalanan berikutnya terjadi. Ini jaminan inti M2: saldo
+    // yang dipakai untuk komisi tidak bisa ikut ditarik withdraw selama
+    // perjalanan berlangsung, karena sudah keluar dari `balance` seketika.
+    const afterAccept = await walletOf(user.id);
+    expect(afterAccept.balance.toNumber()).toBe(9_280);
+    expect(afterAccept.cashBalance.toNumber()).toBe(9_280);
+    const held = await prisma.walletTransaction.findFirstOrThrow({
+      where: { walletId: afterAccept.id, referenceType: "RIDE_COMMISSION_FEE" }
+    });
+    expect(held.amount.toNumber()).toBe(-720);
+    expect((held.metadata as { status: string }).status).toBe("HELD");
+
+    // Complete TIDAK memotong saldo lagi — hanya memfinalkan hold yang sama.
+    await drive(user.id, order.publicReference);
+    const afterComplete = await walletOf(user.id);
+    expect(afterComplete.balance.toNumber()).toBe(9_280);
+    const rows = await prisma.walletTransaction.findMany({
+      where: { walletId: afterAccept.id, referenceType: "RIDE_COMMISSION_FEE" }
+    });
+    expect(rows).toHaveLength(1);
+    expect((rows[0]!.metadata as { status: string }).status).toBe("FINALIZED");
+  });
+
+  it("accept berulang oleh driver yang sama TIDAK menahan komisi dua kali", async () => {
+    const { user } = await createDriver();
+    await fund(user.id, 10_000);
+    const { order } = await createOrder(north(1)); // komisi 720
+    await service().acceptOrder({ userId: user.id, publicReference: order.publicReference });
+    // Accept ulang (idempoten di RideService: driver yang sama menerima
+    // ulang order miliknya) tidak boleh menahan komisi kedua kalinya.
+    await service().acceptOrder({ userId: user.id, publicReference: order.publicReference });
+
+    const wallet = await walletOf(user.id);
+    expect(wallet.balance.toNumber()).toBe(10_000 - 720);
+    const rows = await prisma.walletTransaction.findMany({
+      where: { walletId: wallet.id, referenceType: "RIDE_COMMISSION_FEE" }
+    });
+    expect(rows).toHaveLength(1);
+  });
+
+  it("complete DITOLAK bila hold hilang/tidak utuh — tidak menyelesaikan trip dengan shortfall diam-diam", async () => {
+    const { user } = await createDriver();
+    await fund(user.id, 10_000);
+    const { order } = await createOrder(north(1));
+    await service().acceptOrder({ userId: user.id, publicReference: order.publicReference });
+
+    // Simulasikan hold yang hilang/rusak (mis. data tidak konsisten) dengan
+    // menghapus baris ledger-nya secara langsung.
+    const wallet = await walletOf(user.id);
+    await prisma.walletTransaction.deleteMany({
+      where: { walletId: wallet.id, referenceType: "RIDE_COMMISSION_FEE" }
+    });
+
+    await service().advanceByDriver({ userId: user.id, publicReference: order.publicReference, next: "DRIVER_TO_PICKUP" });
+    await service().advanceByDriver({ userId: user.id, publicReference: order.publicReference, next: "DRIVER_ARRIVED" });
+    await service().advanceByDriver({ userId: user.id, publicReference: order.publicReference, next: "IN_TRIP" });
+    await expect(
+      service().advanceByDriver({ userId: user.id, publicReference: order.publicReference, next: "COMPLETED" })
+    ).rejects.toMatchObject({ code: "RIDE_COMMISSION_HOLD_MISSING" });
+
+    // Trip TIDAK boleh berpindah ke COMPLETED tanpa hold yang utuh.
+    expect((await prisma.rideOrder.findUniqueOrThrow({ where: { id: order.id } })).status).toBe("IN_TRIP");
   });
 
   it("pembulatan ke atas: tarif 9050 -> 724", async () => {
@@ -224,29 +299,204 @@ describe.skipIf(!runIntegration)("Komisi pesanan tunai dari saldo driver (D4)", 
     expect((await walletOf(user.id)).balance.toNumber()).toBe(10_000 - 724);
   });
 
-  it("saldo ditarik saat perjalanan: dipotong sebatas saldo tersedia, selisih dicatat, saldo tidak negatif", async () => {
+  it("M2: withdraw sebesar saldo TIDAK bisa menghabiskan bagian komisi yang ditahan", async () => {
+    // Jaminan inti M2: begitu accept berhasil, dana komisi sudah keluar dari
+    // `balance` — withdraw untuk seluruh SISA saldo (yang tampak) tidak bisa
+    // ikut menyentuh bagian yang sudah ditahan, karena bagian itu sudah tidak
+    // ada lagi di `balance` sama sekali (bukan sekadar ditandai "terkunci").
     const { user } = await createDriver();
-    await fund(user.id, 1_000);
-    const { order } = await createOrder(north(1));
+    // Nominal cukup besar untuk melewati minimum withdrawal (Rp50.000).
+    await fund(user.id, 100_000);
+    const { order } = await createOrder(north(1)); // komisi 720
     await service().acceptOrder({ userId: user.id, publicReference: order.publicReference });
-    await prisma.wallet.update({ where: { userId: user.id }, data: { balance: 300, cashBalance: 300 } });
-    await drive(user.id, order.publicReference);
-    const wallet = await walletOf(user.id);
-    expect(wallet.balance.toNumber()).toBe(0);
-    expect(wallet.cashBalance.toNumber()).toBe(0);
-    const row = await prisma.walletTransaction.findFirstOrThrow({ where: { walletId: wallet.id, referenceType: "RIDE_COMMISSION_FEE" } });
-    expect(row.amount.toNumber()).toBe(-300);
-    expect((row.metadata as { shortfall: string }).shortfall).toBe("420");
+
+    const afterAccept = await walletOf(user.id);
+    expect(afterAccept.balance.toNumber()).toBe(99_280);
+
+    const { walletService } = await import("../helpers/referralWalletHarness.js");
+    // Coba tarik SELURUH 100.000 (termasuk 720 yang seharusnya sudah ditahan)
+    // -> ditolak karena balance sungguhan cuma 99.280.
+    await expect(
+      walletService.requestWithdrawal({
+        userId: user.id,
+        amount: new Prisma.Decimal(100_000),
+        bankName: "BCA",
+        accountNumber: "1234567890",
+        accountHolderName: "Driver Uji"
+      })
+    ).rejects.toMatchObject({ code: "INSUFFICIENT_BALANCE" });
+
+    // Tarik PERSIS sisa yang benar (99.280) berhasil — membuktikan 720 itu
+    // sungguh sudah keluar dari balance yang bisa ditarik, bukan cuma dicatat.
+    await walletService.requestWithdrawal({
+      userId: user.id,
+      amount: new Prisma.Decimal(99_280),
+      bankName: "BCA",
+      accountNumber: "1234567890",
+      accountHolderName: "Driver Uji"
+    });
+    expect((await walletOf(user.id)).balance.toNumber()).toBe(0);
   });
 
-  it("pesanan dibatalkan driver tidak dikenai komisi", async () => {
+  it("pesanan dibatalkan driver melepaskan hold komisi — saldo kembali utuh, hold tercatat RELEASED", async () => {
     const { user } = await createDriver();
+    await fund(user.id, 10_000);
+    const { order } = await createOrder(north(1)); // komisi 720
+    await service().acceptOrder({ userId: user.id, publicReference: order.publicReference });
+    expect((await walletOf(user.id)).balance.toNumber()).toBe(9_280); // hold aktif
+
+    await service().cancelByDriver({ userId: user.id, publicReference: order.publicReference, reason: "OTHER" });
+
+    const wallet = await walletOf(user.id);
+    expect(wallet.balance.toNumber()).toBe(10_000);
+    expect(wallet.cashBalance.toNumber()).toBe(10_000);
+    // Dua baris: hold asli (kini RELEASED) + refund yang membalikkannya —
+    // BUKAN nol baris. Audit trail hold+pelepasannya tetap ada, bukan seolah
+    // tidak pernah terjadi.
+    const rows = await prisma.walletTransaction.findMany({
+      where: { walletId: wallet.id, referenceType: "RIDE_COMMISSION_FEE" },
+      orderBy: { createdAt: "asc" }
+    });
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.type).toBe("PAYMENT");
+    expect(rows[0]!.amount.toNumber()).toBe(-720);
+    expect((rows[0]!.metadata as { status: string }).status).toBe("RELEASED");
+    expect(rows[1]!.type).toBe("REFUND");
+    expect(rows[1]!.amount.toNumber()).toBe(720);
+    expect((rows[1]!.metadata as { reversedFrom: string }).reversedFrom).toBe(rows[0]!.id);
+  });
+
+  it("pesanan dibatalkan PENUMPANG setelah driver ditugaskan juga melepaskan hold", async () => {
+    const { user } = await createDriver();
+    await fund(user.id, 10_000);
+    const { order, passenger } = await createOrder(north(1));
+    await service().acceptOrder({ userId: user.id, publicReference: order.publicReference });
+    expect((await walletOf(user.id)).balance.toNumber()).toBe(9_280);
+
+    await service().cancelByPassenger({
+      userId: passenger.id,
+      publicReference: order.publicReference,
+      reason: "CHANGE_OF_PLAN"
+    });
+
+    expect((await walletOf(user.id)).balance.toNumber()).toBe(10_000);
+  });
+
+  it("koreksi admin ke CANCELLED_BY_SYSTEM setelah driver ditugaskan juga melepaskan hold", async () => {
+    const { user } = await createDriver();
+    const admin = await createUser();
     await fund(user.id, 10_000);
     const { order } = await createOrder(north(1));
     await service().acceptOrder({ userId: user.id, publicReference: order.publicReference });
-    await service().cancelByDriver({ userId: user.id, publicReference: order.publicReference, reason: "OTHER" });
+    expect((await walletOf(user.id)).balance.toNumber()).toBe(9_280);
+
+    await service().correctStatusByAdmin({
+      adminUserId: admin.id,
+      publicReference: order.publicReference,
+      status: "CANCELLED_BY_SYSTEM",
+      reason: "uji M2"
+    });
+
     expect((await walletOf(user.id)).balance.toNumber()).toBe(10_000);
-    expect(await prisma.walletTransaction.count({ where: { referenceType: "RIDE_COMMISSION_FEE" } })).toBe(0);
+  });
+
+  // --- Sisa review audit (1 Oktober 2026): pelepasan hold harus diklaim sekali ---
+
+  it("dua pembatalan PENUMPANG bersamaan untuk order tunai (komisi HELD) hanya mengembalikan fee satu kali", async () => {
+    const { user } = await createDriver();
+    await fund(user.id, 10_000);
+    const { order, passenger } = await createOrder(north(1)); // komisi 720
+    await service().acceptOrder({ userId: user.id, publicReference: order.publicReference });
+    expect((await walletOf(user.id)).balance.toNumber()).toBe(9_280);
+
+    // Dua pemanggilan cancelByPassenger BERSAMAAN (duplikat/double-tap). Baik
+    // keduanya sukses (satu menang klaim status, satu lagi idempoten karena
+    // statusnya sudah sama) maupun salah satu gagal RIDE_ALREADY_FINAL
+    // (SELECT-nya kebetulan terjadi setelah commit pemenang) sama-sama AMAN
+    // — yang diverifikasi adalah HASIL AKHIR (saldo, jumlah baris ledger),
+    // bukan kombinasi fulfilled/rejected yang bergantung timing race.
+    await Promise.allSettled([
+      service().cancelByPassenger({ userId: passenger.id, publicReference: order.publicReference, reason: "CHANGE_OF_PLAN" }),
+      service().cancelByPassenger({ userId: passenger.id, publicReference: order.publicReference, reason: "CHANGE_OF_PLAN" })
+    ]);
+
+    const wallet = await walletOf(user.id);
+    // Persis saldo SEBELUM accept — bukan 10_720 (kredit ganda).
+    expect(wallet.balance.toNumber()).toBe(10_000);
+    expect(wallet.cashBalance.toNumber()).toBe(10_000);
+
+    const rows = await prisma.walletTransaction.findMany({
+      where: { walletId: wallet.id, referenceType: "RIDE_COMMISSION_FEE" }
+    });
+    // HELD (kini RELEASED) + tepat SATU REFUND — bukan dua REFUND.
+    expect(rows).toHaveLength(2);
+    expect(rows.filter((r) => r.type === "REFUND")).toHaveLength(1);
+
+    const finalOrder = await prisma.rideOrder.findUniqueOrThrow({ where: { id: order.id } });
+    expect(finalOrder.status).toBe("CANCELLED_BY_PASSENGER");
+  });
+
+  it("releaseCashCommissionHold kedua (setelah yang pertama sukses) adalah no-op — saldo tidak bertambah lagi", async () => {
+    const { user } = await createDriver();
+    await fund(user.id, 10_000);
+    const { order } = await createOrder(north(1)); // komisi 720
+    await service().acceptOrder({ userId: user.id, publicReference: order.publicReference });
+    expect((await walletOf(user.id)).balance.toNumber()).toBe(9_280);
+
+    // Verifikasi langsung invarian level-ledger releaseCashCommissionHold:
+    // klaim JSON-path pada baris HELD (lihat RideService.ts) membuat
+    // pemanggilan KEDUA (setelah yang pertama sukses mengubahnya jadi
+    // RELEASED) menjadi no-op murni — terpisah dari klaim status order yang
+    // sudah diuji end-to-end pada test sebelumnya.
+    const svc = service() as unknown as {
+      releaseCashCommissionHold: (tx: typeof prisma, orderId: string) => Promise<void>;
+    };
+    await prisma.$transaction((tx) => svc.releaseCashCommissionHold(tx as never, order.id));
+    expect((await walletOf(user.id)).balance.toNumber()).toBe(10_000); // pelepasan pertama, sungguhan
+
+    await prisma.$transaction((tx) => svc.releaseCashCommissionHold(tx as never, order.id));
+    expect((await walletOf(user.id)).balance.toNumber()).toBe(10_000); // TIDAK bertambah lagi
+
+    const wallet = await walletOf(user.id);
+    const rows = await prisma.walletTransaction.findMany({
+      where: { walletId: wallet.id, referenceType: "RIDE_COMMISSION_FEE" }
+    });
+    expect(rows.filter((r) => r.type === "REFUND")).toHaveLength(1);
+  });
+
+  it("accept dua driver BERSAMAAN untuk order tunai yang sama tetap hanya menahan komisi pada pemenang", async () => {
+    const driverA = await createDriver();
+    const driverB = await createDriver();
+    await fund(driverA.user.id, 10_000);
+    await fund(driverB.user.id, 10_000);
+    const { order } = await createOrder(north(1)); // komisi 720
+
+    const results = await Promise.allSettled([
+      service().acceptOrder({ userId: driverA.user.id, publicReference: order.publicReference }),
+      service().acceptOrder({ userId: driverB.user.id, publicReference: order.publicReference })
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]!.reason).toMatchObject({ code: "RIDE_ALREADY_TAKEN" });
+
+    const finalOrder = await prisma.rideOrder.findUniqueOrThrow({ where: { id: order.id } });
+    const winner = finalOrder.driverProfileId === driverA.profile.id ? driverA : driverB;
+    const loser = finalOrder.driverProfileId === driverA.profile.id ? driverB : driverA;
+
+    expect((await walletOf(winner.user.id)).balance.toNumber()).toBe(9_280);
+    expect((await walletOf(loser.user.id)).balance.toNumber()).toBe(10_000); // tidak tersentuh sama sekali
+
+    const winnerHolds = await prisma.walletTransaction.findMany({
+      where: { walletId: (await walletOf(winner.user.id)).id, referenceType: "RIDE_COMMISSION_FEE" }
+    });
+    expect(winnerHolds).toHaveLength(1);
+    const loserHolds = await prisma.walletTransaction.findMany({
+      where: { walletId: (await walletOf(loser.user.id)).id, referenceType: "RIDE_COMMISSION_FEE" }
+    });
+    expect(loserHolds).toHaveLength(0);
   });
 
   it("flag mati: perilaku lama — tanpa dompet pun bisa terima, tidak ada potongan", async () => {
