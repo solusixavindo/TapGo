@@ -66,13 +66,19 @@ export async function resolveAuthFromToken(token: string): Promise<AuthContext> 
     select: { authVersion: true }
   });
 
+  // Audit keamanan 30 September 2026 (M3): SEBELUMNYA token yang tanda
+  // tangannya sah tapi menunjuk user yang sudah tidak ada di database
+  // (dihapus, atau id yang tidak pernah ada) diloloskan apa adanya —
+  // authVersion tidak sempat dibandingkan sama sekali karena baris ini
+  // langsung mengembalikan konteks dari payload. Sekarang diperlakukan
+  // SAMA seperti sesi yang dicabut: user tidak ada berarti tidak ada apa
+  // pun untuk dipercaya dari token itu.
   if (!user) {
-    return {
-      userId: payload.sub,
-      role: payload.role,
-      sessionId: payload.sessionId,
-      ...(payload.channel !== undefined ? { channel: payload.channel } : {})
-    };
+    throw new AppError(
+      "Sesi sudah tidak berlaku. Silakan login kembali.",
+      StatusCodes.UNAUTHORIZED,
+      AUTH_SESSION_REVOKED
+    );
   }
 
   const currentVersion = user.authVersion;
