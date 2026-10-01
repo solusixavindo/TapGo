@@ -325,6 +325,7 @@ model User {
   rideIdempotencyKeys      RideIdempotencyRecord[]
   rideDriverApplications   RideDriverApplication[]
   driverFaceReference      DriverFaceReference?
+  rideSosAlertsResolved    RideSosAlert[]          @relation("RideSosResolvedBy")
   driverFaceChecks         DriverFaceCheck[]       @relation("DriverFaceCheckUser")
   driverFaceCheckOverrides DriverFaceCheck[]       @relation("DriverFaceCheckOverride")
 
@@ -937,6 +938,12 @@ model DriverFaceCheck {
   /// Override admin membuka blokir tanpa memalsukan hasil PASSED asli.
   adminOverrideById String?               @map("admin_override_by_id") @db.Uuid
   adminOverrideAt   DateTime?             @map("admin_override_at")
+  /// Jadwal verifikasi ULANG acak selama sesi online (bukan sekadar sekali
+  /// per hari) — diisi dengan waktu acak setelah PASSED, dicek berkala oleh
+  /// driver_app selama online. Meniru "verifikasi wajah acak sewaktu-waktu"
+  /// milik Gojek, menutup celah joki-akun-setelah-online yang tidak
+  /// tertutup oleh pemeriksaan sekali-sehari saja.
+  recheckDueAt      DateTime?             @map("recheck_due_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1669,6 +1676,11 @@ model RideDriverProfile {
   ratingAverage Decimal                @default(5.0) @map("rating_average") @db.Decimal(3, 2)
   ratingCount   Int                    @default(0) @map("rating_count")
   lastSeenAt    DateTime?              @map("last_seen_at")
+  /// Sejak kapan driver ONLINE TANPA TERPUTUS — diisi saat transisi
+  /// OFFLINE->ONLINE, dikosongkan saat ->OFFLINE, TIDAK direset oleh
+  /// ONLINE<->BUSY (menerima/menyelesaikan order tidak menghentikan jam
+  /// kerja). Dasar perhitungan pengingat kelelahan (fatigue nudge).
+  onlineSince   DateTime?              @map("online_since")
   createdAt     DateTime               @default(now()) @map("created_at")
   updatedAt     DateTime               @updatedAt @map("updated_at")
 
@@ -1677,6 +1689,7 @@ model RideDriverProfile {
   orders    RideOrder[]          @relation("RideOrderDriver")
   locations RideDriverLocation[]
   ratings   RideRating[]
+  sosAlerts RideSosAlert[]
 
   @@index([status, availability])
   @@map("ride_driver_profiles")
@@ -1807,6 +1820,7 @@ model RideOrder {
   locations     RideDriverLocation[]
   chatMessages  ChatMessage[]
   rating        RideRating?
+  sosAlerts     RideSosAlert[]
 
   @@index([passengerId, createdAt])
   @@index([driverProfileId, createdAt])
@@ -1875,6 +1889,43 @@ model RideDriverLocation {
   @@index([driverProfileId, capturedAt])
   @@index([rideOrderId, capturedAt])
   @@map("ride_driver_locations")
+}
+
+/// Sinyal darurat driver (tombol SOS). Dicatat dulu, disebarkan setelahnya —
+/// pola sama dengan RideEvent: baris ini adalah bukti bahwa sinyal SAMPAI ke
+/// server, terlepas dari apakah pemberitahuan (push admin, SMS/WA) berhasil
+/// terkirim atau tidak. Admin menutup status lewat konsol, bukan otomatis.
+model RideSosAlert {
+  id              String             @id @default(uuid()) @db.Uuid
+  driverProfileId String             @map("driver_profile_id") @db.Uuid
+  /// Diisi bila SOS ditekan saat ada perjalanan aktif; null bila di luar
+  /// perjalanan (mis. driver online menunggu tawaran).
+  rideOrderId     String?            @map("ride_order_id") @db.Uuid
+  lat             Decimal            @db.Decimal(10, 7)
+  lng             Decimal            @db.Decimal(10, 7)
+  accuracyMeters  Int?               @map("accuracy_meters")
+  status          RideSosAlertStatus @default(OPEN)
+  resolvedById    String?            @map("resolved_by_id") @db.Uuid
+  resolvedAt      DateTime?          @map("resolved_at")
+  resolutionNote  String?            @map("resolution_note")
+  createdAt       DateTime           @default(now()) @map("created_at")
+
+  driverProfile RideDriverProfile @relation(fields: [driverProfileId], references: [id], onDelete: Cascade)
+  rideOrder     RideOrder?        @relation(fields: [rideOrderId], references: [id], onDelete: SetNull)
+  resolvedBy    User?             @relation("RideSosResolvedBy", fields: [resolvedById], references: [id])
+
+  @@index([status, createdAt])
+  @@index([driverProfileId, createdAt])
+  @@map("ride_sos_alerts")
+}
+
+enum RideSosAlertStatus {
+  /// Baru masuk, belum ada admin yang menindaklanjuti.
+  OPEN
+  /// Admin sudah melihat dan sedang menangani.
+  ACKNOWLEDGED
+  /// Selesai ditangani — resolutionNote wajib diisi (ditegakkan di service, bukan skema).
+  RESOLVED
 }
 
 /// Idempotency untuk operasi mutasi ride (quote/order/accept/complete).

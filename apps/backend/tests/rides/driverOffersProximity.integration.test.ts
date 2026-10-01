@@ -1,9 +1,10 @@
 import { Prisma, RideOrderStatus } from "@prisma/client";
 import { createHash } from "node:crypto";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma, runIntegration, seedMemberships, testDatabaseUrl, cleanDatabase } from "../helpers/referralWalletHarness.js";
 import type { PushNotifier } from "../../src/modules/notifications/application/rideNotifications.js";
 import type { PushMessage } from "../../src/modules/notifications/infrastructure/FcmClient.js";
+import { wibCheckDate } from "../../src/modules/drivers/application/DriverFaceCheckService.js";
 
 /**
  * Stage D2: tawaran berbasis jarak dan batas waktu pencarian.
@@ -404,5 +405,75 @@ describe.skipIf(!runIntegration)("Tawaran berbasis jarak dan batas waktu pencari
     expect(push.sent).toHaveLength(1);
     expect(push.sent[0]!.userId).toBe(user.id);
     expect(push.sent[0]!.message.data?.type).toBe("ride_cancelled");
+  });
+
+  describe("gerbang verifikasi ulang wajah acak (recheck due)", () => {
+    afterEach(() => {
+      backendEnv.DRIVER_FACE_CHECK_ENABLED = false;
+    });
+
+    it("listOffersForDriver mengembalikan [] bila recheck sedang due, walau ada tawaran dalam radius", async () => {
+      backendEnv.DRIVER_FACE_CHECK_ENABLED = true;
+      const { user, profile } = await createDriver();
+      await createOrder(north(1));
+      await prisma.driverFaceCheck.create({
+        data: {
+          userId: user.id,
+          checkDate: wibCheckDate(new Date()),
+          status: "PASSED",
+          attemptCount: 1,
+          passedAt: new Date(),
+          recheckDueAt: new Date(Date.now() - 1000),
+        },
+      });
+      const offers = await service().listOffersForDriver(user.id);
+      expect(offers).toEqual([]);
+      // Kontrol: profil driver tetap valid (bukan sebab lain yang membuat kosong).
+      expect(profile.status).toBe("ACTIVE");
+    });
+
+    it("acceptOrder ditolak RIDE_DRIVER_FACE_RECHECK_REQUIRED bila recheck sedang due", async () => {
+      backendEnv.DRIVER_FACE_CHECK_ENABLED = true;
+      const { user } = await createDriver();
+      const { order } = await createOrder(north(1));
+      await prisma.driverFaceCheck.create({
+        data: {
+          userId: user.id,
+          checkDate: wibCheckDate(new Date()),
+          status: "PASSED",
+          attemptCount: 1,
+          passedAt: new Date(),
+          recheckDueAt: new Date(Date.now() - 1000),
+        },
+      });
+      await expect(
+        service().acceptOrder({ userId: user.id, publicReference: order.publicReference }),
+      ).rejects.toMatchObject({ code: "RIDE_DRIVER_FACE_RECHECK_REQUIRED" });
+
+      const fresh = await prisma.rideOrder.findUnique({ where: { id: order.id } });
+      expect(fresh?.driverProfileId).toBeNull();
+      expect(fresh?.status).toBe("SEARCHING_DRIVER");
+    });
+
+    it("recheck TIDAK due (belum waktunya) -> listOffersForDriver dan acceptOrder tetap normal", async () => {
+      backendEnv.DRIVER_FACE_CHECK_ENABLED = true;
+      const { user } = await createDriver();
+      const { order } = await createOrder(north(1));
+      await prisma.driverFaceCheck.create({
+        data: {
+          userId: user.id,
+          checkDate: wibCheckDate(new Date()),
+          status: "PASSED",
+          attemptCount: 1,
+          passedAt: new Date(),
+          recheckDueAt: new Date(Date.now() + 3_600_000),
+        },
+      });
+      const offers = await service().listOffersForDriver(user.id);
+      expect(offers).toHaveLength(1);
+
+      const accepted = await service().acceptOrder({ userId: user.id, publicReference: order.publicReference });
+      expect(accepted).toBeTruthy();
+    });
   });
 });

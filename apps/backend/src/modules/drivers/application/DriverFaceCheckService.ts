@@ -11,6 +11,15 @@ import { DRIVER_FACE_EMBEDDING_MODEL_VERSION } from "./DriverFaceEmbeddingServic
 
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 
+/** Waktu acak MIN..MAX menit dari `now`, untuk jadwal recheck berikutnya. */
+function randomRecheckDueAt(now: Date): Date {
+  const min = env.DRIVER_FACE_CHECK_RECHECK_MIN_MINUTES;
+  const max = env.DRIVER_FACE_CHECK_RECHECK_MAX_MINUTES;
+  const span = Math.max(0, max - min);
+  const minutes = min + Math.floor(Math.random() * (span + 1));
+  return new Date(now.getTime() + minutes * 60 * 1000);
+}
+
 /**
  * Tanggal kalender WIB (Asia/Jakarta) untuk `now`, dipangkas ke tengah malam
  * UTC agar cocok dengan kolom Prisma `@db.Date` — pola identik
@@ -151,7 +160,7 @@ export class DriverFaceCheckService {
         modelVersion: input.modelVersion,
         lastAttemptAt: now,
         status: (passed ? "PASSED" : blocked ? "BLOCKED" : "PENDING") as "PASSED" | "BLOCKED" | "PENDING",
-        ...(passed ? { passedAt: now } : {}),
+        ...(passed ? { passedAt: now, recheckDueAt: randomRecheckDueAt(now) } : {}),
         ...(blocked ? { blockedAt: now } : {})
       };
 
@@ -204,6 +213,101 @@ export class DriverFaceCheckService {
       StatusCodes.FORBIDDEN,
       "RIDE_DRIVER_FACE_CHECK_REQUIRED"
     );
+  }
+
+  /**
+   * Dipoll driver_app secara berkala SELAMA online (lihat safety-status di
+   * RideService) — true berarti klien harus membuka layar verifikasi wajah
+   * lagi walau sudah PASSED hari ini.
+   */
+  async isRecheckDue(userId: string): Promise<boolean> {
+    if (!env.DRIVER_FACE_CHECK_ENABLED) return false;
+    const checkDate = wibCheckDate(new Date());
+    const row = await this.prisma.driverFaceCheck.findUnique({
+      where: { userId_checkDate: { userId, checkDate } },
+      select: { status: true, recheckDueAt: true }
+    });
+    if (!row || row.status !== "PASSED" || !row.recheckDueAt) return false;
+    return row.recheckDueAt.getTime() <= Date.now();
+  }
+
+  /**
+   * Hasil verifikasi ULANG (recheck) selama sesi online — SELAIN
+   * [submitAttempt] (yang menutup verifikasi HARIAN pertama). Beda penting:
+   * gagal recheck TIDAK menghabiskan attemptCount harian maupun memblokir
+   * driver seharian (itu hukuman yang salah sasaran untuk kejadian yang
+   * terjadi PADAHAL driver sudah lolos verifikasi awal hari ini) — sebagai
+   * gantinya driver dipaksa OFFLINE seketika di server, otoritatif, terlepas
+   * dari apa yang ditampilkan/dilakukan klien setelahnya.
+   */
+  async submitRecheckAttempt(input: {
+    userId: string;
+    similarityScore: number;
+    livenessPassed: boolean;
+    modelVersion: string;
+  }): Promise<DriverFaceCheckSnapshot> {
+    this.requireEnabled();
+    if (!Number.isFinite(input.similarityScore) || input.similarityScore < 0 || input.similarityScore > 1) {
+      throw new AppError("Skor kemiripan tidak valid.", StatusCodes.BAD_REQUEST, "DRIVER_FACE_CHECK_SCORE_INVALID");
+    }
+
+    const checkDate = wibCheckDate(new Date());
+    const now = new Date();
+
+    const outcome = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.driverFaceCheck.findUnique({
+        where: { userId_checkDate: { userId: input.userId, checkDate } }
+      });
+      if (!existing || existing.status !== "PASSED") {
+        throw new AppError(
+          "Belum ada verifikasi wajah harian yang lolos untuk diperbarui.",
+          StatusCodes.CONFLICT,
+          "RIDE_DRIVER_FACE_RECHECK_NOT_APPLICABLE"
+        );
+      }
+      if (!existing.recheckDueAt || existing.recheckDueAt.getTime() > now.getTime()) {
+        throw new AppError(
+          "Belum waktunya verifikasi ulang.",
+          StatusCodes.CONFLICT,
+          "RIDE_DRIVER_FACE_RECHECK_NOT_DUE"
+        );
+      }
+
+      const passed = input.livenessPassed && input.similarityScore >= env.DRIVER_FACE_CHECK_MIN_SIMILARITY;
+
+      const row = await tx.driverFaceCheck.update({
+        where: { userId_checkDate: { userId: input.userId, checkDate } },
+        data: {
+          similarityScore: new Prisma.Decimal(input.similarityScore.toFixed(4)),
+          modelVersion: input.modelVersion,
+          lastAttemptAt: now,
+          // Status TETAP PASSED baik lolos maupun gagal recheck — recheck
+          // gagal tidak pernah membalik hari itu jadi BLOCKED/PENDING, cukup
+          // memaksa offline (di bawah) dan menjadwalkan recheck baru supaya
+          // driver diminta lagi begitu online kembali.
+          recheckDueAt: randomRecheckDueAt(now)
+        }
+      });
+
+      if (!passed) {
+        // Otoritatif: paksa offline SEKARANG, bukan menunggu klien bertindak.
+        await tx.rideDriverProfile.updateMany({
+          where: { userId: input.userId },
+          data: { availability: "OFFLINE", onlineSince: null }
+        });
+      }
+
+      return { passed, row };
+    });
+
+    if (!outcome.passed) {
+      throw new AppError(
+        "Wajah tidak cocok. Anda telah dialihkan ke status offline untuk keamanan.",
+        StatusCodes.FORBIDDEN,
+        "RIDE_DRIVER_FACE_RECHECK_MISMATCH"
+      );
+    }
+    return this.toSnapshot(outcome.row);
   }
 
   /** Membuka blokir tanpa memalsukan hasil PASSED asli — dicatat di AuditLog. */

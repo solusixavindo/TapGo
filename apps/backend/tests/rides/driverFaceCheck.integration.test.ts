@@ -52,6 +52,10 @@ describe.skipIf(!runIntegration)("verifikasi wajah harian sebelum online", () =>
   const originalEnabled = env.DRIVER_FACE_CHECK_ENABLED;
   const originalMinSimilarity = env.DRIVER_FACE_CHECK_MIN_SIMILARITY;
   const originalMaxAttempts = env.DRIVER_FACE_CHECK_MAX_ATTEMPTS_PER_DAY;
+  const originalRecheckMin = env.DRIVER_FACE_CHECK_RECHECK_MIN_MINUTES;
+  const originalRecheckMax = env.DRIVER_FACE_CHECK_RECHECK_MAX_MINUTES;
+  const originalFatigueCar = env.DRIVER_FATIGUE_CAR_MAX_ONLINE_MINUTES;
+  const originalFatigueMotorcycle = env.DRIVER_FATIGUE_MOTORCYCLE_MAX_ONLINE_MINUTES;
 
   beforeAll(async () => {
     if (!testDatabaseUrl?.toLowerCase().includes("test")) {
@@ -79,6 +83,10 @@ describe.skipIf(!runIntegration)("verifikasi wajah harian sebelum online", () =>
     env.DRIVER_FACE_CHECK_ENABLED = false;
     env.DRIVER_FACE_CHECK_MIN_SIMILARITY = 0.75;
     env.DRIVER_FACE_CHECK_MAX_ATTEMPTS_PER_DAY = 3;
+    env.DRIVER_FACE_CHECK_RECHECK_MIN_MINUTES = 120;
+    env.DRIVER_FACE_CHECK_RECHECK_MAX_MINUTES = 300;
+    env.DRIVER_FATIGUE_CAR_MAX_ONLINE_MINUTES = 600;
+    env.DRIVER_FATIGUE_MOTORCYCLE_MAX_ONLINE_MINUTES = 660;
     await cleanTables();
   });
 
@@ -86,6 +94,10 @@ describe.skipIf(!runIntegration)("verifikasi wajah harian sebelum online", () =>
     env.DRIVER_FACE_CHECK_ENABLED = originalEnabled;
     env.DRIVER_FACE_CHECK_MIN_SIMILARITY = originalMinSimilarity;
     env.DRIVER_FACE_CHECK_MAX_ATTEMPTS_PER_DAY = originalMaxAttempts;
+    env.DRIVER_FACE_CHECK_RECHECK_MIN_MINUTES = originalRecheckMin;
+    env.DRIVER_FACE_CHECK_RECHECK_MAX_MINUTES = originalRecheckMax;
+    env.DRIVER_FATIGUE_CAR_MAX_ONLINE_MINUTES = originalFatigueCar;
+    env.DRIVER_FATIGUE_MOTORCYCLE_MAX_ONLINE_MINUTES = originalFatigueMotorcycle;
     await new Promise<void>((resolve, reject) => {
       if (!appServer) return resolve();
       appServer.close((e) => (e ? reject(e) : resolve()));
@@ -292,6 +304,239 @@ describe.skipIf(!runIntegration)("verifikasi wajah harian sebelum online", () =>
     const online = await setAvailability(tokenFor(driver.user), "ONLINE");
     expect(online.status).toBe(200);
   });
+
+  // --- Verifikasi ulang acak (recheck) selama online --------------------------
+
+  it("safety-status: faceRecheck.due tetap false bila flag mati, walau ada baris PASSED dengan recheckDueAt lampau", async () => {
+    const driver = await createDriver({ status: "ACTIVE" });
+    await prisma.driverFaceCheck.create({
+      data: {
+        userId: driver.user.id,
+        checkDate: wibCheckDate(new Date()),
+        status: "PASSED",
+        attemptCount: 1,
+        passedAt: new Date(),
+        recheckDueAt: new Date(Date.now() - 60_000),
+      },
+    });
+    const res = await safetyStatus(tokenFor(driver.user));
+    expect(res.data?.faceRecheck.due).toBe(false);
+  });
+
+  it("safety-status: faceRecheck.due true begitu recheckDueAt terlewati, false sebelum waktunya", async () => {
+    env.DRIVER_FACE_CHECK_ENABLED = true;
+    const driver = await createDriver({ status: "ACTIVE" });
+    await prisma.driverFaceCheck.create({
+      data: {
+        userId: driver.user.id,
+        checkDate: wibCheckDate(new Date()),
+        status: "PASSED",
+        attemptCount: 1,
+        passedAt: new Date(),
+        recheckDueAt: new Date(Date.now() + 3_600_000),
+      },
+    });
+    const notYet = await safetyStatus(tokenFor(driver.user));
+    expect(notYet.data?.faceRecheck.due).toBe(false);
+
+    await prisma.driverFaceCheck.update({
+      where: { userId_checkDate: { userId: driver.user.id, checkDate: wibCheckDate(new Date()) } },
+      data: { recheckDueAt: new Date(Date.now() - 1000) },
+    });
+    const due = await safetyStatus(tokenFor(driver.user));
+    expect(due.data?.faceRecheck.due).toBe(true);
+  });
+
+  it("submitRecheckAttempt: ditolak bila belum ada PASSED hari ini", async () => {
+    env.DRIVER_FACE_CHECK_ENABLED = true;
+    const driver = await createDriver({ status: "ACTIVE" });
+    const res = await submitRecheckAttempt(tokenFor(driver.user), {
+      similarityScore: 0.9,
+      livenessPassed: true,
+      modelVersion: "mobilefacenet-v1",
+    });
+    expect(res.status).toBe(409);
+    expect(res.code).toBe("RIDE_DRIVER_FACE_RECHECK_NOT_APPLICABLE");
+  });
+
+  it("submitRecheckAttempt: ditolak bila belum waktunya (recheckDueAt di masa depan)", async () => {
+    env.DRIVER_FACE_CHECK_ENABLED = true;
+    const driver = await createDriver({ status: "ACTIVE", availability: "ONLINE" });
+    await prisma.driverFaceCheck.create({
+      data: {
+        userId: driver.user.id,
+        checkDate: wibCheckDate(new Date()),
+        status: "PASSED",
+        attemptCount: 1,
+        passedAt: new Date(),
+        recheckDueAt: new Date(Date.now() + 3_600_000),
+      },
+    });
+    const res = await submitRecheckAttempt(tokenFor(driver.user), {
+      similarityScore: 0.9,
+      livenessPassed: true,
+      modelVersion: "mobilefacenet-v1",
+    });
+    expect(res.status).toBe(409);
+    expect(res.code).toBe("RIDE_DRIVER_FACE_RECHECK_NOT_DUE");
+  });
+
+  it("submitRecheckAttempt: lolos -> tetap PASSED, recheckDueAt dijadwalkan ulang ke masa depan, TIDAK dipaksa offline", async () => {
+    env.DRIVER_FACE_CHECK_ENABLED = true;
+    const driver = await createDriver({ status: "ACTIVE", availability: "ONLINE" });
+    await prisma.driverFaceCheck.create({
+      data: {
+        userId: driver.user.id,
+        checkDate: wibCheckDate(new Date()),
+        status: "PASSED",
+        attemptCount: 1,
+        passedAt: new Date(),
+        recheckDueAt: new Date(Date.now() - 1000),
+      },
+    });
+    const res = await submitRecheckAttempt(tokenFor(driver.user), {
+      similarityScore: 0.95,
+      livenessPassed: true,
+      modelVersion: "mobilefacenet-v1",
+    });
+    expect(res.status).toBe(201);
+
+    const row = await prisma.driverFaceCheck.findUnique({
+      where: { userId_checkDate: { userId: driver.user.id, checkDate: wibCheckDate(new Date()) } },
+    });
+    expect(row?.status).toBe("PASSED");
+    expect(row?.recheckDueAt?.getTime()).toBeGreaterThan(Date.now());
+
+    const profile = await prisma.rideDriverProfile.findUnique({ where: { userId: driver.user.id } });
+    expect(profile?.availability).toBe("ONLINE");
+  });
+
+  it("submitRecheckAttempt: gagal -> driver dipaksa OFFLINE seketika, status HARIAN tetap PASSED (bukan BLOCKED/PENDING), attemptCount harian tidak berubah", async () => {
+    env.DRIVER_FACE_CHECK_ENABLED = true;
+    const driver = await createDriver({ status: "ACTIVE", availability: "ONLINE" });
+    await prisma.rideDriverProfile.update({
+      where: { id: driver.profile.id },
+      data: { onlineSince: new Date(Date.now() - 3_600_000) },
+    });
+    await prisma.driverFaceCheck.create({
+      data: {
+        userId: driver.user.id,
+        checkDate: wibCheckDate(new Date()),
+        status: "PASSED",
+        attemptCount: 1,
+        passedAt: new Date(),
+        recheckDueAt: new Date(Date.now() - 1000),
+      },
+    });
+    const res = await submitRecheckAttempt(tokenFor(driver.user), {
+      similarityScore: 0.1,
+      livenessPassed: true,
+      modelVersion: "mobilefacenet-v1",
+    });
+    expect(res.status).toBe(403);
+    expect(res.code).toBe("RIDE_DRIVER_FACE_RECHECK_MISMATCH");
+
+    const row = await prisma.driverFaceCheck.findUnique({
+      where: { userId_checkDate: { userId: driver.user.id, checkDate: wibCheckDate(new Date()) } },
+    });
+    expect(row?.status).toBe("PASSED");
+    expect(row?.attemptCount).toBe(1);
+
+    const profile = await prisma.rideDriverProfile.findUnique({ where: { userId: driver.user.id } });
+    expect(profile?.availability).toBe("OFFLINE");
+    expect(profile?.onlineSince).toBeNull();
+  });
+
+  // --- Pengingat kelelahan (fatigue nudge) -------------------------------------
+
+  it("safety-status: restRequired false selagi offline (onlineSince kosong)", async () => {
+    const driver = await createDriver({ status: "ACTIVE" });
+    const res = await safetyStatus(tokenFor(driver.user));
+    expect(res.data?.fatigue.restRequired).toBe(false);
+    expect(res.data?.fatigue.continuousOnlineMinutes).toBe(0);
+  });
+
+  it("safety-status: restRequired true begitu jam online tanpa terputus melewati ambang motor (660 menit)", async () => {
+    const driver = await createDriver({ status: "ACTIVE", availability: "ONLINE" });
+    await prisma.rideDriverProfile.update({
+      where: { id: driver.profile.id },
+      data: { onlineSince: new Date(Date.now() - 661 * 60_000) },
+    });
+    const res = await safetyStatus(tokenFor(driver.user));
+    expect(res.data?.fatigue.restRequired).toBe(true);
+    expect(res.data?.fatigue.thresholdMinutes).toBe(660);
+  });
+
+  it("safety-status: belum melewati ambang -> restRequired tetap false", async () => {
+    const driver = await createDriver({ status: "ACTIVE", availability: "ONLINE" });
+    await prisma.rideDriverProfile.update({
+      where: { id: driver.profile.id },
+      data: { onlineSince: new Date(Date.now() - 30 * 60_000) },
+    });
+    const res = await safetyStatus(tokenFor(driver.user));
+    expect(res.data?.fatigue.restRequired).toBe(false);
+  });
+
+  it("safety-status: driver kendaraan CAR memakai ambang 600 menit, bukan 660 milik motor", async () => {
+    const driver = await createDriver({ status: "ACTIVE", availability: "ONLINE", vehicleType: "CAR" });
+    await prisma.rideDriverProfile.update({
+      where: { id: driver.profile.id },
+      data: { onlineSince: new Date(Date.now() - 601 * 60_000) },
+    });
+    const res = await safetyStatus(tokenFor(driver.user));
+    expect(res.data?.fatigue.thresholdMinutes).toBe(600);
+    expect(res.data?.fatigue.restRequired).toBe(true);
+  });
+
+  it("driver dengan kendaraan CAR dan MOTORCYCLE aktif memakai ambang PALING KETAT (600, bukan 660)", async () => {
+    const driver = await createDriver({ status: "ACTIVE", availability: "ONLINE", vehicleType: "MOTORCYCLE" });
+    await prisma.rideVehicle.create({
+      data: {
+        driverProfileId: driver.profile.id,
+        type: "CAR",
+        plateNumberHash: createHash("sha256").update(`extra-${driver.profile.id}`).digest("hex"),
+        plateNumberMasked: "B 5678 ***",
+        verificationStatus: "VERIFIED",
+        isActive: true,
+      },
+    });
+    await prisma.rideDriverProfile.update({
+      where: { id: driver.profile.id },
+      data: { onlineSince: new Date(Date.now() - 605 * 60_000) },
+    });
+    const res = await safetyStatus(tokenFor(driver.user));
+    expect(res.data?.fatigue.thresholdMinutes).toBe(600);
+    expect(res.data?.fatigue.restRequired).toBe(true);
+  });
+
+  it("onlineSince TIDAK direset oleh transisi BUSY->ONLINE (jam kerja tidak terputus oleh perjalanan)", async () => {
+    const driver = await createDriver({ status: "ACTIVE", availability: "BUSY" });
+    const eightHoursAgo = new Date(Date.now() - 8 * 3_600_000);
+    await prisma.rideDriverProfile.update({
+      where: { id: driver.profile.id },
+      data: { onlineSince: eightHoursAgo },
+    });
+    resetRateLimits();
+    const res = await setAvailability(tokenFor(driver.user), "ONLINE");
+    expect(res.status).toBe(200);
+
+    const profile = await prisma.rideDriverProfile.findUnique({ where: { userId: driver.user.id } });
+    expect(profile?.onlineSince?.getTime()).toBe(eightHoursAgo.getTime());
+  });
+
+  it("onlineSince diisi saat OFFLINE->ONLINE dan dikosongkan saat ->OFFLINE", async () => {
+    const driver = await createDriver({ status: "ACTIVE" });
+    const online = await setAvailability(tokenFor(driver.user), "ONLINE");
+    expect(online.status).toBe(200);
+    const afterOnline = await prisma.rideDriverProfile.findUnique({ where: { userId: driver.user.id } });
+    expect(afterOnline?.onlineSince).not.toBeNull();
+
+    resetRateLimits();
+    const offline = await setAvailability(tokenFor(driver.user), "OFFLINE");
+    expect(offline.status).toBe(200);
+    const afterOffline = await prisma.rideDriverProfile.findUnique({ where: { userId: driver.user.id } });
+    expect(afterOffline?.onlineSince).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -343,6 +588,32 @@ async function submitAttempt(
   return { status: res.status, ...(parsed.code ? { code: parsed.code } : {}) };
 }
 
+async function submitRecheckAttempt(
+  token: string,
+  input: { similarityScore: number; livenessPassed: boolean; modelVersion: string },
+) {
+  const res = await fetch(`${baseUrl}/api/v1/driver/face-check/recheck-attempt`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const parsed = (await res.json().catch(() => ({}))) as { code?: string };
+  return { status: res.status, ...(parsed.code ? { code: parsed.code } : {}) };
+}
+
+async function safetyStatus(token: string) {
+  const res = await fetch(`${baseUrl}/api/v1/driver/safety-status`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const parsed = (await res.json().catch(() => ({}))) as {
+    data?: {
+      fatigue: { continuousOnlineMinutes: number; thresholdMinutes: number | null; restRequired: boolean };
+      faceRecheck: { due: boolean };
+    };
+  };
+  return { status: res.status, data: parsed.data };
+}
+
 function tokenFor(user: { id: string; role: UserRole }) {
   return signAccessToken({ sub: user.id, role: user.role, sessionId: "face-check-session" });
 }
@@ -363,6 +634,7 @@ async function createDriver(options: {
   status: RideDriverStatus;
   role?: UserRole;
   availability?: "OFFLINE" | "ONLINE" | "BUSY";
+  vehicleType?: "MOTORCYCLE" | "CAR";
 }) {
   const user = await createUser(options.role ?? "USER");
   const profile = await prisma.rideDriverProfile.create({
@@ -376,7 +648,7 @@ async function createDriver(options: {
   await prisma.rideVehicle.create({
     data: {
       driverProfileId: profile.id,
-      type: "MOTORCYCLE",
+      type: options.vehicleType ?? "MOTORCYCLE",
       plateNumberHash: createHash("sha256").update(plate).digest("hex"),
       plateNumberMasked: "A 1234 ***",
       verificationStatus: "VERIFIED",
