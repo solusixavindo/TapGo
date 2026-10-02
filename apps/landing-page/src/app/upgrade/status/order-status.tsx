@@ -50,7 +50,7 @@ const STATUS_VIEW: Record<
     tone: "refund",
     label: "Dokumen ditolak",
     headline: "Dokumen tidak dapat diverifikasi",
-    body: "Pembayaran Anda dikembalikan penuh ke metode pembayaran semula. Proses pengembalian mengikuti waktu penyedia pembayaran."
+    body: "Pembayaran Anda dikembalikan penuh. Untuk pembayaran online, dana kembali ke metode pembayaran semula mengikuti waktu penyedia. Untuk transfer bank, tim TapGo menghubungi Anda untuk rekening tujuan lalu mentransfer balik sebesar pembayaran Anda."
   },
   EXPIRED: {
     tone: "wait",

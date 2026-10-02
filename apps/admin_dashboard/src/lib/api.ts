@@ -140,6 +140,18 @@ export function confirmManualTransfer(orderId: string) {
   );
 }
 
+/**
+ * Super Admin mencatat bahwa dana pengajuan transfer manual yang dokumennya
+ * ditolak SUDAH dikembalikan lewat transfer bank dari rekening perusahaan.
+ * bankReference = nomor referensi transfer balik di mutasi bank.
+ */
+export function confirmManualRefund(orderId: string, bankReference: string) {
+  return request<{ orderId: string; status: string; amount: string }>(
+    `/admin/member-requests/${orderId}/confirm-manual-refund`,
+    { method: "POST", body: JSON.stringify({ bankReference }) }
+  );
+}
+
 /** Super Admin membatalkan pengajuan yang belum dibayar. */
 export function cancelUnpaidMemberRequest(orderId: string, reason: string) {
   return request<MemberRequest>(`/admin/member-requests/${orderId}/reject`, {
