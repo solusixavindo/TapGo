@@ -15,6 +15,7 @@ import {
   readToken,
   rejectDocuments,
   cancelUnpaidMemberRequest,
+  confirmManualRefund,
   confirmManualTransfer,
   confirmMemberPayment,
   roleAtLeast,
@@ -70,6 +71,16 @@ function manualTransferOf(request: MemberRequest): ManualTransfer | null {
   };
 }
 
+type RefundInfo = { status?: string; amount?: string; bankReference?: string };
+
+/** Status pengembalian dana pada pengajuan yang dokumennya ditolak, atau null. */
+function refundOf(request: MemberRequest): RefundInfo | null {
+  const rejection = request.registrationData?.documentRejection;
+  if (!rejection || typeof rejection !== "object") return null;
+  const refund = (rejection as { refund?: unknown }).refund;
+  return refund && typeof refund === "object" ? (refund as RefundInfo) : null;
+}
+
 function statusLabel(request: MemberRequest) {
   if (request.status === "PAID" && request.userMembership) return "Aktif";
   if (request.status === "PAID") {
@@ -80,7 +91,8 @@ function statusLabel(request: MemberRequest) {
   if (request.status === "PENDING") return "Menunggu pembayaran";
   if (request.status === "CANCELLED") {
     const rejected = Boolean(request.registrationData?.documentRejection);
-    return rejected ? "Ditolak, dana dikembalikan" : "Dibatalkan";
+    if (!rejected) return "Dibatalkan";
+    return refundOf(request)?.status === "REFUNDED" ? "Ditolak, dana dikembalikan" : "Ditolak, dana belum dikembalikan";
   }
   return request.status;
 }
@@ -106,6 +118,7 @@ export default function MemberRequestsPage() {
   const [correctionReason, setCorrectionReason] = useState("");
   const [cancelReason, setCancelReason] = useState("");
   const [accountReason, setAccountReason] = useState("");
+  const [refundReference, setRefundReference] = useState("");
 
   const selected = useMemo(
     () => requests.find((item) => item.id === selectedId) ?? null,
@@ -223,6 +236,31 @@ export default function MemberRequestsPage() {
       await refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Tindakan belum dapat diproses.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Mencatat transfer balik untuk pengajuan transfer manual yang dokumennya ditolak. */
+  async function recordManualRefund() {
+    if (!selected || busy) return;
+    const amount = formatRupiah(selected.totalAmount);
+    if (
+      !window.confirm(
+        `Catat bahwa dana ${amount} sudah dikembalikan ke ${selected.user?.fullName ?? "pemohon"} lewat transfer bank? Pastikan transfer balik benar-benar sudah dilakukan dan nomor referensinya sesuai mutasi bank.`
+      )
+    )
+      return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await confirmManualRefund(selected.id, refundReference.trim());
+      setNotice("Pengembalian dana dicatat.");
+      setRefundReference("");
+      await refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Pengembalian dana belum dapat dicatat.");
     } finally {
       setBusy(false);
     }
@@ -513,6 +551,44 @@ export default function MemberRequestsPage() {
                         Batalkan pengajuan
                       </button>
                     </div>
+                  </div>
+                ) : null}
+
+                {selected.status === "CANCELLED" && refundOf(selected)?.status === "PENDING" && roleAtLeast(role, "SUPER_ADMIN") ? (
+                  <div className="mt-6 border-t border-slate-200 pt-5 print:hidden" data-testid="manual-refund">
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Pengembalian dana</p>
+                    {selected.payments?.[0]?.provider === "MANUAL_BANK" ? (
+                      <>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">
+                          Dokumen ditolak, dana {formatRupiah(selected.totalAmount)} wajib kembali penuh. Pembayaran ini transfer
+                          bank manual, jadi kembalikan lewat transfer bank dari rekening perusahaan (hubungi pemohon di{" "}
+                          {selected.user?.phone ?? "nomor terdaftar"} untuk rekening tujuan), lalu catat di sini dengan nomor
+                          referensi transfer baliknya.
+                        </p>
+                        <div className="mt-4 flex flex-wrap items-center gap-3">
+                          <input
+                            value={refundReference}
+                            onChange={(event) => setRefundReference(event.target.value)}
+                            placeholder="Nomor referensi transfer balik (wajib)"
+                            maxLength={120}
+                            className="min-w-[220px] flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-slate-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void recordManualRefund()}
+                            disabled={busy || refundReference.trim().length < 3}
+                            className="rounded-lg bg-brand-green px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                          >
+                            Catat dana sudah dikembalikan
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        Dokumen ditolak, dana {formatRupiah(selected.totalAmount)} wajib kembali penuh lewat penyedia pembayaran
+                        (jalur pengembalian dana penyedia).
+                      </p>
+                    )}
                   </div>
                 ) : null}
 

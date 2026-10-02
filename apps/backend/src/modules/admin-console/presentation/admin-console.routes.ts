@@ -33,6 +33,7 @@ import {
   adminListQuerySchema,
   adminFinancialReportQuerySchema,
   adminMemberDetailSchema,
+  adminManualRefundSchema,
   adminMemberRequestActionSchema,
   adminOrderQuerySchema,
   adminRoleAssignSchema,
@@ -204,6 +205,12 @@ adminConsoleRouter.post(
   requireRoles("SUPER_ADMIN"),
   validateRequest(adminMemberRequestActionSchema),
   asyncHandler(controller.executeMemberRequestRefund)
+);
+adminConsoleRouter.post(
+  "/member-requests/:id/confirm-manual-refund",
+  requireRoles("SUPER_ADMIN"),
+  validateRequest(adminManualRefundSchema),
+  asyncHandler(controller.confirmMemberRequestManualRefund)
 );
 adminConsoleRouter.post(
   "/member-requests/:id/reject",

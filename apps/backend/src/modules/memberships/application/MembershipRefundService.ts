@@ -5,6 +5,7 @@ import {
   PaymentRefundGateway,
   resolveRefundGateway
 } from "../../payments/application/PaymentRefundGateway.js";
+import { MANUAL_BANK_PROVIDER } from "../../payments/application/manualTransferAmounts.js";
 
 /**
  * Eksekusi pengembalian dana atas pengajuan yang dokumennya ditolak.
@@ -30,6 +31,10 @@ import {
 export const REFUND_NOT_PENDING = "MEMBERSHIP_REFUND_NOT_PENDING";
 export const REFUND_ALREADY_DONE = "MEMBERSHIP_REFUND_ALREADY_COMPLETED";
 export const REFUND_ORDER_NOT_REJECTED = "MEMBERSHIP_REFUND_ORDER_NOT_REJECTED";
+/** Pembayaran transfer manual: dana tidak pernah lewat penyedia, jadi tidak ada refund via gateway. */
+export const REFUND_MANUAL_REQUIRED = "MEMBERSHIP_REFUND_MANUAL_REQUIRED";
+/** Konfirmasi refund manual hanya untuk pembayaran transfer manual. */
+export const REFUND_MANUAL_NOT_APPLICABLE = "MEMBERSHIP_REFUND_MANUAL_NOT_APPLICABLE";
 
 export const REFUND_ACTIONS = {
   completed: "MEMBERSHIP_REFUND_COMPLETED",
@@ -47,9 +52,14 @@ export class MembershipRefundService {
     private readonly gateway: PaymentRefundGateway = resolveRefundGateway()
   ) {}
 
-  async executeRefund(input: { orderId: string; adminId: string }) {
+  /**
+   * Memuat pesanan dan memastikan ada refund yang tertunda beserta pembayaran
+   * lunas yang akan dibalik. Dipakai bersama oleh refund via gateway dan
+   * pencatatan refund manual, supaya syaratnya tidak bisa berbeda.
+   */
+  private async loadPendingRefund(orderId: string) {
     const order = await this.prisma.membershipOrder.findUnique({
-      where: { id: input.orderId },
+      where: { id: orderId },
       include: {
         invoice: true,
         payments: { orderBy: { createdAt: "desc" } }
@@ -100,11 +110,28 @@ export class MembershipRefundService {
       );
     }
 
+    return { order, invoice: order.invoice, payment, rejection, refund };
+  }
+
+  async executeRefund(input: { orderId: string; adminId: string }) {
+    const { order, invoice, payment, rejection, refund } = await this.loadPendingRefund(input.orderId);
+
+    // Uang transfer manual tidak pernah lewat penyedia, jadi gateway tidak
+    // boleh dipanggil (invoice ini tidak dikenal di sana). Dana dikembalikan
+    // lewat transfer bank, lalu dicatat dengan confirmManualRefund.
+    if (payment.provider === MANUAL_BANK_PROVIDER) {
+      throw new AppError(
+        "Pembayaran ini transfer bank manual. Kembalikan dana lewat transfer bank dari rekening perusahaan, lalu catat dengan konfirmasi pengembalian dana manual.",
+        StatusCodes.CONFLICT,
+        REFUND_MANUAL_REQUIRED
+      );
+    }
+
     // --- Langkah 2: penyedia lebih dulu, database menyusul ------------------
     let result;
     try {
       result = await this.gateway.refund({
-        invoiceNumber: order.invoice.number,
+        invoiceNumber: invoice.number,
         amount: order.totalAmount,
         reason: this.optionalString(rejection.reason) ?? "Dokumen identitas tidak dapat diverifikasi",
         refundKey: refundKeyFor(order.id)
@@ -122,12 +149,78 @@ export class MembershipRefundService {
     }
 
     // --- Langkah 3: catat, dengan penjaga bersyarat -------------------------
+    return this.settle({
+      order,
+      invoice,
+      payment,
+      rejection,
+      refund,
+      adminId: input.adminId,
+      provider: result.provider,
+      providerReference: result.providerReference,
+      extra: {}
+    });
+  }
+
+  /**
+   * Super Admin mencatat bahwa dana SUDAH dikembalikan lewat transfer bank
+   * dari rekening perusahaan, untuk pembayaran transfer manual. Tidak ada
+   * penyedia yang dipanggil: sistem hanya membukukan apa yang sudah dilakukan
+   * manusia, sehingga `bankReference` (nomor referensi transfer balik) wajib
+   * ada sebagai jejak yang dapat dicocokkan dengan mutasi bank.
+   */
+  async confirmManualRefund(input: { orderId: string; adminId: string; bankReference: string }) {
+    const bankReference = this.optionalString(input.bankReference);
+    if (!bankReference) {
+      throw new AppError(
+        "Nomor referensi transfer pengembalian dana wajib diisi.",
+        StatusCodes.BAD_REQUEST,
+        "MEMBERSHIP_REFUND_BANK_REFERENCE_REQUIRED"
+      );
+    }
+    const { order, invoice, payment, rejection, refund } = await this.loadPendingRefund(input.orderId);
+
+    if (payment.provider !== MANUAL_BANK_PROVIDER) {
+      throw new AppError(
+        "Pengembalian dana manual hanya untuk pembayaran transfer bank manual. Gunakan pengembalian dana lewat penyedia pembayaran.",
+        StatusCodes.CONFLICT,
+        REFUND_MANUAL_NOT_APPLICABLE
+      );
+    }
+
+    return this.settle({
+      order,
+      invoice,
+      payment,
+      rejection,
+      refund,
+      adminId: input.adminId,
+      provider: MANUAL_BANK_PROVIDER,
+      providerReference: `MANUAL:${input.adminId}`,
+      extra: { bankReference }
+    });
+  }
+
+  /** Pembukuan akhir yang sama untuk kedua jalur; bersyarat agar tidak bisa ganda. */
+  private async settle(input: {
+    order: { id: string; userId: string; totalAmount: Prisma.Decimal; registrationData: Prisma.JsonValue | null };
+    invoice: { id: string; number: string; metadata: Prisma.JsonValue | null };
+    payment: { id: string; metadata: Prisma.JsonValue | null };
+    rejection: Record<string, unknown>;
+    refund: Record<string, unknown>;
+    adminId: string;
+    provider: string;
+    providerReference: string;
+    extra: Record<string, unknown>;
+  }) {
+    const { order, invoice, payment, rejection, refund } = input;
     const now = new Date();
     const settled = {
       ...refund,
       status: "REFUNDED",
-      provider: result.provider,
-      providerReference: result.providerReference,
+      provider: input.provider,
+      providerReference: input.providerReference,
+      ...input.extra,
       executedBy: input.adminId,
       executedAt: now.toISOString()
     };
@@ -139,7 +232,7 @@ export class MembershipRefundService {
         where: { id: payment.id, status: "PAID" },
         data: {
           status: "REFUNDED",
-          providerReference: result.providerReference,
+          providerReference: input.providerReference,
           metadata: { ...(this.asObject(payment.metadata)), refund: settled }
         }
       });
@@ -152,10 +245,10 @@ export class MembershipRefundService {
       }
 
       await tx.invoice.updateMany({
-        where: { id: order.invoice!.id, status: "PAID" },
+        where: { id: invoice.id, status: "PAID" },
         data: {
           status: "REFUNDED",
-          metadata: { ...(this.asObject(order.invoice!.metadata)), refund: settled }
+          metadata: { ...(this.asObject(invoice.metadata)), refund: settled }
         }
       });
 
@@ -177,10 +270,11 @@ export class MembershipRefundService {
           entityId: order.id,
           metadata: {
             targetUserId: order.userId,
-            invoiceNumber: order.invoice!.number,
+            invoiceNumber: invoice.number,
             amount: order.totalAmount.toFixed(2),
-            provider: result.provider,
-            providerReference: result.providerReference
+            provider: input.provider,
+            providerReference: input.providerReference,
+            ...input.extra
           }
         }
       });
@@ -189,8 +283,8 @@ export class MembershipRefundService {
     return {
       orderId: order.id,
       amount: order.totalAmount.toFixed(2),
-      provider: result.provider,
-      providerReference: result.providerReference,
+      provider: input.provider,
+      providerReference: input.providerReference,
       status: "REFUNDED" as const
     };
   }
