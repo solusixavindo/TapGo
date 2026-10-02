@@ -33,7 +33,11 @@ BEGIN
   END IF;
 END $$;
 
+-- CATATAN: "wallets_balance_non_negative" SENGAJA tidak ditambahkan di sini —
+-- sudah dibuat oleh migrasi 0003_referral_wallet_hardening. Menambahkannya
+-- lagi gagal dengan SQLSTATE 42710 (constraint sudah ada) di setiap database
+-- yang sudah menjalankan 0003, termasuk produksi. Hanya dua kolom yang belum
+-- punya penjaga yang ditambahkan.
 ALTER TABLE "wallets"
-  ADD CONSTRAINT "wallets_balance_non_negative" CHECK ("balance" >= 0),
   ADD CONSTRAINT "wallets_cash_balance_non_negative" CHECK ("cash_balance" >= 0),
   ADD CONSTRAINT "wallets_ppob_balance_non_negative" CHECK ("ppob_balance" >= 0);
