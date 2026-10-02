@@ -150,6 +150,10 @@ const envSchema = z.object({
   MANUAL_TOPUP_ACCOUNT_NUMBER: z.string().trim().max(40).optional(),
   MANUAL_TOPUP_ACCOUNT_HOLDER: z.string().trim().max(120).optional(),
   MANUAL_TOPUP_MIN_AMOUNT: z.coerce.number().int().min(1000).default(50000),
+  /// Minimal top up untuk tujuan SALDO PPOB (kredit ppobBalance saja). Terpisah
+  /// dari MANUAL_TOPUP_MIN_AMOUNT (Saldo TapGo: driver dan perjalanan) karena
+  /// pembelian PPOB (pulsa, token, tagihan) bernominal kecil.
+  MANUAL_TOPUP_PPOB_MIN_AMOUNT: z.coerce.number().int().min(1000).default(25000),
   MANUAL_TOPUP_MAX_AMOUNT: z.coerce.number().int().max(50000000).default(5000000),
   MANUAL_TOPUP_EXPIRY_HOURS: z.coerce.number().int().min(1).max(168).default(24),
   /// Pembayaran membership lewat transfer bank manual (kode unik + konfirmasi

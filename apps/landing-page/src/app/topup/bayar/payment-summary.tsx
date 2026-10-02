@@ -8,6 +8,7 @@ import {
   PREVIEW_MODE,
   TOKEN_KEY,
   TOPUP_ORDER_KEY,
+  TOPUP_TARGETS,
   getManualTopUp,
   readSession
 } from "../api";
@@ -100,11 +101,23 @@ export default function PaymentSummary() {
         <p className="mt-2 text-xs leading-6 themed-text-muted">
           {"Tiga digit terakhir ("}
           <strong className="themed-text">{String(order.uniqueCode).padStart(3, "0")}</strong>
-          {") adalah kode unik agar transfer Anda mudah dikenali. Saldo yang masuk: "}
-          <strong className="themed-text">{formatRupiah(order.baseAmount)}</strong>. Jangan dibulatkan.
+          {") adalah kode unik agar transfer Anda mudah dikenali. Seluruh nominal transfer, termasuk kode unik, masuk ke "}
+          <strong className="themed-text">{TOPUP_TARGETS[order.target].label}</strong>
+          {" Anda. Jangan dibulatkan."}
         </p>
+        {order.target === "PPOB" ? (
+          <p className="mt-2 text-xs leading-6 themed-text-muted" data-testid="ppob-note">
+            Saldo PPOB hanya untuk pembelian pulsa, token listrik, dan tagihan. Saldo PPOB tidak dapat ditarik.
+          </p>
+        ) : null}
 
         <dl className="mt-5 space-y-4 border-t border-dashed themed-border pt-5">
+          <div className="flex items-center justify-between gap-4">
+            <dt className="text-xs themed-text-muted">Tujuan top up</dt>
+            <dd className="text-base font-black themed-text" data-testid="order-target">
+              {TOPUP_TARGETS[order.target].label}
+            </dd>
+          </div>
           <CopyRow label="Bank" value={order.bank.bankName} />
           <CopyRow label="Nomor rekening" value={order.bank.accountNumber} />
           <CopyRow label="Atas nama" value={order.bank.accountHolder} />

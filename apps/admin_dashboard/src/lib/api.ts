@@ -883,9 +883,13 @@ export function profitLossReport(params: { dateFrom?: string; dateTo?: string })
 
 export type ManualTopUpStatus = "PENDING" | "PAID" | "CANCELLED";
 
+/** WALLET = Saldo TapGo (driver, perjalanan); PPOB = Saldo PPOB (tidak dapat ditarik). */
+export type ManualTopUpTarget = "WALLET" | "PPOB";
+
 export type ManualTopUp = {
   id: string;
   reference: string;
+  target: ManualTopUpTarget;
   status: ManualTopUpStatus;
   transferAmount: number;
   baseAmount: number | null;

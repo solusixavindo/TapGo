@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { PREVIEW_MODE, TOKEN_KEY, login, writeSession } from "./api";
+import { PREVIEW_MODE, TOKEN_KEY, TOPUP_TARGET_KEY, login, parseTopUpTarget, writeSession } from "./api";
 import { Field, inputClass, primaryButtonClass } from "../upgrade/upgrade-shell";
 
 export default function LoginForm() {
@@ -22,6 +22,8 @@ export default function LoginForm() {
     try {
       const result = await login(phone.trim(), password);
       writeSession(TOKEN_KEY, result.accessToken);
+      // Tautan seperti tapgolion.id/topup?tujuan=ppob memilihkan tujuan sejak awal.
+      writeSession(TOPUP_TARGET_KEY, parseTopUpTarget(new URLSearchParams(window.location.search).get("tujuan")));
       router.push("/topup/jumlah");
     } catch (caught) {
       setError(
