@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   ManualTransferInfo,
   ORDER_KEY,
+  PREVIEW_MANUAL_TRANSFER,
   PREVIEW_MODE,
   PREVIEW_PACKAGES,
   PaymentOptions,
@@ -18,7 +19,7 @@ import {
   startManualTransfer
 } from "../api";
 import { formatRupiah, primaryButtonClass, secondaryButtonClass } from "../upgrade-shell";
-import { ManualTransferCard } from "./manual-transfer-card";
+import { InvoiceData, PaymentInvoice } from "../payment-invoice";
 
 /** Ringkasan contoh; hanya dipakai saat PREVIEW_MODE menyala. */
 const PREVIEW_ORDER: UpgradeOrder = {
@@ -33,6 +34,28 @@ const PREVIEW_ORDER: UpgradeOrder = {
   correction: null
 };
 
+/** Invoice transfer bank untuk upgrade: harga paket + kode unik = total transfer. */
+function invoiceFor(order: UpgradeOrder, transfer: ManualTransferInfo): InvoiceData {
+  return {
+    number: transfer.invoiceNumber || order.reference,
+    heading: `Upgrade Membership ${transfer.packageName}`,
+    ...(order.createdAt ? { issuedAt: order.createdAt } : {}),
+    buyerName: order.buyerName,
+    lines: [
+      { label: `Paket ${transfer.packageName}`, amount: transfer.baseAmount },
+      { label: "Kode unik", amount: transfer.uniqueCode, hint: "Untuk mengenali transfer Anda" }
+    ],
+    total: transfer.transferAmount,
+    bank: transfer.bank,
+    expiresAt: transfer.expiresAt,
+    expired: transfer.expired,
+    notes: [
+      "Setelah transfer dikonfirmasi, dokumen Anda masuk antrean verifikasi tim TapGo. Membership aktif setelah dokumen diverifikasi.",
+      "Bila dokumen tidak dapat diverifikasi, pembayaran dikembalikan sesuai kebijakan pengembalian dana."
+    ]
+  };
+}
+
 export default function PaymentSummary() {
   const router = useRouter();
   const [order, setOrder] = useState<UpgradeOrder | null>(PREVIEW_MODE ? PREVIEW_ORDER : null);
@@ -40,7 +63,7 @@ export default function PaymentSummary() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [options, setOptions] = useState<PaymentOptions | null>(null);
-  const [transfer, setTransfer] = useState<ManualTransferInfo | null>(null);
+  const [transfer, setTransfer] = useState<ManualTransferInfo | null>(PREVIEW_MODE ? PREVIEW_MANUAL_TRANSFER : null);
 
   useEffect(() => {
     if (PREVIEW_MODE) return;
@@ -189,7 +212,7 @@ export default function PaymentSummary() {
 
       {transfer ? (
         <div className="mt-5">
-          <ManualTransferCard info={transfer} />
+          <PaymentInvoice data={invoiceFor(order, transfer)} />
         </div>
       ) : null}
 

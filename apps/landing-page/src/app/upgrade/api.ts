@@ -24,6 +24,7 @@ export const PREVIEW_MODE =
 export const TOKEN_KEY = "tapgo.upgrade.token";
 export const PACKAGE_KEY = "tapgo.upgrade.packageId";
 export const ORDER_KEY = "tapgo.upgrade.orderId";
+export const BUYER_NAME_KEY = "tapgo.buyer.name";
 
 /**
  * Paket yang ditunjuk pengunjung dari halaman depan.
@@ -211,10 +212,12 @@ export async function login(phone: string, password: string) {
   // Login lewat kanal WEB (R2.9/K1c): token yang diterbitkan distempel
   // channel="WEB" oleh server, sehingga sah untuk rute /web/membership dan
   // tidak dapat dipakai menembak fitur app (ojek/PPOB).
-  const result = await request<{ accessToken: string }>("/web/auth/login", {
+  const result = await request<{ accessToken: string; user?: { fullName?: string | null } }>("/web/auth/login", {
     method: "POST",
     body: JSON.stringify({ phone, password })
   });
+  // Nama pemohon dipakai invoice (top up tidak memuat nama di rincian pesanan).
+  writeSession(BUYER_NAME_KEY, result.user?.fullName ?? "");
   return result;
 }
 
@@ -342,6 +345,20 @@ export type ManualTransferInfo = {
   expiresAt: string;
   expired: boolean;
   bank: { bankName: string; accountNumber: string; accountHolder: string };
+};
+
+/** Data contoh untuk tinjauan tampilan. Tidak pernah dipakai di produksi. */
+export const PREVIEW_MANUAL_TRANSFER: ManualTransferInfo = {
+  orderId: "preview-order",
+  invoiceNumber: "INV-MBR-20260812-CONTOH",
+  packageName: "Gold",
+  status: "PENDING",
+  baseAmount: 3000000,
+  uniqueCode: 487,
+  transferAmount: 3000487,
+  expiresAt: new Date(Date.now() + 24 * 3600_000).toISOString(),
+  expired: false,
+  bank: { bankName: "BRI", accountNumber: "0000000000", accountHolder: "PT Contoh" }
 };
 
 export async function getPaymentOptions(token: string): Promise<PaymentOptions> {

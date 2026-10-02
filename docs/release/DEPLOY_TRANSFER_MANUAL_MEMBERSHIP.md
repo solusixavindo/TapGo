@@ -203,3 +203,10 @@ Halaman `/topup` (satu-satunya tautan dari aplikasi user dan driver) kini memint
 - Tautan `https://tapgolion.id/topup?tujuan=ppob` memilihkan Saldo PPOB sejak masuk (tanpa `tujuan` = Saldo TapGo). Aplikasi mobile saat ini menautkan ke `/topup` tanpa parameter; menautkan layar PPOB ke `?tujuan=ppob` butuh rilis aplikasi dan sengaja tidak dikerjakan di rilis ini.
 - Tujuan disimpan di metadata pesanan (tanpa migrasi). Pesanan lama tanpa penanda dibaca sebagai Saldo TapGo. Konsol admin (Top Up Manual) menampilkan tujuan dan nominal yang akan dikreditkan, sehingga Super Admin tahu saldo mana yang bertambah saat menekan Konfirmasi.
 - Rekening dan kode unik dipakai bersama membership, top up Saldo TapGo, dan top up Saldo PPOB; nominal transfer tidak pernah kembar di antara pesanan terbuka.
+
+## 9. Invoice pembayaran (landing page saja)
+
+Halaman bayar top up (`/topup/bayar`) dan upgrade (`/upgrade/bayar`) kini menampilkan **invoice**: nomor, tanggal, nama pemohon, rincian (nominal/harga + kode unik = total transfer), rekening perusahaan (bank, nomor, atas nama), dan batas waktu. Tombol: **Cetak / simpan PDF** (hanya invoice yang tercetak, satu halaman), **Kirim ke WhatsApp**, dan **Salin semua**. Halaman status top up yang masih menunggu menautkan kembali ke invoice. Isinya "petunjuk pembayaran, bukan bukti bayar".
+
+- Perubahan **hanya di sisi tampilan**: tidak ada perubahan backend, tidak ada pekerjaan VPS. Cukup unggah zip landing baru.
+- Slot **QRIS** sudah disediakan di komponen (`qris` pada `PaymentInvoice`) tetapi belum diisi. Baru dipasang setelah QRIS resmi perusahaan tersedia dan isinya diperiksa (nama merchant dan CRC). Catatan: pembayaran QRIS dipotong MDR dan sering diselesaikan H+1, sehingga pencocokannya memakai laporan transaksi QRIS, bukan mutasi rekening biasa.

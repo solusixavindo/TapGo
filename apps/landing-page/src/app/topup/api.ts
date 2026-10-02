@@ -8,7 +8,7 @@
 import { API_BASE, PREVIEW_MODE, login, readSession, writeSession, clearSession } from "../upgrade/api";
 
 export { API_BASE, PREVIEW_MODE, login, readSession, writeSession, clearSession };
-export { TOKEN_KEY } from "../upgrade/api";
+export { BUYER_NAME_KEY, TOKEN_KEY } from "../upgrade/api";
 
 export const TOPUP_ORDER_KEY = "tapgo.topup.orderId";
 
@@ -125,6 +125,7 @@ export type ManualTopUpOrder = {
   baseAmount: number;
   uniqueCode: number;
   expiresAt: string;
+  createdAt?: string;
   bank: { bankName: string; accountNumber: string; accountHolder: string };
 };
 
