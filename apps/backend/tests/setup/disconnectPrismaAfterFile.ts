@@ -27,4 +27,17 @@ import { prisma, runIntegration } from "../helpers/referralWalletHarness.js";
 afterAll(async () => {
   if (!runIntegration) return;
   await prisma.$disconnect();
+
+  // Pool milik APLIKASI (src/config/prisma.ts) dipakai berkas yang menyalakan
+  // createApp() dan juga tidak pernah ditutup. Pool itu ikut menumpuk antar
+  // berkas (connection_limit di CI = 25 per pool) sampai Postgres menolak
+  // dengan "too many clients already" — penyebab kegagalan acak di berkas yang
+  // kebetulan berjalan belakangan. Mengimpor modul ini aman walau berkas
+  // tidak memakainya: klien baru tidak membuka koneksi sampai dipakai.
+  try {
+    const { disconnectPrisma } = await import("../../src/config/prisma.js");
+    await disconnectPrisma();
+  } catch {
+    // Berkas unit tanpa environment lengkap: tidak ada pool aplikasi untuk ditutup.
+  }
 });
