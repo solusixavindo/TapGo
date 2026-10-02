@@ -5,6 +5,9 @@ import { validateRequest } from "../../../core/http/validateRequest.js";
 import { requireAuth, requireChannel } from "../../../core/security/authContext.js";
 import { DokuPaymentService } from "../../payments/application/DokuPaymentService.js";
 import { MidtransPaymentService } from "../../payments/application/MidtransPaymentService.js";
+import { env } from "../../../config/env.js";
+import { StatusCodes } from "http-status-codes";
+import { ManualMembershipTransferService } from "../application/ManualMembershipTransferService.js";
 import { MembershipDocumentService } from "../application/MembershipDocumentService.js";
 import { MembershipOrderService } from "../application/MembershipOrderService.js";
 import { MembershipDocumentController } from "./membership-document.controller.js";
@@ -43,6 +46,8 @@ const controller = new MembershipOrderController(
   () => new DokuPaymentService(prisma, service),
   "WEB",
 );
+
+const manualTransferService = new ManualMembershipTransferService(prisma, service);
 
 const documentService = new MembershipDocumentService(prisma);
 const documentController = new MembershipDocumentController(documentService);
@@ -87,6 +92,44 @@ webMembershipRouter.get(
   "/orders/:id",
   validateRequest(membershipOrderDetailSchema),
   asyncHandler(controller.order),
+);
+
+// Opsi pembayaran yang boleh ditawarkan halaman web saat ini. "online" berarti
+// gateway (DOKU atau Midtrans) sudah dikonfigurasi; "manualTransfer" berarti
+// transfer bank dengan kode unik dibuka dan rekening tujuannya sudah diisi.
+webMembershipRouter.get(
+  "/payment-options",
+  asyncHandler(async (_req, res) => {
+    res.json({
+      success: true,
+      data: {
+        online: env.DOKU_ENABLED || Boolean(env.MIDTRANS_SERVER_KEY),
+        manualTransfer: manualTransferService.isAvailable(),
+      },
+    });
+  }),
+);
+webMembershipRouter.post(
+  "/orders/:id/manual-transfer",
+  validateRequest(membershipOrderDetailSchema),
+  asyncHandler(async (req, res) => {
+    const data = await manualTransferService.start({
+      userId: req.auth!.userId,
+      orderId: String(req.params.id),
+    });
+    res.status(StatusCodes.OK).json({ success: true, data });
+  }),
+);
+webMembershipRouter.get(
+  "/orders/:id/manual-transfer",
+  validateRequest(membershipOrderDetailSchema),
+  asyncHandler(async (req, res) => {
+    const data = await manualTransferService.getForUser({
+      userId: req.auth!.userId,
+      orderId: String(req.params.id),
+    });
+    res.json({ success: true, data });
+  }),
 );
 webMembershipRouter.post(
   "/orders/:id/documents/:type",
