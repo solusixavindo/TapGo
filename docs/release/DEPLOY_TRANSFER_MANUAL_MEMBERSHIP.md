@@ -4,7 +4,13 @@ Dokumen ini untuk Owner/operator yang mengeksekusi di VPS produksi. Tidak ada ni
 
 **Cakupan PR:** [solusixavindo/TapGo#1](https://github.com/solusixavindo/TapGo/pull/1) membawa tiga hal sekaligus — remediasi audit keamanan 30 September, kesiapan driver_app, dan transfer manual membership. Jadi deploy backend ini juga membawa dua kelompok pertama (flag-nya tetap mati bawaan, lihat bagian 3).
 
-**Asumsi yang belum saya verifikasi:** cara backend berjalan di VPS saat ini. Dokumen lama (`docs/midtrans/MIDTRANS_VPS_CHECKLIST.md`) memakai **pm2** di `/var/www/Tapgo` dengan proses `tapgo-api`. Workflow `cd.yml` (Docker, tag `v*`) belum disiapkan secrets-nya. Langkah di bawah memakai pm2; sesuaikan bila VPS sudah memakai Docker.
+**Kondisi VPS (dicek baca-saja lewat SSH, 3 Oktober 2026):**
+- `api.tapgolion.id` → 145.79.11.118 (host SSH `myxavi-vps`). Backend berjalan di **pm2** (`tapgo-api`, online), **tanpa Docker**, Node 22. Server ini juga menampung aplikasi lain (`griyacare`, `myxavi-api`, `xavindo-wa-bot`): **restart hanya `tapgo-api`**.
+- Deploy memakai **folder rilis per commit**: pm2 berjalan dari `/var/www/releases/tapgo-<sha>/apps/backend` (saat ini `tapgo-656b249` = `main` sebelum PR ini). Tiap folder rilis adalah checkout git dengan `.env`-nya sendiri. `/var/www/Tapgo` adalah salinan lama (Juni) dan **bukan** target deploy; `git pull` di sana tidak berpengaruh.
+- Konsol admin statis ada di `/var/www/admin` (ada beberapa `admin.bak-*`: tradisi cadangan sebelum menimpa).
+- **Landing page `tapgolion.id` ada di server LAIN** (145.223.108.166), bukan VPS ini. Cara deploy-nya di sana belum saya periksa.
+- `cd.yml` (Docker, tag `v*`) **tidak dipakai** di VPS ini.
+- Yang belum saya ketahui: perintah persis pembuatan folder rilis baru dan pergantian proses pm2 yang biasa Anda pakai (tidak ada skrip di server). Langkah 2.1 di bawah mengikuti pola yang terlihat; sesuaikan dengan kebiasaan Anda.
 
 ---
 
@@ -28,6 +34,33 @@ Jalur gateway untuk membership kini punya flag sendiri, **default mati**, terpis
 ### 0.3 Operator
 Harus ada Super Admin yang rutin mencocokkan mutasi dan menekan **"Konfirmasi transfer masuk"**, serta Admin untuk verifikasi dokumen. Pengajuan tanpa konfirmasi kedaluwarsa dalam 24 jam (`MANUAL_TOPUP_EXPIRY_HOURS`, berlaku sama untuk top up dan membership).
 
+### 0.4 Kondisi produksi saat ini (dicek baca-saja pada rilis aktif `tapgo-656b249`, 3 Okt 2026)
+Nilai rahasia tidak dibaca; data hanya agregat.
+
+| Variabel | Sekarang | Catatan |
+|---|---|---|
+| `NODE_ENV` | `production` | |
+| `MIDTRANS_IS_PRODUCTION` | `true` | kunci berformat produksi (`Mid-server-…`): **Midtrans berjalan di mode PRODUKSI, uang nyata** |
+| `EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED` / `MEMBERSHIP_PURCHASE_WEB_ENABLED` | `true` / `true` | pembelian web sudah terbuka |
+| `DOKU_ENABLED` | `false` | |
+| `WALLET_TOPUP_ENABLED` | `true` | top up gateway sudah jalan |
+| `MANUAL_TOPUP_ENABLED` | `true` | top up manual sudah jalan; rekening, nama bank, dan pemilik sudah terisi |
+| `WALLET_CASH_OUT_WEB_ENABLED` | `true` | penarikan lewat web sudah jalan |
+| `PPOB_PROVIDER` | `digiflazz` | PPOB sungguhan |
+| `MIDTRANS_NOTIFICATION_SECRET` | kosong | tidak dipakai; webhook memverifikasi signature dengan kunci server |
+| `MEMBERSHIP_DOCUMENT_SECRET` | terisi | siap |
+| `MANUAL_MEMBERSHIP_TRANSFER_ENABLED`, `MEMBERSHIP_ONLINE_PAYMENT_ENABLED` | belum ada | baru di PR ini |
+
+Data produksi (agregat): 80 pengguna. Pesanan membership: 5 `PENDING` (web), 1 `PENDING` (tanpa kanal), 1 `CANCELLED`; **tidak ada yang lunas, tidak ada membership yang diaktifkan lewat jalur online**. Pembayaran membership: 2 Midtrans `PENDING` (`sandbox=false`). Top up: 4 manual `PENDING` (Rp201.151), 1 Midtrans `PENDING` (Rp10.000), **tidak ada top up lunas, tidak ada ledger `TOPUP`**.
+
+**Hasil pemeriksaan risiko "pembayaran uji ikut mengaktifkan membership":** tidak terbukti. Dugaan awal bahwa Midtrans berjalan dengan kunci sandbox ternyata keliru (saya sempat membaca `.env` salinan lama di `/var/www/Tapgo`, bukan rilis aktif). Pengaman yang berlaku di kode: webhook wajib ber-signature yang diverifikasi dengan kunci server (ditolak bila kunci tidak ada atau signature salah), nominal callback harus sama persis dengan nominal order, status `challenge`/`deny` Midtrans tidak melunasi, dan simulator pembayaran ditolak di `NODE_ENV=production`.
+
+Konsekuensi yang harus dipahami:
+1. **Saat kode baru naik, jalur Midtrans untuk membership langsung tertutup** (flag online default mati), padahal gerbang pembelian web sudah terbuka. Bila `MANUAL_MEMBERSHIP_TRANSFER_ENABLED` belum `true` saat itu, halaman bayar menampilkan "belum tersedia". Karena itu **isi semua variabel baru di `.env` rilis baru SEBELUM memulai proses pm2 dari rilis itu**: satu kali pergantian, tanpa celah. Variabel baru diabaikan kode lama, jadi aman ditulis lebih dulu.
+2. **Pesanan yang sudah memulai pembayaran Midtrans tidak bisa berpindah ke transfer manual** (ditolak 409 `MEMBERSHIP_PAYMENT_ALREADY_STARTED`). Ada 2 pesanan membership seperti itu. Webhook tidak digerbangi, jadi bila pemiliknya sempat membayar, pembayarannya tetap diselesaikan. Bila tidak, Super Admin dapat membatalkan pengajuan itu ("Batalkan pengajuan") agar pemiliknya mengajukan ulang dan memilih transfer bank.
+3. **Rekening dipakai bersama top up manual yang sudah berjalan.** Kode unik transfer dialokasikan lintas top up dan membership, termasuk 4 top up manual yang sedang `PENDING`, sehingga nominal tidak akan kembar.
+4. **Mode Midtrans produksi vs persetujuan merchant:** jalur online membership akan tertutup setelah deploy, tetapi top up gateway (`WALLET_TOPUP_ENABLED=true`) tetap memakai Midtrans produksi. Itu di luar PR ini dan tidak diubah.
+
 ---
 
 ## 1. Persiapan (sebelum menyentuh produksi)
@@ -50,55 +83,64 @@ Harus ada Super Admin yang rutin mencocokkan mutasi dan menekan **"Konfirmasi tr
 
 Urutan ini disengaja: kode dan UI naik **lebih dulu**, fitur dinyalakan **terakhir**.
 
-### 2.1 Backend
+### 2.1 Backend (folder rilis baru + pm2)
+Pola yang terlihat di server: satu folder per commit. Ikuti kebiasaan Anda; intinya:
 ```bash
-cd /var/www/Tapgo
-git fetch origin && git checkout main && git pull --ff-only
+ssh myxavi-vps
+cd /var/www/releases
+# 1) Siapkan folder rilis baru untuk commit merge PR (checkout git seperti rilis sebelumnya)
+#    contoh nama: tapgo-<sha-merge>
+# 2) Salin .env dari rilis aktif lalu EDIT variabel baru (bagian 3) SEBELUM langkah 5
+cp tapgo-656b249/apps/backend/.env tapgo-<sha>/apps/backend/.env && chmod 600 tapgo-<sha>/apps/backend/.env
+cd tapgo-<sha>
 npm ci
 npx prisma generate --schema apps/backend/prisma/schema.prisma
+# 3) Cadangkan DB, periksa saldo negatif (bagian 1), lalu migrasi memakai DATABASE_URL dari .env rilis baru
 npx prisma migrate deploy --schema apps/backend/prisma/schema.prisma
+# 4) Build
 npm --workspace apps/backend run build
-pm2 restart tapgo-api --update-env
-pm2 save
-curl -s https://api.tapgolion.id/health        # harus success:true
-pm2 logs tapgo-api --lines 80                  # tidak ada galat saat start
+# 5) Ganti proses pm2 ke rilis baru (HANYA tapgo-api; jangan menyentuh griyacare dkk)
+#    cara paling sederhana: pm2 delete tapgo-api; lalu start dari folder rilis baru dengan
+#    cwd apps/backend dan script dist/src/server.js; pm2 save
+curl -s https://api.tapgolion.id/health        # success:true
+pm2 logs tapgo-api --lines 80 --nostream       # tidak ada galat saat start
 ```
-Tiga migrasi baru dijalankan: `ride_sos_alerts`, `driver_fatigue_and_face_recheck`, `wallet_balance_check_constraints`. Semuanya aditif.
+Rilis aktif lama (`tapgo-656b249`) **jangan dihapus**: itulah jalur rollback (bagian 5).
 
-### 2.2 Landing page (situs statis)
-Build dengan **tanpa** mode pratinjau:
+### 2.2 Landing page (situs statis, di server lain)
+`tapgolion.id` ada di 145.223.108.166, bukan VPS API. Build tanpa mode pratinjau:
 ```bash
 cd apps/landing-page
 # NEXT_PUBLIC_TAPGO_API_BASE_URL bawaan sudah https://api.tapgolion.id/api/v1
 # JANGAN set NEXT_PUBLIC_TAPGO_UPGRADE_PREVIEW=true (itu menampilkan DATA CONTOH)
 npm run build
 ```
-Salin isi `apps/landing-page/out/` ke root web `tapgolion.id` dengan cara yang selama ini Anda pakai. Pastikan `CORS_ORIGINS` backend memuat `https://tapgolion.id`.
+Unggah isi `apps/landing-page/out/` ke server landing dengan cara yang selama ini Anda pakai (cara itu belum saya periksa). Pastikan `CORS_ORIGINS` backend memuat `https://tapgolion.id` (sudah terisi di produksi; periksa nilainya).
 
-### 2.3 Konsol admin (statis, satu domain dengan API)
+### 2.3 Konsol admin (statis, `/var/www/admin` di VPS API)
 ```bash
 cd apps/admin_dashboard
 NEXT_PUBLIC_TAPGO_API_BASE_URL=/api/v1 npm run build   # basePath mengikuti TAPGO_ADMIN_BASE_PATH bila dipakai
 ```
-Salin hasilnya ke lokasi `/admin/` seperti biasa (lihat komentar di `apps/admin_dashboard/next.config.mjs`).
+Ikuti tradisi di server: cadangkan dulu (`cp -a /var/www/admin /var/www/admin.bak-<tanggal>`), lalu salin hasil build ke `/var/www/admin`.
 
 Aman bila UI naik sebelum flag: landing page yang gagal membaca opsi pembayaran kembali ke perilaku lama; panel transfer di admin hanya muncul untuk pesanan manual.
 
 ## 3. Env produksi
 
-Edit `apps/backend/.env` di VPS. Nilai di bawah adalah **nama dan bentuk**, bukan nilai nyata.
+Edit `.env` di folder **rilis baru** (`/var/www/releases/tapgo-<sha>/apps/backend/.env`), bukan di rilis aktif, dan lakukan sebelum memulai pm2 dari rilis itu (lihat 0.4). Nilai di bawah adalah **nama dan bentuk**, bukan nilai nyata.
 
-### 3.1 Wajib diisi untuk transfer manual
-| Variabel | Nilai | Catatan |
+### 3.1 Yang perlu ditambah/dipastikan (status per 3 Okt 2026)
+| Variabel | Nilai | Status di produksi |
 |---|---|---|
-| `EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED` | `true` | Gerbang induk pembayaran membership |
-| `MEMBERSHIP_PURCHASE_WEB_ENABLED` | `true` | Kanal web terbuka; aplikasi Play tetap tertutup |
-| `MANUAL_MEMBERSHIP_TRANSFER_ENABLED` | `true` | **Terakhir dinyalakan** |
-| `MEMBERSHIP_ONLINE_PAYMENT_ENABLED` | `false` | Jalur gateway untuk membership tetap mati sampai gateway siap |
-| `MANUAL_TOPUP_BANK_NAME` | nama bank | Rekening perusahaan yang **nyata** |
-| `MANUAL_TOPUP_ACCOUNT_NUMBER` | nomor rekening | Dipakai bersama top up manual |
-| `MANUAL_TOPUP_ACCOUNT_HOLDER` | nama pemilik rekening | Harus sama dengan nama di bank |
-| `MEMBERSHIP_DOCUMENT_SECRET` | acak ≥ 32 karakter | Buat: `openssl rand -hex 32`. Tanpa ini unggah KTP/swafoto selalu gagal (503). Simpan; mengganti nilainya membuat dokumen tersimpan tidak terbaca |
+| `MANUAL_MEMBERSHIP_TRANSFER_ENABLED` | `true` | **TAMBAH** (belum ada) |
+| `MEMBERSHIP_ONLINE_PAYMENT_ENABLED` | `false` | **TAMBAH** (belum ada); jalur Midtrans/DOKU untuk membership tetap mati sampai gateway siap |
+| `MANUAL_TOPUP_BANK_NAME` | nama bank | **PERIKSA** terisi dan nyata (nomor rekening sudah terisi) |
+| `MANUAL_TOPUP_ACCOUNT_HOLDER` | nama pemilik rekening | **PERIKSA** terisi; harus sama dengan nama di bank |
+| `MANUAL_TOPUP_ACCOUNT_NUMBER` | nomor rekening | sudah terisi; pastikan itu rekening yang akan menerima uang membership (dipakai bersama top up manual) |
+| `EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED` | `true` | sudah `true` |
+| `MEMBERSHIP_PURCHASE_WEB_ENABLED` | `true` | sudah `true` |
+| `MEMBERSHIP_DOCUMENT_SECRET` | acak ≥ 32 karakter | sudah terisi; **jangan diganti** (mengganti membuat dokumen tersimpan tidak terbaca) |
 
 ### 3.2 Tetap dipastikan
 | Variabel | Nilai |
@@ -112,11 +154,7 @@ Edit `apps/backend/.env` di VPS. Nilai di bawah adalah **nama dan bentuk**, buka
 ### 3.3 Jangan diubah oleh deploy ini
 `DRIVER_COMMISSION_ENABLED`, `DRIVER_FACE_CHECK_ENABLED`, `DRIVER_LEGACY_CLIENT_BLOCK_ENABLED` dan flag produksi lain tetap seperti sekarang. Keputusan mengaktifkannya terpisah dari upgrade membership.
 
-Terapkan:
-```bash
-pm2 restart tapgo-api --update-env && pm2 save
-```
-Bila gagal start dengan galat env, `pm2 logs tapgo-api` menyebut variabel yang salah; kembalikan flag ke `false` dan restart.
+Variabel baru berlaku saat proses pm2 dimulai dari rilis baru (langkah 2.1 nomor 5). Bila gagal start dengan galat env, `pm2 logs tapgo-api` menyebut variabel yang salah; perbaiki di `.env` rilis baru lalu mulai ulang, atau lakukan rollback (bagian 5).
 
 ## 4. Uji sekali di produksi (akun Anda sendiri)
 
@@ -132,9 +170,9 @@ Baru setelah lolos, umumkan ke pengguna.
 
 ## 5. Mematikan / rollback
 
-- **Matikan fitur seketika:** `MANUAL_MEMBERSHIP_TRANSFER_ENABLED=false` lalu `pm2 restart tapgo-api --update-env`. Pengajuan yang sudah dikonfirmasi tetap sah dan diteruskan ke verifikasi; yang belum dibayar kedaluwarsa sendiri.
+- **Matikan transfer manual seketika:** `MANUAL_MEMBERSHIP_TRANSFER_ENABLED=false` di `.env` rilis aktif, lalu mulai ulang `tapgo-api` (`pm2 restart tapgo-api --update-env`). Pengajuan yang sudah dikonfirmasi tetap sah dan diteruskan ke verifikasi; yang belum dibayar kedaluwarsa sendiri. Dengan flag online juga mati, halaman bayar menampilkan "belum tersedia".
 - **Menutup seluruh upgrade web:** `MEMBERSHIP_PURCHASE_WEB_ENABLED=false`.
-- **Rollback kode:** `git checkout <commit/tag sebelumnya>`, build, restart. Tiga migrasi bersifat aditif dan tidak perlu dibatalkan (constraint saldo justru melindungi).
+- **Rollback kode:** mulai ulang pm2 dari folder rilis lama (`/var/www/releases/tapgo-656b249`, **jangan dihapus**) dengan `.env`-nya sendiri. Catatan: kode lama membuka kembali jalur Midtrans untuk membership dan tidak mengenal transfer manual (lihat 0.4 poin 1); pengajuan transfer manual yang sedang berjalan tetap tercatat di database, tetapi tidak bisa dikonfirmasi lewat konsol sampai kode baru naik lagi. Tiga migrasi baru bersifat aditif dan tidak perlu dibatalkan (constraint saldo justru melindungi); kode lama mengabaikannya.
 - Konfirmasi transfer tetap bisa dilakukan Super Admin walau flag dimatikan, supaya uang yang terlanjur masuk tidak terkunci.
 
 ## 6. Setelah go-live (operasional harian)
