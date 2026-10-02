@@ -157,6 +157,8 @@ void main() {
     ProviderScope(
       overrides: [
         ppobRepositoryProvider.overrideWithValue(_demoRepo()),
+        // Entry point showcase: sengaja menyuntik sesi contoh tanpa jaringan.
+        // ignore: invalid_use_of_visible_for_testing_member
         tapGoSessionProviderForTest.overrideWith(
           (ref) => DemoClientSession.initial().copyWith(
             userName: 'Sandika TapGo',
