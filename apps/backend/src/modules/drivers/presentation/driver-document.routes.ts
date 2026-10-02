@@ -1,11 +1,12 @@
 import express, { Router } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../../../config/prisma.js";
 import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { requireAuth } from "../../../core/security/authContext.js";
 import { DriverDocumentService } from "../application/DriverDocumentService.js";
 import { DriverDocumentController } from "./driver-document.controller.js";
 
-const prisma = new PrismaClient();
+// Memakai klien Prisma bersama (config/prisma.ts), bukan klien sendiri: klien
+// tambahan membuka pool koneksi kedua yang tidak ikut ditutup saat shutdown.
 const controller = new DriverDocumentController(new DriverDocumentService(prisma));
 
 /**
