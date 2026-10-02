@@ -5,7 +5,13 @@ export default defineConfig({
     environment: "node",
     // Uji lama (sebelum Stage D2) berasumsi semua pesanan tampil untuk semua driver.
     // Uji D2 menyalakan proximity secara eksplisit lewat objek env.
-    env: { RIDE_OFFER_PROXIMITY_ENABLED: "false" },
+    env: {
+      RIDE_OFFER_PROXIMITY_ENABLED: "false",
+      // Uji pembayaran gateway membership (DOKU/Midtrans) berasumsi jalur online
+      // terbuka. Defaultnya mati di produksi; uji gerbangnya sendiri mengubah
+      // nilainya lewat objek env (manualMembershipTransfer.integration.test.ts).
+      MEMBERSHIP_ONLINE_PAYMENT_ENABLED: "true"
+    },
     globals: false,
     include: ["tests/**/*.test.ts"],
     setupFiles: ["tests/setup/disconnectPrismaAfterFile.ts"],

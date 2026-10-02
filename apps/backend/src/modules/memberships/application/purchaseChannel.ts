@@ -39,6 +39,18 @@ export function membershipPurchaseEnabled(
 }
 
 /**
+ * Apakah pembayaran ONLINE (payment gateway) boleh dipakai untuk membership.
+ * Tunduk pada gerbang kanal pembelian DAN flag tersendiri, supaya transfer
+ * bank manual dapat dijalankan tanpa jalur gateway ikut terbuka hanya karena
+ * kunci gateway terisi untuk keperluan lain (top up, webhook).
+ */
+export function membershipOnlinePaymentEnabled(
+  channel: MembershipPurchaseChannel,
+): boolean {
+  return membershipPurchaseEnabled(channel) && env.MEMBERSHIP_ONLINE_PAYMENT_ENABLED;
+}
+
+/**
  * Apakah paket berbayar boleh ditampilkan pada kanal tertentu.
  *
  * Menampilkan daftar harga di aplikasi mobile tanpa jalan membeli justru
