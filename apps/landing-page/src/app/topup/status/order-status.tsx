@@ -178,6 +178,12 @@ export default function OrderStatus() {
             </div>
           </dl>
 
+          {status === "PENDING" && !PREVIEW_MODE ? (
+            <Link href="/topup/bayar" className={`${secondaryButtonClass} mt-5`} data-testid="back-to-invoice">
+              Lihat invoice dan rekening tujuan
+            </Link>
+          ) : null}
+
           {error ? (
             <p className="mt-5 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs font-semibold text-amber-300">
               Status terakhir yang berhasil dimuat ditampilkan di atas. {error}
