@@ -8,13 +8,18 @@ export const walletTransactionQuerySchema = z.object({
   })
 });
 
+/**
+ * Audit keamanan 30 September 2026 (H2): kanal mobile SEBELUMNYA menerima
+ * bankName/bankCode/accountNumber/accountHolderName langsung dari body —
+ * sesi yang dibajak bisa mengarahkan dana ke rekening penyerang dalam satu
+ * permintaan. Bentuknya sekarang disamakan dengan webWithdrawalRequestSchema:
+ * tujuan transfer SELALU dari rekening tersimpan di profil (lihat
+ * wallet.controller.ts requestWithdrawal), bukan dari body.
+ */
 export const withdrawalRequestSchema = z.object({
   body: z.object({
-    amount: z.coerce.number().min(50000),
-    bankName: z.string().min(2).max(80),
-    bankCode: z.string().min(2).max(24).optional(),
-    accountNumber: z.string().min(6).max(40),
-    accountHolderName: z.string().min(2).max(120),
+    amount: z.coerce.number().int().min(50000).max(100000000),
+    password: z.string().min(1).max(200),
     notes: z.string().max(500).optional()
   })
 });

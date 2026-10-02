@@ -29,8 +29,18 @@ process.on("uncaughtException", (error) => {
   logger.fatal({ err: error }, "Uncaught exception — proses akan berhenti");
   process.exit(1);
 });
+// Audit keamanan 30 September 2026 (M6): sebelumnya rejection tak tertangani
+// hanya di-log, proses tetap hidup dalam keadaan yang mungkin sudah rusak
+// (mis. state paruh-selesai yang tidak lagi konsisten) — sama seriusnya
+// dengan uncaughtException, jadi diperlakukan identik: log fatal lalu keluar.
+// Prasyaratnya: SETIAP promise yang sengaja tidak di-await di seluruh berkas
+// ini dan di socket.ts sudah dibungkus try/catch atau diberi .catch sendiri
+// (lihat sweepStaleRideSearches, purgeExpiredDocuments, runReconcileCycle,
+// runPriceSyncCycle, shutdown, dan socket.ts) — supaya exit ini menangkap
+// kegagalan yang SUNGGUH belum diketahui, bukan kelalaian yang sudah dikenal.
 process.on("unhandledRejection", (reason) => {
-  logger.error({ err: reason }, "Unhandled promise rejection");
+  logger.fatal({ err: reason }, "Unhandled promise rejection — proses akan berhenti");
+  process.exit(1);
 });
 
 const app = createApp();
@@ -224,5 +234,20 @@ async function shutdown(signal: string) {
   });
 }
 
-process.on("SIGINT", () => void shutdown("SIGINT"));
-process.on("SIGTERM", () => void shutdown("SIGTERM"));
+// .catch eksplisit (bukan cuma "void"): shutdown() tidak dibungkus try/catch
+// sendiri, dan sejak M6 di atas SETIAP rejection tak tertangani menjatuhkan
+// proses — kegagalan di tengah proses mati (mis. Redis/Prisma menolak
+// disconnect) sudah semestinya tetap membuat proses berhenti, tapi harus
+// lewat log fatal yang jelas, bukan meninggalkan rejection mentah.
+process.on("SIGINT", () => {
+  shutdown("SIGINT").catch((error) => {
+    logger.fatal({ err: error }, "Shutdown gagal — proses akan berhenti paksa");
+    process.exit(1);
+  });
+});
+process.on("SIGTERM", () => {
+  shutdown("SIGTERM").catch((error) => {
+    logger.fatal({ err: error }, "Shutdown gagal — proses akan berhenti paksa");
+    process.exit(1);
+  });
+});

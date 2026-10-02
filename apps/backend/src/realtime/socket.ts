@@ -59,14 +59,42 @@ export function attachRealtime(httpServer: HttpServer): Server | null {
   io.on("connection", (socket: AuthedSocket) => {
     logger.info({ socketId: socket.id, userId: socket.data.userId }, "Socket connected");
 
-    // Lokasi driver disiarkan HANYA ke room ride yang sedang dijalani, bukan
-    // ke seluruh socket yang tersambung — siaran global sebelumnya berarti
-    // setiap koneksi menerima lokasi setiap driver aktif tanpa kaitan ride.
-    socket.on("driver:location", (payload: { rideId?: unknown }) => {
-      const rideId = typeof payload?.rideId === "string" ? payload.rideId : null;
-      if (!rideId) return;
-      socket.to(`ride:${rideId}`).emit("driver:location:update", payload);
-    });
+    // Audit keamanan 30 September 2026 (L2): sebelumnya HANYA disiarkan ke
+    // room ride yang benar (bukan ke seluruh socket yang tersambung), tapi
+    // TIDAK memverifikasi bahwa pemanggil benar-benar driver ride tersebut —
+    // penumpang (atau siapa pun yang tahu rideId) bisa menyiarkan "lokasi
+    // driver" palsu ke room itu. Sekarang memakai resolveParticipant yang
+    // sama dengan ride:join di bawah: hanya DRIVER ride ini yang boleh
+    // menyiarkan, room dituju lewat rideOrderId hasil resolusi (bukan string
+    // mentah dari klien), dan payload yang diteruskan disaring ke field geo
+    // yang dikenal saja — tidak pernah meneruskan field lain apa pun dari
+    // klien (mis. token) ke penumpang yang mendengarkan room ini.
+    socket.on(
+      "driver:location",
+      (payload: { rideId?: unknown; lat?: unknown; lng?: unknown; heading?: unknown; speed?: unknown }) => {
+        const rideId = typeof payload?.rideId === "string" ? payload.rideId : null;
+        const lat = typeof payload?.lat === "number" ? payload.lat : null;
+        const lng = typeof payload?.lng === "number" ? payload.lng : null;
+        if (!rideId || lat === null || lng === null) return;
+        chatService
+          .resolveParticipant(rideId, socket.data.userId)
+          .then((participant) => {
+            if (participant.senderType !== "DRIVER") return;
+            socket.to(`ride:${participant.rideOrderId}`).emit("driver:location:update", {
+              rideId: participant.rideOrderId,
+              lat,
+              lng,
+              heading: typeof payload.heading === "number" ? payload.heading : null,
+              speed: typeof payload.speed === "number" ? payload.speed : null
+            });
+          })
+          .catch(() => {
+            // Ride tidak ditemukan/pemanggil bukan partisipannya — diam-diam
+            // diabaikan, sama seperti alasan 404 di resolveParticipant
+            // (tidak perlu konfirmasi keberadaan ride ke non-partisipan).
+          });
+      }
+    );
 
     // Bergabung ke room ride HANYA bila pemanggil benar-benar penumpang atau
     // driver ride tersebut — sebelumnya rideId apa pun diterima tanpa

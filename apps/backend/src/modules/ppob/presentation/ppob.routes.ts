@@ -1,7 +1,9 @@
 import { PpobTransaction, Prisma } from "@prisma/client";
-import { Router } from "express";
+import { Request, Router } from "express";
+import { StatusCodes } from "http-status-codes";
 import { prisma } from "../../../config/prisma.js";
 import { env } from "../../../config/env.js";
+import { AppError } from "../../../core/errors/AppError.js";
 import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
 import { requireAuth } from "../../../core/security/authContext.js";
@@ -140,11 +142,19 @@ async function buildInquiryPayload(input: {
   });
   const ppobBalance = wallet?.ppobBalance ?? new Prisma.Decimal(0);
   const totalAmount = product.price.plus(product.adminFee);
-  // Split pembayaran: saldo PPOB (manfaat membership) dipakai lebih dulu,
-  // sisanya dari saldo utama. Ini aturan server; klien hanya menampilkan.
-  const benefitAmount = Prisma.Decimal.min(ppobBalance, totalAmount);
+  // Audit keamanan 30 September 2026 (M1): inquiry SEBELUMNYA menjanjikan
+  // split pembayaran (ppobBalance dulu, sisanya dari saldo utama) yang tidak
+  // pernah benar-benar terjadi — debit sungguhan (PrismaPpobRepository.
+  // createPurchaseWithDebit) HANYA memotong ppobBalance, tidak pernah
+  // menyentuh saldo utama sama sekali (lihat "pembelian sukses" di
+  // ppob.integration.test.ts: wallet.balance tetap 0.00). ppobBalance adalah
+  // ember terpisah yang TIDAK BOLEH tercampur dengan saldo utama — keputusan
+  // produk yang tidak ditawar. Inquiry sekarang mencerminkan itu persis:
+  // cukup hanya bila ppobBalance sendirian menutup total, dan tidak pernah
+  // menjanjikan saldo utama ikut terpakai.
+  const sufficient = ppobBalance.gte(totalAmount);
+  const benefitAmount = sufficient ? totalAmount : new Prisma.Decimal(0);
   const balanceAmount = totalAmount.minus(benefitAmount);
-  const sufficient = (wallet?.balance ?? new Prisma.Decimal(0)).gte(balanceAmount);
   return {
     product: {
       ...serializeCatalogProduct(product),
@@ -166,7 +176,12 @@ async function buildInquiryPayload(input: {
 
 /** Transaksi -> bentuk PpobOrder yang dibaca model Flutter. */
 function serializeOrder(tx: PpobTransaction, replayed = false) {
-  const benefitAmount = Prisma.Decimal.min(tx.adminFee, tx.totalAmount);
+  // Audit keamanan 30 September 2026 (M1): sebelumnya dihitung dari adminFee
+  // (kebetulan sering 0, sehingga balanceAmount kebetulan sering = totalAmount
+  // — mengarang split yang tidak ada). Transaksi yang SUDAH terjadi selalu
+  // didebit 100% dari ppobBalance (lihat catatan di buildInquiryPayload di
+  // atas), jadi benefitAmount di sini SELALU totalAmount penuh.
+  const benefitAmount = tx.totalAmount;
   return {
     id: tx.publicReference,
     status: tx.status,
@@ -213,6 +228,27 @@ function idempotencyKeyOf(headerValue: unknown): string | undefined {
   const trimmed = headerValue.trim();
   if (trimmed.length === 0 || trimmed.length > 120) return undefined;
   return trimmed;
+}
+
+/**
+ * Audit keamanan 30 September 2026 (H1): pembelian PPOB TANPA Idempotency-Key
+ * sebelumnya diam-diam diterima (idempotencyKeyOf mengembalikan undefined,
+ * lalu spread kondisional melewatkannya begitu saja ke purchase()) — retry
+ * jaringan/tap ganda dari klien yang lupa mengirim header bisa mendebit
+ * ppobBalance dua kali tanpa perlindungan apa pun. Wajibkan headernya DI SINI,
+ * sebelum purchase() sempat dipanggil sama sekali; jangan mengubah unique
+ * constraint atau logika P2002 di PpobService.purchase (itu tetap benar).
+ */
+function requireIdempotencyKey(req: Request): string {
+  const key = idempotencyKeyOf(req.headers["idempotency-key"]);
+  if (!key) {
+    throw new AppError(
+      "Header Idempotency-Key wajib disertakan untuk pembelian PPOB",
+      StatusCodes.BAD_REQUEST,
+      "PPOB_IDEMPOTENCY_REQUIRED"
+    );
+  }
+  return key;
 }
 
 export const ppobRouter = Router();
@@ -262,13 +298,12 @@ ppobRouter.post(
   paymentRateLimiter,
   validateRequest(ppobPurchaseSchema),
   asyncHandler(async (req, res) => {
+    const idempotencyKey = requireIdempotencyKey(req);
     const { transaction, replayed } = await getService().purchase({
       userId: req.auth!.userId,
       sku: req.body.sku,
       targetNumber: req.body.targetNumber,
-      ...(idempotencyKeyOf(req.headers["idempotency-key"])
-        ? { idempotencyKey: idempotencyKeyOf(req.headers["idempotency-key"])! }
-        : {})
+      idempotencyKey
     });
     res.status(replayed ? 200 : 201).json({
       success: true,
@@ -333,13 +368,12 @@ ppobRouter.post(
   paymentRateLimiter,
   validateRequest(ppobPurchaseSchema),
   asyncHandler(async (req, res) => {
+    const idempotencyKey = requireIdempotencyKey(req);
     const { transaction, replayed } = await getService().purchase({
       userId: req.auth!.userId,
       sku: req.body.sku,
       targetNumber: req.body.targetNumber,
-      ...(idempotencyKeyOf(req.headers["idempotency-key"])
-        ? { idempotencyKey: idempotencyKeyOf(req.headers["idempotency-key"])! }
-        : {})
+      idempotencyKey
     });
     // Replay mengembalikan 200 (permintaan sudah pernah diproses), pembelian
     // baru 201 — klien dapat membedakan keduanya tanpa field tambahan.

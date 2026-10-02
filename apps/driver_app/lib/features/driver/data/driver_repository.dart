@@ -105,6 +105,17 @@ abstract class DriverRepository {
     required DateTime capturedAt,
   });
 
+  /// Tombol SOS: mengirim sinyal darurat ke server SEKALI TEKAN. [rideReference]
+  /// opsional — diisi bila driver sedang dalam perjalanan aktif, agar admin
+  /// langsung tahu konteksnya. Server yang menentukan apakah referensi itu
+  /// benar milik driver ini; klien tidak perlu memvalidasinya sendiri.
+  Future<void> triggerSos({
+    required double lat,
+    required double lng,
+    int? accuracyMeters,
+    String? rideReference,
+  });
+
   // --- Verifikasi wajah harian sebelum online ---------------------------
 
   /// Status verifikasi wajah HARI INI (kalender WIB) untuk driver yang
@@ -118,6 +129,21 @@ abstract class DriverRepository {
   /// status liveness) — server menegakkan ULANG ambang batas dan batas
   /// percobaan, tidak sekadar mempercayai klaim klien.
   Future<DriverFaceCheckSnapshot> submitFaceCheckAttempt({
+    required double similarityScore,
+    required bool livenessPassed,
+    required String modelVersion,
+  });
+
+  // --- Keselamatan selama sesi online (dipoll berkala, bukan sekali) ----
+
+  /// Pengingat kelelahan + kewajiban verifikasi ulang wajah acak. Dipanggil
+  /// berkala oleh [DriverController] SELAMA status ONLINE/BUSY saja.
+  Future<DriverSafetyStatus> safetyStatus();
+
+  /// Sama seperti [submitFaceCheckAttempt] tapi untuk verifikasi ULANG acak
+  /// selama online (bukan verifikasi harian pertama) — gagal di sini
+  /// memaksa driver offline di server, terlepas dari kuota percobaan harian.
+  Future<DriverFaceCheckSnapshot> submitRecheckAttempt({
     required double similarityScore,
     required bool livenessPassed,
     required String modelVersion,

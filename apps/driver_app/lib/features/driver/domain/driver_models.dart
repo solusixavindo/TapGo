@@ -115,6 +115,49 @@ class DriverFaceReferenceEmbedding {
   }
 }
 
+/// Pengingat kelelahan (nudge, bukan pengunci) berbasis jam online tanpa
+/// terputus. `thresholdMinutes` null berarti tidak ada kendaraan aktif yang
+/// bisa dijadikan acuan ambang batas.
+class DriverFatigueStatus {
+  const DriverFatigueStatus({
+    required this.continuousOnlineMinutes,
+    required this.thresholdMinutes,
+    required this.restRequired,
+  });
+
+  final int continuousOnlineMinutes;
+  final int? thresholdMinutes;
+  final bool restRequired;
+
+  factory DriverFatigueStatus.fromJson(Map<String, dynamic> json) {
+    return DriverFatigueStatus(
+      continuousOnlineMinutes: (json['continuousOnlineMinutes'] as num?)?.toInt() ?? 0,
+      thresholdMinutes: (json['thresholdMinutes'] as num?)?.toInt(),
+      restRequired: json['restRequired'] == true,
+    );
+  }
+}
+
+/// Dipoll berkala SELAMA online — gabungan pengingat kelelahan dan kewajiban
+/// verifikasi ulang wajah acak, supaya cukup satu permintaan jaringan baru.
+class DriverSafetyStatus {
+  const DriverSafetyStatus({required this.fatigue, required this.faceRecheckDue});
+
+  final DriverFatigueStatus fatigue;
+  final bool faceRecheckDue;
+
+  factory DriverSafetyStatus.fromJson(Map<String, dynamic> json) {
+    final fatigueJson = json['fatigue'];
+    final faceRecheckJson = json['faceRecheck'];
+    return DriverSafetyStatus(
+      fatigue: fatigueJson is Map
+          ? DriverFatigueStatus.fromJson(Map<String, dynamic>.from(fatigueJson))
+          : const DriverFatigueStatus(continuousOnlineMinutes: 0, thresholdMinutes: null, restRequired: false),
+      faceRecheckDue: faceRecheckJson is Map ? faceRecheckJson['due'] == true : false,
+    );
+  }
+}
+
 /// Jenis berkas yang diminta saat verifikasi mitra.
 ///
 /// Nilainya harus persis sama dengan daftar tertutup di backend
@@ -305,6 +348,8 @@ class DriverState {
     this.documentsComplete = false,
     this.vehiclePlateMasked,
     this.locationIssue,
+    this.fatigueWarning,
+    this.faceRecheckDue = false,
   });
 
   factory DriverState.initial(DriverScenario scenario) => DriverState(
@@ -344,6 +389,17 @@ class DriverState {
   /// Pengaturan Lokasi" alih-alih pesan tanpa tindak lanjut.
   final DriverLocationAvailability? locationIssue;
 
+  /// Terisi saat jam online tanpa terputus melewati ambang kelelahan (lihat
+  /// DriverController._pollSafetyStatus) — non-blocking, murni pengingat.
+  final DriverFatigueStatus? fatigueWarning;
+
+  /// True bila server mewajibkan verifikasi wajah ULANG sebelum menerima
+  /// pesanan lagi (lihat DriverController._pollSafetyStatus). Server SUDAH
+  /// menegakkan ini secara otoritatif (listOffersForDriver/acceptOrder
+  /// menolak selagi true) — field ini murni untuk menampilkan banner ajakan
+  /// bertindak, bukan satu-satunya penjaga.
+  final bool faceRecheckDue;
+
   DriverDocumentSummary? documentOf(DriverDocumentKind kind) {
     for (final item in documents) {
       if (item.kind == kind) return item;
@@ -380,6 +436,9 @@ class DriverState {
     bool clearVehiclePlate = false,
     DriverLocationAvailability? locationIssue,
     bool clearLocationIssue = false,
+    DriverFatigueStatus? fatigueWarning,
+    bool clearFatigueWarning = false,
+    bool? faceRecheckDue,
   }) {
     return DriverState(
       status: status ?? this.status,
@@ -405,6 +464,10 @@ class DriverState {
       locationIssue: clearLocationIssue
           ? null
           : locationIssue ?? this.locationIssue,
+      fatigueWarning: clearFatigueWarning
+          ? null
+          : fatigueWarning ?? this.fatigueWarning,
+      faceRecheckDue: faceRecheckDue ?? this.faceRecheckDue,
     );
   }
 }

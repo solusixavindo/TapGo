@@ -66,6 +66,7 @@ class DriverController extends StateNotifier<DriverState>
   }
   Timer? _pollTimer;
   Timer? _locationTimer;
+  Timer? _safetyTimer;
   bool _polling = false;
   final Set<String> _singleFlights = <String>{};
 
@@ -335,6 +336,30 @@ class DriverController extends StateNotifier<DriverState>
         modelVersion: modelVersion,
       );
 
+  /// Verifikasi ULANG acak selama online (bukan verifikasi harian pertama).
+  /// Lolos -> banner hilang, driver tetap online. Gagal -> server SUDAH
+  /// memaksa driver offline sendiri (lihat DriverFaceCheckService di
+  /// backend); di sini cukup menyegarkan workspace supaya status
+  /// online/offline di layar mengikuti kenyataan server, bukan menebaknya.
+  Future<DriverFaceCheckSnapshot> submitRecheckAttempt({
+    required double similarityScore,
+    required bool livenessPassed,
+    required String modelVersion,
+  }) async {
+    try {
+      final snapshot = await _repository.submitRecheckAttempt(
+        similarityScore: similarityScore,
+        livenessPassed: livenessPassed,
+        modelVersion: modelVersion,
+      );
+      if (mounted) state = state.copyWith(faceRecheckDue: false);
+      return snapshot;
+    } on DriverApiException {
+      await refreshWorkspace();
+      rethrow;
+    }
+  }
+
   /// Memuat ulang ringkasan dokumen.
   ///
   /// Kegagalan di sini SENGAJA tidak mengubah status ruang kerja: dokumen
@@ -557,6 +582,46 @@ class DriverController extends StateNotifier<DriverState>
     }
   }
 
+  /// Tombol SOS. Mengembalikan true bila sinyal berhasil terkirim ke server
+  /// — pemanggil (dialog konfirmasi) tetap menampilkan jalur WhatsApp CS
+  /// sebagai cadangan APA PUN hasilnya, karena ini fitur keselamatan.
+  ///
+  /// Referensi ride aktif disertakan otomatis bila ada — driver tidak perlu
+  /// memilihnya sendiri di tengah keadaan darurat.
+  Future<bool> triggerSos() async {
+    if (!_startFlight('sos')) return false;
+    state = state.copyWith(isBusy: true, clearMessage: true);
+    try {
+      final fix = await _locationPort.currentFix();
+      if (fix == null) {
+        state = state.copyWith(
+          message:
+              'Tidak bisa mendapatkan lokasi Anda. Pastikan GPS aktif dan coba lagi, atau hubungi CS langsung.',
+        );
+        return false;
+      }
+      await _repository.triggerSos(
+        lat: fix.lat,
+        lng: fix.lng,
+        accuracyMeters: fix.accuracyMeters,
+        rideReference: state.activeRide?.reference,
+      );
+      driverScaffoldMessengerKey.currentState
+        ?..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+          content: Text('Sinyal darurat terkirim. Tim TapGo akan segera menghubungi Anda.'),
+          duration: Duration(seconds: 6),
+        ));
+      return true;
+    } on DriverApiException catch (error) {
+      state = state.copyWith(message: error.message);
+      return false;
+    } finally {
+      _endFlight('sos');
+      state = state.copyWith(isBusy: false);
+    }
+  }
+
   Future<void> advanceRide() async {
     final ride = state.activeRide;
     if (ride == null || ride.isTerminal) return;
@@ -648,14 +713,57 @@ class DriverController extends StateNotifier<DriverState>
     _pollTimer ??= Timer.periodic(const Duration(seconds: 12), (_) => _poll());
     state = state.copyWith(isPolling: true);
     _startLocationUpdates();
+    _startSafetyMonitoring();
   }
 
   void _stopPolling() {
     _pollTimer?.cancel();
     _pollTimer = null;
-    if (mounted) state = state.copyWith(isPolling: false);
+    if (mounted) {
+      state = state.copyWith(
+        isPolling: false,
+        clearFatigueWarning: true,
+        faceRecheckDue: false,
+      );
+    }
     _stopLocationUpdates();
     unawaited(_locationPort.stopTracking());
+    _stopSafetyMonitoring();
+  }
+
+  /// Pengingat kelelahan + kewajiban verifikasi ulang wajah acak — dipoll
+  /// dengan detak jauh lebih jarang daripada tawaran/lokasi (3 menit, bukan
+  /// detik) karena keduanya berubah lambat dan tidak butuh respons instan.
+  void _startSafetyMonitoring() {
+    _safetyTimer ??= Timer.periodic(
+      const Duration(minutes: 3),
+      (_) => unawaited(_pollSafetyStatus()),
+    );
+    unawaited(_pollSafetyStatus());
+  }
+
+  void _stopSafetyMonitoring() {
+    _safetyTimer?.cancel();
+    _safetyTimer = null;
+  }
+
+  /// Best-effort seperti [_sendLocationSilently]: kegagalan jaringan tidak
+  /// boleh menimpa state.message driver setiap 3 menit. Penegakan SUNGGUHAN
+  /// (menolak tawaran/penerimaan) terjadi di server terlepas dari apakah
+  /// poll ini berhasil menjangkaunya — banner di sini murni memberi tahu,
+  /// bukan satu-satunya pertahanan.
+  Future<void> _pollSafetyStatus() async {
+    try {
+      final status = await _repository.safetyStatus();
+      if (!mounted) return;
+      state = state.copyWith(
+        fatigueWarning: status.fatigue.restRequired ? status.fatigue : null,
+        clearFatigueWarning: !status.fatigue.restRequired,
+        faceRecheckDue: status.faceRecheckDue,
+      );
+    } catch (_) {
+      // Diam — coba lagi pada detak berikutnya.
+    }
   }
 
   /// Kirim lokasi berkala selama driver online/punya perjalanan aktif —

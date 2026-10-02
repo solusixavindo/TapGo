@@ -8,7 +8,7 @@
 import { API_BASE, PREVIEW_MODE, login, readSession, writeSession, clearSession } from "../upgrade/api";
 
 export { API_BASE, PREVIEW_MODE, login, readSession, writeSession, clearSession };
-export { TOKEN_KEY } from "../upgrade/api";
+export { BUYER_NAME_KEY, TOKEN_KEY } from "../upgrade/api";
 
 export const TOPUP_ORDER_KEY = "tapgo.topup.orderId";
 
@@ -78,23 +78,67 @@ export async function createTopUpOrder(token: string, amount: number): Promise<T
   return toOrder(result);
 }
 
+/**
+ * Tujuan top up. WALLET = Saldo TapGo (driver: komisi pesanan tunai; pembayaran
+ * perjalanan). PPOB = Saldo PPOB: khusus pembelian pulsa/token/tagihan dan tidak
+ * dapat ditarik. Batas minimal di sini harus sama dengan server
+ * (MANUAL_TOPUP_MIN_AMOUNT / MANUAL_TOPUP_PPOB_MIN_AMOUNT); server tetap yang
+ * memutuskan.
+ */
+export type TopUpTarget = "WALLET" | "PPOB";
+
+export const TOPUP_TARGETS: Record<
+  TopUpTarget,
+  { label: string; short: string; description: string; min: number; quick: number[] }
+> = {
+  WALLET: {
+    label: "Saldo TapGo",
+    short: "Driver dan perjalanan",
+    description:
+      "Untuk mitra driver (komisi pesanan tunai dipotong dari saldo ini) dan pembayaran perjalanan.",
+    min: 50000,
+    quick: [50000, 100000, 200000, 500000, 1000000]
+  },
+  PPOB: {
+    label: "Saldo PPOB",
+    short: "Pulsa, token, dan tagihan",
+    description:
+      "Khusus pembelian pulsa, token listrik, dan tagihan di aplikasi. Saldo PPOB tidak dapat ditarik.",
+    min: 25000,
+    quick: [25000, 50000, 100000, 200000, 500000]
+  }
+};
+
+/** Tujuan dari tautan (?tujuan=ppob); selain itu Saldo TapGo. */
+export function parseTopUpTarget(raw: string | null | undefined): TopUpTarget {
+  return (raw ?? "").trim().toLowerCase() === "ppob" ? "PPOB" : "WALLET";
+}
+
+export const TOPUP_TARGET_KEY = "tapgo.topup.target";
+
 export type ManualTopUpOrder = {
   id: string;
   reference: string;
+  target: TopUpTarget;
   status: TopUpOrderStatus;
   transferAmount: number;
   baseAmount: number;
   uniqueCode: number;
   expiresAt: string;
+  createdAt?: string;
   bank: { bankName: string; accountNumber: string; accountHolder: string };
 };
 
 /** Top up lewat transfer bank: nominal transfer = jumlah + kode unik. */
-export async function createManualTopUp(token: string, amount: number): Promise<ManualTopUpOrder> {
+export async function createManualTopUp(
+  token: string,
+  amount: number,
+  target: TopUpTarget
+): Promise<ManualTopUpOrder> {
   return request<ManualTopUpOrder>("/web/wallet/topup/manual", {
     method: "POST",
     headers: { authorization: `Bearer ${token}` },
-    body: JSON.stringify({ amount })
+    body: JSON.stringify({ amount, target })
   });
 }
 
@@ -107,6 +151,7 @@ export async function getManualTopUp(token: string, orderId: string): Promise<Ma
 export const PREVIEW_MANUAL_TOPUP: ManualTopUpOrder = {
   id: "preview-topup-order",
   reference: "MTOP-CONTOH01",
+  target: "WALLET",
   status: "PENDING",
   transferAmount: 100347,
   baseAmount: 100000,
@@ -140,7 +185,5 @@ export const PREVIEW_TOPUP_ORDER: TopUpOrder = {
   createdAt: new Date().toISOString()
 };
 
-/** Nominal top up cepat yang ditawarkan di langkah pertama. */
-export const TOPUP_QUICK_AMOUNTS = [50000, 100000, 200000, 500000, 1000000];
-export const TOPUP_MIN_AMOUNT = 50000;
+/** Batas atas per pesanan (sama dengan MANUAL_TOPUP_MAX_AMOUNT di server). */
 export const TOPUP_MAX_AMOUNT = 5000000;

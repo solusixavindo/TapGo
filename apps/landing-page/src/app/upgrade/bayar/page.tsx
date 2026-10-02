@@ -14,7 +14,7 @@ export default function UpgradePaymentPage() {
       step="bayar"
       preview={PREVIEW_MODE}
       title="Periksa dan bayar"
-      subtitle="Pembayaran diproses payment gateway. Manfaat membership aktif setelah dokumen Anda diverifikasi."
+      subtitle="Pilih cara pembayaran yang tersedia. Manfaat membership aktif setelah pembayaran terkonfirmasi dan dokumen Anda diverifikasi."
     >
       <PaymentSummary />
     </UpgradeShell>

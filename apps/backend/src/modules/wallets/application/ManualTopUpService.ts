@@ -6,10 +6,29 @@ import { AppError } from "../../../core/errors/AppError.js";
 import { lazyPushNotifier } from "../../notifications/application/pushServiceFactory.js";
 import { accountPushMessages, pushQuietly } from "../../notifications/application/accountNotifications.js";
 import type { PushNotifier } from "../../notifications/application/rideNotifications.js";
+import { MANUAL_BANK_PROVIDER, openManualTransferAmounts, pickFreeUniqueCode } from "../../payments/application/manualTransferAmounts.js";
 import { PrismaWalletRepository } from "../infrastructure/PrismaWalletRepository.js";
 
-export const MANUAL_TOPUP_PROVIDER = "MANUAL_BANK";
+export const MANUAL_TOPUP_PROVIDER = MANUAL_BANK_PROVIDER;
 const MAX_OPEN_ORDERS_PER_USER = 3;
+
+/**
+ * Tujuan top up. WALLET = Saldo TapGo (balance + cashBalance): dipakai driver
+ * (komisi pesanan tunai) dan pembayaran perjalanan. PPOB = Saldo PPOB
+ * (ppobBalance saja): hanya untuk pembelian pulsa/token/tagihan dan TIDAK dapat
+ * ditarik. Disimpan di metadata pesanan (tanpa migrasi); pesanan lama tanpa
+ * nilai ini dibaca sebagai WALLET.
+ */
+export type TopUpTarget = "WALLET" | "PPOB";
+
+export function topUpTargetOf(metadata: Prisma.JsonValue | null | undefined): TopUpTarget {
+  const target = (metadata ?? {}) as { target?: unknown };
+  return target.target === "PPOB" ? "PPOB" : "WALLET";
+}
+
+export function minimumAmountFor(target: TopUpTarget): number {
+  return target === "PPOB" ? env.MANUAL_TOPUP_PPOB_MIN_AMOUNT : env.MANUAL_TOPUP_MIN_AMOUNT;
+}
 
 /**
  * Top up saldo lewat transfer bank manual. Pengguna membuat pesanan di web,
@@ -47,6 +66,7 @@ export class ManualTopUpService {
     return {
       id: order.id,
       reference: order.reference,
+      target: topUpTargetOf(order.metadata),
       status: order.status,
       transferAmount: order.amount.toNumber(),
       baseAmount: meta.baseAmount ?? null,
@@ -58,13 +78,15 @@ export class ManualTopUpService {
   }
 
   /** Nominal transfer = jumlah top up + kode unik 1..999, unik di antara pesanan terbuka. */
-  async createOrder(input: { userId: string; amount: number }) {
+  async createOrder(input: { userId: string; amount: number; target?: TopUpTarget }) {
     this.assertEnabled();
     const bank = this.bankDetails();
     void bank;
-    if (!Number.isInteger(input.amount) || input.amount < env.MANUAL_TOPUP_MIN_AMOUNT || input.amount > env.MANUAL_TOPUP_MAX_AMOUNT) {
+    const target: TopUpTarget = input.target ?? "WALLET";
+    const minimum = minimumAmountFor(target);
+    if (!Number.isInteger(input.amount) || input.amount < minimum || input.amount > env.MANUAL_TOPUP_MAX_AMOUNT) {
       throw new AppError(
-        `Nominal top up harus antara Rp${env.MANUAL_TOPUP_MIN_AMOUNT.toLocaleString("id-ID")} dan Rp${env.MANUAL_TOPUP_MAX_AMOUNT.toLocaleString("id-ID")}.`,
+        `Nominal top up ${target === "PPOB" ? "Saldo PPOB" : "Saldo TapGo"} harus antara Rp${minimum.toLocaleString("id-ID")} dan Rp${env.MANUAL_TOPUP_MAX_AMOUNT.toLocaleString("id-ID")}.`,
         StatusCodes.BAD_REQUEST,
         "MANUAL_TOPUP_AMOUNT_INVALID",
       );
@@ -82,22 +104,13 @@ export class ManualTopUpService {
             "MANUAL_TOPUP_TOO_MANY_OPEN",
           );
         }
-        const taken = await tx.walletTopUpOrder.findMany({
-          where: {
-            provider: MANUAL_TOPUP_PROVIDER,
-            status: "PENDING",
-            expiresAt: { gt: now },
-            amount: { gte: input.amount + 1, lte: input.amount + 999 },
-          },
-          select: { amount: true },
-        });
-        const used = new Set(taken.map((t) => t.amount.toNumber() - input.amount));
-        const free: number[] = [];
-        for (let code = 1; code <= 999; code += 1) if (!used.has(code)) free.push(code);
-        if (free.length === 0) {
+        // Rekening tujuan dipakai bersama pembayaran membership manual, jadi
+        // nominal unik harus bebas dari pesanan terbuka di KEDUA tabel.
+        const taken = await openManualTransferAmounts(tx, now);
+        const uniqueCode = pickFreeUniqueCode(input.amount, taken);
+        if (uniqueCode === null) {
           throw new AppError("Sistem sedang padat. Coba lagi beberapa menit lagi.", StatusCodes.SERVICE_UNAVAILABLE, "MANUAL_TOPUP_NO_CODE");
         }
-        const uniqueCode = free[randomInt(free.length)]!;
         const reference = `MTOP-${Date.now().toString(36).toUpperCase()}${randomInt(1000, 9999)}`;
         return tx.walletTopUpOrder.create({
           data: {
@@ -107,7 +120,7 @@ export class ManualTopUpService {
             status: "PENDING",
             method: "BANK_TRANSFER",
             provider: MANUAL_TOPUP_PROVIDER,
-            metadata: { baseAmount: input.amount, uniqueCode },
+            metadata: { baseAmount: input.amount, uniqueCode, target },
             expiresAt: new Date(now.getTime() + env.MANUAL_TOPUP_EXPIRY_HOURS * 3600_000),
           },
         });
@@ -135,6 +148,7 @@ export class ManualTopUpService {
     return rows.map((r) => ({
       id: r.id,
       reference: r.reference,
+      target: topUpTargetOf(r.metadata),
       status: r.status,
       transferAmount: r.amount.toNumber(),
       baseAmount: ((r.metadata ?? {}) as { baseAmount?: number }).baseAmount ?? null,
@@ -163,18 +177,13 @@ export class ManualTopUpService {
     if (order.expiresAt && order.expiresAt.getTime() < Date.now()) {
       // Transfer terlambat tetap sah, tetapi hanya bila nominal uniknya tidak
       // sedang dipakai pesanan terbuka lain (kalau tidak, tidak bisa dipastikan siapa pengirimnya).
-      const clash = await this.prisma.walletTopUpOrder.count({
-        where: {
-          provider: MANUAL_TOPUP_PROVIDER,
-          status: "PENDING",
-          amount: order.amount,
-          id: { not: order.id },
-          expiresAt: { gt: new Date() },
-        },
-      });
+      // Pesanan ini sudah kedaluwarsa, jadi tidak ikut terhitung di himpunan
+      // nominal terbuka — yang ada di sana adalah pesanan LAIN (top up maupun
+      // membership manual) yang memakai rekening yang sama.
+      const clash = (await openManualTransferAmounts(this.prisma, new Date())).has(order.amount.toNumber()) ? 1 : 0;
       if (clash > 0) {
         throw new AppError(
-          "Nominal ini sedang dipakai top up lain yang masih berlaku. Periksa mutasi bank secara manual.",
+          "Nominal ini sedang dipakai pesanan transfer lain (top up atau membership) yang masih berlaku. Periksa mutasi bank secara manual.",
           StatusCodes.CONFLICT,
           "MANUAL_TOPUP_AMOUNT_AMBIGUOUS",
         );

@@ -95,7 +95,10 @@ void main() {
       idempotencyKey: 'kunci-idempoten-1',
     );
 
-    expect(api.callsTo('POST /ppob/orders').single.json['idempotencyKey'],
+    // Audit keamanan 30 September 2026 (H1): server hanya membaca kunci
+    // idempotensi dari header, bukan dari body JSON — lihat createOrderRequest
+    // di main.dart.
+    expect(api.callsTo('POST /ppob/orders').single.headers['Idempotency-Key'],
         'kunci-idempoten-1');
     expect(order.replayed, isTrue);
     expect(order.amount, 10500);

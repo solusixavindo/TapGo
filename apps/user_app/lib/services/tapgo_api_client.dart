@@ -3,6 +3,90 @@ part of '../main.dart';
 /// Hasil pertukaran refresh token ke server.
 enum TapGoSessionRefreshResult { refreshed, rejected, unreachable }
 
+// --- Certificate pinning (audit keamanan 30 September 2026, M4) -----------
+// Diisi lewat --dart-define=TAPGO_TLS_PIN_SHA256=hash1,hash2 saat build
+// rilis. Nilainya: hash SHA-256 (hex) dari SubjectPublicKeyInfo DER sertifikat
+// atau intermediate CA yang dipercaya — BUKAN hash seluruh sertifikat, supaya
+// perpanjangan sertifikat dengan kunci yang sama tidak memutus pin. Boleh
+// lebih dari satu (dipisah koma) untuk pin cadangan saat rotasi. Nilai ini
+// SENGAJA tidak diberi default di kode — lihat _applyTlsPinning.
+const String _tlsPinShaEnv = String.fromEnvironment('TAPGO_TLS_PIN_SHA256');
+
+Set<String> get _tlsPinnedSpkiSha256Hashes => _tlsPinShaEnv
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .where((value) => value.isNotEmpty)
+    .toSet();
+
+/// Memasang certificate pinning pada [dio] untuk build rilis.
+///
+/// Trik SecurityContext(withTrustedRoots: false): tanpa root CA bawaan,
+/// SETIAP sertifikat (termasuk yang sah dari CA publik) gagal validasi baku,
+/// sehingga badCertificateCallback SELALU dipanggil untuk SETIAP koneksi —
+/// bukan hanya untuk sertifikat yang sudah tidak valid. Di situlah keputusan
+/// terima/tolak SEBENARNYA dibuat lewat tapGoShouldAcceptPinnedCertificate
+/// (fungsi murni di tls_pinning.dart): host DAN SPKI harus cocok keduanya.
+///
+/// [expectedHost] dibaca ULANG setiap koneksi (bukan sekali saat pemasangan)
+/// supaya tetap benar walau baseUrl klien berubah (mis. setBaseUrl) setelah
+/// HttpClient ini dibuat.
+///
+/// Fail-closed PENUH: bila [allowedPins] kosong ATAU adapter bukan
+/// IOHttpClientAdapter (tidak bisa dipin sama sekali — mis. target web),
+/// SEMUA permintaan jaringan ditolak (lewat interceptor, sebelum TLS
+/// handshake pun dimulai) — bukan diam-diam berjalan tanpa proteksi. Ini
+/// berarti build rilis TANPA TAPGO_TLS_PIN_SHA256, atau di platform yang
+/// adapternya tidak mendukung pinning kustom, tidak bisa menghubungi server
+/// apa pun; nilai pin wajib diisi Owner sebelum build rilis diedarkan.
+void _applyTlsPinning(Dio dio, Set<String> allowedPins, String Function() expectedHost) {
+  if (allowedPins.isEmpty) {
+    _rejectAllRequestsForTlsPinning(
+      dio,
+      'TAPGO_TLS_PIN_SHA256 belum diisi pada build rilis ini — '
+      'permintaan jaringan ditolak (fail-closed) sampai pin diisi.',
+    );
+    return;
+  }
+  final adapter = dio.httpClientAdapter;
+  if (adapter is! IOHttpClientAdapter) {
+    _rejectAllRequestsForTlsPinning(
+      dio,
+      'Adapter jaringan build ini tidak mendukung certificate pinning — '
+      'permintaan jaringan ditolak (fail-closed) daripada berjalan tanpa '
+      'proteksi.',
+    );
+    return;
+  }
+  adapter.createHttpClient = () {
+    final client = HttpClient(context: SecurityContext(withTrustedRoots: false));
+    client.badCertificateCallback = (X509Certificate cert, String host, int port) {
+      return tapGoShouldAcceptPinnedCertificate(
+        host: host,
+        expectedHost: expectedHost(),
+        certificateDer: Uint8List.fromList(cert.der),
+        allowedSpkiSha256Hex: allowedPins,
+      );
+    };
+    return client;
+  };
+}
+
+void _rejectAllRequestsForTlsPinning(Dio dio, String message) {
+  dio.interceptors.add(
+    InterceptorsWrapper(
+      onRequest: (options, handler) {
+        handler.reject(
+          DioException(
+            requestOptions: options,
+            type: DioExceptionType.unknown,
+            error: StateError(message),
+          ),
+        );
+      },
+    ),
+  );
+}
+
 class _TapGoApiClient {
   _TapGoApiClient({
     Dio? dio,
@@ -18,6 +102,19 @@ class _TapGoApiClient {
               ),
             ),
         _deviceContextStore = deviceContextStore ?? _TapGoDeviceContextStore() {
+    // Audit keamanan 30 September 2026 (M4): certificate pinning hanya
+    // ditegakkan pada build rilis (Play Store) — build debug/profile dan
+    // seluruh test suite (flutter test selalu berjalan bukan-release) tidak
+    // tersentuh, supaya lingkungan pengembangan/staging tanpa pin tetap bisa
+    // jalan seperti sebelumnya. Lihat _applyTlsPinning untuk perilaku
+    // fail-closed saat TAPGO_TLS_PIN_SHA256 kosong pada rilis.
+    if (kReleaseMode) {
+      _applyTlsPinning(
+        _dio,
+        _tlsPinnedSpkiSha256Hashes,
+        () => Uri.parse(rootUrl).host,
+      );
+    }
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -225,10 +322,12 @@ class _TapGoApiClient {
   Future<Map<String, dynamic>> post(
     String path, {
     Map<String, dynamic>? body,
+    Map<String, String>? headers,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       _apiPath(path),
       data: body,
+      options: headers != null ? Options(headers: headers) : null,
     );
     return _unwrap(response.data);
   }

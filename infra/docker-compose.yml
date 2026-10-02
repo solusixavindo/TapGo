@@ -25,6 +25,22 @@ services:
     volumes:
       - tapgo-redis-data:/data
 
+  # Mesin routing jarak jalan asli untuk RIDE_DISTANCE_PROVIDER=OSRM.
+  # Butuh data hasil olahan (osrm-extract/partition/customize) di
+  # infra/osrm-data/ sebelum container ini bisa start — jalankan
+  # scripts/osrm-setup.sh sekali sebelum "docker compose up osrm".
+  # Tidak start otomatis lewat "docker compose up" tanpa nama service,
+  # karena data-nya belum tentu ada di checkout baru.
+  osrm:
+    image: osrm/osrm-backend:v5.27.1
+    container_name: tapgo-osrm
+    profiles: ["osrm"]
+    command: ["osrm-routed", "--algorithm", "mld", "/data/indonesia-latest.osrm"]
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./osrm-data:/data
+
 volumes:
   tapgo-postgres-data:
   tapgo-redis-data:

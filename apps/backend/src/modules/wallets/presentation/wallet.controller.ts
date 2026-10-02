@@ -5,9 +5,13 @@ import { env } from "../../../config/env.js";
 import { AppError } from "../../../core/errors/AppError.js";
 import { walletCashOutEnabled } from "../../memberships/application/purchaseChannel.js";
 import { WalletService } from "../application/WalletService.js";
+import { BANK_ACCOUNT_COOLDOWN_MS, PasswordVerifier } from "./web-wallet.controller.js";
 
 export class WalletController {
-  constructor(private readonly walletService: WalletService) {}
+  constructor(
+    private readonly walletService: WalletService,
+    private readonly verifyUserPassword: PasswordVerifier,
+  ) {}
 
   wallet = async (req: Request, res: Response) => {
     const result = await this.walletService.getWallet(req.auth!.userId);
@@ -45,15 +49,47 @@ export class WalletController {
     res.json({ success: true, data: result });
   };
 
+  /**
+   * Audit keamanan 30 September 2026 (H2): pola sama persis dengan
+   * WebWalletController.requestWithdrawal — tujuan transfer TIDAK PERNAH
+   * diterima dari body (mencegah sesi yang dibajak mengarahkan dana ke
+   * rekening penyerang), didahului verifikasi password ulang dan jeda 24 jam
+   * sejak rekening terakhir diubah.
+   */
   requestWithdrawal = async (req: Request, res: Response) => {
     this.assertCashOutEnabledForPlay();
+    const userId = req.auth!.userId;
+
+    const passwordOk = await this.verifyUserPassword(userId, String(req.body.password));
+    if (!passwordOk) {
+      throw new AppError("Password tidak sesuai.", StatusCodes.FORBIDDEN, "WITHDRAWAL_PASSWORD_INVALID");
+    }
+
+    const bank = await this.walletService.getBankAccount(userId);
+    if (!bank || !bank.accountNumber) {
+      throw new AppError(
+        "Simpan rekening bank terlebih dahulu.",
+        StatusCodes.BAD_REQUEST,
+        "WITHDRAWAL_BANK_ACCOUNT_REQUIRED",
+      );
+    }
+
+    const updatedAt = bank.updatedAt ? Date.parse(bank.updatedAt) : Number.NaN;
+    if (!Number.isFinite(updatedAt) || Date.now() - updatedAt < BANK_ACCOUNT_COOLDOWN_MS) {
+      throw new AppError(
+        "Rekening baru dapat dipakai untuk pencairan 24 jam setelah disimpan.",
+        StatusCodes.FORBIDDEN,
+        "WITHDRAWAL_BANK_ACCOUNT_COOLDOWN",
+      );
+    }
+
     const result = await this.walletService.requestWithdrawal({
-      userId: req.auth!.userId,
+      userId,
       amount: new Prisma.Decimal(req.body.amount),
-      bankName: req.body.bankName,
-      ...(typeof req.body.bankCode === "string" ? { bankCode: req.body.bankCode } : {}),
-      accountNumber: req.body.accountNumber,
-      accountHolderName: req.body.accountHolderName,
+      bankName: bank.bankName,
+      ...(bank.bankCode ? { bankCode: bank.bankCode } : {}),
+      accountNumber: bank.accountNumber,
+      accountHolderName: bank.accountHolderName,
       ...this.optionalNotes(req.body.notes)
     });
 

@@ -15,6 +15,8 @@ import {
   readToken,
   rejectDocuments,
   cancelUnpaidMemberRequest,
+  confirmManualRefund,
+  confirmManualTransfer,
   confirmMemberPayment,
   roleAtLeast,
   requestDocumentCorrection,
@@ -45,6 +47,40 @@ function correctionOf(request: MemberRequest): CorrectionInfo | null {
   return value && typeof value === "object" ? (value as CorrectionInfo) : null;
 }
 
+type ManualTransfer = {
+  transferAmount: number;
+  baseAmount: number | null;
+  uniqueCode: number | null;
+  expiresAt: string | null;
+  expired: boolean;
+};
+
+/** Petunjuk transfer manual pada pengajuan ini, atau null bila bukan transfer manual. */
+function manualTransferOf(request: MemberRequest): ManualTransfer | null {
+  const payment = request.payments?.[0];
+  if (!payment || payment.provider !== "MANUAL_BANK") return null;
+  const meta = payment.metadata ?? {};
+  if (typeof meta.transferAmount !== "number") return null;
+  const expiresAt = typeof meta.expiresAt === "string" ? meta.expiresAt : null;
+  return {
+    transferAmount: meta.transferAmount,
+    baseAmount: typeof meta.baseAmount === "number" ? meta.baseAmount : null,
+    uniqueCode: typeof meta.uniqueCode === "number" ? meta.uniqueCode : null,
+    expiresAt,
+    expired: request.status === "PENDING" && expiresAt !== null && new Date(expiresAt).getTime() < Date.now()
+  };
+}
+
+type RefundInfo = { status?: string; amount?: string; bankReference?: string };
+
+/** Status pengembalian dana pada pengajuan yang dokumennya ditolak, atau null. */
+function refundOf(request: MemberRequest): RefundInfo | null {
+  const rejection = request.registrationData?.documentRejection;
+  if (!rejection || typeof rejection !== "object") return null;
+  const refund = (rejection as { refund?: unknown }).refund;
+  return refund && typeof refund === "object" ? (refund as RefundInfo) : null;
+}
+
 function statusLabel(request: MemberRequest) {
   if (request.status === "PAID" && request.userMembership) return "Aktif";
   if (request.status === "PAID") {
@@ -55,7 +91,8 @@ function statusLabel(request: MemberRequest) {
   if (request.status === "PENDING") return "Menunggu pembayaran";
   if (request.status === "CANCELLED") {
     const rejected = Boolean(request.registrationData?.documentRejection);
-    return rejected ? "Ditolak, dana dikembalikan" : "Dibatalkan";
+    if (!rejected) return "Dibatalkan";
+    return refundOf(request)?.status === "REFUNDED" ? "Ditolak, dana dikembalikan" : "Ditolak, dana belum dikembalikan";
   }
   return request.status;
 }
@@ -81,6 +118,7 @@ export default function MemberRequestsPage() {
   const [correctionReason, setCorrectionReason] = useState("");
   const [cancelReason, setCancelReason] = useState("");
   const [accountReason, setAccountReason] = useState("");
+  const [refundReference, setRefundReference] = useState("");
 
   const selected = useMemo(
     () => requests.find((item) => item.id === selectedId) ?? null,
@@ -156,7 +194,16 @@ export default function MemberRequestsPage() {
   async function decideUnpaid(action: "confirm" | "cancel") {
     if (!selected || busy) return;
     const name = selected.user?.fullName ?? "pemohon";
-    if (action === "confirm") {
+    const transfer = manualTransferOf(selected);
+    if (action === "confirm" && transfer) {
+      const late = transfer.expired ? " Batas waktu transfer SUDAH LEWAT; pastikan nominal ini memang masuk dari pemohon." : "";
+      if (
+        !window.confirm(
+          `Konfirmasi transfer ${formatRupiah(transfer.transferAmount)} dari ${name} sudah masuk di mutasi rekening?${late} Pengajuan lanjut ke verifikasi dokumen; membership belum aktif.`
+        )
+      )
+        return;
+    } else if (action === "confirm") {
       const consequence =
         selected.channel === "WEB"
           ? "Pengajuan lanjut ke verifikasi dokumen; membership belum aktif."
@@ -170,8 +217,17 @@ export default function MemberRequestsPage() {
     setNotice("");
     try {
       if (action === "confirm") {
-        await confirmMemberPayment(selected.id);
-        setNotice("Pembayaran dikonfirmasi.");
+        if (transfer) {
+          const result = await confirmManualTransfer(selected.id);
+          setNotice(
+            result.alreadyConfirmed
+              ? "Transfer ini sudah pernah dikonfirmasi sebelumnya."
+              : "Transfer dikonfirmasi. Pengajuan lanjut ke verifikasi dokumen."
+          );
+        } else {
+          await confirmMemberPayment(selected.id);
+          setNotice("Pembayaran dikonfirmasi.");
+        }
       } else {
         await cancelUnpaidMemberRequest(selected.id, cancelReason.trim());
         setNotice("Pengajuan dibatalkan.");
@@ -180,6 +236,31 @@ export default function MemberRequestsPage() {
       await refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Tindakan belum dapat diproses.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Mencatat transfer balik untuk pengajuan transfer manual yang dokumennya ditolak. */
+  async function recordManualRefund() {
+    if (!selected || busy) return;
+    const amount = formatRupiah(selected.totalAmount);
+    if (
+      !window.confirm(
+        `Catat bahwa dana ${amount} sudah dikembalikan ke ${selected.user?.fullName ?? "pemohon"} lewat transfer bank? Pastikan transfer balik benar-benar sudah dilakukan dan nomor referensinya sesuai mutasi bank.`
+      )
+    )
+      return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await confirmManualRefund(selected.id, refundReference.trim());
+      setNotice("Pengembalian dana dicatat.");
+      setRefundReference("");
+      await refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Pengembalian dana belum dapat dicatat.");
     } finally {
       setBusy(false);
     }
@@ -309,6 +390,11 @@ export default function MemberRequestsPage() {
                   <p className="mt-2 text-sm text-slate-600">
                     {request.membership?.name ?? "—"} · {formatRupiah(request.totalAmount)}
                   </p>
+                  {request.status === "PENDING" && manualTransferOf(request) ? (
+                    <p className="mt-1 text-xs font-semibold text-slate-700">
+                      Transfer manual: {formatRupiah(manualTransferOf(request)!.transferAmount)}
+                    </p>
+                  ) : null}
                 </button>
               ))}
             </div>
@@ -413,6 +499,33 @@ export default function MemberRequestsPage() {
                       Pengajuan ini menunggu pembayaran. Konfirmasi hanya bila dana sudah terlihat di rekening perusahaan. Verifikasi
                       dokumen dan keputusan setujui / perbaiki / tolak dilakukan sesudah pembayaran dikonfirmasi.
                     </p>
+
+                    {(() => {
+                      const transfer = manualTransferOf(selected);
+                      if (!transfer) return null;
+                      return (
+                        <div
+                          className={`mt-4 rounded-xl border p-4 ${transfer.expired ? "border-amber-300 bg-amber-50" : "border-emerald-200 bg-emerald-50/50"}`}
+                          data-testid="manual-transfer-info"
+                        >
+                          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Transfer bank manual</p>
+                          <p className="mt-1 text-2xl font-black tabular-nums text-slate-900">{formatRupiah(transfer.transferAmount)}</p>
+                          <p className="mt-1 text-xs leading-5 text-slate-600">
+                            Cocokkan nominal ini PERSIS dengan mutasi masuk
+                            {transfer.baseAmount !== null && transfer.uniqueCode !== null
+                              ? ` (harga paket ${formatRupiah(transfer.baseAmount)} + kode unik ${transfer.uniqueCode})`
+                              : ""}
+                            .
+                          </p>
+                          {transfer.expiresAt ? (
+                            <p className={`mt-1 text-xs font-semibold ${transfer.expired ? "text-amber-800" : "text-slate-600"}`}>
+                              {transfer.expired ? "Batas waktu sudah lewat: " : "Berlaku sampai "}
+                              {formatMoment(transfer.expiresAt)}
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    })()}
                     <div className="mt-4 flex flex-wrap items-center gap-3">
                       <button
                         type="button"
@@ -420,7 +533,7 @@ export default function MemberRequestsPage() {
                         disabled={busy}
                         className="rounded-lg bg-brand-green px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                       >
-                        Konfirmasi pembayaran
+                        {manualTransferOf(selected) ? "Konfirmasi transfer masuk" : "Konfirmasi pembayaran"}
                       </button>
                       <input
                         value={cancelReason}
@@ -438,6 +551,47 @@ export default function MemberRequestsPage() {
                         Batalkan pengajuan
                       </button>
                     </div>
+                  </div>
+                ) : null}
+
+                {selected.status === "CANCELLED" && refundOf(selected)?.status === "PENDING" && roleAtLeast(role, "SUPER_ADMIN") ? (
+                  <div className="mt-6 border-t border-slate-200 pt-5 print:hidden" data-testid="manual-refund">
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Pengembalian dana</p>
+                    {selected.payments?.[0]?.provider === "MANUAL_BANK" ? (
+                      <>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">
+                          Dokumen ditolak, dana wajib kembali penuh. Pemohon mentransfer{" "}
+                          <strong>{formatRupiah(manualTransferOf(selected)?.transferAmount ?? selected.totalAmount)}</strong>
+                          {manualTransferOf(selected)?.uniqueCode ? ` (harga ${formatRupiah(selected.totalAmount)} + kode unik ${manualTransferOf(selected)!.uniqueCode})` : ""}
+                          : kembalikan sebesar nominal yang benar-benar ditransfer. Pembayaran ini transfer
+                          bank manual, jadi kembalikan lewat transfer bank dari rekening perusahaan (hubungi pemohon di{" "}
+                          {selected.user?.phone ?? "nomor terdaftar"} untuk rekening tujuan), lalu catat di sini dengan nomor
+                          referensi transfer baliknya.
+                        </p>
+                        <div className="mt-4 flex flex-wrap items-center gap-3">
+                          <input
+                            value={refundReference}
+                            onChange={(event) => setRefundReference(event.target.value)}
+                            placeholder="Nomor referensi transfer balik (wajib)"
+                            maxLength={120}
+                            className="min-w-[220px] flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-slate-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void recordManualRefund()}
+                            disabled={busy || refundReference.trim().length < 3}
+                            className="rounded-lg bg-brand-green px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                          >
+                            Catat dana sudah dikembalikan
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        Dokumen ditolak, dana {formatRupiah(selected.totalAmount)} wajib kembali penuh lewat penyedia pembayaran
+                        (jalur pengembalian dana penyedia).
+                      </p>
+                    )}
                   </div>
                 ) : null}
 

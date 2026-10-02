@@ -1,7 +1,7 @@
 name: tapgo_driver_app
 description: TapGo driver application.
 publish_to: "none"
-version: 1.0.0+3
+version: 1.0.0+4
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -12,6 +12,7 @@ dependencies:
   flutter_riverpod: ^2.6.1
   dio: ^5.7.0
   flutter_secure_storage: ^9.2.2
+  crypto: ^3.0.3
   # Versi disamakan dengan user_app supaya kedua aplikasi menarik plugin native
   # yang sama; versi berbeda pada plugin platform mudah berakhir sebagai
   # kegagalan build yang hanya muncul di salah satu aplikasi.
@@ -62,6 +63,10 @@ dependencies:
   # Versi disamakan dengan user_app.
   url_launcher: ^6.3.1
   sentry_flutter: ^9.30.1
+  # Nomor versi+build sungguhan dari APK terpasang, dikirim sebagai header
+  # X-TapGo-App-Version ke backend (E4, gerbang versi minimum driver_app) —
+  # versi disamakan dengan user_app yang sudah memakainya lebih dulu.
+  package_info_plus: ^9.0.1
 
 dev_dependencies:
   flutter_test:

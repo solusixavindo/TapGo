@@ -191,28 +191,50 @@ describe.skipIf(!runIntegration)("Stage 5.4 — semantik JWT & batas router admi
     expect((await authed("/api/v1/admin/rides", tokenFor(superAdmin))).status).toBe(200);
   });
 
-  it("kegagalan internal/database tetap 500, tidak dikonversi menjadi 401", async () => {
-    // Token valid secara kriptografis, tetapi sub-nya user yang tidak ada.
-    // Penulisan AuditLog akan melanggar foreign key -> kegagalan internal.
+  // --- M3 (audit keamanan 30 September 2026): user token tidak ada di DB --
+
+  it("token valid secara kriptografis untuk user id yang tidak ada -> 401 AUTH_SESSION_REVOKED", async () => {
+    // SEBELUM perbaikan M3, baris ini justru dipakai untuk MEMBUKTIKAN token
+    // "hantu" (sub tidak ada di DB) diloloskan resolveAuthFromToken sampai ke
+    // handler, lalu gagal di lapisan lain (FK AuditLog) sebagai 500 — bukti
+    // bahwa auth TIDAK menutup celah ini. Itu justru akar masalah M3:
+    // authVersion tidak pernah sempat dibandingkan untuk user yang sudah
+    // dihapus/tidak pernah ada. Sekarang diperlakukan identik dengan sesi
+    // yang dicabut, DI DEPAN, sebelum handler apa pun tersentuh.
     const driver = await createDriverProfile();
     const ghostAdmin = randomUUID();
     const res = await authed(
       `/api/v1/admin/rides/drivers/${driver.id}/status`,
       signAccessToken({ sub: ghostAdmin, role: "SUPER_ADMIN", sessionId: "s" }),
       "PATCH",
-      { status: "SUSPENDED", reason: "uji kegagalan internal" },
+      { status: "SUSPENDED", reason: "uji user tidak ada" },
     );
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(401);
     const body = (await res.json()) as { code?: string };
-    expect(body.code).toBe("INTERNAL_SERVER_ERROR");
-    // Bukan 401: perbaikan auth tidak melebar menelan error non-JWT.
-    expect(res.status).not.toBe(401);
-    // Rollback tetap terjadi.
+    expect(body.code).toBe("AUTH_SESSION_REVOKED");
+
+    // Tidak ada apa pun yang tersentuh — ditolak sebelum handler dipanggil.
     const after = await prisma.rideDriverProfile.findUniqueOrThrow({
       where: { id: driver.id },
     });
     expect(after.status).toBe("ACTIVE");
     expect(await prisma.auditLog.count()).toBe(0);
+  });
+
+  it("aturan authVersion untuk user yang MASIH ADA tidak berubah oleh perbaikan M3", async () => {
+    // Kontrol negatif: perbaikan M3 hanya menyentuh cabang "user tidak
+    // ditemukan" — user yang sungguh ada dan authVersion-nya cocok tetap
+    // lolos seperti sebelumnya, dan yang authVersion-nya TIDAK cocok
+    // (sesi dicabut) tetap 401 dengan kode yang sama seperti sebelumnya.
+    const admin = await createUser("SUPER_ADMIN");
+    const validToken = signAccessToken({ sub: admin.id, role: "SUPER_ADMIN", sessionId: "s" });
+    const stillOk = await authed("/api/v1/admin/rides", validToken);
+    expect(stillOk.status).toBe(200);
+
+    await prisma.user.update({ where: { id: admin.id }, data: { authVersion: { increment: 1 } } });
+    const revoked = await authed("/api/v1/admin/rides", validToken);
+    expect(revoked.status).toBe(401);
+    expect(((await revoked.json()) as { code?: string }).code).toBe("AUTH_SESSION_REVOKED");
   });
 
   // --- I-2: batas router admin ride --------------------------------------

@@ -23,8 +23,18 @@ const MOBILE_PLATFORMS = new Set(["android", "ios"]);
  * Batas build minimum (Owner, 2026-09-25): MOBILE_MIN_APP_BUILD=32 menolak
  * juga build 2.0.0+..2.0.4+31 yang sudah mengirim header distribusi. Aman
  * karena build baru mengirim versi nyata; "unknown" tidak ditolak.
+ *
+ * driver_app (E4, 2026-09-30): mengirim `X-TapGo-App: driver` sejak build
+ * 1.0.0+4. Baris itu dicabang KE FUNGSI TERPISAH ([driverMinAppBuildGate])
+ * dengan env sendiri (DRIVER_MIN_APP_BUILD) SEBELUM logika user_app di bawah
+ * ini sempat jalan — driver_app dan user_app kadang mengirim
+ * `x-tapgo-platform: android` yang SAMA, jadi tanpa pencabangan ini nomor
+ * build driver bisa salah dibandingkan dengan ambang batas milik user_app.
  */
-export function legacyMobileClientGate(req: Request, _res: Response, next: NextFunction) {
+export function legacyMobileClientGate(req: Request, res: Response, next: NextFunction) {
+  if (req.header("x-tapgo-app")?.trim().toLowerCase() === "driver") {
+    return driverMinAppBuildGate(req, res, next);
+  }
   if (!env.MOBILE_LEGACY_CLIENT_BLOCK_ENABLED) {
     return next();
   }
@@ -47,6 +57,28 @@ export function legacyMobileClientGate(req: Request, _res: Response, next: NextF
     return next();
   }
   return next(updateRequired());
+}
+
+/**
+ * Gerbang versi minimum driver_app (E4). Berbeda dari alur user_app di atas:
+ * driver_app TIDAK punya sejarah build yang mengirim header sebagian —
+ * `X-TapGo-App: driver` baru mulai dikirim persis di build yang sama dengan
+ * seluruh header lain (1.0.0+4), jadi tidak perlu aturan "tolak bila header
+ * distribusi hilang" seperti user_app. Build sebelum 1.0.0+4 tidak mengirim
+ * `X-TapGo-App` sama sekali sehingga tidak pernah masuk cabang ini.
+ */
+function driverMinAppBuildGate(req: Request, _res: Response, next: NextFunction) {
+  if (!env.DRIVER_LEGACY_CLIENT_BLOCK_ENABLED) {
+    return next();
+  }
+  const minBuild = env.DRIVER_MIN_APP_BUILD;
+  if (minBuild > 0) {
+    const build = parseBuildNumber(req.header("x-tapgo-app-version"));
+    if (build !== null && build < minBuild) {
+      return next(updateRequired());
+    }
+  }
+  return next();
 }
 
 /** Angka setelah '+' pada "2.0.5+32"; null bila tidak ada atau bukan angka. */

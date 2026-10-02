@@ -173,6 +173,7 @@ describe.skipIf(!runIntegration)("Stage R2.8 — Digiflazz real provider integra
     const res = await api("/api/v1/ppob/transactions", {
       method: "POST",
       token: tokenFor(user),
+      idempotencyKey: "digiflazz-success-1",
       body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" }
     });
     expect(res.status).toBe(201);
@@ -204,16 +205,17 @@ describe.skipIf(!runIntegration)("Stage R2.8 — Digiflazz real provider integra
 
   it("rute per operator: kode provider dipilih dari prefiks nomor dan disimpan di transaksi", async () => {
     const user = await createUserWithPpobBalance("100000");
-    const buy = (targetNumber: string) =>
+    const buy = (targetNumber: string, idempotencyKey: string) =>
       api("/api/v1/ppob/transactions", {
         method: "POST",
         token: tokenFor(user),
+        idempotencyKey,
         body: { sku: "PULSA_MULTI_5K", targetNumber }
       });
 
-    const xl = await buy("081712345678"); // XL
+    const xl = await buy("081712345678", "digiflazz-multi-xl"); // XL
     expect(xl.status).toBe(201);
-    const tsel = await buy("+6281212345678"); // Telkomsel, format +62
+    const tsel = await buy("+6281212345678", "digiflazz-multi-tsel"); // Telkomsel, format +62
     expect(tsel.status).toBe(201);
     expect(stubRequests.map((r) => r.buyer_sku_code)).toEqual(["x5", "s5"]);
 
@@ -224,20 +226,21 @@ describe.skipIf(!runIntegration)("Stage R2.8 — Digiflazz real provider integra
 
   it("operator tidak didukung atau tidak dikenal ditolak SEBELUM saldo didebit dan tanpa memanggil provider", async () => {
     const user = await createUserWithPpobBalance("100000");
-    const buy = (targetNumber: string) =>
+    const buy = (targetNumber: string, idempotencyKey: string) =>
       api("/api/v1/ppob/transactions", {
         method: "POST",
         token: tokenFor(user),
+        idempotencyKey,
         body: { sku: "PULSA_MULTI_5K", targetNumber }
       });
 
-    const indosat = await buy("081512345678"); // Indosat: tidak ada di peta produk
+    const indosat = await buy("081512345678", "digiflazz-unsupported-indosat"); // Indosat: tidak ada di peta produk
     expect(indosat.status).toBe(422);
     const indosatBody = (await indosat.json()) as { code?: string; message?: string };
     expect(indosatBody.code).toBe("PPOB_OPERATOR_UNSUPPORTED");
     expect(indosatBody.message).toContain("Indosat");
 
-    const unknown = await buy("080012345678"); // prefiks tidak dikenal
+    const unknown = await buy("080012345678", "digiflazz-unsupported-unknown"); // prefiks tidak dikenal
     expect(unknown.status).toBe(422);
     expect(((await unknown.json()) as { code?: string }).code).toBe("PPOB_OPERATOR_UNKNOWN");
 
@@ -266,6 +269,7 @@ describe.skipIf(!runIntegration)("Stage R2.8 — Digiflazz real provider integra
     const res = await api("/api/v1/ppob/transactions", {
       method: "POST",
       token: tokenFor(user),
+      idempotencyKey: "digiflazz-gagal-1",
       body: { sku: "PULSA_FAIL", targetNumber: "085612345678" }
     });
     expect(res.status).toBe(201);
@@ -288,6 +292,7 @@ describe.skipIf(!runIntegration)("Stage R2.8 — Digiflazz real provider integra
     const res = await api("/api/v1/ppob/transactions", {
       method: "POST",
       token: tokenFor(user),
+      idempotencyKey: "digiflazz-timeout-1",
       body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" }
     });
     expect(res.status).toBe(201);
@@ -343,6 +348,7 @@ describe.skipIf(!runIntegration)("Stage R2.8 — Digiflazz real provider integra
     const purchase = await api("/api/v1/ppob/transactions", {
       method: "POST",
       token: tokenFor(user),
+      idempotencyKey: "digiflazz-webhook-success-1",
       body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" }
     });
     const purchaseBody = (await purchase.json()) as { data: any };
@@ -406,6 +412,7 @@ describe.skipIf(!runIntegration)("Stage R2.8 — Digiflazz real provider integra
     const purchase = await api("/api/v1/ppob/transactions", {
       method: "POST",
       token: tokenFor(user),
+      idempotencyKey: "digiflazz-webhook-fail-1",
       body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" }
     });
     const reference = ((await purchase.json()) as { data: any }).data.reference;
@@ -488,6 +495,7 @@ describe.skipIf(!runIntegration)("Stage R2.8 — Digiflazz real provider integra
     const purchase = await api("/api/v1/ppob/transactions", {
       method: "POST",
       token: tokenFor(user),
+      idempotencyKey: "digiflazz-reconcile-1",
       body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" }
     });
     const reference = ((await purchase.json()) as { data: any }).data.reference;
@@ -663,13 +671,14 @@ async function createUserWithPpobBalance(amount: string) {
 
 async function api(
   path: string,
-  options: { method?: string; token?: string; body?: unknown } = {}
+  options: { method?: string; token?: string; body?: unknown; idempotencyKey?: string } = {}
 ) {
   return fetch(`${baseUrl}${path}`, {
     method: options.method ?? "GET",
     headers: {
       ...(options.token ? { authorization: `Bearer ${options.token}` } : {}),
-      ...(options.body ? { "content-type": "application/json" } : {})
+      ...(options.body ? { "content-type": "application/json" } : {}),
+      ...(options.idempotencyKey ? { "idempotency-key": options.idempotencyKey } : {})
     },
     ...(options.body ? { body: JSON.stringify(options.body) } : {})
   });

@@ -108,27 +108,47 @@ Owner memutuskan: kerjakan (a) sekarang sejajar dengan fase lain, atau ditunda s
    kurang → tawaran ditolak dengan pesan jelas, bukan error mentah.
 Selesai bila: satu driver menjalani satu hari kerja penuh dengan komisi menyala tanpa keluhan saldo salah.
 
-## E4. Gerbang versi minimum driver — ukuran S
-Sekarang **driver_app tidak mengirim header `X-TapGo-Platform`/`X-TapGo-App-Version`/`X-TapGo-Distribution`
-sama sekali** — `legacyMobileClientGate` di server hanya aktif bila header itu ada, jadi APK driver versi lama
-TIDAK PERNAH ditolak, untuk selamanya, sampai ini dikerjakan. Bukan sekadar mengaktifkan yang sudah ada.
-1. driver_app: tambahkan header yang sama seperti user_app ke setiap permintaan (`Dio` interceptor).
-2. Backend: env baru `DRIVER_MIN_APP_BUILD` terpisah dari `MOBILE_MIN_APP_BUILD` (menaikkan yang lama akan ikut
-   memblokir user_app) — gate membaca env yang sesuai berdasarkan payload klien.
-3. Uji: APK versi lama ditolak dengan pesan jelas ("Perbarui dari Play Store"), versi baru diterima.
-Selesai bila: uji di atas lolos, dan `versionCode` driver_app naik setiap rilis (bukan tetap 1.0.0+3 selamanya).
+## E4. Gerbang versi minimum driver — ukuran S — **SELESAI (kode), 30 Sep 2026**
+1. ✅ driver_app mengirim `X-TapGo-App: driver`, `X-TapGo-Platform`, `X-TapGo-App-Version`,
+   `X-TapGo-Distribution: play` di setiap permintaan (`ApiDriverRepository`, header default Dio +
+   `_loadAppVersionHeader()` async untuk versi sungguhan dari `package_info_plus`).
+2. ✅ Backend: env baru `DRIVER_MIN_APP_BUILD`/`DRIVER_LEGACY_CLIENT_BLOCK_ENABLED`, terpisah total dari
+   `MOBILE_MIN_APP_BUILD`/`MOBILE_LEGACY_CLIENT_BLOCK_ENABLED` milik user_app. `legacyMobileClientGate`
+   mencabang ke `driverMinAppBuildGate` SEBELUM logika user_app sempat jalan, berdasarkan header
+   `X-TapGo-App: driver` — driver_app dan user_app TIDAK PERNAH saling memakai ambang batas satu sama
+   lain walau sama-sama mengirim `x-tapgo-platform: android`.
+3. ✅ Uji: `driverMinAppBuildGate.integration.test.ts` (7 test) — build di bawah batas ditolak 426, versi
+   tak terbaca fail-open, dan dibuktikan eksplisit TIDAK PERNAH memakai `MOBILE_MIN_APP_BUILD`.
+4. Kedua env (`DRIVER_LEGACY_CLIENT_BLOCK_ENABLED`/`DRIVER_MIN_APP_BUILD`) default MATI di produksi —
+   **keputusan Owner**: nyalakan setelah build 1.0.0+4 sempat beredar beberapa waktu, supaya driver
+   yang masih di 1.0.0+3 tidak mendadak ditolak sebelum sempat update dari Play Store.
+Selesai bila: uji di atas lolos (SELESAI), dan `versionCode` driver_app naik setiap rilis — mulai dari
+1.0.0+4 rilis ini.
 
-## E5. Kesiapan Play Console — ukuran M
-1. **Data safety** khusus driver_app: lokasi latar depan saat online, kamera (verifikasi wajah), dokumen
-   identitas (KTP/SIM), kontak (WhatsApp support baru — lihat menu Bantuan).
-2. **Kebijakan privasi driver_app** dipastikan mencakup semua di atas plus retensi dokumen 24 jam.
-3. **Aset listing**: ikon baru (selesai 27 Sep), screenshot dari HP asli minimal 4 (bukan emulator), feature
-   graphic, deskripsi singkat/panjang.
-4. **Akun uji untuk reviewer Google**: satu akun driver ACTIVE dengan kendaraan terverifikasi, supaya reviewer
-   bisa login dan melihat alur kerja tanpa perlu Owner mendampingi.
-5. **Deklarasi foreground service (lokasi)** — Play Console punya form terpisah untuk ini sejak kebijakan 2024;
-   wajib diisi jujur sesuai yang sudah dibangun di D3.
-Selesai bila: semua deklarasi terisi tanpa peringatan merah di pre-launch report Play Console.
+## E5. Kesiapan Play Console — ukuran M — **sebagian besar SELESAI (kode+draf), 30 Sep 2026**
+1. ✅ **Data safety** khusus driver_app dipetakan lengkap ke draf siap-salin:
+   `docs/release/GOOGLE_PLAY_DRIVER_APP_DATA_SAFETY_MAPPING.md` — lokasi latar depan, verifikasi wajah
+   (on-device), dokumen identitas (KTP/SIM/STNK), kontak WhatsApp (tidak membaca daftar kontak), data
+   keuangan (saldo/komisi/withdrawal). **Owner masih harus menyalinnya ke form Play Console sungguhan.**
+2. ✅ **Kebijakan privasi driver_app** — ditambah bagian baru "Data yang Dikumpulkan oleh Aplikasi
+   TapGo Driver" di `apps/landing-page/src/app/privacy-policy/page.tsx` (live setelah landing-page
+   di-deploy ulang), termasuk koreksi klaim lama "tidak mengumpulkan KTP" yang sebelumnya cuma benar
+   untuk aplikasi penumpang.
+3. **Aset listing**: ikon 512×512 dan feature graphic 1024×500 SELESAI dibuat dari artwork ikon
+   adaptive yang sudah final (`google-play-assets/driver/`). Deskripsi singkat/panjang SELESAI di draf
+   `docs/release/GOOGLE_PLAY_DRIVER_APP_LISTING_DRAFT.md`. **Screenshot dari HP asli (minimal 4) BELUM
+   ADA — butuh HP Owner, tidak bisa dibuat dari sini.**
+4. ✅ **Akun uji untuk reviewer Google**: skrip `npm run driver:reviewer-bootstrap` (diuji terhadap
+   database uji, siap dipakai Owner di produksi) — lihat
+   `docs/release/DRIVER_APP_REVIEWER_TEST_ACCOUNT.md`. **Sengaja TANPA kendaraan terverifikasi**
+   (deviasi dari rencana awal "dengan kendaraan terverifikasi"): backend menolak menawarkan pesanan ke
+   driver tanpa kendaraan terverifikasi, jadi akun ini bisa dipakai reviewer login dan menjelajah
+   seluruh aplikasi TANPA risiko tidak sengaja menerima order penumpang sungguhan selama proses review.
+5. **Deklarasi foreground service (lokasi)** — form Play Console terpisah, hanya bisa diisi Owner di
+   dalam Play Console itu sendiri. Manifest sudah benar (FOREGROUND_SERVICE + FOREGROUND_SERVICE_LOCATION,
+   tanpa ACCESS_BACKGROUND_LOCATION) sehingga jawaban jujurnya sudah didukung kode.
+Selesai bila: semua deklarasi terisi tanpa peringatan merah di pre-launch report Play Console — **ini
+langkah Owner di Play Console, bukan langkah kode.**
 
 ## E6. Closed testing — ukuran M, minimal 1 minggu kalender
 1. 5-10 driver pilot + 2 penumpang (keputusan Owner 26 Sep), dengan face check TETAP MATI (lihat E2) kecuali
@@ -153,3 +173,109 @@ Owner), E3-E5 1-2 minggu kerja, E2 opsi (a) 1-2 minggu tersendiri, E6 minimal 1 
 realistis **4-6 minggu** dari sekarang sampai 100%, bukan hitungan hari — dan itu dengan asumsi E1 tidak
 menemukan bug besar baru.
 6. **Cara rilis**: closed testing dengan driver pilot dulu (disarankan) atau langsung produksi?
+
+---
+
+# Fase F: penyelesaian di repo sampai batas yang bisa diselesaikan tanpa Owner (1 Oktober 2026)
+
+Penamaan F0-F6 di bawah dipakai untuk instruksi tugas 1 Oktober 2026; secara isi fase ini
+MELANJUTKAN E1-E7 di atas (F1≈E1, F2≈E3, F3≈E5, F4≈E2, F5≈E6, F6≈E7), bukan menggantikannya —
+baca keduanya bersama. Aturan tetap yang sama berlaku: setiap temuan masuk `REGRESSION_REGISTER.md`
+beserta ujinya; paket hanya diserahkan lewat `scripts/release-gate-driver-app.sh`.
+
+## F0. Bekukan paket uji — **DONE**
+1. ✅ Perbaikan klaim komisi (cancelByPassenger/cancelByDriver mengklaim status dengan updateMany,
+   releaseCashCommissionHold mengklaim metadata HELD sebelum kredit, holdCashCommission membandingkan
+   balance DAN cashBalance) dan pin TLS (host-bound, adapter non-IO fail-closed) diverifikasi masih
+   utuh seperti review terakhir — lihat commit `fix(backend): ... komisi tunai ditahan atomic ...` dan
+   `feat(mobile): ... certificate pinning TLS SPKI ...`.
+2. ✅ 20 commit bertahap di branch lokal `driver-readiness-100` (lihat laporan akhir sesi untuk daftar
+   hash) — mencakup SELURUH pekerjaan yang sebelumnya menumpuk belum ter-commit di `main` (audit
+   keamanan H1-H2/M1-M7/L1-L3, SOS, fatigue/recheck, gerbang versi driver, TLS pinning, draf Play
+   Console), bukan hanya item driver-readiness. Tidak ada `.env`, keystore, atau `google-services.json`
+   baru yang ikut (`google-services.json` sudah terlacak sebelumnya dan tidak berubah).
+3. ✅ Versi driver_app TIDAK dinaikkan — pubspec sudah persis `1.0.0+4`, bukan di bawahnya.
+4. **Build rilis TIDAK dijalankan** — `TAPGO_TLS_PIN_SHA256` kosong di environment shell sesi ini
+   (sesuai desain fail-closed M4: build rilis tanpa pin menolak SEMUA request jaringan). Keystore DAN
+   `key.properties` SUDAH ada di mesin ini, jadi build secara teknis mungkin — hanya menunggu nilai pin.
+   `release-gate-driver-app.sh` diperbaiki agar meneruskan `--dart-define=TAPGO_TLS_PIN_SHA256` dari
+   environment (bukan file repo) dan GAGAL JELAS bila kosong, alih-alih diam-diam menghasilkan artefak
+   yang tidak bisa connect. Divalidasi dengan `--skip-build`: step 1-3 (catatan rilis, source guard,
+   analyze, flutter test) LOLOS. Perintah yang harus Owner jalankan ada di bagian "Perintah untuk
+   Owner" di bawah.
+5. **Deploy backend TIDAK dijalankan** — satu-satunya mekanisme deploy adalah `.github/workflows/cd.yml`,
+   terpicu oleh `git push --tags` (dilarang untuk sesi ini) dan butuh GitHub Secrets
+   (`VPS_HOST`/`VPS_USERNAME`/`VPS_SSH_KEY`/`VPS_PORT`/`VPS_PROJECT_PATH`) yang belum tentu terisi (VPS
+   produksi belum siap per catatan di file itu sendiri). Tidak ada skrip deploy lokal lain yang bisa
+   dijalankan tanpa menebak rahasia. Tidak ada flag komisi/face-check yang disentuh.
+
+## F1. Uji lapangan — **BLOCKED (menunggu Owner)**
+Lembar delapan skenario sudah dibuat: `docs/release/DRIVER_APP_FIELD_TEST.md`. Tidak ada satu baris
+pun yang bisa diisi dari sesi ini — butuh dua HP sungguhan, dua hari kalender berbeda. Baris GAGAL
+wajib disalin ke `REGRESSION_REGISTER.md` (format sudah disediakan di lembar itu).
+
+## F2. Uang sungguhan — **BLOCKED (menunggu Owner), kode DONE**
+`DRIVER_COMMISSION_ENABLED` TIDAK dinyalakan di env produksi. Tiga langkah Owner (dua top up manual
+nominal berbeda, satu trip tunai selesai, satu trip dibatalkan, satu accept saldo kurang) ditulis di
+lembar yang sama (`DRIVER_APP_FIELD_TEST.md`, bagian F2). Uji otomatis
+`driverCashCommission.integration.test.ts` — 17 skenario termasuk 3 baru khusus klaim-sekali (dua
+pembatalan penumpang bersamaan, pemanggilan releaseCashCommissionHold kedua, dua driver accept
+bersamaan) — **LOLOS** (lihat bagian Verifikasi). Ditegaskan ulang: tes integrasi ini BUKAN bukti
+transfer bank sungguhan.
+
+## F3. Paket Play Console — **BLOCKED pada langkah konsol, berkas DONE**
+- ✅ `GOOGLE_PLAY_DRIVER_APP_DATA_SAFETY_MAPPING.md` dan `GOOGLE_PLAY_DRIVER_APP_LISTING_DRAFT.md`
+  diperiksa ulang terhadap kode hari ini — masih akurat ("wajah on-device", default fitur mati) tanpa
+  perlu diubah, karena F4 (pemindahan ke server) belum benar-benar terjadi.
+- ✅ Bagian privasi driver di landing page sudah menyebut data yang benar-benar dikumpulkan (diperiksa,
+  tidak ada perubahan diperlukan).
+- ✅ `docs/release/DRIVER_APP_PLAY_CONSOLE_OWNER_STEPS.md` baru: 5 langkah pasti (screenshot HP,
+  salin data safety, deklarasi foreground service, jalankan `npm run driver:reviewer-bootstrap`,
+  publikasikan OAuth consent screen project `tapgo-c7cb3` keluar dari status Testing). Status
+  BLOCKED pada langkah yang hanya ada di konsol (1, 2, 3, 5) — langkah 4 (akun reviewer) sudah siap
+  dijalankan Owner kapan pun.
+
+## F4. Verifikasi wajah ditentukan server — **BLOCKED (lisensi tidak ada), bukan sekadar belum dikerjakan**
+**Temuan penting, berbeda dari asumsi awal tugas ini**: tidak ditemukan berkas model `.tflite` ATAU
+berkas lisensi apa pun di seluruh repo — bukan hanya di server, **client (driver_app) SENDIRI juga
+tidak membundel model apa pun**. `FaceCheckPipeline.modelAsset = 'assets/ml/mobilefacenet.tflite'`
+(`face_check_pipeline.dart`) menunjuk ke path yang TIDAK ADA di `assets/` maupun di daftar `assets:`
+`pubspec.yaml` — `_computeEmbedding()` SELALU melempar `FaceCheckModelUnavailableException`, sengaja,
+persis seperti `DriverFaceEmbeddingService.computeEmbedding()` di server SELALU melempar
+`DRIVER_FACE_EMBEDDING_MODEL_UNAVAILABLE`. Pencarian `find . -iname "*.tflite"` (di luar `build/`,
+yang hanya berisi model DETEKSI wajah bawaan `google_mlkit_face_detection`, bukan model PENGENALAN
+identitas) dan `find . -iname "LICENSE*"` di seluruh repo sama-sama nihil.
+
+Karena kondisi ini TIDAK memenuhi syarat "lisensi mengizinkan pemakaian di server" di instruksi tugas
+(lisensinya bukan sekadar tidak ditemukan — modelnya sendiri tidak ada), langkah 2-5 (implementasi
+`computeEmbedding`, perhitungan ulang similarity di server, update driver_app mengirim foto) **TIDAK
+dikerjakan** — sesuai instruksi eksplisit untuk berhenti di F4 tanpa mengunduh model dari internet
+atau mengarang skor/model. `DriverFaceCheckService.submitAttempt` TETAP mempercayai `similarityScore`
+dari klien seperti sebelumnya; `DRIVER_FACE_CHECK_ENABLED` TETAP `false` di env contoh produksi.
+
+**Konsekuensi untuk Owner**: untuk benar-benar menyelesaikan F4, Owner perlu salah satu dari:
+(a) menyediakan berkas model (mis. MobileFaceNet) BESERTA bukti lisensinya mengizinkan redistribusi
+di aplikasi komersial closed-source dan dieksekusi di server Node — baru kode bisa dilanjutkan dari
+titik ini; atau (b) tetap menggunakan arsitektur client-trusts-score untuk closed testing dengan
+driver pilot yang dikenal langsung (risiko diterima secara eksplisit, BUKAN untuk rilis publik — lihat
+syarat masuk F6 di `DRIVER_APP_FIELD_TEST.md`).
+
+## F5 dan F6. Tidak dikerjakan (sesuai instruksi)
+Syarat masuk keduanya sudah ditulis di `docs/release/DRIVER_APP_FIELD_TEST.md` bagian penutup,
+termasuk pengingat kedaluwarsa pin TLS leaf (2 November 2026).
+
+## Perintah untuk Owner
+
+```bash
+# F0.4 — build rilis (jalankan setelah mengisi hash SPKI leaf produksi sungguhan,
+# BUKAN hash yang ada di komentar/dokumentasi mana pun di repo ini):
+export TAPGO_TLS_PIN_SHA256="<hash-sha256-spki-leaf-hex>"
+scripts/release-gate-driver-app.sh
+# (hash didapat dari: openssl s_client -connect api.tapgolion.id:443 -showcerts </dev/null 2>/dev/null \
+#   | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -r)
+
+# F0.5 — deploy backend ke VPS (setelah GitHub Secrets VPS_HOST/VPS_USERNAME/VPS_SSH_KEY/VPS_PORT/
+# VPS_PROJECT_PATH terisi dan VPS produksi siap):
+git tag v<versi-baru>
+git push origin v<versi-baru>   # memicu .github/workflows/cd.yml
+```

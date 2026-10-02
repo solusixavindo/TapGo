@@ -142,7 +142,7 @@ export default function ManualTopUpPage() {
                 <tr>
                   <th className="px-4 py-3">Anggota</th>
                   <th className="px-4 py-3 text-right">Nominal transfer</th>
-                  <th className="px-4 py-3 text-right">Saldo masuk</th>
+                  <th className="px-4 py-3">Tujuan saldo</th>
                   <th className="px-4 py-3">Diajukan</th>
                   <th className="px-4 py-3 text-right">Tindakan</th>
                 </tr>
@@ -158,8 +158,22 @@ export default function ManualTopUpPage() {
                     <td className="px-4 py-3 text-right">
                       <p className="text-base font-black tabular-nums">{formatRupiah(item.transferAmount)}</p>
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {item.baseAmount === null ? "—" : formatRupiah(item.baseAmount)}
+                    <td className="px-4 py-3" data-testid="topup-target">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                          item.target === "PPOB" ? "bg-violet-100 text-violet-800" : "bg-sky-100 text-sky-800"
+                        }`}
+                      >
+                        {item.target === "PPOB" ? "Saldo PPOB" : "Saldo TapGo"}
+                      </span>
+                      <p className="mt-1 text-xs tabular-nums text-slate-600">
+                        Dikreditkan: {formatRupiah(item.transferAmount)}
+                      </p>
+                      {item.baseAmount !== null ? (
+                        <p className="text-[11px] tabular-nums text-slate-400">
+                          {formatRupiah(item.baseAmount)} + kode unik {item.transferAmount - item.baseAmount}
+                        </p>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-600">
                       {formatMoment(item.createdAt)}

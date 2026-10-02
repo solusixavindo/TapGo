@@ -9,7 +9,13 @@ part of '../../../main.dart';
 /// build(), bukan di dalam pipeline, karena plugin native ini bisa
 /// crash/hang tanpa kamera sungguhan (mis. saat flutter test/CI).
 class DriverFaceCheckScreen extends ConsumerStatefulWidget {
-  const DriverFaceCheckScreen({super.key});
+  const DriverFaceCheckScreen({super.key, this.isRecheck = false});
+
+  /// True untuk verifikasi ULANG acak selama online (lihat
+  /// DriverController._pollSafetyStatus) — beda dari verifikasi harian
+  /// pertama: memanggil endpoint recheck, dan kegagalannya berarti server
+  /// SUDAH memaksa driver offline, bukan menghabiskan kuota percobaan harian.
+  final bool isRecheck;
 
   @override
   ConsumerState<DriverFaceCheckScreen> createState() => _DriverFaceCheckScreenState();
@@ -93,11 +99,18 @@ class _DriverFaceCheckScreenState extends ConsumerState<DriverFaceCheckScreen> {
         referenceEmbedding: reference.embedding,
       );
 
-      final snapshot = await ref.read(driverControllerProvider.notifier).submitFaceCheckAttempt(
-            similarityScore: similarity,
-            livenessPassed: true,
-            modelVersion: reference.modelVersion,
-          );
+      final controller = ref.read(driverControllerProvider.notifier);
+      final snapshot = widget.isRecheck
+          ? await controller.submitRecheckAttempt(
+              similarityScore: similarity,
+              livenessPassed: true,
+              modelVersion: reference.modelVersion,
+            )
+          : await controller.submitFaceCheckAttempt(
+              similarityScore: similarity,
+              livenessPassed: true,
+              modelVersion: reference.modelVersion,
+            );
 
       if (!mounted) return;
       if (snapshot.status == DriverFaceCheckStatus.passed) {
@@ -123,6 +136,13 @@ class _DriverFaceCheckScreenState extends ConsumerState<DriverFaceCheckScreen> {
       if (!mounted) return;
       if (error.code == 'RIDE_DRIVER_FACE_CHECK_BLOCKED') {
         setState(() => _stage = _Stage.blocked);
+        return;
+      }
+      if (widget.isRecheck && error.code == 'RIDE_DRIVER_FACE_RECHECK_MISMATCH') {
+        // Server SUDAH memaksa offline (lihat submitRecheckAttempt di
+        // controller, yang juga menyegarkan workspace) — layar ini cukup
+        // menutup diri, Beranda akan menampilkan status offline yang benar.
+        Navigator.of(context).pop(false);
         return;
       }
       setState(() {
@@ -159,7 +179,7 @@ class _DriverFaceCheckScreenState extends ConsumerState<DriverFaceCheckScreen> {
       appBar: AppBar(
         backgroundColor: _navy,
         foregroundColor: Colors.white,
-        title: const Text('Verifikasi Wajah'),
+        title: Text(widget.isRecheck ? 'Verifikasi Ulang Wajah' : 'Verifikasi Wajah'),
       ),
       body: switch (_stage) {
         _Stage.initializing => const Center(child: CircularProgressIndicator(color: _gold)),

@@ -52,6 +52,10 @@ coverage/
 # Hasil static export Next. Diunggah manual ke Hostinger, bukan lewat Git —
 # lihat PROJECT_STRUCTURE.md ("safe to regenerate and keep untracked").
 apps/landing-page/out/
+
+# Data OSRM (ekstrak OSM + graf routing hasil olahan) — multi-GB, dibangun
+# lokal/di server lewat scripts/osrm-setup.sh, bukan disimpan di Git.
+infra/osrm-data/
 apps/admin_dashboard/out/
 apps/user_app/build/
 apps/driver_app/build/

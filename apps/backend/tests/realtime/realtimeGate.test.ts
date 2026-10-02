@@ -3,7 +3,7 @@ import { AddressInfo } from "node:net";
 import type { Server as IoServer } from "socket.io";
 import { io as ioClient } from "socket.io-client";
 import { afterEach, describe, expect, it } from "vitest";
-import { runIntegration, testDatabaseUrl } from "../helpers/referralWalletHarness.js";
+import { prisma, runIntegration, testDatabaseUrl } from "../helpers/referralWalletHarness.js";
 
 // A. Gate Socket.IO: fail-closed saat REALTIME_ENABLED=false. Tidak butuh DB
 // (hanya probe HTTP + socket.io-client), sehingga berjalan di semua run.
@@ -98,9 +98,23 @@ describe("A. Realtime Socket.IO gate", () => {
       const health = await fetch(`${base}/health`);
       expect(health.status).toBe(200);
 
+      // Audit keamanan 30 September 2026 (M3): resolveAuthFromToken kini
+      // menolak token yang sub-nya tidak ada di database (lihat authContext.ts)
+      // — sub palsu ("00000000-…") yang dipakai di sini sebelumnya membuat
+      // smoke test ini diam-diam bergantung pada celah yang sama. Dibuat user
+      // sungguhan supaya smoke test tetap menguji jalur koneksi Socket.IO,
+      // bukan celah yang baru saja ditutup.
+      const user = await prisma.user.create({
+        data: {
+          fullName: "Realtime Smoke Test",
+          phone: `+62800${Date.now()}`,
+          referralCode: `RTGATE${Date.now()}`
+        }
+      });
+
       const tokenService = await import("../../src/core/security/tokenService.js");
       const token = tokenService.signAccessToken({
-        sub: "00000000-0000-0000-0000-000000000000",
+        sub: user.id,
         role: "USER",
         sessionId: "realtime-gate-smoke-session"
       });
@@ -131,6 +145,8 @@ describe("A. Realtime Socket.IO gate", () => {
         setTimeout(() => resolve(true), 500);
       });
       expect(disconnected).toBe(true);
+
+      await prisma.user.delete({ where: { id: user.id } });
     }
   );
 });

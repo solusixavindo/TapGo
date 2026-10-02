@@ -7,6 +7,7 @@ import { MidtransPaymentService } from "../../payments/application/MidtransPayme
 import { DokuPaymentService } from "../../payments/application/DokuPaymentService.js";
 import {
   MembershipPurchaseChannel,
+  membershipOnlinePaymentEnabled,
   membershipPurchaseEnabled,
   paidMembershipVisible
 } from "../application/purchaseChannel.js";
@@ -117,6 +118,13 @@ export class MembershipOrderController {
       "Pembayaran membership eksternal belum tersedia untuk rilis Google Play.",
       "EXTERNAL_MEMBERSHIP_PAYMENTS_DISABLED",
     );
+    if (!membershipOnlinePaymentEnabled(this.channel)) {
+      throw new AppError(
+        "Pembayaran online untuk membership belum tersedia. Gunakan transfer bank.",
+        StatusCodes.FORBIDDEN,
+        "MEMBERSHIP_ONLINE_PAYMENT_DISABLED",
+      );
+    }
 
     if (env.DOKU_ENABLED) {
       if (!this.dokuPaymentServiceFactory) {
