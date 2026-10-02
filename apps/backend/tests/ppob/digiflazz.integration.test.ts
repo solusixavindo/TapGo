@@ -1,5 +1,5 @@
 import { Prisma, UserRole } from "@prisma/client";
-import { createHmac } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import http, { Server } from "node:http";
 import { AddressInfo } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -822,12 +822,15 @@ async function api(
   path: string,
   options: { method?: string; token?: string; body?: unknown; idempotencyKey?: string } = {}
 ) {
+  // Pembelian PPOB wajib membawa Idempotency-Key (audit H1); pembeli di tes ini memakai kunci unik per panggilan
+  // kecuali tes menentukannya sendiri.
+  const key = options.idempotencyKey ?? (options.method === "POST" && path === "/api/v1/ppob/orders" ? `uji-${randomUUID()}` : undefined);
   return fetch(`${baseUrl}${path}`, {
     method: options.method ?? "GET",
     headers: {
       ...(options.token ? { authorization: `Bearer ${options.token}` } : {}),
       ...(options.body ? { "content-type": "application/json" } : {}),
-      ...(options.idempotencyKey ? { "idempotency-key": options.idempotencyKey } : {})
+      ...(key ? { "idempotency-key": key } : {})
     },
     ...(options.body ? { body: JSON.stringify(options.body) } : {})
   });
