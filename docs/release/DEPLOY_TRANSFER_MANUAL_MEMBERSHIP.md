@@ -4,9 +4,11 @@ Dokumen ini untuk Owner/operator yang mengeksekusi di VPS produksi. Tidak ada ni
 
 **Cakupan PR:** [solusixavindo/TapGo#1](https://github.com/solusixavindo/TapGo/pull/1) membawa tiga hal sekaligus — remediasi audit keamanan 30 September, kesiapan driver_app, dan transfer manual membership. Jadi deploy backend ini juga membawa dua kelompok pertama (flag-nya tetap mati bawaan, lihat bagian 3).
 
+> **Rilis minimal (branch `release/membership-manual-transfer`).** Rilis produksi pertama dibuat dari `main` + HANYA pekerjaan upgrade membership (transfer manual, refund manual, flag online, perbaikan pool tes, dokumen ini). Perubahan audit keamanan, SOS, dan gerbang versi driver (yang ada di PR #1) **tidak ikut**, karena mengubah perilaku backend yang sedang melayani pengguna dan membawa 3 migrasi. Rilis minimal **tidak membawa migrasi baru**: langkah `migrate deploy` tetap dijalankan tetapi tidak ada yang diterapkan, dan pemeriksaan saldo negatif tidak diperlukan sampai PR #1 dirilis.
+
 **Kondisi VPS (dicek baca-saja lewat SSH, 3 Oktober 2026):**
 - `api.tapgolion.id` → 145.79.11.118 (host SSH `myxavi-vps`). Backend berjalan di **pm2** (`tapgo-api`, online), **tanpa Docker**, Node 22. Server ini juga menampung aplikasi lain (`griyacare`, `myxavi-api`, `xavindo-wa-bot`): **restart hanya `tapgo-api`**.
-- Deploy memakai **folder rilis per commit**: pm2 berjalan dari `/var/www/releases/tapgo-<sha>/apps/backend` (saat ini `tapgo-656b249` = `main` sebelum PR ini). Tiap folder rilis adalah checkout git dengan `.env`-nya sendiri. `/var/www/Tapgo` adalah salinan lama (Juni) dan **bukan** target deploy; `git pull` di sana tidak berpengaruh.
+- Deploy memakai **folder rilis per commit**: pm2 berjalan dari `/var/www/releases/tapgo-<sha>/apps/backend` (saat ini `tapgo-656b249` = `main` sebelum rilis ini). Tiap folder rilis adalah checkout git dengan `.env`-nya sendiri. `/var/www/Tapgo` adalah salinan lama (Juni) dan **bukan** target deploy; `git pull` di sana tidak berpengaruh.
 - Konsol admin statis ada di `/var/www/admin` (ada beberapa `admin.bak-*`: tradisi cadangan sebelum menimpa).
 - **Landing page `tapgolion.id` ada di server LAIN** (145.223.108.166), bukan VPS ini. Cara deploy-nya di sana belum saya periksa.
 - `cd.yml` (Docker, tag `v*`) **tidak dipakai** di VPS ini.
@@ -70,7 +72,7 @@ Konsekuensi yang harus dipahami:
    ```bash
    bash scripts/backup-db.sh        # atau pg_dump -Fc manual ke lokasi aman di luar VPS
    ```
-3. **Periksa saldo negatif** (migrasi ke-3 berhenti bila ada). Catatan: `npm run audit:production-data` TIDAK memeriksa ini (itu audit data uji/dummy); pakai SQL:
+3. **Periksa saldo negatif** (HANYA bila merilis PR #1 yang lengkap; rilis minimal tidak membawa migrasi itu). Catatan: `npm run audit:production-data` TIDAK memeriksa ini (itu audit data uji/dummy); pakai SQL:
    ```sql
    SELECT id, user_id, balance, cash_balance, ppob_balance
    FROM wallets
@@ -95,7 +97,7 @@ cp tapgo-656b249/apps/backend/.env tapgo-<sha>/apps/backend/.env && chmod 600 ta
 cd tapgo-<sha>
 npm ci
 npx prisma generate --schema apps/backend/prisma/schema.prisma
-# 3) Cadangkan DB, periksa saldo negatif (bagian 1), lalu migrasi memakai DATABASE_URL dari .env rilis baru
+# 3) Cadangkan DB lalu migrasi memakai DATABASE_URL dari .env rilis baru (rilis minimal: tidak ada migrasi baru, hasilnya "No pending migrations")
 npx prisma migrate deploy --schema apps/backend/prisma/schema.prisma
 # 4) Build
 npm --workspace apps/backend run build
