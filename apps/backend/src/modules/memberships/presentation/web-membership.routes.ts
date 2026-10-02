@@ -10,6 +10,7 @@ import { StatusCodes } from "http-status-codes";
 import { ManualMembershipTransferService } from "../application/ManualMembershipTransferService.js";
 import { MembershipDocumentService } from "../application/MembershipDocumentService.js";
 import { MembershipOrderService } from "../application/MembershipOrderService.js";
+import { membershipOnlinePaymentEnabled } from "../application/purchaseChannel.js";
 import { MembershipDocumentController } from "./membership-document.controller.js";
 import { MembershipOrderController } from "./membership-order.controller.js";
 import {
@@ -103,7 +104,9 @@ webMembershipRouter.get(
     res.json({
       success: true,
       data: {
-        online: env.DOKU_ENABLED || Boolean(env.MIDTRANS_SERVER_KEY),
+        online:
+          membershipOnlinePaymentEnabled("WEB") &&
+          (env.DOKU_ENABLED || Boolean(env.MIDTRANS_SERVER_KEY)),
         manualTransfer: manualTransferService.isAvailable(),
       },
     });

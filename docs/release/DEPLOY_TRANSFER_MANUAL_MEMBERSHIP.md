@@ -18,10 +18,12 @@ Uang transfer manual tidak pernah lewat Midtrans, jadi refund via gateway tidak 
 - Hasilnya: payment dan invoice `REFUNDED`, audit `MEMBERSHIP_REFUND_COMPLETED` (pelaku, nominal, referensi bank). Tidak bisa dicatat dua kali. Admin biasa tidak dapat melakukannya.
 - Pencatatan itu **hanya pembukuan**: sistem tidak menggerakkan uang. Pastikan transfer balik benar-benar sudah dilakukan sebelum menekan tombol.
 
-### 0.2 Opsi pembayaran online ikut tampil bila kunci gateway terisi
-Halaman bayar menampilkan tombol online bila `DOKU_ENABLED=true` **atau** `MIDTRANS_SERVER_KEY` terisi (kunci sandbox pun terhitung). Selama Midtrans belum menjawab, pengguna bisa memilih jalur online yang belum siap.
-- Bila `MIDTRANS_SERVER_KEY` dipakai fitur lain (top up, webhook), jangan dikosongkan sembarangan. Katakan bila Anda ingin saya memisahkan "online untuk membership" menjadi flag tersendiri.
-- Bila tidak dipakai fitur lain: `DOKU_ENABLED=false` dan kosongkan `MIDTRANS_SERVER_KEY` agar hanya transfer bank yang tampil.
+### 0.2 Opsi pembayaran online (sudah dipisah: `MEMBERSHIP_ONLINE_PAYMENT_ENABLED`)
+Jalur gateway untuk membership kini punya flag sendiri, **default mati**, terpisah dari kunci gateway. `DOKU_ENABLED` dan `MIDTRANS_SERVER_KEY` boleh tetap terisi untuk top up dan webhook tanpa membuka jalur online membership.
+- Flag mati: halaman bayar hanya menampilkan "Bayar dengan transfer bank", dan rute `pay` menjawab 403 `MEMBERSHIP_ONLINE_PAYMENT_DISABLED` (jadi tidak cukup tersembunyi di UI saja).
+- Nyalakan (`true`) hanya setelah gateway siap menjual membership; opsi online baru tampil bila flag hidup **dan** gateway terkonfigurasi.
+- Webhook tidak ikut digerbangi: pembayaran online yang sudah terlanjur dimulai tetap diselesaikan.
+- Selama Midtrans belum menjawab: biarkan `MEMBERSHIP_ONLINE_PAYMENT_ENABLED=false` (atau tidak diset). Tidak perlu mengosongkan kunci gateway.
 
 ### 0.3 Operator
 Harus ada Super Admin yang rutin mencocokkan mutasi dan menekan **"Konfirmasi transfer masuk"**, serta Admin untuk verifikasi dokumen. Pengajuan tanpa konfirmasi kedaluwarsa dalam 24 jam (`MANUAL_TOPUP_EXPIRY_HOURS`, berlaku sama untuk top up dan membership).
@@ -92,6 +94,7 @@ Edit `apps/backend/.env` di VPS. Nilai di bawah adalah **nama dan bentuk**, buka
 | `EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED` | `true` | Gerbang induk pembayaran membership |
 | `MEMBERSHIP_PURCHASE_WEB_ENABLED` | `true` | Kanal web terbuka; aplikasi Play tetap tertutup |
 | `MANUAL_MEMBERSHIP_TRANSFER_ENABLED` | `true` | **Terakhir dinyalakan** |
+| `MEMBERSHIP_ONLINE_PAYMENT_ENABLED` | `false` | Jalur gateway untuk membership tetap mati sampai gateway siap |
 | `MANUAL_TOPUP_BANK_NAME` | nama bank | Rekening perusahaan yang **nyata** |
 | `MANUAL_TOPUP_ACCOUNT_NUMBER` | nomor rekening | Dipakai bersama top up manual |
 | `MANUAL_TOPUP_ACCOUNT_HOLDER` | nama pemilik rekening | Harus sama dengan nama di bank |
@@ -118,7 +121,7 @@ Bila gagal start dengan galat env, `pm2 logs tapgo-api` menyebut variabel yang s
 ## 4. Uji sekali di produksi (akun Anda sendiri)
 
 1. Buka `https://tapgolion.id/upgrade`, login dengan akun uji milik Anda, pilih paket terendah.
-2. Isi data, unggah KTP dan swafoto, lanjut ke pembayaran. **Hanya** "Bayar dengan transfer bank" yang tampil (bila 0.2 sudah dibereskan).
+2. Isi data, unggah KTP dan swafoto, lanjut ke pembayaran. **Hanya** "Bayar dengan transfer bank" yang tampil (flag online mati, walau kunci gateway terisi).
 3. Catat nominal berkode unik, transfer **tepat** sebesar itu dari rekening Anda.
 4. Login Super Admin → Verifikasi Keanggotaan → pastikan nominal tampil di antrean → cocokkan dengan mutasi → **Konfirmasi transfer masuk**.
 5. Status member berubah ke "Menunggu verifikasi" (membership belum aktif).

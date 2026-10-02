@@ -159,10 +159,11 @@ export default function PaymentSummary() {
     { label: "Nama", value: order.buyerName }
   ].filter((row) => row.value.length > 0);
 
-  // Pembayaran online tetap tampil bila status opsi tidak diketahui atau tidak
-  // ada jalur lain, supaya perilaku semula tidak berubah.
+  // Opsi dari server menentukan tombol. Hanya bila opsi gagal dimuat (null),
+  // jalur online semula tetap ditampilkan agar perilaku lama tidak berubah.
   const manualAvailable = options?.manualTransfer === true;
-  const showOnline = !manualAvailable || options?.online === true;
+  const showOnline = options === null || options.online === true;
+  const noMethod = options !== null && !options.online && !options.manualTransfer;
 
   return (
     <div>
@@ -222,6 +223,10 @@ export default function PaymentSummary() {
             </button>
           ) : null}
         </>
+      ) : noMethod ? (
+        <p role="status" className="mt-6 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-300">
+          Pembayaran upgrade belum tersedia saat ini. Silakan coba lagi nanti atau hubungi tim TapGo.
+        </p>
       ) : (
         <>
           {showOnline ? (

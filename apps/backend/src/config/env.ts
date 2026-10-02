@@ -161,6 +161,14 @@ const envSchema = z.object({
   /// Tetap tunduk pada EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED dan
   /// MEMBERSHIP_PURCHASE_WEB_ENABLED (gerbang kanal pembelian).
   MANUAL_MEMBERSHIP_TRANSFER_ENABLED: strictEnvBoolean(false),
+  /// Pembayaran membership lewat payment gateway (DOKU/Midtrans). Terpisah dari
+  /// kunci gateway: DOKU_ENABLED / MIDTRANS_SERVER_KEY juga dipakai top up dan
+  /// webhook, jadi keberadaan kunci TIDAK boleh otomatis membuka jalur online
+  /// untuk membership. Default mati; nyalakan hanya setelah gateway siap dipakai
+  /// menjual membership. Tidak memengaruhi webhook: pembayaran yang sudah
+  /// terlanjur dimulai tetap diselesaikan. Tetap tunduk pada
+  /// EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED dan gerbang kanal pembelian.
+  MEMBERSHIP_ONLINE_PAYMENT_ENABLED: strictEnvBoolean(false),
   /// Verifikasi wajah harian driver sebelum online. Default mati: pencocokan
   /// terjadi di HP driver (tidak ada API pihak ketiga), server hanya melacak
   /// hari/percobaan dan menegakkan ambang batas — lihat DriverFaceCheckService.

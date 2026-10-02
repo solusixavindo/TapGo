@@ -48,7 +48,10 @@ const ENV_KEYS = [
   "MANUAL_TOPUP_BANK_NAME",
   "MANUAL_TOPUP_ACCOUNT_NUMBER",
   "MANUAL_TOPUP_ACCOUNT_HOLDER",
-  "MANUAL_TOPUP_ENABLED"
+  "MANUAL_TOPUP_ENABLED",
+  "MEMBERSHIP_ONLINE_PAYMENT_ENABLED",
+  "DOKU_ENABLED",
+  "MIDTRANS_SERVER_KEY"
 ] as const;
 
 describe.skipIf(!runIntegration)("Transfer bank manual untuk membership", () => {
@@ -94,6 +97,11 @@ describe.skipIf(!runIntegration)("Transfer bank manual untuk membership", () => 
       EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED: true,
       MEMBERSHIP_PURCHASE_WEB_ENABLED: true,
       MANUAL_TOPUP_ENABLED: true,
+      // Kondisi nyata selama Midtrans belum siap: kunci gateway ADA (dipakai
+      // fitur lain) tetapi jalur online untuk membership sengaja mati.
+      MEMBERSHIP_ONLINE_PAYMENT_ENABLED: false,
+      DOKU_ENABLED: false,
+      MIDTRANS_SERVER_KEY: "SB-Mid-server-uji",
       MANUAL_TOPUP_BANK_NAME: "BANK UJI",
       MANUAL_TOPUP_ACCOUNT_NUMBER: "0000000000",
       MANUAL_TOPUP_ACCOUNT_HOLDER: "PT UJI CONTOH"
@@ -139,6 +147,43 @@ describe.skipIf(!runIntegration)("Transfer bank manual untuk membership", () => 
     const res = await startTransfer(order.id, buyer, "APP");
     expect(res.status).toBe(403);
     expect(await codeOf(res)).toBe("AUTH_CHANNEL_FORBIDDEN");
+  });
+
+  it("kunci gateway terisi tetapi flag online mati: online=false dan pay ditolak 403", async () => {
+    const { order, buyer } = await createWebOrder();
+    const options = await getJson("/api/v1/web/membership/payment-options", buyer);
+    expect(options.data).toEqual({ online: false, manualTransfer: true });
+
+    const before = await prisma.membershipPayment.findMany({ where: { orderId: order.id } });
+    const res = await fetch(`${baseUrl}/api/v1/web/membership/orders/${order.id}/pay`, {
+      method: "POST",
+      headers: jsonHeaders(buyer, "WEB"),
+      body: "{}"
+    });
+    expect(res.status).toBe(403);
+    expect(await codeOf(res)).toBe("MEMBERSHIP_ONLINE_PAYMENT_DISABLED");
+    // Gateway tidak tersentuh: baris pembayaran tidak berubah sama sekali.
+    const after = await prisma.membershipPayment.findMany({ where: { orderId: order.id } });
+    expect(after.map((row) => [row.id, row.provider, row.providerReference, row.status])).toEqual(
+      before.map((row) => [row.id, row.provider, row.providerReference, row.status])
+    );
+  });
+
+  it("flag online hidup: online=true hanya bila gateway juga terkonfigurasi", async () => {
+    const { buyer } = await createWebOrder();
+    backendEnv.MEMBERSHIP_ONLINE_PAYMENT_ENABLED = true;
+
+    expect((await getJson("/api/v1/web/membership/payment-options", buyer)).data.online).toBe(true);
+
+    backendEnv.MIDTRANS_SERVER_KEY = undefined;
+    expect((await getJson("/api/v1/web/membership/payment-options", buyer)).data.online).toBe(false);
+  });
+
+  it("flag online hidup tetapi gerbang kanal pembelian tertutup: online=false", async () => {
+    const { buyer } = await createWebOrder();
+    backendEnv.MEMBERSHIP_ONLINE_PAYMENT_ENABLED = true;
+    backendEnv.MEMBERSHIP_PURCHASE_WEB_ENABLED = false;
+    expect((await getJson("/api/v1/web/membership/payment-options", buyer)).data.online).toBe(false);
   });
 
   it("opsi tampil bila semua gerbang terbuka dan rekening terisi", async () => {
