@@ -141,6 +141,8 @@ Edit `.env` di folder **rilis baru** (`/var/www/releases/tapgo-<sha>/apps/backen
 | `EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED` | `true` | sudah `true` |
 | `MEMBERSHIP_PURCHASE_WEB_ENABLED` | `true` | sudah `true` |
 | `MEMBERSHIP_DOCUMENT_SECRET` | acak ≥ 32 karakter | sudah terisi; **jangan diganti** (mengganti membuat dokumen tersimpan tidak terbaca) |
+| `MANUAL_TOPUP_MIN_AMOUNT` | `50000` | Minimal top up Saldo TapGo (driver dan perjalanan); bawaan sudah 50000, tidak perlu diubah |
+| `MANUAL_TOPUP_PPOB_MIN_AMOUNT` | `25000` | **Opsional** (bawaan 25000): minimal top up Saldo PPOB |
 
 ### 3.2 Tetap dipastikan
 | Variabel | Nilai |
@@ -185,3 +187,17 @@ Baru setelah lolos, umumkan ke pengguna.
 
 - Rute lama `POST /admin/member-requests/:id/approve` (Super Admin) masih bisa mengonfirmasi pesanan manual tanpa pemeriksaan nominal kembar untuk transfer terlambat. UI memakai `confirm-transfer`. Perannya sama (Super Admin), jadi bukan eskalasi hak akses.
 - Versi aplikasi tidak dinaikkan; build rilis driver_app 1.0.0+4 dan uji lapangan driver belum dinyatakan lolos.
+
+## 8. Top up: tujuan Saldo TapGo dan Saldo PPOB
+
+Halaman `/topup` (satu-satunya tautan dari aplikasi user dan driver) kini meminta tujuan sebelum jumlah:
+
+| Tujuan | Saldo yang dikredit | Minimal | Pilihan cepat | Keterangan |
+|---|---|---|---|---|
+| **Saldo TapGo** (bawaan) | `balance` + `cashBalance` | Rp50.000 | 50rb, 100rb, 200rb, 500rb, 1jt | Dipakai driver (komisi pesanan tunai dipotong dari saldo ini) dan pembayaran perjalanan |
+| **Saldo PPOB** | `ppobBalance` saja | **Rp25.000** | **25rb**, 50rb, 100rb, 200rb, 500rb | Khusus pulsa, token, tagihan; **tidak dapat ditarik** |
+
+- Maksimal per pesanan Rp5.000.000 (`MANUAL_TOPUP_MAX_AMOUNT`). Nominal yang dikreditkan = **nominal transfer penuh, termasuk kode unik** (mis. transfer Rp25.930 → Saldo PPOB Rp25.930).
+- Tautan `https://tapgolion.id/topup?tujuan=ppob` memilihkan Saldo PPOB sejak masuk (tanpa `tujuan` = Saldo TapGo). Aplikasi mobile saat ini menautkan ke `/topup` tanpa parameter; menautkan layar PPOB ke `?tujuan=ppob` butuh rilis aplikasi dan sengaja tidak dikerjakan di rilis ini.
+- Tujuan disimpan di metadata pesanan (tanpa migrasi). Pesanan lama tanpa penanda dibaca sebagai Saldo TapGo. Konsol admin (Top Up Manual) menampilkan tujuan dan nominal yang akan dikreditkan, sehingga Super Admin tahu saldo mana yang bertambah saat menekan Konfirmasi.
+- Rekening dan kode unik dipakai bersama membership, top up Saldo TapGo, dan top up Saldo PPOB; nominal transfer tidak pernah kembar di antara pesanan terbuka.

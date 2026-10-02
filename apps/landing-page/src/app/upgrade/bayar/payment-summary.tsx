@@ -247,13 +247,15 @@ export default function PaymentSummary() {
         </>
       )}
 
-      <button
-        type="button"
-        onClick={() => router.push("/upgrade/paket")}
-        className={`${secondaryButtonClass} mt-3`}
-      >
-        Ubah pilihan paket
-      </button>
+      {transfer ? null : (
+        <button
+          type="button"
+          onClick={() => router.push("/upgrade/paket")}
+          className={`${secondaryButtonClass} mt-3`}
+        >
+          Ubah pilihan paket
+        </button>
+      )}
     </div>
   );
 }

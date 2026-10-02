@@ -9,7 +9,9 @@ import { ManualTopUpService } from "../application/ManualTopUpService.js";
 
 const service = new ManualTopUpService(prisma);
 
-const createSchema = z.object({ body: z.object({ amount: z.coerce.number().int() }) });
+const createSchema = z.object({
+  body: z.object({ amount: z.coerce.number().int(), target: z.enum(["WALLET", "PPOB"]).default("WALLET") }),
+});
 const idSchema = z.object({ params: z.object({ orderId: z.string().uuid() }) });
 const listSchema = z.object({ query: z.object({ status: z.enum(["PENDING", "PAID", "CANCELLED"]).optional() }) });
 const rejectSchema = z.object({
@@ -24,7 +26,11 @@ webManualTopUpRouter.post(
   "/topup/manual",
   validateRequest(createSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const data = await service.createOrder({ userId: req.auth!.userId, amount: Number(req.body.amount) });
+    const data = await service.createOrder({
+      userId: req.auth!.userId,
+      amount: Number(req.body.amount),
+      target: req.body.target,
+    });
     res.status(StatusCodes.CREATED).json({ success: true, data });
   }),
 );

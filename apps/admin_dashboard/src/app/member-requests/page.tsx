@@ -560,7 +560,10 @@ export default function MemberRequestsPage() {
                     {selected.payments?.[0]?.provider === "MANUAL_BANK" ? (
                       <>
                         <p className="mt-2 text-sm leading-6 text-slate-600">
-                          Dokumen ditolak, dana {formatRupiah(selected.totalAmount)} wajib kembali penuh. Pembayaran ini transfer
+                          Dokumen ditolak, dana wajib kembali penuh. Pemohon mentransfer{" "}
+                          <strong>{formatRupiah(manualTransferOf(selected)?.transferAmount ?? selected.totalAmount)}</strong>
+                          {manualTransferOf(selected)?.uniqueCode ? ` (harga ${formatRupiah(selected.totalAmount)} + kode unik ${manualTransferOf(selected)!.uniqueCode})` : ""}
+                          : kembalikan sebesar nominal yang benar-benar ditransfer. Pembayaran ini transfer
                           bank manual, jadi kembalikan lewat transfer bank dari rekening perusahaan (hubungi pemohon di{" "}
                           {selected.user?.phone ?? "nomor terdaftar"} untuk rekening tujuan), lalu catat di sini dengan nomor
                           referensi transfer baliknya.

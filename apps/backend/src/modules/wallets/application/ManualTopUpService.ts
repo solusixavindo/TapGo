@@ -13,6 +13,24 @@ export const MANUAL_TOPUP_PROVIDER = MANUAL_BANK_PROVIDER;
 const MAX_OPEN_ORDERS_PER_USER = 3;
 
 /**
+ * Tujuan top up. WALLET = Saldo TapGo (balance + cashBalance): dipakai driver
+ * (komisi pesanan tunai) dan pembayaran perjalanan. PPOB = Saldo PPOB
+ * (ppobBalance saja): hanya untuk pembelian pulsa/token/tagihan dan TIDAK dapat
+ * ditarik. Disimpan di metadata pesanan (tanpa migrasi); pesanan lama tanpa
+ * nilai ini dibaca sebagai WALLET.
+ */
+export type TopUpTarget = "WALLET" | "PPOB";
+
+export function topUpTargetOf(metadata: Prisma.JsonValue | null | undefined): TopUpTarget {
+  const target = (metadata ?? {}) as { target?: unknown };
+  return target.target === "PPOB" ? "PPOB" : "WALLET";
+}
+
+export function minimumAmountFor(target: TopUpTarget): number {
+  return target === "PPOB" ? env.MANUAL_TOPUP_PPOB_MIN_AMOUNT : env.MANUAL_TOPUP_MIN_AMOUNT;
+}
+
+/**
  * Top up saldo lewat transfer bank manual. Pengguna membuat pesanan di web,
  * mendapat nominal dengan kode unik (mis. Rp100.347) dan rekening perusahaan;
  * Super Admin mencocokkan mutasi bank lalu mengonfirmasi. Semua pembukuan saldo
@@ -48,6 +66,7 @@ export class ManualTopUpService {
     return {
       id: order.id,
       reference: order.reference,
+      target: topUpTargetOf(order.metadata),
       status: order.status,
       transferAmount: order.amount.toNumber(),
       baseAmount: meta.baseAmount ?? null,
@@ -59,13 +78,15 @@ export class ManualTopUpService {
   }
 
   /** Nominal transfer = jumlah top up + kode unik 1..999, unik di antara pesanan terbuka. */
-  async createOrder(input: { userId: string; amount: number }) {
+  async createOrder(input: { userId: string; amount: number; target?: TopUpTarget }) {
     this.assertEnabled();
     const bank = this.bankDetails();
     void bank;
-    if (!Number.isInteger(input.amount) || input.amount < env.MANUAL_TOPUP_MIN_AMOUNT || input.amount > env.MANUAL_TOPUP_MAX_AMOUNT) {
+    const target: TopUpTarget = input.target ?? "WALLET";
+    const minimum = minimumAmountFor(target);
+    if (!Number.isInteger(input.amount) || input.amount < minimum || input.amount > env.MANUAL_TOPUP_MAX_AMOUNT) {
       throw new AppError(
-        `Nominal top up harus antara Rp${env.MANUAL_TOPUP_MIN_AMOUNT.toLocaleString("id-ID")} dan Rp${env.MANUAL_TOPUP_MAX_AMOUNT.toLocaleString("id-ID")}.`,
+        `Nominal top up ${target === "PPOB" ? "Saldo PPOB" : "Saldo TapGo"} harus antara Rp${minimum.toLocaleString("id-ID")} dan Rp${env.MANUAL_TOPUP_MAX_AMOUNT.toLocaleString("id-ID")}.`,
         StatusCodes.BAD_REQUEST,
         "MANUAL_TOPUP_AMOUNT_INVALID",
       );
@@ -99,7 +120,7 @@ export class ManualTopUpService {
             status: "PENDING",
             method: "BANK_TRANSFER",
             provider: MANUAL_TOPUP_PROVIDER,
-            metadata: { baseAmount: input.amount, uniqueCode },
+            metadata: { baseAmount: input.amount, uniqueCode, target },
             expiresAt: new Date(now.getTime() + env.MANUAL_TOPUP_EXPIRY_HOURS * 3600_000),
           },
         });
@@ -127,6 +148,7 @@ export class ManualTopUpService {
     return rows.map((r) => ({
       id: r.id,
       reference: r.reference,
+      target: topUpTargetOf(r.metadata),
       status: r.status,
       transferAmount: r.amount.toNumber(),
       baseAmount: ((r.metadata ?? {}) as { baseAmount?: number }).baseAmount ?? null,
