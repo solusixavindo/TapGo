@@ -152,6 +152,15 @@ const envSchema = z.object({
   MANUAL_TOPUP_MIN_AMOUNT: z.coerce.number().int().min(1000).default(50000),
   MANUAL_TOPUP_MAX_AMOUNT: z.coerce.number().int().max(50000000).default(5000000),
   MANUAL_TOPUP_EXPIRY_HOURS: z.coerce.number().int().min(1).max(168).default(24),
+  /// Pembayaran membership lewat transfer bank manual (kode unik + konfirmasi
+  /// Super Admin), kanal WEB saja. Dipakai selama gateway (Midtrans/DOKU) belum
+  /// aktif. Independen dari MANUAL_TOPUP_ENABLED, tetapi MEMAKAI rekening yang
+  /// sama (MANUAL_TOPUP_BANK_NAME/ACCOUNT_NUMBER/ACCOUNT_HOLDER) dan masa
+  /// berlaku yang sama (MANUAL_TOPUP_EXPIRY_HOURS) — satu rekening perusahaan,
+  /// jadi kode unik dialokasikan bersama supaya tidak bentrok dengan top up.
+  /// Tetap tunduk pada EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED dan
+  /// MEMBERSHIP_PURCHASE_WEB_ENABLED (gerbang kanal pembelian).
+  MANUAL_MEMBERSHIP_TRANSFER_ENABLED: strictEnvBoolean(false),
   /// Verifikasi wajah harian driver sebelum online. Default mati: pencocokan
   /// terjadi di HP driver (tidak ada API pihak ketiga), server hanya melacak
   /// hari/percobaan dan menegakkan ambang batas — lihat DriverFaceCheckService.

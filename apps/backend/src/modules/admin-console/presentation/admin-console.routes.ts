@@ -19,6 +19,7 @@ import { DriverDocumentController } from "../../drivers/presentation/driver-docu
 import { AdminRoleService } from "../application/AdminRoleService.js";
 import { MembershipRefundService } from "../../memberships/application/MembershipRefundService.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
+import { ManualMembershipTransferService } from "../../memberships/application/ManualMembershipTransferService.js";
 import { MembershipDocumentController } from "../../memberships/presentation/membership-document.controller.js";
 import {
   membershipDocumentListSchema,
@@ -51,6 +52,7 @@ import {
 const service = new AdminConsoleService(prisma);
 const walletService = new WalletService(new PrismaWalletRepository(prisma));
 const membershipOrderService = new MembershipOrderService(prisma);
+const manualMembershipTransferService = new ManualMembershipTransferService(prisma, membershipOrderService);
 const adminRoleService = new AdminRoleService(prisma);
 const membershipRefundService = new MembershipRefundService(prisma);
 const systemHealthService = new SystemHealthService(prisma, redis);
@@ -135,6 +137,22 @@ adminConsoleRouter.post(
   requireRoles("SUPER_ADMIN"),
   validateRequest(adminMemberRequestActionSchema),
   asyncHandler(controller.approveMemberRequest)
+);
+// Konfirmasi transfer bank manual membership: hanya Super Admin (uang), dan
+// hanya untuk pengajuan yang memang memakai transfer manual. Verifikasi dokumen
+// tetap langkah terpisah sesudahnya.
+adminConsoleRouter.post(
+  "/member-requests/:id/confirm-transfer",
+  requireRoles("SUPER_ADMIN"),
+  validateRequest(adminMemberRequestActionSchema),
+  asyncHandler(async (req, res) => {
+    const data = await manualMembershipTransferService.confirm({
+      orderId: String(req.params.id),
+      actorId: req.auth!.userId,
+      actorRole: req.auth!.role,
+    });
+    res.json({ success: true, data });
+  })
 );
 // Admin membuka dokumen untuk dicetak menjadi berkas administrasi. Ini
 // satu-satunya jalan keluar isi dokumen dari database.

@@ -15,6 +15,7 @@ import {
   readToken,
   rejectDocuments,
   cancelUnpaidMemberRequest,
+  confirmManualTransfer,
   confirmMemberPayment,
   roleAtLeast,
   requestDocumentCorrection,
@@ -43,6 +44,30 @@ type CorrectionInfo = { reason?: string; requestedAt?: string; resubmittedAt?: s
 function correctionOf(request: MemberRequest): CorrectionInfo | null {
   const value = request.registrationData?.documentCorrection;
   return value && typeof value === "object" ? (value as CorrectionInfo) : null;
+}
+
+type ManualTransfer = {
+  transferAmount: number;
+  baseAmount: number | null;
+  uniqueCode: number | null;
+  expiresAt: string | null;
+  expired: boolean;
+};
+
+/** Petunjuk transfer manual pada pengajuan ini, atau null bila bukan transfer manual. */
+function manualTransferOf(request: MemberRequest): ManualTransfer | null {
+  const payment = request.payments?.[0];
+  if (!payment || payment.provider !== "MANUAL_BANK") return null;
+  const meta = payment.metadata ?? {};
+  if (typeof meta.transferAmount !== "number") return null;
+  const expiresAt = typeof meta.expiresAt === "string" ? meta.expiresAt : null;
+  return {
+    transferAmount: meta.transferAmount,
+    baseAmount: typeof meta.baseAmount === "number" ? meta.baseAmount : null,
+    uniqueCode: typeof meta.uniqueCode === "number" ? meta.uniqueCode : null,
+    expiresAt,
+    expired: request.status === "PENDING" && expiresAt !== null && new Date(expiresAt).getTime() < Date.now()
+  };
 }
 
 function statusLabel(request: MemberRequest) {
@@ -156,7 +181,16 @@ export default function MemberRequestsPage() {
   async function decideUnpaid(action: "confirm" | "cancel") {
     if (!selected || busy) return;
     const name = selected.user?.fullName ?? "pemohon";
-    if (action === "confirm") {
+    const transfer = manualTransferOf(selected);
+    if (action === "confirm" && transfer) {
+      const late = transfer.expired ? " Batas waktu transfer SUDAH LEWAT; pastikan nominal ini memang masuk dari pemohon." : "";
+      if (
+        !window.confirm(
+          `Konfirmasi transfer ${formatRupiah(transfer.transferAmount)} dari ${name} sudah masuk di mutasi rekening?${late} Pengajuan lanjut ke verifikasi dokumen; membership belum aktif.`
+        )
+      )
+        return;
+    } else if (action === "confirm") {
       const consequence =
         selected.channel === "WEB"
           ? "Pengajuan lanjut ke verifikasi dokumen; membership belum aktif."
@@ -170,8 +204,17 @@ export default function MemberRequestsPage() {
     setNotice("");
     try {
       if (action === "confirm") {
-        await confirmMemberPayment(selected.id);
-        setNotice("Pembayaran dikonfirmasi.");
+        if (transfer) {
+          const result = await confirmManualTransfer(selected.id);
+          setNotice(
+            result.alreadyConfirmed
+              ? "Transfer ini sudah pernah dikonfirmasi sebelumnya."
+              : "Transfer dikonfirmasi. Pengajuan lanjut ke verifikasi dokumen."
+          );
+        } else {
+          await confirmMemberPayment(selected.id);
+          setNotice("Pembayaran dikonfirmasi.");
+        }
       } else {
         await cancelUnpaidMemberRequest(selected.id, cancelReason.trim());
         setNotice("Pengajuan dibatalkan.");
@@ -309,6 +352,11 @@ export default function MemberRequestsPage() {
                   <p className="mt-2 text-sm text-slate-600">
                     {request.membership?.name ?? "—"} · {formatRupiah(request.totalAmount)}
                   </p>
+                  {request.status === "PENDING" && manualTransferOf(request) ? (
+                    <p className="mt-1 text-xs font-semibold text-slate-700">
+                      Transfer manual: {formatRupiah(manualTransferOf(request)!.transferAmount)}
+                    </p>
+                  ) : null}
                 </button>
               ))}
             </div>
@@ -413,6 +461,33 @@ export default function MemberRequestsPage() {
                       Pengajuan ini menunggu pembayaran. Konfirmasi hanya bila dana sudah terlihat di rekening perusahaan. Verifikasi
                       dokumen dan keputusan setujui / perbaiki / tolak dilakukan sesudah pembayaran dikonfirmasi.
                     </p>
+
+                    {(() => {
+                      const transfer = manualTransferOf(selected);
+                      if (!transfer) return null;
+                      return (
+                        <div
+                          className={`mt-4 rounded-xl border p-4 ${transfer.expired ? "border-amber-300 bg-amber-50" : "border-emerald-200 bg-emerald-50/50"}`}
+                          data-testid="manual-transfer-info"
+                        >
+                          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Transfer bank manual</p>
+                          <p className="mt-1 text-2xl font-black tabular-nums text-slate-900">{formatRupiah(transfer.transferAmount)}</p>
+                          <p className="mt-1 text-xs leading-5 text-slate-600">
+                            Cocokkan nominal ini PERSIS dengan mutasi masuk
+                            {transfer.baseAmount !== null && transfer.uniqueCode !== null
+                              ? ` (harga paket ${formatRupiah(transfer.baseAmount)} + kode unik ${transfer.uniqueCode})`
+                              : ""}
+                            .
+                          </p>
+                          {transfer.expiresAt ? (
+                            <p className={`mt-1 text-xs font-semibold ${transfer.expired ? "text-amber-800" : "text-slate-600"}`}>
+                              {transfer.expired ? "Batas waktu sudah lewat: " : "Berlaku sampai "}
+                              {formatMoment(transfer.expiresAt)}
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    })()}
                     <div className="mt-4 flex flex-wrap items-center gap-3">
                       <button
                         type="button"
@@ -420,7 +495,7 @@ export default function MemberRequestsPage() {
                         disabled={busy}
                         className="rounded-lg bg-brand-green px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                       >
-                        Konfirmasi pembayaran
+                        {manualTransferOf(selected) ? "Konfirmasi transfer masuk" : "Konfirmasi pembayaran"}
                       </button>
                       <input
                         value={cancelReason}

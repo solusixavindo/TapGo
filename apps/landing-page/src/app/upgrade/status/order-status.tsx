@@ -32,7 +32,7 @@ const STATUS_VIEW: Record<
     tone: "wait",
     label: "Menunggu pembayaran",
     headline: "Pembayaran belum kami terima",
-    body: "Selesaikan pembayaran sebelum batas waktu. Pengajuan otomatis kedaluwarsa setelah 24 jam."
+    body: "Selesaikan pembayaran sebelum batas waktu. Untuk transfer bank, tim TapGo mengonfirmasi setelah mutasi rekening dicek. Pengajuan otomatis kedaluwarsa setelah 24 jam."
   },
   PAID_AWAITING_VERIFICATION: {
     tone: "review",
@@ -278,6 +278,12 @@ export default function OrderStatus() {
               </dd>
             </div>
           </dl>
+
+          {status === "PENDING" && !PREVIEW_MODE ? (
+            <Link href="/upgrade/bayar" className={`${secondaryButtonClass} mt-5`}>
+              Lihat petunjuk pembayaran
+            </Link>
+          ) : null}
 
           {status === "PAID_AWAITING_VERIFICATION" && order.correction && !order.correction.resubmitted ? (
             <CorrectionPanel order={order} onDone={() => void refresh()} />

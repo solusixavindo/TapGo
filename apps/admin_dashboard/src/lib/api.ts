@@ -28,6 +28,8 @@ export type MemberRequest = {
   invoice: { number: string } | null;
   userMembership: { status: string } | null;
   user: { id: string; fullName: string; phone: string; referralCode: string; status?: string } | null;
+  /** Pembayaran terbaru; untuk transfer manual metadata memuat nominal berkode unik. */
+  payments?: Array<{ provider: string; method: string; status: string; metadata: Record<string, unknown> | null }>;
 };
 
 export type DocumentSummary = {
@@ -124,6 +126,18 @@ export function confirmMemberPayment(orderId: string) {
     method: "POST",
     body: JSON.stringify({})
   });
+}
+
+/**
+ * Super Admin mengonfirmasi bahwa transfer bank manual (nominal + kode unik) sudah
+ * masuk ke rekening perusahaan. Berbeda dari confirmMemberPayment: memeriksa batas
+ * waktu dan kemungkinan nominal kembar, serta mencatat audit khusus.
+ */
+export function confirmManualTransfer(orderId: string) {
+  return request<{ orderId: string; status: string; alreadyConfirmed: boolean }>(
+    `/admin/member-requests/${orderId}/confirm-transfer`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
 }
 
 /** Super Admin membatalkan pengajuan yang belum dibayar. */
