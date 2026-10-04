@@ -2219,9 +2219,17 @@ export class RideService {
       input.eventKeySuffix ?? "",
     ].join(":");
 
-    try {
-      await tx.rideEvent.create({
-        data: {
+    // INSERT ... ON CONFLICT DO NOTHING (skipDuplicates), BUKAN create lalu
+    // menelan P2002. Dua alasan, keduanya terbukti di produksi/tes:
+    // 1. create yang gagal tetap dicatat mesin Prisma sebagai event `error`
+    //    dan diteruskan ke Sentry (TAPGO-BACKEND-2, reject ganda 29 Sep 2026)
+    //    padahal duplikat itu terduga dan idempoten.
+    // 2. Di dalam $transaction PostgreSQL, INSERT yang melanggar unique
+    //    membatalkan SELURUH transaksi (SQLSTATE 25P02) walau P2002 ditelan,
+    //    sehingga pernyataan berikutnya gagal.
+    await tx.rideEvent.createMany({
+      data: [
+        {
           rideOrderId: input.rideOrderId,
           type: input.type,
           ...(input.actorUserId ? { actorUserId: input.actorUserId } : {}),
@@ -2232,17 +2240,9 @@ export class RideService {
           ...(input.metadata ? { metadata: input.metadata as Prisma.InputJsonValue } : {}),
           eventKey: key,
         },
-      });
-    } catch (error) {
-      // Event duplikat diabaikan agar operasi tetap idempoten.
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
-      ) {
-        return;
-      }
-      throw error;
-    }
+      ],
+      skipDuplicates: true,
+    });
   }
 
   /**
