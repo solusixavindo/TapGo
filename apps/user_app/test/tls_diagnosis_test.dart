@@ -113,6 +113,33 @@ void main() {
       expect(message, isNot(contains(_networkMessage)));
     });
 
+    test('kegagalan TLS yang BUKAN penolakan pin (pinning aktif) menjadi certificateInvalid',
+        () async {
+      // Dio mengeluarkan DioExceptionType.unknown + HandshakeException untuk
+      // SEMUA kegagalan TLS, termasuk penolakan pin, jadi penolakan pin dikenali
+      // dari callback pin. Di sini handshake gagal sebelum callback dipanggil
+      // (server HTTP biasa dihubungi lewat https). Pesan "perbarui dari Google
+      // Play" hanya untuk penolakan pin.
+      final plain = await HttpServer.bind('127.0.0.1', 0);
+      plain.listen((request) {
+        request.response.write('{}');
+        request.response.close();
+      });
+      try {
+        final dio = tapGoPinnedDioForTests(
+            baseUrl: 'https://localhost:${plain.port}',
+            pins: {certA.spkiSha256Hex});
+        final error = await _failure(dio);
+        expect(tapGoTlsFailureOf(error), TapGoTlsFailure.certificateInvalid);
+        final message = tapGoTlsFailureMessage(error)!;
+        expect(message, contains('tanggal dan jam'));
+        expect(message, contains('belum tentu'));
+        expect(message, isNot(contains('Google Play')));
+      } finally {
+        await plain.close(force: true);
+      }
+    });
+
     test('pin kosong pada build rilis dikenali sebagai pinNotConfigured',
         () async {
       final dio =

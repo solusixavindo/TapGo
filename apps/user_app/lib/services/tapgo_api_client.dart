@@ -38,6 +38,26 @@ Set<String> get _tlsPinnedSpkiSha256Hashes => _tlsPinShaEnv
 /// berarti build rilis TANPA TAPGO_TLS_PIN_SHA256, atau di platform yang
 /// adapternya tidak mendukung pinning kustom, tidak bisa menghubungi server
 /// apa pun; nilai pin wajib diisi Owner sebelum build rilis diedarkan.
+/// Mencatat penolakan oleh callback pin. Dio mengeluarkan
+/// DioExceptionType.unknown + HandshakeException untuk SEMUA kegagalan TLS —
+/// termasuk penolakan pin — jadi penolakan pin tidak dapat dikenali dari tipe
+/// galat. Callback pin sendiri yang tahu, maka ia yang mencatatnya; tiap
+/// permintaan menandai hitungan awalnya (RequestOptions.extra) dan dianggap
+/// ditolak pin bila hitungan bertambah selama permintaan itu berjalan.
+class _PinRejectionLog {
+  static const _startKey = 'tapgo_pin_rejections_at_start';
+  int _count = 0;
+
+  void record() => _count += 1;
+
+  void markStart(RequestOptions options) => options.extra[_startKey] = _count;
+
+  bool rejectedDuring(RequestOptions options) {
+    final atStart = options.extra[_startKey];
+    return atStart is int && _count > atStart;
+  }
+}
+
 void _applyTlsPinning(Dio dio, Set<String> allowedPins, String Function() expectedHost) {
   if (allowedPins.isEmpty) {
     _rejectAllRequestsForTlsPinning(
@@ -57,28 +77,43 @@ void _applyTlsPinning(Dio dio, Set<String> allowedPins, String Function() expect
     );
     return;
   }
+  final rejections = _PinRejectionLog();
   adapter.createHttpClient = () {
     final client = HttpClient(context: SecurityContext(withTrustedRoots: false));
     client.badCertificateCallback = (X509Certificate cert, String host, int port) {
-      return tapGoShouldAcceptPinnedCertificate(
+      final accepted = tapGoShouldAcceptPinnedCertificate(
         host: host,
         expectedHost: expectedHost(),
         certificateDer: Uint8List.fromList(cert.der),
         allowedSpkiSha256Hex: allowedPins,
       );
+      if (!accepted) rejections.record();
+      return accepted;
     };
     return client;
   };
-  // Menandai kegagalan TLS yang terjadi SAAT pinning aktif sebagai pinMismatch
-  // (bukan sekadar "sertifikat tidak valid") dan melaporkannya sekali.
+  // Penolakan pin ditandai pinMismatch; kegagalan TLS lain saat pinning aktif
+  // (jam HP salah, jaringan yang mencegat, protokol gagal) tetap
+  // certificateInvalid. Keduanya dilaporkan sekali ke Sentry.
   dio.interceptors.add(
     InterceptorsWrapper(
+      onRequest: (options, handler) {
+        rejections.markStart(options);
+        handler.next(options);
+      },
       onError: (error, handler) {
         if (_isTlsFailure(error) && error.error is! _TlsPinMismatch) {
+          final pinRejected = rejections.rejectedDuring(error.requestOptions);
           _reportTlsFailureOnce(
-              _tlsFailureCode(TapGoTlsFailure.pinMismatch), error.requestOptions.uri.host);
-          handler.next(error.copyWith(error: _TlsPinMismatch(error.error)));
-          return;
+            _tlsFailureCode(pinRejected
+                ? TapGoTlsFailure.pinMismatch
+                : TapGoTlsFailure.certificateInvalid),
+            error.requestOptions.uri.host,
+          );
+          if (pinRejected) {
+            handler.next(error.copyWith(error: _TlsPinMismatch(error.error)));
+            return;
+          }
         }
         handler.next(error);
       },
@@ -138,7 +173,8 @@ String? tapGoTlsFailureMessage(Object error) {
           'Pasang versi terbaru dari Google Play atau hubungi bantuan TapGo.';
     case TapGoTlsFailure.certificateInvalid:
       return 'Koneksi aman ke server TapGo gagal diverifikasi. '
-          'Periksa tanggal dan jam HP Anda, lalu coba lagi.';
+          'Periksa tanggal dan jam HP Anda, lalu coba lagi. '
+          'Ini belum tentu berarti aplikasi harus diperbarui.';
     case null:
       return null;
   }
