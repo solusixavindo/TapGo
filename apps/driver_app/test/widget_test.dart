@@ -447,6 +447,34 @@ void main() {
       expect(find.text('Ketersediaan'), findsNothing);
     });
 
+    testWidgets(
+        'login ditolak 401 INVALID_CREDENTIALS tetap di layar login dengan pesan Indonesia',
+        (tester) async {
+      // Regresi APK +4 (4 Okt 2026): 401 saat login dipetakan menjadi
+      // sessionExpired sehingga driver dilempar ke layar "Sesi berakhir"
+      // alih-alih tetap di form login dengan pesan yang bisa ditindaklanjuti.
+      // Kode di bawah adalah kode NYATA backend (AuthService.ts), bukan
+      // karangan, supaya pemetaan pesan diuji pada masukan sebenarnya.
+      final repo = FakeDriverRepository(
+        session: null,
+        loginError: const DriverApiException(
+          code: 'INVALID_CREDENTIALS',
+          message: 'Nomor HP atau password salah.',
+          statusCode: 401,
+        ),
+      );
+      await pumpDriver(tester, repo);
+
+      await tester.tap(find.byKey(const ValueKey('driver-login-button')));
+      await tester.pumpAndSettle();
+
+      expect(repo.loginCalls, 1);
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(find.byKey(const ValueKey('driver-login-button')), findsOneWidget);
+      expect(find.text('Sesi berakhir'), findsNothing);
+      expect(find.text('Nomor HP atau password salah.'), findsOneWidget);
+    });
+
     testWidgets('login berhasil, ADMIN tidak mendapat bypass dari client',
         (tester) async {
       final repo = FakeDriverRepository(session: null);
@@ -595,6 +623,70 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Pengajuan #1'), findsOneWidget);
+    });
+
+    testWidgets(
+        'H1: pengajuan gagal dengan pesan yang memuat kata "terkirim" tidak menutup wizard',
+        (tester) async {
+      // Keberhasilan dulu dideteksi lewat message.contains('terkirim'), jadi
+      // pesan galat yang kebetulan memuat kata itu menutup wizard seolah sukses
+      // dan data yang sudah diisi hilang.
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        currentError: const DriverApiException(
+          code: 'RIDE_DRIVER_NOT_ACTIVE',
+          message: 'Akun driver belum aktif untuk menerima perjalanan.',
+          statusCode: 403,
+        ),
+      )..submitError = const DriverApiException(
+          code: 'SERVER_BUSY',
+          message: 'Pengajuan belum terkirim. Silakan coba lagi.',
+          statusCode: 503,
+        );
+      for (final kind in DriverDocumentKind.values) {
+        await repo.uploadDocument(
+          kind: kind,
+          bytes: Uint8List.fromList([1, 2, 3]),
+          contentType: 'image/png',
+        );
+      }
+      await pumpDriver(tester, repo);
+
+      final nextKey = find.byKey(const ValueKey('driver-application-wizard-next'));
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('start-application-wizard')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.byKey(const ValueKey('start-application-wizard')));
+      await tester.pumpAndSettle();
+      await tester.tap(nextKey);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('wizard-full-name')), 'Budi Santoso');
+      await tester.enterText(find.byKey(const ValueKey('wizard-address')), 'Jl. Melati No. 5');
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('wizard-date-of-birth')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('wizard-emergency-name')), 'Siti');
+      await tester.enterText(find.byKey(const ValueKey('wizard-emergency-phone')), '081234567890');
+      await tester.pump();
+      await tester.tap(nextKey);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('wizard-plate')), 'B 1234 UJI');
+      await tester.pump();
+      await tester.tap(nextKey);
+      await tester.pumpAndSettle();
+      await tester.tap(nextKey);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('wizard-declaration-checkbox')));
+      await tester.pumpAndSettle();
+      await tester.tap(nextKey);
+      await tester.pumpAndSettle();
+
+      expect(repo.submitCalls, 0);
+      expect(find.byKey(const ValueKey('wizard-declaration-checkbox')), findsOneWidget);
     });
 
     testWidgets('H1: pengajuan terbuka dapat ditarik lewat dialog konfirmasi',
@@ -989,6 +1081,64 @@ void main() {
         find.textContaining('Tidak bisa mendapatkan lokasi Anda'),
         findsWidgets,
       );
+    });
+
+    testWidgets(
+        'SOS gagal karena server belum punya rute: pesan Indonesia, tombol tidak macet, WhatsApp CS tetap ada',
+        (tester) async {
+      // Backend produksi yang belum memuat rute SOS membalas 404
+      // ROUTE_NOT_FOUND (pesan Inggris). Driver dalam bahaya harus tetap
+      // melihat jalan keluar: tombol bisa ditekan lagi dan CS tersedia.
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        availability: DriverAvailability.online,
+      )..sosError = const DriverApiException(
+          code: 'ROUTE_NOT_FOUND',
+          message: 'Fitur ini belum tersedia di server. Perbarui aplikasi atau coba lagi nanti.',
+          statusCode: 404,
+        );
+      final location = RecordingLocationPort(available: true)
+        ..fix = const DriverLocationFix(lat: -6.2, lng: 106.8, accuracyMeters: 8);
+      await pumpDriver(tester, repo, locationPort: location);
+
+      await tapReachable(tester, find.byTooltip('SOS Darurat'));
+      await tester.pumpAndSettle();
+      await tapReachable(tester, find.text('Kirim SOS'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Kirim sinyal darurat?'), findsOneWidget);
+      expect(find.textContaining('belum tersedia di server'), findsWidgets);
+      expect(find.textContaining('Route '), findsNothing);
+      expect(find.text('WhatsApp CS'), findsOneWidget);
+      final send = tester.widget<FilledButton>(
+          find.ancestor(of: find.text('Kirim SOS'), matching: find.byType(FilledButton)));
+      expect(send.onPressed, isNotNull);
+    });
+
+    testWidgets('galat tak terduga saat SOS tidak membuat tombol macet',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        availability: DriverAvailability.online,
+      )..sosError = StateError('di luar dugaan');
+      final location = RecordingLocationPort(available: true)
+        ..fix = const DriverLocationFix(lat: -6.2, lng: 106.8, accuracyMeters: 8);
+      await pumpDriver(tester, repo, locationPort: location);
+
+      await tapReachable(tester, find.byTooltip('SOS Darurat'));
+      await tester.pumpAndSettle();
+      await tapReachable(tester, find.text('Kirim SOS'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Kirim sinyal darurat?'), findsOneWidget);
+      expect(find.textContaining('StateError'), findsNothing);
+      expect(find.textContaining('di luar dugaan'), findsNothing);
+      final send = tester.widget<FilledButton>(
+          find.ancestor(of: find.text('Kirim SOS'), matching: find.byType(FilledButton)));
+      expect(send.onPressed, isNotNull);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('tombol WhatsApp CS selalu tersedia di dialog SOS sebagai cadangan',
@@ -1625,6 +1775,69 @@ void main() {
 
       await tester.pump(const Duration(seconds: 15));
       expect(location.sendCalls, 2);
+    });
+
+    testWidgets(
+        'gangguan jaringan sesaat saat polling tidak menutup workspace dan polling terus berjalan',
+        (tester) async {
+      // Sebelumnya satu kegagalan jaringan pada poll 12 detik memanggil
+      // _applyCapabilityError: seluruh workspace diganti layar "Koneksi belum
+      // stabil" DAN _stopPolling() mematikan polling + pengiriman lokasi —
+      // driver di tengah perjalanan (mis. lewat terowongan) kehilangan
+      // aplikasinya sampai menekan "Coba lagi" secara manual.
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        current: demoRide(RideStatus.inTrip),
+      );
+      final location = RecordingLocationPort(available: true);
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, locationPort: location));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('network-error')), findsNothing);
+
+      repo.currentError = const DriverApiException(
+        code: 'NETWORK_ERROR',
+        message: 'Koneksi belum stabil. Silakan coba lagi.',
+      );
+      final callsBefore = repo.currentRideCalls;
+      await tester.pump(const Duration(seconds: 12));
+      await tester.pump();
+      expect(repo.currentRideCalls, greaterThan(callsBefore),
+          reason: 'poll harus benar-benar mencoba lagi');
+      expect(find.byKey(const ValueKey('network-error')), findsNothing);
+      expect(find.byType(NavigationBar), findsOneWidget);
+
+      // Jaringan pulih: polling masih hidup tanpa campur tangan driver.
+      repo.currentError = null;
+      final callsAfterFailure = repo.currentRideCalls;
+      await tester.pump(const Duration(seconds: 12));
+      await tester.pump();
+      expect(repo.currentRideCalls, greaterThan(callsAfterFailure));
+      expect(find.byKey(const ValueKey('network-error')), findsNothing);
+
+      // Lokasi tetap terkirim sepanjang gangguan.
+      final sendsBefore = location.sendCalls;
+      await tester.pump(const Duration(seconds: 5));
+      expect(location.sendCalls, greaterThan(sendsBefore));
+    });
+
+    testWidgets(
+        'status akun benar-benar berubah (suspended) saat polling tetap menutup workspace',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        current: demoRide(RideStatus.inTrip),
+      );
+      await tester.pumpWidget(buildTestableDriverApp(repository: repo));
+      await tester.pumpAndSettle();
+      repo.currentError = const DriverApiException(
+        code: 'RIDE_DRIVER_SUSPENDED',
+        message: 'Akun driver ditangguhkan.',
+        statusCode: 403,
+      );
+      await tester.pump(const Duration(seconds: 12));
+      await tester.pump();
+      expect(find.byType(NavigationBar), findsNothing);
     });
 
     testWidgets('saat ada perjalanan aktif lokasi terkirim tiap 5 detik',

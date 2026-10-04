@@ -4,42 +4,29 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tapgo_driver_app/core/security/tls_pinning.dart';
 
-/// Byte DER sertifikat X.509 sungguhan, dipakai sebagai vektor uji ekstraksi
-/// SubjectPublicKeyInfo (M4). BUKAN nilai tebakan: diambil langsung dari
-/// `openssl s_client -connect api.tapgolion.id:443 -showcerts` (audit
-/// keamanan 30 September 2026) dan dari sertifikat self-signed yang dibuat
-/// lokal dengan `openssl req -x509`. Hash SHA-256 pembanding di setiap test
-/// dihitung independen lewat
-/// `openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256`
-/// — bukan disalin dari kode yang sedang diuji.
+/// Byte DER sertifikat X.509 yang dipakai sebagai vektor uji ekstraksi
+/// SubjectPublicKeyInfo (M4). Intermediate CA Let's Encrypt (YE1) adalah
+/// sertifikat publik; leaf dan RSA dibuat lokal. Hash pembanding di setiap
+/// test dihitung independen lewat openssl — bukan disalin dari kode yang
+/// sedang diuji.
 ///
-/// Sertifikat produksi (leaf) berlaku sampai 2026-11-02; bila test ini mulai
-/// gagal setelah tanggal itu karena sertifikat sudah diperbarui, itu memang
-/// terduga (leaf Let's Encrypt berumur pendek) — bukan regresi. Perbarui
-/// vektornya dengan cara yang sama.
+/// Sertifikat EC sintetis yang dibuat lokal (`openssl ecparam` + `openssl req
+/// -x509`), BUKAN milik server produksi — kunci privatnya dibuang. Dipakai
+/// sebagai vektor "leaf" (algoritma EC). Hash SPKI dihitung independen lewat
+/// `openssl x509 -pubkey -noout | openssl pkey -pubin -outform der |
+/// openssl dgst -sha256`. Vektor produksi sebelumnya dilepas (4 Okt 2026):
+/// leaf Let's Encrypt diputar tiap perpanjangan, jadi tidak boleh ada nilai
+/// pin produksi tertanam di repo.
 const _leafCertificateDerBase64 =
-    'MIIDjzCCAxWgAwIBAgISBfcDAeWSmEzFplFhq2YMJmVVMAoGCCqGSM49BAMDMDMx'
-    'CzAJBgNVBAYTAlVTMRYwFAYDVQQKEw1MZXQncyBFbmNyeXB0MQwwCgYDVQQDEwNZ'
-    'RTEwHhcNMjYwODA0MTkwOTMyWhcNMjYxMTAyMTkwOTMxWjAbMRkwFwYDVQQDExBh'
-    'cGkudGFwZ29saW9uLmlkMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEoFv71qDQ'
-    'FPSj42DO+h/Z0l5vNXWOcI2Dvn3BBN1g1U648hXhST7FxCrLL9VCXlVo38+oQ1Nu'
-    '2d6im0huE0VU3KOCAh8wggIbMA4GA1UdDwEB/wQEAwIHgDATBgNVHSUEDDAKBggr'
-    'BgEFBQcDATAMBgNVHRMBAf8EAjAAMB0GA1UdDgQWBBRWoiIBavQipYj3d33IWKh3'
-    '3ifmlDAfBgNVHSMEGDAWgBS7IMpHC/7X5Zz5jwkqo4w3RbG82DAzBggrBgEFBQcB'
-    'AQQnMCUwIwYIKwYBBQUHMAKGF2h0dHA6Ly95ZTEuaS5sZW5jci5vcmcvMBsGA1Ud'
-    'EQQUMBKCEGFwaS50YXBnb2xpb24uaWQwEwYDVR0gBAwwCjAIBgZngQwBAgEwLgYD'
-    'VR0fBCcwJTAjoCGgH4YdaHR0cDovL3llMS5jLmxlbmNyLm9yZy84Ni5jcmwwggEN'
-    'BgorBgEEAdZ5AgQCBIH+BIH7APkAdwDLOPcViXyEoURfW8Hd+8lu8ppZzUcKaQWF'
-    'sMsUwxRY5wAAAZ/OY+0uAAAEAwBIMEYCIQCMW1Ee25nKCLLtNZhb1z9ybPkf0Fc+'
-    'Tq4o0HySmATS4AIhANhShw8T0EWo/AIgvTegOvPcf9mAbXstAFR/D2S6tkGIAH4A'
-    'Rq+GPTs+5Z+ld96oJF02sNntIqIj9GF3QSKUUu6VUF8AAAGfzmPtVAAIAAAFAA/R'
-    'eO8EAwBHMEUCIQCYrC+6AzJBKQaeiqJhZYzviTuunpi7U7TeC2KzD3OBSAIgL1+a'
-    'w7cAyGDilVe1XgCqTW7wdP8qWEMU4mVxhJo2DnkwCgYIKoZIzj0EAwMDaAAwZQIx'
-    'ALjeIIGnjAyCUP7r45I8ykFpy/DuE675ott//ZscbBgbobbZdMeAa04aLOFpQ8G2'
-    'KwIwbuQ11pHtw0i/mtNH0lp9eaFdY0PCLtMwW3G19EU6tFu0Ms9jYb/pbNI9XkxR'
-    'sxQF';
+    'MIIBMTCB2AIJAK1+GnEUhES3MAoGCCqGSM49BAMCMCAxHjAcBgNVBAMMFXRhcGdv'
+    'LXRlc3QtZWMtZml4dHVyZTAgFw0yNjEwMDQxMDM5NTVaGA8yMTI2MDkxMDEwMzk1'
+    'NVowIDEeMBwGA1UEAwwVdGFwZ28tdGVzdC1lYy1maXh0dXJlMFkwEwYHKoZIzj0C'
+    'AQYIKoZIzj0DAQcDQgAEmsw9EeG4ZrTtgdifUh4NQRJHl3nBFWN6u2SwOYDcQW9q'
+    'tgnBlAUK+H/OKRbOfZBt5lq2beynLHo1XGqaIJlmfTAKBggqhkjOPQQDAgNIADBF'
+    'AiEA7jeuM56lm7xJ5cRQGBULxcAzwi7uj+sroSyME2rMwJcCIFsB3U88OZPekeLF'
+    'LP8pXGziusWotHxn1phX74cXDjvW';
 const _leafSpkiSha256Hex =
-    'd8a3f82de44e0e155d459c39f5d64aec66b78da2343fafbfad6c728a9254f8b8';
+    '0676ac80ef648960d90979c5c219f4974fbecb9deb2cb7c71ac92d72ca960e53';
 
 const _intermediateCertificateDerBase64 =
     'MIICizCCAhGgAwIBAgIQXd1w3TH4AchcGGp6BLgK/jAKBggqhkjOPQQDAzAuMQsw'
@@ -85,7 +72,7 @@ Uint8List _decode(String base64Der) => base64.decode(base64Der);
 
 void main() {
   group('tapGoExtractSubjectPublicKeyInfoDer', () {
-    test('mengambil SPKI dari sertifikat leaf produksi (EC, api.tapgolion.id)', () {
+    test('mengambil SPKI dari sertifikat leaf sintetis (EC)', () {
       final spki = tapGoExtractSubjectPublicKeyInfoDer(_decode(_leafCertificateDerBase64));
       expect(spki, isNotNull);
       expect(tapGoSha256Hex(spki!), _leafSpkiSha256Hex);

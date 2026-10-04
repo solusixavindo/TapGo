@@ -87,6 +87,51 @@ offline, ambang kelelahan per jenis kendaraan, onlineSince bertahan lewat BUSY),
 due). driver_app: 3 test widget baru (banner kelelahan muncul/hilang, banner recheck membuka layar
 yang benar, recheck diutamakan di atas kelelahan saat keduanya aktif).
 
+## Perbaikan setelah uji HP 4 Oktober 2026 (build ulang 1.0.0+4)
+
+Owner menguji APK 1.0.0+4 sebelumnya dan melaporkan kemunduran: halaman Login menampilkan
+"Koneksi belum stabil. Silakan coba lagi." Penelusuran akar masalah dan audit menyeluruh
+menghasilkan perubahan berikut (semua tercatat di `REGRESSION_REGISTER.md` beserta ujinya).
+
+**Akar masalah laporan itu** — bukan regresi kode. Pin TLS di APK adalah hash SPKI sertifikat *leaf*
+server; Let's Encrypt menerbitkan kunci leaf baru tiap perpanjangan, dan sertifikat diperbarui
+3 Okt 2026, jadi pin di APK lama tidak cocok lagi dan SETIAP permintaan gagal handshake. Tiga bukti
+independen: (1) string pin yang tertanam di `libapp.so` APK, (2) hash SPKI sertifikat live berbeda,
+(3) fungsi pin menolak pin lama terhadap sertifikat live dan menerima pin baru.
+
+**Yang diperbaiki di aplikasi**
+- Kegagalan sertifikat/TLS kini dibedakan dari gangguan sinyal dan menampilkan pesan yang bisa
+  ditindaklanjuti ("Perbarui aplikasi dari Google Play…"), dan dilaporkan sekali ke Sentry bila aktif.
+- Login ditolak (kata sandi salah) tetap di form login dengan pesan Indonesia, bukan layar
+  "Sesi berakhir".
+- Pesan galat server berbahasa Inggris dipetakan ke pesan Indonesia.
+- Gangguan jaringan sesaat saat polling tidak lagi menutup workspace dan tidak menghentikan polling
+  serta pengiriman lokasi (bug lama yang paling berbahaya saat di tengah perjalanan).
+- SOS: galat tak terduga tidak membuat tombol macet; WhatsApp CS tetap tersedia.
+- Wizard pengajuan tidak lagi tertutup oleh pesan galat yang berisi kata "terkirim".
+- Tautan isi saldo dari server hanya dibuka bila https ke tapgolion.id.
+- Izin `RECORD_AUDIO` dan `READ_MEDIA_IMAGES` dihapus (tidak dipakai); foto wajah sementara dihapus
+  setelah verifikasi; warna teks mode gelap diperbaiki.
+
+**Yang diperbaiki di proses rilis**
+- `scripts/check-tls-pin-live.sh` membandingkan pin dengan sertifikat live; gerbang rilis membatalkan
+  build bila tidak cocok, dan memeriksa bahwa pin benar-benar tertanam di APK.
+- Vektor uji berisi sertifikat produksi diganti sertifikat sintetis; uji TLS memakai handshake
+  sungguhan.
+
+**Syarat agar APK ini tetap berfungsi (tindakan Owner, bukan kode)**
+1. **Rotasi kunci sertifikat.** Pin leaf akan basi lagi pada perpanjangan berikutnya (±60 hari sejak
+   3 Okt 2026, yaitu sekitar awal Desember 2026) kecuali certbot memakai `reuse_key`. Atur di VPS
+   (`renew_before_expiry`/`reuse_key = True` pada berkas renewal certbot untuk domain API), lalu
+   jalankan `scripts/check-tls-pin-live.sh` terjadwal sebagai pemantau.
+2. **Backend produksi harus memuat endpoint dari PR #1** (`POST /driver/sos`,
+   `GET /driver/safety-status`, `POST /driver/face-check/recheck-attempt`) sebelum APK ini dipakai di
+   lapangan. Di produksi yang hanya menjalankan branch `release/membership-manual-transfer`, tiga
+   endpoint itu membalas `ROUTE_NOT_FOUND`: SOS gagal (dengan pesan jelas dan jalur WhatsApp CS),
+   banner kelelahan/verifikasi ulang tidak muncul.
+3. user_app memakai desain pin yang sama dan berisiko sama; pin-nya perlu diperiksa dengan skrip yang
+   sama sebelum rilis berikutnya.
+
 ## Yang TIDAK bisa diselesaikan dari sisi kode (butuh tindakan Owner langsung)
 
 Ditulis jujur supaya tidak ada kesan "100% siap Play Store" padahal belum:
@@ -111,4 +156,4 @@ karena ada pekerjaan kode yang belum ditemukan.
 ## Uji
 
 - Backend: 1226 test lolos (SOS, gerbang versi minimum, recheck wajah + kelelahan).
-- driver_app: 125 test lolos, `flutter analyze` bersih.
+- driver_app: 160 test lolos (20 dilewati: bukti visual, bawaan), `flutter analyze` bersih, gerbang rilis lolos pada 4 Okt 2026.

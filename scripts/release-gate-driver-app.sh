@@ -53,6 +53,18 @@ if [ -z "${TAPGO_TLS_PIN_SHA256:-}" ]; then
   fail "TAPGO_TLS_PIN_SHA256 kosong di environment shell ini — build rilis dibatalkan (fail-closed). Jalankan: export TAPGO_TLS_PIN_SHA256=<hash SPKI produksi>, lalu ulangi skrip ini."
 fi
 
+# Regresi APK +4 (4 Okt 2026): pin yang tidak cocok dengan sertifikat live
+# lolos semua uji otomatis tetapi membuat SETIAP permintaan di HP gagal.
+# Pin dibandingkan dengan sertifikat yang disajikan server SEKARANG; gagal
+# (1) atau tidak dapat diperiksa (2) sama-sama membatalkan build.
+# TAPGO_SKIP_LIVE_PIN_CHECK=1 hanya untuk kondisi offline yang disengaja.
+step "3b. Pin TLS cocok dengan sertifikat live"
+if [ "${TAPGO_SKIP_LIVE_PIN_CHECK:-0}" = "1" ]; then
+  echo "DILEWATI (TAPGO_SKIP_LIVE_PIN_CHECK=1) — pin TIDAK diverifikasi terhadap server."
+else
+  "$root/scripts/check-tls-pin-live.sh" || fail "pin TLS tidak cocok / tidak dapat diverifikasi terhadap sertifikat live — build dibatalkan"
+fi
+
 step "4. Build rilis APK dan AAB"
 flutter build apk --release --dart-define=TAPGO_TLS_PIN_SHA256="$TAPGO_TLS_PIN_SHA256" 2>&1 | tail -2
 flutter build appbundle --release --dart-define=TAPGO_TLS_PIN_SHA256="$TAPGO_TLS_PIN_SHA256" 2>&1 | tail -2
@@ -62,6 +74,13 @@ aab="$app/build/app/outputs/bundle/release/app-release.aab"
 step "5. Pemeriksa artefak dan identitas paket"
 VERIFY_CONTROL_STRING="/driver/rides/offers" "$root/scripts/verify-mobile-artifact.sh" "$apk"
 VERIFY_CONTROL_STRING="/driver/rides/offers" "$root/scripts/verify-mobile-artifact.sh" "$aab"
+# Pin harus benar-benar tertanam di biner Dart (bukan hanya ada di env saat build).
+# Dihitung dengan grep -c (bukan -q): -q menutup pipa lebih awal, unzip kena
+# SIGPIPE, dan pipefail menandai pemeriksaan gagal padahal pin ada.
+for abi_so in $(unzip -Z1 "$apk" 'lib/*/libapp.so'); do
+  found="$(unzip -p "$apk" "$abi_so" | grep -ac "${TAPGO_TLS_PIN_SHA256%%,*}" || true)"
+  [ "${found:-0}" -ge 1 ] || fail "pin TLS tidak ditemukan di $abi_so — dart-define tidak terpasang"
+done
 aapt="$(ls -d "$HOME"/Library/Android/sdk/build-tools/*/aapt 2>/dev/null | tail -1)"
 if [ -n "$aapt" ]; then
   badging="$("$aapt" dump badging "$apk")"
@@ -69,6 +88,11 @@ if [ -n "$aapt" ]; then
     || fail "package/versionCode/versionName tidak cocok dengan pubspec ($version_line)"
   # Aplikasi driver tidak boleh meminta izin lokasi latar belakang tanpa deklarasi Play.
   if echo "$badging" | grep -q "ACCESS_BACKGROUND_LOCATION"; then fail "ACCESS_BACKGROUND_LOCATION terdeteksi; butuh keputusan dan deklarasi Play"; fi
+  # Verifikasi wajah hanya memotret (enableAudio: false); izin mikrofon dan
+  # baca-galeri tidak dipakai dan tidak boleh ikut terbawa (audit 4 Okt 2026).
+  for perm in RECORD_AUDIO READ_MEDIA_IMAGES; do
+    if echo "$badging" | grep -q "uses-permission: name='android.permission.$perm'"; then fail "izin $perm terdeteksi di APK padahal tidak dipakai"; fi
+  done
 fi
 
 step "6. Salin ke Desktop dan checksum"

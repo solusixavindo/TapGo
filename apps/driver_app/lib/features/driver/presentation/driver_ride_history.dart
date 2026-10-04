@@ -109,7 +109,7 @@ class _RideHistoryCard extends StatelessWidget {
               style: Theme.of(context)
                   .textTheme
                   .bodySmall
-                  ?.copyWith(color: Colors.grey[600]),
+                  ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
             const SizedBox(height: 10),
             Text('${ride.pickupAddress} ke ${ride.dropoffAddress}', maxLines: 3),
@@ -120,7 +120,7 @@ class _RideHistoryCard extends StatelessWidget {
                 style: Theme.of(context)
                     .textTheme
                     .bodySmall
-                    ?.copyWith(fontStyle: FontStyle.italic, color: Colors.grey[700]),
+                    ?.copyWith(fontStyle: FontStyle.italic, color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
             ],
             const SizedBox(height: 10),
