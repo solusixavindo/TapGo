@@ -2811,7 +2811,8 @@ Future<void> _showPhoneEditSheet(
                 errorMessage = switch (code) {
                   'INVALID_CREDENTIALS' => 'Password saat ini salah.',
                   'PHONE_ALREADY_IN_USE' => 'Nomor HP sudah dipakai akun lain.',
-                  _ => 'Gagal mengubah nomor HP. Silakan coba lagi.',
+                  _ => tapGoTlsFailureMessage(error) ??
+                      'Gagal mengubah nomor HP. Silakan coba lagi.',
                 };
               });
             } catch (_) {

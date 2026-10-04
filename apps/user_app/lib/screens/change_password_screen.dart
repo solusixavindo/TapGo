@@ -5,6 +5,8 @@ part of '../main.dart';
 /// Tidak pernah menampilkan exception mentah dari backend. Kode yang tidak
 /// dikenali jatuh ke pesan umum, bukan ke `error.toString()`.
 String tapGoChangePasswordErrorMessage(Object error) {
+  final tls = tapGoTlsFailureMessage(error);
+  if (tls != null) return tls;
   if (error is DioException) {
     final data = _authResponseDataMap(error.response?.data);
     final code = data?['code']?.toString();
