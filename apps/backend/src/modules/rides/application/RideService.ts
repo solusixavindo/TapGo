@@ -7,6 +7,7 @@ import {
   RideDriverStatus,
   RideOrderStatus,
   RideServiceType,
+  RideSosAlertStatus,
   RideVehicleVerificationStatus,
 } from "@prisma/client";
 import { createHash, randomBytes } from "node:crypto";
@@ -582,8 +583,14 @@ export class RideService {
         ? CANCELLATION_FEE
         : 0;
 
-      const updated = await tx.rideOrder.update({
-        where: { id: order.id },
+      // Audit keamanan 30 September 2026 (sisa review): klaim atomic bersyarat
+      // pada status yang baru dibaca — pola sama dengan acceptOrder dan
+      // correctStatusByAdmin. Dua pembatalan bersamaan (mis. passenger dan
+      // cancelByDriver/admin) tidak lagi bisa sama-sama lolos dan sama-sama
+      // memanggil releaseCashCommissionHold/refundDigitalPayment/releaseDriver
+      // — hanya transaksi yang MEMENANGKAN klaim ini yang boleh melepas dana.
+      const claim = await tx.rideOrder.updateMany({
+        where: { id: order.id, status: order.status },
         data: {
           status: "CANCELLED_BY_PASSENGER",
           cancelledByUserId: input.userId,
@@ -595,9 +602,26 @@ export class RideService {
           cancelledAt: new Date(),
         },
       });
+      if (claim.count !== 1) {
+        const current = await tx.rideOrder.findUniqueOrThrow({ where: { id: order.id } });
+        if (current.status === "CANCELLED_BY_PASSENGER") {
+          // Pemanggil lain (request duplikat/retry) sudah mencapai hasil yang
+          // SAMA PERSIS yang diminta pemanggil ini — idempoten, bukan gagal.
+          // Dana sudah dilepas oleh transaksi yang menang; tidak dilepas lagi.
+          return this.toOrderView(current);
+        }
+        throw new AppError(
+          "Status perjalanan berubah, silakan muat ulang",
+          StatusCodes.CONFLICT,
+          "RIDE_STATUS_CONFLICT",
+        );
+      }
+
+      const updated = await tx.rideOrder.findUniqueOrThrow({ where: { id: order.id } });
 
       await this.releaseDriver(tx, order.driverProfileId);
       await this.refundDigitalPayment(tx, order);
+      await this.releaseCashCommissionHold(tx, order.id);
       await this.writeEvent(tx, {
         rideOrderId: order.id,
         type: "CANCELLED",
@@ -644,12 +668,69 @@ export class RideService {
     ) {
       await this.faceCheck.requirePassedToday(input.userId);
     }
+    // onlineSince menandai awal sesi kerja TANPA TERPUTUS (dasar pengingat
+    // kelelahan) — diisi hanya pada transisi OFFLINE->ONLINE sungguhan,
+    // dikosongkan hanya pada transisi ->OFFLINE. ONLINE<->BUSY (menerima
+    // atau menyelesaikan order) TIDAK menyentuh kolom ini: driver yang
+    // sedang menjalankan perjalanan tetap dianggap bekerja, bukan istirahat.
+    const onlineSinceUpdate =
+      input.availability === "ONLINE" && profile.availability === "OFFLINE"
+        ? { onlineSince: new Date() }
+        : input.availability === "OFFLINE"
+          ? { onlineSince: null }
+          : {};
     const updated = await this.prisma.rideDriverProfile.update({
       where: { id: profile.id },
-      data: { availability: input.availability, lastSeenAt: new Date() },
+      data: { availability: input.availability, lastSeenAt: new Date(), ...onlineSinceUpdate },
       select: { id: true, availability: true, status: true },
     });
     return updated;
+  }
+
+  /**
+   * Status keselamatan yang dipoll driver_app secara berkala SELAMA online
+   * (bukan sekali saat toggle) — pengingat kelelahan (nudge, tidak memaksa
+   * offline) dan kewajiban verifikasi ulang wajah acak (yang MEMAKSA offline
+   * bila gagal, lihat DriverFaceCheckService.submitRecheckAttempt).
+   *
+   * Ambang kelelahan dipilih dari kendaraan AKTIF driver — bila ia terdaftar
+   * di lebih dari satu jenis, dipakai yang PALING KETAT (lebih aman salah
+   * mengingatkan lebih awal daripada terlambat).
+   */
+  async getSafetyStatus(userId: string) {
+    const profile = await this.requireDriverProfile(userId);
+
+    let fatigue: {
+      continuousOnlineMinutes: number;
+      thresholdMinutes: number | null;
+      restRequired: boolean;
+    };
+    if (!profile.onlineSince) {
+      fatigue = { continuousOnlineMinutes: 0, thresholdMinutes: null, restRequired: false };
+    } else {
+      const vehicleTypes = await this.prisma.rideVehicle.findMany({
+        where: { driverProfileId: profile.id, isActive: true },
+        select: { type: true },
+      });
+      const thresholds = vehicleTypes.map((v) =>
+        v.type === "CAR"
+          ? env.DRIVER_FATIGUE_CAR_MAX_ONLINE_MINUTES
+          : env.DRIVER_FATIGUE_MOTORCYCLE_MAX_ONLINE_MINUTES,
+      );
+      const thresholdMinutes = thresholds.length > 0 ? Math.min(...thresholds) : null;
+      const continuousOnlineMinutes = Math.floor(
+        (Date.now() - profile.onlineSince.getTime()) / 60000,
+      );
+      fatigue = {
+        continuousOnlineMinutes,
+        thresholdMinutes,
+        restRequired: thresholdMinutes !== null && continuousOnlineMinutes >= thresholdMinutes,
+      };
+    }
+
+    const faceRecheckDue = await this.faceCheck.isRecheckDue(userId);
+
+    return { fatigue, faceRecheck: { due: faceRecheckDue } };
   }
 
   /** Tawaran yang layak untuk driver (hanya order yang masih mencari driver). */
@@ -690,6 +771,12 @@ export class RideService {
       select: { type: true },
     });
     if (vehicleTypes.length === 0) return [];
+
+    // Verifikasi ulang wajah acak (E2 mitigasi) belum diselesaikan hari ini —
+    // driver tidak melihat tawaran apa pun sampai lolos, persis pola yang
+    // sama dengan kendaraan tidak terverifikasi di atas. Otoritatif dari
+    // server, tidak bisa dilewati klien.
+    if (await this.faceCheck.isRecheckDue(userId)) return [];
 
     const proximity = env.RIDE_OFFER_PROXIMITY_ENABLED;
     const now = new Date();
@@ -918,6 +1005,15 @@ export class RideService {
         "RIDE_DRIVER_NOT_ACTIVE",
       );
     }
+    // Lapis pertahanan KEDUA untuk gerbang recheck (lihat listOffersForDriver)
+    // — otoritatif di titik penerimaan sungguhan, bukan cuma di daftar tawaran.
+    if (await this.faceCheck.isRecheckDue(input.userId)) {
+      throw new AppError(
+        "Verifikasi ulang wajah diperlukan sebelum menerima pesanan.",
+        StatusCodes.FORBIDDEN,
+        "RIDE_DRIVER_FACE_RECHECK_REQUIRED",
+      );
+    }
 
     const driverPoint = env.RIDE_OFFER_PROXIMITY_ENABLED
       ? await this.freshDriverPoint(profile.id)
@@ -991,7 +1087,7 @@ export class RideService {
       }
 
       if (order.paymentMethod === "CASH") {
-        await this.assertCommissionCovered(tx, profile.userId, order.totalFare);
+        await this.holdCashCommission(tx, order, profile.userId);
       }
 
       const vehicle = await tx.rideVehicle.findFirst({
@@ -1164,7 +1260,7 @@ export class RideService {
         if (order.paymentMethod === "DIGITAL") {
           await this.settleDigitalPayment(tx, order, profile.id);
         } else {
-          await this.chargeCashCommission(tx, order, profile.userId);
+          await this.finalizeCashCommissionHold(tx, order);
         }
       }
 
@@ -1219,8 +1315,10 @@ export class RideService {
 
       assertTransition(order.status, "CANCELLED_BY_DRIVER", "DRIVER");
 
-      const updated = await tx.rideOrder.update({
-        where: { id: order.id },
+      // Audit keamanan 30 September 2026 (sisa review): klaim atomic bersyarat
+      // pada status yang baru dibaca — lihat catatan sama di cancelByPassenger.
+      const claim = await tx.rideOrder.updateMany({
+        where: { id: order.id, status: order.status },
         data: {
           status: "CANCELLED_BY_DRIVER",
           cancelledByUserId: input.userId,
@@ -1231,11 +1329,30 @@ export class RideService {
           cancellationPolicy: CANCELLATION_POLICY_VERSION,
           cancelledAt: new Date(),
         },
+      });
+      if (claim.count !== 1) {
+        const current = await tx.rideOrder.findUniqueOrThrow({
+          where: { id: order.id },
+          include: DRIVER_DISCLOSURE_INCLUDE,
+        });
+        if (current.status === "CANCELLED_BY_DRIVER") {
+          return this.toOrderView(current);
+        }
+        throw new AppError(
+          "Status perjalanan berubah, silakan muat ulang",
+          StatusCodes.CONFLICT,
+          "RIDE_STATUS_CONFLICT",
+        );
+      }
+
+      const updated = await tx.rideOrder.findUniqueOrThrow({
+        where: { id: order.id },
         include: DRIVER_DISCLOSURE_INCLUDE,
       });
 
       await this.releaseDriver(tx, profile.id);
       await this.refundDigitalPayment(tx, order);
+      await this.releaseCashCommissionHold(tx, order.id);
       await this.writeEvent(tx, {
         rideOrderId: order.id,
         type: "CANCELLED",
@@ -1327,6 +1444,107 @@ export class RideService {
 
     // Respons sengaja tidak mengembalikan koordinat.
     return { accepted: true, sequence };
+  }
+
+  /**
+   * Tombol SOS driver.
+   *
+   * Prinsip: catat dulu, sebarkan setelahnya. Baris `RideSosAlert` di bawah
+   * adalah BUKTI bahwa sinyal darurat sampai ke server — ini harus berhasil
+   * walau setiap upaya pemberitahuan sesudahnya gagal total. Karena ini fitur
+   * keselamatan, pemeriksaan di sini SENGAJA lebih longgar daripada
+   * `requireDriverProfile()`: driver yang berstatus non-ACTIVE (mis. baru
+   * disuspend saat masih di tengah perjalanan aktif) tetap harus bisa memicu
+   * SOS. Otorisasi hanya menuntut profil driver ADA — bukan aktif.
+   *
+   * `rideReference`, bila dikirim, hanya diterima setelah dicocokkan sebagai
+   * milik driver ini sendiri; referensi ride milik orang lain diam-diam
+   * diabaikan (bukan error) supaya tombol darurat tidak pernah gagal hanya
+   * karena field opsional ini salah.
+   */
+  async triggerSos(input: {
+    userId: string;
+    lat: number;
+    lng: number;
+    accuracyMeters?: number;
+    rideReference?: string;
+  }) {
+    if (!isValidCoordinate({ lat: input.lat, lng: input.lng })) {
+      throw new AppError("Koordinat tidak valid", StatusCodes.BAD_REQUEST, "RIDE_COORDINATE_INVALID");
+    }
+
+    const profile = await this.prisma.rideDriverProfile.findUnique({
+      where: { userId: input.userId },
+      select: { id: true },
+    });
+    if (!profile) {
+      throw new AppError(
+        "Profil driver tidak ditemukan",
+        StatusCodes.FORBIDDEN,
+        "RIDE_DRIVER_PROFILE_REQUIRED",
+      );
+    }
+
+    let rideOrderId: string | null = null;
+    if (input.rideReference) {
+      const order = await this.prisma.rideOrder.findUnique({
+        where: { publicReference: input.rideReference },
+        select: { id: true, driverProfileId: true },
+      });
+      if (order && order.driverProfileId === profile.id) {
+        rideOrderId = order.id;
+      }
+    }
+
+    const alert = await this.prisma.rideSosAlert.create({
+      data: {
+        driverProfileId: profile.id,
+        rideOrderId,
+        lat: new Prisma.Decimal(input.lat),
+        lng: new Prisma.Decimal(input.lng),
+        ...(input.accuracyMeters !== undefined
+          ? { accuracyMeters: Math.trunc(input.accuracyMeters) }
+          : {}),
+      },
+    });
+
+    this.notifyAdminsOfSos(alert.id, profile.id);
+
+    return { alertId: alert.id, status: alert.status, createdAt: alert.createdAt };
+  }
+
+  /**
+   * Memberi tahu seluruh ADMIN/SUPER_ADMIN/SUPER_ADMIN_VIP aktif bahwa ada
+   * sinyal SOS baru. Dipanggil setelah alert ter-commit, tidak pernah
+   * ditunggu — kegagalan push tidak boleh membuat pemicu SOS tampak gagal.
+   *
+   * CATATAN: TapGo belum memiliki provider SMS/WhatsApp produksi (lihat
+   * komentar domain di OtpDeliveryProvider). Push ini HANYA menjangkau admin
+   * yang membuka aplikasi mobile dengan token push terdaftar — dashboard web
+   * admin tidak menerima FCM. Selama itu belum ada, baris `RideSosAlert` di
+   * atas tetap menjadi jalur keselamatan utama: admin yang memantau konsol
+   * secara berkala akan tetap melihatnya lewat `listSosAlerts`.
+   */
+  private notifyAdminsOfSos(alertId: string, driverProfileId: string) {
+    if (!this.push.enabled) return;
+    void (async () => {
+      const admins = await this.prisma.user.findMany({
+        where: {
+          role: { in: ["ADMIN", "SUPER_ADMIN", "SUPER_ADMIN_VIP"] },
+          status: "ACTIVE",
+        },
+        select: { id: true },
+      });
+      for (const admin of admins) {
+        await this.push
+          .notifyUser(admin.id, {
+            title: "SOS Driver",
+            body: "Seorang driver menekan tombol darurat. Buka konsol admin segera.",
+            data: { type: "driver_sos", alertId },
+          })
+          .catch(() => undefined);
+      }
+    })().catch(() => undefined);
   }
 
   // -------------------------------------------------------------------------
@@ -1489,6 +1707,7 @@ export class RideService {
 
       await this.releaseDriver(tx, order.driverProfileId);
       await this.refundDigitalPayment(tx, order);
+      await this.releaseCashCommissionHold(tx, order.id);
       await this.writeEvent(tx, {
         rideOrderId: order.id,
         type: input.status === "CANCELLED_BY_SYSTEM" ? "CANCELLED" : "STATUS_CHANGED",
@@ -1790,6 +2009,79 @@ export class RideService {
     return vehicle;
   }
 
+  /** Daftar sinyal SOS untuk konsol admin. Default: yang belum tuntas saja. */
+  async listSosAlerts(input: { status?: RideSosAlertStatus; limit?: number }) {
+    const alerts = await this.prisma.rideSosAlert.findMany({
+      where: { status: input.status ?? { in: ["OPEN", "ACKNOWLEDGED"] } },
+      orderBy: { createdAt: "desc" },
+      take: input.limit ?? 50,
+      select: {
+        id: true,
+        status: true,
+        lat: true,
+        lng: true,
+        accuracyMeters: true,
+        rideOrderId: true,
+        resolvedAt: true,
+        resolutionNote: true,
+        createdAt: true,
+        driverProfile: {
+          select: {
+            id: true,
+            user: { select: { id: true, fullName: true, phone: true } },
+          },
+        },
+      },
+    });
+    return alerts.map((alert) => ({
+      id: alert.id,
+      status: alert.status,
+      lat: Number(alert.lat),
+      lng: Number(alert.lng),
+      accuracyMeters: alert.accuracyMeters,
+      rideOrderId: alert.rideOrderId,
+      resolvedAt: alert.resolvedAt,
+      resolutionNote: alert.resolutionNote,
+      createdAt: alert.createdAt,
+      driver: {
+        driverProfileId: alert.driverProfile.id,
+        userId: alert.driverProfile.user.id,
+        fullName: alert.driverProfile.user.fullName,
+        phone: alert.driverProfile.user.phone,
+      },
+    }));
+  }
+
+  /**
+   * Menutup sinyal SOS lewat konsol admin — SATU-SATUNYA cara status berubah
+   * dari OPEN/ACKNOWLEDGED ke RESOLVED. Tidak ada penutupan otomatis: alert
+   * adalah bukti bahwa seseorang sungguh menanganinya, bukan sekadar sinyal
+   * yang kedaluwarsa sendiri.
+   */
+  async resolveSosAlert(input: { alertId: string; resolvedById: string; note: string }) {
+    const alert = await this.prisma.rideSosAlert.findUnique({ where: { id: input.alertId } });
+    if (!alert) {
+      throw new AppError("Sinyal SOS tidak ditemukan", StatusCodes.NOT_FOUND, "RIDE_SOS_NOT_FOUND");
+    }
+    if (alert.status === "RESOLVED") {
+      throw new AppError(
+        "Sinyal SOS ini sudah ditutup",
+        StatusCodes.CONFLICT,
+        "RIDE_SOS_ALREADY_RESOLVED",
+      );
+    }
+    const updated = await this.prisma.rideSosAlert.update({
+      where: { id: input.alertId },
+      data: {
+        status: "RESOLVED",
+        resolvedById: input.resolvedById,
+        resolvedAt: new Date(),
+        resolutionNote: input.note,
+      },
+    });
+    return { id: updated.id, status: updated.status, resolvedAt: updated.resolvedAt };
+  }
+
   // -------------------------------------------------------------------------
   // Helper
   // -------------------------------------------------------------------------
@@ -2005,46 +2297,37 @@ export class RideService {
   }
 
   /**
-   * Driver hanya boleh menerima pesanan tunai bila saldo TapGo-nya menutup
-   * komisi. Tidak berlaku bila DRIVER_COMMISSION_ENABLED mati.
+   * Audit keamanan 30 September 2026 (M2): komisi pesanan tunai kini DITAHAN
+   * (didebit sungguhan, atomic) pada saat driver MENERIMA order, bukan
+   * sekadar diperiksa lalu didebit belakangan saat selesai. Tiga method
+   * berikut menggantikan assertCommissionCovered (hanya membaca, rawan race
+   * antara pemeriksaan dan keputusan) dan chargeCashCommission (memotong
+   * seadanya bila saldo kurang, menyisakan shortfall yang justru pernah jadi
+   * ladang selisih):
+   *
+   * - holdCashCommission (accept): debit ATOMIC bersyarat (updateMany WHERE
+   *   balance >= fee) — saldo yang dipakai untuk komisi seketika tidak bisa
+   *   ikut ditarik withdraw, dan tidak ada lagi jendela race antara dua accept
+   *   bersamaan memakai saldo yang sama.
+   * - finalizeCashCommissionHold (complete): hold BERUBAH jadi biaya final.
+   *   Tidak ada mutasi saldo tambahan — uangnya sudah berpindah saat accept —
+   *   cukup menandai baris ledger yang sama sebagai FINALIZED. Bila hold
+   *   tidak ditemukan/tidak utuh, complete DITOLAK (bukan diselesaikan dengan
+   *   shortfall diam-diam).
+   * - releaseCashCommissionHold (cancel/expire sebelum complete): mengembalikan
+   *   PERSIS jumlah yang ditahan, mekanisme sama dengan refundDigitalPayment.
+   *
+   * Idempoten by construction: acceptOrder sudah menolak accept kedua kali
+   * (early-return sebelum method ini terpanggil) dan advanceByDriver sudah
+   * menolak transisi berulang ke status yang sama — hold/finalize/release
+   * masing-masing hanya pernah terjadi tepat sekali per order.
    */
-  private async assertCommissionCovered(
-    tx: Prisma.TransactionClient,
-    driverUserId: string,
-    totalFare: number,
-  ) {
-    if (!env.DRIVER_COMMISSION_ENABLED) return;
-    const fee = this.cashCommissionFee(totalFare);
-    const wallet = await tx.wallet.findUnique({
-      where: { userId: driverUserId },
-      select: { balance: true },
-    });
-    const balance = wallet?.balance ?? new Prisma.Decimal(0);
-    if (balance.lt(fee)) {
-      const shortBy = fee.minus(balance).toNumber();
-      throw new AppError(
-        `Saldo TapGo Anda kurang Rp${shortBy.toLocaleString("id-ID")} untuk komisi ${env.DRIVER_COMMISSION_PERCENT}% pesanan tunai ini. Isi saldo di tapgolion.id lalu coba lagi.`,
-        StatusCodes.PAYMENT_REQUIRED,
-        "RIDE_COMMISSION_BALANCE_INSUFFICIENT",
-      );
-    }
-  }
-
-  /**
-   * Memotong komisi pesanan tunai dari saldo driver saat perjalanan selesai.
-   * Tidak menyentuh tabel Commission/Business Engine: hanya satu baris ledger
-   * debit. Bila saldo ternyata kurang (mis. ditarik selama perjalanan), yang
-   * dipotong sebatas saldo tersedia dan selisihnya dicatat di metadata; sisa
-   * itu ditagih lewat syarat saldo pada pesanan tunai berikutnya. Dipanggil
-   * tepat sekali karena hanya dari transisi COMPLETED yang bersyarat.
-   */
-  private async chargeCashCommission(
+  private async holdCashCommission(
     tx: Prisma.TransactionClient,
     order: { id: string; totalFare: number },
     driverUserId: string,
   ) {
     if (!env.DRIVER_COMMISSION_ENABLED) return;
-    if (!Number.isFinite(order.totalFare) || order.totalFare <= 0) return;
     const fee = this.cashCommissionFee(order.totalFare);
     const wallet = await tx.wallet.upsert({
       where: { userId: driverUserId },
@@ -2052,30 +2335,144 @@ export class RideService {
       create: { userId: driverUserId },
       select: { id: true, balance: true, cashBalance: true },
     });
-    let charged = Prisma.Decimal.min(fee, wallet.balance);
-    if (charged.gt(0)) {
-      const applied = await tx.wallet.updateMany({
-        where: { id: wallet.id, balance: { gte: charged } },
-        data: {
-          balance: { decrement: charged },
-          cashBalance: { decrement: Prisma.Decimal.min(charged, wallet.cashBalance) },
-        },
-      });
-      if (applied.count !== 1) charged = new Prisma.Decimal(0);
+    const fromCash = Prisma.Decimal.min(fee, wallet.cashBalance);
+    // Kurang dari bacaan ini saja sudah pasti kurang — ditolak SEBELUM
+    // updateMany, supaya tidak pernah mencoba tulisan yang dijamin melanggar
+    // CHECK constraint (L1) hanya untuk menangkap errornya belakangan.
+    if (wallet.balance.lt(fee)) {
+      const shortBy = fee.minus(wallet.balance).toNumber();
+      throw new AppError(
+        `Saldo TapGo Anda kurang Rp${shortBy.toLocaleString("id-ID")} untuk komisi ${env.DRIVER_COMMISSION_PERCENT}% pesanan tunai ini. Isi saldo di tapgolion.id lalu coba lagi.`,
+        StatusCodes.PAYMENT_REQUIRED,
+        "RIDE_COMMISSION_BALANCE_INSUFFICIENT",
+      );
+    }
+    // Audit keamanan 30 September 2026 (sisa review): compare-and-set PENUH
+    // (balance DAN cashBalance sama persis dengan yang baru dibaca) — pola
+    // sama dengan holdDigitalPayment, bukan hanya "balance >= fee". fromCash
+    // di atas dihitung dari wallet.cashBalance hasil BACAAN ini; syarat lama
+    // (cuma balance >= fee) tidak mendeteksi bila cashBalance berubah di
+    // antara baca dan tulis, sehingga decrement cashBalance bisa memakai
+    // fromCash yang sudah basi dan mendorong cashBalance ke bawah nol. Cek
+    // kecukupan di atas menutup kasus "memang kurang sejak awal"; CAS di
+    // bawah menutup kasus "berubah di tengah jalan" — keduanya perlu, bukan
+    // saling menggantikan.
+    const applied = await tx.wallet.updateMany({
+      where: { id: wallet.id, balance: wallet.balance, cashBalance: wallet.cashBalance },
+      data: {
+        balance: { decrement: fee },
+        cashBalance: { decrement: fromCash },
+      },
+    });
+    if (applied.count !== 1) {
+      const fresh = await tx.wallet.findUniqueOrThrow({ where: { id: wallet.id }, select: { balance: true } });
+      if (fresh.balance.lt(fee)) {
+        const shortBy = fee.minus(fresh.balance).toNumber();
+        throw new AppError(
+          `Saldo TapGo Anda kurang Rp${shortBy.toLocaleString("id-ID")} untuk komisi ${env.DRIVER_COMMISSION_PERCENT}% pesanan tunai ini. Isi saldo di tapgolion.id lalu coba lagi.`,
+          StatusCodes.PAYMENT_REQUIRED,
+          "RIDE_COMMISSION_BALANCE_INSUFFICIENT",
+        );
+      }
+      throw new AppError(
+        "Saldo berubah, silakan coba lagi",
+        StatusCodes.CONFLICT,
+        "RIDE_BALANCE_CHANGED",
+      );
     }
     await tx.walletTransaction.create({
       data: {
         walletId: wallet.id,
         type: "PAYMENT",
-        amount: charged.neg(),
+        amount: fee.neg(),
         referenceType: "RIDE_COMMISSION_FEE",
         referenceId: order.id,
         metadata: {
           percent: env.DRIVER_COMMISSION_PERCENT,
           fare: order.totalFare,
           fee: fee.toString(),
-          shortfall: fee.minus(charged).toString(),
+          fromCash: fromCash.toString(),
+          status: "HELD",
         },
+      },
+    });
+  }
+
+  private async findCommissionHold(tx: Prisma.TransactionClient, orderId: string) {
+    const row = await tx.walletTransaction.findFirst({
+      where: { referenceType: "RIDE_COMMISSION_FEE", referenceId: orderId, type: "PAYMENT" },
+    });
+    if (!row) return null;
+    const meta = (row.metadata ?? {}) as Record<string, unknown>;
+    if (meta.status !== "HELD") return null;
+    return { row, meta };
+  }
+
+  private async finalizeCashCommissionHold(
+    tx: Prisma.TransactionClient,
+    order: { id: string },
+  ) {
+    if (!env.DRIVER_COMMISSION_ENABLED) return;
+    const hold = await this.findCommissionHold(tx, order.id);
+    if (!hold) {
+      throw new AppError(
+        "Penahanan komisi tidak ditemukan atau tidak utuh untuk perjalanan ini",
+        StatusCodes.CONFLICT,
+        "RIDE_COMMISSION_HOLD_MISSING",
+      );
+    }
+    await tx.walletTransaction.update({
+      where: { id: hold.row.id },
+      data: { metadata: { ...hold.meta, status: "FINALIZED" } },
+    });
+  }
+
+  /**
+   * Melepaskan hold komisi tunai yang belum sempat difinalkan (cancel/expire
+   * sebelum complete) — mengembalikan PERSIS jumlah yang ditahan, pola sama
+   * dengan refundDigitalPayment. Tidak melakukan apa pun (no-op aman) bila
+   * tidak ada hold HELD untuk order ini: ride digital, komisi mati, atau
+   * hold sudah difinalkan/dilepas sebelumnya.
+   */
+  private async releaseCashCommissionHold(tx: Prisma.TransactionClient, orderId: string) {
+    const hold = await this.findCommissionHold(tx, orderId);
+    if (!hold) return;
+    const fee = hold.row.amount.abs();
+    const fromCash = new Prisma.Decimal(String(hold.meta.fromCash ?? "0"));
+
+    // Audit keamanan 30 September 2026 (sisa review): baris ledger HELD
+    // diKLAIM secara atomic SEBELUM saldo disentuh — pola sama dengan
+    // refundDigitalPayment (updateMany bersyarat, count === 1 baru boleh
+    // mengkredit). Sebelumnya method ini membaca status HELD lalu langsung
+    // mengkredit tanpa syarat; dua pembatalan bersamaan (mis. passenger dan
+    // driver/admin) yang sama-sama membaca HELD sebelum salah satu commit
+    // sama-sama mengkredit — komisi terklaim dua kali. Filter JSON path di
+    // WHERE memastikan hanya transaksi yang benar-benar mengubah status
+    // HELD->RELEASED yang boleh melanjutkan ke kredit saldo.
+    const claimed = await tx.walletTransaction.updateMany({
+      where: {
+        id: hold.row.id,
+        metadata: { path: ["status"], equals: "HELD" },
+      },
+      data: { metadata: { ...hold.meta, status: "RELEASED" } },
+    });
+    if (claimed.count !== 1) return;
+
+    await tx.wallet.update({
+      where: { id: hold.row.walletId },
+      data: {
+        balance: { increment: fee },
+        cashBalance: { increment: fromCash },
+      },
+    });
+    await tx.walletTransaction.create({
+      data: {
+        walletId: hold.row.walletId,
+        type: "REFUND",
+        amount: fee,
+        referenceType: "RIDE_COMMISSION_FEE",
+        referenceId: orderId,
+        metadata: { reversedFrom: hold.row.id },
       },
     });
   }
@@ -2219,9 +2616,17 @@ export class RideService {
       input.eventKeySuffix ?? "",
     ].join(":");
 
-    try {
-      await tx.rideEvent.create({
-        data: {
+    // INSERT ... ON CONFLICT DO NOTHING (skipDuplicates), BUKAN create lalu
+    // menelan P2002. Dua alasan, keduanya terbukti di produksi/tes:
+    // 1. create yang gagal tetap dicatat mesin Prisma sebagai event `error`
+    //    dan diteruskan ke Sentry (TAPGO-BACKEND-2, reject ganda 29 Sep 2026)
+    //    padahal duplikat itu terduga dan idempoten.
+    // 2. Di dalam $transaction PostgreSQL, INSERT yang melanggar unique
+    //    membatalkan SELURUH transaksi (SQLSTATE 25P02) walau P2002 ditelan,
+    //    sehingga pernyataan berikutnya gagal.
+    await tx.rideEvent.createMany({
+      data: [
+        {
           rideOrderId: input.rideOrderId,
           type: input.type,
           ...(input.actorUserId ? { actorUserId: input.actorUserId } : {}),
@@ -2232,17 +2637,9 @@ export class RideService {
           ...(input.metadata ? { metadata: input.metadata as Prisma.InputJsonValue } : {}),
           eventKey: key,
         },
-      });
-    } catch (error) {
-      // Event duplikat diabaikan agar operasi tetap idempoten.
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
-      ) {
-        return;
-      }
-      throw error;
-    }
+      ],
+      skipDuplicates: true,
+    });
   }
 
   /**

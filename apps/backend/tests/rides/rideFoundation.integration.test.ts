@@ -208,6 +208,47 @@ describe.skipIf(!runIntegration)("Stage 5.2 — Ride backend foundation", () => 
     expect(await prisma.rideOrder.count()).toBe(0);
   });
 
+  it("pickupNote round-trip: tersimpan, tampil ke penumpang dan driver", async () => {
+    const passenger = await createUser("USER");
+    const driver = await createDriver("MOTORCYCLE");
+    await setOnline(driver);
+    const quote = await createQuote(passenger);
+
+    const created = await api("/api/v1/rides", {
+      method: "POST",
+      token: tokenFor(passenger),
+      body: {
+        quoteId: quote.quoteId,
+        paymentMethod: "CASH",
+        pickupNote: "Di depan minimarket, bukan gang sebelah",
+      },
+    });
+    expect(created.status).toBe(201);
+    const createdBody = (await created.json()) as { data: { reference: string; pickupNote: string | null } };
+    expect(createdBody.data.pickupNote).toBe("Di depan minimarket, bukan gang sebelah");
+
+    const passengerView = await api(`/api/v1/rides/${createdBody.data.reference}`, {
+      token: tokenFor(passenger),
+    });
+    const passengerBody = (await passengerView.json()) as { data: { pickupNote: string | null } };
+    expect(passengerBody.data.pickupNote).toBe("Di depan minimarket, bukan gang sebelah");
+
+    const offers = await api("/api/v1/driver/rides/offers", {
+      token: tokenFor(driver.user),
+    });
+    const offersBody = (await offers.json()) as { data: { reference: string; pickupNote: string | null }[] };
+    const offer = offersBody.data.find((o) => o.reference === createdBody.data.reference);
+    expect(offer?.pickupNote).toBe("Di depan minimarket, bukan gang sebelah");
+  });
+
+  it("pickupNote opsional: order tanpa catatan mengembalikan null, bukan hilang diam-diam", async () => {
+    const passenger = await createUser("USER");
+    const quote = await createQuote(passenger);
+    const created = await createOrder(passenger, quote.quoteId);
+    const body = (await created.json()) as { data: { pickupNote: string | null } };
+    expect(body.data.pickupNote).toBeNull();
+  });
+
   // --- Matching & eligibility ---------------------------------------------
 
   it("driver mobil tidak menerima tawaran order motor", async () => {
@@ -928,10 +969,6 @@ async function cleanRideTables() {
   // RideDriverApplication memakai ON DELETE RESTRICT: tanpa baris ini
   // user.deleteMany() di bawah akan gagal dengan SQLSTATE 23001.
   await prisma.rideDriverApplication.deleteMany();
-  // Commission (bagi hasil tarif V2) juga RESTRICT lewat beneficiaryId —
-  // tanpa baris ini user.deleteMany() gagal begitu ada ride yang sempat
-  // menghasilkan komisi driver/perusahaan.
-  await prisma.commission.deleteMany();
   await prisma.walletTransaction.deleteMany();
   await prisma.wallet.deleteMany();
   await prisma.user.deleteMany();

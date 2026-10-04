@@ -9,6 +9,15 @@ import {
   seedMemberships,
   testDatabaseUrl
 } from "../helpers/referralWalletHarness.js";
+import { hashPassword } from "../../src/core/security/passwordHasher.js";
+
+/**
+ * Audit keamanan 30 September 2026 (H2): pencairan mobile sekarang menuntut
+ * password akun dan rekening tersimpan (bukan lagi rekening dari body) — lihat
+ * requestWithdrawal di bawah. Password sama untuk seluruh pengguna uji berkas
+ * ini, dibuat sekali lewat createWalletUser.
+ */
+const TEST_PASSWORD = "wallet-isolation-password-1";
 
 /**
  * Authorization dan isolasi antar-akun untuk permukaan wallet.
@@ -198,6 +207,74 @@ describe.skipIf(!runIntegration)("Wallet access isolation", () => {
     expect(aliceBody).not.toContain(bob.id);
   });
 
+  // --- H2 (audit keamanan 30 September 2026) ----------------------------------
+
+  it("rekening penyerang di body DIABAIKAN — tujuan transfer selalu rekening tersimpan di profil", async () => {
+    const user = await createWalletUser("WISO0008", "USER", "500000.00");
+    await setBankAccount(user.id, "1234567890", "Pemilik Sah");
+    setCashOutEnabled(true);
+
+    const response = await requestWithdrawal(user, 100000, {
+      extra: {
+        bankName: "Bank Penyerang",
+        bankCode: "666",
+        accountNumber: "0000000000",
+        accountHolderName: "Penyerang"
+      }
+    });
+    expect(response.status).toBe(201);
+
+    const withdrawal = await prisma.withdrawal.findFirstOrThrow({
+      where: { userId: user.id }
+    });
+    const storedBank = withdrawal.bankAccount as Record<string, unknown>;
+    expect(storedBank.accountNumber).toBe("1234567890");
+    expect(storedBank.accountHolderName).toBe("Pemilik Sah");
+    expect(JSON.stringify(storedBank)).not.toContain("Penyerang");
+    expect(JSON.stringify(storedBank)).not.toContain("0000000000");
+  });
+
+  it("password salah ditolak dan TIDAK mengurangi saldo maupun membuat penarikan", async () => {
+    const user = await createWalletUser("WISO0009", "USER", "500000.00");
+    await setBankAccount(user.id, "1234567890", "Pemilik Sah");
+    setCashOutEnabled(true);
+
+    const response = await requestWithdrawal(user, 100000, { password: "password-salah" });
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as { code?: string };
+    expect(body.code).toBe("WITHDRAWAL_PASSWORD_INVALID");
+
+    const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
+    expect(wallet.balance.toString()).toBe("500000");
+    expect(await prisma.withdrawal.count({ where: { userId: user.id } })).toBe(0);
+  });
+
+  it("rekening yang diubah kurang dari 24 jam ditolak untuk pencairan, saldo tidak berkurang", async () => {
+    const user = await createWalletUser("WISO0010", "USER", "500000.00");
+    // updatedAt BARU SAJA (bukan default 25 jam lalu di helper).
+    await setBankAccount(user.id, "1234567890", "Pemilik Sah", new Date().toISOString());
+    setCashOutEnabled(true);
+
+    const response = await requestWithdrawal(user, 100000);
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as { code?: string };
+    expect(body.code).toBe("WITHDRAWAL_BANK_ACCOUNT_COOLDOWN");
+
+    const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
+    expect(wallet.balance.toString()).toBe("500000");
+    expect(await prisma.withdrawal.count({ where: { userId: user.id } })).toBe(0);
+  });
+
+  it("tanpa rekening tersimpan sama sekali -> ditolak WITHDRAWAL_BANK_ACCOUNT_REQUIRED", async () => {
+    const user = await createWalletUser("WISO0011", "USER", "500000.00");
+    setCashOutEnabled(true);
+
+    const response = await requestWithdrawal(user, 100000);
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { code?: string };
+    expect(body.code).toBe("WITHDRAWAL_BANK_ACCOUNT_REQUIRED");
+  });
+
   it("menolak pembaruan rekening bank yang tidak valid tanpa menyentuh data lama", async () => {
     const user = await createWalletUser("WISO0002", "USER", "0.00");
     await setBankAccount(user.id, "1234567890", "Pemilik Sah");
@@ -347,7 +424,11 @@ function findBalance(node: unknown): unknown {
   return null;
 }
 
-async function requestWithdrawal(user: User, amount: number) {
+async function requestWithdrawal(
+  user: User,
+  amount: number,
+  options: { password?: string; extra?: Record<string, unknown> } = {}
+) {
   return fetch(`${baseUrl}/api/v1/wallet/withdraw`, {
     method: "POST",
     headers: {
@@ -356,9 +437,8 @@ async function requestWithdrawal(user: User, amount: number) {
     },
     body: JSON.stringify({
       amount,
-      bankName: "BCA",
-      accountNumber: bankAccountNumberFor(user),
-      accountHolderName: user.fullName
+      password: options.password ?? TEST_PASSWORD,
+      ...options.extra
     })
   });
 }
@@ -382,7 +462,8 @@ async function createWalletUser(
       phone: `+628${referralCode.padStart(9, "0")}`,
       referralCode,
       role,
-      membershipId: basic.id
+      membershipId: basic.id,
+      passwordHash: await hashPassword(TEST_PASSWORD)
     }
   });
   await prisma.wallet.create({
@@ -417,10 +498,13 @@ async function addTransaction(
 async function setBankAccount(
   userId: string,
   accountNumber: string,
-  accountHolderName: string
+  accountHolderName: string,
+  // Rekening "lama" secara default (lolos jeda 24 jam) — tes yang justru
+  // ingin menguji jeda itu sendiri mengirim updatedAt lebih baru secara eksplisit.
+  updatedAt: string = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString()
 ): Promise<void> {
   await prisma.user.update({
     where: { id: userId },
-    data: { bankAccount: { bankName: "BCA", accountNumber, accountHolderName } }
+    data: { bankAccount: { bankName: "BCA", accountNumber, accountHolderName, updatedAt } }
   });
 }

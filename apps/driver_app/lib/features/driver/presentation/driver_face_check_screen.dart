@@ -9,7 +9,13 @@ part of '../../../main.dart';
 /// build(), bukan di dalam pipeline, karena plugin native ini bisa
 /// crash/hang tanpa kamera sungguhan (mis. saat flutter test/CI).
 class DriverFaceCheckScreen extends ConsumerStatefulWidget {
-  const DriverFaceCheckScreen({super.key});
+  const DriverFaceCheckScreen({super.key, this.isRecheck = false});
+
+  /// True untuk verifikasi ULANG acak selama online (lihat
+  /// DriverController._pollSafetyStatus) — beda dari verifikasi harian
+  /// pertama: memanggil endpoint recheck, dan kegagalannya berarti server
+  /// SUDAH memaksa driver offline, bukan menghabiskan kuota percobaan harian.
+  final bool isRecheck;
 
   @override
   ConsumerState<DriverFaceCheckScreen> createState() => _DriverFaceCheckScreenState();
@@ -76,8 +82,9 @@ class _DriverFaceCheckScreenState extends ConsumerState<DriverFaceCheckScreen> {
     if (camera == null || reference == null || _stage != _Stage.ready) return;
 
     setState(() => _stage = _Stage.capturing);
+    XFile? photo;
     try {
-      final photo = await camera.takePicture();
+      photo = await camera.takePicture();
       final liveness = await _pipeline.checkLiveness(photo.path);
       if (!liveness.passed) {
         if (!mounted) return;
@@ -93,11 +100,18 @@ class _DriverFaceCheckScreenState extends ConsumerState<DriverFaceCheckScreen> {
         referenceEmbedding: reference.embedding,
       );
 
-      final snapshot = await ref.read(driverControllerProvider.notifier).submitFaceCheckAttempt(
-            similarityScore: similarity,
-            livenessPassed: true,
-            modelVersion: reference.modelVersion,
-          );
+      final controller = ref.read(driverControllerProvider.notifier);
+      final snapshot = widget.isRecheck
+          ? await controller.submitRecheckAttempt(
+              similarityScore: similarity,
+              livenessPassed: true,
+              modelVersion: reference.modelVersion,
+            )
+          : await controller.submitFaceCheckAttempt(
+              similarityScore: similarity,
+              livenessPassed: true,
+              modelVersion: reference.modelVersion,
+            );
 
       if (!mounted) return;
       if (snapshot.status == DriverFaceCheckStatus.passed) {
@@ -125,6 +139,13 @@ class _DriverFaceCheckScreenState extends ConsumerState<DriverFaceCheckScreen> {
         setState(() => _stage = _Stage.blocked);
         return;
       }
+      if (widget.isRecheck && error.code == 'RIDE_DRIVER_FACE_RECHECK_MISMATCH') {
+        // Server SUDAH memaksa offline (lihat submitRecheckAttempt di
+        // controller, yang juga menyegarkan workspace) — layar ini cukup
+        // menutup diri, Beranda akan menampilkan status offline yang benar.
+        Navigator.of(context).pop(false);
+        return;
+      }
       setState(() {
         _stage = _Stage.ready;
         _errorMessage = error.message;
@@ -135,6 +156,21 @@ class _DriverFaceCheckScreenState extends ConsumerState<DriverFaceCheckScreen> {
         _stage = _Stage.ready;
         _errorMessage = 'Verifikasi belum dapat diproses. Coba lagi.';
       });
+    } finally {
+      // Foto wajah hanya dibutuhkan selama verifikasi. camera.takePicture()
+      // menulisnya ke cache aplikasi dan tidak pernah menghapusnya, sehingga
+      // foto wajah driver menumpuk di perangkat (audit 4 Okt 2026, M3).
+      await _deleteCapturedPhoto(photo);
+    }
+  }
+
+  Future<void> _deleteCapturedPhoto(XFile? photo) async {
+    if (photo == null) return;
+    try {
+      final file = File(photo.path);
+      if (await file.exists()) await file.delete();
+    } catch (_) {
+      // Gagal hapus berkas sementara tidak boleh mengubah hasil verifikasi.
     }
   }
 
@@ -159,7 +195,7 @@ class _DriverFaceCheckScreenState extends ConsumerState<DriverFaceCheckScreen> {
       appBar: AppBar(
         backgroundColor: _navy,
         foregroundColor: Colors.white,
-        title: const Text('Verifikasi Wajah'),
+        title: Text(widget.isRecheck ? 'Verifikasi Ulang Wajah' : 'Verifikasi Wajah'),
       ),
       body: switch (_stage) {
         _Stage.initializing => const Center(child: CircularProgressIndicator(color: _gold)),

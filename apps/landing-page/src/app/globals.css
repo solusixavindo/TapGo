@@ -449,3 +449,53 @@ html.js .reveal-init.revealed {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* Cetak / simpan PDF invoice: hanya `.invoice-print` yang dicetak, berlatar putih
+   dan bertinta hitam agar terbaca di kertas apa pun tema halamannya. */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+  html,
+  body {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  body * {
+    visibility: hidden !important;
+  }
+  .invoice-print,
+  .invoice-print * {
+    visibility: visible !important;
+  }
+  /* Selain invoice, ruang yang dipakai halaman (header, footer, kerangka) dikosongkan
+     supaya hasil cetak tidak menyisakan halaman kosong di belakang invoice. */
+  body *:not(.invoice-print):not(.invoice-print *) {
+    height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    line-height: 0 !important;
+  }
+  .invoice-print {
+    width: 100% !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    break-inside: avoid;
+  }
+  .invoice-print,
+  .invoice-print * {
+    color: #111 !important;
+    background: transparent !important;
+    border-color: #999 !important;
+    text-shadow: none !important;
+  }
+  .invoice-print .no-print {
+    display: none !important;
+  }
+}

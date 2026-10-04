@@ -127,6 +127,15 @@ const envSchema = z.object({
   // 2.0.5+32). 0 = tidak ada batas. Hanya berlaku bila
   // MOBILE_LEGACY_CLIENT_BLOCK_ENABLED=true.
   MOBILE_MIN_APP_BUILD: z.coerce.number().int().min(0).default(0),
+  /// Sama seperti MOBILE_LEGACY_CLIENT_BLOCK_ENABLED tapi KHUSUS driver_app —
+  /// env TERPISAH secara sengaja (E4, DRIVER_APP_READINESS_PLAN.md): sebelum
+  /// ini, driver_app tidak mengirim header identitas apa pun sehingga APK
+  /// lama tidak pernah bisa ditolak. Menaikkan MOBILE_MIN_APP_BUILD akan ikut
+  /// memblokir user_app — env ini menghindari itu sepenuhnya. Default mati.
+  DRIVER_LEGACY_CLIENT_BLOCK_ENABLED: strictEnvBoolean(false),
+  /// Nomor build minimum driver_app. 0 = tidak ada batas. Hanya berlaku bila
+  /// DRIVER_LEGACY_CLIENT_BLOCK_ENABLED=true.
+  DRIVER_MIN_APP_BUILD: z.coerce.number().int().min(0).default(0),
   /// Pencairan saldo lewat dashboard mitra (kanal WEB saja). Terpisah dari
   /// WALLET_CASH_OUT_ENABLED agar rilis Google Play tetap tertutup walau
   /// pencairan web dinyalakan.
@@ -150,8 +159,29 @@ const envSchema = z.object({
   MANUAL_TOPUP_ACCOUNT_NUMBER: z.string().trim().max(40).optional(),
   MANUAL_TOPUP_ACCOUNT_HOLDER: z.string().trim().max(120).optional(),
   MANUAL_TOPUP_MIN_AMOUNT: z.coerce.number().int().min(1000).default(50000),
+  /// Minimal top up untuk tujuan SALDO PPOB (kredit ppobBalance saja). Terpisah
+  /// dari MANUAL_TOPUP_MIN_AMOUNT (Saldo TapGo: driver dan perjalanan) karena
+  /// pembelian PPOB (pulsa, token, tagihan) bernominal kecil.
+  MANUAL_TOPUP_PPOB_MIN_AMOUNT: z.coerce.number().int().min(1000).default(25000),
   MANUAL_TOPUP_MAX_AMOUNT: z.coerce.number().int().max(50000000).default(5000000),
   MANUAL_TOPUP_EXPIRY_HOURS: z.coerce.number().int().min(1).max(168).default(24),
+  /// Pembayaran membership lewat transfer bank manual (kode unik + konfirmasi
+  /// Super Admin), kanal WEB saja. Dipakai selama gateway (Midtrans/DOKU) belum
+  /// aktif. Independen dari MANUAL_TOPUP_ENABLED, tetapi MEMAKAI rekening yang
+  /// sama (MANUAL_TOPUP_BANK_NAME/ACCOUNT_NUMBER/ACCOUNT_HOLDER) dan masa
+  /// berlaku yang sama (MANUAL_TOPUP_EXPIRY_HOURS) — satu rekening perusahaan,
+  /// jadi kode unik dialokasikan bersama supaya tidak bentrok dengan top up.
+  /// Tetap tunduk pada EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED dan
+  /// MEMBERSHIP_PURCHASE_WEB_ENABLED (gerbang kanal pembelian).
+  MANUAL_MEMBERSHIP_TRANSFER_ENABLED: strictEnvBoolean(false),
+  /// Pembayaran membership lewat payment gateway (DOKU/Midtrans). Terpisah dari
+  /// kunci gateway: DOKU_ENABLED / MIDTRANS_SERVER_KEY juga dipakai top up dan
+  /// webhook, jadi keberadaan kunci TIDAK boleh otomatis membuka jalur online
+  /// untuk membership. Default mati; nyalakan hanya setelah gateway siap dipakai
+  /// menjual membership. Tidak memengaruhi webhook: pembayaran yang sudah
+  /// terlanjur dimulai tetap diselesaikan. Tetap tunduk pada
+  /// EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED dan gerbang kanal pembelian.
+  MEMBERSHIP_ONLINE_PAYMENT_ENABLED: strictEnvBoolean(false),
   /// Verifikasi wajah harian driver sebelum online. Default mati: pencocokan
   /// terjadi di HP driver (tidak ada API pihak ketiga), server hanya melacak
   /// hari/percobaan dan menegakkan ambang batas — lihat DriverFaceCheckService.
@@ -163,6 +193,22 @@ const envSchema = z.object({
   /// pernah cukup dipercaya mengirim {passed: true} begitu saja. Disetel ulang
   /// selama rollout berdasarkan similarityScore nyata yang tercatat.
   DRIVER_FACE_CHECK_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.75),
+  /// Verifikasi ulang ACAK selama sesi online (bukan sekali per hari saja) —
+  /// meniru pola Gojek yang memverifikasi ulang sewaktu-waktu, menutup celah
+  /// joki-akun-setelah-online. Jadwal berikutnya diacak di antara MIN..MAX
+  /// menit setelah PASSED (dan setelah setiap recheck yang lolos), supaya
+  /// waktunya tidak bisa ditebak driver. Tunduk pada DRIVER_FACE_CHECK_ENABLED
+  /// yang sama — mati total bila fitur induk mati.
+  DRIVER_FACE_CHECK_RECHECK_MIN_MINUTES: z.coerce.number().int().positive().default(120),
+  DRIVER_FACE_CHECK_RECHECK_MAX_MINUTES: z.coerce.number().int().positive().default(300),
+  /// Pengingat kelelahan (fatigue nudge, bukan penguncian) — ambang jam
+  /// online TANPA TERPUTUS sebelum driver diingatkan untuk istirahat. Angka
+  /// bawaan meniru ambang batas Grab yang sudah dipublikasikan: mobil 10 jam,
+  /// motor 11 jam. Sengaja hanya PENGINGAT (banner), tidak memaksa offline —
+  /// mengunci akses adalah keputusan bisnis yang mempengaruhi penghasilan
+  /// driver dan menuntut keputusan eksplisit Owner, bukan default teknis.
+  DRIVER_FATIGUE_CAR_MAX_ONLINE_MINUTES: z.coerce.number().int().positive().default(600),
+  DRIVER_FATIGUE_MOTORCYCLE_MAX_ONLINE_MINUTES: z.coerce.number().int().positive().default(660),
   // Release 1 tidak memakai realtime/chat. Fail-closed: Socket.IO hanya
   // di-attach bila diaktifkan eksplisit ("true"). Nilai lain -> false.
   REALTIME_ENABLED: strictEnvBoolean(false),

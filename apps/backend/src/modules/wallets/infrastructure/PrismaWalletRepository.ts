@@ -581,13 +581,21 @@ export class PrismaWalletRepository implements WalletRepository {
         return null;
       }
 
+      // Tujuan top up ada di metadata pesanan. PPOB mengkredit HANYA ppobBalance
+      // (saldo khusus pembelian PPOB, tidak dapat ditarik); selain itu — termasuk
+      // pesanan gateway dan pesanan lama tanpa penanda — jalur Saldo TapGo semula.
+      const orderMeta = (order.metadata ?? {}) as { target?: unknown };
+      const target = orderMeta.target === "PPOB" ? "PPOB" : "WALLET";
       const wallet = await this.getOrCreateWallet(order.userId, tx);
       await tx.wallet.update({
         where: { id: wallet.id },
-        data: {
-          cashBalance: { increment: order.amount },
-          balance: { increment: order.amount }
-        }
+        data:
+          target === "PPOB"
+            ? { ppobBalance: { increment: order.amount } }
+            : {
+                cashBalance: { increment: order.amount },
+                balance: { increment: order.amount }
+              }
       });
       await tx.walletTransaction.create({
         data: {
@@ -596,7 +604,7 @@ export class PrismaWalletRepository implements WalletRepository {
           amount: order.amount,
           referenceType: "WALLET_TOPUP",
           referenceId: order.id,
-          metadata: { reference: order.reference, providerReference: input.providerReference }
+          metadata: { reference: order.reference, providerReference: input.providerReference, target }
         }
       });
 

@@ -1,6 +1,65 @@
 import * as Sentry from "@sentry/node";
 import { nodeProfilingIntegration } from "@sentry/profiling-node";
 
+const BEARER_TOKEN_PATTERN = /Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi;
+const JWT_PATTERN = /\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g;
+const LONG_DIGIT_RUN_PATTERN = /\d{6,}/g;
+
+/**
+ * Lapisan pertahanan KEDUA (audit keamanan 30 September 2026, M5): redaction
+ * Pino di logger.ts bekerja per-path field terstruktur, tapi Bearer
+ * token/JWT/nomor panjang (NIK, no. HP, no. rekening, OTP) bisa saja ikut
+ * tercetak sebagai SUBSTRING pesan bebas (mis. exception.message dari
+ * library pihak ketiga) yang tidak pernah lewat redact path manapun. Scrub
+ * berbasis pola string ini menutup celah itu sebelum event dikirim ke
+ * Sentry — melengkapi (bukan menggantikan) redact Pino.
+ */
+export function scrubSensitiveText(value: string): string {
+  return value
+    .replace(BEARER_TOKEN_PATTERN, "Bearer [REDACTED]")
+    .replace(JWT_PATTERN, "[REDACTED_JWT]")
+    .replace(LONG_DIGIT_RUN_PATTERN, "[REDACTED_DIGITS]");
+}
+
+// Field yang di-redact PENUH berdasar nama key-nya (bukan hanya isi) —
+// pasangan dari daftar redact Pino di logger.ts, untuk struktur event Sentry
+// yang tidak selalu lewat Pino (mis. request/breadcrumbs bawaan SDK Sentry).
+const SENSITIVE_KEY_PATTERN = /(authorization|cookie|password|token|secret|signature|nik|otp|account.?number)/i;
+
+const MAX_SCRUB_DEPTH = 8;
+
+function scrubValue(value: unknown, keyHint: string | undefined, depth: number): unknown {
+  if (depth > MAX_SCRUB_DEPTH) {
+    return "[REDACTED_TOO_DEEP]";
+  }
+  if (typeof value === "string") {
+    if (keyHint && SENSITIVE_KEY_PATTERN.test(keyHint)) {
+      return "[REDACTED]";
+    }
+    return scrubSensitiveText(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => scrubValue(item, keyHint, depth + 1));
+  }
+  if (value && typeof value === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      result[key] = scrubValue(val, key, depth + 1);
+    }
+    return result;
+  }
+  return value;
+}
+
+/**
+ * Menyaring SELURUH struktur event Sentry (message, exception, breadcrumbs,
+ * request, extra, contexts, dst) sebelum dikirim. Dipasang sebagai
+ * beforeSend di initSentry() di bawah.
+ */
+export function scrubSentryEvent<T extends object>(event: T): T {
+  return scrubValue(event, undefined, 0) as T;
+}
+
 /**
  * Fail-closed seperti PPOB_PROVIDER=disabled dan pola lain di codebase ini:
  * tanpa SENTRY_DSN, initSentry() tidak melakukan apa pun — Sentry.captureException()
@@ -29,7 +88,10 @@ export function initSentry(): void {
     // dari SELURUH request. Sama alasannya: cukup untuk gambaran fungsi mana
     // yang lambat, tanpa membebani CPU produksi.
     profilesSampleRate: 0.1,
-    integrations: [nodeProfilingIntegration()]
+    integrations: [nodeProfilingIntegration()],
+    beforeSend(event) {
+      return scrubSentryEvent(event);
+    }
   });
 }
 

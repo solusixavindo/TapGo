@@ -251,6 +251,17 @@ export class AdminConsoleController {
     res.json({ success: true, data: result });
   };
 
+  /// Mencatat pengembalian dana lewat transfer bank untuk pembayaran transfer
+  /// manual (executeRefund menolak jalur ini karena tidak ada penyedia).
+  confirmMemberRequestManualRefund = async (req: Request, res: Response) => {
+    const result = await this.membershipRefundService.confirmManualRefund({
+      orderId: String(req.params.id),
+      adminId: req.auth!.userId,
+      bankReference: String(req.body.bankReference)
+    });
+    res.json({ success: true, data: result });
+  };
+
   rejectMemberRequest = async (req: Request, res: Response) => {
     const result = await this.adminConsoleService.rejectMemberRequest({
       orderId: String(req.params.id),

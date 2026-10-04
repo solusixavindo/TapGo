@@ -20,6 +20,22 @@ enum DriverLocationAvailability {
   bool get isAvailable => this == DriverLocationAvailability.available;
 }
 
+/// Satu titik GPS mentah, TANPA dikirim ke server — dipakai oleh pemanggil
+/// yang butuh koordinat untuk endpoint SELAIN `/driver/location` (mis. SOS),
+/// beda dari [DriverLocationPort.sendCurrentLocation] yang mengambil DAN
+/// langsung mengirim dalam satu langkah.
+class DriverLocationFix {
+  const DriverLocationFix({
+    required this.lat,
+    required this.lng,
+    required this.accuracyMeters,
+  });
+
+  final double lat;
+  final double lng;
+  final int accuracyMeters;
+}
+
 abstract class DriverLocationPort {
   Future<bool> get isAvailable;
 
@@ -29,6 +45,12 @@ abstract class DriverLocationPort {
   Future<DriverLocationAvailability> checkAvailability();
 
   Future<void> sendCurrentLocation();
+
+  /// Ambil satu fix GPS untuk dikirim sendiri oleh pemanggil (mis. tombol
+  /// SOS). Null berarti fix tidak bisa diperoleh (izin/GPS mati, atau
+  /// timeout) — pemanggil bertanggung jawab menampilkan jalan keluar lain
+  /// (mis. hubungi CS langsung), BUKAN mengirim koordinat kosong/palsu.
+  Future<DriverLocationFix?> currentFix();
 
   /// Aliran posisi live untuk marker peta di Beranda. Implementasi tanpa GPS
   /// asli (mis. [NoDriverLocationPort] — dipakai di mode demo dan widget
@@ -58,6 +80,9 @@ class NoDriverLocationPort implements DriverLocationPort {
       message: 'Lokasi belum tersedia pada versi ini.',
     );
   }
+
+  @override
+  Future<DriverLocationFix?> currentFix() async => null;
 
   @override
   Stream<(double lat, double lng)> get positionStream => const Stream.empty();
@@ -134,16 +159,7 @@ class GeolocatorDriverLocationPort implements DriverLocationPort {
 
   @override
   Future<void> sendCurrentLocation() async {
-    final cached = _lastTracked;
-    final position = cached != null &&
-            DateTime.now().difference(cached.timestamp).inSeconds < 15
-        ? cached
-        : await Geolocator.getCurrentPosition(
-            locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.high,
-              timeLimit: Duration(seconds: 10),
-            ),
-          );
+    final position = await _getPosition();
     await _repository.sendLocation(
       lat: position.latitude,
       lng: position.longitude,
@@ -152,6 +168,34 @@ class GeolocatorDriverLocationPort implements DriverLocationPort {
       // lebih akurat dari yang sebenarnya.
       accuracyMeters: position.accuracy.ceil(),
       capturedAt: DateTime.now(),
+    );
+  }
+
+  @override
+  Future<DriverLocationFix?> currentFix() async {
+    try {
+      final position = await _getPosition();
+      return DriverLocationFix(
+        lat: position.latitude,
+        lng: position.longitude,
+        accuracyMeters: position.accuracy.ceil(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Position> _getPosition() async {
+    final cached = _lastTracked;
+    if (cached != null &&
+        DateTime.now().difference(cached.timestamp).inSeconds < 15) {
+      return cached;
+    }
+    return Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 10),
+      ),
     );
   }
 

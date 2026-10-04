@@ -16,6 +16,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -25,6 +26,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'demo/client_flow_models.dart';
 import 'features/ppob/application/ppob_providers.dart';
 import 'services/token_refresh_coordinator.dart';
+import 'services/tls_pinning.dart';
 import 'features/ppob/data/ppob_demo_repository.dart';
 import 'features/ppob/data/ppob_repository.dart';
 import 'features/ppob/domain/ppob_models.dart';
@@ -126,36 +128,49 @@ const tapGoPpobDemoMode = bool.fromEnvironment('TAPGO_PPOB_DEMO_MODE');
 @visibleForTesting
 PpobRepository tapGoBuildPpobRepositoryForTests() => _buildPpobRepository();
 
+/// Pemeta galat PPOB. TLS dipetakan lebih dulu supaya pin yang basi tidak
+/// tampil sebagai "Koneksi ke server gagal".
+@visibleForTesting
+PpobApiException tapGoMapPpobError(Object error) {
+  final tlsFailure = tapGoTlsFailureOf(error);
+  if (tlsFailure != null) {
+    return PpobApiException(
+      code: _tlsFailureCode(tlsFailure),
+      message: tapGoTlsFailureMessage(error)!,
+      statusCode: (error as DioException).response?.statusCode,
+    );
+  }
+  if (error is DioException) {
+    final data = error.response?.data;
+    if (data is Map<String, dynamic>) {
+      return PpobApiException(
+        code: data['code'] is String ? data['code'] as String : 'UNKNOWN',
+        message: data['message'] is String
+            ? data['message'] as String
+            : 'Terjadi kesalahan pada server.',
+        statusCode: error.response?.statusCode,
+      );
+    }
+    return PpobApiException(
+      code: 'NETWORK_ERROR',
+      message: 'Koneksi ke server gagal.',
+      statusCode: error.response?.statusCode,
+    );
+  }
+  if (error is PpobApiException) {
+    return error;
+  }
+  return const PpobApiException(
+    code: 'UNKNOWN',
+    message: 'Terjadi kesalahan yang tidak dikenal.',
+  );
+}
+
 /// Menjembatani fitur PPOB (library berdiri sendiri di lib/features/ppob/)
 /// dengan _apiClient privat milik library ini. Error Dio dinormalisasi
 /// menjadi PpobApiException agar lapisan UI tidak bergantung pada Dio.
 PpobRepository _buildPpobRepository() {
-  PpobApiException mapError(Object error) {
-    if (error is DioException) {
-      final data = error.response?.data;
-      if (data is Map<String, dynamic>) {
-        return PpobApiException(
-          code: data['code'] is String ? data['code'] as String : 'UNKNOWN',
-          message: data['message'] is String
-              ? data['message'] as String
-              : 'Terjadi kesalahan pada server.',
-          statusCode: error.response?.statusCode,
-        );
-      }
-      return PpobApiException(
-        code: 'NETWORK_ERROR',
-        message: 'Koneksi ke server gagal.',
-        statusCode: error.response?.statusCode,
-      );
-    }
-    if (error is PpobApiException) {
-      return error;
-    }
-    return const PpobApiException(
-      code: 'UNKNOWN',
-      message: 'Terjadi kesalahan yang tidak dikenal.',
-    );
-  }
+  PpobApiException mapError(Object error) => tapGoMapPpobError(error);
 
   Future<T> guard<T>(Future<T> Function() call) async {
     try {
@@ -184,13 +199,18 @@ PpobRepository _buildPpobRepository() {
       required idempotencyKey,
     }) =>
         guard(
+      // Audit keamanan 30 September 2026 (H1): server HANYA membaca kunci
+      // idempotensi dari header `Idempotency-Key` (lihat idempotencyKeyOf
+      // di ppob.routes.ts) — sebelumnya field ini dikirim di dalam body JSON
+      // dan diam-diam diabaikan Zod (schema tidak strict), sehingga retry
+      // jaringan/tap ganda tidak pernah benar-benar terlindungi di produksi.
       () => _apiClient.post(
         'ppob/orders',
         body: {
           'sku': sku,
           'targetNumber': targetNumber,
-          'idempotencyKey': idempotencyKey,
         },
+        headers: {'Idempotency-Key': idempotencyKey},
       ),
     ),
     ordersRequest: () => guard(() async {

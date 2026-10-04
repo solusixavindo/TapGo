@@ -127,12 +127,11 @@ describe.skipIf(!runIntegration)("Web withdrawal (dashboard mitra)", () => {
     const viaLegacy = await fetch(`${baseUrl}/api/v1/wallet/withdrawals`, {
       method: "POST",
       headers: headers(user, "APP"),
-      body: JSON.stringify({
-        amount: 100000,
-        bankName: "BCA",
-        accountNumber: "1234567890",
-        accountHolderName: user.fullName
-      })
+      // Audit keamanan 30 September 2026 (H2): rute mobile kini menuntut
+      // password, bukan lagi rekening di body — dikirim di sini supaya
+      // permintaan lolos validasi dan benar-benar menguji gerbang flag
+      // Play-safe (CASH_OUT_DISABLED_FOR_PLAY), bukan gagal duluan di Zod.
+      body: JSON.stringify({ amount: 100000, password: PASSWORD })
     });
     expect(viaLegacy.status).toBe(403);
     expect(((await viaLegacy.json()) as { code?: string }).code).toBe("CASH_OUT_DISABLED_FOR_PLAY");

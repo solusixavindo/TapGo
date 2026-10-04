@@ -104,6 +104,17 @@ export const adminMemberRequestActionSchema = z.object({
   }).default({})
 });
 
+export const adminManualRefundSchema = z.object({
+  params: z.object({
+    id: z.string().uuid()
+  }),
+  body: z.object({
+    // Nomor referensi transfer pengembalian dana dari mutasi bank. Wajib agar
+    // pembukuan dapat dicocokkan dengan rekening koran.
+    bankReference: z.string().trim().min(3).max(120)
+  })
+});
+
 export const adminReportQuerySchema = z.object({
   query: z.object({
     ...paginationQuery,

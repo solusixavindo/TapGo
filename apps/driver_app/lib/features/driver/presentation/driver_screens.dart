@@ -7,6 +7,105 @@ part of '../../../main.dart';
 /// google-play-assets/TapGo_Logo_512x512.png.
 const String driverBrandLogoAsset = 'assets/images/tapgo_logo_512.png';
 
+/// Nomor WhatsApp CS resmi TapGo — sama dengan [_SupportCard] di bawah.
+/// Dipakai SOS sebagai jalur cadangan yang TIDAK bergantung pada backend:
+/// TapGo belum punya provider SMS/WhatsApp produksi (lihat catatan domain di
+/// OtpDeliveryProvider), jadi tombol ini membuka WhatsApp asli di perangkat
+/// driver sendiri, bukan mengklaim mengirim pesan lewat server.
+const String _tapGoSupportWhatsAppUrl = 'https://wa.me/6283800255588';
+
+Future<void> _openSupportWhatsApp() => launchUrl(
+    Uri.parse(_tapGoSupportWhatsAppUrl),
+    mode: LaunchMode.externalApplication);
+
+/// Dialog konfirmasi tombol SOS — bisa dipanggil dari mana pun di dalam
+/// [DriverShell] (app bar global), sehingga selalu terjangkau apa pun tab
+/// yang sedang aktif.
+Future<void> showSosDialog(BuildContext context, WidgetRef ref) {
+  return showDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    builder: (dialogContext) => _SosDialog(ref: ref),
+  );
+}
+
+class _SosDialog extends StatefulWidget {
+  const _SosDialog({required this.ref});
+
+  final WidgetRef ref;
+
+  @override
+  State<_SosDialog> createState() => _SosDialogState();
+}
+
+class _SosDialogState extends State<_SosDialog> {
+  bool _sending = false;
+  String? _error;
+
+  Future<void> _send() async {
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    final controller = widget.ref.read(driverControllerProvider.notifier);
+    final ok = await controller.triggerSos();
+    if (!mounted) return;
+    if (ok) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() {
+      _sending = false;
+      _error = widget.ref.read(driverControllerProvider).message ??
+          'Sinyal SOS gagal terkirim. Coba lagi atau hubungi CS langsung.';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      icon: const Icon(Icons.sos_rounded, color: Colors.redAccent, size: 40),
+      title: const Text('Kirim sinyal darurat?'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Lokasi Anda saat ini akan dikirim ke tim TapGo. Gunakan hanya bila Anda dalam bahaya atau butuh bantuan segera.',
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            ErrorNotice(message: _error!),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _sending ? null : () => Navigator.of(context).pop(),
+          child: const Text('Batal'),
+        ),
+        OutlinedButton.icon(
+          onPressed: _sending ? null : _openSupportWhatsApp,
+          icon: const Icon(Icons.chat_rounded),
+          label: const Text('WhatsApp CS'),
+        ),
+        FilledButton.icon(
+          onPressed: _sending ? null : _send,
+          style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+          icon: _sending
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Icon(Icons.sos_rounded),
+          label: const Text('Kirim SOS'),
+        ),
+      ],
+    );
+  }
+}
+
 class DriverShell extends ConsumerStatefulWidget {
   const DriverShell({super.key});
 
@@ -44,6 +143,12 @@ class _DriverShellState extends ConsumerState<DriverShell> {
       appBar: AppBar(
         title: const Text('TapGo Driver'),
         actions: [
+          if (showTabs)
+            IconButton(
+              tooltip: 'SOS Darurat',
+              onPressed: () => showSosDialog(context, ref),
+              icon: const Icon(Icons.sos_rounded, color: Colors.redAccent),
+            ),
           if (state.isAuthenticated)
             IconButton(
               tooltip: 'Logout',
@@ -703,6 +808,30 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                             ? 'Buka Pengaturan GPS'
                             : 'Buka Pengaturan Lokasi',
                       ),
+                    ),
+                  ],
+                  if (state.faceRecheckDue) ...[
+                    const SizedBox(height: 10),
+                    _SafetyBanner(
+                      key: const ValueKey('face-recheck-banner'),
+                      icon: Icons.face_retouching_natural_rounded,
+                      text: 'Verifikasi ulang wajah diperlukan. Anda tidak akan menerima pesanan baru sampai ini selesai.',
+                      buttonLabel: 'Verifikasi Sekarang',
+                      onPressed: () async {
+                        await Navigator.of(context).push<bool>(
+                          MaterialPageRoute(
+                            builder: (_) => const DriverFaceCheckScreen(isRecheck: true),
+                          ),
+                        );
+                      },
+                    ),
+                  ] else if (state.fatigueWarning != null) ...[
+                    const SizedBox(height: 10),
+                    _SafetyBanner(
+                      key: const ValueKey('fatigue-banner'),
+                      icon: Icons.bedtime_rounded,
+                      text:
+                          'Anda sudah online ${_formatDuration(state.fatigueWarning!.continuousOnlineMinutes)} tanpa jeda. Pertimbangkan istirahat sejenak demi keselamatan Anda dan penumpang.',
                     ),
                   ],
                   if (state.activeRide != null) ...[
@@ -1366,9 +1495,7 @@ class _PreferencesCard extends ConsumerWidget {
 class _SupportCard extends ConsumerWidget {
   const _SupportCard();
 
-  Future<void> _openWhatsApp() =>
-      launchUrl(Uri.parse('https://wa.me/6283800255588'),
-          mode: LaunchMode.externalApplication);
+  Future<void> _openWhatsApp() => _openSupportWhatsApp();
 
   Future<void> _openPrivacyPolicy() => launchUrl(
       Uri.parse('https://tapgolion.id/privacy-policy'),
@@ -1605,8 +1732,8 @@ class ActiveRideCard extends ConsumerWidget {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(Icons.person_outline_rounded,
-                      size: 20, color: Colors.black54),
+                  Icon(Icons.person_outline_rounded,
+                      size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(width: 8),
                   Text(
                     ride.passengerName!,
@@ -1639,9 +1766,9 @@ class ActiveRideCard extends ConsumerWidget {
                 padding: const EdgeInsets.only(top: 6, left: 32),
                 child: Text(
                   'Catatan: ${ride.pickupNote}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontStyle: FontStyle.italic,
-                    color: Colors.black54,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -1751,9 +1878,9 @@ class OfferDetailSheet extends ConsumerWidget {
                   padding: const EdgeInsets.only(top: 6, left: 32),
                   child: Text(
                     'Catatan: ${ride.pickupNote}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontStyle: FontStyle.italic,
-                      color: Colors.black54,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -1963,6 +2090,71 @@ class ErrorNotice extends StatelessWidget {
           message,
           style:
               TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
+        ),
+      ),
+    );
+  }
+}
+
+/// "1 jam 5 menit" / "45 menit" — dipakai banner kelelahan supaya angka
+/// menit mentah dari server tampil sebagai durasi yang mudah dibaca driver.
+String _formatDuration(int minutes) {
+  final hours = minutes ~/ 60;
+  final rest = minutes % 60;
+  if (hours <= 0) return '$rest menit';
+  if (rest == 0) return '$hours jam';
+  return '$hours jam $rest menit';
+}
+
+/// Banner keselamatan non-blocking (kelelahan atau ajakan verifikasi ulang)
+/// — beda dari [ErrorNotice]: warna netral (bukan merah error) karena ini
+/// bukan kegagalan, dan opsional punya tombol aksi.
+class _SafetyBanner extends StatelessWidget {
+  const _SafetyBanner({
+    required this.icon,
+    required this.text,
+    this.buttonLabel,
+    this.onPressed,
+    super.key,
+  });
+
+  final IconData icon;
+  final String text;
+  final String? buttonLabel;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: scheme.secondaryContainer,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, color: scheme.onSecondaryContainer),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    text,
+                    style: TextStyle(color: scheme.onSecondaryContainer),
+                  ),
+                ),
+              ],
+            ),
+            if (buttonLabel != null) ...[
+              const SizedBox(height: 10),
+              FilledButton(onPressed: onPressed, child: Text(buttonLabel!)),
+            ],
+          ],
         ),
       ),
     );

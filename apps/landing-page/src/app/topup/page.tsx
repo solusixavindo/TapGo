@@ -14,7 +14,7 @@ export default function TopUpLoginPage() {
       step="masuk"
       preview={PREVIEW_MODE}
       title="Masuk ke akun TapGo"
-      subtitle="Gunakan nomor HP dan password akun TapGo Anda untuk mengisi saldo TapGoPay."
+      subtitle="Gunakan nomor HP dan password akun TapGo Anda untuk mengisi Saldo TapGo (driver dan perjalanan) atau Saldo PPOB (pulsa, token, tagihan)."
     >
       <LoginForm />
     </TopUpShell>

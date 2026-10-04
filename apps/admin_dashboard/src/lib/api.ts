@@ -28,6 +28,8 @@ export type MemberRequest = {
   invoice: { number: string } | null;
   userMembership: { status: string } | null;
   user: { id: string; fullName: string; phone: string; referralCode: string; status?: string } | null;
+  /** Pembayaran terbaru; untuk transfer manual metadata memuat nominal berkode unik. */
+  payments?: Array<{ provider: string; method: string; status: string; metadata: Record<string, unknown> | null }>;
 };
 
 export type DocumentSummary = {
@@ -124,6 +126,30 @@ export function confirmMemberPayment(orderId: string) {
     method: "POST",
     body: JSON.stringify({})
   });
+}
+
+/**
+ * Super Admin mengonfirmasi bahwa transfer bank manual (nominal + kode unik) sudah
+ * masuk ke rekening perusahaan. Berbeda dari confirmMemberPayment: memeriksa batas
+ * waktu dan kemungkinan nominal kembar, serta mencatat audit khusus.
+ */
+export function confirmManualTransfer(orderId: string) {
+  return request<{ orderId: string; status: string; alreadyConfirmed: boolean }>(
+    `/admin/member-requests/${orderId}/confirm-transfer`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+}
+
+/**
+ * Super Admin mencatat bahwa dana pengajuan transfer manual yang dokumennya
+ * ditolak SUDAH dikembalikan lewat transfer bank dari rekening perusahaan.
+ * bankReference = nomor referensi transfer balik di mutasi bank.
+ */
+export function confirmManualRefund(orderId: string, bankReference: string) {
+  return request<{ orderId: string; status: string; amount: string }>(
+    `/admin/member-requests/${orderId}/confirm-manual-refund`,
+    { method: "POST", body: JSON.stringify({ bankReference }) }
+  );
 }
 
 /** Super Admin membatalkan pengajuan yang belum dibayar. */
@@ -857,9 +883,13 @@ export function profitLossReport(params: { dateFrom?: string; dateTo?: string })
 
 export type ManualTopUpStatus = "PENDING" | "PAID" | "CANCELLED";
 
+/** WALLET = Saldo TapGo (driver, perjalanan); PPOB = Saldo PPOB (tidak dapat ditarik). */
+export type ManualTopUpTarget = "WALLET" | "PPOB";
+
 export type ManualTopUp = {
   id: string;
   reference: string;
+  target: ManualTopUpTarget;
   status: ManualTopUpStatus;
   transferAmount: number;
   baseAmount: number | null;

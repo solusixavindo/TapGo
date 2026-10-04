@@ -4,6 +4,8 @@ part of '../main.dart';
 /// sama, tetapi kata "pemulihan" tidak boleh muncul di layar verifikasi, dan
 /// kode khusus alur tambah-email dipetakan di sini.
 String tapGoVerificationErrorMessage(Object error) {
+  final tls = tapGoTlsFailureMessage(error);
+  if (tls != null) return tls;
   if (error is DioException) {
     final code =
         _authResponseDataMap(error.response?.data)?['code']?.toString();

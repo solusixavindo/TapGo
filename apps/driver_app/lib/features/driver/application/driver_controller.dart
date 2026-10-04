@@ -66,6 +66,7 @@ class DriverController extends StateNotifier<DriverState>
   }
   Timer? _pollTimer;
   Timer? _locationTimer;
+  Timer? _safetyTimer;
   bool _polling = false;
   final Set<String> _singleFlights = <String>{};
 
@@ -102,9 +103,11 @@ class DriverController extends StateNotifier<DriverState>
       await refreshWorkspace();
     } on DriverApiException catch (error) {
       state = state.copyWith(
-        status: error.statusCode == 401
-            ? DriverWorkspaceStatus.sessionExpired
-            : DriverWorkspaceStatus.unauthenticated,
+        // Kegagalan di alur LOGIN selalu kembali ke form login: 401 di sini
+        // berarti kredensial/token Google ditolak, BUKAN sesi yang berakhir
+        // (belum ada sesi). Memetakannya ke sessionExpired membuang driver
+        // ke layar "Sesi berakhir" tanpa form (regresi APK +4, 4 Okt 2026).
+        status: DriverWorkspaceStatus.unauthenticated,
         message: error.message,
       );
     } finally {
@@ -129,9 +132,11 @@ class DriverController extends StateNotifier<DriverState>
       return result;
     } on DriverApiException catch (error) {
       state = state.copyWith(
-        status: error.statusCode == 401
-            ? DriverWorkspaceStatus.sessionExpired
-            : DriverWorkspaceStatus.unauthenticated,
+        // Kegagalan di alur LOGIN selalu kembali ke form login: 401 di sini
+        // berarti kredensial/token Google ditolak, BUKAN sesi yang berakhir
+        // (belum ada sesi). Memetakannya ke sessionExpired membuang driver
+        // ke layar "Sesi berakhir" tanpa form (regresi APK +4, 4 Okt 2026).
+        status: DriverWorkspaceStatus.unauthenticated,
         message: error.message,
       );
       return null;
@@ -170,9 +175,11 @@ class DriverController extends StateNotifier<DriverState>
       return true;
     } on DriverApiException catch (error) {
       state = state.copyWith(
-        status: error.statusCode == 401
-            ? DriverWorkspaceStatus.sessionExpired
-            : DriverWorkspaceStatus.unauthenticated,
+        // Kegagalan di alur LOGIN selalu kembali ke form login: 401 di sini
+        // berarti kredensial/token Google ditolak, BUKAN sesi yang berakhir
+        // (belum ada sesi). Memetakannya ke sessionExpired membuang driver
+        // ke layar "Sesi berakhir" tanpa form (regresi APK +4, 4 Okt 2026).
+        status: DriverWorkspaceStatus.unauthenticated,
         message: error.message,
       );
       return false;
@@ -196,7 +203,25 @@ class DriverController extends StateNotifier<DriverState>
     );
   }
 
-  Future<void> refreshWorkspace() async {
+  /// Gangguan jaringan sesaat (tanpa respons / 5xx / 408 / 429) — BUKAN
+  /// perubahan status akun. Kegagalan TLS sengaja tidak termasuk: itu tidak
+  /// pulih sendiri dan driver perlu melihat pesan diagnosisnya.
+  static bool _isTransientFailure(DriverApiException error) {
+    final code = error.statusCode;
+    if (error.code == 'NETWORK_ERROR') return true;
+    if (code == null) return false;
+    return code >= 500 || code == 408 || code == 429;
+  }
+
+  int _backgroundFailures = 0;
+
+  /// [background] = dipanggil timer polling / kembali dari latar belakang,
+  /// bukan tindakan driver. Pada workspace yang sudah aktif, gangguan sesaat
+  /// TIDAK boleh mengganti seluruh layar dengan galat atau menghentikan
+  /// polling dan pengiriman lokasi — driver di tengah perjalanan (terowongan,
+  /// sinyal lemah) harus pulih sendiri begitu jaringan kembali. Setelah gagal
+  /// berulang, hanya pesan non-blokir yang ditampilkan.
+  Future<void> refreshWorkspace({bool background = false}) async {
     if (state.session == null) {
       state = state.copyWith(status: DriverWorkspaceStatus.unauthenticated);
       return;
@@ -233,12 +258,36 @@ class DriverController extends StateNotifier<DriverState>
       _startPolling();
       _syncTracking();
       _startPush();
+      _backgroundFailures = 0;
     } on DriverApiException catch (error) {
+      if (background && _keepWorkspaceOnFailure(error)) return;
       _applyCapabilityError(error);
     } catch (_) {
+      if (background && state.status == DriverWorkspaceStatus.active) {
+        _noteBackgroundFailure();
+        return;
+      }
       state = state.copyWith(
         status: DriverWorkspaceStatus.networkError,
         message: 'Koneksi belum stabil. Silakan coba lagi.',
+      );
+    }
+  }
+
+  bool _keepWorkspaceOnFailure(DriverApiException error) {
+    if (state.status != DriverWorkspaceStatus.active ||
+        !_isTransientFailure(error)) {
+      return false;
+    }
+    _noteBackgroundFailure();
+    return true;
+  }
+
+  void _noteBackgroundFailure() {
+    _backgroundFailures += 1;
+    if (_backgroundFailures >= 3 && state.message == null) {
+      state = state.copyWith(
+        message: 'Koneksi belum stabil. Aplikasi akan mencoba tersambung lagi.',
       );
     }
   }
@@ -334,6 +383,30 @@ class DriverController extends StateNotifier<DriverState>
         livenessPassed: livenessPassed,
         modelVersion: modelVersion,
       );
+
+  /// Verifikasi ULANG acak selama online (bukan verifikasi harian pertama).
+  /// Lolos -> banner hilang, driver tetap online. Gagal -> server SUDAH
+  /// memaksa driver offline sendiri (lihat DriverFaceCheckService di
+  /// backend); di sini cukup menyegarkan workspace supaya status
+  /// online/offline di layar mengikuti kenyataan server, bukan menebaknya.
+  Future<DriverFaceCheckSnapshot> submitRecheckAttempt({
+    required double similarityScore,
+    required bool livenessPassed,
+    required String modelVersion,
+  }) async {
+    try {
+      final snapshot = await _repository.submitRecheckAttempt(
+        similarityScore: similarityScore,
+        livenessPassed: livenessPassed,
+        modelVersion: modelVersion,
+      );
+      if (mounted) state = state.copyWith(faceRecheckDue: false);
+      return snapshot;
+    } on DriverApiException {
+      await refreshWorkspace();
+      rethrow;
+    }
+  }
 
   /// Memuat ulang ringkasan dokumen.
   ///
@@ -557,6 +630,54 @@ class DriverController extends StateNotifier<DriverState>
     }
   }
 
+  /// Tombol SOS. Mengembalikan true bila sinyal berhasil terkirim ke server
+  /// — pemanggil (dialog konfirmasi) tetap menampilkan jalur WhatsApp CS
+  /// sebagai cadangan APA PUN hasilnya, karena ini fitur keselamatan.
+  ///
+  /// Referensi ride aktif disertakan otomatis bila ada — driver tidak perlu
+  /// memilihnya sendiri di tengah keadaan darurat.
+  Future<bool> triggerSos() async {
+    if (!_startFlight('sos')) return false;
+    state = state.copyWith(isBusy: true, clearMessage: true);
+    try {
+      final fix = await _locationPort.currentFix();
+      if (fix == null) {
+        state = state.copyWith(
+          message:
+              'Tidak bisa mendapatkan lokasi Anda. Pastikan GPS aktif dan coba lagi, atau hubungi CS langsung.',
+        );
+        return false;
+      }
+      await _repository.triggerSos(
+        lat: fix.lat,
+        lng: fix.lng,
+        accuracyMeters: fix.accuracyMeters,
+        rideReference: state.activeRide?.reference,
+      );
+      driverScaffoldMessengerKey.currentState
+        ?..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+          content: Text('Sinyal darurat terkirim. Tim TapGo akan segera menghubungi Anda.'),
+          duration: Duration(seconds: 6),
+        ));
+      return true;
+    } on DriverApiException catch (error) {
+      state = state.copyWith(message: error.message);
+      return false;
+    } catch (_) {
+      // Galat tak terduga (mis. plugin lokasi) tidak boleh lolos ke dialog:
+      // tombol SOS akan macet pada status "mengirim" saat driver butuh bantuan.
+      state = state.copyWith(
+        message:
+            'Sinyal SOS gagal terkirim. Coba lagi atau hubungi CS lewat WhatsApp.',
+      );
+      return false;
+    } finally {
+      _endFlight('sos');
+      state = state.copyWith(isBusy: false);
+    }
+  }
+
   Future<void> advanceRide() async {
     final ride = state.activeRide;
     if (ride == null || ride.isTerminal) return;
@@ -648,14 +769,57 @@ class DriverController extends StateNotifier<DriverState>
     _pollTimer ??= Timer.periodic(const Duration(seconds: 12), (_) => _poll());
     state = state.copyWith(isPolling: true);
     _startLocationUpdates();
+    _startSafetyMonitoring();
   }
 
   void _stopPolling() {
     _pollTimer?.cancel();
     _pollTimer = null;
-    if (mounted) state = state.copyWith(isPolling: false);
+    if (mounted) {
+      state = state.copyWith(
+        isPolling: false,
+        clearFatigueWarning: true,
+        faceRecheckDue: false,
+      );
+    }
     _stopLocationUpdates();
     unawaited(_locationPort.stopTracking());
+    _stopSafetyMonitoring();
+  }
+
+  /// Pengingat kelelahan + kewajiban verifikasi ulang wajah acak — dipoll
+  /// dengan detak jauh lebih jarang daripada tawaran/lokasi (3 menit, bukan
+  /// detik) karena keduanya berubah lambat dan tidak butuh respons instan.
+  void _startSafetyMonitoring() {
+    _safetyTimer ??= Timer.periodic(
+      const Duration(minutes: 3),
+      (_) => unawaited(_pollSafetyStatus()),
+    );
+    unawaited(_pollSafetyStatus());
+  }
+
+  void _stopSafetyMonitoring() {
+    _safetyTimer?.cancel();
+    _safetyTimer = null;
+  }
+
+  /// Best-effort seperti [_sendLocationSilently]: kegagalan jaringan tidak
+  /// boleh menimpa state.message driver setiap 3 menit. Penegakan SUNGGUHAN
+  /// (menolak tawaran/penerimaan) terjadi di server terlepas dari apakah
+  /// poll ini berhasil menjangkaunya — banner di sini murni memberi tahu,
+  /// bukan satu-satunya pertahanan.
+  Future<void> _pollSafetyStatus() async {
+    try {
+      final status = await _repository.safetyStatus();
+      if (!mounted) return;
+      state = state.copyWith(
+        fatigueWarning: status.fatigue.restRequired ? status.fatigue : null,
+        clearFatigueWarning: !status.fatigue.restRequired,
+        faceRecheckDue: status.faceRecheckDue,
+      );
+    } catch (_) {
+      // Diam — coba lagi pada detak berikutnya.
+    }
   }
 
   /// Kirim lokasi berkala selama driver online/punya perjalanan aktif —
@@ -740,7 +904,7 @@ class DriverController extends StateNotifier<DriverState>
     if (_polling || state.session == null || state.hasTerminalRide) return;
     _polling = true;
     try {
-      await refreshWorkspace();
+      await refreshWorkspace(background: true);
     } finally {
       _polling = false;
     }
@@ -762,7 +926,7 @@ class DriverController extends StateNotifier<DriverState>
       _stopPolling();
     }
     if (state == AppLifecycleState.resumed) {
-      unawaited(refreshWorkspace());
+      unawaited(refreshWorkspace(background: true));
     }
   }
 

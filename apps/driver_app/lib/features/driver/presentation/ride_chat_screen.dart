@@ -222,7 +222,7 @@ class _RideChatScreenState extends ConsumerState<RideChatScreen> {
                                   decoration: BoxDecoration(
                                     color: isMine
                                         ? colorScheme.primary
-                                        : Colors.white,
+                                        : colorScheme.surfaceContainerHighest,
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   child: Text(
@@ -230,7 +230,7 @@ class _RideChatScreenState extends ConsumerState<RideChatScreen> {
                                     style: TextStyle(
                                       color: isMine
                                           ? colorScheme.onPrimary
-                                          : Colors.black87,
+                                          : colorScheme.onSurface,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
