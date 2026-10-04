@@ -29,11 +29,12 @@ sama atau lebih rendah ditolak). Nama versi tetap 1.0.0.
 
 ## Yang tidak berubah dari +5
 
-- Pin leaf TLS dan `reuse_key`: sertifikat server memakai kunci yang dipakai ulang pada tiap
-  perpanjangan (`reuse_key = True`, sudah dibuktikan pada 4 Okt 2026), jadi pin tidak putus pada
-  perpanjangan berikutnya selama konfigurasi itu tidak diubah. Kunci diganti pada 4 Okt 2026 setelah
-  kunci sebelumnya terbuka sebagian; artefak yang dibangun dengan pin kunci lama tidak dapat terhubung
-  dan tidak boleh dipakai. Catatan teknis ada di `DEPLOY_VPS.md` bagian 14.1 (langkah Owner di VPS).
+- Pin TLS: pin di +6 cocok dengan sertifikat `api.tapgolion.id` yang diterbitkan 4 Okt 2026 20:08 WIB
+  (berlaku sampai 2 Jan 2027). APK +4 dan +5 memuat pin yang tidak cocok dengan sertifikat itu, tidak
+  dapat login, dan **tidak boleh dipasang**. Hash di dalam APK adalah sidik kunci publik: bukan rahasia
+  dan bukan bukti kunci rahasia server bocor. Apakah pin tetap cocok pada perpanjangan sertifikat
+  berikutnya bergantung pada konfigurasi certbot di VPS — langkah Owner di `DEPLOY_VPS.md` bagian 14.1;
+  rilis ini tidak mengubahnya dan tidak mengklaim statusnya.
 - Tiga endpoint SOS / `safety-status` / `face-check/recheck-attempt` belum ada di backend produksi.
 - Verifikasi wajah tetap nonaktif di server dan komisi tidak disentuh.
 

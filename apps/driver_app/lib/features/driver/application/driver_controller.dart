@@ -304,61 +304,70 @@ class DriverController extends StateNotifier<DriverState>
     }
   }
 
-  /// Membuka OfferDetailSheet yang sudah ada untuk tawaran BARU, tanpa
-  /// menunggu driver mengetuk OfferTile. Berlaku untuk order yang datang lewat
-  /// push maupun polling (keduanya berakhir di refreshWorkspace).
+  /// Antrian popup tawaran. Setiap tawaran `searchingDriver` yang belum
+  /// ditutup atau ditolak pada sesi ini akhirnya membuka OfferDetailSheet yang
+  /// sudah ada, satu per satu, yang terbaru lebih dulu — tanpa menunggu driver
+  /// mengetuk OfferTile. Dipanggil dari refreshWorkspace, jadi berlaku untuk
+  /// push maupun polling.
   ///
-  /// Sheet yang sedang terbuka TIDAK diganti (jangan menyambar tawaran yang
-  /// sedang dibaca), dan tidak ada sheet yang dibuka selama ada perjalanan
-  /// aktif. Tawaran baru yang tidak sempat dibuka karena itu dicatat tertunda
-  /// dan dibuka segera setelah sheet tertutup (closeOffer / penolakan berhasil)
-  /// lewat [_openPendingOffer]. Tawaran yang sudah ditutup atau ditolak pada
-  /// sesi ini tidak pernah dibuka lagi. Bila beberapa kandidat, dibuka yang
-  /// paling baru.
+  /// - Sheet yang sedang terbuka TIDAK diganti; perjalanan aktif tidak membuka
+  ///   sheet. Semua kandidat yang tidak sedang dibuka dicatat di
+  ///   [_pendingOfferRefs] SEBELUM fungsi kembali (termasuk saat beberapa
+  ///   tawaran datang bersamaan dan yang terbaru langsung dibuka). Tanpa
+  ///   catatan ini polling berikutnya menganggapnya sudah ada di daftar dan
+  ///   tidak pernah membukanya.
+  /// - Tawaran yang sedang terbuka tetapi sudah hilang dari daftar atau
+  ///   statusnya bukan searchingDriver dianggap sudah dilihat
+  ///   ([_dismissedOfferRefs]), sheetnya ditutup, dan yang tertunda berikutnya
+  ///   dibuka pada refresh yang sama.
+  /// - closeOffer dan penolakan yang berhasil memanggil [_openPendingOffer].
   void _openNewestFreshOffer({
     required Set<String> previousRefs,
     required List<DriverRide> offers,
   }) {
-    final live = offers.map((o) => o.reference).toSet();
-    _pendingOfferRefs.removeWhere(
-        (ref) => !live.contains(ref) || _dismissedOfferRefs.contains(ref));
-    final candidates = offers
-        .where((o) =>
-            o.reference.isNotEmpty &&
-            o.status == RideStatus.searchingDriver &&
-            !_dismissedOfferRefs.contains(o.reference) &&
-            (!previousRefs.contains(o.reference) ||
-                _pendingOfferRefs.contains(o.reference)))
-        .toList();
-    if (candidates.isEmpty) return;
-    if (state.activeRide != null || state.selectedOffer != null) {
-      _pendingOfferRefs.addAll(candidates.map((o) => o.reference));
-      return;
+    final byReference = {for (final o in offers) o.reference: o};
+    final open = state.selectedOffer;
+    // Tidak menutup saat accept/reject sedang berjalan: handler aksi itu yang
+    // menentukan hasilnya.
+    if (open != null && !state.isBusy) {
+      final current = byReference[open.reference];
+      if (current == null || current.status != RideStatus.searchingDriver) {
+        _dismissedOfferRefs.add(open.reference);
+        state = state.copyWith(clearSelectedOffer: true);
+      }
     }
-    _selectNewest(candidates);
+    _pendingOfferRefs.removeWhere((ref) =>
+        !byReference.containsKey(ref) || _dismissedOfferRefs.contains(ref));
+    final openRef = state.selectedOffer?.reference;
+    for (final offer in offers) {
+      if (offer.reference.isEmpty ||
+          offer.reference == openRef ||
+          offer.status != RideStatus.searchingDriver ||
+          _dismissedOfferRefs.contains(offer.reference)) {
+        continue;
+      }
+      if (!previousRefs.contains(offer.reference)) {
+        _pendingOfferRefs.add(offer.reference);
+      }
+    }
+    _openPendingOffer();
   }
 
-  /// Dipanggil tepat setelah sheet tertutup. Membuka tawaran tertunda yang
-  /// MASIH ada di daftar, masih mencari driver, dan belum ditutup/ditolak —
-  /// tanpa menunggu polling berikutnya.
+  /// Membuka tawaran tertunda yang paling baru bila tidak ada sheet terbuka dan
+  /// tidak ada perjalanan aktif. Hanya yang MASIH ada di daftar, masih mencari
+  /// driver, dan belum ditutup/ditolak; yang lain dilepas dari catatan.
   void _openPendingOffer() {
+    final live = state.offers.map((o) => o.reference).toSet();
+    _pendingOfferRefs.removeWhere(
+        (ref) => !live.contains(ref) || _dismissedOfferRefs.contains(ref));
     if (_pendingOfferRefs.isEmpty) return;
     if (state.activeRide != null || state.selectedOffer != null) return;
     final candidates = state.offers
         .where((o) =>
             _pendingOfferRefs.contains(o.reference) &&
-            o.status == RideStatus.searchingDriver &&
-            !_dismissedOfferRefs.contains(o.reference))
+            o.status == RideStatus.searchingDriver)
         .toList();
-    // Yang sudah hilang dari daftar tidak boleh dibuka dan dilepas dari catatan.
-    final live = state.offers.map((o) => o.reference).toSet();
-    _pendingOfferRefs.removeWhere(
-        (ref) => !live.contains(ref) || _dismissedOfferRefs.contains(ref));
     if (candidates.isEmpty) return;
-    _selectNewest(candidates);
-  }
-
-  void _selectNewest(List<DriverRide> candidates) {
     // Urutan daftar dari server bukan urutan waktu (createdAt asc atau jarak),
     // jadi yang terbaru ditentukan dari waktunya; tanpa waktu, yang terakhir.
     var newest = candidates.last;
@@ -367,7 +376,6 @@ class DriverController extends StateNotifier<DriverState>
       final best = newest.updatedAt;
       if (at != null && (best == null || at.isAfter(best))) newest = offer;
     }
-    _pendingOfferRefs.remove(newest.reference);
     selectOffer(newest);
   }
 
@@ -635,6 +643,13 @@ class DriverController extends StateNotifier<DriverState>
   }
 
   void selectOffer(DriverRide ride) {
+    // Tawaran lain yang sedang terbuka dan kini diganti dianggap sudah dilihat;
+    // yang baru dibuka tidak lagi tertunda.
+    final previous = state.selectedOffer?.reference;
+    if (previous != null && previous != ride.reference) {
+      _dismissedOfferRefs.add(previous);
+    }
+    _pendingOfferRefs.remove(ride.reference);
     state = state.copyWith(selectedOffer: ride);
   }
 
