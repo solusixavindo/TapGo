@@ -42,15 +42,41 @@ tail -1 /tmp/gate-flutter-test.log
 
 [ "$skip_build" = 1 ] && { echo "OK (tanpa build)"; exit 0; }
 
+# Audit 4 Okt 2026: sejak pinning TLS masuk (e7eea10, 1 Okt) build rilis TANPA
+# TAPGO_TLS_PIN_SHA256 menghasilkan aplikasi yang menolak SEMUA permintaan
+# jaringan (fail-closed by design), tetapi lolos semua langkah gerbang ini dan
+# verify-mobile-artifact.sh. Gerbang driver sudah dijaga (02e2798); user_app
+# belum. Nilai HANYA dari environment shell, TIDAK PERNAH dari file di repo.
+if [ -z "${TAPGO_TLS_PIN_SHA256:-}" ]; then
+  fail "TAPGO_TLS_PIN_SHA256 kosong di environment shell ini — build rilis dibatalkan (fail-closed). Jalankan: export TAPGO_TLS_PIN_SHA256=<hash SPKI produksi>, lalu ulangi skrip ini."
+fi
+
+# Let's Encrypt memutar kunci leaf tiap perpanjangan: pin yang kemarin benar
+# bisa hari ini salah (regresi driver_app 1.0.0+4, 4 Okt 2026). Dibandingkan
+# dengan sertifikat yang disajikan server SEKARANG.
+step "3b. Pin TLS cocok dengan sertifikat live"
+if [ "${TAPGO_SKIP_LIVE_PIN_CHECK:-0}" = "1" ]; then
+  echo "DILEWATI (TAPGO_SKIP_LIVE_PIN_CHECK=1) — pin TIDAK diverifikasi terhadap server."
+else
+  "$root/scripts/check-tls-pin-live.sh" || fail "pin TLS tidak cocok / tidak dapat diverifikasi terhadap sertifikat live — build dibatalkan"
+fi
+
 step "4. Build rilis APK dan AAB"
-flutter build apk --release 2>&1 | tail -2
-flutter build appbundle --release 2>&1 | tail -2
+flutter build apk --release --dart-define=TAPGO_TLS_PIN_SHA256="$TAPGO_TLS_PIN_SHA256" 2>&1 | tail -2
+flutter build appbundle --release --dart-define=TAPGO_TLS_PIN_SHA256="$TAPGO_TLS_PIN_SHA256" 2>&1 | tail -2
 apk="$app/build/app/outputs/flutter-apk/app-release.apk"
 aab="$app/build/app/outputs/bundle/release/app-release.aab"
 
 step "5. Pemeriksa artefak dan identitas paket"
 "$root/scripts/verify-mobile-artifact.sh" "$apk"
 "$root/scripts/verify-mobile-artifact.sh" "$aab"
+# Pin harus benar-benar tertanam di biner Dart di setiap ABI. Dihitung dengan
+# grep -c (bukan -q): -q menutup pipa lebih awal, unzip kena SIGPIPE, dan
+# pipefail menandai pemeriksaan gagal padahal pin ada.
+for abi_so in $(unzip -Z1 "$apk" 'lib/*/libapp.so'); do
+  found="$(unzip -p "$apk" "$abi_so" | grep -ac "${TAPGO_TLS_PIN_SHA256%%,*}" || true)"
+  [ "${found:-0}" -ge 1 ] || fail "pin TLS tidak ditemukan di $abi_so — dart-define tidak terpasang"
+done
 aapt="$(ls -d "$HOME"/Library/Android/sdk/build-tools/*/aapt 2>/dev/null | tail -1)"
 if [ -n "$aapt" ]; then
   badging="$("$aapt" dump badging "$apk")"
