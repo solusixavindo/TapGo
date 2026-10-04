@@ -77,3 +77,12 @@ Tidak tercakup: perilaku di perangkat nyata, FCM sungguhan, GPS sungguhan, kamer
 - Gerbang rilis lolos sampai langkah 6 (guard sumber, analyze, tes, pin live, build, pemeriksa artefak, izin terlarang, salin).
 - Artefak: pin live ada di `libapp.so` ketiga ABI; `RECORD_AUDIO`/`READ_MEDIA_IMAGES`/`ACCESS_BACKGROUND_LOCATION` tidak ada; package `com.xavindo.tapgo.driver` versionCode 4; tanda tangan APK terverifikasi (v2) dan AAB `jar verified`, sidik jari kunci sama dengan APK lama sehingga dapat menimpa pemasangan sebelumnya.
 - Berkas lama dipindah (tidak dihapus) ke `~/Desktop/tapgo-driver-arsip/` dengan akhiran `-PIN-BASI-1okt`.
+
+## 6. Koreksi (4 Okt 2026, setelah cek ulang)
+
+Analisis akar masalah di bagian 1 **tidak lengkap**. Pin yang basi memang tidak cocok dengan sertifikat
+baru, tetapi pin leaf yang benar pun tidak akan pernah cocok: terhadap rantai produksi, callback
+`badCertificateCallback` menerima sertifikat teratas (ISRG Root X2), bukan leaf. Karena itu temuan H5
+dan M1 (pin leaf, `scripts/check-tls-pin-live.sh`) digantikan oleh trust-anchor pinning dan gerbang
+handshake sungguhan; lihat `TLS_TRUST_ANCHORS.md`. Pernyataan di bagian 5 bahwa pin live "ada di
+`libapp.so`" membuktikan pin tertanam, bukan bahwa aplikasi dapat terhubung.

@@ -1,5 +1,7 @@
 # TapGo Driver 1.0.0+5 — Release Notes
 
+> **PERINGATAN (4 Okt 2026): artefak ini tidak dapat terhubung ke server produksi** (cacat pinning TLS: callback menerima sertifikat teratas, bukan leaf; lihat `TLS_TRUST_ANCHORS.md`). Jangan dipasang atau diunggah. Pengganti: driver 1.0.0+8.
+
 Rilis ini menggantikan 1.0.0+4. Artefak 1.0.0+4 yang gagal login pada uji HP 4 Oktober 2026
 **tidak boleh dikirim ulang**; satu-satunya artefak perbaikan yang sah adalah 1.0.0+5.
 

@@ -1,5 +1,7 @@
 # TapGo user_app 2.0.5+33 — pin TLS sesuai sertifikat 4 Okt 2026
 
+> **PERINGATAN (4 Okt 2026): artefak ini tidak dapat terhubung ke server produksi** (cacat pinning TLS; lihat `TLS_TRUST_ANCHORS.md`). Jangan dipasang atau diunggah. Pengganti: user_app 2.0.5+34.
+
 Tanggal: 2026-10-04. Dasar: 2.0.5+32.
 
 ## Mengapa build ini ada

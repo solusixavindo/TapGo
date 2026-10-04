@@ -4,15 +4,20 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tapgo_driver_app/main.dart';
 
-/// Tes ujung-ke-ujung galat jaringan driver_app (regresi APK +4, 4 Okt 2026).
+/// Tes ujung-ke-ujung galat jaringan driver_app.
 ///
-/// Penyebab APK +4 menampilkan "Koneksi belum stabil" di layar login: pin TLS
-/// yang dibakar ke APK tidak cocok lagi dengan sertifikat server (Let's
-/// Encrypt memutar kunci leaf tiap perpanjangan), sehingga SETIAP permintaan
-/// gagal handshake, dan semua kegagalan itu dilebur menjadi NETWORK_ERROR.
-/// Tes ini memakai server HTTPS lokal sungguhan + sertifikat sintetis yang
-/// dibuat `openssl` saat tes berjalan (tidak ada kunci privat di repo), jadi
-/// yang diuji adalah handshake dart:io yang sebenarnya, bukan tiruan.
+/// Riwayat: APK 1.0.0+4 sampai +7 menampilkan "Koneksi belum stabil" karena
+/// pinning SPKI leaf lewat badCertificateCallback tidak pernah cocok terhadap
+/// rantai produksi: dengan SecurityContext(withTrustedRoots: false), callback
+/// menerima sertifikat TERATAS rantai yang gagal diverifikasi (ISRG Root X2),
+/// bukan leaf. Uji lama memakai SATU sertifikat self-signed (leaf = satu-satunya
+/// sertifikat) sehingga cacat itu tidak pernah terlihat.
+///
+/// Desain sekarang: sertifikat CA dipasang sebagai satu-satunya trust anchor.
+/// Tes ini memakai server HTTPS lokal sungguhan dengan rantai SEBENARNYA
+/// (CA sintetis + leaf bertanda tangan CA, SAN localhost) yang dibuat `openssl`
+/// saat tes berjalan (tidak ada kunci privat di repo), jadi yang diuji adalah
+/// handshake dart:io yang sebenarnya, bukan tiruan.
 
 const _loginOk = {
   'success': true,
@@ -23,41 +28,52 @@ const _loginOk = {
   },
 };
 
-class _SyntheticCert {
-  _SyntheticCert(this.certPath, this.keyPath, this.spkiSha256Hex);
-  final String certPath;
-  final String keyPath;
-  final String spkiSha256Hex;
+/// CA sintetis dan leaf bertanda tangan CA itu (CN dan SAN `localhost`).
+class _TestPki {
+  _TestPki(this.caPem, this.leafCertPath, this.leafKeyPath);
+  final String caPem;
+  final String leafCertPath;
+  final String leafKeyPath;
 }
 
-/// Hash SPKI dihitung lewat openssl (alat independen), BUKAN lewat fungsi
-/// tapGoExtractSubjectPublicKeyInfoDer yang sedang diuji.
-Future<_SyntheticCert> _makeCert(Directory dir, String name) async {
-  final cert = '${dir.path}/$name.crt';
-  final key = '${dir.path}/$name.key';
-  final gen = await Process.run('openssl', [
+Future<void> _openssl(List<String> args) async {
+  final result = await Process.run('openssl', args);
+  if (result.exitCode != 0) {
+    fail('openssl ${args.take(2).join(' ')} gagal: ${result.stderr}');
+  }
+}
+
+Future<_TestPki> _makePki(Directory dir, String name) async {
+  final d = dir.path;
+  File('$d/$name-ca.cnf').writeAsStringSync(
+      '[req]\ndistinguished_name=dn\n[dn]\n[v3_ca]\n'
+      'basicConstraints=critical,CA:TRUE\nkeyUsage=critical,keyCertSign,cRLSign\n');
+  File('$d/$name-leaf.cnf').writeAsStringSync(
+      'subjectAltName=DNS:localhost\nbasicConstraints=CA:FALSE\n'
+      'extendedKeyUsage=serverAuth\n');
+  await _openssl([
     'req', '-x509', '-newkey', 'rsa:2048', '-nodes', //
-    '-keyout', key, '-out', cert, '-days', '2', '-subj', '/CN=localhost',
+    '-keyout', '$d/$name-ca.key', '-out', '$d/$name-ca.crt', '-days', '2',
+    '-subj', '/CN=TapGo-Test-CA-$name', '-config', '$d/$name-ca.cnf',
+    '-extensions', 'v3_ca',
   ]);
-  if (gen.exitCode != 0) {
-    fail('openssl req gagal: ${gen.stderr}');
-  }
-  final hash = await Process.run('sh', [
-    '-c',
-    'openssl x509 -in "$cert" -pubkey -noout | '
-        'openssl pkey -pubin -outform der | openssl dgst -sha256',
+  await _openssl([
+    'req', '-newkey', 'rsa:2048', '-nodes', '-keyout', '$d/$name-leaf.key',
+    '-out', '$d/$name-leaf.csr', '-subj', '/CN=localhost',
   ]);
-  if (hash.exitCode != 0) {
-    fail('openssl dgst gagal: ${hash.stderr}');
-  }
-  final hex = RegExp(r'[0-9a-f]{64}').firstMatch('${hash.stdout}')!.group(0)!;
-  return _SyntheticCert(cert, key, hex);
+  await _openssl([
+    'x509', '-req', '-in', '$d/$name-leaf.csr', '-CA', '$d/$name-ca.crt',
+    '-CAkey', '$d/$name-ca.key', '-CAcreateserial', '-out',
+    '$d/$name-leaf.crt', '-days', '2', '-extfile', '$d/$name-leaf.cnf',
+  ]);
+  return _TestPki(File('$d/$name-ca.crt').readAsStringSync(),
+      '$d/$name-leaf.crt', '$d/$name-leaf.key');
 }
 
-Future<HttpServer> _httpsServer(_SyntheticCert cert) async {
+Future<HttpServer> _httpsServer(_TestPki pki) async {
   final context = SecurityContext()
-    ..useCertificateChain(cert.certPath)
-    ..usePrivateKey(cert.keyPath);
+    ..useCertificateChain(pki.leafCertPath)
+    ..usePrivateKey(pki.leafKeyPath);
   final server = await HttpServer.bindSecure('127.0.0.1', 0, context);
   server.listen(_respondLoginOk);
   return server;
@@ -88,13 +104,14 @@ ApiDriverRepository _repo(
   HttpServer server, {
   required bool https,
   bool enforce = false,
-  Set<String>? pins,
+  List<String>? anchors,
+  String host = 'localhost',
 }) {
   return ApiDriverRepository(
-    baseUrl: '${https ? 'https' : 'http'}://localhost:${server.port}/api/v1',
+    baseUrl: '${https ? 'https' : 'http'}://$host:${server.port}/api/v1',
     storage: MemorySessionStore(),
     enforceTlsPinning: enforce,
-    tlsPinsOverride: pins,
+    tlsTrustAnchorsOverride: anchors,
   );
 }
 
@@ -110,14 +127,14 @@ Future<DriverApiException> _loginFailure(ApiDriverRepository repo) async {
 void main() {
   walletTopUpUrlTests();
   late Directory certDir;
-  late _SyntheticCert certA;
-  late _SyntheticCert certB;
+  late _TestPki pkiA;
+  late _TestPki pkiB;
   final servers = <HttpServer>[];
 
   setUpAll(() async {
     certDir = await Directory.systemTemp.createTemp('tapgo-tls-test');
-    certA = await _makeCert(certDir, 'a');
-    certB = await _makeCert(certDir, 'b');
+    pkiA = await _makePki(certDir, 'a');
+    pkiB = await _makePki(certDir, 'b');
   });
 
   tearDownAll(() async {
@@ -137,22 +154,19 @@ void main() {
     return server;
   }
 
-  group('TLS pinning pada handshake sungguhan', () {
-    test('pin cocok dengan SPKI server: login berhasil', () async {
-      final server = await track(_httpsServer(certA));
-      final repo = _repo(server,
-          https: true, enforce: true, pins: {certA.spkiSha256Hex});
+  group('trust-anchor pinning pada handshake sungguhan', () {
+    test('anchor = CA yang menandatangani server: login berhasil', () async {
+      final server = await track(_httpsServer(pkiA));
+      final repo = _repo(server, https: true, enforce: true, anchors: [pkiA.caPem]);
       final session =
           await repo.login(phone: '081234567890', password: 'password-uji');
       expect(session.accessToken, 'access-token-uji');
     });
 
-    test('pin basi (SPKI lain) ditolak dengan kode dan pesan yang jelas',
+    test('anchor = CA lain ditolak sebagai TLS_PIN_MISMATCH dengan pesan yang jelas',
         () async {
-      // Persis skenario APK +4: server memakai kunci baru, pin di APK kunci lama.
-      final server = await track(_httpsServer(certA));
-      final repo = _repo(server,
-          https: true, enforce: true, pins: {certB.spkiSha256Hex});
+      final server = await track(_httpsServer(pkiA));
+      final repo = _repo(server, https: true, enforce: true, anchors: [pkiB.caPem]);
       final error = await _loginFailure(repo);
       expect(error.code, 'TLS_PIN_MISMATCH');
       expect(error.message, isNot(contains('Koneksi belum stabil')));
@@ -160,25 +174,43 @@ void main() {
       expect(error.statusCode, isNull);
     });
 
-    test('pin kosong pada build rilis: fail-closed dengan kode TLS_PIN_NOT_CONFIGURED',
+    test('beberapa anchor: cukup satu yang menandatangani server', () async {
+      final server = await track(_httpsServer(pkiA));
+      final repo = _repo(server,
+          https: true, enforce: true, anchors: [pkiB.caPem, pkiA.caPem]);
+      final session =
+          await repo.login(phone: '081234567890', password: 'password-uji');
+      expect(session.accessToken, 'access-token-uji');
+    });
+
+    test('sertifikat sah tetapi untuk host lain ditolak (hostname diperiksa)',
         () async {
-      final server = await track(_httpsServer(certA));
-      final repo = _repo(server, https: true, enforce: true, pins: <String>{});
+      // Leaf hanya bertanda SAN localhost; dihubungi lewat 127.0.0.1. Tanpa
+      // pemeriksaan hostname, siapa pun dengan sertifikat dari CA yang sama
+      // untuk domain lain dapat menyamar.
+      final server = await track(_httpsServer(pkiA));
+      final repo = _repo(server,
+          https: true, enforce: true, anchors: [pkiA.caPem], host: '127.0.0.1');
+      final error = await _loginFailure(repo);
+      expect(error.code, startsWith('TLS_'));
+    });
+
+    test('anchor kosong pada build rilis: fail-closed dengan kode TLS_PIN_NOT_CONFIGURED',
+        () async {
+      final server = await track(_httpsServer(pkiA));
+      final repo = _repo(server, https: true, enforce: true, anchors: <String>[]);
       final error = await _loginFailure(repo);
       expect(error.code, 'TLS_PIN_NOT_CONFIGURED');
       expect(error.message, isNot(contains('Koneksi belum stabil')));
     });
 
-    test('kegagalan TLS yang BUKAN penolakan pin (pinning aktif) menjadi TLS_CERTIFICATE_INVALID',
+    test('kegagalan TLS yang BUKAN penolakan sertifikat (pinning aktif) menjadi TLS_CERTIFICATE_INVALID',
         () async {
-      // Handshake gagal sebelum callback pin sempat dipanggil (server HTTP
-      // biasa dihubungi lewat https). Dio mengeluarkan DioExceptionType.unknown
-      // + HandshakeException untuk SEMUA kegagalan TLS, termasuk penolakan pin,
-      // jadi penolakan pin dikenali dari callback pin, bukan dari tipe galat.
-      // Pesan "perbarui dari Google Play" hanya untuk penolakan pin.
+      // Handshake gagal sebelum callback sertifikat sempat dipanggil (server
+      // HTTP biasa dihubungi lewat https). Pesan "perbarui dari Google Play"
+      // hanya untuk sertifikat yang tidak dipercaya.
       final plain = await track(_httpServer(200, {'success': true}));
-      final repo = _repo(plain,
-          https: true, enforce: true, pins: {certA.spkiSha256Hex});
+      final repo = _repo(plain, https: true, enforce: true, anchors: [pkiA.caPem]);
       final error = await _loginFailure(repo);
       expect(error.code, 'TLS_CERTIFICATE_INVALID');
       expect(error.message, contains('tanggal dan jam'));
@@ -186,22 +218,11 @@ void main() {
       expect(error.message, isNot(contains('Google Play')));
     });
 
-    test('penolakan pin tetap TLS_PIN_MISMATCH dan satu-satunya yang menyuruh memperbarui',
+    test('tanpa pinning (debug), sertifikat dari CA tak dikenal tetap ditolak sebagai galat TLS',
         () async {
-      final server = await track(_httpsServer(certA));
-      final repo = _repo(server,
-          https: true, enforce: true, pins: {certB.spkiSha256Hex});
-      final error = await _loginFailure(repo);
-      expect(error.code, 'TLS_PIN_MISMATCH');
-      expect(error.message, contains('Google Play'));
-      expect(error.message, isNot(contains('tanggal dan jam')));
-    });
-
-    test('tanpa pinning (debug), sertifikat self-signed tetap ditolak sebagai galat TLS',
-        () async {
-      // Memastikan kegagalan sertifikat BUKAN lagi dilebur menjadi NETWORK_ERROR
+      // Memastikan kegagalan sertifikat BUKAN dilebur menjadi NETWORK_ERROR
       // walau pinning tidak aktif.
-      final server = await track(_httpsServer(certA));
+      final server = await track(_httpsServer(pkiA));
       final repo = _repo(server, https: true, enforce: false);
       final error = await _loginFailure(repo);
       expect(error.code, 'TLS_CERTIFICATE_INVALID');

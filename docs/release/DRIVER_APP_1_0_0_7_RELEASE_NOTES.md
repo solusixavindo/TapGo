@@ -1,5 +1,7 @@
 # TapGo Driver 1.0.0+7 — Release Notes
 
+> **PERINGATAN (4 Okt 2026): artefak ini tidak dapat terhubung ke server produksi** (cacat pinning TLS: callback menerima sertifikat teratas, bukan leaf; lihat `TLS_TRUST_ANCHORS.md`). Jangan dipasang atau diunggah. Pengganti: driver 1.0.0+8.
+
 Rilis ini menggantikan 1.0.0+6. Isi 1.0.0+5 dan 1.0.0+6 tetap berlaku
 (`DRIVER_APP_1_0_0_5_RELEASE_NOTES.md`, `DRIVER_APP_1_0_0_6_RELEASE_NOTES.md`); hanya antrian popup
 order yang disempurnakan.

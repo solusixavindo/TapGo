@@ -1,5 +1,7 @@
 # TapGo Driver 1.0.0+4 — Release Notes
 
+> **PERINGATAN (4 Okt 2026): artefak ini tidak dapat terhubung ke server produksi** (cacat pinning TLS: callback menerima sertifikat teratas, bukan leaf; lihat `TLS_TRUST_ANCHORS.md`). Jangan dipasang atau diunggah. Pengganti: driver 1.0.0+8.
+
 Rilis ini menggabungkan beberapa batch pekerjaan sejak APK 1.0.0+3 terakhir yang diuji Owner: fitur
 baru Tombol SOS, langkah pertama menuju kesiapan Google Play Store (fase E4 dari
 `DRIVER_APP_READINESS_PLAN.md`), dan dua fitur keamanan/kesejahteraan baru yang diadaptasi dari

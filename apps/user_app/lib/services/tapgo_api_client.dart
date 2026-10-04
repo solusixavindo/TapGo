@@ -3,67 +3,51 @@ part of '../main.dart';
 /// Hasil pertukaran refresh token ke server.
 enum TapGoSessionRefreshResult { refreshed, rejected, unreachable }
 
-// --- Certificate pinning (audit keamanan 30 September 2026, M4) -----------
-// Diisi lewat --dart-define=TAPGO_TLS_PIN_SHA256=hash1,hash2 saat build
-// rilis. Nilainya: hash SHA-256 (hex) dari SubjectPublicKeyInfo DER sertifikat
-// atau intermediate CA yang dipercaya — BUKAN hash seluruh sertifikat, supaya
-// perpanjangan sertifikat dengan kunci yang sama tidak memutus pin. Boleh
-// lebih dari satu (dipisah koma) untuk pin cadangan saat rotasi. Nilai ini
-// SENGAJA tidak diberi default di kode — lihat _applyTlsPinning.
-const String _tlsPinShaEnv = String.fromEnvironment('TAPGO_TLS_PIN_SHA256');
+// --- Trust-anchor pinning ---------------------------------------------------
+// Anchor dibundel di services/tls_pinning.dart (tanpa --dart-define dan tanpa
+// nilai dari environment). Lihat docs/release/TLS_TRUST_ANCHORS.md.
 
-Set<String> get _tlsPinnedSpkiSha256Hashes => _tlsPinShaEnv
-    .split(',')
-    .map((value) => value.trim().toLowerCase())
-    .where((value) => value.isNotEmpty)
-    .toSet();
-
-/// Memasang certificate pinning pada [dio] untuk build rilis.
-///
-/// Trik SecurityContext(withTrustedRoots: false): tanpa root CA bawaan,
-/// SETIAP sertifikat (termasuk yang sah dari CA publik) gagal validasi baku,
-/// sehingga badCertificateCallback SELALU dipanggil untuk SETIAP koneksi —
-/// bukan hanya untuk sertifikat yang sudah tidak valid. Di situlah keputusan
-/// terima/tolak SEBENARNYA dibuat lewat tapGoShouldAcceptPinnedCertificate
-/// (fungsi murni di tls_pinning.dart): host DAN SPKI harus cocok keduanya.
-///
-/// [expectedHost] dibaca ULANG setiap koneksi (bukan sekali saat pemasangan)
-/// supaya tetap benar walau baseUrl klien berubah (mis. setBaseUrl) setelah
-/// HttpClient ini dibuat.
-///
-/// Fail-closed PENUH: bila [allowedPins] kosong ATAU adapter bukan
-/// IOHttpClientAdapter (tidak bisa dipin sama sekali — mis. target web),
-/// SEMUA permintaan jaringan ditolak (lewat interceptor, sebelum TLS
-/// handshake pun dimulai) — bukan diam-diam berjalan tanpa proteksi. Ini
-/// berarti build rilis TANPA TAPGO_TLS_PIN_SHA256, atau di platform yang
-/// adapternya tidak mendukung pinning kustom, tidak bisa menghubungi server
-/// apa pun; nilai pin wajib diisi Owner sebelum build rilis diedarkan.
-/// Mencatat penolakan oleh callback pin. Dio mengeluarkan
-/// DioExceptionType.unknown + HandshakeException untuk SEMUA kegagalan TLS —
-/// termasuk penolakan pin — jadi penolakan pin tidak dapat dikenali dari tipe
-/// galat. Callback pin sendiri yang tahu, maka ia yang mencatatnya; tiap
-/// permintaan menandai hitungan awalnya (RequestOptions.extra) dan dianggap
-/// ditolak pin bila hitungan bertambah selama permintaan itu berjalan.
-class _PinRejectionLog {
-  static const _startKey = 'tapgo_pin_rejections_at_start';
+/// Mencatat penolakan sertifikat oleh callback. Dio mengeluarkan
+/// DioExceptionType.unknown + HandshakeException untuk SEMUA kegagalan TLS,
+/// jadi penyebabnya tidak dapat dikenali dari tipe galat. Callback sertifikat
+/// buruk yang tahu (ia menerima sertifikat pada titik gagal), maka ia yang
+/// mencatatnya; tiap permintaan menandai hitungan awalnya
+/// (RequestOptions.extra) dan dianggap ditolak bila hitungan bertambah selama
+/// permintaan itu berjalan.
+class _CertificateRejectionLog {
+  static const _startKey = 'tapgo_cert_rejections_at_start';
   int _count = 0;
+  TapGoCertificateRejection? _last;
 
-  void record() => _count += 1;
+  void record(TapGoCertificateRejection reason) {
+    _count += 1;
+    _last = reason;
+  }
 
   void markStart(RequestOptions options) => options.extra[_startKey] = _count;
 
-  bool rejectedDuring(RequestOptions options) {
+  /// Alasan penolakan terakhir selama permintaan ini, atau null bila callback
+  /// tidak dipanggil (kegagalan handshake lain).
+  TapGoCertificateRejection? rejectionDuring(RequestOptions options) {
     final atStart = options.extra[_startKey];
-    return atStart is int && _count > atStart;
+    return atStart is int && _count > atStart ? _last : null;
   }
 }
 
-void _applyTlsPinning(Dio dio, Set<String> allowedPins, String Function() expectedHost) {
-  if (allowedPins.isEmpty) {
+/// Memasang trust-anchor pinning pada [dio] untuk build rilis: hanya rantai
+/// yang berujung di [anchorPems] yang diterima; validasi (rantai, masa berlaku,
+/// hostname) dikerjakan BoringSSL, dan callback sertifikat buruk selalu menolak.
+///
+/// Fail-closed PENUH: bila [anchorPems] kosong ATAU adapter bukan
+/// IOHttpClientAdapter (tidak bisa dipin sama sekali — mis. target web),
+/// SEMUA permintaan jaringan ditolak (lewat interceptor, sebelum TLS
+/// handshake pun dimulai) — bukan diam-diam berjalan tanpa proteksi.
+void _applyTlsPinning(Dio dio, List<String> anchorPems) {
+  if (anchorPems.isEmpty) {
     _rejectAllRequestsForTlsPinning(
       dio,
-      'TAPGO_TLS_PIN_SHA256 belum diisi pada build rilis ini — '
-      'permintaan jaringan ditolak (fail-closed) sampai pin diisi.',
+      'Trust anchor TLS kosong pada build rilis ini — permintaan jaringan '
+      'ditolak (fail-closed).',
     );
     return;
   }
@@ -77,24 +61,19 @@ void _applyTlsPinning(Dio dio, Set<String> allowedPins, String Function() expect
     );
     return;
   }
-  final rejections = _PinRejectionLog();
+  final rejections = _CertificateRejectionLog();
   adapter.createHttpClient = () {
-    final client = HttpClient(context: SecurityContext(withTrustedRoots: false));
+    final client = HttpClient(context: tapGoBuildTrustAnchorContext(anchorPems));
     client.badCertificateCallback = (X509Certificate cert, String host, int port) {
-      final accepted = tapGoShouldAcceptPinnedCertificate(
-        host: host,
-        expectedHost: expectedHost(),
-        certificateDer: Uint8List.fromList(cert.der),
-        allowedSpkiSha256Hex: allowedPins,
-      );
-      if (!accepted) rejections.record();
-      return accepted;
+      rejections.record(tapGoClassifyRejectedCertificate(cert, DateTime.now()));
+      return false;
     };
     return client;
   };
-  // Penolakan pin ditandai pinMismatch; kegagalan TLS lain saat pinning aktif
-  // (jam HP salah, jaringan yang mencegat, protokol gagal) tetap
-  // certificateInvalid. Keduanya dilaporkan sekali ke Sentry.
+  // Sertifikat yang TIDAK DIPERCAYA (rantai tidak berujung di anchor, hostname
+  // tidak cocok) ditandai pinMismatch; kegagalan TLS lain — sertifikat
+  // kedaluwarsa/belum berlaku (jam HP salah) dan kegagalan handshake lain —
+  // tetap certificateInvalid. Keduanya dilaporkan sekali ke Sentry.
   dio.interceptors.add(
     InterceptorsWrapper(
       onRequest: (options, handler) {
@@ -103,14 +82,15 @@ void _applyTlsPinning(Dio dio, Set<String> allowedPins, String Function() expect
       },
       onError: (error, handler) {
         if (_isTlsFailure(error) && error.error is! _TlsPinMismatch) {
-          final pinRejected = rejections.rejectedDuring(error.requestOptions);
+          final untrusted = rejections.rejectionDuring(error.requestOptions) ==
+              TapGoCertificateRejection.untrusted;
           _reportTlsFailureOnce(
-            _tlsFailureCode(pinRejected
+            _tlsFailureCode(untrusted
                 ? TapGoTlsFailure.pinMismatch
                 : TapGoTlsFailure.certificateInvalid),
             error.requestOptions.uri.host,
           );
-          if (pinRejected) {
+          if (untrusted) {
             handler.next(error.copyWith(error: _TlsPinMismatch(error.error)));
             return;
           }
@@ -121,7 +101,7 @@ void _applyTlsPinning(Dio dio, Set<String> allowedPins, String Function() expect
   );
 }
 
-/// Pinning tidak dapat ditegakkan pada build ini (pin kosong / adapter tidak
+/// Pinning tidak dapat ditegakkan pada build ini (anchor kosong / adapter tidak
 /// mendukung). Tipe khusus supaya dapat dibedakan dari gangguan jaringan biasa.
 class _TlsPinningUnavailable implements Exception {
   const _TlsPinningUnavailable(this.message);
@@ -130,8 +110,9 @@ class _TlsPinningUnavailable implements Exception {
   String toString() => message;
 }
 
-/// Handshake ditolak oleh pemeriksaan pin aplikasi (sertifikat server tidak
-/// cocok dengan pin yang tertanam). Membungkus galat asli dari dart:io.
+/// Handshake ditolak karena sertifikat server TIDAK DIPERCAYA (rantai tidak
+/// berujung di trust anchor yang dibundel, atau hostname tidak cocok).
+/// Membungkus galat asli dari dart:io.
 class _TlsPinMismatch implements Exception {
   const _TlsPinMismatch(this.cause);
   final Object? cause;
@@ -226,7 +207,7 @@ void _rejectAllRequestsForTlsPinning(Dio dio, String message) {
 @visibleForTesting
 Dio tapGoPinnedDioForTests({
   required String baseUrl,
-  required Set<String> pins,
+  required List<String> anchors,
   bool enforce = true,
 }) {
   final dio = Dio(BaseOptions(
@@ -235,7 +216,7 @@ Dio tapGoPinnedDioForTests({
     receiveTimeout: const Duration(seconds: 5),
   ));
   if (enforce) {
-    _applyTlsPinning(dio, pins, () => Uri.parse(baseUrl).host);
+    _applyTlsPinning(dio, anchors);
   }
   return dio;
 }
@@ -260,13 +241,9 @@ class _TapGoApiClient {
     // seluruh test suite (flutter test selalu berjalan bukan-release) tidak
     // tersentuh, supaya lingkungan pengembangan/staging tanpa pin tetap bisa
     // jalan seperti sebelumnya. Lihat _applyTlsPinning untuk perilaku
-    // fail-closed saat TAPGO_TLS_PIN_SHA256 kosong pada rilis.
+    // fail-closed bila anchor kosong pada rilis.
     if (kReleaseMode) {
-      _applyTlsPinning(
-        _dio,
-        _tlsPinnedSpkiSha256Hashes,
-        () => Uri.parse(rootUrl).host,
-      );
+      _applyTlsPinning(_dio, kTapGoTrustAnchorPems);
     }
     _dio.interceptors.add(
       InterceptorsWrapper(

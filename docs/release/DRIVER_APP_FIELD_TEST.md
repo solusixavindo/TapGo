@@ -89,17 +89,11 @@ lanjut tanpa perlu menafsirkan ulang rencana:
   dengan aplikasi yang dimodifikasi; itu bukan risiko yang bisa diterima di luar
   pilot yang dikenal langsung.
 
-## Pengingat kedaluwarsa pin TLS
+## Trust anchor TLS (menggantikan "pin leaf", 4 Okt 2026)
 
-Pin sertifikat produksi (`TAPGO_TLS_PIN_SHA256`) yang dipakai saat build rilis
-mengikat ke sertifikat **leaf** `api.tapgolion.id` yang berlaku sampai
-**2 November 2026** (Let's Encrypt, umur pendek ~90 hari). **Setiap build rilis
-setelah tanggal itu wajib memakai hash SPKI leaf yang BARU** (ambil ulang dengan
-`openssl s_client -connect api.tapgolion.id:443 -showcerts`, lihat catatan di
-`_applyTlsPinning`) — hash leaf lama TIDAK akan cocok lagi, dan hash intermediate
-CA (YE1) **tidak pernah dan tidak akan pernah cocok** dengan apa yang dikirim
-`badCertificateCallback` Dart, karena callback itu hanya pernah menerima
-sertifikat peer (leaf), bukan rantai sertifikat. Bila pin dibiarkan basi, build
-rilis berikutnya akan menolak SEMUA permintaan jaringan (fail-closed by design) —
-bukan bug, tapi tetap harus diantisipasi sebelum merilis, bukan ditemukan setelah
-pengguna melapor aplikasi tidak bisa connect.
+Versi sebelumnya dokumen ini mewajibkan pin SPKI leaf (`TAPGO_TLS_PIN_SHA256`) dan menyatakan bahwa
+`badCertificateCallback` hanya menerima leaf. Itu **keliru**: terhadap rantai produksi callback
+menerima sertifikat teratas (ISRG Root X2), sehingga pin leaf tidak pernah cocok. Mulai driver_app
+1.0.0+8 aplikasi mempercayai trust anchor CA yang dibundel dan tidak lagi bergantung pada kunci leaf
+atau pada nilai dari environment. Yang perlu diingat sebelum merilis: tanggal kedaluwarsa anchor dan
+rencana pembaruannya — lihat `docs/release/TLS_TRUST_ANCHORS.md`.

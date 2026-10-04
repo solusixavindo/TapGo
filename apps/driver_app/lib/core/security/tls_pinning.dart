@@ -1,189 +1,148 @@
-import 'dart:typed_data';
+import 'dart:convert';
+import 'dart:io';
 
-import 'package:crypto/crypto.dart';
-
-/// Ekstraksi & pencocokan SubjectPublicKeyInfo (SPKI) sertifikat TLS untuk
-/// certificate pinning (audit keamanan 30 September 2026, M4).
+/// Trust-anchor pinning untuk koneksi ke api.tapgolion.id.
 ///
-/// Berkas ini murni (tanpa dart:io) supaya bisa diuji dengan byte sertifikat
-/// sungguhan tanpa koneksi jaringan — lihat tls_pinning_test.dart. Pemanggil
-/// (tapgo_api_client.dart) yang menghubungkannya ke SecurityContext/HttpClient.
+/// Riwayat desain: pinning SPKI leaf lewat badCertificateCallback TIDAK bekerja
+/// terhadap rantai produksi. Dengan SecurityContext(withTrustedRoots: false),
+/// callback menerima sertifikat TERATAS rantai yang gagal diverifikasi (di
+/// produksi: ISRG Root X2), bukan leaf, sehingga pin leaf yang benar pun
+/// tidak pernah cocok dan SETIAP permintaan ditolak (driver_app 1.0.0+4 sampai
+/// +7, user_app 2.0.5+33). Uji lama memakai satu sertifikat self-signed, tempat
+/// leaf adalah satu-satunya sertifikat, sehingga cacat itu tidak terlihat.
+///
+/// Desain sekarang: sertifikat CA dipasang sebagai SATU-SATUNYA trust anchor
+/// (setTrustedCertificates). Seluruh validasi dikerjakan BoringSSL secara baku
+/// — rantai, masa berlaku, dan hostname — dan koneksi hanya diterima bila
+/// rantainya berujung di salah satu anchor di bawah. Callback sertifikat buruk
+/// SELALU menolak. Tidak bergantung pada kunci leaf, jadi perpanjangan
+/// sertifikat (termasuk kunci baru) tidak memutus aplikasi.
+///
+/// Konsekuensinya lebih longgar dari pin leaf: sertifikat apa pun dari CA itu
+/// untuk api.tapgolion.id diterima. Anchor adalah root, bukan intermediate,
+/// supaya penggantian intermediate Let's Encrypt tidak memutus aplikasi.
+///
+/// Sumber dan prosedur pembaruan: docs/release/TLS_TRUST_ANCHORS.md. Anchor
+/// harus diperbarui SEBELUM kedaluwarsa (Root YE hasil tanda tangan silang:
+/// 2032-09-02; ISRG Root X1: 2035-06-04; ISRG Root X2: 2040-09-17) dan
+/// sebelum Let's Encrypt memindahkan rantainya ke root yang tidak ada di sini.
 
-class _DerTlv {
-  const _DerTlv({
-    required this.tag,
-    required this.raw,
-    required this.value,
-    required this.nextOffset,
-  });
+/// ISRG Root X1 (sumber: toko sertifikat sistem macOS; SHA-256
+/// 96:BC:EC:06:26:49:76:F3:74:60:77:9A:CF:28:C5:A7:CF:E8:A3:C0:AA:E1:1A:8F:FC:EE:05:C0:BD:DF:08:C6).
+const String _isrgRootX1Pem = '''
+-----BEGIN CERTIFICATE-----
+MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
+TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
+cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4
+WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu
+ZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY
+MTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc
+h77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+
+0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6U
+A5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sW
+T8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyH
+B5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UC
+B5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUv
+KBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWn
+OlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTn
+jh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbw
+qHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CI
+rU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNV
+HRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkq
+hkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL
+ubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ
+3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK
+NFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5
+ORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur
+TkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdC
+jNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVc
+oyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq
+4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPA
+mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
+emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
+-----END CERTIFICATE-----
+''';
 
-  /// Byte tag DER (tanpa bit-bit constructed/class diuraikan lebih jauh —
-  /// pembacaan ini hanya butuh nilai tag mentah untuk membedakan SEQUENCE
-  /// dari field context-tagged opsional).
-  final int tag;
+/// ISRG Root X2 (sumber: toko sertifikat sistem macOS; SHA-256
+/// 69:72:9B:8E:15:A8:6E:FC:17:7A:57:AF:B7:17:1D:FC:64:AD:D2:8C:2F:CA:8C:F1:50:7E:34:45:3C:CB:14:70).
+const String _isrgRootX2Pem = '''
+-----BEGIN CERTIFICATE-----
+MIICGzCCAaGgAwIBAgIQQdKd0XLq7qeAwSxs6S+HUjAKBggqhkjOPQQDAzBPMQsw
+CQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJuZXQgU2VjdXJpdHkgUmVzZWFyY2gg
+R3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBYMjAeFw0yMDA5MDQwMDAwMDBaFw00
+MDA5MTcxNjAwMDBaME8xCzAJBgNVBAYTAlVTMSkwJwYDVQQKEyBJbnRlcm5ldCBT
+ZWN1cml0eSBSZXNlYXJjaCBHcm91cDEVMBMGA1UEAxMMSVNSRyBSb290IFgyMHYw
+EAYHKoZIzj0CAQYFK4EEACIDYgAEzZvVn4CDCuwJSvMWSj5cz3es3mcFDR0HttwW
++1qLFNvicWDEukWVEYmO6gbf9yoWHKS5xcUy4APgHoIYOIvXRdgKam7mAHf7AlF9
+ItgKbppbd9/w+kHsOdx1ymgHDB/qo0IwQDAOBgNVHQ8BAf8EBAMCAQYwDwYDVR0T
+AQH/BAUwAwEB/zAdBgNVHQ4EFgQUfEKWrt5LSDv6kviejM9ti6lyN5UwCgYIKoZI
+zj0EAwMDaAAwZQIwe3lORlCEwkSHRhtFcP9Ymd70/aTSVaYgLXTWNLxBo1BfASdW
+tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
+/q4AaOeMSQ+2b1tbFfLn
+-----END CERTIFICATE-----
+''';
 
-  /// TLV lengkap: tag + length + value. Inilah yang di-hash untuk SPKI,
-  /// karena RFC 7469-style pinning menghash SubjectPublicKeyInfo DER
-  /// SELURUHNYA (bukan cuma isi BIT STRING-nya).
-  final Uint8List raw;
+/// Root YE, ditandatangani silang oleh ISRG Root X2 (diautentikasi dengan
+/// `openssl verify` terhadap Root X2 dari toko sistem macOS; SHA-256
+/// 0F:C0:90:1C:CA:2B:AE:9E:9F:DB:B0:2D:50:D0:2F:10:94:F7:B3:66:72:08:69:91:B9:E8:97:62:6D:C4:85:F0).
+const String _isrgRootYePem = '''
+-----BEGIN CERTIFICATE-----
+MIICpjCCAiugAwIBAgIRAIchZfw0tuX7qK3Vs3BftTowCgYIKoZIzj0EAwMwTzEL
+MAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2VhcmNo
+IEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDIwHhcNMjYwNTEzMDAwMDAwWhcN
+MzIwOTAyMjM1OTU5WjAuMQswCQYDVQQGEwJVUzENMAsGA1UEChMESVNSRzEQMA4G
+A1UEAxMHUm9vdCBZRTB2MBAGByqGSM49AgEGBSuBBAAiA2IABDwS/6vhrcVqcbBo
++wgdI3fwn9x7DNJJOY/lTOti0vkwuRN87RhEhTH17E7XyFjWsPYhIPt/wzOqxTd2
+b+4ZJNy9ID04YywF9U5zasDVyGSNErVNtz8uSGh5izW87j77GaOB6zCB6DAOBgNV
+HQ8BAf8EBAMCAQYwEwYDVR0lBAwwCgYIKwYBBQUHAwEwDwYDVR0TAQH/BAUwAwEB
+/zAdBgNVHQ4EFgQUo8gmWo6hTNA1Y/ybI8g6rlbzT1YwHwYDVR0jBBgwFoAUfEKW
+rt5LSDv6kviejM9ti6lyN5UwMgYIKwYBBQUHAQEEJjAkMCIGCCsGAQUFBzAChhZo
+dHRwOi8veDIuaS5sZW5jci5vcmcvMBMGA1UdIAQMMAowCAYGZ4EMAQIBMCcGA1Ud
+HwQgMB4wHKAaoBiGFmh0dHA6Ly94Mi5jLmxlbmNyLm9yZy8wCgYIKoZIzj0EAwMD
+aQAwZgIxAMU19WCtmxVND8UHBZRoma49Z7jPs64Dma0eTu1OChVbB/2J7GV3nvYK
+Ax54uk1G9QIxAO0miLVJu8PLNiXXXkiE/gsK3CTRTF/aeo4bMX42Zw40csRU6AC2
+6hSW1/IWaas6dg==
+-----END CERTIFICATE-----
+''';
 
-  /// Hanya isi (value) — dipakai untuk turun ke anak-anak SEQUENCE.
-  final Uint8List value;
+/// Trust anchor yang dibundel ke aplikasi.
+const List<String> kTapGoTrustAnchorPems = [
+  _isrgRootX1Pem,
+  _isrgRootX2Pem,
+  _isrgRootYePem,
+];
 
-  /// Offset tepat setelah TLV ini di buffer asal — posisi mulai TLV berikut.
-  final int nextOffset;
+/// Konteks keamanan yang hanya mempercayai [anchorPems]. Melempar galat bila
+/// ada PEM yang tidak dapat dibaca: anchor rusak tidak boleh diam-diam dilewati
+/// (hasilnya konteks tanpa anchor yang menolak semuanya, atau lebih buruk,
+/// sebagian).
+SecurityContext tapGoBuildTrustAnchorContext(Iterable<String> anchorPems) {
+  final context = SecurityContext(withTrustedRoots: false);
+  for (final pem in anchorPems) {
+    context.setTrustedCertificatesBytes(utf8.encode(pem));
+  }
+  return context;
 }
 
-_DerTlv? _readDerTlv(Uint8List bytes, int offset) {
-  if (offset < 0 || offset + 1 >= bytes.length) {
-    return null;
-  }
-  final tag = bytes[offset];
-  final firstLengthByte = bytes[offset + 1];
-  int length;
-  int lengthFieldSize;
-  if (firstLengthByte & 0x80 == 0) {
-    length = firstLengthByte;
-    lengthFieldSize = 1;
-  } else {
-    final extraBytes = firstLengthByte & 0x7F;
-    // 0 (bentuk length tak-terbatas) dan >4 (panjang tak wajar untuk field
-    // sertifikat) sengaja ditolak di sini — bukan struktur yang diharapkan
-    // dari sertifikat X.509 DER manapun.
-    if (extraBytes == 0 || extraBytes > 4) {
-      return null;
-    }
-    if (offset + 2 + extraBytes > bytes.length) {
-      return null;
-    }
-    length = 0;
-    for (var i = 0; i < extraBytes; i++) {
-      length = (length << 8) | bytes[offset + 2 + i];
-    }
-    lengthFieldSize = 1 + extraBytes;
-  }
-  final valueStart = offset + 1 + lengthFieldSize;
-  final valueEnd = valueStart + length;
-  if (valueEnd > bytes.length || valueEnd < valueStart) {
-    return null;
-  }
-  return _DerTlv(
-    tag: tag,
-    raw: Uint8List.sublistView(bytes, offset, valueEnd),
-    value: Uint8List.sublistView(bytes, valueStart, valueEnd),
-    nextOffset: valueEnd,
-  );
+/// Mengapa callback sertifikat buruk dipanggil.
+enum TapGoCertificateRejection {
+  /// Sertifikat dalam masa berlaku tetapi tidak dipercaya: rantai tidak
+  /// berujung di anchor yang dibundel, atau hostname tidak cocok.
+  untrusted,
+
+  /// Sertifikat kedaluwarsa atau belum berlaku — umumnya jam HP salah.
+  outsideValidity,
 }
 
-const int _tagSequence = 0x30;
-const int _tagContextVersion = 0xA0;
-
-/// Mengambil DER SubjectPublicKeyInfo dari DER sertifikat X.509 lengkap.
-///
-/// Mengikuti struktur baku RFC 5280:
-///   Certificate ::= SEQUENCE { tbsCertificate TBSCertificate, ... }
-///   TBSCertificate ::= SEQUENCE {
-///     version [0] EXPLICIT Version DEFAULT v1,   -- opsional
-///     serialNumber, signature, issuer, validity, subject,
-///     subjectPublicKeyInfo,                       -- selalu field wajib ke-6
-///     ...
-///   }
-/// subjectPublicKeyInfo SELALU berada tepat setelah lima field wajib
-/// (serialNumber, signature, issuer, validity, subject), terlepas dari field
-/// version opsional ada atau tidak — pembacaan ini murni posisional
-/// mengikuti urutan ASN.1 di atas, bukan menebak/mencari berdasar isi field.
-/// Diverifikasi cocok dengan `openssl asn1parse`/`openssl x509 -pubkey` atas
-/// sertifikat produksi sungguhan (lihat tls_pinning_test.dart).
-///
-/// Mengembalikan null bila struktur tidak sesuai dugaan (byte rusak/bukan
-/// sertifikat X.509 DER) — pemanggil WAJIB memperlakukan null sebagai
-/// kegagalan verifikasi (tertutup), bukan diloloskan.
-Uint8List? tapGoExtractSubjectPublicKeyInfoDer(Uint8List certificateDer) {
-  final certificate = _readDerTlv(certificateDer, 0);
-  if (certificate == null || certificate.tag != _tagSequence) {
-    return null;
+/// Mengklasifikasi sertifikat yang ditolak verifikasi. [cert] adalah sertifikat
+/// pada titik gagal; bila ia di luar masa berlaku pada [now], kegagalannya
+/// soal waktu, bukan soal kepercayaan.
+TapGoCertificateRejection tapGoClassifyRejectedCertificate(
+  X509Certificate cert,
+  DateTime now,
+) {
+  if (now.isBefore(cert.startValidity) || now.isAfter(cert.endValidity)) {
+    return TapGoCertificateRejection.outsideValidity;
   }
-
-  final tbsCertificate = _readDerTlv(certificate.value, 0);
-  if (tbsCertificate == null || tbsCertificate.tag != _tagSequence) {
-    return null;
-  }
-
-  final fields = tbsCertificate.value;
-  var node = _readDerTlv(fields, 0);
-  if (node == null) {
-    return null;
-  }
-  if (node.tag == _tagContextVersion) {
-    node = _readDerTlv(fields, node.nextOffset);
-    if (node == null) {
-      return null;
-    }
-  }
-  // node sekarang serialNumber (field wajib ke-1). Lewati 5 field wajib
-  // berikutnya (serialNumber, signature, issuer, validity, subject) untuk
-  // sampai ke subjectPublicKeyInfo (field wajib ke-6).
-  for (var i = 0; i < 5; i++) {
-    node = _readDerTlv(fields, node!.nextOffset);
-    if (node == null) {
-      return null;
-    }
-  }
-  final subjectPublicKeyInfo = node!;
-  if (subjectPublicKeyInfo.tag != _tagSequence) {
-    return null;
-  }
-  return subjectPublicKeyInfo.raw;
-}
-
-/// SHA-256 dari [bytes], huruf kecil heksadesimal.
-String tapGoSha256Hex(Uint8List bytes) {
-  return sha256.convert(bytes).toString();
-}
-
-/// True bila SPKI sertifikat [certificateDer] cocok dengan salah satu hash
-/// SHA-256 (hex, huruf kecil) di [allowedSpkiSha256Hex].
-///
-/// [allowedSpkiSha256Hex] kosong ATAU sertifikat yang gagal diurai SELALU
-/// dianggap TIDAK cocok — tertutup terhadap kegagalan (fail-closed), bukan
-/// meloloskan koneksi yang tidak bisa diverifikasi.
-bool tapGoCertificateMatchesPins(
-  Uint8List certificateDer, {
-  required Set<String> allowedSpkiSha256Hex,
-}) {
-  if (allowedSpkiSha256Hex.isEmpty) {
-    return false;
-  }
-  final spki = tapGoExtractSubjectPublicKeyInfoDer(certificateDer);
-  if (spki == null) {
-    return false;
-  }
-  return allowedSpkiSha256Hex.contains(tapGoSha256Hex(spki));
-}
-
-/// Keputusan pin LENGKAP — host DAN SPKI harus cocok. Murni (tanpa dart:io
-/// atau jaringan), supaya bisa diuji langsung tanpa membuka koneksi
-/// sungguhan (lihat tls_pinning_test.dart).
-///
-/// Sisa review audit (1 Oktober 2026): badCertificateCallback Dart hanya
-/// pernah menerima sertifikat PEER (leaf) dari koneksi yang SEDANG dibuka —
-/// cocoknya SPKI saja TIDAK CUKUP untuk memutuskan terima/tolak, karena pin
-/// yang kebetulan cocok (mis. SPKI intermediate CA publik yang menerbitkan
-/// sertifikat untuk banyak domain lain) tetap bisa dipakai host LAIN yang
-/// bukan API TapGo. [host] (host koneksi yang sedang diverifikasi) WAJIB
-/// sama persis dengan [expectedHost] (host base URL klien API) sebelum SPKI
-/// sekalipun diperiksa — host lain ditolak walau SPKI-nya cocok.
-bool tapGoShouldAcceptPinnedCertificate({
-  required String host,
-  required String expectedHost,
-  required Uint8List certificateDer,
-  required Set<String> allowedSpkiSha256Hex,
-}) {
-  if (host != expectedHost) {
-    return false;
-  }
-  return tapGoCertificateMatchesPins(
-    certificateDer,
-    allowedSpkiSha256Hex: allowedSpkiSha256Hex,
-  );
+  return TapGoCertificateRejection.untrusted;
 }
