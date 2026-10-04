@@ -1150,6 +1150,119 @@ void main() {
       expect(selectedRef(tester), 'RID-A');
     });
 
+    testWidgets(
+        'closeOffer pada A langsung membuka B yang datang saat A terbuka, tanpa refresh tambahan',
+        (tester) async {
+      // Lubang +5: B masuk saat sheet A terbuka dan tersimpan di daftar; poll
+      // berikutnya tidak lagi menganggap B baru, jadi B tidak pernah dibuka.
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+      repo.offerItems = [offerRide('RID-A')];
+      await poll(tester);
+      expect(selectedRef(tester), 'RID-A');
+
+      repo.offerItems = [offerRide('RID-A'), offerRide('RID-B')];
+      await poll(tester);
+      expect(selectedRef(tester), 'RID-A', reason: 'sheet A tidak boleh diganti');
+
+      final callsBefore = repo.offersCalls;
+      controllerOf(tester).closeOffer();
+      await tester.pump();
+
+      expect(selectedRef(tester), 'RID-B');
+      expect(find.byType(OfferDetailSheet), findsOneWidget);
+      expect(repo.offersCalls, callsBefore, reason: 'tanpa refresh tambahan');
+    });
+
+    testWidgets('menolak A dengan berhasil langsung membuka B yang tertunda',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+      repo.offerItems = [offerRide('RID-A')];
+      await poll(tester);
+      repo.offerItems = [offerRide('RID-A'), offerRide('RID-B')];
+      await poll(tester);
+      expect(selectedRef(tester), 'RID-A');
+
+      await controllerOf(tester).rejectSelectedOffer();
+      await tester.pump();
+
+      expect(selectedRef(tester), 'RID-B');
+    });
+
+    testWidgets('B yang sudah ditutup atau ditolak tidak dibuka lagi saat A ditutup',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+      // B dibuka lalu ditutup.
+      repo.offerItems = [offerRide('RID-B')];
+      await poll(tester);
+      controllerOf(tester).closeOffer();
+      await tester.pump();
+      // A datang, dibuka; B masih ada di daftar.
+      repo.offerItems = [offerRide('RID-B'), offerRide('RID-A')];
+      await poll(tester);
+      expect(selectedRef(tester), 'RID-A');
+      controllerOf(tester).closeOffer();
+      await tester.pump();
+      expect(selectedRef(tester), isNull);
+
+      // B yang ditolak tidak kembali walau tertunda sebelumnya.
+      final repo2 = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo2);
+      repo2.offerItems = [offerRide('RID-A')];
+      await poll(tester);
+      repo2.offerItems = [offerRide('RID-A'), offerRide('RID-B')];
+      await poll(tester);
+      await controllerOf(tester).rejectSelectedOffer(); // A ditolak, B terbuka
+      await tester.pump();
+      expect(selectedRef(tester), 'RID-B');
+      await controllerOf(tester).rejectSelectedOffer(); // B ditolak
+      await tester.pump();
+      expect(selectedRef(tester), isNull);
+      await poll(tester);
+      expect(selectedRef(tester), isNull);
+    });
+
+    testWidgets('B yang sudah hilang dari daftar saat A ditutup tidak dibuka',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+      repo.offerItems = [offerRide('RID-A')];
+      await poll(tester);
+      repo.offerItems = [offerRide('RID-A'), offerRide('RID-B')];
+      await poll(tester);
+      // B kedaluwarsa/diambil driver lain sebelum A ditutup.
+      repo.offerItems = [offerRide('RID-A')];
+      await poll(tester);
+      expect(selectedRef(tester), 'RID-A');
+
+      controllerOf(tester).closeOffer();
+      await tester.pump();
+
+      expect(selectedRef(tester), isNull);
+      expect(find.byType(OfferDetailSheet), findsNothing);
+    });
+
+    testWidgets('tawaran tertunda tidak membuka sheet selama ada perjalanan aktif',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+      repo.offerItems = [offerRide('RID-A')];
+      await poll(tester);
+      repo.offerItems = [offerRide('RID-A'), offerRide('RID-B')];
+      await poll(tester);
+
+      // A diterima: perjalanan aktif; B yang tertunda tidak boleh membuka sheet.
+      repo.current = demoRide(RideStatus.driverAssigned);
+      await controllerOf(tester).acceptSelectedOffer();
+      await tester.pump();
+      await poll(tester);
+
+      expect(selectedRef(tester), isNull);
+      expect(find.byType(OfferDetailSheet), findsNothing);
+    });
+
     testWidgets('push ride_offer berjudul dan berisi kosong diberi teks bawaan',
         (tester) async {
       // showForegroundAlert kembali diam-diam bila judul dan isi kosong.

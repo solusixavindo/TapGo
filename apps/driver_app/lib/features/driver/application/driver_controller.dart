@@ -71,6 +71,11 @@ class DriverController extends StateNotifier<DriverState>
   /// Tawaran yang sudah ditutup atau ditolak driver pada sesi ini. Popup
   /// otomatis tidak boleh membukanya lagi walau hilang lalu muncul kembali.
   final Set<String> _dismissedOfferRefs = <String>{};
+  /// Tawaran baru yang TIDAK sempat dibuka karena sheet lain sedang terbuka
+  /// atau ada perjalanan aktif. Dibuka begitu sheet tertutup (lihat
+  /// _openPendingOffer). Tanpa catatan ini polling berikutnya tidak lagi
+  /// menganggapnya baru (sudah ada di state.offers) sehingga tidak pernah dibuka.
+  final Set<String> _pendingOfferRefs = <String>{};
   final Set<String> _singleFlights = <String>{};
 
   Future<void> restore() async {
@@ -197,6 +202,7 @@ class DriverController extends StateNotifier<DriverState>
     await _stopPush();
     await _repository.logout();
     _dismissedOfferRefs.clear();
+    _pendingOfferRefs.clear();
     state = state.copyWith(
       status: DriverWorkspaceStatus.unauthenticated,
       clearSession: true,
@@ -300,35 +306,68 @@ class DriverController extends StateNotifier<DriverState>
 
   /// Membuka OfferDetailSheet yang sudah ada untuk tawaran BARU, tanpa
   /// menunggu driver mengetuk OfferTile. Berlaku untuk order yang datang lewat
-  /// push maupun polling (keduanya berakhir di refreshWorkspace). Order masuk
-  /// sebelumnya hanya menambah daftar sehingga driver yang tidak menatap
-  /// daftar tidak tahu ada order.
+  /// push maupun polling (keduanya berakhir di refreshWorkspace).
   ///
-  /// Tidak membuka sheet bila: ada perjalanan aktif; sheet lain sedang terbuka
-  /// (jangan menyambar tawaran yang sedang dibaca — tawaran baru tetap ada di
-  /// daftar); atau tawaran itu sudah ditutup/ditolak pada sesi ini. Bila
-  /// beberapa tawaran baru datang bersamaan, dibuka yang paling baru.
+  /// Sheet yang sedang terbuka TIDAK diganti (jangan menyambar tawaran yang
+  /// sedang dibaca), dan tidak ada sheet yang dibuka selama ada perjalanan
+  /// aktif. Tawaran baru yang tidak sempat dibuka karena itu dicatat tertunda
+  /// dan dibuka segera setelah sheet tertutup (closeOffer / penolakan berhasil)
+  /// lewat [_openPendingOffer]. Tawaran yang sudah ditutup atau ditolak pada
+  /// sesi ini tidak pernah dibuka lagi. Bila beberapa kandidat, dibuka yang
+  /// paling baru.
   void _openNewestFreshOffer({
     required Set<String> previousRefs,
     required List<DriverRide> offers,
   }) {
-    if (state.activeRide != null || state.selectedOffer != null) return;
-    final fresh = offers
+    final live = offers.map((o) => o.reference).toSet();
+    _pendingOfferRefs.removeWhere(
+        (ref) => !live.contains(ref) || _dismissedOfferRefs.contains(ref));
+    final candidates = offers
         .where((o) =>
             o.reference.isNotEmpty &&
             o.status == RideStatus.searchingDriver &&
-            !previousRefs.contains(o.reference) &&
+            !_dismissedOfferRefs.contains(o.reference) &&
+            (!previousRefs.contains(o.reference) ||
+                _pendingOfferRefs.contains(o.reference)))
+        .toList();
+    if (candidates.isEmpty) return;
+    if (state.activeRide != null || state.selectedOffer != null) {
+      _pendingOfferRefs.addAll(candidates.map((o) => o.reference));
+      return;
+    }
+    _selectNewest(candidates);
+  }
+
+  /// Dipanggil tepat setelah sheet tertutup. Membuka tawaran tertunda yang
+  /// MASIH ada di daftar, masih mencari driver, dan belum ditutup/ditolak —
+  /// tanpa menunggu polling berikutnya.
+  void _openPendingOffer() {
+    if (_pendingOfferRefs.isEmpty) return;
+    if (state.activeRide != null || state.selectedOffer != null) return;
+    final candidates = state.offers
+        .where((o) =>
+            _pendingOfferRefs.contains(o.reference) &&
+            o.status == RideStatus.searchingDriver &&
             !_dismissedOfferRefs.contains(o.reference))
         .toList();
-    if (fresh.isEmpty) return;
+    // Yang sudah hilang dari daftar tidak boleh dibuka dan dilepas dari catatan.
+    final live = state.offers.map((o) => o.reference).toSet();
+    _pendingOfferRefs.removeWhere(
+        (ref) => !live.contains(ref) || _dismissedOfferRefs.contains(ref));
+    if (candidates.isEmpty) return;
+    _selectNewest(candidates);
+  }
+
+  void _selectNewest(List<DriverRide> candidates) {
     // Urutan daftar dari server bukan urutan waktu (createdAt asc atau jarak),
     // jadi yang terbaru ditentukan dari waktunya; tanpa waktu, yang terakhir.
-    var newest = fresh.last;
-    for (final offer in fresh) {
+    var newest = candidates.last;
+    for (final offer in candidates) {
       final at = offer.updatedAt;
       final best = newest.updatedAt;
       if (at != null && (best == null || at.isAfter(best))) newest = offer;
     }
+    _pendingOfferRefs.remove(newest.reference);
     selectOffer(newest);
   }
 
@@ -603,6 +642,7 @@ class DriverController extends StateNotifier<DriverState>
     final reference = state.selectedOffer?.reference;
     if (reference != null) _dismissedOfferRefs.add(reference);
     state = state.copyWith(clearSelectedOffer: true);
+    _openPendingOffer();
   }
 
   Future<void> acceptSelectedOffer() async {
@@ -660,6 +700,7 @@ class DriverController extends StateNotifier<DriverState>
       // status order (order tetap dicari driver lain, lihat
       // RideService.rejectOffer) — itu memang bukan peristiwa yang perlu
       // diketahui penumpang, bukan celah yang diam-diam gagal.
+      _openPendingOffer();
       driverScaffoldMessengerKey.currentState
         ?..hideCurrentSnackBar()
         ..showSnackBar(const SnackBar(
