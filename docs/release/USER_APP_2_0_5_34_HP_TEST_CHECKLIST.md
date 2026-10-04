@@ -1,19 +1,25 @@
-# Daftar uji HP — TapGo user_app 2.0.5+33
+# Daftar uji HP — TapGo user_app 2.0.5+34
 
-Tujuan: memastikan build pertama yang membawa pinning TLS ini berfungsi di perangkat nyata sebelum
-diunggah ke track uji Play. Dokumen ini belum berisi hasil apa pun; belum ada uji HP untuk build ini.
+Tujuan: memastikan build pertama yang membawa trust-anchor pinning TLS ini berfungsi di perangkat nyata
+sebelum diunggah ke track uji Play. Dokumen ini belum berisi hasil uji HP; belum ada uji HP untuk build ini.
 
-- Berkas: `tapgo-user-2.0.5+33.apk` (versionCode 33, versionName 2.0.5)
-- SHA-256 APK: `1e5f713b4b5974b7d087954b293a92203acdc561c5711eb326c85eba980c1284`
+**2.0.5+33 tidak dapat terhubung ke server dan tidak boleh dipasang** (cacat pinning; lihat
+`TLS_TRUST_ANCHORS.md`). Yang sudah dibuktikan di luar HP: tes handshake sungguhan dengan CA sintetis,
+gerbang rilis yang menjalankan handshake nyata ke `api.tapgolion.id` dengan kode aplikasi, dan probe kecil
+yang memakai berkas anchor yang sama di emulator Android x86_64 (mode rilis) yang mendapat HTTP 200 dari
+server produksi (tanpa anchor ditolak). Aplikasi penuh belum diuji ujung ke ujung; itulah isi dokumen ini.
+
+- Berkas: `tapgo-user-2.0.5+34.apk` (versionCode 34, versionName 2.0.5)
+- SHA-256 APK: `967c172bd4e7de5763e646618c61857c5e899ae98e549e918897dc61d4c45085`
 - Tanda tangan sama dengan build user_app sebelumnya (2.0.2) yang ada di laptop pengembang.
 - Server: produksi (`api.tapgolion.id`). Pembelian PPOB dan transfer memakai uang sungguhan.
 
 ## 0. Persiapan
 
-- [ ] Siapkan **2 HP** bila ingin menguji ojek penuh: HP penumpang (+33) dan HP driver
+- [ ] Siapkan **2 HP** bila ingin menguji ojek penuh: HP penumpang (+34) dan HP driver
       (`tapgo-driver-1.0.0+7.apk`). Satu HP cukup untuk bagian lain.
 - [ ] Siapkan **akun uji penumpang milik sendiri** dengan saldo kecil. Jangan memakai akun pelanggan.
-- [ ] Cocokkan checksum APK di laptop: `shasum -a 256 tapgo-user-2.0.5+33.apk`.
+- [ ] Cocokkan checksum APK di laptop: `shasum -a 256 tapgo-user-2.0.5+34.apk`.
 - [ ] Pasang. Bila HP menolak dengan konflik tanda tangan (aplikasi yang sudah terpasang berasal dari
       Play dan ditandatangani kunci lain), hapus aplikasi lama dulu. Itu perilaku Android, bukan bug,
       dan data lokal aplikasi lama ikut hilang.
@@ -25,6 +31,10 @@ Pesan yang BUKAN lulus: "Perbarui aplikasi dari Google Play…", "belum dikonfig
 "Periksa tanggal dan jam HP Anda…" saat jaringan normal. Itu berarti handshake TLS gagal: hentikan uji,
 ambil screenshot, catat jaringan yang dipakai (Wi-Fi atau data) dan laporkan.
 
+- [ ] 1.0 **Bukti handshake yang paling sederhana:** di layar login, masukkan nomor HP dan password yang
+      **sengaja salah**. Pesan yang benar: "Nomor HP atau password salah." Pesan itu hanya muncul bila
+      aplikasi berhasil berbicara dengan server lewat TLS. Bila yang muncul "Perbarui aplikasi…" atau
+      "Server TapGo belum dapat dihubungi", handshake gagal.
 - [ ] 1.1 Wi-Fi biasa: buka aplikasi lalu login. Berhasil sampai Beranda.
 - [ ] 1.2 Data seluler (matikan Wi-Fi): tutup aplikasi, buka lagi, login ulang atau muat Beranda. Berhasil.
 - [ ] 1.3 **Mode pesawat**, lalu coba login. Pesan yang benar: "Server TapGo belum dapat dihubungi…"
@@ -34,8 +44,10 @@ ambil screenshot, catat jaringan yang dipakai (Wi-Fi atau data) dan laporkan.
       tampil. Pesan TLS di sini wajar karena jaringan itu mencegat koneksi; yang penting aplikasi tidak
       crash dan pulih setelah pindah ke jaringan normal.
 
-Catatan: mengubah tanggal atau jam HP **tidak** menguji apa pun di sini (pin memeriksa host dan kunci,
-bukan masa berlaku), jadi tidak perlu dilakukan.
+- [ ] 1.6 **Jam HP salah:** matikan "Tanggal & waktu otomatis", majukan tanggal minimal satu tahun, lalu
+      coba login. Pesan yang benar: "Periksa tanggal dan jam HP Anda… belum tentu berarti aplikasi harus
+      diperbarui." (sertifikat server dianggap kedaluwarsa). **Kembalikan ke otomatis** sesudahnya dan
+      pastikan login normal lagi.
 
 ## 2. Autentikasi dan akun
 
@@ -117,7 +129,7 @@ Salin tabel ini untuk setiap temuan.
 Keadaan Play Console (screenshot Owner, 4 Okt 2026): produksi terbaru **32 (2.0.5)**, rilis 26 Sep,
 rollout 100%, sekitar 52 instalasi. Internal testing berisi 13 (1.0.11) dari 25 Jul. Closed testing
 dan Open testing belum disiapkan. Build 32 dibangun sebelum kode pinning TLS masuk (1 Okt), jadi
-pengguna produksi sekarang tidak memakai pin dan tidak terpengaruh penggantian sertifikat; +33 tidak
+pengguna produksi sekarang tidak memakai pin dan tidak terpengaruh penggantian sertifikat; +34 tidak
 memperbaiki sesuatu yang rusak di Play.
 
 ### 10.1 Syarat naik ke Internal testing
@@ -126,7 +138,7 @@ memperbaiki sesuatu yang rusak di Play.
 - Baca dulu chip "Unread notifications" di Play Console; isinya belum diketahui dan bisa memengaruhi rilis.
 
 ### 10.2 Jalur unggah
-1. Unggah `tapgo-user-2.0.5+33.aab` ke **Internal testing** (tanpa peninjauan, cepat). versionCode 33
+1. Unggah `tapgo-user-2.0.5+34.aab` ke **Internal testing** (tanpa peninjauan, cepat). versionCode 34
    lebih tinggi dari 32 dan 13, jadi diterima.
 2. Uji dari tautan Internal testing. Ini menguji bundel yang ditandatangani Play, persis seperti yang
    akan diterima pengguna. (Bila memasang APK langsung, aplikasi dari Play harus dihapus dulu karena
@@ -135,11 +147,10 @@ memperbaiki sesuatu yang rusak di Play.
 
 ### 10.3 Syarat naik ke produksi
 Jangan naik ke produksi sebelum **kedua** hal ini terpenuhi:
-- Sertifikat `api.tapgolion.id` diperpanjang berikutnya (sekitar awal Desember 2026) dan terbukti
-  tidak mengubah kunci server (bandingkan sidik kunci publik sebelum dan sesudah), **atau** ada pin
-  cadangan di aplikasi.
 - Bagian 1 sampai 4 lulus pada pemasangan dari Play.
+- Rencana pembaruan trust anchor di `TLS_TRUST_ANCHORS.md` dipahami dan dijadwalkan (anchor yang
+  terdekat berakhir 2032-09-02; Let's Encrypt harus diikuti bila memindahkan rantainya).
 
-Saat naik ke produksi, mulai dengan **rollout bertahap (10–20%)**, bukan 100%, lalu pantau Sentry dan
-laporan pengguna untuk kegagalan TLS sebelum melanjutkan. Risikonya: bila kunci server berganti tanpa
-rilis berpin baru, setiap pengguna +33 gagal terhubung sampai memperbarui dari Play.
+Perpanjangan atau penggantian kunci sertifikat server **tidak lagi** memengaruhi aplikasi (tidak ada pin
+leaf). Saat naik ke produksi, tetap mulai dengan **rollout bertahap (10–20%)**, bukan 100%, lalu pantau
+Sentry dan laporan pengguna untuk kegagalan TLS sebelum melanjutkan.
