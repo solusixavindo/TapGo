@@ -57,8 +57,10 @@ describe("event mesin Prisma sampai ke Sentry dengan isinya", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 200));
 
-    expect(captured.length).toBe(1);
-    expect(captured[0]!.message).toContain("kind: Closed");
-    expect(captured[0]!.message).not.toBe("Prisma error");
+    // Disaring menurut isi: suite penuh berjalan di satu proses, sehingga log
+    // error dari berkas tes lain bisa ikut tertangkap pada jendela yang sama.
+    const mine = captured.filter((e) => e.message?.includes("kind: Closed"));
+    expect(mine).toHaveLength(1);
+    expect(mine[0]!.message).not.toBe("Prisma error");
   });
 });
