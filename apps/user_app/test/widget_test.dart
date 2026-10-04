@@ -1211,6 +1211,7 @@ void main() {
   testWidgets('Account hub remains a navigation menu after Profile split', (
     WidgetTester tester,
   ) async {
+    tapGoDisablePersistenceForTests = true;
     await tester.pumpWidget(
       const ProviderScope(child: MaterialApp(home: AccountScreen())),
     );
