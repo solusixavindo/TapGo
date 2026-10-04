@@ -251,8 +251,12 @@ class _DriverApplicationWizardScreenState
       declarationAccepted: _declarationAccepted,
     );
     if (!mounted) return;
-    final message = ref.read(driverControllerProvider).message;
-    if (message != null && message.contains('terkirim')) {
+    // Berhasil = server mengembalikan pengajuan terbuka. Tidak boleh dibaca
+    // dari teks pesan: pesan galat yang kebetulan memuat kata "terkirim"
+    // akan menutup wizard dan membuang isian driver.
+    final submitted =
+        ref.read(driverControllerProvider).application?.status.isOpen ?? false;
+    if (submitted) {
       Navigator.of(context).pop();
     }
   }

@@ -82,8 +82,9 @@ class _DriverFaceCheckScreenState extends ConsumerState<DriverFaceCheckScreen> {
     if (camera == null || reference == null || _stage != _Stage.ready) return;
 
     setState(() => _stage = _Stage.capturing);
+    XFile? photo;
     try {
-      final photo = await camera.takePicture();
+      photo = await camera.takePicture();
       final liveness = await _pipeline.checkLiveness(photo.path);
       if (!liveness.passed) {
         if (!mounted) return;
@@ -155,6 +156,21 @@ class _DriverFaceCheckScreenState extends ConsumerState<DriverFaceCheckScreen> {
         _stage = _Stage.ready;
         _errorMessage = 'Verifikasi belum dapat diproses. Coba lagi.';
       });
+    } finally {
+      // Foto wajah hanya dibutuhkan selama verifikasi. camera.takePicture()
+      // menulisnya ke cache aplikasi dan tidak pernah menghapusnya, sehingga
+      // foto wajah driver menumpuk di perangkat (audit 4 Okt 2026, M3).
+      await _deleteCapturedPhoto(photo);
+    }
+  }
+
+  Future<void> _deleteCapturedPhoto(XFile? photo) async {
+    if (photo == null) return;
+    try {
+      final file = File(photo.path);
+      if (await file.exists()) await file.delete();
+    } catch (_) {
+      // Gagal hapus berkas sementara tidak boleh mengubah hasil verifikasi.
     }
   }
 

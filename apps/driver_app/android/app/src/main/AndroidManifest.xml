@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Diperlukan untuk memotret dokumen verifikasi mitra. Hanya kamera dan
          pembacaan galeri; TIDAK ada izin tulis, karena aplikasi ini tidak
@@ -6,7 +7,14 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- Sengaja TANPA READ_MEDIA_IMAGES: image_picker memakai pemilih sistem
+         (Photo Picker / SAF) yang tidak butuh izin baca galeri. Izin itu
+         sebelumnya ikut terbawa padahal tidak dipakai (audit 4 Okt 2026). -->
+    <!-- Verifikasi wajah hanya memotret (enableAudio: false), tidak pernah
+         merekam suara. Plugin camera menambahkan RECORD_AUDIO lewat manifest
+         merger; dibuang di sini supaya APK tidak meminta/menampilkan izin
+         mikrofon yang tidak dipakai. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove" />
     <!-- Peta live posisi driver di Beranda + kirim lokasi berkala ke backend
          selama online. Hanya foreground (whileInUse) — tidak ada klaim akses
          lokasi latar belakang. -->

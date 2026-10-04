@@ -68,6 +68,16 @@ void _applyTlsPinning(Dio dio, Set<String> allowedPins, String Function() expect
   };
 }
 
+/// Pinning tidak dapat ditegakkan pada build ini (pin kosong / adapter tidak
+/// mendukung). Tipe khusus supaya _performRequest dapat membedakannya dari
+/// gangguan jaringan biasa dan menampilkan diagnosis yang benar.
+class _TlsPinningUnavailable implements Exception {
+  const _TlsPinningUnavailable(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
 void _rejectAllRequestsForTlsPinning(Dio dio, String message) {
   dio.interceptors.add(
     InterceptorsWrapper(
@@ -76,7 +86,7 @@ void _rejectAllRequestsForTlsPinning(Dio dio, String message) {
           DioException(
             requestOptions: options,
             type: DioExceptionType.unknown,
-            error: StateError(message),
+            error: _TlsPinningUnavailable(message),
           ),
         );
       },
@@ -84,9 +94,38 @@ void _rejectAllRequestsForTlsPinning(Dio dio, String message) {
   );
 }
 
+/// Kegagalan sertifikat/handshake TLS — berbeda dari "tidak ada sinyal".
+bool _isTlsFailure(DioException error) =>
+    error.type == DioExceptionType.badCertificate ||
+    error.error is TlsException;
+
+bool _tlsFailureReported = false;
+
+/// Laporan sekali per proses ke Sentry (no-op bila Sentry tidak aktif). Hanya
+/// kode dan host — tanpa token, nomor HP, atau isi permintaan.
+void _reportTlsFailureOnce(String code, String host) {
+  if (_tlsFailureReported) return;
+  _tlsFailureReported = true;
+  try {
+    unawaited(Sentry.captureMessage(
+      'driver_app TLS: $code host=$host',
+      level: SentryLevel.error,
+    ));
+  } catch (_) {
+    // Pelaporan tidak boleh mengganggu alur login.
+  }
+}
+
 class ApiDriverRepository implements DriverRepository {
-  ApiDriverRepository({required String baseUrl, required SessionStore storage})
-      : _storage = storage,
+  ApiDriverRepository({
+    required String baseUrl,
+    required SessionStore storage,
+    // Hanya untuk tes: memaksa pinning aktif (atau mati) di luar kReleaseMode
+    // dan menyuntikkan pin, supaya handshake TLS sungguhan dapat diuji.
+    @visibleForTesting bool? enforceTlsPinning,
+    @visibleForTesting Set<String>? tlsPinsOverride,
+  })  : _storage = storage,
+        _pinningEnforced = enforceTlsPinning ?? kReleaseMode,
         _dio = Dio(
           BaseOptions(
             baseUrl: _normalizeBaseUrl(baseUrl),
@@ -111,10 +150,10 @@ class ApiDriverRepository implements DriverRepository {
     // Audit keamanan 30 September 2026 (M4): sama seperti user_app, hanya
     // ditegakkan pada build rilis. Lihat _applyTlsPinning untuk perilaku
     // fail-closed saat TAPGO_TLS_PIN_SHA256 kosong pada rilis.
-    if (kReleaseMode) {
+    if (_pinningEnforced) {
       _applyTlsPinning(
         _dio,
-        _tlsPinnedSpkiSha256Hashes,
+        tlsPinsOverride ?? _tlsPinnedSpkiSha256Hashes,
         () => Uri.parse(_dio.options.baseUrl).host,
       );
     }
@@ -141,6 +180,7 @@ class ApiDriverRepository implements DriverRepository {
 
   final Dio _dio;
   final SessionStore _storage;
+  final bool _pinningEnforced;
   DriverSession? _session;
 
   // SEMUA penukaran refresh token lewat koordinator ini (lihat
@@ -782,6 +822,12 @@ class ApiDriverRepository implements DriverRepository {
         );
       }
       final body = error.response?.data;
+      final tlsCode = _tlsDiagnosis(error);
+      if (tlsCode != null) {
+        _reportTlsFailureOnce(tlsCode, Uri.parse(_dio.options.baseUrl).host);
+        throw DriverApiException(
+            code: tlsCode, message: _friendlyMessage(tlsCode, ''));
+      }
       String code = 'NETWORK_ERROR';
       String message = 'Koneksi belum stabil. Silakan coba lagi.';
       if (body is Map) {
@@ -791,6 +837,15 @@ class ApiDriverRepository implements DriverRepository {
       throw DriverApiException(
           code: code, message: message, statusCode: error.response?.statusCode);
     }
+  }
+
+  /// Kode diagnosis untuk kegagalan TLS, atau null bila bukan masalah TLS.
+  String? _tlsDiagnosis(DioException error) {
+    if (error.error is _TlsPinningUnavailable) return 'TLS_PIN_NOT_CONFIGURED';
+    if (_isTlsFailure(error)) {
+      return _pinningEnforced ? 'TLS_PIN_MISMATCH' : 'TLS_CERTIFICATE_INVALID';
+    }
+    return null;
   }
 
   void _applyToken() {
@@ -896,7 +951,28 @@ String _friendlyMessage(String code, String fallback) {
     // authentication attempts...") — regresi Owner 29 Sep 2026, muncul saat
     // menguji login berulang dari 1 perangkat dalam waktu singkat.
     case 'RATE_LIMITED':
+    case 'AUTH_RECOVERY_RATE_LIMITED':
+    case 'REGISTER_PHONE_RATE_LIMITED':
       return 'Terlalu banyak percobaan. Silakan tunggu beberapa menit lalu coba lagi.';
+    // Kode backend (AuthService.ts, errorHandler.ts) yang pesan aslinya
+    // berbahasa Inggris. Tanpa ini pesan mentah server tampil ke driver.
+    case 'INVALID_CREDENTIALS':
+      return 'Nomor HP atau password salah.';
+    case 'ACCOUNT_INACTIVE':
+      return 'Akun Anda tidak aktif. Hubungi dukungan TapGo.';
+    case 'VALIDATION_ERROR':
+      return 'Data yang dikirim tidak valid. Periksa isian Anda lalu coba lagi.';
+    case 'ROUTE_NOT_FOUND':
+      return 'Fitur ini belum tersedia di server. Perbarui aplikasi atau coba lagi nanti.';
+    case 'TLS_PIN_MISMATCH':
+      return 'Koneksi aman ke server TapGo tidak dapat diverifikasi. '
+          'Perbarui aplikasi dari Google Play. Jika masih terjadi, hubungi dukungan TapGo.';
+    case 'TLS_PIN_NOT_CONFIGURED':
+      return 'Aplikasi ini belum dikonfigurasi dengan benar untuk terhubung ke server. '
+          'Pasang versi terbaru dari Google Play atau hubungi dukungan TapGo.';
+    case 'TLS_CERTIFICATE_INVALID':
+      return 'Koneksi aman ke server TapGo gagal diverifikasi. '
+          'Periksa tanggal dan jam HP Anda, lalu coba lagi.';
     // Kode di bawah datang dari jalur unggah dokumen. Pesannya ditulis ulang
     // agar menyebutkan apa yang harus driver lakukan, bukan sekadar menolak.
     case 'DRIVER_PROFILE_NOT_FOUND':

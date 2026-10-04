@@ -689,6 +689,24 @@ class DriverWalletEntry {
   bool get isCommission => kind == 'COMMISSION';
 }
 
+const String _defaultTopUpUrl = 'https://tapgolion.id/topup';
+
+/// Tautan isi saldo datang dari server lalu dibuka di aplikasi eksternal,
+/// jadi hanya https ke tapgolion.id (atau subdomainnya) yang diterima; selain
+/// itu jatuh ke tautan bawaan. Tanpa ini respons yang dimanipulasi dapat
+/// mengarahkan driver ke situs lain atau skema berbahaya (intent://, dll).
+String _trustedTopUpUrl(Object? raw) {
+  final uri = Uri.tryParse('${raw ?? ''}'.trim());
+  if (uri == null || uri.scheme != 'https' || uri.userInfo.isNotEmpty) {
+    return _defaultTopUpUrl;
+  }
+  final host = uri.host.toLowerCase();
+  if (host == 'tapgolion.id' || host.endsWith('.tapgolion.id')) {
+    return uri.toString();
+  }
+  return _defaultTopUpUrl;
+}
+
 /// Saldo TapGo driver, aturan komisi, dan riwayatnya (GET /driver/wallet).
 class DriverWalletSummary {
   const DriverWalletSummary({
@@ -705,7 +723,7 @@ class DriverWalletSummary {
       balance: _intOf(json['balance']) ?? 0,
       commissionEnabled: json['commissionEnabled'] == true,
       commissionPercent: _intOf(json['commissionPercent']) ?? 8,
-      topUpUrl: '${json['topUpUrl'] ?? 'https://tapgolion.id/topup'}',
+      topUpUrl: _trustedTopUpUrl(json['topUpUrl']),
       entries: raw is List
           ? raw
               .whereType<Map>()

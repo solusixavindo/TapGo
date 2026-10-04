@@ -1732,8 +1732,8 @@ class ActiveRideCard extends ConsumerWidget {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(Icons.person_outline_rounded,
-                      size: 20, color: Colors.black54),
+                  Icon(Icons.person_outline_rounded,
+                      size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(width: 8),
                   Text(
                     ride.passengerName!,
@@ -1766,9 +1766,9 @@ class ActiveRideCard extends ConsumerWidget {
                 padding: const EdgeInsets.only(top: 6, left: 32),
                 child: Text(
                   'Catatan: ${ride.pickupNote}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontStyle: FontStyle.italic,
-                    color: Colors.black54,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -1878,9 +1878,9 @@ class OfferDetailSheet extends ConsumerWidget {
                   padding: const EdgeInsets.only(top: 6, left: 32),
                   child: Text(
                     'Catatan: ${ride.pickupNote}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontStyle: FontStyle.italic,
-                      color: Colors.black54,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),

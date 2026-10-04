@@ -103,9 +103,11 @@ class DriverController extends StateNotifier<DriverState>
       await refreshWorkspace();
     } on DriverApiException catch (error) {
       state = state.copyWith(
-        status: error.statusCode == 401
-            ? DriverWorkspaceStatus.sessionExpired
-            : DriverWorkspaceStatus.unauthenticated,
+        // Kegagalan di alur LOGIN selalu kembali ke form login: 401 di sini
+        // berarti kredensial/token Google ditolak, BUKAN sesi yang berakhir
+        // (belum ada sesi). Memetakannya ke sessionExpired membuang driver
+        // ke layar "Sesi berakhir" tanpa form (regresi APK +4, 4 Okt 2026).
+        status: DriverWorkspaceStatus.unauthenticated,
         message: error.message,
       );
     } finally {
@@ -130,9 +132,11 @@ class DriverController extends StateNotifier<DriverState>
       return result;
     } on DriverApiException catch (error) {
       state = state.copyWith(
-        status: error.statusCode == 401
-            ? DriverWorkspaceStatus.sessionExpired
-            : DriverWorkspaceStatus.unauthenticated,
+        // Kegagalan di alur LOGIN selalu kembali ke form login: 401 di sini
+        // berarti kredensial/token Google ditolak, BUKAN sesi yang berakhir
+        // (belum ada sesi). Memetakannya ke sessionExpired membuang driver
+        // ke layar "Sesi berakhir" tanpa form (regresi APK +4, 4 Okt 2026).
+        status: DriverWorkspaceStatus.unauthenticated,
         message: error.message,
       );
       return null;
@@ -171,9 +175,11 @@ class DriverController extends StateNotifier<DriverState>
       return true;
     } on DriverApiException catch (error) {
       state = state.copyWith(
-        status: error.statusCode == 401
-            ? DriverWorkspaceStatus.sessionExpired
-            : DriverWorkspaceStatus.unauthenticated,
+        // Kegagalan di alur LOGIN selalu kembali ke form login: 401 di sini
+        // berarti kredensial/token Google ditolak, BUKAN sesi yang berakhir
+        // (belum ada sesi). Memetakannya ke sessionExpired membuang driver
+        // ke layar "Sesi berakhir" tanpa form (regresi APK +4, 4 Okt 2026).
+        status: DriverWorkspaceStatus.unauthenticated,
         message: error.message,
       );
       return false;
@@ -197,7 +203,25 @@ class DriverController extends StateNotifier<DriverState>
     );
   }
 
-  Future<void> refreshWorkspace() async {
+  /// Gangguan jaringan sesaat (tanpa respons / 5xx / 408 / 429) — BUKAN
+  /// perubahan status akun. Kegagalan TLS sengaja tidak termasuk: itu tidak
+  /// pulih sendiri dan driver perlu melihat pesan diagnosisnya.
+  static bool _isTransientFailure(DriverApiException error) {
+    final code = error.statusCode;
+    if (error.code == 'NETWORK_ERROR') return true;
+    if (code == null) return false;
+    return code >= 500 || code == 408 || code == 429;
+  }
+
+  int _backgroundFailures = 0;
+
+  /// [background] = dipanggil timer polling / kembali dari latar belakang,
+  /// bukan tindakan driver. Pada workspace yang sudah aktif, gangguan sesaat
+  /// TIDAK boleh mengganti seluruh layar dengan galat atau menghentikan
+  /// polling dan pengiriman lokasi — driver di tengah perjalanan (terowongan,
+  /// sinyal lemah) harus pulih sendiri begitu jaringan kembali. Setelah gagal
+  /// berulang, hanya pesan non-blokir yang ditampilkan.
+  Future<void> refreshWorkspace({bool background = false}) async {
     if (state.session == null) {
       state = state.copyWith(status: DriverWorkspaceStatus.unauthenticated);
       return;
@@ -234,12 +258,36 @@ class DriverController extends StateNotifier<DriverState>
       _startPolling();
       _syncTracking();
       _startPush();
+      _backgroundFailures = 0;
     } on DriverApiException catch (error) {
+      if (background && _keepWorkspaceOnFailure(error)) return;
       _applyCapabilityError(error);
     } catch (_) {
+      if (background && state.status == DriverWorkspaceStatus.active) {
+        _noteBackgroundFailure();
+        return;
+      }
       state = state.copyWith(
         status: DriverWorkspaceStatus.networkError,
         message: 'Koneksi belum stabil. Silakan coba lagi.',
+      );
+    }
+  }
+
+  bool _keepWorkspaceOnFailure(DriverApiException error) {
+    if (state.status != DriverWorkspaceStatus.active ||
+        !_isTransientFailure(error)) {
+      return false;
+    }
+    _noteBackgroundFailure();
+    return true;
+  }
+
+  void _noteBackgroundFailure() {
+    _backgroundFailures += 1;
+    if (_backgroundFailures >= 3 && state.message == null) {
+      state = state.copyWith(
+        message: 'Koneksi belum stabil. Aplikasi akan mencoba tersambung lagi.',
       );
     }
   }
@@ -616,6 +664,14 @@ class DriverController extends StateNotifier<DriverState>
     } on DriverApiException catch (error) {
       state = state.copyWith(message: error.message);
       return false;
+    } catch (_) {
+      // Galat tak terduga (mis. plugin lokasi) tidak boleh lolos ke dialog:
+      // tombol SOS akan macet pada status "mengirim" saat driver butuh bantuan.
+      state = state.copyWith(
+        message:
+            'Sinyal SOS gagal terkirim. Coba lagi atau hubungi CS lewat WhatsApp.',
+      );
+      return false;
     } finally {
       _endFlight('sos');
       state = state.copyWith(isBusy: false);
@@ -848,7 +904,7 @@ class DriverController extends StateNotifier<DriverState>
     if (_polling || state.session == null || state.hasTerminalRide) return;
     _polling = true;
     try {
-      await refreshWorkspace();
+      await refreshWorkspace(background: true);
     } finally {
       _polling = false;
     }
@@ -870,7 +926,7 @@ class DriverController extends StateNotifier<DriverState>
       _stopPolling();
     }
     if (state == AppLifecycleState.resumed) {
-      unawaited(refreshWorkspace());
+      unawaited(refreshWorkspace(background: true));
     }
   }
 
