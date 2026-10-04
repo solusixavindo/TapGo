@@ -35,7 +35,32 @@ Set<String> get _tlsPinnedSpkiSha256Hashes => _tlsPinShaEnv
 /// berarti build rilis TANPA TAPGO_TLS_PIN_SHA256, atau di platform yang
 /// adapternya tidak mendukung pinning kustom, tidak bisa menghubungi server
 /// apa pun; nilai pin wajib diisi Owner sebelum build rilis diedarkan.
-void _applyTlsPinning(Dio dio, Set<String> allowedPins, String Function() expectedHost) {
+/// Mencatat penolakan oleh callback pin. Dio mengeluarkan
+/// DioExceptionType.unknown + HandshakeException untuk SEMUA kegagalan TLS —
+/// termasuk penolakan pin — jadi penolakan pin tidak dapat dikenali dari tipe
+/// galat. Callback pin sendiri yang tahu, maka ia yang mencatatnya; tiap
+/// permintaan menandai hitungan awalnya (RequestOptions.extra) dan dianggap
+/// ditolak pin bila hitungan bertambah selama permintaan itu berjalan.
+class _PinRejectionLog {
+  static const _startKey = 'tapgo_pin_rejections_at_start';
+  int _count = 0;
+
+  void record() => _count += 1;
+
+  void markStart(RequestOptions options) => options.extra[_startKey] = _count;
+
+  bool rejectedDuring(RequestOptions options) {
+    final atStart = options.extra[_startKey];
+    return atStart is int && _count > atStart;
+  }
+}
+
+void _applyTlsPinning(
+  Dio dio,
+  Set<String> allowedPins,
+  String Function() expectedHost, {
+  _PinRejectionLog? rejections,
+}) {
   if (allowedPins.isEmpty) {
     _rejectAllRequestsForTlsPinning(
       dio,
@@ -57,15 +82,27 @@ void _applyTlsPinning(Dio dio, Set<String> allowedPins, String Function() expect
   adapter.createHttpClient = () {
     final client = HttpClient(context: SecurityContext(withTrustedRoots: false));
     client.badCertificateCallback = (X509Certificate cert, String host, int port) {
-      return tapGoShouldAcceptPinnedCertificate(
+      final accepted = tapGoShouldAcceptPinnedCertificate(
         host: host,
         expectedHost: expectedHost(),
         certificateDer: Uint8List.fromList(cert.der),
         allowedSpkiSha256Hex: allowedPins,
       );
+      if (!accepted) rejections?.record();
+      return accepted;
     };
     return client;
   };
+  if (rejections != null) {
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          rejections.markStart(options);
+          handler.next(options);
+        },
+      ),
+    );
+  }
 }
 
 /// Pinning tidak dapat ditegakkan pada build ini (pin kosong / adapter tidak
@@ -155,6 +192,7 @@ class ApiDriverRepository implements DriverRepository {
         _dio,
         tlsPinsOverride ?? _tlsPinnedSpkiSha256Hashes,
         () => Uri.parse(_dio.options.baseUrl).host,
+        rejections: _pinRejections,
       );
     }
     unawaited(_loadAppVersionHeader());
@@ -181,6 +219,7 @@ class ApiDriverRepository implements DriverRepository {
   final Dio _dio;
   final SessionStore _storage;
   final bool _pinningEnforced;
+  final _PinRejectionLog _pinRejections = _PinRejectionLog();
   DriverSession? _session;
 
   // SEMUA penukaran refresh token lewat koordinator ini (lihat
@@ -842,10 +881,15 @@ class ApiDriverRepository implements DriverRepository {
   /// Kode diagnosis untuk kegagalan TLS, atau null bila bukan masalah TLS.
   String? _tlsDiagnosis(DioException error) {
     if (error.error is _TlsPinningUnavailable) return 'TLS_PIN_NOT_CONFIGURED';
-    if (_isTlsFailure(error)) {
-      return _pinningEnforced ? 'TLS_PIN_MISMATCH' : 'TLS_CERTIFICATE_INVALID';
-    }
-    return null;
+    if (!_isTlsFailure(error)) return null;
+    // TLS_PIN_MISMATCH hanya bila callback pin yang menolak (pesannya menyuruh
+    // memperbarui dari Google Play). Kegagalan TLS lain — jam HP salah,
+    // jaringan yang mencegat, protokol gagal — TLS_CERTIFICATE_INVALID, yang
+    // BUKAN otomatis berarti aplikasi harus diperbarui.
+    final pinRejected = _pinningEnforced &&
+        (error.type == DioExceptionType.badCertificate ||
+            _pinRejections.rejectedDuring(error.requestOptions));
+    return pinRejected ? 'TLS_PIN_MISMATCH' : 'TLS_CERTIFICATE_INVALID';
   }
 
   void _applyToken() {
@@ -972,7 +1016,8 @@ String _friendlyMessage(String code, String fallback) {
           'Pasang versi terbaru dari Google Play atau hubungi dukungan TapGo.';
     case 'TLS_CERTIFICATE_INVALID':
       return 'Koneksi aman ke server TapGo gagal diverifikasi. '
-          'Periksa tanggal dan jam HP Anda, lalu coba lagi.';
+          'Periksa tanggal dan jam HP Anda, lalu coba lagi. '
+          'Ini belum tentu berarti aplikasi harus diperbarui.';
     // Kode di bawah datang dari jalur unggah dokumen. Pesannya ditulis ulang
     // agar menyebutkan apa yang harus driver lakukan, bukan sekadar menolak.
     case 'DRIVER_PROFILE_NOT_FOUND':

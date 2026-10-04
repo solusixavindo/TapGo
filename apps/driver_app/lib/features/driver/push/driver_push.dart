@@ -19,6 +19,20 @@ class DriverPushMessage {
     final value = data['type'];
     return value == 'ride_offer' || value == 'ride_cancelled' ? value : null;
   }
+
+  /// Pesan `ride_offer` tanpa judul dan isi (data-only) diberi teks bawaan.
+  /// Tanpa ini showForegroundAlert kembali diam-diam dan order masuk tidak
+  /// memunculkan notifikasi sistem sama sekali. Jenis lain tidak diubah.
+  DriverPushMessage withRideOfferDefaults() {
+    if (type != 'ride_offer' || title.trim().isNotEmpty || body.trim().isNotEmpty) {
+      return this;
+    }
+    return DriverPushMessage(
+      title: 'Order baru',
+      body: 'Ada penumpang di dekat Anda',
+      data: data,
+    );
+  }
 }
 
 /// Batas antara aplikasi dan plugin Firebase; uji memakai implementasi palsu.
@@ -197,7 +211,8 @@ class DriverPushController {
           onError: (_) {},
         ))
         ..add(platform.foregroundMessages.listen(
-          (m) {
+          (raw) {
+            final m = raw.withRideOfferDefaults();
             onMessage(m, opened: false);
             unawaited(platform.showForegroundAlert(m));
           },

@@ -1003,6 +1003,177 @@ void main() {
     });
   });
 
+  group('Popup order masuk (OfferDetailSheet otomatis)', () {
+    DriverRide offerRide(String reference, {DateTime? updatedAt}) => DriverRide(
+          reference: reference,
+          serviceType: 'MOTORCYCLE',
+          status: RideStatus.searchingDriver,
+          pickupAddress: 'JEMPUT_$reference',
+          dropoffAddress: 'TUJUAN_$reference',
+          distanceMeters: 2500,
+          durationSeconds: 600,
+          totalFare: 9000,
+          updatedAt: updatedAt,
+        );
+
+    DriverController controllerOf(WidgetTester tester) =>
+        ProviderScope.containerOf(tester.element(find.byType(TapGoDriverApp)))
+            .read(driverControllerProvider.notifier);
+
+    String? selectedRef(WidgetTester tester) =>
+        ProviderScope.containerOf(tester.element(find.byType(TapGoDriverApp)))
+            .read(driverControllerProvider)
+            .selectedOffer
+            ?.reference;
+
+    Future<void> poll(WidgetTester tester) async {
+      await tester.pump(const Duration(seconds: 12));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    testWidgets('tawaran baru lewat polling 12 detik membuka sheet tanpa ketukan',
+        (tester) async {
+      // Sebelumnya order masuk hanya menambah daftar; sheet baru muncul bila
+      // driver mengetuk OfferTile, sehingga driver yang tidak menatap daftar
+      // tidak tahu ada order.
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+      expect(find.byType(OfferDetailSheet), findsNothing);
+
+      repo.offerItems = [offerRide('RID-A')];
+      await poll(tester);
+
+      expect(selectedRef(tester), 'RID-A');
+      expect(find.byType(OfferDetailSheet), findsOneWidget);
+    });
+
+    testWidgets('tawaran baru lewat push membuka sheet', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = FakePushPlatform(token: 'tok');
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, pushPlatform: platform));
+      await tester.pumpAndSettle();
+      expect(find.byType(OfferDetailSheet), findsNothing);
+
+      repo.offerItems = [offerRide('RID-PUSH')];
+      platform.foreground.add(const DriverPushMessage(
+          title: 'Order baru',
+          body: 'Ada penumpang di dekat Anda',
+          data: {'type': 'ride_offer', 'rideReference': 'RID-PUSH'}));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(selectedRef(tester), 'RID-PUSH');
+      expect(find.byType(OfferDetailSheet), findsOneWidget);
+    });
+
+    testWidgets('setelah closeOffer, tawaran yang sama tidak dibuka lagi',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+      repo.offerItems = [offerRide('RID-A')];
+      await poll(tester);
+      expect(selectedRef(tester), 'RID-A');
+
+      controllerOf(tester).closeOffer();
+      await tester.pump();
+      expect(find.byType(OfferDetailSheet), findsNothing);
+
+      // Polling berikutnya, dan tawaran yang sempat hilang lalu muncul lagi.
+      await poll(tester);
+      expect(selectedRef(tester), isNull);
+      repo.offerItems = [];
+      await poll(tester);
+      repo.offerItems = [offerRide('RID-A')];
+      await poll(tester);
+      expect(selectedRef(tester), isNull);
+      expect(find.byType(OfferDetailSheet), findsNothing);
+    });
+
+    testWidgets('tawaran yang ditolak tidak dibuka lagi, tawaran lain tetap dibuka',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+      repo.offerItems = [offerRide('RID-A')];
+      await poll(tester);
+      await controllerOf(tester).rejectSelectedOffer();
+      await tester.pump();
+      expect(selectedRef(tester), isNull);
+
+      repo.offerItems = [];
+      await poll(tester);
+      repo.offerItems = [offerRide('RID-A'), offerRide('RID-B')];
+      await poll(tester);
+
+      expect(selectedRef(tester), 'RID-B');
+    });
+
+    testWidgets('perjalanan aktif tidak membuka sheet', (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        current: demoRide(RideStatus.inTrip),
+      );
+      await pumpDriver(tester, repo);
+      repo.offerItems = [offerRide('RID-A')];
+      await poll(tester);
+
+      expect(selectedRef(tester), isNull);
+      expect(find.byType(OfferDetailSheet), findsNothing);
+    });
+
+    testWidgets('beberapa tawaran baru bersamaan: yang paling baru dibuka',
+        (tester) async {
+      final older = DateTime.utc(2026, 10, 4, 10, 0);
+      final newer = DateTime.utc(2026, 10, 4, 10, 5);
+      for (final order in [
+        [offerRide('RID-NEW', updatedAt: newer), offerRide('RID-OLD', updatedAt: older)],
+        [offerRide('RID-OLD', updatedAt: older), offerRide('RID-NEW', updatedAt: newer)],
+      ]) {
+        final repo = FakeDriverRepository(session: demoSession);
+        await pumpDriver(tester, repo);
+        repo.offerItems = order;
+        await poll(tester);
+        expect(selectedRef(tester), 'RID-NEW',
+            reason: 'urutan daftar: ${order.map((o) => o.reference)}');
+      }
+    });
+
+    testWidgets('sheet yang sedang terbuka tidak diganti tawaran baru lain',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+      repo.offerItems = [offerRide('RID-A')];
+      await poll(tester);
+      repo.offerItems = [offerRide('RID-A'), offerRide('RID-B')];
+      await poll(tester);
+
+      expect(selectedRef(tester), 'RID-A');
+    });
+
+    testWidgets('push ride_offer berjudul dan berisi kosong diberi teks bawaan',
+        (tester) async {
+      // showForegroundAlert kembali diam-diam bila judul dan isi kosong.
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = FakePushPlatform(token: 'tok');
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, pushPlatform: platform));
+      await tester.pumpAndSettle();
+
+      platform.foreground.add(const DriverPushMessage(
+          title: '', body: '', data: {'type': 'ride_offer'}));
+      platform.foreground.add(const DriverPushMessage(
+          title: '', body: '', data: {'type': 'ride_cancelled'}));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(platform.foregroundAlerts, hasLength(2));
+      expect(platform.foregroundAlerts[0].title, 'Order baru');
+      expect(platform.foregroundAlerts[0].body, 'Ada penumpang di dekat Anda');
+      // Jenis lain tidak diubah.
+      expect(platform.foregroundAlerts[1].title, isEmpty);
+    });
+  });
+
   group('Tombol SOS darurat', () {
     testWidgets(
         'kirim SOS berhasil: lokasi terlampir, dialog tertutup, SnackBar tampil',
@@ -1412,6 +1583,14 @@ void main() {
         ],
       );
       await pumpDriverOrders(tester, repo);
+      // Tawaran yang sudah ada saat muat pertama kini membuka OfferDetailSheet
+      // otomatis (1.0.0+5); jarak tampil di sheet DAN di kartu. Tes ini
+      // memeriksa kartu di daftar, jadi sheetnya ditutup dulu.
+      expect(find.byType(OfferDetailSheet), findsOneWidget);
+      ProviderScope.containerOf(tester.element(find.byType(TapGoDriverApp)))
+          .read(driverControllerProvider.notifier)
+          .closeOffer();
+      await tester.pump();
       expect(find.byKey(const ValueKey('offer-distance-to-pickup')), findsOneWidget);
       expect(find.textContaining('dari Anda'), findsOneWidget);
     });

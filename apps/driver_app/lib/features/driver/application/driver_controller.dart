@@ -68,6 +68,9 @@ class DriverController extends StateNotifier<DriverState>
   Timer? _locationTimer;
   Timer? _safetyTimer;
   bool _polling = false;
+  /// Tawaran yang sudah ditutup atau ditolak driver pada sesi ini. Popup
+  /// otomatis tidak boleh membukanya lagi walau hilang lalu muncul kembali.
+  final Set<String> _dismissedOfferRefs = <String>{};
   final Set<String> _singleFlights = <String>{};
 
   Future<void> restore() async {
@@ -193,6 +196,7 @@ class DriverController extends StateNotifier<DriverState>
     _stopPolling();
     await _stopPush();
     await _repository.logout();
+    _dismissedOfferRefs.clear();
     state = state.copyWith(
       status: DriverWorkspaceStatus.unauthenticated,
       clearSession: true,
@@ -243,6 +247,7 @@ class DriverController extends StateNotifier<DriverState>
         _startPush();
         return;
       }
+      final previousOfferRefs = state.offers.map((o) => o.reference).toSet();
       final offers = await _repository.offers();
       final availability = switch (_repository) {
         DemoDriverRepository demo => demo.currentAvailability,
@@ -255,6 +260,7 @@ class DriverController extends StateNotifier<DriverState>
         availability: availability,
         clearMessage: true,
       );
+      _openNewestFreshOffer(previousRefs: previousOfferRefs, offers: offers);
       _startPolling();
       _syncTracking();
       _startPush();
@@ -290,6 +296,40 @@ class DriverController extends StateNotifier<DriverState>
         message: 'Koneksi belum stabil. Aplikasi akan mencoba tersambung lagi.',
       );
     }
+  }
+
+  /// Membuka OfferDetailSheet yang sudah ada untuk tawaran BARU, tanpa
+  /// menunggu driver mengetuk OfferTile. Berlaku untuk order yang datang lewat
+  /// push maupun polling (keduanya berakhir di refreshWorkspace). Order masuk
+  /// sebelumnya hanya menambah daftar sehingga driver yang tidak menatap
+  /// daftar tidak tahu ada order.
+  ///
+  /// Tidak membuka sheet bila: ada perjalanan aktif; sheet lain sedang terbuka
+  /// (jangan menyambar tawaran yang sedang dibaca — tawaran baru tetap ada di
+  /// daftar); atau tawaran itu sudah ditutup/ditolak pada sesi ini. Bila
+  /// beberapa tawaran baru datang bersamaan, dibuka yang paling baru.
+  void _openNewestFreshOffer({
+    required Set<String> previousRefs,
+    required List<DriverRide> offers,
+  }) {
+    if (state.activeRide != null || state.selectedOffer != null) return;
+    final fresh = offers
+        .where((o) =>
+            o.reference.isNotEmpty &&
+            o.status == RideStatus.searchingDriver &&
+            !previousRefs.contains(o.reference) &&
+            !_dismissedOfferRefs.contains(o.reference))
+        .toList();
+    if (fresh.isEmpty) return;
+    // Urutan daftar dari server bukan urutan waktu (createdAt asc atau jarak),
+    // jadi yang terbaru ditentukan dari waktunya; tanpa waktu, yang terakhir.
+    var newest = fresh.last;
+    for (final offer in fresh) {
+      final at = offer.updatedAt;
+      final best = newest.updatedAt;
+      if (at != null && (best == null || at.isAfter(best))) newest = offer;
+    }
+    selectOffer(newest);
   }
 
   Future<void> setAvailability(DriverAvailability availability) async {
@@ -560,6 +600,8 @@ class DriverController extends StateNotifier<DriverState>
   }
 
   void closeOffer() {
+    final reference = state.selectedOffer?.reference;
+    if (reference != null) _dismissedOfferRefs.add(reference);
     state = state.copyWith(clearSelectedOffer: true);
   }
 
@@ -585,6 +627,7 @@ class DriverController extends StateNotifier<DriverState>
         'RIDE_OFFER_EXPIRED',
         'RIDE_OFFER_OUT_OF_RANGE',
       }.contains(error.code)) {
+        _dismissedOfferRefs.add(offer.reference);
         state = state.copyWith(clearSelectedOffer: true);
         unawaited(refreshWorkspace());
       }
@@ -601,6 +644,7 @@ class DriverController extends StateNotifier<DriverState>
     state = state.copyWith(isBusy: true, clearMessage: true);
     try {
       await _repository.reject(offer.reference);
+      _dismissedOfferRefs.add(offer.reference);
       state = state.copyWith(
         clearSelectedOffer: true,
         offers: state.offers

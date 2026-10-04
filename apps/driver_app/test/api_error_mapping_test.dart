@@ -169,6 +169,34 @@ void main() {
       expect(error.message, isNot(contains('Koneksi belum stabil')));
     });
 
+    test('kegagalan TLS yang BUKAN penolakan pin (pinning aktif) menjadi TLS_CERTIFICATE_INVALID',
+        () async {
+      // Handshake gagal sebelum callback pin sempat dipanggil (server HTTP
+      // biasa dihubungi lewat https). Dio mengeluarkan DioExceptionType.unknown
+      // + HandshakeException untuk SEMUA kegagalan TLS, termasuk penolakan pin,
+      // jadi penolakan pin dikenali dari callback pin, bukan dari tipe galat.
+      // Pesan "perbarui dari Google Play" hanya untuk penolakan pin.
+      final plain = await track(_httpServer(200, {'success': true}));
+      final repo = _repo(plain,
+          https: true, enforce: true, pins: {certA.spkiSha256Hex});
+      final error = await _loginFailure(repo);
+      expect(error.code, 'TLS_CERTIFICATE_INVALID');
+      expect(error.message, contains('tanggal dan jam'));
+      expect(error.message, contains('belum tentu'));
+      expect(error.message, isNot(contains('Google Play')));
+    });
+
+    test('penolakan pin tetap TLS_PIN_MISMATCH dan satu-satunya yang menyuruh memperbarui',
+        () async {
+      final server = await track(_httpsServer(certA));
+      final repo = _repo(server,
+          https: true, enforce: true, pins: {certB.spkiSha256Hex});
+      final error = await _loginFailure(repo);
+      expect(error.code, 'TLS_PIN_MISMATCH');
+      expect(error.message, contains('Google Play'));
+      expect(error.message, isNot(contains('tanggal dan jam')));
+    });
+
     test('tanpa pinning (debug), sertifikat self-signed tetap ditolak sebagai galat TLS',
         () async {
       // Memastikan kegagalan sertifikat BUKAN lagi dilebur menjadi NETWORK_ERROR
