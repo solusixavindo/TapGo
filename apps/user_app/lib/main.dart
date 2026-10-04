@@ -128,36 +128,49 @@ const tapGoPpobDemoMode = bool.fromEnvironment('TAPGO_PPOB_DEMO_MODE');
 @visibleForTesting
 PpobRepository tapGoBuildPpobRepositoryForTests() => _buildPpobRepository();
 
+/// Pemeta galat PPOB. TLS dipetakan lebih dulu supaya pin yang basi tidak
+/// tampil sebagai "Koneksi ke server gagal".
+@visibleForTesting
+PpobApiException tapGoMapPpobError(Object error) {
+  final tlsFailure = tapGoTlsFailureOf(error);
+  if (tlsFailure != null) {
+    return PpobApiException(
+      code: _tlsFailureCode(tlsFailure),
+      message: tapGoTlsFailureMessage(error)!,
+      statusCode: (error as DioException).response?.statusCode,
+    );
+  }
+  if (error is DioException) {
+    final data = error.response?.data;
+    if (data is Map<String, dynamic>) {
+      return PpobApiException(
+        code: data['code'] is String ? data['code'] as String : 'UNKNOWN',
+        message: data['message'] is String
+            ? data['message'] as String
+            : 'Terjadi kesalahan pada server.',
+        statusCode: error.response?.statusCode,
+      );
+    }
+    return PpobApiException(
+      code: 'NETWORK_ERROR',
+      message: 'Koneksi ke server gagal.',
+      statusCode: error.response?.statusCode,
+    );
+  }
+  if (error is PpobApiException) {
+    return error;
+  }
+  return const PpobApiException(
+    code: 'UNKNOWN',
+    message: 'Terjadi kesalahan yang tidak dikenal.',
+  );
+}
+
 /// Menjembatani fitur PPOB (library berdiri sendiri di lib/features/ppob/)
 /// dengan _apiClient privat milik library ini. Error Dio dinormalisasi
 /// menjadi PpobApiException agar lapisan UI tidak bergantung pada Dio.
 PpobRepository _buildPpobRepository() {
-  PpobApiException mapError(Object error) {
-    if (error is DioException) {
-      final data = error.response?.data;
-      if (data is Map<String, dynamic>) {
-        return PpobApiException(
-          code: data['code'] is String ? data['code'] as String : 'UNKNOWN',
-          message: data['message'] is String
-              ? data['message'] as String
-              : 'Terjadi kesalahan pada server.',
-          statusCode: error.response?.statusCode,
-        );
-      }
-      return PpobApiException(
-        code: 'NETWORK_ERROR',
-        message: 'Koneksi ke server gagal.',
-        statusCode: error.response?.statusCode,
-      );
-    }
-    if (error is PpobApiException) {
-      return error;
-    }
-    return const PpobApiException(
-      code: 'UNKNOWN',
-      message: 'Terjadi kesalahan yang tidak dikenal.',
-    );
-  }
+  PpobApiException mapError(Object error) => tapGoMapPpobError(error);
 
   Future<T> guard<T>(Future<T> Function() call) async {
     try {

@@ -68,7 +68,7 @@ class _WalletTransferScreenState extends ConsumerState<WalletTransferScreen> {
       if (!rootContext.mounted) {
         return;
       }
-      _TapGoSnackbar.error(rootContext, _friendlyTransferError(error));
+      _TapGoSnackbar.error(rootContext, tapGoTransferErrorMessage(error));
     } finally {
       if (rootContext.mounted && _isSubmitting) {
         setState(() => _isSubmitting = false);
@@ -190,7 +190,9 @@ class _WalletTransferScreenState extends ConsumerState<WalletTransferScreen> {
   }
 }
 
-String _friendlyTransferError(Object error) {
+String tapGoTransferErrorMessage(Object error) {
+  final tls = tapGoTlsFailureMessage(error);
+  if (tls != null) return tls;
   if (error is DioException) {
     final responseData = error.response?.data;
     if (responseData is Map) {

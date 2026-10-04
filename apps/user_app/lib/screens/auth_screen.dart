@@ -15,6 +15,8 @@ bool _tapGoIsNetworkFailure(DioException error) {
 /// setiap kode dan kelas status dipetakan ke kalimat Indonesia yang memberi
 /// tahu apa yang harus dilakukan.
 String tapGoAuthErrorMessage(DioException error, {required bool isRegister}) {
+  final tls = tapGoTlsFailureMessage(error);
+  if (tls != null) return tls;
   final code = _authResponseDataMap(error.response?.data)?['code']?.toString();
   final status = error.response?.statusCode;
   switch (code) {

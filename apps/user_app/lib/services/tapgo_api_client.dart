@@ -69,22 +69,139 @@ void _applyTlsPinning(Dio dio, Set<String> allowedPins, String Function() expect
     };
     return client;
   };
+  // Menandai kegagalan TLS yang terjadi SAAT pinning aktif sebagai pinMismatch
+  // (bukan sekadar "sertifikat tidak valid") dan melaporkannya sekali.
+  dio.interceptors.add(
+    InterceptorsWrapper(
+      onError: (error, handler) {
+        if (_isTlsFailure(error) && error.error is! _TlsPinMismatch) {
+          _reportTlsFailureOnce(
+              _tlsFailureCode(TapGoTlsFailure.pinMismatch), error.requestOptions.uri.host);
+          handler.next(error.copyWith(error: _TlsPinMismatch(error.error)));
+          return;
+        }
+        handler.next(error);
+      },
+    ),
+  );
+}
+
+/// Pinning tidak dapat ditegakkan pada build ini (pin kosong / adapter tidak
+/// mendukung). Tipe khusus supaya dapat dibedakan dari gangguan jaringan biasa.
+class _TlsPinningUnavailable implements Exception {
+  const _TlsPinningUnavailable(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
+/// Handshake ditolak oleh pemeriksaan pin aplikasi (sertifikat server tidak
+/// cocok dengan pin yang tertanam). Membungkus galat asli dari dart:io.
+class _TlsPinMismatch implements Exception {
+  const _TlsPinMismatch(this.cause);
+  final Object? cause;
+  @override
+  String toString() => 'TLS pin mismatch: $cause';
+}
+
+/// Penyebab kegagalan TLS yang dapat dibedakan pengguna dan tim dukungan.
+enum TapGoTlsFailure { pinMismatch, pinNotConfigured, certificateInvalid }
+
+bool _isTlsFailure(DioException error) =>
+    error.type == DioExceptionType.badCertificate ||
+    error.error is TlsException ||
+    error.error is _TlsPinMismatch;
+
+/// Penyebab kegagalan TLS pada [error], atau null bila itu bukan masalah TLS
+/// (mis. tidak ada sinyal, server mati, respons 4xx/5xx).
+TapGoTlsFailure? tapGoTlsFailureOf(Object error) {
+  if (error is! DioException) return null;
+  if (error.error is _TlsPinningUnavailable) {
+    return TapGoTlsFailure.pinNotConfigured;
+  }
+  if (error.error is _TlsPinMismatch) return TapGoTlsFailure.pinMismatch;
+  if (_isTlsFailure(error)) return TapGoTlsFailure.certificateInvalid;
+  return null;
+}
+
+/// Pesan Indonesia untuk kegagalan TLS, atau null bila bukan masalah TLS.
+/// Dipakai SEMUA pemeta pesan galat sebelum jatuh ke pesan "tidak dapat
+/// dihubungi": tanpa ini pin yang basi tampak seperti masalah sinyal dan
+/// pengguna tidak tahu harus memperbarui aplikasi (driver_app 1.0.0+4).
+String? tapGoTlsFailureMessage(Object error) {
+  switch (tapGoTlsFailureOf(error)) {
+    case TapGoTlsFailure.pinMismatch:
+      return 'Koneksi aman ke server TapGo tidak dapat diverifikasi. '
+          'Perbarui aplikasi dari Google Play. Jika masih terjadi, hubungi bantuan TapGo.';
+    case TapGoTlsFailure.pinNotConfigured:
+      return 'Aplikasi ini belum dikonfigurasi dengan benar untuk terhubung ke server. '
+          'Pasang versi terbaru dari Google Play atau hubungi bantuan TapGo.';
+    case TapGoTlsFailure.certificateInvalid:
+      return 'Koneksi aman ke server TapGo gagal diverifikasi. '
+          'Periksa tanggal dan jam HP Anda, lalu coba lagi.';
+    case null:
+      return null;
+  }
+}
+
+String _tlsFailureCode(TapGoTlsFailure failure) => switch (failure) {
+      TapGoTlsFailure.pinMismatch => 'TLS_PIN_MISMATCH',
+      TapGoTlsFailure.pinNotConfigured => 'TLS_PIN_NOT_CONFIGURED',
+      TapGoTlsFailure.certificateInvalid => 'TLS_CERTIFICATE_INVALID',
+    };
+
+bool _tlsFailureReported = false;
+
+/// Laporan sekali per proses ke Sentry (no-op bila Sentry tidak aktif). Hanya
+/// kode dan host — tanpa token, nomor HP, atau isi permintaan.
+void _reportTlsFailureOnce(String code, String host) {
+  if (_tlsFailureReported) return;
+  _tlsFailureReported = true;
+  try {
+    unawaited(Sentry.captureMessage(
+      'user_app TLS: $code host=$host',
+      level: SentryLevel.error,
+    ));
+  } catch (_) {
+    // Pelaporan tidak boleh mengganggu alur pengguna.
+  }
 }
 
 void _rejectAllRequestsForTlsPinning(Dio dio, String message) {
   dio.interceptors.add(
     InterceptorsWrapper(
       onRequest: (options, handler) {
+        _reportTlsFailureOnce(
+            _tlsFailureCode(TapGoTlsFailure.pinNotConfigured), options.uri.host);
         handler.reject(
           DioException(
             requestOptions: options,
             type: DioExceptionType.unknown,
-            error: StateError(message),
+            error: _TlsPinningUnavailable(message),
           ),
         );
       },
     ),
   );
+}
+
+/// Hook uji: Dio dengan pinning yang SAMA dengan klien API produksi, tanpa
+/// bergantung pada kReleaseMode, supaya handshake TLS sungguhan dapat diuji.
+@visibleForTesting
+Dio tapGoPinnedDioForTests({
+  required String baseUrl,
+  required Set<String> pins,
+  bool enforce = true,
+}) {
+  final dio = Dio(BaseOptions(
+    baseUrl: baseUrl,
+    connectTimeout: const Duration(seconds: 5),
+    receiveTimeout: const Duration(seconds: 5),
+  ));
+  if (enforce) {
+    _applyTlsPinning(dio, pins, () => Uri.parse(baseUrl).host);
+  }
+  return dio;
 }
 
 class _TapGoApiClient {
@@ -1428,6 +1545,8 @@ String? _dateLabel(Object? value) {
 /// cacat. Layar yang punya pemetaan kode khusus memanggil ini sebagai lapis
 /// terakhir, dengan [fallback] yang menjelaskan tindakan yang gagal.
 String tapGoGenericErrorMessage(Object error, {required String fallback}) {
+  final tls = tapGoTlsFailureMessage(error);
+  if (tls != null) return tls;
   if (error is DioException) {
     final code =
         _authResponseDataMap(error.response?.data)?['code']?.toString();

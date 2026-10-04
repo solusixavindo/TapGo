@@ -477,6 +477,8 @@ class RideOrderView {
 /// Tidak pernah menampilkan exception mentah. Kode yang tidak dikenal jatuh ke
 /// pesan umum, bukan ke `error.toString()`.
 String tapGoRideErrorMessage(Object error) {
+  final tls = tapGoTlsFailureMessage(error);
+  if (tls != null) return tls;
   if (error is DioException) {
     final data = _authResponseDataMap(error.response?.data);
     final code = data?['code']?.toString();
