@@ -1211,7 +1211,14 @@ void main() {
   testWidgets('Account hub remains a navigation menu after Profile split', (
     WidgetTester tester,
   ) async {
+    // AccountScreen menonton _accountAvatarBytesProvider; tanpa flag ini ia
+    // memanggil _apiClient.fetchAvatarBytes() dan Timer batas waktu Dio (8 s)
+    // tertinggal setelah pohon widget dibuang. Flag bersifat global, jadi nilai
+    // sebelumnya dikembalikan agar tes sesudahnya tidak ikut berubah.
+    final previousDisablePersistence = tapGoDisablePersistenceForTests;
     tapGoDisablePersistenceForTests = true;
+    addTearDown(
+        () => tapGoDisablePersistenceForTests = previousDisablePersistence);
     await tester.pumpWidget(
       const ProviderScope(child: MaterialApp(home: AccountScreen())),
     );
