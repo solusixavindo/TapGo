@@ -144,6 +144,95 @@ describe.skipIf(!runIntegration)("Push notifikasi status perjalanan", () => {
     expect(view.status).toBe("DRIVER_ASSIGNED");
     expect(push.sent).toHaveLength(0);
   });
+
+  describe("driver menolak tawaran", () => {
+    it("order masih SEARCHING_DRIVER: penumpang diberi tahu pencarian dilanjutkan; status order TIDAK berubah", async () => {
+      const driver = await createDriver({ status: "ACTIVE" });
+      const order = await createRideOrder(driver, "SEARCHING_DRIVER");
+      const push = new RecordingPush();
+
+      const result = await makeService(push).rejectOffer({
+        userId: driver.user.id,
+        publicReference: order.publicReference,
+      });
+      await flush();
+
+      expect(result).toEqual({ rejected: true });
+      expect(push.sent).toHaveLength(1);
+      expect(push.sent[0]!.userId).toBe(order.passenger.id);
+      expect(push.sent[0]!.message.title).toBe("Masih mencari driver");
+      expect(push.sent[0]!.message.body).toBe(
+        "Seorang driver tidak mengambil pesanan. Pencarian dilanjutkan.",
+      );
+      expect(push.sent[0]!.message.data).toEqual({
+        type: "ride_search_continues",
+        rideReference: order.publicReference,
+      });
+      const after = await prisma.rideOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(after.status).toBe("SEARCHING_DRIVER");
+    });
+
+    it("menolak dua kali oleh driver yang sama tidak menggandakan pemberitahuan", async () => {
+      const driver = await createDriver({ status: "ACTIVE" });
+      const order = await createRideOrder(driver, "SEARCHING_DRIVER");
+      const push = new RecordingPush();
+      const service = makeService(push);
+
+      await service.rejectOffer({ userId: driver.user.id, publicReference: order.publicReference });
+      await service.rejectOffer({ userId: driver.user.id, publicReference: order.publicReference });
+      await flush();
+
+      expect(push.sent).toHaveLength(1);
+    });
+
+    it("driver lain sudah menerima: tidak ada pemberitahuan 'masih mencari'", async () => {
+      const accepting = await createDriver({ status: "ACTIVE" });
+      const rejecting = await createDriver({ status: "ACTIVE" });
+      const order = await createRideOrder(accepting, "SEARCHING_DRIVER");
+      const push = new RecordingPush();
+      const service = makeService(push);
+
+      await service.acceptOrder({ userId: accepting.user.id, publicReference: order.publicReference });
+      await flush();
+      const afterAccept = push.sent.length;
+      await service.rejectOffer({ userId: rejecting.user.id, publicReference: order.publicReference });
+      await flush();
+
+      expect(push.sent).toHaveLength(afterAccept);
+      expect(push.sent.map((m) => m.message.title)).not.toContain("Masih mencari driver");
+    });
+
+    it("push yang gagal tidak mengubah hasil penolakan", async () => {
+      const driver = await createDriver({ status: "ACTIVE" });
+      const order = await createRideOrder(driver, "SEARCHING_DRIVER");
+      const push = new RecordingPush();
+      push.failWith = new Error("FCM down");
+
+      const result = await makeService(push).rejectOffer({
+        userId: driver.user.id,
+        publicReference: order.publicReference,
+      });
+      await flush();
+
+      expect(result).toEqual({ rejected: true });
+    });
+
+    it("layanan push nonaktif: penolakan tetap berjalan tanpa pemberitahuan", async () => {
+      const driver = await createDriver({ status: "ACTIVE" });
+      const order = await createRideOrder(driver, "SEARCHING_DRIVER");
+      const push = new RecordingPush();
+      push.enabled = false;
+
+      const result = await makeService(push).rejectOffer({
+        userId: driver.user.id,
+        publicReference: order.publicReference,
+      });
+      await flush();
+
+      expect(result).toEqual({ rejected: true });
+      expect(push.sent).toHaveLength(0);
+    });
+  });
 });
 
 async function cleanTables() {
