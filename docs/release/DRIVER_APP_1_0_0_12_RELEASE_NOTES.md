@@ -11,7 +11,7 @@ berisiko ditolak. arm64-v8a dan armeabi-v7a tidak bermasalah.
 
 ## Perubahan
 
-- **ABI x86_64 dikeluarkan dari build driver** (`ndk { abiFilters }` hanya `arm64-v8a` dan `armeabi-v7a`).
+- **ABI x86_64 dikeluarkan dari build driver** (pengecualian pengemasan `lib/x86_64/**` di `packaging.jniLibs`; `ndk.abiFilters` sudah dicoba dan terbukti tidak berpengaruh karena Flutter mengatur ABI sendiri).
   x86_64 hanya dipakai emulator dan sebagian kecil Chromebook, bukan ponsel driver. Tidak ada perubahan
   kode aplikasi, tampilan, atau perilaku; pustaka TensorFlow Lite tidak diperbarui.
 - **Gerbang rilis** (`scripts/release-gate-driver-app.sh` dan `release-gate-user-app.sh`) kini memanggil
@@ -19,7 +19,7 @@ berisiko ditolak. arm64-v8a dan armeabi-v7a tidak bermasalah.
   ≥ 16 KB, dan untuk driver ABI x86_64 tidak boleh ada. Dibuktikan: skrip menolak AAB +11 dan meloloskan
   user_app +37.
 
-Tes: `apps/driver_app/test/build_config_test.dart` (gagal bila x86_64 kembali ke `abiFilters`).
+Tes: `apps/driver_app/test/build_config_test.dart` (gagal bila pengecualian x86_64 dicabut).
 
 ## Dampak
 
