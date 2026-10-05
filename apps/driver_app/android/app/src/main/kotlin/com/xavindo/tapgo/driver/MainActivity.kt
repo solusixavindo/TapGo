@@ -1,11 +1,6 @@
 package com.xavindo.tapgo.driver
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.Intent
-import android.media.AudioAttributes
-import android.media.Ringtone
-import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -19,12 +14,12 @@ class MainActivity : FlutterActivity() {
     // (lib/features/driver/application/system_settings.dart).
     private val settingsChannel = "tapgo.driver/settings"
     private val alertsChannel = "tapgo.driver/alerts"
-    private var activeRingtone: Ringtone? = null
+    private val alertSound by lazy { AlertSound(applicationContext) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Sebelum notifikasi apa pun dapat tampil.
-        createAlertNotificationChannel()
+        alertSound.createChannel()
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -39,61 +34,17 @@ class MainActivity : FlutterActivity() {
         }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, alertsChannel).setMethodCallHandler { call, result ->
             when (call.method) {
-                "playNotificationSound" -> result.success(playNotificationSound())
+                // true bila bunyi dimulai (berkas suara aplikasi, atau nada bawaan HP sebagai cadangan).
+                "playNotificationSound" -> result.success(alertSound.play() == null)
+                // Untuk layar "Uji bunyi": keadaan HP + hasil pemutaran (galat atau null).
+                "soundDiagnostics" -> {
+                    val info = alertSound.diagnostics().toMutableMap()
+                    info["playError"] = alertSound.play()
+                    result.success(info)
+                }
+                "areNotificationsEnabled" -> result.success(alertSound.notificationsEnabled())
                 else -> result.notImplemented()
             }
-        }
-    }
-
-    private fun notificationAudioAttributes(): AudioAttributes =
-        AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build()
-
-    // Channel BARU "tapgo_alerts_v2". Sejak Android 8 suara dan prioritas channel
-    // yang sudah ada TIDAK berubah oleh pemasangan baru dan createNotificationChannel
-    // ulang pada id yang sama diabaikan; channel lama tapgo_default sudah
-    // terkunci di HP yang pernah memasang APK lama (senyap). Karena itu order,
-    // chat, dan pembaruan perjalanan memakai id baru ini. Suara eksplisit
-    // (ringtone notifikasi bawaan), tidak pernah dikosongkan. HP yang mode
-    // senyap/Jangan Ganggu tetap senyap: USAGE_NOTIFICATION mengikuti aturan itu.
-    private fun createAlertNotificationChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val manager = getSystemService(NotificationManager::class.java) ?: return
-        val channel = NotificationChannel(
-            "tapgo_alerts_v2",
-            "Peringatan TapGo",
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = "Order baru, pesan chat, dan pembaruan perjalanan yang harus berbunyi"
-            enableVibration(true)
-            setSound(
-                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
-                notificationAudioAttributes()
-            )
-        }
-        manager.createNotificationChannel(channel)
-    }
-
-    /**
-     * Memutar ringtone notifikasi bawaan HP SEKALI (saat aplikasi di depan,
-     * bunyi tidak bergantung pada notifikasi). Mengembalikan false bila gagal
-     * sehingga Dart dapat jatuh ke notifikasi di channel yang sama.
-     */
-    private fun playNotificationSound(): Boolean {
-        return try {
-            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-                ?: return false
-            val ringtone = RingtoneManager.getRingtone(applicationContext, uri)
-                ?: return false
-            ringtone.audioAttributes = notificationAudioAttributes()
-            activeRingtone?.stop()
-            activeRingtone = ringtone
-            ringtone.play()
-            true
-        } catch (_: Exception) {
-            false
         }
     }
 

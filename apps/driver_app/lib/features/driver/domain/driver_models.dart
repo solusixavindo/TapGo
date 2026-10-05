@@ -350,6 +350,7 @@ class DriverState {
     this.locationIssue,
     this.fatigueWarning,
     this.faceRecheckDue = false,
+    this.chatUnread = const {},
   });
 
   factory DriverState.initial(DriverScenario scenario) => DriverState(
@@ -400,6 +401,12 @@ class DriverState {
   /// bertindak, bukan satu-satunya penjaga.
   final bool faceRecheckDue;
 
+  /// Jumlah pesan chat penumpang yang belum dibaca per referensi perjalanan
+  /// (dari kotak masuk chat). Menyalakan titik merah pada tombol chat dan tab.
+  final Map<String, int> chatUnread;
+
+  int get totalChatUnread => chatUnread.values.fold(0, (a, b) => a + b);
+
   DriverDocumentSummary? documentOf(DriverDocumentKind kind) {
     for (final item in documents) {
       if (item.kind == kind) return item;
@@ -439,6 +446,7 @@ class DriverState {
     DriverFatigueStatus? fatigueWarning,
     bool clearFatigueWarning = false,
     bool? faceRecheckDue,
+    Map<String, int>? chatUnread,
   }) {
     return DriverState(
       status: status ?? this.status,
@@ -468,6 +476,7 @@ class DriverState {
           ? null
           : fatigueWarning ?? this.fatigueWarning,
       faceRecheckDue: faceRecheckDue ?? this.faceRecheckDue,
+      chatUnread: chatUnread ?? this.chatUnread,
     );
   }
 }

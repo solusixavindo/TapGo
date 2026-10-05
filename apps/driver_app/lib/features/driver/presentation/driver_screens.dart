@@ -191,20 +191,26 @@ class _DriverShellState extends ConsumerState<DriverShell> {
               selectedIndex: _tabIndex,
               onDestinationSelected: (value) =>
                   setState(() => _tabIndex = value),
-              destinations: const [
-                NavigationDestination(
+              destinations: [
+                const NavigationDestination(
                   icon: Icon(Icons.home_rounded),
                   label: 'Beranda',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.receipt_long_rounded),
+                  // Titik merah bila ada pesan chat penumpang yang belum dibaca.
+                  icon: Badge(
+                    key: const ValueKey('orders-tab-badge'),
+                    isLabelVisible: state.totalChatUnread > 0,
+                    label: Text('${state.totalChatUnread}'),
+                    child: const Icon(Icons.receipt_long_rounded),
+                  ),
                   label: 'Pesanan',
                 ),
-                NavigationDestination(
+                const NavigationDestination(
                   icon: Icon(Icons.savings_rounded),
                   label: 'Pendapatan',
                 ),
-                NavigationDestination(
+                const NavigationDestination(
                   icon: Icon(Icons.person_rounded),
                   label: 'Akun',
                 ),
@@ -804,6 +810,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _StatusHeroCard(state: state),
+                  const _NotificationOffBanner(),
                   if (state.message != null) ...[
                     const SizedBox(height: 12),
                     ErrorNotice(message: state.message!),
@@ -1551,6 +1558,17 @@ class _PreferencesCard extends ConsumerWidget {
               icon: const Icon(Icons.notifications_active_outlined),
               label: const Text('Buka Pengaturan Notifikasi'),
             ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              key: const ValueKey('open-sound-test'),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const DriverSoundTestScreen(),
+                ),
+              ),
+              icon: const Icon(Icons.volume_up_rounded),
+              label: const Text('Uji bunyi'),
+            ),
           ],
         ),
       ),
@@ -1865,8 +1883,18 @@ class ActiveRideCard extends ConsumerWidget {
                     builder: (_) => RideChatScreen(rideReference: ride.reference),
                   ),
                 ),
-                icon: const Icon(Icons.chat_bubble_outline_rounded),
-                label: const Text('Chat dengan Penumpang'),
+                icon: Badge(
+                  key: const ValueKey('trip-chat-badge'),
+                  isLabelVisible:
+                      (state.chatUnread[ride.reference] ?? 0) > 0,
+                  label: Text('${state.chatUnread[ride.reference] ?? 0}'),
+                  child: const Icon(Icons.chat_bubble_outline_rounded),
+                ),
+                label: Text(
+                  (state.chatUnread[ride.reference] ?? 0) > 0
+                      ? 'Chat dengan Penumpang (pesan baru)'
+                      : 'Chat dengan Penumpang',
+                ),
               ),
             ],
             if (!ride.isTerminal) ...[

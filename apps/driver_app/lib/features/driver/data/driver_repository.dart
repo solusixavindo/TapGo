@@ -89,6 +89,10 @@ abstract class DriverRepository {
 
   // --- Chat per-perjalanan (Stage R2.10) -------------------------------
 
+  /// Kotak masuk chat (GET /chat/conversations): per perjalanan, memuat
+  /// `unreadCount` dan pesan terakhir. Dipakai sebagai pemicu notifikasi pesan
+  /// baru yang TIDAK bergantung pada push FCM.
+  Future<List<Map<String, dynamic>>> chatConversations();
   Future<List<Map<String, dynamic>>> chatMessages(String rideReference);
   Future<void> sendChatMessage(String rideReference, String message);
   Future<void> markChatRead(String rideReference);

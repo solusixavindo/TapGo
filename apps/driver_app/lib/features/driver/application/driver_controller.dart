@@ -1,5 +1,10 @@
 part of '../../../main.dart';
 
+/// Jam yang dipakai penjaga waktu peringatan chat; uji menggantinya karena
+/// DateTime.now() tidak ikut waktu palsu flutter_test.
+@visibleForTesting
+DateTime Function() driverClockForTests = DateTime.now;
+
 class DriverController extends StateNotifier<DriverState>
     with WidgetsBindingObserver {
   DriverController({
@@ -64,9 +69,10 @@ class DriverController extends StateNotifier<DriverState>
     unawaited(_push!.start());
   }
 
-  /// Pesan chat baru. Notifikasi yang diketuk membuka chat-nya; pesan latar
-  /// depan menampilkan popup, kecuali layar chat perjalanan itu sedang terbuka
-  /// (pesannya masuk lewat polling layar itu).
+  /// Pesan chat baru lewat push. Notifikasi yang diketuk membuka chat-nya;
+  /// pesan latar depan memicu peringatan (popup + bunyi) lewat [_alertChat],
+  /// yang juga dipakai pemantau kotak masuk chat sehingga keduanya tidak
+  /// menggandakan peringatan.
   void _handleChatPush(DriverPushMessage message, {required bool opened}) {
     final reference = message.rideReference;
     if (reference == null) return;
@@ -74,16 +80,112 @@ class DriverController extends StateNotifier<DriverState>
       driverOpenChat(reference);
       return;
     }
-    if (reference == driverOpenChatReference) return;
+    _alertChat(message, reference);
+  }
+
+  /// Peringatan pesan chat baru: popup di dalam aplikasi + SATU bunyi. Tidak
+  /// ada bila layar chat perjalanan itu sedang terbuka (pesan masuk lewat
+  /// polling layar itu) atau bila perjalanan yang sama sudah diperingatkan dalam
+  /// 8 detik terakhir (push dan pemantau kotak masuk dapat melaporkan pesan yang
+  /// sama).
+  final Map<String, DateTime> _chatAlertAt = <String, DateTime>{};
+
+  bool _alertChat(DriverPushMessage message, String reference) {
+    if (reference == driverOpenChatReference) return false;
+    final now = driverClockForTests();
+    final last = _chatAlertAt[reference];
+    if (last != null && now.difference(last) < const Duration(seconds: 8)) {
+      return false;
+    }
+    _chatAlertAt[reference] = now;
     driverShowChatPopup(message, reference);
+    final platform = _pushPlatform;
+    if (platform != null) unawaited(platform.showForegroundAlert(message));
+    return true;
+  }
+
+  // -------------------------------------------------------------------------
+  // Pemantau kotak masuk chat: pemicu notifikasi pesan baru TANPA FCM
+  // -------------------------------------------------------------------------
+
+  Timer? _chatTimer;
+  bool _chatPolling = false;
+  final Map<String, int> _lastChatUnread = <String, int>{};
+
+  void _startChatMonitor() {
+    _chatTimer ??= Timer.periodic(
+      const Duration(seconds: 6),
+      (_) => unawaited(_pollChat()),
+    );
+    unawaited(_pollChat());
+  }
+
+  void _stopChatMonitor() {
+    _chatTimer?.cancel();
+    _chatTimer = null;
+    _lastChatUnread.clear();
+    if (mounted && state.chatUnread.isNotEmpty) {
+      state = state.copyWith(chatUnread: const {});
+    }
+  }
+
+  /// Satu putaran: baca kotak masuk, nyalakan titik merah, dan beri peringatan
+  /// bila jumlah pesan belum dibaca NAIK untuk perjalanan yang layar chat-nya
+  /// tidak terbuka. Kegagalan jaringan diam (putaran berikutnya mencoba lagi).
+  Future<void> _pollChat() async {
+    if (_chatPolling || !mounted) return;
+    final ride = state.activeRide;
+    if (ride == null || ride.isTerminal) return;
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (lifecycle != null && lifecycle != AppLifecycleState.resumed) return;
+    _chatPolling = true;
+    try {
+      final rows = await _repository.chatConversations();
+      if (!mounted) return;
+      final unread = <String, int>{};
+      for (final row in rows) {
+        final reference = row['rideReference'];
+        final count = row['unreadCount'];
+        if (reference is! String || count is! num || count <= 0) continue;
+        unread[reference] = count.toInt();
+      }
+      for (final entry in unread.entries) {
+        final previous = _lastChatUnread[entry.key] ?? 0;
+        if (entry.value > previous) {
+          _alertChat(
+            DriverPushMessage(
+              title: 'Pesan baru dari penumpang',
+              body: 'Ketuk untuk membaca.',
+              data: {'type': 'chat_message', 'rideReference': entry.key},
+            ),
+            entry.key,
+          );
+        }
+      }
+      _lastChatUnread
+        ..clear()
+        ..addAll(unread);
+      // Layar chat yang terbuka sedang membaca pesannya: tidak ditandai belum dibaca.
+      final shown = {
+        for (final e in unread.entries)
+          if (e.key != driverOpenChatReference) e.key: e.value
+      };
+      if (!mapEquals(shown, state.chatUnread)) {
+        state = state.copyWith(chatUnread: shown);
+      }
+    } catch (_) {
+      // Diam.
+    } finally {
+      _chatPolling = false;
+    }
   }
 
   /// Apakah pesan latar depan juga dibunyikan lewat notifikasi sistem.
   bool _shouldAlertForeground(DriverPushMessage message) {
     switch (message.type) {
       case 'chat_message':
-        final reference = message.rideReference;
-        return reference != null && reference != driverOpenChatReference;
+        // Bunyi chat ditangani _alertChat (satu pintu bersama pemantau kotak masuk).
+        return false;
       case 'ride_offer':
         return _claimOfferSound(message.rideReference);
       default:
@@ -1008,6 +1110,7 @@ class DriverController extends StateNotifier<DriverState>
     state = state.copyWith(isPolling: true);
     _startLocationUpdates();
     _startSafetyMonitoring();
+    _startChatMonitor();
   }
 
   void _stopPolling() {
@@ -1023,6 +1126,7 @@ class DriverController extends StateNotifier<DriverState>
     _stopLocationUpdates();
     unawaited(_locationPort.stopTracking());
     _stopSafetyMonitoring();
+    _stopChatMonitor();
   }
 
   /// Pengingat kelelahan + kewajiban verifikasi ulang wajah acak — dipoll

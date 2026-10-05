@@ -49,6 +49,7 @@ part 'features/driver/application/face_check_pipeline.dart';
 part 'features/driver/presentation/driver_ride_history.dart';
 part 'features/driver/presentation/driver_earnings_screen.dart';
 part 'features/driver/presentation/ride_chat_screen.dart';
+part 'features/driver/presentation/driver_sound_test.dart';
 part 'features/driver/presentation/driver_documents.dart';
 part 'features/driver/presentation/driver_application.dart';
 part 'features/driver/presentation/driver_application_wizard.dart';

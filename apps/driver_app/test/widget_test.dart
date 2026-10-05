@@ -3363,6 +3363,239 @@ void main() {
       expect(android.channelId, isNot('tapgo_default'));
       expect(android.playSound, isTrue);
     });
+
+    // ---------------- Uji bunyi dan banner notifikasi mati ----------------
+
+    Map<String, Object?> hpSehat() => {
+          'notificationsEnabled': true,
+          'soundResourceFound': true,
+          'channelExists': true,
+          'channelImportance': 4,
+          'ringerMode': 2,
+          'volumeNotification': 7,
+          'volumeNotificationMax': 15,
+          'dndFilter': 1,
+          'playError': null,
+        };
+
+    Future<void> openSoundTest(WidgetTester tester) async {
+      await tester.tap(find.byIcon(Icons.person_rounded));
+      await tester.pumpAndSettle();
+      await tapReachable(tester, find.byKey(const ValueKey('open-sound-test')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('Uji bunyi: HP sehat → semua hijau dan "Pengaturan HP sudah benar"', (tester) async {
+      driverSoundDiagnosticsForTests = () async => hpSehat();
+      addTearDown(() => driverSoundDiagnosticsForTests = null);
+      await pumpWith(tester, FakeDriverRepository(session: demoSession));
+      await openSoundTest(tester);
+      expect(find.byType(DriverSoundTestScreen), findsOneWidget);
+      expect(find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('sound-check-bad')), findsNothing);
+      expect(find.text('Pengaturan HP sudah benar.'), findsOneWidget);
+      expect(find.byKey(const ValueKey('sound-test-copy')), findsOneWidget);
+    });
+
+    testWidgets('Uji bunyi: volume nol dan Jangan Ganggu tampil merah dengan tindakan', (tester) async {
+      driverSoundDiagnosticsForTests =
+          () async => {...hpSehat(), 'volumeNotification': 0, 'dndFilter': 3};
+      addTearDown(() => driverSoundDiagnosticsForTests = null);
+      await pumpWith(tester, FakeDriverRepository(session: demoSession));
+      await openSoundTest(tester);
+      expect(find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('sound-check-bad')), findsNWidgets(2));
+      expect(find.text('Volume notifikasi nol'), findsOneWidget);
+      expect(find.text('Mode Jangan Ganggu aktif'), findsOneWidget);
+      expect(find.textContaining('Perbaiki yang bertanda merah'), findsOneWidget);
+    });
+
+    testWidgets('Uji bunyi: native tidak ada → pesan tidak tersedia, bukan crash', (tester) async {
+      driverSoundDiagnosticsForTests = () async => null;
+      addTearDown(() => driverSoundDiagnosticsForTests = null);
+      await pumpWith(tester, FakeDriverRepository(session: demoSession));
+      await openSoundTest(tester);
+      expect(find.byKey(const ValueKey('sound-test-unavailable')), findsOneWidget);
+    });
+
+    testWidgets('Beranda: notifikasi dimatikan → banner dengan tombol pengaturan', (tester) async {
+      driverNotificationsEnabledForTests = () async => false;
+      addTearDown(() => driverNotificationsEnabledForTests = null);
+      await pumpWith(tester, FakeDriverRepository(session: demoSession));
+      expect(find.byKey(const ValueKey('notifications-off-banner')), findsOneWidget);
+      expect(find.text('Nyalakan Notifikasi'), findsOneWidget);
+    });
+
+    testWidgets('Beranda: notifikasi diizinkan → tidak ada banner', (tester) async {
+      driverNotificationsEnabledForTests = () async => true;
+      addTearDown(() => driverNotificationsEnabledForTests = null);
+      await pumpWith(tester, FakeDriverRepository(session: demoSession));
+      expect(find.byKey(const ValueKey('notifications-off-banner')), findsNothing);
+    });
+
+    // ---------------- Chat tanpa FCM: pemantau kotak masuk ----------------
+
+    Map<String, dynamic> inboxRow(String reference, int unread) => {
+          'rideReference': reference,
+          'status': 'DRIVER_TO_PICKUP',
+          'canSend': true,
+          'unreadCount': unread,
+          'lastMessage': {'text': 'rahasia', 'senderType': 'USER'},
+        };
+
+    // Jam palsu untuk penjaga waktu peringatan chat (DateTime.now() tidak ikut
+    // waktu palsu flutter_test); tiap putaran memajukannya 6 detik.
+    var fakeNow = DateTime(2026, 10, 6, 12);
+    setUp(() {
+      fakeNow = DateTime(2026, 10, 6, 12);
+      driverClockForTests = () => fakeNow;
+    });
+    tearDown(() => driverClockForTests = DateTime.now);
+
+    Future<void> chatPoll(WidgetTester tester) async {
+      fakeNow = fakeNow.add(const Duration(seconds: 6));
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    testWidgets('pesan masuk TANPA push: popup + satu bunyi + titik merah, isi pesan tidak tampil', (tester) async {
+      final repo = FakeDriverRepository(
+          session: demoSession, current: demoRide(RideStatus.driverToPickup));
+      final platform = RingtoneProbePlatform();
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, pushPlatform: platform));
+      await tester.pumpAndSettle();
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      });
+      expect(find.byKey(const ValueKey('chat-popup')), findsNothing);
+
+      repo.chatConversationRows = [inboxRow('RIDE-DEMO-001', 1)];
+      await chatPoll(tester);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('chat-popup')), findsOneWidget);
+      expect(find.text('rahasia'), findsNothing);
+      expect(platform.ringtone, hasLength(1));
+      // Titik merah pada tab Pesanan.
+      expect(tester.widget<Badge>(find.byKey(const ValueKey('orders-tab-badge'))).isLabelVisible, isTrue);
+      expect(ProviderScope.containerOf(tester.element(find.byType(TapGoDriverApp)))
+          .read(driverControllerProvider).chatUnread, {'RIDE-DEMO-001': 1});
+    });
+
+    testWidgets('hitungan sama tidak memperingatkan lagi; naik = peringatan baru', (tester) async {
+      final repo = FakeDriverRepository(
+          session: demoSession, current: demoRide(RideStatus.driverToPickup));
+      final platform = RingtoneProbePlatform();
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, pushPlatform: platform));
+      await tester.pumpAndSettle();
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      });
+
+      repo.chatConversationRows = [inboxRow('RIDE-DEMO-001', 1)];
+      await chatPoll(tester);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('chat-popup-later')));
+      await tester.pumpAndSettle();
+      expect(platform.ringtone, hasLength(1));
+
+      // Beberapa putaran dengan hitungan tetap: tidak ada peringatan lagi.
+      await chatPoll(tester);
+      await chatPoll(tester);
+      expect(platform.ringtone, hasLength(1));
+      expect(find.byKey(const ValueKey('chat-popup')), findsNothing);
+
+      // Pesan berikutnya (≥ 8 detik kemudian): hitungan naik → peringatan baru.
+      repo.chatConversationRows = [inboxRow('RIDE-DEMO-001', 2)];
+      await chatPoll(tester);
+      await tester.pumpAndSettle();
+      expect(platform.ringtone, hasLength(2));
+      expect(find.byKey(const ValueKey('chat-popup')), findsOneWidget);
+    });
+
+    testWidgets('push dan kotak masuk untuk pesan yang sama: SATU peringatan', (tester) async {
+      final repo = FakeDriverRepository(
+          session: demoSession, current: demoRide(RideStatus.driverToPickup));
+      final platform = RingtoneProbePlatform();
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, pushPlatform: platform));
+      await tester.pumpAndSettle();
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      });
+
+      platform.fcm.add(const DriverPushMessage(
+        title: 'Pesan baru dari penumpang',
+        body: 'Ketuk untuk membaca.',
+        data: {'type': 'chat_message', 'rideReference': 'RID-A2B3C4D5E6'},
+      ));
+      repo.chatConversationRows = [inboxRow('RID-A2B3C4D5E6', 1)];
+      await tester.pump();
+      await chatPoll(tester);
+      await tester.pumpAndSettle();
+      expect(platform.ringtone, hasLength(1));
+      expect(find.byKey(const ValueKey('chat-popup')), findsOneWidget);
+    });
+
+    testWidgets('layar chat perjalanan itu terbuka: tanpa peringatan dan tanpa titik merah', (tester) async {
+      final repo = FakeDriverRepository(
+          session: demoSession, current: demoRide(RideStatus.driverToPickup));
+      final platform = RingtoneProbePlatform();
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, pushPlatform: platform));
+      await tester.pumpAndSettle();
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      });
+      driverNavigatorKey.currentState!.push(MaterialPageRoute<void>(
+        builder: (_) => const RideChatScreen(
+            rideReference: 'RIDE-DEMO-001', pollInterval: Duration.zero),
+      ));
+      await tester.pumpAndSettle();
+
+      repo.chatConversationRows = [inboxRow('RIDE-DEMO-001', 3)];
+      await chatPoll(tester);
+      await tester.pumpAndSettle();
+      expect(platform.ringtone, isEmpty);
+      expect(find.byKey(const ValueKey('chat-popup')), findsNothing);
+      expect(ProviderScope.containerOf(tester.element(find.byType(RideChatScreen)))
+          .read(driverControllerProvider).chatUnread, isEmpty);
+    });
+
+    testWidgets('tanpa perjalanan aktif: kotak masuk tidak dipanggil sama sekali', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpWith(tester, repo);
+      repo.chatConversationRows = [inboxRow('RIDE-DEMO-001', 5)];
+      await tester.pump(const Duration(seconds: 30));
+      expect(repo.chatConversationCalls, 0);
+    });
+
+    testWidgets('tombol chat di perjalanan aktif menampilkan titik merah dan teks pesan baru', (tester) async {
+      final repo = FakeDriverRepository(
+          session: demoSession, current: demoRide(RideStatus.driverToPickup));
+      repo.chatConversationRows = [inboxRow('RIDE-DEMO-001', 2)];
+      await pumpWith(tester, repo);
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('chat-popup-later')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.receipt_long_rounded));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('trip-chat-badge')), findsOneWidget);
+      expect(find.text('Chat dengan Penumpang (pesan baru)'), findsOneWidget);
+    });
   });
 }
 
@@ -3794,6 +4027,16 @@ class FakeDriverRepository implements DriverRepository {
     withdrawCalls += 1;
     applicationInfo = null;
     return _snapshot();
+  }
+
+  /// Kotak masuk chat yang dikembalikan server (GET /chat/conversations).
+  List<Map<String, dynamic>> chatConversationRows = [];
+  int chatConversationCalls = 0;
+
+  @override
+  Future<List<Map<String, dynamic>>> chatConversations() async {
+    chatConversationCalls += 1;
+    return List.of(chatConversationRows);
   }
 
   /// Isi chat yang dikembalikan server (diubah uji untuk mensimulasikan pesan masuk).

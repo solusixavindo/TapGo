@@ -80,12 +80,14 @@ abstract class DriverPushPlatform {
   Future<void> showForegroundAlert(DriverPushMessage message);
 }
 
-/// Channel notifikasi untuk order, chat, dan pembaruan perjalanan. BARU: suara
-/// dan prioritas channel yang sudah ada tidak berubah oleh pemasangan baru dan
-/// channel lama `tapgo_default` sudah terkunci senyap di HP yang pernah memasang
-/// APK lama. Dibuat di MainActivity.onCreate; id HARUS sama dengan manifest
+/// Channel notifikasi untuk order, chat, dan pembaruan perjalanan. Suara dan
+/// prioritas channel yang sudah ada tidak berubah oleh pemasangan baru, dan
+/// channel lama (`tapgo_default`, `tapgo_alerts_v2`) sudah terkunci di HP yang
+/// pernah memasang APK lama, jadi suara yang diubah SELALU membutuhkan id baru.
+/// v3 memakai berkas suara aplikasi (res/raw/tapgo_alert), bukan nada bawaan HP.
+/// Dibuat di MainActivity.onCreate; id HARUS sama dengan manifest
 /// (default_notification_channel_id) dan payload FCM backend.
-const driverAlertChannelId = 'tapgo_alerts_v2';
+const driverAlertChannelId = 'tapgo_alerts_v3';
 const driverAlertChannelName = 'Peringatan TapGo';
 const driverAlertChannelDescription =
     'Order baru, pesan chat, dan pembaruan perjalanan yang harus berbunyi';
@@ -408,4 +410,131 @@ bool driverShowChatPopup(DriverPushMessage message, String reference) {
 void driverResetChatUiForTests() {
   driverOpenChatReference = null;
   _driverChatPopupRefs.clear();
+}
+
+// ---------------------------------------------------------------------------
+// Uji bunyi: keadaan HP yang menentukan apakah bunyi terdengar
+// ---------------------------------------------------------------------------
+
+/// Seam uji: mengganti pemanggilan MethodChannel sungguhan.
+@visibleForTesting
+Future<Map<String, Object?>?> Function()? driverSoundDiagnosticsForTests;
+
+/// Meminta sisi native memutar bunyi dan melaporkan keadaan HP (izin notifikasi,
+/// channel, mode dering, volume, Jangan Ganggu, nada bawaan). null bila gagal.
+Future<Map<String, Object?>?> driverSoundDiagnostics() async {
+  final override = driverSoundDiagnosticsForTests;
+  if (override != null) return override();
+  try {
+    final raw = await driverAlertsMethodChannel
+        .invokeMapMethod<String, Object?>('soundDiagnostics');
+    return raw;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Seam uji untuk status izin notifikasi.
+@visibleForTesting
+Future<bool> Function()? driverNotificationsEnabledForTests;
+
+/// true bila notifikasi diizinkan; true juga bila tidak dapat ditentukan
+/// (web, demo, galat) supaya banner tidak muncul tanpa bukti.
+Future<bool> driverAreNotificationsEnabled() async {
+  final override = driverNotificationsEnabledForTests;
+  if (override != null) return override();
+  if (kIsWeb || kDriverDemoMode) return true;
+  try {
+    return await driverAlertsMethodChannel
+            .invokeMethod<bool>('areNotificationsEnabled') ??
+        true;
+  } catch (_) {
+    return true;
+  }
+}
+
+enum SoundCheckLevel { ok, warn, bad }
+
+class SoundCheck {
+  const SoundCheck(this.level, this.title, this.detail);
+  final SoundCheckLevel level;
+  final String title;
+  final String detail;
+}
+
+/// Mengubah laporan native menjadi daftar pemeriksaan yang dapat dipahami
+/// pengguna, lengkap dengan tindakan perbaikannya. Fungsi murni (diuji).
+List<SoundCheck> driverSoundChecks(Map<String, Object?> info) {
+  int? intOf(String key) => info[key] is num ? (info[key] as num).toInt() : null;
+  final checks = <SoundCheck>[];
+
+  if (info['notificationsEnabled'] == false) {
+    checks.add(const SoundCheck(SoundCheckLevel.bad, 'Notifikasi dimatikan',
+        'Android memblokir semua notifikasi TapGo. Buka pengaturan notifikasi dan nyalakan.'));
+  } else {
+    checks.add(const SoundCheck(SoundCheckLevel.ok, 'Notifikasi diizinkan', ''));
+  }
+
+  if (info['soundResourceFound'] == false) {
+    checks.add(const SoundCheck(SoundCheckLevel.bad, 'Berkas suara tidak ada di aplikasi',
+        'Pasang ulang aplikasi dari berkas terbaru.'));
+  }
+
+  final importance = intOf('channelImportance');
+  if (info['channelExists'] == false) {
+    checks.add(const SoundCheck(SoundCheckLevel.bad, 'Kategori "Peringatan TapGo" belum dibuat',
+        'Tutup aplikasi sepenuhnya lalu buka lagi.'));
+  } else if (importance != null && importance < 4) {
+    checks.add(SoundCheck(SoundCheckLevel.bad, 'Kategori "Peringatan TapGo" tidak berstatus Penting',
+        'Tingkat saat ini $importance (perlu 4). Buka pengaturan notifikasi, pilih "Peringatan TapGo", set ke Penting dengan suara.'));
+  } else if (info['channelExists'] == true) {
+    checks.add(const SoundCheck(SoundCheckLevel.ok, 'Kategori "Peringatan TapGo" aktif (Penting)', ''));
+  }
+
+  switch (intOf('ringerMode')) {
+    case 0:
+      checks.add(const SoundCheck(SoundCheckLevel.bad, 'HP dalam mode senyap',
+          'Ubah mode dering ke Suara agar order terdengar.'));
+    case 1:
+      checks.add(const SoundCheck(SoundCheckLevel.warn, 'HP dalam mode getar',
+          'Notifikasi hanya bergetar. Ubah ke Suara agar berbunyi.'));
+    case 2:
+      checks.add(const SoundCheck(SoundCheckLevel.ok, 'Mode dering: Suara', ''));
+  }
+
+  final volume = intOf('volumeNotification');
+  final volumeMax = intOf('volumeNotificationMax');
+  if (volume != null) {
+    if (volume == 0) {
+      checks.add(const SoundCheck(SoundCheckLevel.bad, 'Volume notifikasi nol',
+          'Naikkan volume notifikasi: Pengaturan HP > Suara > Volume notifikasi.'));
+    } else if (volumeMax != null && volume <= (volumeMax / 4).floor()) {
+      checks.add(SoundCheck(SoundCheckLevel.warn, 'Volume notifikasi sangat rendah ($volume/$volumeMax)',
+          'Naikkan volume notifikasi agar terdengar di jalan.'));
+    } else {
+      checks.add(SoundCheck(SoundCheckLevel.ok, 'Volume notifikasi $volume/${volumeMax ?? '?'}', ''));
+    }
+  }
+
+  final dnd = intOf('dndFilter');
+  if (dnd != null && dnd > 1) {
+    checks.add(SoundCheck(SoundCheckLevel.bad, 'Mode Jangan Ganggu aktif',
+        dnd == 4
+            ? 'Hanya alarm yang berbunyi. Matikan Jangan Ganggu atau izinkan TapGo.'
+            : 'Notifikasi dibisukan. Matikan Jangan Ganggu atau izinkan TapGo.'));
+  }
+
+  final playError = info['playError'];
+  if (playError is String && playError.isNotEmpty) {
+    checks.add(SoundCheck(SoundCheckLevel.bad, 'Bunyi gagal diputar', playError));
+  } else if (info.containsKey('playError')) {
+    checks.add(const SoundCheck(SoundCheckLevel.ok, 'Bunyi berhasil diputar oleh aplikasi', ''));
+  }
+  return checks;
+}
+
+/// Laporan teks untuk disalin dan dikirim ke tim.
+String driverSoundReportText(Map<String, Object?> info) {
+  final keys = info.keys.toList()..sort();
+  return ['Laporan uji bunyi TapGo Driver', for (final k in keys) '$k: ${info[k]}'].join('\n');
 }

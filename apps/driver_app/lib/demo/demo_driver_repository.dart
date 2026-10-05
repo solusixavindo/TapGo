@@ -349,6 +349,9 @@ class DemoDriverRepository implements DriverRepository {
   final _demoChatMessages = <Map<String, dynamic>>[];
 
   @override
+  Future<List<Map<String, dynamic>>> chatConversations() async => const [];
+
+  @override
   Future<List<Map<String, dynamic>>> chatMessages(String rideReference) async {
     return List<Map<String, dynamic>>.from(_demoChatMessages);
   }

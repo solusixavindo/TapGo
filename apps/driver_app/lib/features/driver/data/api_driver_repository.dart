@@ -624,6 +624,18 @@ class ApiDriverRepository implements DriverRepository {
   }
 
   @override
+  Future<List<Map<String, dynamic>>> chatConversations() async {
+    final data = await _request(() => _dio.get<dynamic>('/chat/conversations'));
+    final items = data['items'] is List
+        ? data['items'] as List
+        : data['data'] as List? ?? const [];
+    return items
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+
+  @override
   Future<List<Map<String, dynamic>>> chatMessages(String rideReference) async {
     final data = await _request(
       () => _dio.get<dynamic>(
