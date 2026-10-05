@@ -130,7 +130,13 @@ export class FcmClient implements PushSender {
               token,
               notification: { title: message.title, body: message.body },
               ...(message.data ? { data: message.data } : {}),
-              android: { priority: "HIGH", notification: { channel_id: "tapgo_default" } }
+              // `sound: "default"` eksplisit supaya notifikasi latar berbunyi walau
+              // pengaturan channel di HP tertentu tidak menyalakannya sendiri.
+              // Channel tetap tapgo_default (IMPORTANCE_HIGH); bukan channel baru.
+              android: {
+                priority: "HIGH",
+                notification: { channel_id: "tapgo_default", sound: "default" }
+              }
             }
           }),
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)

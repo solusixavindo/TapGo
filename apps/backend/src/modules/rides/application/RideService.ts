@@ -459,7 +459,120 @@ export class RideService {
         "RIDE_ORDER_NOT_FOUND",
       );
     }
-    return this.toOrderView(order);
+    // Sinyal tambahan untuk layar penumpang (di-poll tiap 4 detik):
+    // - searchRejectionCount: berapa driver yang menolak selama order MASIH
+    //   mencari driver. HANYA hitungan; tanpa nama, id profil, atau id
+    //   pengguna driver. Setelah ada driver yang menerima nilainya 0.
+    // - rating: penilaian milik penumpang ini (null bila belum menilai).
+    //   HANYA ada pada order COMPLETED: selama perjalanan berjalan respons
+    //   tidak memuat kata "rating" sama sekali (kontrak kartu driver tetap
+    //   tanpa rating; lihat passengerDriverDisclosure.integration.test.ts).
+    const searching = order.status === "SEARCHING_DRIVER";
+    const completed = order.status === "COMPLETED";
+    const [rejections, rating] = await Promise.all([
+      searching
+        ? this.prisma.rideEvent.count({
+            where: { rideOrderId: order.id, type: "DRIVER_REJECTED_OFFER" },
+          })
+        : Promise.resolve(0),
+      completed
+        ? this.prisma.rideRating.findUnique({
+            where: { rideOrderId: order.id },
+            select: { stars: true, note: true, createdAt: true },
+          })
+        : Promise.resolve(undefined),
+    ]);
+    return {
+      ...this.toOrderView(order),
+      searchRejectionCount: rejections,
+      ...(completed ? { rating: rating ?? null } : {}),
+    };
+  }
+
+  /**
+   * Penumpang menilai perjalanan yang SUDAH selesai: satu penilaian per order,
+   * hanya oleh penumpang order itu. Penilaian dan penghitungan ulang
+   * RideDriverProfile.ratingAverage/ratingCount terjadi dalam satu transaksi;
+   * baris profil driver dikunci (FOR UPDATE) lebih dulu supaya dua penilaian
+   * bersamaan untuk driver yang sama tidak saling menimpa hitungan. Sumber
+   * hitungan HANYA tabel RideRating (bukan Review atau drivers.rating_average).
+   */
+  async rateOrder(input: {
+    userId: string;
+    publicReference: string;
+    stars: number;
+    note?: string;
+  }) {
+    const order = await this.prisma.rideOrder.findUnique({
+      where: { publicReference: input.publicReference },
+      select: { id: true, passengerId: true, status: true, driverProfileId: true },
+    });
+    if (!order || order.passengerId !== input.userId) {
+      throw new AppError(
+        "Perjalanan tidak ditemukan",
+        StatusCodes.NOT_FOUND,
+        "RIDE_ORDER_NOT_FOUND",
+      );
+    }
+    if (order.status !== "COMPLETED" || !order.driverProfileId) {
+      throw new AppError(
+        "Perjalanan hanya dapat dinilai setelah selesai",
+        StatusCodes.CONFLICT,
+        "RIDE_NOT_COMPLETED",
+      );
+    }
+    const driverProfileId = order.driverProfileId;
+    const note = input.note?.trim() ? input.note.trim() : null;
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM ride_driver_profiles WHERE id = ${driverProfileId}::uuid FOR UPDATE`;
+        const existing = await tx.rideRating.findUnique({
+          where: { rideOrderId: order.id },
+          select: { id: true },
+        });
+        if (existing) {
+          throw new AppError(
+            "Perjalanan ini sudah dinilai",
+            StatusCodes.CONFLICT,
+            "RIDE_RATING_ALREADY_SUBMITTED",
+          );
+        }
+        const created = await tx.rideRating.create({
+          data: {
+            rideOrderId: order.id,
+            driverProfileId,
+            stars: input.stars,
+            note,
+          },
+          select: { stars: true, note: true, createdAt: true },
+        });
+        const aggregate = await tx.rideRating.aggregate({
+          where: { driverProfileId },
+          _avg: { stars: true },
+          _count: { _all: true },
+        });
+        await tx.rideDriverProfile.update({
+          where: { id: driverProfileId },
+          data: {
+            ratingCount: aggregate._count._all,
+            ratingAverage: new Prisma.Decimal(aggregate._avg.stars ?? input.stars).toDecimalPlaces(2),
+          },
+        });
+        return created;
+      });
+    } catch (error) {
+      // Balapan dua kiriman untuk order yang sama: unique rideOrderId menjaga
+      // satu baris; yang kalah dijawab sama seperti kiriman ulang biasa.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new AppError(
+          "Perjalanan ini sudah dinilai",
+          StatusCodes.CONFLICT,
+          "RIDE_RATING_ALREADY_SUBMITTED",
+        );
+      }
+      throw error;
+    }
   }
 
   /**

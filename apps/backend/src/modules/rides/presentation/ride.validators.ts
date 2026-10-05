@@ -76,6 +76,15 @@ export const rideReferenceSchema = z.object({
   params: z.object({ reference: publicReference }),
 });
 
+export const rateRideSchema = z.object({
+  params: z.object({ reference: publicReference }),
+  body: z.object({
+    // Bilangan bulat 1..5; string "5" atau 3.5 ditolak (bukan dikoersi).
+    stars: z.number().int().min(1).max(5),
+    note: z.string().trim().max(280).optional(),
+  }),
+});
+
 export const cancelRideSchema = z.object({
   params: z.object({ reference: publicReference }),
   body: z.object({
