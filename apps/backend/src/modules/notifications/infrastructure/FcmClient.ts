@@ -130,14 +130,15 @@ export class FcmClient implements PushSender {
               token,
               notification: { title: message.title, body: message.body },
               ...(message.data ? { data: message.data } : {}),
-              // Channel BARU tapgo_alerts_v2 (IMPORTANCE_HIGH, suara eksplisit; dibuat
-              // MainActivity.onCreate di kedua aplikasi). Channel lama tapgo_default
-              // sudah terkunci senyap di HP yang pernah memasang APK lama dan tidak
-              // dapat diubah dari aplikasi (Android 8+), jadi tidak dipakai lagi.
-              // `sound: "default"` tetap eksplisit.
+              // Channel tapgo_alerts_v3 (IMPORTANCE_HIGH, suara aplikasi sendiri; dibuat
+              // MainActivity.onCreate di kedua aplikasi). Suara channel yang sudah ada
+              // tidak dapat diubah dari aplikasi (Android 8+), dan tapgo_default serta
+              // tapgo_alerts_v2 sudah terkunci di HP yang pernah memasang APK lama, jadi
+              // suara yang diubah selalu butuh id baru. `sound: "default"` tetap eksplisit
+              // (hanya berlaku di Android < 8; di 8+ suara ditentukan channel).
               android: {
                 priority: "HIGH",
-                notification: { channel_id: "tapgo_alerts_v2", sound: "default" }
+                notification: { channel_id: "tapgo_alerts_v3", sound: "default" }
               }
             }
           }),
