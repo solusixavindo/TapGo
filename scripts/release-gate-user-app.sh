@@ -90,8 +90,19 @@ if [ -n "$aapt" ]; then
   echo "$badging" | grep -q "POST_NOTIFICATIONS" || fail "izin notifikasi tidak ada"
 fi
 
-step "6. Salin ke Desktop dan checksum"
-out="$HOME/Desktop/tapgo-user-$version_line"
-cp "$apk" "$out.apk"; cp "$aab" "$out.aab"
-( cd "$HOME/Desktop" && shasum -a 256 "tapgo-user-$version_line.apk" "tapgo-user-$version_line.aab" | tee "tapgo-user-$version_line.sha256" )
+step "6. APK ke Desktop; AAB, APK, dan checksum ke arsip"
+# Desktop hanya berisi APK yang akan diuji di HP. AAB (untuk Play) dan berkas
+# checksum disimpan di folder arsip (bisa diganti lewat TAPGO_ARCHIVE_DIR), tempat
+# semua versi lama juga berada, supaya Desktop tidak menumpuk.
+archive="${TAPGO_ARCHIVE_DIR:-$HOME/Documents/dari DESKTOP/arsip-rilis-tapgo}"
+mkdir -p "$archive"
+name_out="tapgo-user-$version_line"
+cp "$apk" "$HOME/Desktop/$name_out.apk"
+cp "$apk" "$archive/$name_out.apk"; cp "$aab" "$archive/$name_out.aab"
+( cd "$archive" && shasum -a 256 "$name_out.apk" "$name_out.aab" | tee "$name_out.sha256" )
+# Salinan APK di Desktop harus identik dengan yang tercatat di checksum.
+[ "$(shasum -a 256 "$HOME/Desktop/$name_out.apk" | cut -d' ' -f1)" = "$(shasum -a 256 "$archive/$name_out.apk" | cut -d' ' -f1)" ] \
+  || fail "APK di Desktop tidak identik dengan salinan arsip"
+echo; echo "APK  : $HOME/Desktop/$name_out.apk"
+echo "Arsip: $archive/$name_out.{apk,aab,sha256}"
 echo; echo "GERBANG LOLOS untuk $version_line"
