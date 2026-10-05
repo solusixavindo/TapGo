@@ -63,45 +63,56 @@ class _SosDialogState extends State<_SosDialog> {
 
   @override
   Widget build(BuildContext context) {
+    // Tiga tombol ditumpuk selebar dialog di dalam konten, BUKAN
+    // AlertDialog.actions (yang melempar "Batal" ke baris sendiri). Kirim SOS
+    // tanpa ikon huruf SOS (Icons.sos_rounded menggambar huruf "SOS", sehingga
+    // terbaca "SOS Kirim SOS" — uji HP +7).
     return AlertDialog(
-      icon: const Icon(Icons.sos_rounded, color: Colors.redAccent, size: 40),
+      icon: const Icon(Icons.warning_amber_rounded,
+          color: Colors.redAccent, size: 40),
       title: const Text('Kirim sinyal darurat?'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Lokasi Anda saat ini akan dikirim ke tim TapGo. Gunakan hanya bila Anda dalam bahaya atau butuh bantuan segera.',
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 12),
-            ErrorNotice(message: _error!),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Lokasi Anda saat ini akan dikirim ke tim TapGo. Gunakan hanya bila Anda dalam bahaya atau butuh bantuan segera.',
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              ErrorNotice(message: _error!),
+            ],
+            const SizedBox(height: 20),
+            OutlinedButton(
+              onPressed: _sending ? null : () => Navigator.of(context).pop(),
+              child: const Text('Batal'),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _sending ? null : _openSupportWhatsApp,
+              icon: const Icon(Icons.chat_rounded),
+              label: const Text('WhatsApp CS'),
+            ),
+            const SizedBox(height: 10),
+            FilledButton(
+              onPressed: _sending ? null : _send,
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+              ),
+              child: _sending
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Kirim SOS'),
+            ),
           ],
-        ],
+        ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _sending ? null : () => Navigator.of(context).pop(),
-          child: const Text('Batal'),
-        ),
-        OutlinedButton.icon(
-          onPressed: _sending ? null : _openSupportWhatsApp,
-          icon: const Icon(Icons.chat_rounded),
-          label: const Text('WhatsApp CS'),
-        ),
-        FilledButton.icon(
-          onPressed: _sending ? null : _send,
-          style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
-          icon: _sending
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                )
-              : const Icon(Icons.sos_rounded),
-          label: const Text('Kirim SOS'),
-        ),
-      ],
     );
   }
 }
@@ -856,45 +867,99 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
 /// mengikuti [DriverLocationPort.positionStream]. Tanpa GPS asli (demo/test)
 /// peta tetap tampil, hanya diam di titik acuan tanpa marker bergerak —
 /// bukan menyembunyikan peta sama sekali, supaya tab ini tidak kosong.
-class _DriverLiveMap extends ConsumerWidget {
+/// Peta Beranda. Kamera langsung ke posisi driver: satu posisi saat ini diambil
+/// ketika layar tampil, lalu setiap fix dari stream ikut memindahkan kamera.
+/// Sebelumnya hanya MapOptions.initialCenter (dipakai SEKALI) yang menentukan
+/// pusat, jadi tanpa fix pada frame pertama peta jatuh ke Jakarta, dan titik
+/// pertama dari stream (distanceFilter 10 m) tidak pernah memindahkan kamera
+/// (uji HP +7). Tanpa GPS peta tetap di Jakarta dan tanpa marker.
+class _DriverLiveMap extends ConsumerStatefulWidget {
   const _DriverLiveMap();
 
+  @override
+  ConsumerState<_DriverLiveMap> createState() => _DriverLiveMapState();
+}
+
+class _DriverLiveMapState extends ConsumerState<_DriverLiveMap> {
   static const _defaultCenter = LatLng(-6.1754, 106.8272); // Jakarta
   static const _tileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  static const _initialZoom = 15.0;
+
+  final _mapController = MapController();
+  StreamSubscription<(double, double)>? _positionSubscription;
+  LatLng? _position;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final locationPort = ref.watch(locationPortProvider);
-    return StreamBuilder<(double, double)>(
-      stream: locationPort.positionStream,
-      builder: (context, snapshot) {
-        final fix = snapshot.data;
-        final point =
-            fix == null ? _defaultCenter : LatLng(fix.$1, fix.$2);
-        return FlutterMap(
-          key: const ValueKey('driver-home-map'),
-          options: MapOptions(initialCenter: point, initialZoom: 15),
-          children: [
-            TileLayer(
-              urlTemplate: _tileUrl,
-              userAgentPackageName: 'com.xavindo.tapgo.driver',
+  void initState() {
+    super.initState();
+    final port = ref.read(locationPortProvider);
+    _positionSubscription = port.positionStream.listen(
+      (fix) => _setPosition(LatLng(fix.$1, fix.$2)),
+      onError: (_) {},
+    );
+    unawaited(_loadCurrentFix(port));
+  }
+
+  /// Satu posisi saat ini tanpa menunggu driver bergerak 10 meter. Fix dari
+  /// stream yang sudah tiba lebih dulu tidak ditimpa posisi yang lebih lama.
+  Future<void> _loadCurrentFix(DriverLocationPort port) async {
+    try {
+      final fix = await port.currentFix();
+      if (fix != null && mounted && _position == null) {
+        _setPosition(LatLng(fix.lat, fix.lng));
+      }
+    } catch (_) {
+      // Tanpa GPS: peta tetap di Jakarta, tanpa marker.
+    }
+  }
+
+  void _setPosition(LatLng point) {
+    if (!mounted) return;
+    setState(() => _position = point);
+    // Dipindahkan setelah frame: FlutterMap harus sudah dibangun sebelum
+    // MapController dipakai (fix pertama bisa tiba sebelum frame pertama).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _mapController.move(point, _mapController.camera.zoom);
+    });
+  }
+
+  @override
+  void dispose() {
+    _positionSubscription?.cancel();
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final position = _position;
+    return FlutterMap(
+      key: const ValueKey('driver-home-map'),
+      mapController: _mapController,
+      options: MapOptions(
+        initialCenter: position ?? _defaultCenter,
+        initialZoom: _initialZoom,
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: _tileUrl,
+          userAgentPackageName: 'com.xavindo.tapgo.driver',
+        ),
+        if (position != null)
+          MarkerLayer(markers: [
+            Marker(
+              point: position,
+              width: 44,
+              height: 44,
+              child: const Icon(
+                Icons.two_wheeler_rounded,
+                color: Color(0xFF0877E8),
+                size: 36,
+              ),
             ),
-            if (fix != null)
-              MarkerLayer(markers: [
-                Marker(
-                  point: point,
-                  width: 44,
-                  height: 44,
-                  child: const Icon(
-                    Icons.two_wheeler_rounded,
-                    color: Color(0xFF0877E8),
-                    size: 36,
-                  ),
-                ),
-              ]),
-          ],
-        );
-      },
+          ]),
+      ],
     );
   }
 }
@@ -1187,13 +1252,17 @@ class _StatusHeroCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(driverControllerProvider.notifier);
     final name = state.session?.driverName ?? 'Driver TapGo';
-    final isOnline = state.availability == DriverAvailability.online;
-    final status = switch (state.availability) {
-      DriverAvailability.online => 'Online',
-      DriverAvailability.busy => 'Dalam Perjalanan',
-      DriverAvailability.offline => 'Offline',
-    };
-    final hasActiveRide = state.activeRide != null;
+    // Perjalanan aktif yang belum terminal menentukan label kartu (Menuju
+    // Jemput, Tiba di Jemput, Dalam Perjalanan); tanpa itu, availability dari
+    // server. BUSY tanpa perjalanan aktif tampil Online.
+    final activeRide = state.activeRide;
+    final liveRide =
+        activeRide != null && !activeRide.isTerminal ? activeRide : null;
+    final isOnline = state.availability != DriverAvailability.offline;
+    final status = liveRide != null
+        ? _statusLabel(liveRide.status)
+        : (isOnline ? 'Online' : 'Offline');
+    final hasActiveRide = liveRide != null;
     // Inisial heuristik ringan — bukan parsing nama resmi, hanya label avatar.
     final parts = name.trim().split(RegExp(r'\s+'));
     final initials = parts.isEmpty || parts.first.isEmpty

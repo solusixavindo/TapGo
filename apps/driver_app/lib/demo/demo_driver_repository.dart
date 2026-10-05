@@ -85,6 +85,9 @@ class DemoDriverRepository implements DriverRepository {
   }
 
   @override
+  Future<DriverAvailability> fetchAvailability() async => _availability;
+
+  @override
   Future<DriverAvailability> setAvailability(
       DriverAvailability availability) async {
     _availability = availability;

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:tapgo_driver_app/main.dart';
 
 void main() {
@@ -1003,6 +1005,223 @@ void main() {
     });
   });
 
+  group('Peta beranda langsung ke posisi driver', () {
+    LatLng mapCenter(WidgetTester tester) => tester
+        .widget<FlutterMap>(find.byKey(const ValueKey('driver-home-map')))
+        .mapController!
+        .camera
+        .center;
+    const jakarta = LatLng(-6.1754, 106.8272);
+
+    testWidgets('stream yang emit setelah frame pertama memindahkan pusat dari Jakarta ke titik itu',
+        (tester) async {
+      // Uji HP +7: peta hanya memakai initialCenter sekali; titik pertama dari
+      // stream (distanceFilter 10 m) tidak pernah memindahkan kamera.
+      final fixes = StreamController<(double, double)>.broadcast();
+      addTearDown(fixes.close);
+      final repo = FakeDriverRepository(session: demoSession);
+      final location = RecordingLocationPort(available: true, fixes: fixes.stream);
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, locationPort: location));
+      await tester.pumpAndSettle();
+      expect(mapCenter(tester).latitude, closeTo(jakarta.latitude, 1e-6));
+
+      fixes.add((-6.9175, 107.6191));
+      await tester.pump();
+      await tester.pump();
+
+      expect(mapCenter(tester).latitude, closeTo(-6.9175, 1e-6));
+      expect(mapCenter(tester).longitude, closeTo(107.6191, 1e-6));
+      expect(find.byType(MarkerLayer), findsOneWidget);
+    });
+
+    testWidgets('satu posisi saat layar dibuka memindahkan kamera tanpa menunggu gerakan 10 meter',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final location = RecordingLocationPort(available: true)
+        ..fix = const DriverLocationFix(lat: -7.2575, lng: 112.7521, accuracyMeters: 10);
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, locationPort: location));
+      await tester.pumpAndSettle();
+
+      expect(mapCenter(tester).latitude, closeTo(-7.2575, 1e-6));
+      expect(mapCenter(tester).longitude, closeTo(112.7521, 1e-6));
+    });
+
+    testWidgets('pembaruan stream berikutnya juga memindahkan kamera', (tester) async {
+      final fixes = StreamController<(double, double)>.broadcast();
+      addTearDown(fixes.close);
+      final repo = FakeDriverRepository(session: demoSession);
+      final location = RecordingLocationPort(available: true, fixes: fixes.stream)
+        ..fix = const DriverLocationFix(lat: -7.2575, lng: 112.7521, accuracyMeters: 10);
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, locationPort: location));
+      await tester.pumpAndSettle();
+
+      fixes.add((-7.2600, 112.7600));
+      await tester.pump();
+      await tester.pump();
+
+      expect(mapCenter(tester).latitude, closeTo(-7.2600, 1e-6));
+      expect(mapCenter(tester).longitude, closeTo(112.7600, 1e-6));
+    });
+
+    testWidgets('tanpa GPS: peta tetap di Jakarta dan tanpa marker', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final location = RecordingLocationPort(available: false);
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, locationPort: location));
+      await tester.pumpAndSettle();
+
+      expect(mapCenter(tester).latitude, closeTo(jakarta.latitude, 1e-6));
+      expect(mapCenter(tester).longitude, closeTo(jakarta.longitude, 1e-6));
+      expect(find.byType(MarkerLayer), findsNothing);
+    });
+  });
+
+  group('Sampai di tujuan tidak menyelesaikan perjalanan sendiri', () {
+    testWidgets('GPS tiba di titik tujuan: tombol tetap "Selesaikan Perjalanan", complete tidak dipanggil',
+        (tester) async {
+      final fixes = StreamController<(double, double)>.broadcast();
+      addTearDown(fixes.close);
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        current: demoRideWithLocation(RideStatus.inTrip),
+        availability: DriverAvailability.busy,
+      );
+      final location = RecordingLocationPort(available: true, fixes: fixes.stream);
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, locationPort: location));
+      await tester.pumpAndSettle();
+
+      // Posisi driver tepat di titik tujuan, lalu polling berjalan.
+      fixes.add((-6.1854, 106.8372));
+      await tester.pump(const Duration(seconds: 13));
+      await tester.pump(const Duration(seconds: 13));
+
+      expect(repo.completeCalls, 0, reason: 'tidak boleh selesai dari jarak GPS');
+      await tester.tap(find.byIcon(Icons.receipt_long_rounded));
+      await tester.pumpAndSettle();
+      expect(find.text('Selesaikan Perjalanan'), findsOneWidget);
+      expect(repo.completeCalls, 0);
+    });
+  });
+
+  group('Status beranda mengikuti server (bukan memori)', () {
+    testWidgets('buka ulang saat server ONLINE: kartu Online, tanpa memanggil POST',
+        (tester) async {
+      // Uji HP +7: setelah aplikasi dibuka ulang kartu menampilkan Offline
+      // padahal server ONLINE, karena availability hanya hidup di memori klien.
+      final repo = FakeDriverRepository(
+          session: demoSession, availability: DriverAvailability.online);
+      final location = RecordingLocationPort(available: true);
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, locationPort: location));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Status: Online'), findsOneWidget);
+      expect(find.text('Status: Offline'), findsNothing);
+      expect(repo.availabilityRequests, isEmpty,
+          reason: 'jangan memanggil POST saat dibuka: onlineSince dan verifikasi wajah tidak boleh direset');
+      expect(location.startTrackingCalls, greaterThan(0),
+          reason: 'ONLINE: pelacakan lokasi menyala');
+    });
+
+    testWidgets('server OFFLINE: kartu Offline dan pelacakan tidak menyala',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final location = RecordingLocationPort(available: true);
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, locationPort: location));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Status: Offline'), findsOneWidget);
+      expect(location.startTrackingCalls, 0);
+    });
+
+    testWidgets('server BUSY tanpa perjalanan aktif: kartu Online, tanpa POST',
+        (tester) async {
+      final repo = FakeDriverRepository(
+          session: demoSession, availability: DriverAvailability.busy);
+      await pumpDriver(tester, repo);
+
+      expect(find.text('Status: Online'), findsOneWidget);
+      expect(find.text('Status: Dalam Perjalanan'), findsNothing);
+      expect(repo.availabilityRequests, isEmpty);
+    });
+
+    testWidgets('perjalanan aktif: kartu menampilkan status perjalanan, bukan label availability',
+        (tester) async {
+      for (final entry in {
+        RideStatus.driverToPickup: 'Menuju Jemput',
+        RideStatus.driverArrived: 'Tiba di Jemput',
+        RideStatus.inTrip: 'Dalam Perjalanan',
+      }.entries) {
+        final repo = FakeDriverRepository(
+          session: demoSession,
+          current: demoRide(entry.key),
+          availability: DriverAvailability.busy,
+        );
+        await pumpDriver(tester, repo);
+        expect(find.text('Status: ${entry.value}'), findsOneWidget,
+            reason: '${entry.key}');
+      }
+    });
+
+    testWidgets('setelah complete berhasil: kartu kembali ke hasil server (Online), tidak tetap "Dalam Perjalanan"',
+        (tester) async {
+      // Uji HP +7: setelah complete kartu tetap "Dalam Perjalanan" karena klien
+      // mempertahankan busy dari accept.
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        current: demoRide(RideStatus.inTrip),
+        availability: DriverAvailability.busy,
+      );
+      await pumpDriver(tester, repo);
+      expect(find.text('Status: Dalam Perjalanan'), findsOneWidget);
+
+      // Tombol perjalanan ada di tab Pesanan; kartu status di Beranda.
+      await tester.tap(find.byIcon(Icons.receipt_long_rounded));
+      await tester.pumpAndSettle();
+      await tapReachable(tester, find.byKey(const ValueKey('trip-primary-action')));
+      await tester.pumpAndSettle();
+      expect(repo.completeCalls, 1);
+      // Tepat setelah complete (sebelum pindah tab, yang memicu refresh): state
+      // sudah selaras dengan server, bukan busy dari accept.
+      expect(
+        ProviderScope.containerOf(tester.element(find.byType(TapGoDriverApp)))
+            .read(driverControllerProvider)
+            .availability,
+        DriverAvailability.online,
+      );
+      await tester.tap(find.byIcon(Icons.home_rounded));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Status: Online'), findsOneWidget);
+      expect(find.text('Status: Dalam Perjalanan'), findsNothing);
+      expect(repo.availabilityRequests, isEmpty);
+    });
+
+    testWidgets('server lama tanpa GET availability (404): workspace tetap terbuka, tidak error',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession)
+        ..availabilityGetError = const DriverApiException(
+          code: 'ROUTE_NOT_FOUND',
+          message: 'Fitur ini belum tersedia di server.',
+          statusCode: 404,
+        );
+      await pumpDriver(tester, repo,
+          locationPort: RecordingLocationPort(available: true));
+
+      expect(find.byKey(const ValueKey('network-error')), findsNothing);
+      expect(find.text('Status: Offline'), findsOneWidget);
+      // Toggle manual tetap berjalan seperti sebelumnya.
+      await tester.tap(find.byKey(const ValueKey('availability-toggle')));
+      await tester.pumpAndSettle();
+      expect(find.text('Status: Online'), findsOneWidget);
+    });
+  });
+
   group('Popup order masuk (OfferDetailSheet otomatis)', () {
     DriverRide offerRide(String reference, {DateTime? updatedAt}) => DriverRide(
           reference: reference,
@@ -1586,6 +1805,53 @@ void main() {
           find.ancestor(of: find.text('Kirim SOS'), matching: find.byType(FilledButton)));
       expect(send.onPressed, isNotNull);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'dialog SOS: Batal, WhatsApp CS, dan Kirim SOS ditumpuk selebar dialog; tidak ada "SOS Kirim SOS"',
+        (tester) async {
+      // Uji HP +7: tiga tombol di AlertDialog.actions membuat "Batal" terlempar
+      // ke baris sendiri, dan ikon Icons.sos_rounded menggambar huruf SOS di
+      // depan teks "Kirim SOS" sehingga terbaca "SOS Kirim SOS".
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        availability: DriverAvailability.online,
+      );
+      await pumpDriver(tester, repo);
+      await tapReachable(tester, find.byTooltip('SOS Darurat'));
+      await tester.pumpAndSettle();
+
+      // Satu judul dan penjelasan yang sama.
+      expect(find.text('Kirim sinyal darurat?'), findsOneWidget);
+      expect(find.textContaining('Lokasi Anda saat ini akan dikirim ke tim TapGo'),
+          findsOneWidget);
+      // Ketiga label ada.
+      expect(find.text('Batal'), findsOneWidget);
+      expect(find.text('WhatsApp CS'), findsOneWidget);
+      expect(find.text('Kirim SOS'), findsOneWidget);
+      expect(find.text('SOS Kirim SOS'), findsNothing);
+      // Tidak ada ikon huruf SOS di dialog (dan tombol kirim tanpa ikon sama sekali).
+      expect(
+        find.descendant(of: find.byType(AlertDialog), matching: find.byIcon(Icons.sos_rounded)),
+        findsNothing,
+      );
+
+      final batal = tester.getRect(find.ancestor(
+          of: find.text('Batal'), matching: find.bySubtype<ButtonStyleButton>()));
+      final wa = tester.getRect(find.ancestor(
+          of: find.text('WhatsApp CS'), matching: find.bySubtype<ButtonStyleButton>()));
+      final kirim = tester.getRect(find.ancestor(
+          of: find.text('Kirim SOS'), matching: find.bySubtype<ButtonStyleButton>()));
+      // Ditumpuk dari atas ke bawah: Batal, lalu WhatsApp CS, lalu Kirim SOS.
+      expect(batal.bottom, lessThanOrEqualTo(wa.top));
+      expect(wa.bottom, lessThanOrEqualTo(kirim.top));
+      // Selebar dialog: ketiganya sama lebar dan sama posisi kiri.
+      expect(wa.width, closeTo(batal.width, 0.5));
+      expect(kirim.width, closeTo(batal.width, 0.5));
+      expect(wa.left, closeTo(batal.left, 0.5));
+      expect(kirim.left, closeTo(batal.left, 0.5));
+      final dialog = tester.getRect(find.byType(AlertDialog));
+      expect(batal.width, greaterThan(dialog.width * 0.6));
     });
 
     testWidgets('tombol WhatsApp CS selalu tersedia di dialog SOS sebagai cadangan',
@@ -2841,6 +3107,17 @@ class FakeDriverRepository implements DriverRepository {
     session = null;
   }
 
+  /// GET /driver/availability: availability menurut SERVER (field [availability]).
+  int availabilityGetCalls = 0;
+  DriverApiException? availabilityGetError;
+
+  @override
+  Future<DriverAvailability> fetchAvailability() async {
+    availabilityGetCalls += 1;
+    if (availabilityGetError != null) throw availabilityGetError!;
+    return availability;
+  }
+
   @override
   Future<DriverAvailability> setAvailability(
       DriverAvailability availability) async {
@@ -2925,6 +3202,7 @@ class FakeDriverRepository implements DriverRepository {
     if (acceptError != null) throw acceptError!;
     current = await (acceptCompleter?.future ??
         Future.value(demoRide(RideStatus.driverToPickup)));
+    availability = DriverAvailability.busy; // server: acceptOrder -> BUSY
     return current!;
   }
 
@@ -2957,8 +3235,11 @@ class FakeDriverRepository implements DriverRepository {
   @override
   Future<DriverRide> complete(String reference) async {
     completeCalls += 1;
-    current = demoRide(RideStatus.completed);
-    return current!;
+    // Server: perjalanan selesai tidak lagi "saat ini" (hanya status aktif),
+    // dan releaseDriver mengembalikan profil BUSY -> ONLINE.
+    current = null;
+    availability = DriverAvailability.online;
+    return demoRide(RideStatus.completed);
   }
 
   @override

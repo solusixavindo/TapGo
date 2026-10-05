@@ -413,6 +413,23 @@ class ApiDriverRepository implements DriverRepository {
   }
 
   @override
+  Future<DriverAvailability> fetchAvailability() async {
+    final data =
+        await _request(() => _dio.get<dynamic>('/driver/availability'));
+    final raw = '${data['availability'] ?? ''}';
+    // Nilai tak dikenal TIDAK boleh diam-diam menjadi offline (kartu beranda
+    // akan berbohong): lapor sebagai tak diketahui supaya klien mempertahankan
+    // keadaan sebelumnya.
+    if (raw != 'ONLINE' && raw != 'OFFLINE' && raw != 'BUSY') {
+      throw const DriverApiException(
+        code: 'AVAILABILITY_UNKNOWN',
+        message: 'Status ketersediaan dari server tidak dikenali.',
+      );
+    }
+    return _availabilityFrom(raw);
+  }
+
+  @override
   Future<DriverAvailability> setAvailability(
       DriverAvailability availability) async {
     final data = await _request(

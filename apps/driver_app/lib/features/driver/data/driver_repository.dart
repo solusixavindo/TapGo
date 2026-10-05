@@ -21,6 +21,9 @@ abstract class DriverRepository {
   });
 
   Future<void> logout();
+  /// Availability profil menurut SERVER (GET /driver/availability), hanya
+  /// membaca. Dipakai agar kartu beranda mengikuti server, bukan memori klien.
+  Future<DriverAvailability> fetchAvailability();
   Future<DriverAvailability> setAvailability(DriverAvailability availability);
   Future<List<DriverRide>> offers();
   Future<DriverRide?> currentRide();

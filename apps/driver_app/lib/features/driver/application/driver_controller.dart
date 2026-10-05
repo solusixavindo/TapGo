@@ -239,12 +239,19 @@ class DriverController extends StateNotifier<DriverState>
     try {
       final current = await _repository.currentRide();
       if (current != null) {
+        // Perjalanan terminal yang masih tampil: availability dari server
+        // (server sudah melepaskan driver), bukan ditebak Offline.
+        final terminalAvailability = current.isTerminal
+            ? (await _fetchServerAvailability())
+            : null;
         state = state.copyWith(
           status: DriverWorkspaceStatus.active,
           activeRide: current,
           offers: const [],
           availability: current.isTerminal
-              ? DriverAvailability.offline
+              ? (terminalAvailability == null
+                  ? DriverAvailability.offline
+                  : _displayAvailability(terminalAvailability))
               : DriverAvailability.busy,
           clearMessage: true,
         );
@@ -255,9 +262,16 @@ class DriverController extends StateNotifier<DriverState>
       }
       final previousOfferRefs = state.offers.map((o) => o.reference).toSet();
       final offers = await _repository.offers();
+      // Availability mengikuti SERVER (bukan memori klien): dibuka ulang saat
+      // server ONLINE harus tampil Online. Hanya membaca — jangan memanggil
+      // setAvailability di sini, supaya onlineSince dan verifikasi wajah tidak
+      // direset. Server lama tanpa GET: pertahankan keadaan klien.
+      final serverAvailability = await _fetchServerAvailability();
       final availability = switch (_repository) {
         DemoDriverRepository demo => demo.currentAvailability,
-        _ => state.availability,
+        _ => serverAvailability == null
+            ? state.availability
+            : _displayAvailability(serverAvailability),
       };
       state = state.copyWith(
         status: DriverWorkspaceStatus.active,
@@ -284,6 +298,44 @@ class DriverController extends StateNotifier<DriverState>
         message: 'Koneksi belum stabil. Silakan coba lagi.',
       );
     }
+  }
+
+  /// Availability profil menurut server, atau null bila tidak dapat diketahui:
+  /// server lama tanpa GET /driver/availability (404/ROUTE_NOT_FOUND) atau
+  /// respons tak dikenali. Kegagalan lain (jaringan, auth, kapabilitas)
+  /// diteruskan agar ditangani seperti panggilan lain di refreshWorkspace.
+  Future<DriverAvailability?> _fetchServerAvailability() async {
+    try {
+      return await _repository.fetchAvailability();
+    } on DriverApiException catch (error) {
+      if (error.statusCode == 404 ||
+          error.code == 'ROUTE_NOT_FOUND' ||
+          error.code == 'AVAILABILITY_UNKNOWN') {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  /// BUSY di server tanpa perjalanan aktif ditampilkan sebagai Online (driver
+  /// sudah dilepaskan; BUSY hanya bermakna saat ada perjalanan).
+  static DriverAvailability _displayAvailability(DriverAvailability server) =>
+      server == DriverAvailability.busy ? DriverAvailability.online : server;
+
+  /// Menyelaraskan availability dengan server setelah perjalanan berakhir
+  /// (selesai/batal) yang sudah dibalas berhasil. Bila server tidak dapat
+  /// dibaca, memakai [fallback] — keadaan yang memang ditetapkan server pada
+  /// peristiwa itu (releaseDriver: BUSY -> ONLINE).
+  Future<void> _syncAvailabilityAfterRide(
+      {required DriverAvailability fallback}) async {
+    DriverAvailability next = fallback;
+    try {
+      final server = await _fetchServerAvailability();
+      if (server != null) next = _displayAvailability(server);
+    } on DriverApiException {
+      // pakai fallback
+    }
+    if (mounted) state = state.copyWith(availability: next);
   }
 
   bool _keepWorkspaceOnFailure(DriverApiException error) {
@@ -794,7 +846,14 @@ class DriverController extends StateNotifier<DriverState>
         _TripAction.complete => await _repository.complete(ride.reference),
       };
       state = state.copyWith(activeRide: updated);
-      updated.isTerminal ? _stopPolling() : _startPolling();
+      if (updated.isTerminal) {
+        _stopPolling();
+        // Server sudah melepaskan driver (BUSY -> ONLINE): kartu beranda kembali
+        // ke availability server, tidak tetap "Dalam Perjalanan".
+        await _syncAvailabilityAfterRide(fallback: DriverAvailability.online);
+      } else {
+        _startPolling();
+      }
     } on DriverApiException catch (error) {
       state = state.copyWith(message: error.message);
     } finally {
@@ -813,6 +872,7 @@ class DriverController extends StateNotifier<DriverState>
       state = state.copyWith(
           activeRide: cancelled, availability: DriverAvailability.offline);
       _stopPolling();
+      await _syncAvailabilityAfterRide(fallback: DriverAvailability.offline);
     } on DriverApiException catch (error) {
       state = state.copyWith(message: error.message);
     } finally {
