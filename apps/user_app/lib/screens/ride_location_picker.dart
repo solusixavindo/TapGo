@@ -70,6 +70,16 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
   /// pembacaan saat ini). Tidak pernah diganti koordinat Jakarta/titik jemput.
   RideLocation? _deviceLocation;
 
+  /// Posisi terakhir yang diketahui, dipakai bersama antar pembukaan lembar ini:
+  /// pembukaan kedua langsung berpusat di posisi HP tanpa menunggu GPS.
+  static RideLocation? _lastDeviceLocation;
+
+  /// Nomor pencarian terbaru: jawaban pencarian yang sudah usang diabaikan,
+  /// sehingga saran tidak melompat ke hasil ketikan sebelumnya.
+  int _searchSeq = 0;
+  bool _refiningLocation = false;
+  String _latestQuery = '';
+
   @override
   void initState() {
     super.initState();
@@ -126,17 +136,51 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
 
   void _onQueryChanged(String value) {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 450), () => _search(value));
+    _debounce = Timer(const Duration(milliseconds: 300), () => _search(value));
   }
 
+  /// Pusat pencarian = posisi HP. TIDAK memblokir: memakai posisi terakhir yang
+  /// diketahui (cache sheet, lalu GPS terakhir). Bila belum ada sama sekali,
+  /// kembali null (pemanggil memberi tahu pengguna) sementara pembacaan GPS
+  /// berjalan di latar belakang dan mengulang pencarian begitu tersedia.
   Future<RideLocation?> _resolveSearchCenter() async {
-    return _deviceLocation ??= await widget.port.lastKnownLocation() ??
-        await widget.port.currentLocation();
+    final known = _deviceLocation ?? _lastDeviceLocation;
+    if (known != null) {
+      _deviceLocation = known;
+      return known;
+    }
+    final last = await widget.port.lastKnownLocation();
+    if (last != null) {
+      _deviceLocation = _lastDeviceLocation = last;
+      return last;
+    }
+    _refineLocationInBackground();
+    return null;
+  }
+
+  /// Satu pembacaan GPS saat ini di latar belakang; hasilnya menjadi pusat
+  /// pencarian dan pencarian yang tertunda diulang otomatis.
+  void _refineLocationInBackground() {
+    if (_refiningLocation) return;
+    _refiningLocation = true;
+    unawaited(() async {
+      final location = await widget.port.currentLocation();
+      _refiningLocation = false;
+      if (!mounted || location == null) return;
+      _deviceLocation = _lastDeviceLocation = location;
+      if (_latestQuery.trim().length >= 2) unawaited(_search(_latestQuery));
+    }());
   }
 
   Future<void> _search(String query) async {
-    if (query.trim().length < 3) {
-      setState(() => _results = const []);
+    _latestQuery = query;
+    final seq = ++_searchSeq;
+    if (query.trim().length < 2) {
+      setState(() {
+        _results = const [];
+        _searching = false;
+        _notice = null;
+      });
       return;
     }
     setState(() {
@@ -144,20 +188,20 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
       _notice = null;
     });
     final center = await _resolveSearchCenter();
-    if (!mounted) return;
+    if (!mounted || seq != _searchSeq) return;
     if (center == null) {
       // Tidak berpura-pura mencari di Jakarta: tanpa posisi HP, hasilnya tidak
-      // dapat diurutkan menurut kedekatan.
+      // dapat diurutkan menurut kedekatan. Pencarian diulang otomatis begitu
+      // posisi HP tersedia.
       setState(() {
         _searching = false;
         _results = const [];
-        _notice = 'Lokasi perangkat belum tersedia. Aktifkan GPS dan izin '
-            'lokasi, lalu coba lagi.';
+        _notice = 'Mencari lokasi perangkat… Pastikan GPS dan izin lokasi aktif.';
       });
       return;
     }
     final results = await widget.port.searchAddress(query, near: center);
-    if (!mounted) return;
+    if (!mounted || seq != _searchSeq) return;
     setState(() {
       _searching = false;
       _results = results;
@@ -561,4 +605,10 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
 String _shortLabelForUi(String displayName) {
   final parts = displayName.split(',').map((p) => p.trim()).toList();
   return parts.take(2).join(', ');
+}
+
+/// Mengosongkan cache posisi terakhir antar uji.
+@visibleForTesting
+void tapGoResetPickerLocationCacheForTests() {
+  _RideLocationPickerSheetState._lastDeviceLocation = null;
 }

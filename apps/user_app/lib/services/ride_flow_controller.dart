@@ -269,10 +269,14 @@ class RideVehicleView {
 
 /// Penilaian penumpang untuk satu perjalanan selesai (dari server).
 class RideRatingView {
-  const RideRatingView({required this.stars, this.note});
+  const RideRatingView({required this.stars, this.note, this.pending = false});
 
   final int stars;
   final String? note;
+
+  /// true = tersimpan di perangkat dan akan dikirim otomatis (server belum dapat
+  /// menerimanya saat ini). Tidak pernah berasal dari server.
+  final bool pending;
 
   static RideRatingView? fromJson(dynamic json) {
     if (json is! Map) {
@@ -315,6 +319,7 @@ class RideOrderView {
     this.dropoffLng,
     this.searchRejectionCount = 0,
     this.rating,
+    this.completedAt,
   });
 
   /// Berapa driver yang menolak tawaran selama order masih mencari driver.
@@ -325,6 +330,9 @@ class RideOrderView {
   /// Penilaian milik penumpang untuk perjalanan selesai; null bila belum menilai
   /// (atau server belum mengirimnya).
   final RideRatingView? rating;
+
+  /// Waktu perjalanan selesai (dari server); null bila belum/tidak dikirim.
+  final DateTime? completedAt;
 
   RideOrderView withRating(RideRatingView value) => RideOrderView(
         reference: reference,
@@ -349,6 +357,7 @@ class RideOrderView {
         dropoffLng: dropoffLng,
         searchRejectionCount: searchRejectionCount,
         rating: value,
+        completedAt: completedAt,
       );
 
   /// Koordinat dari server; null bila tidak dikirim. Dipakai untuk "Pesan
@@ -529,6 +538,8 @@ class RideOrderView {
       createdAt: DateTime.tryParse('${json['createdAt'] ?? ''}'),
       searchRejectionCount: _int(json['searchRejectionCount']),
       rating: RideRatingView.fromJson(json['rating']),
+      completedAt: DateTime.tryParse(
+          '${(json['timeline'] is Map ? (json['timeline'] as Map)['completedAt'] : null) ?? ''}'),
     );
   }
 }

@@ -167,6 +167,7 @@ class _TapGoPersistentStore {
     } catch (_) {}
     // Tempat tersimpan milik pengguna yang keluar tidak boleh terbaca akun lain.
     await _savedPlacesStore.clear();
+    await _pendingRatingsStore.clear();
   }
 
   Future<void> clearProductionRuntimeCache() async {

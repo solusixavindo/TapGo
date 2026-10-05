@@ -58,6 +58,8 @@ part 'screens/verification_gate_screen.dart';
 part 'screens/wallet_screen.dart';
 part 'screens/wallet_transfer_screen.dart';
 part 'services/persistent_demo_store.dart';
+part 'services/pending_ratings.dart';
+part 'screens/ride_rating_screen.dart';
 part 'services/ride_flow_controller.dart';
 part 'services/ride_location_port.dart';
 part 'services/tapgo_api_client.dart';

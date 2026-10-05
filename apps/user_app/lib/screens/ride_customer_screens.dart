@@ -1629,11 +1629,10 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
   String? _errorMessage;
   bool _isCancelling = false;
 
-  // Penilaian setelah perjalanan selesai.
-  int _ratingStars = 0;
-  final _ratingNoteController = TextEditingController();
-  bool _isRating = false;
-  String? _ratingError;
+  // Penilaian setelah perjalanan selesai (halaman penuh RideRatingScreen).
+  bool _ratingPageOpen = false;
+  bool _ratingPromptShown = false;
+  RideRatingView? _pendingRating;
 
   static bool _isTrackingPhase(RideUiPhase phase) =>
       phase == RideUiPhase.assigned ||
@@ -1676,6 +1675,7 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
     super.initState();
     _order = widget.initialOrder;
     WidgetsBinding.instance.addObserver(this);
+    unawaited(_loadPendingRating());
     if (widget.autoStart) {
       _poller = RideStatusPoller(
         reference: widget.reference,
@@ -1683,7 +1683,13 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
         fetch: widget.detailRequest ?? tapGoRideDetailLoaderForTests,
         onUpdate: (order) {
           if (mounted) {
-            _hapticForTransition(_order?.phase, order.phase);
+            final previousPhase = _order?.phase;
+            _hapticForTransition(previousPhase, order.phase);
+            if (_shouldPromptRating(order, previousPhase)) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) unawaited(_openRatingPage());
+              });
+            }
             if (order.phase == RideUiPhase.searching &&
                 order.searchRejectionCount >
                     (_order?.searchRejectionCount ?? 0)) {
@@ -1748,79 +1754,77 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
     // Polling berhenti bersama widget: tidak ada timer yang menggantung.
     _poller?.dispose();
     _tracker?.dispose();
-    _ratingNoteController.dispose();
     super.dispose();
   }
 
-  Future<void> _submitRating() async {
-    final stars = _ratingStars;
-    if (stars < 1 || stars > 5 || _isRating) {
-      return;
+  Future<void> _loadPendingRating() async {
+    final items = await _pendingRatingsStore.load();
+    if (!mounted) return;
+    for (final item in items) {
+      if (item.reference == widget.reference) {
+        setState(() => _pendingRating = RideRatingView(
+            stars: item.stars, note: item.note, pending: true));
+        return;
+      }
     }
+  }
+
+  /// Penilaian dibuka otomatis begitu perjalanan selesai (atau saat layar dibuka
+  /// tak lama setelah selesai) dan belum dinilai, sekali per layar.
+  bool _shouldPromptRating(RideOrderView order, RideUiPhase? previousPhase) {
+    if (_ratingPromptShown || _ratingPageOpen || _pendingRating != null) {
+      return false;
+    }
+    if (order.phase != RideUiPhase.completed || order.rating != null) {
+      return false;
+    }
+    if (previousPhase != null && previousPhase != RideUiPhase.completed) {
+      return true; // selesai saat layar ini terbuka
+    }
+    final at = order.completedAt;
+    return at != null &&
+        DateTime.now().difference(at.toLocal()) < const Duration(hours: 2);
+  }
+
+  Future<void> _openRatingPage() async {
+    final order = _order;
+    if (order == null || _ratingPageOpen || !mounted) return;
+    _ratingPageOpen = true;
+    _ratingPromptShown = true;
+    final result = await Navigator.of(context).push<RideRatingView>(
+      MaterialPageRoute<RideRatingView>(
+        fullscreenDialog: true,
+        builder: (_) => RideRatingScreen(order: order, request: widget.ratingRequest),
+      ),
+    );
+    _ratingPageOpen = false;
+    if (!mounted || result == null) return;
     setState(() {
-      _isRating = true;
-      _ratingError = null;
+      if (result.pending) {
+        _pendingRating = result;
+      } else {
+        _order = _order?.withRating(result);
+      }
     });
-    try {
-      final request = widget.ratingRequest ?? _apiClient.rateRide;
-      final data = await request(
-        reference: widget.reference,
-        stars: stars,
-        note: _ratingNoteController.text,
+    if (result.pending) {
+      _TapGoSnackbar.success(
+        context,
+        'Terima kasih! Penilaianmu akan dikirim otomatis.',
       );
-      if (!mounted) {
-        return;
-      }
-      final saved = RideRatingView.fromJson(data) ??
-          RideRatingView(stars: stars, note: _ratingNoteController.text.trim());
-      final order = _order;
-      setState(() {
-        if (order != null) {
-          _order = order.withRating(saved);
-        }
-      });
-      _TapGoHaptic.success();
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      if (tapGoRideIsSessionExpired(error)) {
-        final outcome = await _resolveRideSessionExpired(context, ref);
-        if (!mounted) {
-          return;
-        }
-        if (outcome == TapGoSessionRefreshResult.refreshed) {
-          setState(() => _isRating = false);
-          await _submitRating();
-          return;
-        }
-        setState(() => _ratingError = 'Koneksi belum stabil. Silakan coba lagi.');
-        return;
-      }
-      // Sudah pernah dinilai (mis. dari perangkat lain): tarik ulang detail
-      // supaya layar menampilkan bintang yang tersimpan, bukan formulir kosong.
-      String? code;
-      if (error is DioException) {
-        code = _authResponseDataMap(error.response?.data)?['code']?.toString();
-      }
-      if (code == 'RIDE_RATING_ALREADY_SUBMITTED') {
-        try {
-          final load = widget.detailRequest ??
-              tapGoRideDetailLoaderForTests ??
-              _apiClient.rideDetail;
-          final fresh = RideOrderView.fromJson(await load(widget.reference));
-          if (mounted && fresh.rating != null) {
-            setState(() => _order = fresh);
-            return;
-          }
-        } catch (_) {}
-      }
-      setState(() => _ratingError = tapGoRatingErrorMessage(error));
-    } finally {
-      if (mounted) {
-        setState(() => _isRating = false);
-      }
+    } else {
+      // Server dapat sudah memiliki penilaian lain (mis. dari perangkat lain):
+      // ambil yang tersimpan supaya bintang yang tampil benar.
+      unawaited(_refreshRatingFromServer());
     }
+  }
+
+  Future<void> _refreshRatingFromServer() async {
+    final load = widget.detailRequest ?? tapGoRideDetailLoaderForTests;
+    if (load == null) return;
+    try {
+      final fresh = RideOrderView.fromJson(await load(widget.reference));
+      if (mounted && fresh.rating != null) setState(() => _order = fresh);
+    } catch (_) {}
   }
 
   @override
@@ -2265,40 +2269,31 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
     );
   }
 
-  /// Langkah penilaian setelah perjalanan selesai: bintang 1-5, catatan opsional
-  /// (maksimal 280 karakter). Sudah dinilai = hanya menampilkan bintangnya.
+  /// Penilaian pada layar status perjalanan selesai: bintang yang sudah diberikan
+  /// (terkirim atau menunggu dikirim), atau ajakan membuka halaman penilaian.
   /// Bintang TIDAK pernah tampil di kartu driver selama perjalanan berjalan.
   Widget _ratingCard(ColorScheme colorScheme, RideOrderView order) {
-    final given = order.rating;
     final decoration = BoxDecoration(
       color: colorScheme.surface,
       borderRadius: BorderRadius.circular(16),
       border: Border.all(color: colorScheme.outlineVariant),
     );
-    Widget stars(int value, {void Function(int star)? onTap}) {
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          for (var star = 1; star <= 5; star++)
-            IconButton(
-              key: ValueKey('rating-star-$star'),
-              tooltip: '$star bintang',
-              onPressed: onTap == null ? null : () => onTap(star),
-              icon: Icon(
+    Widget stars(int value) => Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (var star = 1; star <= 5; star++)
+              Icon(
                 star <= value ? Icons.star_rounded : Icons.star_outline_rounded,
-                size: 38,
-                color: star <= value
-                    ? const Color(0xFFF59E0B)
-                    : colorScheme.outline,
+                size: 34,
+                color: star <= value ? const Color(0xFFF59E0B) : colorScheme.outline,
               ),
-            ),
-        ],
-      );
-    }
+          ],
+        );
 
+    final given = order.rating ?? _pendingRating;
     if (given != null) {
       return Container(
-        key: const ValueKey('rating-given'),
+        key: ValueKey(given.pending ? 'rating-pending' : 'rating-given'),
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: decoration,
@@ -2312,20 +2307,31 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
                 fontWeight: FontWeight.w900,
               ),
             ),
+            const SizedBox(height: 6),
             stars(given.stars),
-            if (given.note != null)
+            if (given.note != null) ...[
+              const SizedBox(height: 6),
               Text(
                 given.note!,
                 textAlign: TextAlign.center,
                 style: TextStyle(color: colorScheme.onSurfaceVariant),
               ),
+            ],
+            if (given.pending) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Akan dikirim otomatis.',
+                key: const ValueKey('rating-pending-note'),
+                style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12.5),
+              ),
+            ],
           ],
         ),
       );
     }
 
     return Container(
-      key: const ValueKey('rating-form'),
+      key: const ValueKey('rating-prompt'),
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: decoration,
@@ -2341,41 +2347,16 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
               fontWeight: FontWeight.w900,
             ),
           ),
-          stars(
-            _ratingStars,
-            onTap: _isRating ? null : (star) => setState(() => _ratingStars = star),
-          ),
-          TextField(
-            key: const ValueKey('rating-note'),
-            controller: _ratingNoteController,
-            enabled: !_isRating,
-            maxLength: 280,
-            maxLines: 2,
-            textInputAction: TextInputAction.done,
-            decoration: const InputDecoration(
-              hintText: 'Catatan untuk driver (opsional)',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          if (_ratingError != null) ...[
-            const SizedBox(height: 6),
-            Text(
-              _ratingError!,
-              key: const ValueKey('rating-error'),
-              style: const TextStyle(color: Color(0xFFB3261E), fontSize: 13),
-            ),
-          ],
           const SizedBox(height: 10),
-          FilledButton(
-            key: const ValueKey('rating-submit'),
-            onPressed: _ratingStars == 0 || _isRating ? null : _submitRating,
+          FilledButton.icon(
+            key: const ValueKey('rating-open'),
+            onPressed: _ratingPageOpen ? null : () => unawaited(_openRatingPage()),
             style: FilledButton.styleFrom(
               backgroundColor: _brandBlue,
               minimumSize: const Size.fromHeight(48),
             ),
-            child: _isRating
-                ? const _TapGoLoading(size: 18, strokeWidth: 2)
-                : const Text('Kirim Penilaian'),
+            icon: const Icon(Icons.star_rounded),
+            label: const Text('Beri penilaian'),
           ),
         ],
       ),

@@ -29,7 +29,8 @@ class _TapGoDashboardState extends State<TapGoDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    return _ChatInboxPoller(
+    return _PendingRatingsFlusher(
+        child: _ChatInboxPoller(
         child: Scaffold(
       body: SafeArea(
         child: Stack(
@@ -54,7 +55,7 @@ class _TapGoDashboardState extends State<TapGoDashboard> {
           ],
         ),
       ),
-    ));
+    )));
   }
 }
 

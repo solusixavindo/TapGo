@@ -176,8 +176,12 @@ class OsmLocationPort implements LocationSelectionPort, LiveLocationSource {
   OsmLocationPort({
     Dio? http,
     Duration requestGap = const Duration(milliseconds: 1100),
+    Duration photonGap = const Duration(milliseconds: 300),
+    bool usePhoton = true,
   })  : _http = http ?? Dio(),
-        _requestGap = requestGap;
+        _requestGap = requestGap,
+        _photonGap = photonGap,
+        _usePhoton = usePhoton;
 
   static const _searchUrl = 'https://nominatim.openstreetmap.org/search';
   static const _reverseUrl = 'https://nominatim.openstreetmap.org/reverse';
@@ -189,6 +193,19 @@ class OsmLocationPort implements LocationSelectionPort, LiveLocationSource {
   /// Hanya uji yang menurunkannya.
   final Duration _requestGap;
   DateTime _lastRequestAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Photon (geocoder OSM yang mendukung awalan kata dan bias lokasi) menjadi
+  /// sumber utama saran; Nominatim menjadi cadangan. Nominatim TIDAK mendukung
+  /// ketik-sambil-mencari: di sekitar Serang "sta", "stasi", "stasiun ser" = 0
+  /// hasil dan hanya kata utuh yang menghasilkan sesuatu (diuji langsung).
+  static const _photonUrl = 'https://photon.komoot.io/api/';
+
+  /// Kotak Indonesia (minLon,minLat,maxLon,maxLat): Photon hanya mengembalikan
+  /// tempat di Indonesia.
+  static const _indonesiaBbox = '95.0,-11.0,141.1,6.1';
+  final Duration _photonGap;
+  final bool _usePhoton;
+  DateTime _lastPhotonAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   Map<String, String> get _headers => const {'User-Agent': _userAgent};
 
@@ -246,6 +263,12 @@ class OsmLocationPort implements LocationSelectionPort, LiveLocationSource {
     RideLocation? near,
   }) async {
     final trimmed = query.trim();
+    if (trimmed.length < 2) return const [];
+    if (near != null && _usePhoton) {
+      final fromPhoton = await _searchPhoton(trimmed, near);
+      if (fromPhoton != null && fromPhoton.isNotEmpty) return fromPhoton;
+      // Photon gagal/kosong: cadangan Nominatim di bawah.
+    }
     if (trimmed.length < 3) return const [];
     if (near == null) {
       return _searchOnce(trimmed, limit: 6);
@@ -274,6 +297,102 @@ class OsmLocationPort implements LocationSelectionPort, LiveLocationSource {
           .compareTo(
               tapGoHaversineMeters(near.lat, near.lng, b.lat, b.lng)));
     return sorted.take(_maxShown).toList();
+  }
+
+  /// Satu permintaan Photon dengan bias ke posisi HP, lalu diurutkan menurut
+  /// jarak haversine (yang terdekat di atas). null bila Photon gagal.
+  Future<List<RideAddressCandidate>?> _searchPhoton(
+    String query,
+    RideLocation near,
+  ) async {
+    try {
+      final elapsed = DateTime.now().difference(_lastPhotonAt);
+      if (elapsed < _photonGap) {
+        await Future<void>.delayed(_photonGap - elapsed);
+      }
+      _lastPhotonAt = DateTime.now();
+      final response = await _http.get<Map<String, dynamic>>(
+        _photonUrl,
+        queryParameters: {
+          'q': query,
+          'lat': near.lat,
+          'lon': near.lng,
+          'limit': 15,
+          'lang': 'default',
+          'bbox': _indonesiaBbox,
+          'location_bias_scale': 0.5,
+        },
+        options: Options(
+          headers: _headers,
+          receiveTimeout: const Duration(seconds: 8),
+          sendTimeout: const Duration(seconds: 8),
+        ),
+      );
+      final features = response.data?['features'];
+      if (features is! List) return null;
+      final seen = <String>{};
+      final results = <RideAddressCandidate>[];
+      for (final feature in features.whereType<Map>()) {
+        final candidate = _photonCandidate(feature);
+        if (candidate == null) continue;
+        final key = '${candidate.lat.toStringAsFixed(5)},${candidate.lng.toStringAsFixed(5)}';
+        if (seen.add(key)) results.add(candidate);
+      }
+      results.sort((a, b) =>
+          tapGoHaversineMeters(near.lat, near.lng, a.lat, a.lng).compareTo(
+              tapGoHaversineMeters(near.lat, near.lng, b.lat, b.lng)));
+      return results.take(_maxShown).toList();
+    } on DioException {
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static RideAddressCandidate? _photonCandidate(Map feature) {
+    final geometry = feature['geometry'];
+    final properties = feature['properties'];
+    if (geometry is! Map || properties is! Map) return null;
+    final coordinates = geometry['coordinates'];
+    if (coordinates is! List || coordinates.length < 2) return null;
+    final lng = (coordinates[0] as num?)?.toDouble();
+    final lat = (coordinates[1] as num?)?.toDouble();
+    if (lat == null || lng == null || lat.abs() > 90 || lng.abs() > 180) return null;
+    final country = properties['countrycode'];
+    if (country is String && country.toUpperCase() != 'ID') return null;
+    String? text(String key) {
+      final value = properties[key];
+      return value is String && value.trim().isNotEmpty ? value.trim() : null;
+    }
+
+    final name = text('name');
+    final street = text('street');
+    if (name == null && street == null) return null;
+    final streetLine = street == null
+        ? null
+        : [street, if (text('housenumber') != null) text('housenumber')].join(' ');
+    // Nama tempat + alamat bertingkat, tanpa pengulangan.
+    final parts = <String>[];
+    for (final part in [
+      name,
+      streetLine,
+      text('district'),
+      text('locality'),
+      text('city') ?? text('county'),
+      text('state'),
+    ]) {
+      if (part != null && !parts.contains(part)) parts.add(part);
+    }
+    final label = name ?? street!;
+    // Label pendek: nama tempat dan wilayahnya (agar "Alfamart" dari jalan yang
+    // berbeda dapat dibedakan).
+    final area = text('district') ?? text('locality') ?? text('city') ?? text('county');
+    return RideAddressCandidate(
+      label: area != null && area != label ? '$label, $area' : label,
+      address: parts.join(', '),
+      lat: lat,
+      lng: lng,
+    );
   }
 
   Future<List<RideAddressCandidate>> _searchOnce(

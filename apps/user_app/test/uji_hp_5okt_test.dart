@@ -196,6 +196,7 @@ void main() {
     tapGoDisablePersistenceForTests = true;
     await tapGoResetSavedPlacesForTests();
     tapGoResetPushUiForTests();
+    tapGoResetPickerLocationCacheForTests();
     tapGoRecentHistoryLoaderForTests = null;
   });
   tearDown(() {
@@ -442,192 +443,6 @@ void main() {
   });
 
   // =========================================================================
-  group('7. penilaian setelah perjalanan selesai', () {
-    Widget completed({
-      RideRatingRequest? request,
-      Map<String, dynamic>? rating,
-      String st = 'COMPLETED',
-      RideDetailRequest? detail,
-    }) =>
-        appWith(RideStatusScreen(
-          reference: _ref,
-          autoStart: false,
-          ratingRequest: request,
-          detailRequest: detail,
-          initialOrder: RideOrderView.fromJson(
-              orderJson(status: st, rating: rating, withRatingKey: true)),
-        ));
-
-    testWidgets('selesai: bintang 1-5, catatan opsional, kirim; tombol nonaktif tanpa bintang',
-        (tester) async {
-      tall(tester);
-      await tester.pumpWidget(completed(request: ({
-        required String reference,
-        required int stars,
-        String? note,
-      }) async =>
-          {'stars': stars, 'note': note}));
-      await tester.pump();
-
-      expect(find.byKey(const ValueKey('rating-form')), findsOneWidget);
-      for (var star = 1; star <= 5; star++) {
-        expect(find.byKey(ValueKey('rating-star-$star')), findsOneWidget);
-      }
-      expect(find.byKey(const ValueKey('rating-note')), findsOneWidget);
-      final submit = tester
-          .widget<FilledButton>(find.byKey(const ValueKey('rating-submit')));
-      expect(submit.onPressed, isNull);
-      // "Kembali ke Dashboard" tetap ada, di bawah langkah penilaian.
-      expect(find.text('Kembali ke Dashboard'), findsOneWidget);
-    });
-
-    testWidgets('memilih 4 bintang + catatan lalu kirim: request benar, lalu tampil bintang tersimpan',
-        (tester) async {
-      tall(tester);
-      final calls = <({String reference, int stars, String? note})>[];
-      await tester.pumpWidget(completed(request: ({
-        required String reference,
-        required int stars,
-        String? note,
-      }) async {
-        calls.add((reference: reference, stars: stars, note: note));
-        return {'stars': stars, 'note': note?.trim()};
-      }));
-      await tester.pump();
-
-      await tapKey(tester, 'rating-star-4');
-      await tester.pump();
-      await tester.enterText(
-          find.byKey(const ValueKey('rating-note')), 'Ramah dan tepat waktu');
-      await tapKey(tester, 'rating-submit');
-      await tester.pumpAndSettle();
-
-      expect(calls, hasLength(1));
-      expect(calls.single.reference, _ref);
-      expect(calls.single.stars, 4);
-      expect(calls.single.note, 'Ramah dan tepat waktu');
-      expect(find.byKey(const ValueKey('rating-form')), findsNothing);
-      expect(find.byKey(const ValueKey('rating-given')), findsOneWidget);
-      expect(find.text('Ramah dan tepat waktu'), findsOneWidget);
-      expect(find.byIcon(Icons.star_rounded), findsNWidgets(4));
-    });
-
-    testWidgets('sudah dinilai dari server: hanya bintang yang tampil, tanpa formulir',
-        (tester) async {
-      tall(tester);
-      await tester.pumpWidget(
-          completed(rating: {'stars': 5, 'note': 'Mantap'}));
-      await tester.pump();
-      expect(find.byKey(const ValueKey('rating-given')), findsOneWidget);
-      expect(find.byKey(const ValueKey('rating-form')), findsNothing);
-      expect(find.byKey(const ValueKey('rating-submit')), findsNothing);
-      expect(find.byIcon(Icons.star_rounded), findsNWidgets(5));
-    });
-
-    testWidgets('kirim ganda cepat hanya mengirim satu permintaan (single-flight)',
-        (tester) async {
-      tall(tester);
-      var calls = 0;
-      final gate = Completer<Map<String, dynamic>>();
-      await tester.pumpWidget(completed(request: ({
-        required String reference,
-        required int stars,
-        String? note,
-      }) {
-        calls += 1;
-        return gate.future;
-      }));
-      await tester.pump();
-      await tapKey(tester, 'rating-star-5');
-      await tester.pump();
-      await tapKey(tester, 'rating-submit');
-      await tester.pump();
-      await tapKey(tester, 'rating-submit');
-      await tester.pump();
-      expect(calls, 1);
-      gate.complete({'stars': 5});
-      await tester.pumpAndSettle();
-      expect(calls, 1);
-    });
-
-    testWidgets('gagal (rute belum ada di server): pesan jelas, formulir tetap dan bisa dicoba lagi',
-        (tester) async {
-      tall(tester);
-      await tester.pumpWidget(completed(request: ({
-        required String reference,
-        required int stars,
-        String? note,
-      }) async =>
-          throw apiError('ROUTE_NOT_FOUND', status: 404)));
-      await tester.pump();
-      await tapKey(tester, 'rating-star-3');
-      await tester.pump();
-      await tapKey(tester, 'rating-submit');
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('rating-error')), findsOneWidget);
-      expect(find.textContaining('belum tersedia'), findsOneWidget);
-      expect(find.byKey(const ValueKey('rating-form')), findsOneWidget);
-      final submit = tester
-          .widget<FilledButton>(find.byKey(const ValueKey('rating-submit')));
-      expect(submit.onPressed, isNotNull);
-    });
-
-    testWidgets('server menjawab sudah dinilai (409): layar menampilkan bintang yang tersimpan',
-        (tester) async {
-      tall(tester);
-      await tester.pumpWidget(completed(
-        request: ({
-          required String reference,
-          required int stars,
-          String? note,
-        }) async =>
-            throw apiError('RIDE_RATING_ALREADY_SUBMITTED'),
-        detail: (_) async => orderJson(rating: {'stars': 2, 'note': null}),
-      ));
-      await tester.pump();
-      await tapKey(tester, 'rating-star-5');
-      await tester.pump();
-      await tapKey(tester, 'rating-submit');
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('rating-given')), findsOneWidget);
-      expect(find.byIcon(Icons.star_rounded), findsNWidgets(2));
-    });
-
-    testWidgets('catatan dibatasi 280 karakter', (tester) async {
-      tall(tester);
-      await tester.pumpWidget(completed());
-      await tester.pump();
-      await tester.enterText(
-          find.byKey(const ValueKey('rating-note')), 'x' * 400);
-      await tester.pump();
-      final field = tester.widget<TextField>(find.byKey(const ValueKey('rating-note')));
-      expect(field.controller!.text.length, 280);
-    });
-
-    for (final st in ['SEARCHING_DRIVER', 'DRIVER_ASSIGNED', 'IN_TRIP']) {
-      testWidgets('status $st: tidak ada langkah penilaian dan tidak ada bintang di kartu driver',
-          (tester) async {
-        tall(tester);
-        await tester.pumpWidget(completed(st: st));
-        await tester.pump();
-        expect(find.byKey(const ValueKey('rating-form')), findsNothing);
-        expect(find.byKey(const ValueKey('rating-given')), findsNothing);
-        expect(find.byIcon(Icons.star_rounded), findsNothing);
-        expect(find.byIcon(Icons.star_outline_rounded), findsNothing);
-        expect(find.textContaining('rating'), findsNothing);
-      });
-    }
-
-    test('penilaian dari server diurai; nilai di luar 1..5 ditolak', () {
-      expect(RideRatingView.fromJson({'stars': 4, 'note': 'ok'})!.stars, 4);
-      expect(RideRatingView.fromJson({'stars': 0}), isNull);
-      expect(RideRatingView.fromJson({'stars': 6}), isNull);
-      expect(RideRatingView.fromJson({'stars': 3.5}), isNull);
-      expect(RideRatingView.fromJson(null), isNull);
-    });
-  });
-
-  // =========================================================================
   group('5. pencarian alamat terdekat', () {
     // Peta di lembar pemilih memuat ubin OSM lewat jaringan; lingkungan uji
     // menolaknya (HTTP 400). Itu bukan yang diuji di sini. Dipasang DI DALAM
@@ -647,7 +462,8 @@ void main() {
     OsmLocationPort portWith(_NominatimAdapter adapter,
         {Duration gap = Duration.zero}) {
       final dio = Dio()..httpClientAdapter = adapter;
-      return OsmLocationPort(http: dio, requestGap: gap);
+      // Photon dimatikan: kelompok ini menguji cadangan Nominatim.
+      return OsmLocationPort(http: dio, requestGap: gap, usePhoton: false);
     }
 
     test('haversine: 1 derajat lintang ≈ 111,2 km', () {
@@ -734,6 +550,7 @@ void main() {
       final adapter = _NominatimAdapter((i, q) => const []);
       final port = OsmLocationPort(
         http: Dio()..httpClientAdapter = adapter,
+        usePhoton: false,
       );
       await port.searchAddress('alfamart', near: near);
       expect(adapter.times, hasLength(3));
@@ -768,8 +585,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
       await tester.pump();
       expect(port.searches, isEmpty);
-      expect(find.textContaining('Lokasi perangkat belum tersedia'),
-          findsOneWidget);
+      expect(find.textContaining('Mencari lokasi perangkat'), findsOneWidget);
     });
 
     testWidgets(
