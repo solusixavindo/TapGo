@@ -1909,6 +1909,14 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
     }
   }
 
+  /// Jumlah pesan driver yang belum dibaca untuk perjalanan ini (dari kotak
+  /// masuk chat); menyalakan titik merah pada tombol chat.
+  int get _chatUnread => ref.watch(_chatConversationsProvider.select(
+        (value) => (value.valueOrNull ?? const <TapGoChatConversation>[])
+            .where((c) => c.rideReference == widget.reference)
+            .fold<int>(0, (sum, c) => sum + c.unreadCount),
+      ));
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -1957,8 +1965,17 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
                         context,
                         RideChatScreen(rideReference: widget.reference),
                       ),
-                      icon: const Icon(Icons.chat_bubble_outline_rounded),
-                      label: const Text('Chat dengan Driver'),
+                      icon: Badge(
+                        key: const ValueKey('ride-chat-badge'),
+                        isLabelVisible: _chatUnread > 0,
+                        label: Text('$_chatUnread'),
+                        child: const Icon(Icons.chat_bubble_outline_rounded),
+                      ),
+                      label: Text(
+                        _chatUnread > 0
+                            ? 'Chat dengan Driver (pesan baru)'
+                            : 'Chat dengan Driver',
+                      ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: _brandBlue,
                         padding: const EdgeInsets.symmetric(vertical: 13),

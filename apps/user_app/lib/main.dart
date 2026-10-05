@@ -42,6 +42,7 @@ part 'services/activity_feed.dart';
 part 'services/chat_inbox.dart';
 part 'services/push_notifications.dart';
 part 'services/ride_tracking.dart';
+part 'services/sound_diagnostics.dart';
 part 'services/saved_places.dart';
 part 'screens/auth_screen.dart';
 part 'screens/change_password_screen.dart';

@@ -35,16 +35,18 @@ abstract class TapGoPushPlatform {
   /// ke [foregroundMessages] tanpa bunyi apa pun (SnackBar tidak bersuara).
   /// Aplikasi di depan = ringtone notifikasi bawaan HP (tidak bergantung pada
   /// notifikasi); selain itu (atau bila ringtone gagal) = SATU notifikasi lokal
-  /// di channel `tapgo_alerts_v2`. Tidak pernah keduanya untuk peristiwa yang sama.
+  /// di channel `tapgo_alerts_v3`. Tidak pernah keduanya untuk peristiwa yang sama.
   Future<void> showForegroundAlert(TapGoPushMessage message);
 }
 
 /// Channel notifikasi untuk pembaruan perjalanan, chat, saldo, dan pembayaran.
-/// BARU: suara/prioritas channel yang sudah ada tidak berubah oleh pemasangan
-/// baru dan channel lama `tapgo_default` sudah terkunci senyap di HP yang pernah
-/// memasang APK lama. Dibuat di MainActivity.onCreate; id HARUS sama dengan
-/// manifest (default_notification_channel_id) dan payload FCM backend.
-const tapGoAlertChannelId = 'tapgo_alerts_v2';
+/// Suara/prioritas channel yang sudah ada tidak berubah oleh pemasangan baru,
+/// dan channel lama (`tapgo_default`, `tapgo_alerts_v2`) sudah terkunci di HP
+/// yang pernah memasang APK lama, jadi suara yang diubah SELALU membutuhkan id
+/// baru. v3 memakai berkas suara aplikasi (res/raw/tapgo_alert). Dibuat di
+/// MainActivity.onCreate; id HARUS sama dengan manifest
+/// (default_notification_channel_id) dan payload FCM backend.
+const tapGoAlertChannelId = 'tapgo_alerts_v3';
 const tapGoAlertChannelName = 'Peringatan TapGo';
 const tapGoAlertChannelDescription =
     'Pembaruan perjalanan, pesan chat, saldo, dan pembayaran';
@@ -394,13 +396,32 @@ String? tapGoOpenChatReference;
 /// menumpuk popup.
 final Set<String> _tapGoChatPopupRefs = <String>{};
 
-/// Pesan chat untuk layar chat yang sedang terbuka tidak berbunyi/berpopup.
+/// Bunyi otomatis untuk push latar depan. Pesan chat TIDAK termasuk: popup dan
+/// bunyinya satu pintu lewat [_tapGoAlertChat] (juga dipakai pemantau kotak
+/// masuk), supaya push dan kotak masuk tidak menggandakan peringatan.
 bool tapGoShouldAlertForeground(TapGoPushMessage message) {
-  if (message.data['type'] != 'chat_message') {
-    return true;
+  return message.data['type'] != 'chat_message';
+}
+
+final Map<String, DateTime> _tapGoChatAlertAt = <String, DateTime>{};
+
+/// Peringatan pesan chat baru: popup di dalam aplikasi + SATU bunyi. Tidak ada
+/// bila layar chat perjalanan itu terbuka (pesan masuk lewat polling layar itu)
+/// atau bila perjalanan yang sama sudah diperingatkan dalam 8 detik terakhir
+/// (push dan pemantau kotak masuk dapat melaporkan pesan yang sama).
+bool _tapGoAlertChat(TapGoPushMessage message, String reference) {
+  if (reference == tapGoOpenChatReference) return false;
+  final now = tapGoClockForTests();
+  final last = _tapGoChatAlertAt[reference];
+  if (last != null && now.difference(last) < const Duration(seconds: 8)) {
+    return false;
   }
-  final reference = tapGoRideReferenceFromPush(message.data);
-  return reference == null || reference != tapGoOpenChatReference;
+  _tapGoChatAlertAt[reference] = now;
+  _tapGoShowChatPopup(message, reference);
+  final controller = _tapGoPushController;
+  final platform = controller?.platform ?? tapGoPushPlatformForTests;
+  if (platform != null) unawaited(platform.showForegroundAlert(message));
+  return true;
 }
 
 void _tapGoShowForegroundPush(TapGoPushMessage message) {
@@ -420,11 +441,8 @@ void _tapGoShowForegroundPush(TapGoPushMessage message) {
   if (message.data['type'] == 'chat_message') {
     // Pesan chat baru: segarkan kotak masuk agar lencana ikut naik.
     _tapGoPushInvalidateChat?.call();
-    if (reference != null && reference == tapGoOpenChatReference) {
-      // Layar chat itu terbuka: pesan masuk lewat polling-nya, tanpa popup.
-      return;
-    }
-    if (reference != null && _tapGoShowChatPopup(message, reference)) {
+    if (reference != null) {
+      _tapGoAlertChat(message, reference);
       return;
     }
   }
@@ -543,5 +561,9 @@ void tapGoOpenFromPushForTests(TapGoPushMessage message) =>
 void tapGoResetPushUiForTests() {
   tapGoOpenChatReference = null;
   _tapGoChatPopupRefs.clear();
+  _tapGoChatAlertAt.clear();
+  tapGoClockForTests = DateTime.now;
+  tapGoPushPlatformForTests = null;
+  tapGoChatConversationsLoaderForTests = null;
   tapGoSearchContinuesRefs.value = const {};
 }

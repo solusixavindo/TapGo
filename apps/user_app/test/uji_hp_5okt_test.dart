@@ -229,21 +229,9 @@ void main() {
       await controller.stop();
     });
 
-    test('pesan chat untuk layar chat yang sedang terbuka tidak dibunyikan',
+    test('bunyi otomatis push: chat TIDAK termasuk (satu pintu lewat peringatan chat); jenis lain ya',
         () async {
-      tapGoOpenChatReference = _ref;
       expect(tapGoShouldAlertForeground(_chatPush), isFalse);
-      // Perjalanan lain, atau jenis pesan lain, tetap dibunyikan.
-      expect(
-          tapGoShouldAlertForeground(const TapGoPushMessage(
-            title: 't',
-            body: 'b',
-            data: {
-              'type': 'chat_message',
-              'rideReference': 'RID-ZZZZZZZZZZ',
-            },
-          )),
-          isTrue);
       expect(
           tapGoShouldAlertForeground(const TapGoPushMessage(
             title: 't',
@@ -251,8 +239,6 @@ void main() {
             data: {'type': 'ride_status', 'rideReference': _ref},
           )),
           isTrue);
-      tapGoOpenChatReference = null;
-      expect(tapGoShouldAlertForeground(_chatPush), isTrue);
     });
 
     test('controller memakai shouldAlert: chat yang layarnya terbuka senyap',

@@ -49,8 +49,21 @@ class TapGoChatConversation {
 
 /// Kotak masuk chat perjalanan. Dibersihkan saat sesi berganti (lihat
 /// TapGoUserApp) dan disegarkan berkala oleh [_ChatInboxPoller].
+/// Seam uji: mengganti pembacaan kotak masuk dari server.
+@visibleForTesting
+Future<List<Map<String, dynamic>>> Function()? tapGoChatConversationsLoaderForTests;
+
 final _chatConversationsProvider =
     FutureProvider<List<TapGoChatConversation>>((ref) async {
+  final loader = tapGoChatConversationsLoaderForTests;
+  if (loader != null) {
+    return [
+      for (final row in await loader())
+        if (TapGoChatConversation.tryParse(row, asPassenger: true)
+            case final conversation?)
+          conversation,
+    ];
+  }
   if (tapGoDashboardVisualFixtureEnabledForTests) {
     return const [];
   }
@@ -75,8 +88,46 @@ int _tapGoUnreadChatCount(AsyncValue<List<TapGoChatConversation>> value) {
       .fold<int>(0, (sum, item) => sum + item.unreadCount);
 }
 
-/// Menyegarkan kotak masuk tiap 30 detik selama aplikasi terbuka dan sudah masuk,
-/// agar lencana pesan baru muncul tanpa membuka tab Chat.
+/// Selang pembaruan kotak masuk: cepat (6 detik) selama ada percobaan chat
+/// yang masih dapat dibalas (perjalanan berjalan), lambat (30 detik) bila tidak.
+/// Murah: satu permintaan ke GET /chat/conversations.
+Duration tapGoChatInboxDelay(List<TapGoChatConversation>? latest) {
+  final hasLiveChat =
+      latest?.any((c) => c.isActive && c.canSend) ?? false;
+  return Duration(seconds: hasLiveChat ? 6 : 30);
+}
+
+/// Jam yang dipakai penjaga waktu peringatan chat; uji menggantinya karena
+/// DateTime.now() tidak ikut waktu palsu flutter_test.
+@visibleForTesting
+DateTime Function() tapGoClockForTests = DateTime.now;
+
+/// Membandingkan dua pembacaan kotak masuk dan memberi peringatan (popup + satu
+/// bunyi) untuk perjalanan yang jumlah pesan belum dibacanya NAIK. TANPA
+/// bergantung pada push FCM. Pembacaan pertama (previous == null) hanya menjadi
+/// patokan: pesan lama yang sudah ada saat aplikasi dibuka tidak diperingatkan.
+void tapGoHandleChatInboxUpdate(
+  List<TapGoChatConversation>? previous,
+  List<TapGoChatConversation>? next,
+) {
+  if (previous == null || next == null) return;
+  final before = {for (final c in previous) c.rideReference: c.unreadCount};
+  for (final conversation in next) {
+    if (conversation.unreadCount > (before[conversation.rideReference] ?? 0)) {
+      _tapGoAlertChat(
+        const TapGoPushMessage(
+          title: 'Pesan baru dari driver',
+          body: 'Ketuk untuk membaca.',
+        ),
+        conversation.rideReference,
+      );
+    }
+  }
+}
+
+/// Menyegarkan kotak masuk selama aplikasi terbuka dan sudah masuk: lencana
+/// pesan baru, titik merah pada tombol chat, dan peringatan pesan baru yang
+/// tidak bergantung pada FCM. Selang menyesuaikan [tapGoChatInboxDelay].
 class _ChatInboxPoller extends ConsumerStatefulWidget {
   const _ChatInboxPoller({required this.child});
 
@@ -95,13 +146,24 @@ class _ChatInboxPollerState extends ConsumerState<_ChatInboxPoller> {
     if (_tapGoRunningUnderTest) {
       return;
     }
-    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
-      final state = WidgetsBinding.instance.lifecycleState;
-      if (state != null && state != AppLifecycleState.resumed) {
-        return;
-      }
+    _schedule();
+  }
+
+  void _schedule() {
+    _timer?.cancel();
+    _timer = Timer(
+      tapGoChatInboxDelay(ref.read(_chatConversationsProvider).valueOrNull),
+      _tick,
+    );
+  }
+
+  void _tick() {
+    if (!mounted) return;
+    final state = WidgetsBinding.instance.lifecycleState;
+    if (state == null || state == AppLifecycleState.resumed) {
       ref.invalidate(_chatConversationsProvider);
-    });
+    }
+    _schedule();
   }
 
   @override
@@ -111,7 +173,17 @@ class _ChatInboxPollerState extends ConsumerState<_ChatInboxPoller> {
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    ref.listen<AsyncValue<List<TapGoChatConversation>>>(
+      _chatConversationsProvider,
+      (previous, next) {
+        final state = WidgetsBinding.instance.lifecycleState;
+        if (state != null && state != AppLifecycleState.resumed) return;
+        tapGoHandleChatInboxUpdate(previous?.valueOrNull, next.valueOrNull);
+      },
+    );
+    return widget.child;
+  }
 }
 
 /// Balasan cepat: satu ketuk mengirim, untuk situasi penjemputan yang terburu-buru.

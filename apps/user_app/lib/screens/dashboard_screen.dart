@@ -2208,6 +2208,12 @@ class AccountScreen extends ConsumerWidget {
             () => _openDemo(context, const ContactUsScreen()),
           ),
           _AccountMenuTile(
+            'Uji bunyi',
+            Icons.volume_up_rounded,
+            () => _openDemo(context, const TapGoSoundTestScreen()),
+            subtitle: 'Periksa notifikasi dan suara di HP ini',
+          ),
+          _AccountMenuTile(
             'Kebijakan Privasi',
             Icons.privacy_tip_rounded,
             () => _openDemo(

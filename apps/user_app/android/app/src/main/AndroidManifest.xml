@@ -18,7 +18,7 @@
         android:dataExtractionRules="@xml/data_extraction_rules">
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="tapgo_alerts_v2" />
+            android:value="tapgo_alerts_v3" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

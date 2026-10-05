@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tapgo_user_app/main.dart';
 
 /// Uji HP 6 Okt 2026: bunyi tidak boleh bergantung pada channel `tapgo_default`
-/// yang sudah terkunci senyap di HP. Channel BARU `tapgo_alerts_v2`; aplikasi
+/// yang sudah terkunci senyap di HP. Channel BARU `tapgo_alerts_v3`; aplikasi
 /// di depan memutar ringtone notifikasi bawaan (bukan notifikasi). Satu
 /// peristiwa = satu bunyi.
 
@@ -63,6 +63,8 @@ const _statusPush = TapGoPushMessage(
 String read(String path) => File(path).readAsStringSync();
 
 Future<TapGoPushController> startController(ProbePlatform platform) async {
+  // Peringatan chat satu pintu (_tapGoAlertChat) membunyikan lewat platform ini.
+  tapGoPushPlatformForTests = platform;
   final controller = TapGoPushController(
     platform: platform,
     register: (_) async {},
@@ -82,9 +84,9 @@ void main() {
   tearDown(tapGoResetPushUiForTests);
 
   group('rincian notifikasi lokal', () {
-    test('channel baru tapgo_alerts_v2, Importance.high, suara dan getar menyala', () {
+    test('channel baru tapgo_alerts_v3, Importance.high, suara dan getar menyala', () {
       final android = tapGoAlertNotificationDetails().android!;
-      expect(android.channelId, 'tapgo_alerts_v2');
+      expect(android.channelId, 'tapgo_alerts_v3');
       expect(android.channelName, 'Peringatan TapGo');
       expect(android.importance, Importance.high);
       expect(android.priority, Priority.high);
@@ -107,7 +109,7 @@ void main() {
       final p = ProbePlatform(ringtoneWorks: false);
       await p.showForegroundAlert(_statusPush);
       expect(p.shown, hasLength(1));
-      expect(p.shown.single.details.android!.channelId, 'tapgo_alerts_v2');
+      expect(p.shown.single.details.android!.channelId, 'tapgo_alerts_v3');
       expect(p.shown.single.details.android!.channelId, isNot('tapgo_default'));
     });
 
@@ -116,7 +118,7 @@ void main() {
       await p.showForegroundAlert(_chatPush);
       expect(p.ringtone, isEmpty);
       expect(p.shown, hasLength(1));
-      expect(p.shown.single.details.android!.channelId, 'tapgo_alerts_v2');
+      expect(p.shown.single.details.android!.channelId, 'tapgo_alerts_v3');
       expect(p.shown.single.title, 'Pesan baru dari driver');
     });
   });
@@ -198,52 +200,126 @@ void main() {
   });
 
   group('berkas Android', () {
-    final kotlin = read('android/app/src/main/kotlin/com/xavindo/tapgo/MainActivity.kt');
+    final main = read('android/app/src/main/kotlin/com/xavindo/tapgo/MainActivity.kt');
+    final sound = read('android/app/src/main/kotlin/com/xavindo/tapgo/AlertSound.kt');
     final manifest = read('android/app/src/main/AndroidManifest.xml');
 
-    test('MainActivity membuat tapgo_alerts_v2 di onCreate dengan suara eksplisit', () {
-      expect(kotlin, contains('"tapgo_alerts_v2"'));
-      expect(kotlin, contains('"Peringatan TapGo"'));
-      expect(kotlin, contains('NotificationManager.IMPORTANCE_HIGH'));
-      expect(kotlin, contains('enableVibration(true)'));
-      expect(kotlin, contains('RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)'));
-      expect(kotlin, contains('AudioAttributes.USAGE_NOTIFICATION'));
-      expect(kotlin, isNot(contains('setSound(null')));
-      final onCreate = kotlin.substring(kotlin.indexOf('override fun onCreate'));
-      expect(onCreate.indexOf('createAlertNotificationChannel()'),
+    test('AlertSound membuat tapgo_alerts_v3 dengan berkas suara aplikasi, getar, dan USAGE_NOTIFICATION', () {
+      expect(sound, contains('"tapgo_alerts_v3"'));
+      expect(sound, contains('"Peringatan TapGo"'));
+      expect(sound, contains('NotificationManager.IMPORTANCE_HIGH'));
+      expect(sound, contains('enableVibration(true)'));
+      expect(sound, contains('setSound(soundUri(), attributes())'));
+      expect(sound, contains('/raw/\$RAW_NAME'));
+      expect(sound, contains('AudioAttributes.USAGE_NOTIFICATION'));
+      expect(sound, isNot(contains('setSound(null')));
+      expect(sound, isNot(contains('setBypassDnd')));
+    });
+
+    test('channel dibuat sebelum notifikasi apa pun (onCreate); berkas suara ada', () {
+      final onCreate = main.substring(main.indexOf('override fun onCreate'));
+      expect(onCreate.indexOf('alertSound.createChannel()'),
           lessThan(onCreate.indexOf('override fun configureFlutterEngine')));
+      expect(File('android/app/src/main/res/raw/tapgo_alert.wav').existsSync(), isTrue);
+      expect(File('android/app/src/main/res/raw/tapgo_alert.wav').lengthSync(), greaterThan(10000));
+      expect(read('android/app/src/main/res/raw/keep.xml'), contains('tools:keep="@raw/tapgo_alert"'));
     });
 
-    test('MethodChannel tapgo.user/alerts memutar ringtone lewat RingtoneManager', () {
-      expect(kotlin, contains('"tapgo.user/alerts"'));
-      expect(kotlin, contains('"playNotificationSound"'));
-      expect(kotlin, contains('RingtoneManager.getRingtone(applicationContext'));
+    test('MethodChannel tapgo.user/alerts: putar, diagnostik, status izin, pengaturan', () {
+      expect(main, contains('"tapgo.user/alerts"'));
+      expect(main, contains('"playNotificationSound"'));
+      expect(main, contains('"soundDiagnostics"'));
+      expect(main, contains('"areNotificationsEnabled"'));
+      expect(main, contains('"openNotificationSettings"'));
+      expect(sound, contains('MediaPlayer'));
     });
 
-    test('manifest: channel default FCM ikut tapgo_alerts_v2', () {
-      expect(manifest, contains('android:value="tapgo_alerts_v2"'));
+    test('manifest: channel default FCM ikut tapgo_alerts_v3', () {
+      expect(manifest, contains('android:value="tapgo_alerts_v3"'));
     });
 
-    test('tapgo_default tidak lagi dipakai (Kotlin, manifest, Dart)', () {
-      expect(kotlin, isNot(contains('"tapgo_default"')));
-      expect(manifest, isNot(contains('tapgo_default')));
-      final offenders = <String>[];
-      for (final file in Directory('lib').listSync(recursive: true)) {
-        if (file is File && file.path.endsWith('.dart')) {
-          final text = file.readAsStringSync();
-          if (text.contains("'tapgo_default'") || text.contains('"tapgo_default"')) {
-            offenders.add(file.path);
+    test('channel lama (tapgo_default, tapgo_alerts_v2) tidak dipakai lagi', () {
+      for (final old in ['tapgo_default', 'tapgo_alerts_v2']) {
+        expect(main, isNot(contains('"$old"')));
+        expect(sound, isNot(contains('"$old"')));
+        expect(manifest, isNot(contains(old)));
+        final offenders = <String>[];
+        for (final file in Directory('lib').listSync(recursive: true)) {
+          if (file is File && file.path.endsWith('.dart')) {
+            final text = file.readAsStringSync();
+            if (text.contains("'$old'") || text.contains('"$old"')) {
+              offenders.add(file.path);
+            }
           }
         }
+        expect(offenders, isEmpty, reason: old);
       }
-      expect(offenders, isEmpty);
     });
 
     test('tidak ada izin RECORD_AUDIO atau USE_FULL_SCREEN_INTENT', () {
       expect(manifest, isNot(contains('RECORD_AUDIO')));
       expect(manifest, isNot(contains('USE_FULL_SCREEN_INTENT')));
       expect(manifest, isNot(contains('ACCESS_NOTIFICATION_POLICY')));
-      expect(kotlin, isNot(contains('setBypassDnd')));
+      expect(main + sound, isNot(contains('setBypassDnd')));
+    });
+  });
+
+  group('uji bunyi: pemeriksaan keadaan HP', () {
+    Map<String, Object?> sehat() => {
+          'notificationsEnabled': true,
+          'soundResourceFound': true,
+          'channelExists': true,
+          'channelImportance': 4,
+          'ringerMode': 2,
+          'volumeNotification': 7,
+          'volumeNotificationMax': 15,
+          'dndFilter': 1,
+          'playError': null,
+        };
+
+    test('HP sehat: semua hijau', () {
+      expect(tapGoSoundChecks(sehat()).every((c) => c.level == TapGoSoundCheckLevel.ok), isTrue);
+    });
+
+    test('tiap penghalang menghasilkan pemeriksaan merah dengan tindakan', () {
+      bool bad(Map<String, Object?> patch, String contains) =>
+          tapGoSoundChecks({...sehat(), ...patch}).any((c) =>
+              c.level == TapGoSoundCheckLevel.bad && c.title.contains(contains));
+      expect(bad({'notificationsEnabled': false}, 'Notifikasi dimatikan'), isTrue);
+      expect(bad({'ringerMode': 0}, 'mode senyap'), isTrue);
+      expect(bad({'volumeNotification': 0}, 'Volume notifikasi nol'), isTrue);
+      expect(bad({'dndFilter': 3}, 'Jangan Ganggu'), isTrue);
+      expect(bad({'channelImportance': 2}, 'tidak berstatus Penting'), isTrue);
+      expect(bad({'channelExists': false}, 'belum dibuat'), isTrue);
+      expect(bad({'soundResourceFound': false}, 'Berkas suara'), isTrue);
+      expect(bad({'playError': 'MediaPlayer error'}, 'gagal diputar'), isTrue);
+    });
+
+    test('laporan teks memuat nilai untuk dikirim ke tim', () {
+      expect(tapGoSoundReportText(sehat()), contains('ringerMode: 2'));
+    });
+
+    testWidgets('layar Uji bunyi: HP sehat hijau; volume nol merah dengan saran', (tester) async {
+      tapGoSoundDiagnosticsForTests = () async => sehat();
+      addTearDown(() => tapGoSoundDiagnosticsForTests = null);
+      await tester.pumpWidget(const MaterialApp(home: TapGoSoundTestScreen()));
+      await tester.pumpAndSettle();
+      expect(find.text('Pengaturan HP sudah benar.'), findsOneWidget);
+      expect(find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('sound-check-bad')), findsNothing);
+
+      tapGoSoundDiagnosticsForTests = () async => {...sehat(), 'volumeNotification': 0};
+      await tester.tap(find.byKey(const ValueKey('sound-test-again')));
+      await tester.pumpAndSettle();
+      expect(find.text('Volume notifikasi nol'), findsOneWidget);
+      expect(find.textContaining('Perbaiki yang bertanda merah'), findsOneWidget);
+    });
+
+    testWidgets('layar Uji bunyi: native tidak ada = pesan tidak tersedia', (tester) async {
+      tapGoSoundDiagnosticsForTests = () async => null;
+      addTearDown(() => tapGoSoundDiagnosticsForTests = null);
+      await tester.pumpWidget(const MaterialApp(home: TapGoSoundTestScreen()));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('sound-test-unavailable')), findsOneWidget);
     });
   });
 }
