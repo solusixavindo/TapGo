@@ -2922,6 +2922,332 @@ void main() {
       expect(repo.logoutCalls, 1);
     });
   });
+
+  group('uji HP 5 Okt 2026: bunyi order, popup chat, polling chat, pesan cepat', () {
+    const rideRef = 'RID-A2B3C4D5E6';
+
+    setUp(driverResetChatUiForTests);
+    tearDown(driverResetChatUiForTests);
+
+    DriverRide offerRide(String reference, {DateTime? updatedAt}) => DriverRide(
+          reference: reference,
+          serviceType: 'MOTORCYCLE',
+          status: RideStatus.searchingDriver,
+          pickupAddress: 'JEMPUT_$reference',
+          dropoffAddress: 'TUJUAN_$reference',
+          distanceMeters: 2500,
+          durationSeconds: 600,
+          totalFare: 9000,
+          updatedAt: updatedAt,
+        );
+
+    Future<void> pumpWith(
+      WidgetTester tester,
+      FakeDriverRepository repo, {
+      FakePushPlatform? platform,
+      Size size = const Size(390, 844),
+    }) async {
+      await tester.binding.setSurfaceSize(size);
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, pushPlatform: platform));
+      await tester.pumpAndSettle();
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      });
+    }
+
+    DriverController controllerOf(WidgetTester tester) =>
+        ProviderScope.containerOf(tester.element(find.byType(TapGoDriverApp)))
+            .read(driverControllerProvider.notifier);
+
+    Future<void> openChat(WidgetTester tester,
+        {Duration pollInterval = const Duration(seconds: 4)}) async {
+      driverNavigatorKey.currentState!.push(MaterialPageRoute<void>(
+        builder: (_) =>
+            RideChatScreen(rideReference: rideRef, pollInterval: pollInterval),
+      ));
+      await tester.pumpAndSettle();
+    }
+
+    Map<String, dynamic> passengerMessage(String id, String text) =>
+        {'id': id, 'senderType': 'USER', 'message': text};
+
+    const chatPush = DriverPushMessage(
+      title: 'Pesan baru dari penumpang',
+      body: 'Ketuk untuk membaca.',
+      data: {'type': 'chat_message', 'rideReference': rideRef},
+    );
+
+    Future<void> poll(WidgetTester tester) async {
+      await tester.pump(const Duration(seconds: 12));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    // ---------------- 1. bunyi order masuk ----------------
+
+    testWidgets('lembar tawaran terbuka dari POLLING: berbunyi (notifikasi lokal channel yang sama)',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = FakePushPlatform(token: 'tok');
+      await pumpWith(tester, repo, platform: platform);
+      expect(platform.foregroundAlerts, isEmpty);
+
+      repo.offerItems = [offerRide('RID-A2B3C4D5E7')];
+      await poll(tester);
+
+      expect(find.byType(OfferDetailSheet), findsOneWidget);
+      expect(platform.foregroundAlerts, hasLength(1));
+      expect(platform.foregroundAlerts.single.title, 'Order baru');
+      expect(platform.foregroundAlerts.single.data['type'], 'ride_offer');
+    });
+
+    testWidgets('order lewat PUSH latar depan + lembar yang terbuka: tepat SATU bunyi',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = FakePushPlatform(token: 'tok');
+      await pumpWith(tester, repo, platform: platform);
+
+      repo.offerItems = [offerRide('RID-A2B3C4D5E7')];
+      platform.foreground.add(const DriverPushMessage(
+        title: 'Order baru',
+        body: 'Ada penumpang di dekat Anda',
+        data: {'type': 'ride_offer', 'rideReference': 'RID-A2B3C4D5E7'},
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byType(OfferDetailSheet), findsOneWidget);
+      // Polling berikutnya tidak membunyikan lagi tawaran yang sama.
+      await poll(tester);
+      expect(platform.foregroundAlerts, hasLength(1));
+    });
+
+    testWidgets('dua tawaran berbeda: masing-masing berbunyi saat lembarnya terbuka; ketuk manual tidak berbunyi',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = FakePushPlatform(token: 'tok');
+      await pumpWith(tester, repo, platform: platform);
+
+      repo.offerItems = [offerRide('RID-A2B3C4D5E7')];
+      await poll(tester);
+      expect(platform.foregroundAlerts, hasLength(1));
+
+      // Tutup lalu tawaran kedua datang.
+      controllerOf(tester).closeOffer();
+      await tester.pumpAndSettle();
+      repo.offerItems = [offerRide('RID-A2B3C4D5E7'), offerRide('RID-A2B3C4D5E8')];
+      await poll(tester);
+      expect(platform.foregroundAlerts, hasLength(2));
+
+      // Ketuk manual pada tawaran yang sudah ada tidak membunyikan apa pun.
+      controllerOf(tester).closeOffer();
+      await tester.pumpAndSettle();
+      final before = platform.foregroundAlerts.length;
+      controllerOf(tester).selectOffer(offerRide('RID-A2B3C4D5E7'));
+      await tester.pumpAndSettle();
+      expect(platform.foregroundAlerts.length, before);
+    });
+
+    // ---------------- 2. popup chat ----------------
+
+    testWidgets('chat masuk saat layar chat TIDAK terbuka: popup + bunyi, tanpa isi pesan; Buka chat membuka chat',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = FakePushPlatform(token: 'tok');
+      await pumpWith(tester, repo, platform: platform);
+
+      platform.foreground.add(chatPush);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('chat-popup')), findsOneWidget);
+      expect(find.text('Pesan baru dari penumpang'), findsWidgets);
+      expect(platform.foregroundAlerts, hasLength(1));
+      expect(platform.foregroundAlerts.single.title, 'Pesan baru dari penumpang');
+      expect(platform.foregroundAlerts.single.body, 'Ketuk untuk membaca.');
+
+      await tester.tap(find.byKey(const ValueKey('chat-popup-open')));
+      await tester.pumpAndSettle();
+      expect(find.byType(RideChatScreen), findsOneWidget);
+      expect(driverOpenChatReference, rideRef);
+    });
+
+    testWidgets('chat masuk saat layar chat perjalanan itu SUDAH terbuka: hanya masuk daftar, tanpa popup dan tanpa bunyi',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = FakePushPlatform(token: 'tok');
+      await pumpWith(tester, repo, platform: platform);
+      await openChat(tester, pollInterval: Duration.zero);
+
+      repo.chatItems = [passengerMessage('m1', 'Saya di depan toko')];
+      platform.foreground.add(chatPush);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('chat-popup')), findsNothing);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(platform.foregroundAlerts, isEmpty);
+    });
+
+    testWidgets('pesan chat beruntun tidak menumpuk popup', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = FakePushPlatform(token: 'tok');
+      await pumpWith(tester, repo, platform: platform);
+      platform.foreground.add(chatPush);
+      platform.foreground.add(chatPush);
+      platform.foreground.add(chatPush);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('chat-popup')), findsOneWidget);
+    });
+
+    testWidgets('Nanti menutup popup tanpa membuka chat', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = FakePushPlatform(token: 'tok');
+      await pumpWith(tester, repo, platform: platform);
+      platform.foreground.add(chatPush);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('chat-popup-later')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('chat-popup')), findsNothing);
+      expect(find.byType(RideChatScreen), findsNothing);
+    });
+
+    testWidgets('referensi perjalanan tidak sah pada push chat: diabaikan', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = FakePushPlatform(token: 'tok');
+      await pumpWith(tester, repo, platform: platform);
+      platform.foreground.add(const DriverPushMessage(
+        title: 'Pesan baru dari penumpang',
+        body: 'x',
+        data: {'type': 'chat_message', 'rideReference': '../admin'},
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(platform.foregroundAlerts, isEmpty);
+    });
+
+    testWidgets('notifikasi chat yang diketuk (latar belakang) membuka layar chat',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = FakePushPlatform(token: 'tok');
+      await pumpWith(tester, repo, platform: platform);
+      platform.opened.add(chatPush);
+      await tester.pumpAndSettle();
+      expect(find.byType(RideChatScreen), findsOneWidget);
+    });
+
+    // ---------------- 2b. polling REST di chat driver ----------------
+
+    testWidgets('selama chat terbuka pesan penumpang diambil tiap 4 detik tanpa duplikat; dibaca-tandai',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpWith(tester, repo);
+      await openChat(tester);
+      expect(find.text('Halo, saya di gerbang'), findsNothing);
+      final fetchesAtOpen = repo.chatFetchCalls;
+
+      repo.chatItems = [passengerMessage('m1', 'Halo, saya di gerbang')];
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(repo.chatFetchCalls, greaterThan(fetchesAtOpen));
+      expect(find.text('Halo, saya di gerbang'), findsOneWidget);
+      expect(repo.chatMarkReadCalls, greaterThan(0));
+
+      // Polling berikutnya membawa pesan yang sama + satu pesan baru: tanpa duplikat.
+      repo.chatItems = [
+        passengerMessage('m1', 'Halo, saya di gerbang'),
+        passengerMessage('m2', 'Pakai jaket merah'),
+      ];
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.text('Halo, saya di gerbang'), findsOneWidget);
+      expect(find.text('Pakai jaket merah'), findsOneWidget);
+    });
+
+    testWidgets('selang polling 0 mematikan polling', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpWith(tester, repo);
+      await openChat(tester, pollInterval: Duration.zero);
+      final fetches = repo.chatFetchCalls;
+      await tester.pump(const Duration(seconds: 20));
+      expect(repo.chatFetchCalls, fetches);
+    });
+
+    testWidgets('polling berhenti setelah layar chat ditutup', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpWith(tester, repo);
+      await openChat(tester);
+      driverNavigatorKey.currentState!.pop();
+      await tester.pumpAndSettle();
+      expect(driverOpenChatReference, isNull);
+      final fetches = repo.chatFetchCalls;
+      await tester.pump(const Duration(seconds: 20));
+      expect(repo.chatFetchCalls, fetches);
+    });
+
+    // ---------------- 3. pesan cepat ----------------
+
+    testWidgets('chip pesan cepat dari sisi DRIVER tampil; kalimat penumpang tidak', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      // Lebar layar cukup agar keempat chip (daftar horizontal malas) terbangun.
+      await pumpWith(tester, repo, size: const Size(1400, 844));
+      await openChat(tester, pollInterval: Duration.zero);
+      for (final text in driverQuickReplies) {
+        expect(find.text(text), findsOneWidget);
+      }
+      expect(driverQuickReplies, [
+        'Saya menuju titik jemput',
+        'Saya sudah sampai',
+        'Mohon tunggu sebentar',
+        'Baik, saya mengerti',
+      ]);
+      for (final passengerText in [
+        'Saya sudah di titik jemput',
+        'Tunggu sebentar ya',
+        'Saya di seberang jalan',
+        'Terima kasih',
+      ]) {
+        expect(find.text(passengerText), findsNothing);
+      }
+    });
+
+    testWidgets('mengetuk chip mengirim lewat jalur kirim yang ada; pesan tampil sekali',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpWith(tester, repo, size: const Size(1400, 844));
+      await openChat(tester, pollInterval: Duration.zero);
+      await tester.tap(find.byKey(const ValueKey('driver_quick_reply_1')));
+      await tester.pumpAndSettle();
+      expect(repo.sentChat, ['Saya sudah sampai']);
+      // Satu di daftar chat (bubble) + satu pada chip.
+      expect(find.text('Saya sudah sampai'), findsNWidgets(2));
+    });
+
+    // ---------------- 8. tanpa badge Offline ----------------
+
+    testWidgets('chat driver tidak menampilkan label Offline/Live dan tidak mengubah ketersediaan',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpWith(tester, repo);
+      final availabilityBefore =
+          ProviderScope.containerOf(tester.element(find.byType(TapGoDriverApp)))
+              .read(driverControllerProvider)
+              .availability;
+      await openChat(tester, pollInterval: Duration.zero);
+
+      expect(find.textContaining('Offline'), findsNothing);
+      expect(find.textContaining('Live'), findsNothing);
+      expect(find.text('Chat Penumpang'), findsOneWidget);
+      // Membuka chat tidak mengubah ketersediaan driver.
+      expect(
+          ProviderScope.containerOf(tester.element(find.byType(RideChatScreen)))
+              .read(driverControllerProvider)
+              .availability,
+          availabilityBefore);
+      expect(repo.availabilityRequests, isEmpty);
+    });
+  });
 }
 
 Future<void> pumpDriver(
@@ -3354,16 +3680,32 @@ class FakeDriverRepository implements DriverRepository {
     return _snapshot();
   }
 
+  /// Isi chat yang dikembalikan server (diubah uji untuk mensimulasikan pesan masuk).
+  List<Map<String, dynamic>> chatItems = [];
+  int chatFetchCalls = 0;
+  int chatMarkReadCalls = 0;
+  final List<String> sentChat = [];
+
   @override
   Future<List<Map<String, dynamic>>> chatMessages(String rideReference) async {
-    return const [];
+    chatFetchCalls += 1;
+    return List.of(chatItems);
   }
 
   @override
-  Future<void> sendChatMessage(String rideReference, String message) async {}
+  Future<void> sendChatMessage(String rideReference, String message) async {
+    sentChat.add(message);
+    chatItems.add({
+      'id': 'sent-${sentChat.length}',
+      'senderType': 'DRIVER',
+      'message': message,
+    });
+  }
 
   @override
-  Future<void> markChatRead(String rideReference) async {}
+  Future<void> markChatRead(String rideReference) async {
+    chatMarkReadCalls += 1;
+  }
 
   int sendLocationCalls = 0;
 
@@ -3507,8 +3849,9 @@ class FakePushPlatform implements DriverPushPlatform {
   Stream<String> get tokenRefreshes => const Stream.empty();
   @override
   Stream<DriverPushMessage> get foregroundMessages => foreground.stream;
+  final opened = StreamController<DriverPushMessage>.broadcast();
   @override
-  Stream<DriverPushMessage> get openedMessages => const Stream.empty();
+  Stream<DriverPushMessage> get openedMessages => opened.stream;
   @override
   Future<void> deleteToken() async => deleted = true;
   @override

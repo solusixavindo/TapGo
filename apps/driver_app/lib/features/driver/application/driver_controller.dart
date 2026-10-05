@@ -31,8 +31,13 @@ class DriverController extends StateNotifier<DriverState>
       platform: platform,
       register: _repository.registerPushToken,
       unregister: _repository.unregisterPushToken,
+      shouldAlert: _shouldAlertForeground,
       onMessage: (message, {required bool opened}) {
         if (!mounted || message.type == null) return;
+        if (message.type == 'chat_message') {
+          _handleChatPush(message, opened: opened);
+          return;
+        }
         // SnackBar lewat key GLOBAL, BUKAN state.message: state.message
         // sebelumnya ditimpa ulang oleh refreshWorkspace() di bawah (yang
         // SELALU clearMessage: true) begitu offers berhasil dimuat — pada
@@ -57,6 +62,78 @@ class DriverController extends StateNotifier<DriverState>
       },
     );
     unawaited(_push!.start());
+  }
+
+  /// Pesan chat baru. Notifikasi yang diketuk membuka chat-nya; pesan latar
+  /// depan menampilkan popup, kecuali layar chat perjalanan itu sedang terbuka
+  /// (pesannya masuk lewat polling layar itu).
+  void _handleChatPush(DriverPushMessage message, {required bool opened}) {
+    final reference = message.rideReference;
+    if (reference == null) return;
+    if (opened) {
+      driverOpenChat(reference);
+      return;
+    }
+    if (reference == driverOpenChatReference) return;
+    driverShowChatPopup(message, reference);
+  }
+
+  /// Apakah pesan latar depan juga dibunyikan lewat notifikasi sistem.
+  bool _shouldAlertForeground(DriverPushMessage message) {
+    switch (message.type) {
+      case 'chat_message':
+        final reference = message.rideReference;
+        return reference != null && reference != driverOpenChatReference;
+      case 'ride_offer':
+        return _claimOfferSound(message.rideReference);
+      default:
+        return true;
+    }
+  }
+
+  /// Bunyi untuk SATU tawaran hanya sekali, walau datang dari dua jalur
+  /// (push latar depan dan lembar tawaran yang terbuka dari polling). Tanpa
+  /// referensi (push data-only) dipakai jendela waktu singkat.
+  final Map<String, DateTime> _offerSoundAt = <String, DateTime>{};
+
+  bool _claimOfferSound(String? reference) {
+    final now = DateTime.now();
+    _offerSoundAt.removeWhere(
+        (_, at) => now.difference(at) > const Duration(minutes: 2));
+    final recentAnonymous = _offerSoundAt['*'];
+    if (reference != null) {
+      if (_offerSoundAt.containsKey(reference)) return false;
+      if (recentAnonymous != null &&
+          now.difference(recentAnonymous) < const Duration(seconds: 15)) {
+        return false;
+      }
+      _offerSoundAt[reference] = now;
+      return true;
+    }
+    if (recentAnonymous != null &&
+        now.difference(recentAnonymous) < const Duration(seconds: 15)) {
+      return false;
+    }
+    _offerSoundAt['*'] = now;
+    return true;
+  }
+
+  /// Bunyi untuk tawaran yang BARU SAJA dibuka sebagai lembar tawaran. Sebelum
+  /// ini lembar dibuka dari polling dalam diam: suara hanya mungkin dari push
+  /// FCM latar depan, jadi order yang datang lewat polling tidak berbunyi.
+  void _soundOfferOpened(DriverRide offer) {
+    final platform = _pushPlatform;
+    if (platform == null) return;
+    // Di latar belakang notifikasi FCM sudah berbunyi; notifikasi lokal di sini
+    // hanya akan menggandakannya.
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (lifecycle != null && lifecycle != AppLifecycleState.resumed) return;
+    if (!_claimOfferSound(offer.reference)) return;
+    unawaited(platform.showForegroundAlert(DriverPushMessage(
+      title: 'Order baru',
+      body: 'Ada penumpang di dekat Anda',
+      data: {'type': 'ride_offer', 'rideReference': offer.reference},
+    )));
   }
 
   Future<void> _stopPush() async {
@@ -429,6 +506,7 @@ class DriverController extends StateNotifier<DriverState>
       if (at != null && (best == null || at.isAfter(best))) newest = offer;
     }
     selectOffer(newest);
+    _soundOfferOpened(newest);
   }
 
   Future<void> setAvailability(DriverAvailability availability) async {

@@ -14,10 +14,24 @@ class DriverPushMessage {
   final Map<String, String> data;
 
   /// Hanya jenis yang dikenal yang dipercaya; data push tidak menentukan
-  /// aksi apa pun selain menyegarkan daftar pesanan.
+  /// aksi apa pun selain menyegarkan daftar pesanan atau memberi tahu ada
+  /// pesan chat baru.
   String? get type {
     final value = data['type'];
-    return value == 'ride_offer' || value == 'ride_cancelled' ? value : null;
+    return value == 'ride_offer' ||
+            value == 'ride_cancelled' ||
+            value == 'chat_message'
+        ? value
+        : null;
+  }
+
+  /// Referensi perjalanan dari data push bila bentuknya sah; data push tidak
+  /// dipercaya mentah.
+  String? get rideReference {
+    final value = data['rideReference'];
+    return value != null && _driverRideReferencePattern.hasMatch(value)
+        ? value
+        : null;
   }
 
   /// Pesan `ride_offer` tanpa judul dan isi (data-only) diberi teks bawaan.
@@ -34,6 +48,8 @@ class DriverPushMessage {
     );
   }
 }
+
+final _driverRideReferencePattern = RegExp(r'^RID-[A-Z0-9]{6,20}$');
 
 /// Batas antara aplikasi dan plugin Firebase; uji memakai implementasi palsu.
 abstract class DriverPushPlatform {
@@ -182,6 +198,7 @@ class DriverPushController {
     required this.register,
     required this.unregister,
     required this.onMessage,
+    this.shouldAlert,
   });
 
   final DriverPushPlatform platform;
@@ -191,6 +208,11 @@ class DriverPushController {
   /// Dipanggil untuk pesan latar depan maupun notifikasi yang diketuk.
   final void Function(DriverPushMessage message, {required bool opened})
       onMessage;
+
+  /// Menentukan apakah pesan latar depan juga dibunyikan lewat notifikasi
+  /// sistem; null = selalu. Mencegah bunyi ganda (push + lembar tawaran) dan
+  /// bunyi untuk chat yang layarnya sedang terbuka.
+  final bool Function(DriverPushMessage message)? shouldAlert;
 
   final List<StreamSubscription<Object?>> _subscriptions = [];
   String? _token;
@@ -214,7 +236,9 @@ class DriverPushController {
           (raw) {
             final m = raw.withRideOfferDefaults();
             onMessage(m, opened: false);
-            unawaited(platform.showForegroundAlert(m));
+            if (shouldAlert?.call(m) ?? true) {
+              unawaited(platform.showForegroundAlert(m));
+            }
           },
           onError: (_) {},
         ))
@@ -252,4 +276,75 @@ class DriverPushController {
       await platform.deleteToken();
     } catch (_) {}
   }
+}
+
+// ---------------------------------------------------------------------------
+// Pesan chat baru: popup di dalam aplikasi
+// ---------------------------------------------------------------------------
+
+/// Referensi perjalanan yang layar chat-nya SEDANG terbuka (null bila tidak
+/// ada). Pesan untuk perjalanan itu cukup masuk ke daftar chat lewat polling:
+/// tanpa popup dan tanpa bunyi tambahan.
+String? driverOpenChatReference;
+
+/// Perjalanan yang popup chat-nya sedang tampil, supaya pesan beruntun tidak
+/// menumpuk popup.
+final Set<String> _driverChatPopupRefs = <String>{};
+
+/// Membuka layar chat perjalanan dari mana pun (popup atau ketukan notifikasi).
+void driverOpenChat(String reference) {
+  driverNavigatorKey.currentState?.push(
+    MaterialPageRoute<void>(
+      builder: (_) => RideChatScreen(rideReference: reference),
+    ),
+  );
+}
+
+/// Popup untuk pesan chat baru saat layar chat-nya tidak terbuka. Tidak memuat
+/// isi pesan (push memang hanya membawa judul peran pengirim), dengan tombol
+/// yang membuka chat perjalanan itu. Mengembalikan false bila belum ada
+/// navigator untuk menampilkannya.
+bool driverShowChatPopup(DriverPushMessage message, String reference) {
+  final context = driverNavigatorKey.currentState?.overlay?.context;
+  if (context == null) return false;
+  if (!_driverChatPopupRefs.add(reference)) {
+    return true; // popup untuk perjalanan ini sudah tampil
+  }
+  unawaited(
+    showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('chat-popup'),
+        icon: Icon(Icons.chat_bubble_rounded,
+            color: Theme.of(dialogContext).colorScheme.primary),
+        title: Text(message.title.trim().isEmpty
+            ? 'Pesan baru dari penumpang'
+            : message.title),
+        content: const Text('Ketuk "Buka chat" untuk membaca dan membalas.'),
+        actions: [
+          TextButton(
+            key: const ValueKey('chat-popup-later'),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Nanti'),
+          ),
+          FilledButton(
+            key: const ValueKey('chat-popup-open'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Buka chat'),
+          ),
+        ],
+      ),
+    ).then((open) {
+      _driverChatPopupRefs.remove(reference);
+      if (open == true) driverOpenChat(reference);
+    }),
+  );
+  return true;
+}
+
+/// Mengosongkan status UI chat global antar uji.
+@visibleForTesting
+void driverResetChatUiForTests() {
+  driverOpenChatReference = null;
+  _driverChatPopupRefs.clear();
 }

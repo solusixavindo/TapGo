@@ -8,6 +8,10 @@ part of '../main.dart';
 /// user_app — sudah terbukti, bukan pendekatan baru yang belum teruji.
 final driverScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
+/// Navigator global: popup pesan chat dan ketukan notifikasi chat harus dapat
+/// membuka layar dari mana pun driver berada, tanpa BuildContext titik tiba.
+final driverNavigatorKey = GlobalKey<NavigatorState>();
+
 class TapGoDriverApp extends ConsumerWidget {
   const TapGoDriverApp({super.key});
 
@@ -23,6 +27,7 @@ class TapGoDriverApp extends ConsumerWidget {
       title: 'TapGo Driver',
       debugShowCheckedModeBanner: false,
       scaffoldMessengerKey: driverScaffoldMessengerKey,
+      navigatorKey: driverNavigatorKey,
       themeMode: testOverride ?? userPreference ?? ThemeMode.system,
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
