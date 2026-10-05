@@ -1,21 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      Gold TapGo (#FFC857 — sama dengan warna `gold` di lib/app/driver_app.dart),
-      BUKAN navy. Frame gold pada logo asli adalah cincin di TEPI LUAR kartu
-      navy, dengan bentuk rounded-square TETAP milik desain aslinya — tidak
-      ada launcher Android yang menjamin memotong ikon persis dengan bentuk
-      itu (circle, squircle, rounded-square dengan radius berbeda-beda per
-      OEM). Membakar cincin gold ke foreground (pendekatan sebelumnya)
-      membuatnya terputus/hilang sebagian di launcher yang bentuk potongnya
-      tidak cocok dengan rounded-square asli — persis laporan Owner 28 Sep.
-
-      Perbaikannya: GOLD jadi warna BACKGROUND penuh satu kanvas, dan kartu
-      navy (ic_launcher_foreground.png) diperkecil, jauh di dalam safe-zone
-      66dp — sehingga bentuk potong APA PUN yang dipakai launcher hanya
-      memotong gold di tepi terluar (yang seragam di semua sisi), sementara
-      kartu navy di tengah tidak pernah tersentuh garis potong sama sekali.
-      Hasilnya: cincin gold utuh, tanpa putus, di launcher mana pun.
+      Navy TapGo (#082140, diambil dari latar logo resmi). Lambang emas pada navy
+      memberi kontras tertinggi dan paling dekat dengan logo resmi; latar emas
+      sebelumnya membuat lambang navy tipis tampak kecil dan pucat pada ukuran ikon.
     -->
-    <color name="ic_launcher_background">#FFC857</color>
+    <color name="ic_launcher_background">#082140</color>
+    <!-- Warna aksen notifikasi (ikon kecil di bilah status): emas TapGo. -->
+    <color name="tapgo_notification_accent">#FFC857</color>
 </resources>

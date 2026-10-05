@@ -40,6 +40,15 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="tapgo_alerts_v3" />
+        <!-- Ikon kecil (siluet putih) dan warna aksen notifikasi FCM latar belakang;
+             tanpa ini Android memakai ikon peluncur berwarna yang tampil sebagai
+             gumpalan putih di bilah status. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_tapgo" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/tapgo_notification_accent" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -87,6 +87,9 @@ abstract class DriverPushPlatform {
 /// v3 memakai berkas suara aplikasi (res/raw/tapgo_alert), bukan nada bawaan HP.
 /// Dibuat di MainActivity.onCreate; id HARUS sama dengan manifest
 /// (default_notification_channel_id) dan payload FCM backend.
+/// Ikon kecil notifikasi (siluet putih, drawable/ic_stat_tapgo).
+const driverNotificationIcon = 'ic_stat_tapgo';
+
 const driverAlertChannelId = 'tapgo_alerts_v3';
 const driverAlertChannelName = 'Peringatan TapGo';
 const driverAlertChannelDescription =
@@ -107,6 +110,7 @@ NotificationDetails driverAlertNotificationDetails() =>
         priority: Priority.high,
         playSound: true,
         enableVibration: true,
+        icon: driverNotificationIcon,
       ),
     );
 
@@ -155,7 +159,7 @@ class FirebaseDriverPushPlatform implements DriverPushPlatform {
         const InitializationSettings(
           // Ikon peluncur aplikasi — sama seperti yang FCM pakai otomatis
           // untuk notifikasi latar belakang, bukan aset terpisah.
-          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          android: AndroidInitializationSettings(driverNotificationIcon),
         ),
       );
       _localNotificationsInitialized = true;
