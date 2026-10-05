@@ -214,6 +214,18 @@ rideRouter.post(
 // ADMIN/SUPER_ADMIN tidak mendapat bypass ke route operasional driver.
 driverRideRouter.use(requireAuth, createRequireDriverCapability(prisma));
 
+// Hanya MEMBACA availability profil dari database; tidak menulis apa pun. Klien
+// memakainya agar kartu beranda mengikuti server (bukan memori aplikasi) saat
+// dibuka ulang atau setelah perjalanan selesai. Auth sama dengan POST di bawah
+// (createRequireDriverCapability pada seluruh /driver/*).
+driverRideRouter.get(
+  "/availability",
+  asyncHandler(async (req, res) => {
+    const data = await rideService.getAvailability(req.auth!.userId);
+    res.json({ success: true, data });
+  }),
+);
+
 driverRideRouter.post(
   "/availability",
   rideWriteRateLimiter,

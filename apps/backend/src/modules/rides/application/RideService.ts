@@ -619,6 +619,15 @@ export class RideService {
   // Driver
   // -------------------------------------------------------------------------
 
+  /**
+   * Availability profil driver SEKARANG menurut database. Murni baca: tidak
+   * menyentuh availability, onlineSince, lastSeenAt, atau verifikasi wajah.
+   */
+  async getAvailability(userId: string) {
+    const profile = await this.requireDriverProfile(userId);
+    return { availability: profile.availability };
+  }
+
   async setAvailability(input: {
     userId: string;
     availability: RideDriverAvailability;
@@ -1072,6 +1081,17 @@ export class RideService {
         "RIDE_ORDER_NOT_FOUND",
       );
     }
+    // Penolakan berulang oleh driver yang sama tidak boleh menggandakan
+    // pemberitahuan ke penumpang: dicek SEBELUM menulis event (actorUserId unik
+    // per driver per order lewat eventKeySuffix).
+    const alreadyRejected = await this.prisma.rideEvent.findFirst({
+      where: {
+        rideOrderId: order.id,
+        type: "DRIVER_REJECTED_OFFER",
+        actorUserId: input.userId,
+      },
+      select: { id: true },
+    });
     // Menolak tawaran tidak mengubah status order (order tetap dicari driver lain).
     await this.writeEvent(this.prisma, {
       rideOrderId: order.id,
@@ -1081,7 +1101,36 @@ export class RideService {
       metadata: { driverProfileId: profile.id },
       eventKeySuffix: profile.id,
     });
+    if (!alreadyRejected) {
+      this.notifyPassengerSearchContinues(input.publicReference);
+    }
     return { rejected: true };
+  }
+
+  /**
+   * Memberi tahu penumpang bahwa seorang driver tidak mengambil pesanan dan
+   * pencarian dilanjutkan. Hanya bila order MASIH SEARCHING_DRIVER (dibaca ulang
+   * setelah catatan penolakan tertulis): bila driver lain sudah menerima, pesan
+   * ini keliru. Tidak mengubah status order, tanpa identitas driver, tidak
+   * pernah ditunggu, dan kegagalan push tidak memengaruhi penolakan.
+   */
+  private notifyPassengerSearchContinues(publicReference: string) {
+    if (!this.push.enabled) return;
+    void this.prisma.rideOrder
+      .findUnique({
+        where: { publicReference },
+        select: { passengerId: true, status: true },
+      })
+      .then((row) =>
+        row && row.status === "SEARCHING_DRIVER"
+          ? this.push.notifyUser(row.passengerId, {
+              title: "Masih mencari driver",
+              body: "Seorang driver tidak mengambil pesanan. Pencarian dilanjutkan.",
+              data: { type: "ride_search_continues", rideReference: publicReference },
+            })
+          : undefined,
+      )
+      .catch(() => undefined);
   }
 
   /** Transisi status oleh driver yang ditugaskan. */

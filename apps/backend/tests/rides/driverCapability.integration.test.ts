@@ -40,6 +40,7 @@ let sequence = 0;
 
 /** Seluruh route operasional driver yang dilindungi capability guard. */
 const DRIVER_ACTION_ROUTES: Array<{ method: string; path: string; body?: unknown }> = [
+  { method: "GET", path: "/api/v1/driver/availability" },
   { method: "POST", path: "/api/v1/driver/availability", body: { availability: "ONLINE" } },
   { method: "GET", path: "/api/v1/driver/rides/offers" },
   { method: "GET", path: "/api/v1/driver/rides/current" },
