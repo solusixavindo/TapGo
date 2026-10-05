@@ -227,6 +227,8 @@ void tapGoStartPush() {
 
 /// Dipanggil sebelum sesi dihapus (logout).
 Future<void> tapGoStopPush() async {
+  // Catatan "pencarian dilanjutkan" milik sesi ini tidak boleh terbawa ke akun lain.
+  tapGoSearchContinuesRefs.value = const {};
   final controller = _tapGoPushController;
   if (controller == null) {
     return;
@@ -234,12 +236,31 @@ Future<void> tapGoStopPush() async {
   await controller.stop();
 }
 
+/// Perjalanan yang barusan mendapat pemberitahuan "pencarian dilanjutkan"
+/// (seorang driver menolak tawaran; status order TIDAK berubah). Dibaca
+/// RideStatusScreen untuk menampilkan satu baris di kartu mencari driver.
+final ValueNotifier<Set<String>> tapGoSearchContinuesRefs =
+    ValueNotifier<Set<String>>(const {});
+
+/// Hook uji: menjalankan penanganan push latar depan tanpa Firebase.
+@visibleForTesting
+void tapGoShowForegroundPushForTests(TapGoPushMessage message) =>
+    _tapGoShowForegroundPush(message);
+
 void _tapGoShowForegroundPush(TapGoPushMessage message) {
   final text = [message.title, message.body].where((s) => s.isNotEmpty).join('\n');
   if (text.isEmpty) {
     return;
   }
   final reference = tapGoRideReferenceFromPush(message.data);
+  // Informasi, bukan peristiwa: dicatat untuk satu baris di kartu mencari
+  // driver, tanpa SnackBar dan tanpa mengubah status yang tampil.
+  if (message.data['type'] == 'ride_search_continues') {
+    if (reference != null) {
+      tapGoSearchContinuesRefs.value = {...tapGoSearchContinuesRefs.value, reference};
+    }
+    return;
+  }
   _tapGoScaffoldMessengerKey.currentState
     ?..hideCurrentSnackBar()
     ..showSnackBar(

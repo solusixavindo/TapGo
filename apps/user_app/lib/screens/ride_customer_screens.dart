@@ -2009,6 +2009,29 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
               fontSize: 13.5,
             ),
           ),
+          // Seorang driver menolak tawaran: pencarian berlanjut, status order
+          // tetap "Mencari driver" (tidak dibatalkan).
+          ValueListenableBuilder<Set<String>>(
+            valueListenable: tapGoSearchContinuesRefs,
+            builder: (context, refs, _) {
+              if (!refs.contains(widget.reference)) {
+                return const SizedBox.shrink();
+              }
+              return Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Text(
+                  'Seorang driver tidak mengambil pesanan. Pencarian dilanjutkan.',
+                  key: const ValueKey('search-continues-notice'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 12.5,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              );
+            },
+          ),
         ],
       ),
     );

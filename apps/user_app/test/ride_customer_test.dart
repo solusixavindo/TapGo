@@ -618,6 +618,72 @@ void main() {
   // -------------------------------------------------------------------------
 
   group('status dan pengungkapan driver', () {
+    // State global (notifier push) tidak boleh bocor antar tes.
+    setUp(() => tapGoSearchContinuesRefs.value = const {});
+    tearDown(() => tapGoSearchContinuesRefs.value = const {});
+
+    testWidgets(
+        '11b. push "pencarian dilanjutkan" di latar depan: satu baris di kartu mencari driver, status tetap Mencari driver',
+        (tester) async {
+      // Seorang driver menolak tawaran; order tidak berubah status. Penumpang
+      // diberi tahu pencarian berlanjut, TANPA layar seolah order dibatalkan.
+      useTallView(tester);
+      await tester.pumpWidget(
+        wrapRide(
+          RideStatusScreen(
+            reference: 'RID-A2B3C4D5E6',
+            autoStart: false,
+            initialOrder: RideOrderView.fromJson(
+              orderPayload(status: 'SEARCHING_DRIVER'),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      const notice = 'Seorang driver tidak mengambil pesanan. Pencarian dilanjutkan.';
+      expect(find.text(notice), findsNothing);
+
+      tapGoShowForegroundPushForTests(const TapGoPushMessage(
+        title: 'Masih mencari driver',
+        body: notice,
+        data: {'type': 'ride_search_continues', 'rideReference': 'RID-A2B3C4D5E6'},
+      ));
+      await tester.pump();
+
+      expect(find.text(notice), findsOneWidget);
+      expect(find.text('Mencari driver'), findsOneWidget);
+      expect(find.textContaining('Dibatalkan'), findsNothing);
+      expect(find.textContaining('dibatalkan'), findsNothing);
+      // Informasi, bukan SnackBar: tidak menutupi layar.
+      expect(find.byType(SnackBar), findsNothing);
+    });
+
+    testWidgets('11c. push "pencarian dilanjutkan" untuk perjalanan lain tidak muncul di layar ini',
+        (tester) async {
+      useTallView(tester);
+      await tester.pumpWidget(
+        wrapRide(
+          RideStatusScreen(
+            reference: 'RID-A2B3C4D5E6',
+            autoStart: false,
+            initialOrder: RideOrderView.fromJson(
+              orderPayload(status: 'SEARCHING_DRIVER'),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      tapGoShowForegroundPushForTests(const TapGoPushMessage(
+        title: 'Masih mencari driver',
+        body: 'Seorang driver tidak mengambil pesanan. Pencarian dilanjutkan.',
+        data: {'type': 'ride_search_continues', 'rideReference': 'RID-ZZZZZZZZZZ'},
+      ));
+      await tester.pump();
+
+      expect(find.textContaining('Pencarian dilanjutkan'), findsNothing);
+    });
+
     testWidgets('11. status pencarian driver mengikuti status server', (
       tester,
     ) async {
