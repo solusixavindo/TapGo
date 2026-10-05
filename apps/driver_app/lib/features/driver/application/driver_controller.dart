@@ -28,6 +28,14 @@ class DriverController extends StateNotifier<DriverState>
   final DriverPushPlatform? _pushPlatform;
   DriverPushController? _push;
 
+  /// StateNotifier secara bawaan memberi tahu pendengar bila objek state BERBEDA
+  /// IDENTITAS, walau nilainya sama. Poll 12 detik selalu membuat state baru
+  /// dengan isi yang sama, sehingga seluruh layar dibangun ulang tiap poll.
+  /// Dengan kesetaraan nilai ([DriverState.==]), refresh tanpa perubahan tidak
+  /// membangunkan siapa pun.
+  @override
+  bool updateShouldNotify(DriverState old, DriverState current) => old != current;
+
   /// Mendaftarkan token push setelah workspace aktif (idempoten).
   void _startPush() {
     final platform = _pushPlatform;
@@ -440,12 +448,18 @@ class DriverController extends StateNotifier<DriverState>
         return;
       }
       final previousOfferRefs = state.offers.map((o) => o.reference).toSet();
-      final offers = await _repository.offers();
+      // Dua permintaan yang tidak saling bergantung dijalankan BERSAMAAN
+      // (sebelumnya berurutan: waktu muat = jumlah keduanya).
       // Availability mengikuti SERVER (bukan memori klien): dibuka ulang saat
       // server ONLINE harus tampil Online. Hanya membaca — jangan memanggil
       // setAvailability di sini, supaya onlineSince dan verifikasi wajah tidak
       // direset. Server lama tanpa GET: pertahankan keadaan klien.
-      final serverAvailability = await _fetchServerAvailability();
+      final fetched = await Future.wait<Object?>([
+        _repository.offers(),
+        _fetchServerAvailability(),
+      ]);
+      final offers = fetched[0]! as List<DriverRide>;
+      final serverAvailability = fetched[1] as DriverAvailability?;
       final availability = switch (_repository) {
         DemoDriverRepository demo => demo.currentAvailability,
         _ => serverAvailability == null
@@ -1104,9 +1118,36 @@ class DriverController extends StateNotifier<DriverState>
     state = state.copyWith(status: status, message: error.message);
   }
 
+  /// Selang polling adaptif: 12 detik saat aplikasi di depan; 30 detik saat
+  /// berjalan di latar belakang (driver Online). Order tetap datang cepat lewat
+  /// push; polling latar belakang hanya jaring pengaman, jadi tidak perlu
+  /// memakai data dan baterai sebanyak saat layar dipandang.
+  static const _foregroundPollInterval = Duration(seconds: 12);
+  static const _backgroundPollInterval = Duration(seconds: 30);
+  Duration? _pollTimerInterval;
+
+  /// Selang yang berlaku sekarang (terlihat agar uji dapat memeriksanya).
+  @visibleForTesting
+  Duration? get pollIntervalForTests => _pollTimer == null ? null : _pollTimerInterval;
+
+  Duration _wantedPollInterval() {
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    return lifecycle == null || lifecycle == AppLifecycleState.resumed
+        ? _foregroundPollInterval
+        : _backgroundPollInterval;
+  }
+
+  void _ensurePollTimer() {
+    final wanted = _wantedPollInterval();
+    if (_pollTimer != null && _pollTimerInterval == wanted) return;
+    _pollTimer?.cancel();
+    _pollTimerInterval = wanted;
+    _pollTimer = Timer.periodic(wanted, (_) => _poll());
+  }
+
   void _startPolling() {
     if (state.activeRide?.isTerminal ?? false) return;
-    _pollTimer ??= Timer.periodic(const Duration(seconds: 12), (_) => _poll());
+    _ensurePollTimer();
     state = state.copyWith(isPolling: true);
     _startLocationUpdates();
     _startSafetyMonitoring();
@@ -1116,6 +1157,7 @@ class DriverController extends StateNotifier<DriverState>
   void _stopPolling() {
     _pollTimer?.cancel();
     _pollTimer = null;
+    _pollTimerInterval = null;
     if (mounted) {
       state = state.copyWith(
         isPolling: false,
@@ -1267,6 +1309,8 @@ class DriverController extends StateNotifier<DriverState>
         !_keepAliveInBackground) {
       _stopPolling();
     }
+    // Selang mengikuti keadaan aplikasi (di depan atau di latar belakang).
+    if (_pollTimer != null) _ensurePollTimer();
     if (state == AppLifecycleState.resumed) {
       unawaited(refreshWorkspace(background: true));
     }

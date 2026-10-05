@@ -139,9 +139,18 @@ class _DriverShellState extends ConsumerState<DriverShell> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(driverControllerProvider);
+    // Hanya bidang yang dipakai cangkang ini yang ditonton: perubahan penawaran,
+    // lokasi, dsb. tidak lagi membangun ulang seluruh cangkang dan isi tab.
+    final view = ref.watch(driverControllerProvider.select((s) => (
+          status: s.status,
+          // Pesan hanya dipakai layar non-aktif.
+          message: s.status == DriverWorkspaceStatus.active ? null : s.message,
+          authenticated: s.isAuthenticated,
+          busy: s.isBusy,
+          chatUnread: s.totalChatUnread,
+        )));
     final controller = ref.read(driverControllerProvider.notifier);
-    final showTabs = state.status == DriverWorkspaceStatus.active;
+    final showTabs = view.status == DriverWorkspaceStatus.active;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -160,10 +169,10 @@ class _DriverShellState extends ConsumerState<DriverShell> {
               onPressed: () => showSosDialog(context, ref),
               icon: const Icon(Icons.sos_rounded, color: Colors.redAccent),
             ),
-          if (state.isAuthenticated)
+          if (view.authenticated)
             IconButton(
               tooltip: 'Logout',
-              onPressed: state.isBusy ? null : controller.logout,
+              onPressed: view.busy ? null : controller.logout,
               icon: const Icon(Icons.logout_rounded),
             ),
         ],
@@ -174,10 +183,10 @@ class _DriverShellState extends ConsumerState<DriverShell> {
             DriverOverlay(
               child: Padding(
                 padding:
-                    EdgeInsets.only(bottom: state.isAuthenticated ? 24 : 0),
+                    EdgeInsets.only(bottom: view.authenticated ? 24 : 0),
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 220),
-                  child: showTabs ? _tabBodyFor(_tabIndex) : _bodyFor(state),
+                  child: showTabs ? _tabBodyFor(_tabIndex) : _bodyFor(view.status, view.message),
                 ),
               ),
             ),
@@ -186,7 +195,7 @@ class _DriverShellState extends ConsumerState<DriverShell> {
           ],
         ),
       ),
-      bottomNavigationBar: state.isAuthenticated && showTabs
+      bottomNavigationBar: view.authenticated && showTabs
           ? NavigationBar(
               selectedIndex: _tabIndex,
               onDestinationSelected: (value) =>
@@ -200,8 +209,8 @@ class _DriverShellState extends ConsumerState<DriverShell> {
                   // Titik merah bila ada pesan chat penumpang yang belum dibaca.
                   icon: Badge(
                     key: const ValueKey('orders-tab-badge'),
-                    isLabelVisible: state.totalChatUnread > 0,
-                    label: Text('${state.totalChatUnread}'),
+                    isLabelVisible: view.chatUnread > 0,
+                    label: Text('${view.chatUnread}'),
                     child: const Icon(Icons.receipt_long_rounded),
                   ),
                   label: 'Pesanan',
@@ -237,8 +246,8 @@ class _DriverShellState extends ConsumerState<DriverShell> {
     }
   }
 
-  Widget _bodyFor(DriverState state) {
-    switch (state.status) {
+  Widget _bodyFor(DriverWorkspaceStatus status, String? message) {
+    switch (status) {
       case DriverWorkspaceStatus.loading:
         return const LoadingScreen(key: ValueKey('loading'));
       case DriverWorkspaceStatus.unauthenticated:
@@ -248,7 +257,7 @@ class _DriverShellState extends ConsumerState<DriverShell> {
           key: const ValueKey('profile-required'),
           title: 'Profil driver diperlukan',
           message:
-              state.message ?? 'Akun ini belum memiliki profil driver aktif.',
+              message ?? 'Akun ini belum memiliki profil driver aktif.',
           icon: Icons.badge_rounded,
           // H1: jalur pengajuan mandiri — calon mitra tanpa profil justru
           // harus bisa mengunggah dokumen dan mengirim pengajuannya di sini.
@@ -258,7 +267,7 @@ class _DriverShellState extends ConsumerState<DriverShell> {
         return CapabilityScreen(
           key: const ValueKey('pending'),
           title: 'Akun driver belum aktif',
-          message: state.message ?? 'Pengajuan driver sedang ditinjau.',
+          message: message ?? 'Pengajuan driver sedang ditinjau.',
           icon: Icons.hourglass_top_rounded,
           // Menunggu peninjauan adalah saat berkas paling dibutuhkan.
           showDocuments: true,
@@ -267,7 +276,7 @@ class _DriverShellState extends ConsumerState<DriverShell> {
         return CapabilityScreen(
           key: const ValueKey('rejected'),
           title: 'Pengajuan perlu diperbaiki',
-          message: state.message ??
+          message: message ??
               'Berkas Anda belum dapat diterima. Unggah ulang berkas yang diminta.',
           icon: Icons.error_outline_rounded,
           // Ditolak berarti ada yang harus diperbaiki, jadi jalur unggahnya
@@ -278,7 +287,7 @@ class _DriverShellState extends ConsumerState<DriverShell> {
         return CapabilityScreen(
           key: const ValueKey('suspended'),
           title: 'Akses driver dihentikan',
-          message: state.message ?? 'Akun driver belum dapat digunakan.',
+          message: message ?? 'Akun driver belum dapat digunakan.',
           icon: Icons.block_rounded,
           // Penghentian akses TIDAK dibuka jalur unggahnya: mengunggah berkas
           // tidak akan mengubah keputusan itu, dan menampilkan tombolnya hanya
@@ -288,14 +297,14 @@ class _DriverShellState extends ConsumerState<DriverShell> {
         return CapabilityScreen(
           key: const ValueKey('account-inactive'),
           title: 'Akun tidak aktif',
-          message: state.message ?? 'Hubungi dukungan TapGo.',
+          message: message ?? 'Hubungi dukungan TapGo.',
           icon: Icons.lock_rounded,
         );
       case DriverWorkspaceStatus.sessionExpired:
         return CapabilityScreen(
           key: const ValueKey('session-expired'),
           title: 'Sesi berakhir',
-          message: state.message ?? 'Silakan login kembali.',
+          message: message ?? 'Silakan login kembali.',
           icon: Icons.lock_clock_rounded,
           showLoginAction: true,
         );
@@ -303,7 +312,7 @@ class _DriverShellState extends ConsumerState<DriverShell> {
         return CapabilityScreen(
           key: const ValueKey('network-error'),
           title: 'Koneksi belum stabil',
-          message: state.message ?? 'Coba muat ulang beberapa saat lagi.',
+          message: message ?? 'Coba muat ulang beberapa saat lagi.',
           icon: Icons.wifi_off_rounded,
           showRetry: true,
         );

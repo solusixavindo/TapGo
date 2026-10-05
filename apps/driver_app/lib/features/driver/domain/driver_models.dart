@@ -414,6 +414,57 @@ class DriverState {
     return null;
   }
 
+  /// Kesetaraan NILAI: StateNotifier tidak memberi tahu pendengar bila state
+  /// baru sama dengan yang lama, sehingga refresh yang tidak mengubah apa pun
+  /// tidak membangun ulang layar. Bidang bertipe yang tidak punya kesetaraan
+  /// nilai (dokumen, pengajuan, kelelahan) dibandingkan menurut identitas:
+  /// paling buruk dianggap berubah (aman), tidak pernah dianggap sama keliru.
+  @override
+  bool operator ==(Object other) =>
+      other is DriverState &&
+      other.status == status &&
+      other.availability == availability &&
+      listEquals(other.offers, offers) &&
+      other.session == session &&
+      other.activeRide == activeRide &&
+      other.selectedOffer == selectedOffer &&
+      other.message == message &&
+      other.isBusy == isBusy &&
+      other.isPolling == isPolling &&
+      other.demoScenario == demoScenario &&
+      listEquals(other.documents, documents) &&
+      other.uploadingDocument == uploadingDocument &&
+      identical(other.application, application) &&
+      other.documentsComplete == documentsComplete &&
+      other.vehiclePlateMasked == vehiclePlateMasked &&
+      other.locationIssue == locationIssue &&
+      identical(other.fatigueWarning, fatigueWarning) &&
+      other.faceRecheckDue == faceRecheckDue &&
+      mapEquals(other.chatUnread, chatUnread);
+
+  @override
+  int get hashCode => Object.hash(
+        status,
+        availability,
+        Object.hashAll(offers),
+        session,
+        activeRide,
+        selectedOffer,
+        message,
+        isBusy,
+        isPolling,
+        demoScenario,
+        Object.hashAll(documents),
+        uploadingDocument,
+        application == null ? 0 : identityHashCode(application),
+        documentsComplete,
+        vehiclePlateMasked,
+        locationIssue,
+        fatigueWarning == null ? 0 : identityHashCode(fatigueWarning),
+        faceRecheckDue,
+        Object.hashAll(chatUnread.entries.map((e) => Object.hash(e.key, e.value))),
+      );
+
   bool get isAuthenticated => session != null;
   bool get isActive => status == DriverWorkspaceStatus.active;
   bool get hasTerminalRide => activeRide?.isTerminal ?? false;
@@ -490,6 +541,16 @@ class DriverSession {
   final String accessToken;
   final String refreshToken;
   final String driverName;
+
+  @override
+  bool operator ==(Object other) =>
+      other is DriverSession &&
+      other.accessToken == accessToken &&
+      other.refreshToken == refreshToken &&
+      other.driverName == driverName;
+
+  @override
+  int get hashCode => Object.hash(accessToken, refreshToken, driverName);
 }
 
 /// Hasil langkah 1 Daftar/Masuk dengan Google.
@@ -598,6 +659,52 @@ class DriverRide {
   final int? totalFare;
   final String currency;
   final DateTime? updatedAt;
+
+  // Kesetaraan NILAI: poll yang membawa data sama tidak boleh dianggap perubahan
+  // state (tanpa ini tiap poll 12 detik membangun ulang seluruh layar).
+  @override
+  bool operator ==(Object other) =>
+      other is DriverRide &&
+      other.reference == reference &&
+      other.serviceType == serviceType &&
+      other.status == status &&
+      other.pickupAddress == pickupAddress &&
+      other.dropoffAddress == dropoffAddress &&
+      other.pickupNote == pickupNote &&
+      other.pickupLat == pickupLat &&
+      other.pickupLng == pickupLng &&
+      other.dropoffLat == dropoffLat &&
+      other.dropoffLng == dropoffLng &&
+      other.passengerName == passengerName &&
+      other.distanceMeters == distanceMeters &&
+      other.durationSeconds == durationSeconds &&
+      other.totalFare == totalFare &&
+      other.currency == currency &&
+      other.updatedAt == updatedAt &&
+      other.paymentMethod == paymentMethod &&
+      other.distanceToPickupMeters == distanceToPickupMeters;
+
+  @override
+  int get hashCode => Object.hash(
+        reference,
+        serviceType,
+        status,
+        pickupAddress,
+        dropoffAddress,
+        pickupNote,
+        pickupLat,
+        pickupLng,
+        dropoffLat,
+        dropoffLng,
+        passengerName,
+        distanceMeters,
+        durationSeconds,
+        totalFare,
+        currency,
+        updatedAt,
+        paymentMethod,
+        distanceToPickupMeters,
+      );
 
   bool get isTerminal => {
         RideStatus.completed,

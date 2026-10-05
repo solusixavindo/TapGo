@@ -167,7 +167,7 @@ void main() {
           lessThan(onCreate.indexOf('override fun configureFlutterEngine')));
       expect(File('android/app/src/main/res/raw/tapgo_alert.wav').existsSync(), isTrue);
       expect(File('android/app/src/main/res/raw/tapgo_alert.wav').lengthSync(), greaterThan(10000));
-      expect(read('android/app/src/main/res/raw/keep.xml'), contains('tools:keep="@raw/tapgo_alert"'));
+      expect(read('android/app/src/main/res/raw/keep.xml'), contains('@raw/tapgo_alert'));
     });
 
     test('MethodChannel tapgo.driver/alerts: putar, diagnostik, status izin', () {

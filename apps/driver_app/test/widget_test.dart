@@ -3340,7 +3340,7 @@ void main() {
       expect(find.byKey(const ValueKey('chat-popup')), findsOneWidget);
     });
 
-    testWidgets('di belakang: peristiwa memakai notifikasi channel tapgo_alerts_v2, bukan tapgo_default, dan tanpa ringtone',
+    testWidgets('di belakang: peristiwa memakai notifikasi channel tapgo_alerts_v3, bukan tapgo_default, dan tanpa ringtone',
         (tester) async {
       final repo = FakeDriverRepository(session: demoSession);
       final platform = RingtoneProbePlatform(foreground: false);
@@ -3359,7 +3359,7 @@ void main() {
       expect(platform.ringtone, isEmpty);
       expect(platform.shown, hasLength(1));
       final android = platform.shown.single.android!;
-      expect(android.channelId, 'tapgo_alerts_v2');
+      expect(android.channelId, 'tapgo_alerts_v3');
       expect(android.channelId, isNot('tapgo_default'));
       expect(android.playSound, isTrue);
     });
@@ -3596,6 +3596,91 @@ void main() {
       expect(find.byKey(const ValueKey('trip-chat-badge')), findsOneWidget);
       expect(find.text('Chat dengan Penumpang (pesan baru)'), findsOneWidget);
     });
+
+    // ---------------- Performa: poll tanpa perubahan tidak membangun ulang layar ----------------
+    //
+    // Baseline terukur sebelum perbaikan (6 Okt 2026, flutter test + debugOnRebuildDirtyWidget):
+    // 3 poll 12 detik tanpa perubahan data = 1135 rebuild elemen di Beranda dan 1134 di tab
+    // Pesanan (≈378 per poll). Penyebab: poll membuat objek DriverState baru bernilai sama dan
+    // StateNotifier memberi tahu pendengar bila identitasnya berbeda; seluruh layar menonton
+    // seluruh state.
+
+    Future<int> countIdlePollRebuilds(WidgetTester tester, {int polls = 3}) async {
+      // Satu poll pemanasan menyerap perubahan nyata pertama (mis. isu lokasi).
+      await poll(tester);
+      var rebuilds = 0;
+      final previous = debugOnRebuildDirtyWidget;
+      debugOnRebuildDirtyWidget = (element, builtOnce) => rebuilds += 1;
+      addTearDown(() => debugOnRebuildDirtyWidget = previous);
+      for (var i = 0; i < polls; i++) {
+        await poll(tester);
+      }
+      debugOnRebuildDirtyWidget = previous;
+      return rebuilds;
+    }
+
+    testWidgets('PERFORMA: 3 poll tanpa perubahan data tidak membangun ulang layar Beranda', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpWith(tester, repo);
+      final rebuilds = await countIdlePollRebuilds(tester);
+      expect(rebuilds, lessThanOrEqualTo(10), reason: 'baseline sebelum perbaikan: 1135');
+    });
+
+    testWidgets('PERFORMA: 3 poll tanpa perubahan data tidak membangun ulang tab Pesanan (2 tawaran)', (tester) async {
+      final repo = FakeDriverRepository(
+          session: demoSession,
+          offerItems: [offerRide('RID-A2B3C4D5E7'), offerRide('RID-A2B3C4D5E8')]);
+      await pumpWith(tester, repo);
+      await poll(tester);
+      controllerOf(tester).closeOffer();
+      await tester.pumpAndSettle();
+      controllerOf(tester).closeOffer();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.receipt_long_rounded));
+      await tester.pumpAndSettle();
+      final rebuilds = await countIdlePollRebuilds(tester);
+      expect(rebuilds, lessThanOrEqualTo(10), reason: 'baseline sebelum perbaikan: 1134');
+    });
+
+    testWidgets('PERFORMA: data yang BENAR-BENAR berubah tetap membangun ulang (tawaran baru muncul)', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpWith(tester, repo);
+      await poll(tester);
+      repo.offerItems = [offerRide('RID-A2B3C4D5E7')];
+      await poll(tester);
+      expect(find.byType(OfferDetailSheet), findsOneWidget);
+    });
+
+    testWidgets('PERFORMA: tawaran dan availability dimuat BERSAMAAN (bukan berurutan)', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpWith(tester, repo);
+      repo.offersDelay = const Duration(milliseconds: 100);
+      repo.availabilityDelay = const Duration(milliseconds: 100);
+      repo.offerItems = [offerRide('RID-A2B3C4D5E7')];
+      unawaited(controllerOf(tester).refreshWorkspace());
+      // Berurutan butuh 200 ms; bersamaan cukup ±100 ms.
+      await tester.pump(const Duration(milliseconds: 120));
+      await tester.pump();
+      expect(find.byType(OfferDetailSheet), findsOneWidget);
+    });
+
+    testWidgets('PERFORMA: selang polling 12 dtk di depan, 30 dtk di latar belakang (Online), kembali 12 dtk saat dibuka', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession)..availability = DriverAvailability.online;
+      await pumpWith(tester, repo);
+      await poll(tester);
+      expect(controllerOf(tester).pollIntervalForTests, const Duration(seconds: 12));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      expect(controllerOf(tester).pollIntervalForTests, const Duration(seconds: 30));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump();
+      expect(controllerOf(tester).pollIntervalForTests, const Duration(seconds: 12));
+    });
   });
 }
 
@@ -3789,6 +3874,7 @@ class FakeDriverRepository implements DriverRepository {
   @override
   Future<DriverAvailability> fetchAvailability() async {
     availabilityGetCalls += 1;
+    if (availabilityDelay > Duration.zero) await Future<void>.delayed(availabilityDelay);
     if (availabilityGetError != null) throw availabilityGetError!;
     return availability;
   }
@@ -3801,9 +3887,14 @@ class FakeDriverRepository implements DriverRepository {
     return availabilityCompleter?.future ?? availability;
   }
 
+  /// Latensi buatan (waktu palsu flutter_test) untuk menguji paralelisme refresh.
+  Duration offersDelay = Duration.zero;
+  Duration availabilityDelay = Duration.zero;
+
   @override
   Future<List<DriverRide>> offers() async {
     offersCalls += 1;
+    if (offersDelay > Duration.zero) await Future<void>.delayed(offersDelay);
     if (offersError != null) throw offersError!;
     return offerItems;
   }
