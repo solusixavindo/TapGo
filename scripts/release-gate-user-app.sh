@@ -66,7 +66,10 @@ aab="$app/build/app/outputs/bundle/release/app-release.aab"
 step "5. Pemeriksa artefak dan identitas paket"
 "$root/scripts/verify-mobile-artifact.sh" "$apk"
 "$root/scripts/verify-mobile-artifact.sh" "$aab"
-# Trust anchor harus benar-benar tertanam di biner Dart di setiap ABI: baris
+# Keselarasan 16 KB (syarat Play untuk target Android 15+).
+"$root/scripts/check-native-alignment.sh" "$apk" || fail "keselarasan 16 KB pada APK"
+"$root/scripts/check-native-alignment.sh" "$aab" || fail "keselarasan 16 KB pada AAB"
+# Trust anchor harus benar-benar tertanam di biner Dart setiap ABI: baris
 # pertama basis64 tiap anchor di lib/services/tls_pinning.dart dicari di libapp.so. Dihitung
 # dengan grep -c (bukan -q): -q menutup pipa lebih awal, unzip kena SIGPIPE,
 # dan pipefail menandai pemeriksaan gagal padahal anchor ada.

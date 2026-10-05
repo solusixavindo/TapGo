@@ -41,6 +41,14 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Tanpa x86_64: pustaka native TensorFlow Lite untuk x86_64 tidak selaras
+        // 16 KB (alignment 4 KB), sedangkan Play mensyaratkan dukungan 16 KB untuk
+        // aplikasi yang menarget Android 15+. x86_64 hanya dipakai emulator dan
+        // sebagian kecil Chromebook, bukan ponsel driver. Pemeriksaan keselarasan
+        // ada di scripts/check-native-alignment.sh (dipanggil gerbang rilis).
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     signingConfigs {

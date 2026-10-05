@@ -66,6 +66,10 @@ aab="$app/build/app/outputs/bundle/release/app-release.aab"
 step "5. Pemeriksa artefak dan identitas paket"
 VERIFY_CONTROL_STRING="/driver/rides/offers" "$root/scripts/verify-mobile-artifact.sh" "$apk"
 VERIFY_CONTROL_STRING="/driver/rides/offers" "$root/scripts/verify-mobile-artifact.sh" "$aab"
+# Keselarasan 16 KB (syarat Play untuk target Android 15+) dan tanpa ABI x86_64:
+# pustaka TensorFlow Lite x86_64 tidak selaras (temuan 6 Okt 2026).
+"$root/scripts/check-native-alignment.sh" "$apk" --forbid-abi x86_64 || fail "keselarasan 16 KB / ABI x86_64 pada APK"
+"$root/scripts/check-native-alignment.sh" "$aab" --forbid-abi x86_64 || fail "keselarasan 16 KB / ABI x86_64 pada AAB"
 # Trust anchor harus benar-benar tertanam di biner Dart di setiap ABI: baris
 # pertama basis64 tiap anchor di lib/core/security/tls_pinning.dart dicari di libapp.so. Dihitung
 # dengan grep -c (bukan -q): -q menutup pipa lebih awal, unzip kena SIGPIPE,
