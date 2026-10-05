@@ -29,9 +29,67 @@ abstract class TapGoPushPlatform {
   /// Notifikasi yang diketuk hingga membuka aplikasi dari keadaan tertutup.
   Future<TapGoPushMessage?> initialMessage();
   Future<void> deleteToken();
+
+  /// Notifikasi SISTEM (dengan suara) untuk pesan yang tiba SAAT APP DI DEPAN.
+  /// FCM hanya menampilkan notifikasi otomatis di latar belakang; di depan
+  /// pesan sampai ke [foregroundMessages] tanpa bunyi apa pun (SnackBar tidak
+  /// bersuara). Channel sama dengan notifikasi latar (`tapgo_default`,
+  /// IMPORTANCE_HIGH, dibuat MainActivity.kt), bukan channel baru.
+  Future<void> showForegroundAlert(TapGoPushMessage message);
 }
 
 class FirebasePushPlatform implements TapGoPushPlatform {
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
+  bool _localNotificationsInitialized = false;
+  int _notificationId = 0;
+
+  Future<void> _ensureLocalNotificationsInitialized() async {
+    if (_localNotificationsInitialized) {
+      return;
+    }
+    try {
+      await _localNotifications.initialize(
+        const InitializationSettings(
+          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        ),
+      );
+      _localNotificationsInitialized = true;
+    } catch (error) {
+      _tapGoDebugLog('[TapGo Push] notifikasi lokal gagal init: $error');
+    }
+  }
+
+  @override
+  Future<void> showForegroundAlert(TapGoPushMessage message) async {
+    if (message.title.isEmpty && message.body.isEmpty) {
+      return;
+    }
+    try {
+      await _ensureLocalNotificationsInitialized();
+      if (!_localNotificationsInitialized) {
+        return;
+      }
+      // Tanpa playSound:false / sound:null: suara bawaan channel dipakai.
+      await _localNotifications.show(
+        _notificationId++,
+        message.title,
+        message.body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'tapgo_default',
+            'Notifikasi TapGo',
+            channelDescription: 'Pembaruan perjalanan, saldo, dan pembayaran',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+        ),
+      );
+    } catch (error) {
+      _tapGoDebugLog('[TapGo Push] notifikasi latar depan dilewati: $error');
+    }
+  }
+
   Future<bool> _ensureInitialized() async {
     try {
       if (Firebase.apps.isEmpty) {
@@ -122,6 +180,7 @@ class TapGoPushController {
     required this.unregister,
     required this.onForeground,
     required this.onOpened,
+    this.shouldAlert,
   });
 
   final TapGoPushPlatform platform;
@@ -129,6 +188,11 @@ class TapGoPushController {
   final Future<void> Function(String token) unregister;
   final void Function(TapGoPushMessage message) onForeground;
   final void Function(TapGoPushMessage message) onOpened;
+
+  /// Menentukan apakah pesan latar depan juga dibunyikan lewat notifikasi
+  /// sistem; null = selalu. Dipakai agar pesan chat tidak berbunyi ganda saat
+  /// layar chat perjalanan itu sedang terbuka.
+  final bool Function(TapGoPushMessage message)? shouldAlert;
 
   final List<StreamSubscription<Object?>> _subscriptions = [];
   String? _token;
@@ -154,7 +218,15 @@ class TapGoPushController {
           (token) => unawaited(_register(token)),
           onError: (_) {},
         ))
-        ..add(platform.foregroundMessages.listen(onForeground, onError: (_) {}))
+        ..add(platform.foregroundMessages.listen(
+          (message) {
+            onForeground(message);
+            if (shouldAlert?.call(message) ?? true) {
+              unawaited(platform.showForegroundAlert(message));
+            }
+          },
+          onError: (_) {},
+        ))
         ..add(platform.openedMessages.listen(onOpened, onError: (_) {}));
       final initial = await platform.initialMessage();
       if (initial != null && _started) {
@@ -214,6 +286,7 @@ TapGoPushController _tapGoPush() {
     unregister: _apiClient.unregisterPushToken,
     onForeground: _tapGoShowForegroundPush,
     onOpened: _tapGoOpenFromPush,
+    shouldAlert: tapGoShouldAlertForeground,
   );
 }
 
@@ -247,19 +320,48 @@ final ValueNotifier<Set<String>> tapGoSearchContinuesRefs =
 void tapGoShowForegroundPushForTests(TapGoPushMessage message) =>
     _tapGoShowForegroundPush(message);
 
+/// Referensi chat perjalanan yang layar chat-nya SEDANG terbuka (null bila
+/// tidak ada). Diisi RideChatScreen. Pesan untuk perjalanan itu cukup masuk ke
+/// daftar chat: tidak ada popup dan tidak ada bunyi tambahan.
+String? tapGoOpenChatReference;
+
+/// Perjalanan yang popup chat-nya sedang tampil, supaya pesan beruntun tidak
+/// menumpuk popup.
+final Set<String> _tapGoChatPopupRefs = <String>{};
+
+/// Pesan chat untuk layar chat yang sedang terbuka tidak berbunyi/berpopup.
+bool tapGoShouldAlertForeground(TapGoPushMessage message) {
+  if (message.data['type'] != 'chat_message') {
+    return true;
+  }
+  final reference = tapGoRideReferenceFromPush(message.data);
+  return reference == null || reference != tapGoOpenChatReference;
+}
+
 void _tapGoShowForegroundPush(TapGoPushMessage message) {
   final text = [message.title, message.body].where((s) => s.isNotEmpty).join('\n');
   if (text.isEmpty) {
     return;
   }
   final reference = tapGoRideReferenceFromPush(message.data);
-  // Informasi, bukan peristiwa: dicatat untuk satu baris di kartu mencari
-  // driver, tanpa SnackBar dan tanpa mengubah status yang tampil.
+  // Informasi, bukan peristiwa: dicatat untuk kartu mencari driver, tanpa
+  // SnackBar dan tanpa mengubah status yang tampil.
   if (message.data['type'] == 'ride_search_continues') {
     if (reference != null) {
       tapGoSearchContinuesRefs.value = {...tapGoSearchContinuesRefs.value, reference};
     }
     return;
+  }
+  if (message.data['type'] == 'chat_message') {
+    // Pesan chat baru: segarkan kotak masuk agar lencana ikut naik.
+    _tapGoPushInvalidateChat?.call();
+    if (reference != null && reference == tapGoOpenChatReference) {
+      // Layar chat itu terbuka: pesan masuk lewat polling-nya, tanpa popup.
+      return;
+    }
+    if (reference != null && _tapGoShowChatPopup(message, reference)) {
+      return;
+    }
   }
   _tapGoScaffoldMessengerKey.currentState
     ?..hideCurrentSnackBar()
@@ -276,10 +378,49 @@ void _tapGoShowForegroundPush(TapGoPushMessage message) {
               ),
       ),
     );
-  // Pesan chat baru: segarkan kotak masuk agar lencana ikut naik.
-  if (message.data['type'] == 'chat_message') {
-    _tapGoPushInvalidateChat?.call();
+}
+
+/// Popup di dalam aplikasi untuk pesan chat baru saat layar chat-nya tidak
+/// terbuka. Tidak memuat isi pesan (push memang hanya membawa judul peran
+/// pengirim), dengan tombol yang membuka chat perjalanan itu. Mengembalikan
+/// false bila tidak ada tempat menampilkannya (pemanggil memakai SnackBar).
+bool _tapGoShowChatPopup(TapGoPushMessage message, String reference) {
+  final context = _tapGoNavigatorKey.currentState?.overlay?.context;
+  if (context == null) {
+    return false;
   }
+  if (!_tapGoChatPopupRefs.add(reference)) {
+    return true; // popup untuk perjalanan ini sudah tampil
+  }
+  unawaited(
+    showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('chat-popup'),
+        icon: const Icon(Icons.chat_bubble_rounded, color: _brandBlue),
+        title: Text(message.title.isEmpty ? 'Pesan baru' : message.title),
+        content: const Text('Ketuk "Buka chat" untuk membaca dan membalas.'),
+        actions: [
+          TextButton(
+            key: const ValueKey('chat-popup-later'),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Nanti'),
+          ),
+          FilledButton(
+            key: const ValueKey('chat-popup-open'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Buka chat'),
+          ),
+        ],
+      ),
+    ).then((open) {
+      _tapGoChatPopupRefs.remove(reference);
+      if (open == true) {
+        _tapGoOpenChat(reference);
+      }
+    }),
+  );
+  return true;
 }
 
 /// Diisi TapGoUserApp; dipakai push latar depan untuk menyegarkan lencana chat.
@@ -292,9 +433,14 @@ void _tapGoOpenFromPush(TapGoPushMessage message) {
   }
   if (message.data['type'] == 'chat_message') {
     _tapGoOpenChat(reference);
-  } else {
-    _tapGoOpenRide(reference);
+    return;
   }
+  if (message.data['type'] == 'ride_search_continues') {
+    // Catatan yang sama dengan penerimaan di depan, supaya layar status tidak
+    // menunggu poll berikutnya untuk menampilkan pemberitahuannya.
+    tapGoSearchContinuesRefs.value = {...tapGoSearchContinuesRefs.value, reference};
+  }
+  _tapGoOpenRide(reference);
 }
 
 void _tapGoOpenChat(String reference) {
@@ -311,4 +457,26 @@ void _tapGoOpenRide(String reference) {
       builder: (_) => RideStatusScreen(reference: reference),
     ),
   );
+}
+
+// --- Seam uji ---------------------------------------------------------------
+
+@visibleForTesting
+GlobalKey<NavigatorState> get tapGoNavigatorKeyForTests => _tapGoNavigatorKey;
+
+@visibleForTesting
+GlobalKey<ScaffoldMessengerState> get tapGoScaffoldMessengerKeyForTests =>
+    _tapGoScaffoldMessengerKey;
+
+/// Menjalankan penanganan ketukan notifikasi tanpa Firebase.
+@visibleForTesting
+void tapGoOpenFromPushForTests(TapGoPushMessage message) =>
+    _tapGoOpenFromPush(message);
+
+/// Mengosongkan status UI push global antar uji.
+@visibleForTesting
+void tapGoResetPushUiForTests() {
+  tapGoOpenChatReference = null;
+  _tapGoChatPopupRefs.clear();
+  tapGoSearchContinuesRefs.value = const {};
 }

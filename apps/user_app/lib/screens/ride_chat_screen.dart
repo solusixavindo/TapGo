@@ -42,6 +42,7 @@ class _RideChatScreenState extends ConsumerState<RideChatScreen> {
   @override
   void initState() {
     super.initState();
+    tapGoOpenChatReference = widget.rideReference;
     _loadHistory();
     _connectSocket();
     if (!_tapGoRunningUnderTest ||
@@ -52,6 +53,9 @@ class _RideChatScreenState extends ConsumerState<RideChatScreen> {
 
   @override
   void dispose() {
+    if (tapGoOpenChatReference == widget.rideReference) {
+      tapGoOpenChatReference = null;
+    }
     _pollTimer?.cancel();
     _socket?.dispose();
     _textController.dispose();

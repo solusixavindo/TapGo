@@ -123,8 +123,8 @@ abstract class LocationSelectionPort {
 
   /// Cari kandidat alamat dari teks bebas (mis. "Monas Jakarta").
   ///
-  /// [near] membatasi hasil ke sekitar satu titik (mis. titik jemput yang
-  /// sudah dipilih) supaya rekomendasi tidak melompat ke kota/provinsi lain
+  /// [near] adalah POSISI HP: hasil dibatasi ke sekitarnya dan diurutkan dari
+  /// yang terdekat, supaya rekomendasi tidak melompat ke kota/provinsi lain
   /// yang kebetulan punya nama jalan sama.
   Future<List<RideAddressCandidate>> searchAddress(
     String query, {
@@ -145,6 +145,22 @@ abstract class LocationSelectionPort {
   Future<RideLocation?> lastKnownLocation();
 }
 
+/// Jarak garis lurus (haversine) dalam meter antara dua koordinat.
+double tapGoHaversineMeters(
+  double lat1,
+  double lng1,
+  double lat2,
+  double lng2,
+) {
+  const earthRadiusMeters = 6371000.0;
+  double rad(double degrees) => degrees * pi / 180;
+  final dLat = rad(lat2 - lat1);
+  final dLng = rad(lng2 - lng1);
+  final a = pow(sin(dLat / 2), 2) +
+      cos(rad(lat1)) * cos(rad(lat2)) * pow(sin(dLng / 2), 2);
+  return 2 * earthRadiusMeters * asin(min(1.0, sqrt(a)));
+}
+
 /// Label pendek dari hasil Nominatim: dua komponen pertama alamat.
 String _shortLabel(String displayName) {
   final parts = displayName.split(',').map((p) => p.trim()).toList();
@@ -157,22 +173,29 @@ String _shortLabel(String displayName) {
 /// dan membatasi 1 permintaan/detik; klien di sini mematuhinya dengan antrean
 /// sederhana (permintaan berturut dijeda) dan header yang jelas.
 class OsmLocationPort implements LocationSelectionPort, LiveLocationSource {
-  OsmLocationPort({Dio? http}) : _http = http ?? Dio();
+  OsmLocationPort({
+    Dio? http,
+    Duration requestGap = const Duration(milliseconds: 1100),
+  })  : _http = http ?? Dio(),
+        _requestGap = requestGap;
 
   static const _searchUrl = 'https://nominatim.openstreetmap.org/search';
   static const _reverseUrl = 'https://nominatim.openstreetmap.org/reverse';
   static const _userAgent = 'TapGo-Customer/2.0 (kontak: admin@tapgolion.id)';
 
   final Dio _http;
+
+  /// Jeda minimal antar permintaan Nominatim (kebijakan: 1 permintaan/detik).
+  /// Hanya uji yang menurunkannya.
+  final Duration _requestGap;
   DateTime _lastRequestAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   Map<String, String> get _headers => const {'User-Agent': _userAgent};
 
   Future<void> _respectRateLimit() async {
     final elapsed = DateTime.now().difference(_lastRequestAt);
-    if (elapsed < const Duration(milliseconds: 1100)) {
-      await Future<void>.delayed(
-          const Duration(milliseconds: 1100) - elapsed);
+    if (elapsed < _requestGap) {
+      await Future<void>.delayed(_requestGap - elapsed);
     }
     _lastRequestAt = DateTime.now();
   }
@@ -180,12 +203,43 @@ class OsmLocationPort implements LocationSelectionPort, LiveLocationSource {
   @override
   RideLocationProviderStatus get status => RideLocationProviderStatus.ready;
 
-  /// Setengah lebar/tinggi kotak pembatas pencarian (derajat) di sekitar
-  /// [near] — kira-kira 35-40 km, cakupan wajar untuk "satu kota/kabupaten
-  /// terdekat" tanpa melompat ke provinsi lain yang kebetulan sama nama
-  /// jalannya.
+  /// Setengah lebar/tinggi kotak terluas (derajat) di sekitar [near] — kira-kira
+  /// 35-40 km, cakupan "satu kota/kabupaten terdekat" tanpa melompat ke
+  /// provinsi lain yang kebetulan sama nama jalannya.
   static const _nearBoxDegrees = 0.35;
 
+  /// Radius kotak pencarian bertahap (km) di sekitar posisi HP: ketat dulu
+  /// (3 km), lalu 15 km, lalu kotak terluas di atas.
+  static const _nearRadiiKm = <double>[3, 15];
+
+  /// Bila hasil gabungan kurang dari ini, kotak dilebarkan ke tahap berikutnya.
+  static const _enoughResults = 3;
+
+  /// Jumlah yang diminta per permintaan. Nominatim mengurutkan menurut
+  /// kepentingan nama, bukan kedekatan; mengambil lebih banyak dalam kotak
+  /// kecil lalu mengurutkan sendiri menurut jarak membuat yang terdekat
+  /// benar-benar di atas.
+  static const _perRequestLimit = 20;
+
+  /// Batas hasil yang ditampilkan setelah diurutkan menurut jarak.
+  static const _maxShown = 8;
+
+  /// Kotak `left,top,right,bottom` (lng,lat) ±[km] di sekitar [near].
+  static String _viewboxKm(RideLocation near, double km) {
+    final dLat = km / 111.32;
+    final dLng = km / (111.32 * max(0.05, cos(near.lat * pi / 180)));
+    return '${near.lng - dLng},${near.lat + dLat},'
+        '${near.lng + dLng},${near.lat - dLat}';
+  }
+
+  static String _viewboxDegrees(RideLocation near) =>
+      '${near.lng - _nearBoxDegrees},${near.lat + _nearBoxDegrees},'
+      '${near.lng + _nearBoxDegrees},${near.lat - _nearBoxDegrees}';
+
+  /// [near] adalah POSISI HP. Dicari bertahap (3 km → 15 km → kotak terluas,
+  /// berhenti begitu hasilnya cukup), lalu SETIAP hasil diurutkan menurut jarak
+  /// haversine ke [near] — yang terdekat di atas. Tanpa [near] (tidak dipakai
+  /// layar pemesanan) pencarian tidak dibatasi dan tidak dapat diurutkan.
   @override
   Future<List<RideAddressCandidate>> searchAddress(
     String query, {
@@ -193,21 +247,53 @@ class OsmLocationPort implements LocationSelectionPort, LiveLocationSource {
   }) async {
     final trimmed = query.trim();
     if (trimmed.length < 3) return const [];
+    if (near == null) {
+      return _searchOnce(trimmed, limit: 6);
+    }
+    final boxes = <String>[
+      for (final km in _nearRadiiKm) _viewboxKm(near, km),
+      _viewboxDegrees(near),
+    ];
+    final merged = <String, RideAddressCandidate>{};
+    for (final box in boxes) {
+      final batch = await _searchOnce(
+        trimmed,
+        limit: _perRequestLimit,
+        viewbox: box,
+      );
+      for (final candidate in batch) {
+        merged['${candidate.lat.toStringAsFixed(6)},'
+            '${candidate.lng.toStringAsFixed(6)}'] = candidate;
+      }
+      if (merged.length >= _enoughResults) {
+        break;
+      }
+    }
+    final sorted = merged.values.toList()
+      ..sort((a, b) => tapGoHaversineMeters(near.lat, near.lng, a.lat, a.lng)
+          .compareTo(
+              tapGoHaversineMeters(near.lat, near.lng, b.lat, b.lng)));
+    return sorted.take(_maxShown).toList();
+  }
+
+  Future<List<RideAddressCandidate>> _searchOnce(
+    String query, {
+    required int limit,
+    String? viewbox,
+  }) async {
     try {
       await _respectRateLimit();
       final response = await _http.get<List<dynamic>>(
         _searchUrl,
         queryParameters: {
-          'q': trimmed,
+          'q': query,
           'format': 'jsonv2',
-          'limit': 6,
+          'limit': limit,
           'countrycodes': 'id',
           'accept-language': 'id',
           'addressdetails': 0,
-          if (near != null) ...{
-            'viewbox':
-                '${near.lng - _nearBoxDegrees},${near.lat + _nearBoxDegrees},'
-                '${near.lng + _nearBoxDegrees},${near.lat - _nearBoxDegrees}',
+          if (viewbox != null) ...{
+            'viewbox': viewbox,
             'bounded': 1,
           },
         },

@@ -25,6 +25,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // flutter_local_notifications (notifikasi + suara saat app di depan)
+        // mensyaratkan ini; build release gagal tanpanya.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -91,6 +94,12 @@ kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
+}
+
+dependencies {
+    // Pasangan dari isCoreLibraryDesugaringEnabled di atas (versi yang sama
+    // dengan driver_app).
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
 flutter {

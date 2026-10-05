@@ -1,7 +1,7 @@
 name: tapgo_user_app
 description: TapGo customer super app.
 publish_to: "none"
-version: 2.0.5+35
+version: 2.0.5+36
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -24,6 +24,11 @@ dependencies:
   sentry_flutter: ^9.30.1
   firebase_core: ^4.15.0
   firebase_messaging: ^16.7.0
+  # Notifikasi sistem (dengan suara) untuk push yang tiba SAAT APP DI DEPAN —
+  # FCM tidak menampilkan apa pun di kondisi itu. Channel sama dengan notifikasi
+  # latar (tapgo_default, IMPORTANCE_HIGH, dibuat MainActivity.kt); versi sama
+  # dengan driver_app.
+  flutter_local_notifications: ^18.0.1
 
 flutter:
   uses-material-design: true

@@ -267,6 +267,29 @@ class RideVehicleView {
   }
 }
 
+/// Penilaian penumpang untuk satu perjalanan selesai (dari server).
+class RideRatingView {
+  const RideRatingView({required this.stars, this.note});
+
+  final int stars;
+  final String? note;
+
+  static RideRatingView? fromJson(dynamic json) {
+    if (json is! Map) {
+      return null;
+    }
+    final stars = json['stars'];
+    if (stars is! num || stars < 1 || stars > 5 || stars != stars.toInt()) {
+      return null;
+    }
+    final note = '${json['note'] ?? ''}'.trim();
+    return RideRatingView(
+      stars: stars.toInt(),
+      note: note.isEmpty ? null : note,
+    );
+  }
+}
+
 /// Satu perjalanan sebagaimana dilaporkan server.
 class RideOrderView {
   const RideOrderView({
@@ -290,7 +313,43 @@ class RideOrderView {
     this.pickupLng,
     this.dropoffLat,
     this.dropoffLng,
+    this.searchRejectionCount = 0,
+    this.rating,
   });
+
+  /// Berapa driver yang menolak tawaran selama order masih mencari driver.
+  /// Hanya hitungan dari server (tanpa identitas driver); 0 bila server lama
+  /// belum mengirimnya atau order tidak lagi mencari.
+  final int searchRejectionCount;
+
+  /// Penilaian milik penumpang untuk perjalanan selesai; null bila belum menilai
+  /// (atau server belum mengirimnya).
+  final RideRatingView? rating;
+
+  RideOrderView withRating(RideRatingView value) => RideOrderView(
+        reference: reference,
+        serviceType: serviceType,
+        status: status,
+        isFinal: isFinal,
+        pickupAddress: pickupAddress,
+        dropoffAddress: dropoffAddress,
+        distanceMeters: distanceMeters,
+        durationSeconds: durationSeconds,
+        totalFare: totalFare,
+        cancellationReason: cancellationReason,
+        cancellationFee: cancellationFee,
+        driver: driver,
+        vehicle: vehicle,
+        createdAt: createdAt,
+        paymentMethod: paymentMethod,
+        paymentState: paymentState,
+        pickupLat: pickupLat,
+        pickupLng: pickupLng,
+        dropoffLat: dropoffLat,
+        dropoffLng: dropoffLng,
+        searchRejectionCount: searchRejectionCount,
+        rating: value,
+      );
 
   /// Koordinat dari server; null bila tidak dikirim. Dipakai untuk "Pesan
   /// lagi" dan tempat terakhir.
@@ -468,6 +527,8 @@ class RideOrderView {
       driver: RideDriverView.fromJson(json['driver']),
       vehicle: RideVehicleView.fromJson(json['vehicle']),
       createdAt: DateTime.tryParse('${json['createdAt'] ?? ''}'),
+      searchRejectionCount: _int(json['searchRejectionCount']),
+      rating: RideRatingView.fromJson(json['rating']),
     );
   }
 }
@@ -505,6 +566,10 @@ String tapGoRideErrorMessage(Object error) {
         return 'Saldo TapGoPay tidak cukup. Pilih tunai atau isi saldo dulu.';
       case 'RIDE_BALANCE_CHANGED':
         return 'Saldo baru saja berubah. Silakan coba lagi.';
+      case 'RIDE_RATING_ALREADY_SUBMITTED':
+        return 'Perjalanan ini sudah dinilai.';
+      case 'RIDE_NOT_COMPLETED':
+        return 'Perjalanan baru dapat dinilai setelah selesai.';
       case 'RATE_LIMITED':
         return 'Terlalu banyak permintaan. Coba lagi beberapa saat lagi.';
     }
@@ -564,6 +629,36 @@ typedef RideHistoryRequest = Future<List<Map<String, dynamic>>> Function();
 typedef RideCancelRequest = Future<Map<String, dynamic>> Function({
   required String reference,
   required String reasonCode,
+  String? note,
+});
+
+/// Pesan galat penilaian; tidak pernah menampilkan exception mentah.
+String tapGoRatingErrorMessage(Object error) {
+  if (error is DioException) {
+    final code = _authResponseDataMap(error.response?.data)?['code']?.toString();
+    switch (code) {
+      case 'RIDE_RATING_ALREADY_SUBMITTED':
+        return 'Perjalanan ini sudah dinilai.';
+      case 'RIDE_NOT_COMPLETED':
+        return 'Perjalanan baru dapat dinilai setelah selesai.';
+      case 'ROUTE_NOT_FOUND':
+        return 'Penilaian belum tersedia di versi layanan saat ini. Coba lagi nanti.';
+      case 'RATE_LIMITED':
+        return 'Terlalu banyak permintaan. Coba lagi beberapa saat lagi.';
+    }
+    if (error.type == DioExceptionType.connectionError ||
+        error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.receiveTimeout ||
+        error.type == DioExceptionType.sendTimeout) {
+      return 'Koneksi ke server TapGo terputus. Silakan coba lagi.';
+    }
+  }
+  return 'Penilaian belum dapat dikirim. Silakan coba lagi.';
+}
+
+typedef RideRatingRequest = Future<Map<String, dynamic>> Function({
+  required String reference,
+  required int stars,
   String? note,
 });
 

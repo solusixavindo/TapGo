@@ -12,6 +12,7 @@ class _FakePlatform implements TapGoPushPlatform {
   final foreground = StreamController<TapGoPushMessage>.broadcast();
   final opened = StreamController<TapGoPushMessage>.broadcast();
   bool deleted = false;
+  final alerts = <TapGoPushMessage>[];
 
   @override
   Future<String?> obtainToken() async => token;
@@ -25,6 +26,9 @@ class _FakePlatform implements TapGoPushPlatform {
   Future<TapGoPushMessage?> initialMessage() async => initial;
   @override
   Future<void> deleteToken() async => deleted = true;
+  @override
+  Future<void> showForegroundAlert(TapGoPushMessage message) async =>
+      alerts.add(message);
 }
 
 void main() {

@@ -553,6 +553,71 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     }
   }
 
+  Future<void> _confirmRemoveSaved(RideSavedPlace place) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Hapus ${place.label}?'),
+        content: Text(
+          '${place.label} dihapus dari Tempat cepat. Riwayat perjalanan '
+          'tidak ikut terhapus.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            key: const ValueKey('quick-place-confirm'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    await _savedPlacesStore.remove(place.slot);
+    ref.invalidate(_savedPlacesProvider);
+    if (mounted) {
+      _TapGoHaptic.tap();
+      _TapGoSnackbar.success(context, '${place.label} dihapus dari Tempat cepat.');
+    }
+  }
+
+  Future<void> _confirmHideRecent(RideLocation place) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Sembunyikan dari Tempat cepat?'),
+        content: Text(
+          '"${place.label}" tidak lagi tampil di Tempat cepat. Perjalanan di '
+          'riwayat tidak dihapus.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            key: const ValueKey('quick-place-confirm'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Sembunyikan'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    await _savedPlacesStore.hideRecent(place.address);
+    ref.invalidate(_recentPlacesProvider);
+    if (mounted) {
+      _TapGoHaptic.tap();
+    }
+  }
+
   /// Tempat cepat: Rumah/Kantor tersimpan dan tujuan terakhir, plus tombol
   /// untuk menyimpan tujuan yang sedang dipilih.
   Widget _quickPlaces(ColorScheme colorScheme) {
@@ -566,11 +631,23 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       return const SizedBox.shrink();
     }
 
-    Widget chip(IconData icon, String label, RideLocation place) {
-      return ActionChip(
-        avatar: Icon(icon, size: 18, color: _brandBlue),
-        label: Text(label, overflow: TextOverflow.ellipsis),
-        onPressed: _isBusy ? null : () => _useDropoff(place),
+    // Tekan lama = hapus (Rumah/Kantor) atau sembunyikan (riwayat) dari
+    // "Tempat cepat"; ketuk biasa tetap memilih tujuan.
+    Widget chip(
+      IconData icon,
+      String label,
+      RideLocation place, {
+      required Key key,
+      required VoidCallback onLongPress,
+    }) {
+      return GestureDetector(
+        key: key,
+        onLongPress: _isBusy ? null : onLongPress,
+        child: ActionChip(
+          avatar: Icon(icon, size: 18, color: _brandBlue),
+          label: Text(label, overflow: TextOverflow.ellipsis),
+          onPressed: _isBusy ? null : () => _useDropoff(place),
+        ),
       );
     }
 
@@ -600,10 +677,26 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                         : Icons.work_rounded,
                     place.label,
                     place.toLocation(),
+                    key: ValueKey('quick-place-${place.slot}'),
+                    onLongPress: () => _confirmRemoveSaved(place),
                   ),
-                for (final place in recent)
-                  chip(Icons.history_rounded, place.label, place),
+                for (var index = 0; index < recent.length; index++)
+                  chip(
+                    Icons.history_rounded,
+                    recent[index].label,
+                    recent[index],
+                    key: ValueKey('quick-place-recent-$index'),
+                    onLongPress: () => _confirmHideRecent(recent[index]),
+                  ),
               ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Tahan lama untuk menghapus.',
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
+                fontSize: 11.5,
+              ),
             ),
           ],
           if (canSave)
@@ -1499,6 +1592,7 @@ class RideStatusScreen extends ConsumerStatefulWidget {
     this.autoStart = true,
     this.detailRequest,
     this.cancelRequest,
+    this.ratingRequest,
     this.driverLocationRequest,
     this.trackInterval = const Duration(seconds: 5),
   });
@@ -1519,6 +1613,9 @@ class RideStatusScreen extends ConsumerStatefulWidget {
   final RideDetailRequest? detailRequest;
   final RideCancelRequest? cancelRequest;
 
+  /// Pengirim penilaian; null = API sungguhan.
+  final RideRatingRequest? ratingRequest;
+
   @override
   ConsumerState<RideStatusScreen> createState() => _RideStatusScreenState();
 }
@@ -1531,6 +1628,12 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
   RideOrderView? _order;
   String? _errorMessage;
   bool _isCancelling = false;
+
+  // Penilaian setelah perjalanan selesai.
+  int _ratingStars = 0;
+  final _ratingNoteController = TextEditingController();
+  bool _isRating = false;
+  String? _ratingError;
 
   static bool _isTrackingPhase(RideUiPhase phase) =>
       phase == RideUiPhase.assigned ||
@@ -1581,6 +1684,13 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
         onUpdate: (order) {
           if (mounted) {
             _hapticForTransition(_order?.phase, order.phase);
+            if (order.phase == RideUiPhase.searching &&
+                order.searchRejectionCount >
+                    (_order?.searchRejectionCount ?? 0)) {
+              // Seorang driver baru saja menolak: status tetap "Mencari driver",
+              // tetapi penumpang perlu tahu pencarian dilanjutkan.
+              _TapGoHaptic.warning();
+            }
             setState(() {
               _order = order;
               _errorMessage = null;
@@ -1638,7 +1748,79 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
     // Polling berhenti bersama widget: tidak ada timer yang menggantung.
     _poller?.dispose();
     _tracker?.dispose();
+    _ratingNoteController.dispose();
     super.dispose();
+  }
+
+  Future<void> _submitRating() async {
+    final stars = _ratingStars;
+    if (stars < 1 || stars > 5 || _isRating) {
+      return;
+    }
+    setState(() {
+      _isRating = true;
+      _ratingError = null;
+    });
+    try {
+      final request = widget.ratingRequest ?? _apiClient.rateRide;
+      final data = await request(
+        reference: widget.reference,
+        stars: stars,
+        note: _ratingNoteController.text,
+      );
+      if (!mounted) {
+        return;
+      }
+      final saved = RideRatingView.fromJson(data) ??
+          RideRatingView(stars: stars, note: _ratingNoteController.text.trim());
+      final order = _order;
+      setState(() {
+        if (order != null) {
+          _order = order.withRating(saved);
+        }
+      });
+      _TapGoHaptic.success();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      if (tapGoRideIsSessionExpired(error)) {
+        final outcome = await _resolveRideSessionExpired(context, ref);
+        if (!mounted) {
+          return;
+        }
+        if (outcome == TapGoSessionRefreshResult.refreshed) {
+          setState(() => _isRating = false);
+          await _submitRating();
+          return;
+        }
+        setState(() => _ratingError = 'Koneksi belum stabil. Silakan coba lagi.');
+        return;
+      }
+      // Sudah pernah dinilai (mis. dari perangkat lain): tarik ulang detail
+      // supaya layar menampilkan bintang yang tersimpan, bukan formulir kosong.
+      String? code;
+      if (error is DioException) {
+        code = _authResponseDataMap(error.response?.data)?['code']?.toString();
+      }
+      if (code == 'RIDE_RATING_ALREADY_SUBMITTED') {
+        try {
+          final load = widget.detailRequest ??
+              tapGoRideDetailLoaderForTests ??
+              _apiClient.rideDetail;
+          final fresh = RideOrderView.fromJson(await load(widget.reference));
+          if (mounted && fresh.rating != null) {
+            setState(() => _order = fresh);
+            return;
+          }
+        } catch (_) {}
+      }
+      setState(() => _ratingError = tapGoRatingErrorMessage(error));
+    } finally {
+      if (mounted) {
+        setState(() => _isRating = false);
+      }
+    }
   }
 
   @override
@@ -1805,6 +1987,10 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
                           : const Text('Batalkan perjalanan'),
                     ),
                   ),
+                ],
+                if (order.phase == RideUiPhase.completed) ...[
+                  const SizedBox(height: 16),
+                  _ratingCard(colorScheme, order),
                 ],
                 if (order.isFinal) ...[
                   const SizedBox(height: 16),
@@ -2010,27 +2196,169 @@ class _RideStatusScreenState extends ConsumerState<RideStatusScreen>
             ),
           ),
           // Seorang driver menolak tawaran: pencarian berlanjut, status order
-          // tetap "Mencari driver" (tidak dibatalkan).
+          // tetap "Mencari driver" (tidak dibatalkan). Sumbernya dua: hitungan
+          // penolakan dari detail order (di-poll tiap 4 detik, andal) dan push
+          // `ride_search_continues` (lebih cepat bila sampai).
           ValueListenableBuilder<Set<String>>(
             valueListenable: tapGoSearchContinuesRefs,
             builder: (context, refs, _) {
-              if (!refs.contains(widget.reference)) {
+              final count = order.searchRejectionCount;
+              if (count < 1 && !refs.contains(widget.reference)) {
                 return const SizedBox.shrink();
               }
-              return Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Text(
-                  'Seorang driver tidak mengambil pesanan. Pencarian dilanjutkan.',
-                  key: const ValueKey('search-continues-notice'),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: colorScheme.onSurfaceVariant,
-                    fontSize: 12.5,
-                    fontStyle: FontStyle.italic,
+              final who = count > 1
+                  ? '$count driver tidak mengambil pesanan'
+                  : 'Seorang driver tidak mengambil pesanan';
+              return Container(
+                key: const ValueKey('search-continues-notice'),
+                width: double.infinity,
+                margin: const EdgeInsets.only(top: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.55),
                   ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline_rounded,
+                        size: 20, color: Color(0xFFB45309)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '$who. Pencarian dilanjutkan.',
+                        style: TextStyle(
+                          color: colorScheme.onSurface,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               );
             },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Langkah penilaian setelah perjalanan selesai: bintang 1-5, catatan opsional
+  /// (maksimal 280 karakter). Sudah dinilai = hanya menampilkan bintangnya.
+  /// Bintang TIDAK pernah tampil di kartu driver selama perjalanan berjalan.
+  Widget _ratingCard(ColorScheme colorScheme, RideOrderView order) {
+    final given = order.rating;
+    final decoration = BoxDecoration(
+      color: colorScheme.surface,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: colorScheme.outlineVariant),
+    );
+    Widget stars(int value, {void Function(int star)? onTap}) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (var star = 1; star <= 5; star++)
+            IconButton(
+              key: ValueKey('rating-star-$star'),
+              tooltip: '$star bintang',
+              onPressed: onTap == null ? null : () => onTap(star),
+              icon: Icon(
+                star <= value ? Icons.star_rounded : Icons.star_outline_rounded,
+                size: 38,
+                color: star <= value
+                    ? const Color(0xFFF59E0B)
+                    : colorScheme.outline,
+              ),
+            ),
+        ],
+      );
+    }
+
+    if (given != null) {
+      return Container(
+        key: const ValueKey('rating-given'),
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: decoration,
+        child: Column(
+          children: [
+            Text(
+              'Penilaian Anda',
+              style: TextStyle(
+                color: colorScheme.onSurface,
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            stars(given.stars),
+            if (given.note != null)
+              Text(
+                given.note!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: colorScheme.onSurfaceVariant),
+              ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      key: const ValueKey('rating-form'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: decoration,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Bagaimana perjalananmu?',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: colorScheme.onSurface,
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          stars(
+            _ratingStars,
+            onTap: _isRating ? null : (star) => setState(() => _ratingStars = star),
+          ),
+          TextField(
+            key: const ValueKey('rating-note'),
+            controller: _ratingNoteController,
+            enabled: !_isRating,
+            maxLength: 280,
+            maxLines: 2,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(
+              hintText: 'Catatan untuk driver (opsional)',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          if (_ratingError != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              _ratingError!,
+              key: const ValueKey('rating-error'),
+              style: const TextStyle(color: Color(0xFFB3261E), fontSize: 13),
+            ),
+          ],
+          const SizedBox(height: 10),
+          FilledButton(
+            key: const ValueKey('rating-submit'),
+            onPressed: _ratingStars == 0 || _isRating ? null : _submitRating,
+            style: FilledButton.styleFrom(
+              backgroundColor: _brandBlue,
+              minimumSize: const Size.fromHeight(48),
+            ),
+            child: _isRating
+                ? const _TapGoLoading(size: 18, strokeWidth: 2)
+                : const Text('Kirim Penilaian'),
           ),
         ],
       ),

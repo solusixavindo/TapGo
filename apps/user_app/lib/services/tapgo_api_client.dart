@@ -645,6 +645,19 @@ class _TapGoApiClient {
         .toList();
   }
 
+  /// Penilaian penumpang untuk perjalanan yang sudah selesai (1..5 bintang,
+  /// catatan opsional ≤ 280 karakter). Satu penilaian per perjalanan.
+  Future<Map<String, dynamic>> rateRide({
+    required String reference,
+    required int stars,
+    String? note,
+  }) {
+    return post('rides/$reference/rating', body: {
+      'stars': stars,
+      if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+    });
+  }
+
   Future<Map<String, dynamic>> cancelRide({
     required String reference,
     required String reasonCode,

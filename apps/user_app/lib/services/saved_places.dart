@@ -137,13 +137,64 @@ class _TapGoSavedPlacesStore {
     } catch (_) {}
   }
 
+  // --- Riwayat yang disembunyikan dari "Tempat cepat" -------------------------
+  // Hanya catatan LOKAL (alamat huruf kecil): perjalanan di server tidak
+  // dihapus atau diubah.
+
+  static const _hiddenKey = 'tapgo.ride.hidden_recent.v1';
+  static const _hiddenLimit = 100;
+  static Set<String> _hiddenMemory = <String>{};
+
+  static String hiddenKeyOf(String address) => address.trim().toLowerCase();
+
+  Future<Set<String>> loadHiddenRecent() async {
+    if (tapGoDisablePersistenceForTests) {
+      return Set.of(_hiddenMemory);
+    }
+    try {
+      final raw = await _storage.read(key: _hiddenKey);
+      if (raw == null || raw.isEmpty) {
+        return <String>{};
+      }
+      final decoded = jsonDecode(raw);
+      return decoded is List
+          ? decoded.whereType<String>().toSet()
+          : <String>{};
+    } catch (_) {
+      return <String>{};
+    }
+  }
+
+  Future<void> hideRecent(String address) async {
+    final key = hiddenKeyOf(address);
+    if (key.isEmpty) {
+      return;
+    }
+    final next = <String>[
+      ...(await loadHiddenRecent()).where((item) => item != key),
+      key,
+    ];
+    final trimmed = next.length > _hiddenLimit
+        ? next.sublist(next.length - _hiddenLimit)
+        : next;
+    if (tapGoDisablePersistenceForTests) {
+      _hiddenMemory = trimmed.toSet();
+      return;
+    }
+    try {
+      await _storage.write(key: _hiddenKey, value: jsonEncode(trimmed));
+    } catch (_) {}
+  }
+
   Future<void> clear() async {
     _memory = [];
+    _hiddenMemory = <String>{};
     if (tapGoDisablePersistenceForTests) {
       return;
     }
     try {
       await _storage.delete(key: _key);
+      await _storage.delete(key: _hiddenKey);
     } catch (_) {}
   }
 }
@@ -158,27 +209,42 @@ final _savedPlacesProvider =
   return _savedPlacesStore.load();
 });
 
+/// Seam uji: mengganti pemuat riwayat perjalanan untuk chip tujuan terakhir.
+@visibleForTesting
+Future<List<Map<String, dynamic>>> Function()? tapGoRecentHistoryLoaderForTests;
+
 /// Tujuan terakhir (maksimal 3, unik menurut alamat) dari riwayat perjalanan
 /// yang selesai. Gagal memuat = daftar kosong; ini hanya pelengkap.
 final _recentPlacesProvider =
     FutureProvider.autoDispose<List<RideLocation>>((ref) async {
   final session = ref.read(_demoSessionProvider);
-  if (tapGoDisablePersistenceForTests ||
-      session.accessToken == null ||
-      session.accessToken!.isEmpty) {
+  final loader = tapGoRecentHistoryLoaderForTests;
+  if (loader == null &&
+      (tapGoDisablePersistenceForTests ||
+          session.accessToken == null ||
+          session.accessToken!.isEmpty)) {
     return const [];
   }
   try {
     _apiClient.setAccessToken(session.accessToken);
-    final rows = await _apiClient.rideHistory(limit: 20);
-    return tapGoRecentPlacesFrom(rows.map(RideOrderView.fromJson).toList());
+    final rows = await (loader?.call() ?? _apiClient.rideHistory(limit: 20));
+    return tapGoRecentPlacesFrom(
+      rows.map(RideOrderView.fromJson).toList(),
+      hiddenAddresses: await _savedPlacesStore.loadHiddenRecent(),
+    );
   } catch (_) {
     return const [];
   }
 });
 
-List<RideLocation> tapGoRecentPlacesFrom(List<RideOrderView> orders) {
-  final seen = <String>{};
+/// [hiddenAddresses] (alamat huruf kecil, lihat [_TapGoSavedPlacesStore.hiddenKeyOf])
+/// dilewati sebelum menghitung batas tiga, jadi yang tersisa terisi lagi dari
+/// riwayat yang lebih lama.
+List<RideLocation> tapGoRecentPlacesFrom(
+  List<RideOrderView> orders, {
+  Set<String> hiddenAddresses = const {},
+}) {
+  final seen = <String>{...hiddenAddresses};
   final places = <RideLocation>[];
   for (final order in orders) {
     if (order.phase != RideUiPhase.completed ||
@@ -211,4 +277,5 @@ List<RideLocation> tapGoRecentPlacesFrom(List<RideOrderView> orders) {
 @visibleForTesting
 class TapGoSavedPlacesProbe {
   static Future<List<RideSavedPlace>> load() => _savedPlacesStore.load();
+  static Future<Set<String>> loadHidden() => _savedPlacesStore.loadHiddenRecent();
 }

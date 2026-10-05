@@ -19,9 +19,9 @@ class RideLocationPickerSheet extends StatefulWidget {
   final String title;
   final RideLocation? initial;
 
-  /// Titik acuan untuk membatasi hasil pencarian (mis. titik jemput yang
-  /// sudah dipilih, saat sheet ini dibuka untuk mencari tujuan) DAN sebagai
-  /// titik awal pin sebelum pengguna menggeser peta.
+  /// Titik awal pin sebelum pengguna menggeser peta (mis. titik jemput yang
+  /// sudah dipilih saat sheet ini dibuka untuk mencari tujuan). BUKAN pusat
+  /// pencarian: pencarian selalu berpusat di posisi HP.
   final RideLocation? near;
 
   static Future<RideLocation?> show(
@@ -65,6 +65,10 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
   bool _resolvingCenter = false;
   bool _userMovedMap = false;
   String? _notice;
+
+  /// Posisi HP yang menjadi pusat pencarian (terakhir diketahui, atau
+  /// pembacaan saat ini). Tidak pernah diganti koordinat Jakarta/titik jemput.
+  RideLocation? _deviceLocation;
 
   @override
   void initState() {
@@ -125,6 +129,11 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
     _debounce = Timer(const Duration(milliseconds: 450), () => _search(value));
   }
 
+  Future<RideLocation?> _resolveSearchCenter() async {
+    return _deviceLocation ??= await widget.port.lastKnownLocation() ??
+        await widget.port.currentLocation();
+  }
+
   Future<void> _search(String query) async {
     if (query.trim().length < 3) {
       setState(() => _results = const []);
@@ -134,10 +143,20 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
       _searching = true;
       _notice = null;
     });
-    final results = await widget.port.searchAddress(
-      query,
-      near: widget.near ?? _selected?.toRideLocation(),
-    );
+    final center = await _resolveSearchCenter();
+    if (!mounted) return;
+    if (center == null) {
+      // Tidak berpura-pura mencari di Jakarta: tanpa posisi HP, hasilnya tidak
+      // dapat diurutkan menurut kedekatan.
+      setState(() {
+        _searching = false;
+        _results = const [];
+        _notice = 'Lokasi perangkat belum tersedia. Aktifkan GPS dan izin '
+            'lokasi, lalu coba lagi.';
+      });
+      return;
+    }
+    final results = await widget.port.searchAddress(query, near: center);
     if (!mounted) return;
     setState(() {
       _searching = false;
@@ -162,6 +181,7 @@ class _RideLocationPickerSheetState extends State<RideLocationPickerSheet> {
       }
       _userMovedMap = true;
       _notice = null;
+      _deviceLocation ??= location;
     });
     if (location != null) {
       _selectAndCenter(
