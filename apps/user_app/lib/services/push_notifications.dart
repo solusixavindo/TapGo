@@ -30,15 +30,76 @@ abstract class TapGoPushPlatform {
   Future<TapGoPushMessage?> initialMessage();
   Future<void> deleteToken();
 
-  /// Notifikasi SISTEM (dengan suara) untuk pesan yang tiba SAAT APP DI DEPAN.
-  /// FCM hanya menampilkan notifikasi otomatis di latar belakang; di depan
-  /// pesan sampai ke [foregroundMessages] tanpa bunyi apa pun (SnackBar tidak
-  /// bersuara). Channel sama dengan notifikasi latar (`tapgo_default`,
-  /// IMPORTANCE_HIGH, dibuat MainActivity.kt), bukan channel baru.
+  /// Membunyikan peringatan untuk satu peristiwa SAAT APP DI DEPAN. FCM hanya
+  /// menampilkan notifikasi otomatis di latar belakang; di depan pesan sampai
+  /// ke [foregroundMessages] tanpa bunyi apa pun (SnackBar tidak bersuara).
+  /// Aplikasi di depan = ringtone notifikasi bawaan HP (tidak bergantung pada
+  /// notifikasi); selain itu (atau bila ringtone gagal) = SATU notifikasi lokal
+  /// di channel `tapgo_alerts_v2`. Tidak pernah keduanya untuk peristiwa yang sama.
   Future<void> showForegroundAlert(TapGoPushMessage message);
 }
 
+/// Channel notifikasi untuk pembaruan perjalanan, chat, saldo, dan pembayaran.
+/// BARU: suara/prioritas channel yang sudah ada tidak berubah oleh pemasangan
+/// baru dan channel lama `tapgo_default` sudah terkunci senyap di HP yang pernah
+/// memasang APK lama. Dibuat di MainActivity.onCreate; id HARUS sama dengan
+/// manifest (default_notification_channel_id) dan payload FCM backend.
+const tapGoAlertChannelId = 'tapgo_alerts_v2';
+const tapGoAlertChannelName = 'Peringatan TapGo';
+const tapGoAlertChannelDescription =
+    'Pembaruan perjalanan, pesan chat, saldo, dan pembayaran';
+
+/// Nama dan method HARUS sama dengan MainActivity.kt.
+const tapGoAlertsMethodChannel = MethodChannel('tapgo.user/alerts');
+
+/// Rincian notifikasi lokal: channel baru, Importance.high, suara menyala.
+/// Tanpa `sound: null` dan tanpa `silent: true`.
+NotificationDetails tapGoAlertNotificationDetails() =>
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        tapGoAlertChannelId,
+        tapGoAlertChannelName,
+        channelDescription: tapGoAlertChannelDescription,
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+      ),
+    );
+
+/// Memutar ringtone notifikasi bawaan HP lewat MethodChannel. false bila gagal.
+Future<bool> tapGoPlayNotificationRingtone() async {
+  try {
+    return await tapGoAlertsMethodChannel
+            .invokeMethod<bool>('playNotificationSound') ??
+        false;
+  } catch (_) {
+    return false;
+  }
+}
+
 class FirebasePushPlatform implements TapGoPushPlatform {
+  FirebasePushPlatform({
+    Future<bool> Function()? playRingtone,
+    Future<void> Function(
+            int id, String title, String body, NotificationDetails details)?
+        showLocal,
+    bool Function()? isForeground,
+  })  : _playRingtone = playRingtone ?? tapGoPlayNotificationRingtone,
+        _showLocalOverride = showLocal,
+        _isForeground = isForeground ?? _appIsInForeground;
+
+  static bool _appIsInForeground() {
+    final state = WidgetsBinding.instance.lifecycleState;
+    return state == null || state == AppLifecycleState.resumed;
+  }
+
+  final Future<bool> Function() _playRingtone;
+  final Future<void> Function(
+          int id, String title, String body, NotificationDetails details)?
+      _showLocalOverride;
+  final bool Function() _isForeground;
+
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
   bool _localNotificationsInitialized = false;
@@ -65,28 +126,32 @@ class FirebasePushPlatform implements TapGoPushPlatform {
     if (message.title.isEmpty && message.body.isEmpty) {
       return;
     }
+    // Aplikasi di depan: ringtone, BUKAN notifikasi (satu peristiwa = satu bunyi).
+    if (_isForeground() && await _playRingtone()) {
+      return;
+    }
+    // Di belakang, atau ringtone gagal: tepat satu notifikasi di channel baru.
     try {
+      final override = _showLocalOverride;
+      if (override != null) {
+        await override(_notificationId++, message.title, message.body,
+            tapGoAlertNotificationDetails());
+        return;
+      }
       await _ensureLocalNotificationsInitialized();
       if (!_localNotificationsInitialized) {
         return;
       }
-      // Tanpa playSound:false / sound:null: suara bawaan channel dipakai.
       await _localNotifications.show(
         _notificationId++,
         message.title,
         message.body,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'tapgo_default',
-            'Notifikasi TapGo',
-            channelDescription: 'Pembaruan perjalanan, saldo, dan pembayaran',
-            importance: Importance.high,
-            priority: Priority.high,
-          ),
-        ),
+        tapGoAlertNotificationDetails(),
       );
     } catch (error) {
-      _tapGoDebugLog('[TapGo Push] notifikasi latar depan dilewati: $error');
+      // Dicatat juga di rilis (sebelumnya ditelan diam-diam): hanya jenis
+      // galat, tanpa isi pesan.
+      debugPrint('[TapGo Push] notifikasi peringatan gagal: ${error.runtimeType}');
     }
   }
 
