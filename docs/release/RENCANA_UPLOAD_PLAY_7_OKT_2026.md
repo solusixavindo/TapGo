@@ -21,7 +21,7 @@ yang dikerjakan dari repo ini (login Play Console hanya oleh Owner), dan belum a
 | G2 | **Keselarasan 16 KB — DIPERBAIKI di driver +12 (6 Okt 2026).** AAB +11 punya 2 pustaka x86_64 TFLite yang tidak selaras (4 KB). +12 mengeluarkan x86_64 saat pengemasan (hanya arm64-v8a dan armeabi-v7a); semua pustaka 64-bit selaras 16 KB, dan gerbang rilis kini memeriksanya (`scripts/check-native-alignment.sh`). **Unggah +12, bukan +11.** | Selasa: unggah AAB +12 ke Internal testing dan pastikan Play tidak memperingatkan soal 16 KB. | Bila Play tetap memperingatkan, kirim teks peringatannya persis. |
 | G3 | **Rilis backend** `release/driver-rating` (2d9b8b4) sudah di-cutover dan terverifikasi (panduan ada di laporan sebelumnya). Tanpa itu: penilaian menampilkan "belum tersedia" ke pengguna sungguhan, banner penolakan lemah, dan bunyi notifikasi latar belakang masih memakai channel lama. | Log `POST .../rating` → 201 dan satu baris di `ride_ratings`. | **Jangan** mulai rollout user_app ke produksi. Internal testing boleh. |
 | G4 | **SOS, safety-status, dan face-check belum ada di backend produksi.** Driver +12 di produksi: tombol SOS menampilkan pesan gagal dengan jalur WhatsApp CS; banner kelelahan dan verifikasi wajah tidak muncul. Itu perilaku yang sudah didokumentasikan, tetapi tombol yang tidak bekerja akan terlihat oleh peninjau Google dan driver. | Keputusan Owner. | Pilihan: (a) rilis dengan keterbatasan dan tulis jujur di catatan peninjau; (b) tunda driver sampai backend PR #1 dirilis (bukan pekerjaan Rabu). Rekomendasi: (a) hanya untuk Closed testing, (b) sebelum produksi publik. |
-| G5 | **Uji HP.** Belum ada uji HP untuk +11/+37. | Pasang dari **Internal testing Play** (bundel yang ditandatangani Play, persis yang diterima pengguna), lalu jalankan daftar di bagian 6. | Temuan P0/P1 = jangan promosikan ke produksi. |
+| G5 | **Uji HP.** Belum ada uji HP untuk +12/+37. | Pasang dari **Internal testing Play** (bundel yang ditandatangani Play, persis yang diterima pengguna), lalu jalankan daftar di bagian 6. | Temuan P0/P1 = jangan promosikan ke produksi. |
 | G6 | **Kunci unggah cocok.** Sidik jari sertifikat AAB harus sama dengan "Upload key certificate" di Play Console → App integrity. user_app: `90:A9:5A:AC:…` (SHA-256 `90a95aac052b6488a870b0c86d2697f5e3d42f8f13295b7854a6638ed013473b`). driver_app: `04aa1a8091c099385da40ff4bc995e267f4561267e3335bd7865093b5daa89c4`. | Bandingkan di App integrity. | Jangan unggah; kunci unggah salah akan ditolak, dan kunci hilang harus diatur ulang lewat dukungan Play. |
 
 ## 2. Artefak yang akan diunggah (semua lewat gerbang rilis, "GERBANG LOLOS")
@@ -42,7 +42,7 @@ mengubah sha256 dan harus lewat gerbang lagi.
 1. G6: cocokkan sidik jari kunci unggah (kedua aplikasi).
 2. **Unggah user_app 37 ke Internal testing** (tanpa tinjauan; tersedia cepat). Pasang di HP dari tautan
    Internal testing. Jalankan daftar uji bagian 6A.
-3. **Unggah driver_app 11 ke Internal testing** (membuat aplikasi baru bila belum ada, lihat 5.1). Ini
+3. **Unggah driver_app 12 ke Internal testing** (membuat aplikasi baru bila belum ada, lihat 5.1). Ini
    sekaligus menjawab G2 (Play menerima/menolak AAB). Jalankan bagian 6B.
 4. Cutover backend (G3) bila belum, atau tetapkan jamnya Rabu pagi.
 5. Putuskan G4 (G1 sudah selesai: akun organisasi).
