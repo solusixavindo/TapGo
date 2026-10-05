@@ -130,12 +130,14 @@ export class FcmClient implements PushSender {
               token,
               notification: { title: message.title, body: message.body },
               ...(message.data ? { data: message.data } : {}),
-              // `sound: "default"` eksplisit supaya notifikasi latar berbunyi walau
-              // pengaturan channel di HP tertentu tidak menyalakannya sendiri.
-              // Channel tetap tapgo_default (IMPORTANCE_HIGH); bukan channel baru.
+              // Channel BARU tapgo_alerts_v2 (IMPORTANCE_HIGH, suara eksplisit; dibuat
+              // MainActivity.onCreate di kedua aplikasi). Channel lama tapgo_default
+              // sudah terkunci senyap di HP yang pernah memasang APK lama dan tidak
+              // dapat diubah dari aplikasi (Android 8+), jadi tidak dipakai lagi.
+              // `sound: "default"` tetap eksplisit.
               android: {
                 priority: "HIGH",
-                notification: { channel_id: "tapgo_default", sound: "default" }
+                notification: { channel_id: "tapgo_alerts_v2", sound: "default" }
               }
             }
           }),
