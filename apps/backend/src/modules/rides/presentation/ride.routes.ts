@@ -55,6 +55,7 @@ import {
   driverLocationSchema,
   driverSosSchema,
   listRidesSchema,
+  rateRideSchema,
   rideReferenceSchema,
 } from "./ride.validators.js";
 
@@ -189,6 +190,21 @@ rideRouter.get(
     // Posisi bergerak: jangan pernah disimpan cache di perantara atau klien.
     res.setHeader("Cache-Control", "no-store");
     res.json({ success: true, data });
+  }),
+);
+
+rideRouter.post(
+  "/:reference/rating",
+  rideWriteRateLimiter,
+  validateRequest(rateRideSchema),
+  asyncHandler(async (req, res) => {
+    const data = await rideService.rateOrder({
+      userId: req.auth!.userId,
+      publicReference: referenceParam(req.params.reference),
+      stars: req.body.stars,
+      ...(req.body.note ? { note: req.body.note } : {}),
+    });
+    res.status(201).json({ success: true, data });
   }),
 );
 

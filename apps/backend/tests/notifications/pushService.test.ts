@@ -89,6 +89,19 @@ describe("FcmClient", () => {
     expect(JSON.parse(init.body as string).message.data.rideRef).toBe("RID-1");
   });
 
+  it("notifikasi latar Android memakai channel tapgo_default dan suara bawaan, tanpa isi chat tambahan", async () => {
+    const { client, fetchImpl } = clientWith(200);
+    await client.send("tok", { title: "Pesan baru dari driver", body: "Ketuk untuk membaca." });
+    const init = (fetchImpl as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls[0]![1];
+    const message = JSON.parse(init.body as string).message;
+    expect(message.android).toEqual({
+      priority: "HIGH",
+      notification: { channel_id: "tapgo_default", sound: "default" }
+    });
+    // Tidak ada kunci data-only yang membocorkan isi: hanya judul/isi yang dikirim pemanggil.
+    expect(message.notification).toEqual({ title: "Pesan baru dari driver", body: "Ketuk untuk membaca." });
+  });
+
   it("memetakan 404 dan 400 INVALID_ARGUMENT -> invalid_token, lainnya -> failed", async () => {
     expect(await clientWith(404).client.send("t", { title: "a", body: "b" })).toBe("invalid_token");
     expect(

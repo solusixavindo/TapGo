@@ -1686,6 +1686,7 @@ model RideDriverProfile {
   orders    RideOrder[]          @relation("RideOrderDriver")
   locations RideDriverLocation[]
   sosAlerts RideSosAlert[]
+  ratings   RideRating[]
 
   @@index([status, availability])
   @@map("ride_driver_profiles")
@@ -1816,11 +1817,32 @@ model RideOrder {
   locations     RideDriverLocation[]
   chatMessages  ChatMessage[]
   sosAlerts     RideSosAlert[]
+  rating        RideRating?
 
   @@index([passengerId, createdAt])
   @@index([driverProfileId, createdAt])
   @@index([status, serviceType])
   @@map("ride_orders")
+}
+
+/// Penilaian penumpang untuk satu order selesai (1..5 bintang, catatan
+/// opsional). SATU baris per order (rideOrderId unik). Menempel ke RideOrder
+/// dan RideDriverProfile — BUKAN ke tabel Ride/Review lama, dan tidak menyentuh
+/// drivers.rating_average. Rata-rata dan jumlah di RideDriverProfile dihitung
+/// ulang dari tabel ini dalam transaksi yang sama (lihat RideService.rateOrder).
+model RideRating {
+  id              String   @id @default(uuid()) @db.Uuid
+  rideOrderId     String   @unique @map("ride_order_id") @db.Uuid
+  driverProfileId String   @map("driver_profile_id") @db.Uuid
+  stars           Int      @db.SmallInt
+  note            String?  @db.VarChar(280)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  rideOrder     RideOrder         @relation(fields: [rideOrderId], references: [id], onDelete: Cascade)
+  driverProfile RideDriverProfile @relation(fields: [driverProfileId], references: [id], onDelete: Cascade)
+
+  @@index([driverProfileId])
+  @@map("ride_ratings")
 }
 
 /// Catatan audit immutable untuk setiap transisi material.
