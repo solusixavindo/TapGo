@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
@@ -3247,6 +3248,121 @@ void main() {
           availabilityBefore);
       expect(repo.availabilityRequests, isEmpty);
     });
+
+    // ---------------- bunyi nyata: ringtone (platform asli, native di-mock) ----------------
+
+    testWidgets('ringtone: order dari polling diputar SEKALI per referensi, polling berikutnya tidak mengulang',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = RingtoneProbePlatform();
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, pushPlatform: platform));
+      await tester.pumpAndSettle();
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      });
+
+      repo.offerItems = [offerRide('RID-A2B3C4D5E7')];
+      await poll(tester);
+      expect(find.byType(OfferDetailSheet), findsOneWidget);
+      expect(platform.ringtone, hasLength(1));
+      expect(platform.shown, isEmpty);
+
+      await poll(tester);
+      await poll(tester);
+      expect(platform.ringtone, hasLength(1));
+    });
+
+    testWidgets('ringtone: push + lembar yang terbuka untuk referensi yang sama = SATU ringtone',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = RingtoneProbePlatform();
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, pushPlatform: platform));
+      await tester.pumpAndSettle();
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      });
+
+      repo.offerItems = [offerRide('RID-A2B3C4D5E7')];
+      platform.fcm.add(const DriverPushMessage(
+        title: 'Order baru',
+        body: 'Ada penumpang di dekat Anda',
+        data: {'type': 'ride_offer', 'rideReference': 'RID-A2B3C4D5E7'},
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await poll(tester);
+      expect(find.byType(OfferDetailSheet), findsOneWidget);
+      expect(platform.ringtone, hasLength(1));
+      expect(platform.shown, isEmpty);
+    });
+
+    testWidgets('ringtone chat: layar chat TERBUKA tidak berbunyi dan tidak berpopup; TIDAK terbuka berbunyi sekali + popup',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = RingtoneProbePlatform();
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, pushPlatform: platform));
+      await tester.pumpAndSettle();
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      });
+
+      // Layar chat perjalanan itu terbuka.
+      driverNavigatorKey.currentState!.push(MaterialPageRoute<void>(
+        builder: (_) => const RideChatScreen(
+            rideReference: rideRef, pollInterval: Duration.zero),
+      ));
+      await tester.pumpAndSettle();
+      platform.fcm.add(chatPush);
+      await tester.pumpAndSettle();
+      expect(platform.ringtone, isEmpty);
+      expect(platform.shown, isEmpty);
+      expect(find.byKey(const ValueKey('chat-popup')), findsNothing);
+
+      // Layar ditutup: pesan berikutnya berbunyi sekali dan berpopup.
+      driverNavigatorKey.currentState!.pop();
+      await tester.pumpAndSettle();
+      platform.fcm.add(chatPush);
+      await tester.pumpAndSettle();
+      expect(platform.ringtone, hasLength(1));
+      expect(platform.shown, isEmpty);
+      expect(find.byKey(const ValueKey('chat-popup')), findsOneWidget);
+    });
+
+    testWidgets('di belakang: peristiwa memakai notifikasi channel tapgo_alerts_v2, bukan tapgo_default, dan tanpa ringtone',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = RingtoneProbePlatform(foreground: false);
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, pushPlatform: platform));
+      await tester.pumpAndSettle();
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      });
+
+      repo.offerItems = [offerRide('RID-A2B3C4D5E7')];
+      await poll(tester);
+      expect(platform.ringtone, isEmpty);
+      expect(platform.shown, hasLength(1));
+      final android = platform.shown.single.android!;
+      expect(android.channelId, 'tapgo_alerts_v2');
+      expect(android.channelId, isNot('tapgo_default'));
+      expect(android.playSound, isTrue);
+    });
   });
 }
 
@@ -3834,6 +3950,39 @@ class RecordingLocationPort implements DriverLocationPort {
 
   @override
   final Stream<(double lat, double lng)> positionStream;
+}
+
+/// Platform push asli (ringtone dan notifikasi lokal di-mock) dengan aliran FCM
+/// yang dikendalikan uji. Menghitung berapa kali ringtone diputar dan notifikasi
+/// lokal ditampilkan.
+class RingtoneProbePlatform extends FirebaseDriverPushPlatform {
+  RingtoneProbePlatform._(this.ringtone, this.shown, bool foreground)
+      : super(
+          isForeground: () => foreground,
+          playRingtone: () async {
+            ringtone.add(1);
+            return true;
+          },
+          showLocal: (id, title, body, details) async => shown.add(details),
+        );
+
+  factory RingtoneProbePlatform({bool foreground = true}) =>
+      RingtoneProbePlatform._(<int>[], <NotificationDetails>[], foreground);
+
+  final List<int> ringtone;
+  final List<NotificationDetails> shown;
+  final fcm = StreamController<DriverPushMessage>.broadcast();
+
+  @override
+  Future<String?> obtainToken() async => 'tok';
+  @override
+  Stream<String> get tokenRefreshes => const Stream.empty();
+  @override
+  Stream<DriverPushMessage> get foregroundMessages => fcm.stream;
+  @override
+  Stream<DriverPushMessage> get openedMessages => const Stream.empty();
+  @override
+  Future<void> deleteToken() async {}
 }
 
 class FakePushPlatform implements DriverPushPlatform {

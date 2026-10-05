@@ -62,7 +62,13 @@ abstract class DriverPushPlatform {
   Stream<DriverPushMessage> get openedMessages;
   Future<void> deleteToken();
 
-  /// Menampilkan notifikasi SISTEM (dengan suara) untuk pesan yang datang
+  /// Membunyikan peringatan untuk satu peristiwa yang terjadi SAAT APP DI DEPAN:
+  /// aplikasi di depan = ringtone notifikasi bawaan HP (tidak bergantung pada
+  /// notifikasi, yang channel-nya dapat terkunci senyap); selain itu (atau bila
+  /// ringtone gagal) = SATU notifikasi lokal di channel `tapgo_alerts_v2`.
+  /// Tidak pernah keduanya untuk peristiwa yang sama.
+  ///
+  /// Latar belakang: menampilkan notifikasi SISTEM (dengan suara) untuk pesan yang datang
   /// SAAT APP DI DEPAN — regresi Owner 29 Sep 2026: "order masuk tapi tidak
   /// ada suara dan tidak ada pop up". FCM HANYA menampilkan notifikasi
   /// otomatis untuk kondisi LATAR BELAKANG; saat app di depan, pesan hanya
@@ -74,7 +80,67 @@ abstract class DriverPushPlatform {
   Future<void> showForegroundAlert(DriverPushMessage message);
 }
 
+/// Channel notifikasi untuk order, chat, dan pembaruan perjalanan. BARU: suara
+/// dan prioritas channel yang sudah ada tidak berubah oleh pemasangan baru dan
+/// channel lama `tapgo_default` sudah terkunci senyap di HP yang pernah memasang
+/// APK lama. Dibuat di MainActivity.onCreate; id HARUS sama dengan manifest
+/// (default_notification_channel_id) dan payload FCM backend.
+const driverAlertChannelId = 'tapgo_alerts_v2';
+const driverAlertChannelName = 'Peringatan TapGo';
+const driverAlertChannelDescription =
+    'Order baru, pesan chat, dan pembaruan perjalanan yang harus berbunyi';
+
+/// Nama dan method HARUS sama dengan MainActivity.kt.
+const driverAlertsMethodChannel = MethodChannel('tapgo.driver/alerts');
+
+/// Rincian notifikasi lokal: channel baru, Importance.high, suara menyala.
+/// Tanpa `sound: null` dan tanpa `silent: true`.
+NotificationDetails driverAlertNotificationDetails() =>
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        driverAlertChannelId,
+        driverAlertChannelName,
+        channelDescription: driverAlertChannelDescription,
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+      ),
+    );
+
+/// Memutar ringtone notifikasi bawaan HP lewat MethodChannel. false bila gagal.
+Future<bool> driverPlayNotificationRingtone() async {
+  try {
+    return await driverAlertsMethodChannel
+            .invokeMethod<bool>('playNotificationSound') ??
+        false;
+  } catch (_) {
+    return false;
+  }
+}
+
 class FirebaseDriverPushPlatform implements DriverPushPlatform {
+  FirebaseDriverPushPlatform({
+    Future<bool> Function()? playRingtone,
+    Future<void> Function(
+            int id, String title, String body, NotificationDetails details)?
+        showLocal,
+    bool Function()? isForeground,
+  })  : _playRingtone = playRingtone ?? driverPlayNotificationRingtone,
+        _showLocalOverride = showLocal,
+        _isForeground = isForeground ?? _appIsInForeground;
+
+  static bool _appIsInForeground() {
+    final state = WidgetsBinding.instance.lifecycleState;
+    return state == null || state == AppLifecycleState.resumed;
+  }
+
+  final Future<bool> Function() _playRingtone;
+  final Future<void> Function(
+          int id, String title, String body, NotificationDetails details)?
+      _showLocalOverride;
+  final bool Function() _isForeground;
+
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
   bool _localNotificationsInitialized = false;
@@ -159,33 +225,28 @@ class FirebaseDriverPushPlatform implements DriverPushPlatform {
   @override
   Future<void> showForegroundAlert(DriverPushMessage message) async {
     if (message.title.isEmpty && message.body.isEmpty) return;
+    // Aplikasi di depan: ringtone, BUKAN notifikasi (satu peristiwa = satu bunyi).
+    if (_isForeground() && await _playRingtone()) return;
+    // Di belakang, atau ringtone gagal: tepat satu notifikasi di channel baru.
     try {
+      final override = _showLocalOverride;
+      if (override != null) {
+        await override(_notificationId++, message.title, message.body,
+            driverAlertNotificationDetails());
+        return;
+      }
       await _ensureLocalNotificationsInitialized();
       if (!_localNotificationsInitialized) return;
-      // Channel ID SAMA PERSIS dengan yang dibuat MainActivity.kt untuk
-      // notifikasi latar belakang (IMPORTANCE_HIGH, sudah ada suaranya) —
-      // memakai channel yang sama, bukan channel baru, supaya driver hanya
-      // punya SATU pengaturan suara/getar untuk diatur, konsisten di kedua
-      // kondisi (app di depan maupun di belakang).
       await _localNotifications.show(
         _notificationId++,
         message.title,
         message.body,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'tapgo_default',
-            'Pesanan dan pemberitahuan',
-            channelDescription:
-                'Pesanan baru di dekat Anda, pembatalan, dan pembaruan akun',
-            importance: Importance.high,
-            priority: Priority.high,
-          ),
-        ),
+        driverAlertNotificationDetails(),
       );
     } catch (error) {
-      if (kDebugMode) {
-        debugPrint('[TapGo Push] Gagal menampilkan notifikasi foreground: $error');
-      }
+      // Dicatat juga di rilis (sebelumnya ditelan diam-diam sehingga tidak ada
+      // jejak mengapa tidak berbunyi). Hanya jenis galat, tanpa isi pesan.
+      debugPrint('[TapGo Push] notifikasi peringatan gagal: ${error.runtimeType}');
     }
   }
 }
