@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "../hard-nav";
 
 /**
  * Kerangka alur Top Up TapGoPay (Stage R2.10).

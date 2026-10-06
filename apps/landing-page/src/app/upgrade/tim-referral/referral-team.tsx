@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import Link from "../../hard-nav";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useHardRouter as useRouter } from "../../hard-nav";
 import {
   PREVIEW_MODE,
   PREVIEW_REFERRAL_SUMMARY,

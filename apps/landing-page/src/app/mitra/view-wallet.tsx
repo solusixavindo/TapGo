@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "../hard-nav";
 import { useState } from "react";
 import { MITRA_PREVIEW, WalletTransaction, getWalletTransactions } from "./mitra-api";
 import { formatDateTime, formatRupiah, walletTypeLabel } from "./mitra-format";

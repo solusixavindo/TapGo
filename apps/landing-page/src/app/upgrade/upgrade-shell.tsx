@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "../hard-nav";
 
 /**
  * Kerangka alur upgrade membership (Stage R2.6 jalur A).

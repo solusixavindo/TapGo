@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "../hard-nav";
 import { ChangeEvent, FormEvent, useRef, useState } from "react";
 import { ApiError, MITRA_PREVIEW, changePassword, uploadOwnAvatar } from "./mitra-api";
 import ProfileAvatar from "./profile-avatar";

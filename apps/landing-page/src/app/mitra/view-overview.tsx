@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "../hard-nav";
 import { useMemo } from "react";
 import { Commission, MITRA_PREVIEW, getCommissions } from "./mitra-api";
 import {

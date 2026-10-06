@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import Link from "../hard-nav";
+import { useHardRouter as useRouter } from "../hard-nav";
 import { FormEvent, useEffect, useState } from "react";
 import { NOTICE_KEY, PREVIEW_MODE, TOKEN_KEY, clearSession, login, readSession, takeNextPath, writeSession } from "./api";
 import { Field, inputClass, primaryButtonClass } from "./upgrade-shell";
