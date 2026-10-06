@@ -117,3 +117,19 @@ Rollback tidak membatalkan migrasi (aditif; tabel, kolom, dan nilai enum terting
 - Bunyi pilihan driver saat aplikasi tertutup (APK driver +14/+15).
 - Tile Tagihan di user_app +40/+41 (mengisi daftar produk setelah Langkah 8).
 - Rute prabayar lama tidak diubah. Perbaikan `Idempotency-Key` wajib untuk pembelian PPOB prabayar BELUM ada di produksi (hanya rute pascabayar baru yang mewajibkannya).
+
+---
+
+# Lanjutan: rilis `55a85a4` (tanpa migrasi) — katalog pascabayar bebas dari batas rc=83
+
+Dasar: log produksi 6 Okt menunjukkan `PPOB_PRICE_SYNC_ENABLED=true`; sinkronisasi harga prabayar ikut meminta daftar `pasca` (sia-sia) dan menghabiskan jatah Digiflazz tiap start. `55a85a4` menghentikan itu, memberi katalog satu permintaan per siklus, dan mengulang 15 menit (maks 6x) bila kena batas.
+Hash penuh: lihat `git rev-parse release/driver-rating` saat panduan diberikan. Rilis aktif sebelumnya: `tapgo-e8d40b3`. Tidak ada migrasi baru, jadi cadangan database tidak wajib (cadangan Langkah 2 di atas masih terbaru).
+
+1. Pastikan aktif `tapgo-e8d40b3`.
+2. Clone ke `tapgo-55a85a4`, checkout hash penuh, salin `.env`, tambahkan `PPOB_POSTPAID_CATALOG_SYNC_ENABLED=true`, `npm ci`, `prisma generate`, build, cek `MODUL OK`.
+3. `prisma migrate status` harus "Database schema is up to date!" (tidak ada yang menggantung).
+4. Cutover: `pm2 delete tapgo-api` lalu `pm2 start ... --cwd <folder baru>/apps/backend`, `pm2 save`.
+5. Verifikasi: cwd, restarts 0, `health: 200`, dan log "PPOB postpaid catalog sync completed" (atau peringatan rc=83 yang diulang 15 menit).
+6. Hitung produk: `select category, count(*) from ppob_products where is_postpaid group by 1;`
+
+Rollback: nonaktifkan produk pascabayar (`update ppob_products set is_active=false where is_postpaid;`) lalu jalankan kembali `tapgo-e8d40b3` (skema sama).
