@@ -48,3 +48,23 @@ adminPpobSyncRouter.post(
     res.json({ success: true, data: result });
   })
 );
+
+/**
+ * Sinkronisasi katalog pascabayar (BPJS dan PDAM). Hasilnya memuat `ignoredBrands`:
+ * brand pascabayar lain yang tersedia di Digiflazz tetapi belum dibuka di aplikasi.
+ */
+adminPpobSyncRouter.post(
+  "/sync-postpaid-catalog",
+  asyncHandler(async (_req, res) => {
+    const provider = resolvePpobProviderForSync();
+    if (!provider) {
+      throw new AppError(
+        "Sinkronisasi katalog hanya tersedia saat PPOB_PROVIDER=digiflazz",
+        StatusCodes.SERVICE_UNAVAILABLE,
+        "PPOB_PRICE_SYNC_UNAVAILABLE"
+      );
+    }
+    const service = new PpobPriceSyncService(new PrismaPpobRepository(prisma), provider);
+    res.json({ success: true, data: await service.runPostpaidCatalogSync() });
+  })
+);

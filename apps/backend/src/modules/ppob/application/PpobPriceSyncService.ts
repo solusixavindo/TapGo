@@ -1,6 +1,9 @@
+import { createHash } from "node:crypto";
+import { PpobCategory } from "@prisma/client";
 import { logger } from "../../../core/logger/logger.js";
 import { ppobSellingPriceFor, selectPricingBand } from "../../../core/finance/ppobPricing.js";
 import {
+  PpobPostpaidCatalogUpsert,
   PpobPriceSyncCandidate,
   PpobPriceSyncUpdate,
   PpobRepository
@@ -13,6 +16,42 @@ import { PpobPriceListEntry, PpobProviderGateway } from "../domain/ppobProvider.
  * modul lain.
  */
 const PPOB_PRICE_SYNC_LOCK_KEY = 727009;
+/** Kunci terpisah untuk sinkronisasi katalog pascabayar. */
+const PPOB_POSTPAID_CATALOG_LOCK_KEY = 727010;
+
+/**
+ * Kategori pascabayar yang dibuka di aplikasi (keputusan Owner 6 Okt 2026:
+ * BPJS dan PDAM dulu). Produk pascabayar di luar ini TIDAK dibuat; brand-nya
+ * dilaporkan di hasil sinkronisasi supaya Owner dapat memilih yang berikutnya.
+ */
+const ENABLED_POSTPAID_CATEGORIES: ReadonlySet<PpobCategory> = new Set<PpobCategory>(["BPJS", "PDAM"]);
+
+/** Menentukan kategori produk pascabayar dari brand/nama katalog; null = belum dibuka. */
+export function classifyPostpaidEntry(entry: { brand: string; name: string }): PpobCategory | null {
+  const brand = entry.brand.toUpperCase();
+  const name = entry.name.toUpperCase();
+  if (brand.includes("PDAM") || name.startsWith("PDAM")) return "PDAM";
+  // Hanya BPJS Kesehatan: BPJS Ketenagakerjaan memakai nomor dan alur lain.
+  if ((brand.includes("BPJS") || name.includes("BPJS")) && !brand.includes("KETENAGAKERJAAN") && !name.includes("KETENAGAKERJAAN")) {
+    return "BPJS";
+  }
+  return null;
+}
+
+/** SKU internal buram dan stabil untuk produk pascabayar (lolos regex klien). */
+export function postpaidSkuFor(providerSku: string): string {
+  return `PSC_${createHash("sha1").update(providerSku).digest("hex").slice(0, 12).toUpperCase()}`;
+}
+
+export type PpobPostpaidCatalogSyncResult = {
+  skipped: boolean;
+  created: number;
+  updated: number;
+  deactivated: number;
+  /// Brand pascabayar di Digiflazz yang belum dibuka di aplikasi, dengan jumlah produk.
+  ignoredBrands: Record<string, number>;
+  errors: number;
+};
 
 export type PpobPriceSyncResult = {
   skipped: boolean;
@@ -125,6 +164,56 @@ export class PpobPriceSyncService {
     const { updated } = await this.repository.applyPriceSyncUpdates(updates, syncedAt);
 
     return { skipped: false, considered: candidates.length, updated, deactivated, reactivated, errors };
+  }
+
+  /**
+   * Membuat/memperbarui katalog BPJS dan PDAM dari daftar harga pascabayar
+   * Digiflazz. Gagal mengambil daftar = tidak mengubah apa pun. Produk yang
+   * tidak ada lagi/ditutup dinonaktifkan; kategori lain tidak dibuat.
+   */
+  async runPostpaidCatalogSync(): Promise<PpobPostpaidCatalogSyncResult> {
+    const empty = { skipped: true, created: 0, updated: 0, deactivated: 0, ignoredBrands: {}, errors: 0 };
+    if (!this.provider.fetchPostpaidCatalog) return empty;
+    const lockHeld = await this.repository.transaction((tx) =>
+      this.repository.tryAcquireReconcileLock(PPOB_POSTPAID_CATALOG_LOCK_KEY, tx)
+    );
+    if (!lockHeld) return empty;
+
+    let catalog;
+    try {
+      catalog = await this.provider.fetchPostpaidCatalog();
+    } catch (error) {
+      logger.warn({ err: error }, "PPOB postpaid catalog sync: gagal mengambil daftar harga pascabayar");
+      return { ...empty, skipped: false, errors: 1 };
+    }
+
+    const upserts: PpobPostpaidCatalogUpsert[] = [];
+    const ignoredBrands: Record<string, number> = {};
+    for (const entry of catalog) {
+      const category = classifyPostpaidEntry(entry);
+      if (!category || !ENABLED_POSTPAID_CATEGORIES.has(category)) {
+        const key = entry.brand || entry.name;
+        ignoredBrands[key] = (ignoredBrands[key] ?? 0) + 1;
+        continue;
+      }
+      upserts.push({
+        sku: postpaidSkuFor(entry.providerSku),
+        category,
+        brand: entry.brand || category,
+        name: entry.name,
+        description: entry.description,
+        providerSku: entry.providerSku,
+        adminFee: entry.adminFee,
+        isActive: entry.active
+      });
+    }
+    // Katalog kosong (mis. akun belum berlangganan pascabayar) TIDAK boleh
+    // menonaktifkan produk yang sudah ada; itu kemungkinan gangguan, bukan keputusan.
+    if (upserts.length === 0) {
+      return { ...empty, skipped: false, ignoredBrands };
+    }
+    const counts = await this.repository.syncPostpaidCatalog(upserts, new Date());
+    return { skipped: false, ...counts, ignoredBrands, errors: 0 };
   }
 
   private computeForCandidate(

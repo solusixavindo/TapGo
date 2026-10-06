@@ -2,7 +2,9 @@ import { PpobCategory, Prisma, PrismaClient } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../core/errors/AppError.js";
 import {
+  PpobBillInquiryRecord,
   PpobOpenTransaction,
+  PpobPostpaidCatalogUpsert,
   PpobPriceSyncCandidate,
   PpobPriceSyncUpdate,
   PpobProductRecord,
@@ -21,7 +23,8 @@ const PRODUCT_SELECT = {
   price: true,
   adminFee: true,
   providerSku: true,
-  providerSkus: true
+  providerSkus: true,
+  isPostpaid: true
 } satisfies Prisma.PpobProductSelect;
 
 export class PrismaPpobRepository implements PpobRepository {
@@ -38,6 +41,8 @@ export class PrismaPpobRepository implements PpobRepository {
     return this.prisma.ppobProduct.findMany({
       where: {
         isActive: true,
+        // Katalog prabayar: produk pascabayar dibeli lewat cek tagihan.
+        isPostpaid: false,
         ...(category !== undefined ? { category } : {})
       },
       select: PRODUCT_SELECT,
@@ -51,6 +56,13 @@ export class PrismaPpobRepository implements PpobRepository {
   ): Promise<PpobProductRecord | null> {
     return tx.ppobProduct.findFirst({
       where: { sku, isActive: true },
+      select: PRODUCT_SELECT
+    });
+  }
+
+  findActiveProductById(id: string): Promise<PpobProductRecord | null> {
+    return this.prisma.ppobProduct.findFirst({
+      where: { id, isActive: true },
       select: PRODUCT_SELECT
     });
   }
@@ -71,9 +83,33 @@ export class PrismaPpobRepository implements PpobRepository {
       provider: string;
       providerSku: string;
       idempotencyKey?: string;
+      billInquiry?: PpobBillInquiryRecord;
     },
     tx: Prisma.TransactionClient
   ): Promise<PpobTransactionRecord> {
+    // Pascabayar: klaim inquiry SEBELUM debit, di transaksi yang sama. Satu
+    // statement bersyarat (milik user ini, belum dipakai, belum kedaluwarsa):
+    // dua pembayaran bersamaan untuk inquiry yang sama hanya satu yang lolos,
+    // dan kegagalan klaim membatalkan seluruh transaksi tanpa debit.
+    if (input.billInquiry) {
+      const claimed = await tx.ppobBillInquiry.updateMany({
+        where: {
+          id: input.billInquiry.id,
+          userId: input.userId,
+          usedAt: null,
+          expiresAt: { gt: new Date() }
+        },
+        data: { usedAt: new Date() }
+      });
+      if (claimed.count !== 1) {
+        throw new AppError(
+          "Tagihan sudah kedaluwarsa atau sudah dipakai. Cek tagihan lagi.",
+          StatusCodes.CONFLICT,
+          "PPOB_BILL_INQUIRY_UNUSABLE"
+        );
+      }
+    }
+
     // Debit bersyarat dalam SATU statement: baris wallet hanya berubah bila
     // saldo mencukupi. Dua pembelian bersamaan tidak bisa membuat saldo negatif
     // karena klausa where dievaluasi di bawah row lock.
@@ -124,8 +160,14 @@ export class PrismaPpobRepository implements PpobRepository {
         brandSnapshot: input.product.brand,
         category: input.product.category,
         targetNumber: input.targetNumber,
-        amount: input.product.price,
-        adminFee: input.product.adminFee,
+        // Pascabayar: tagihan murni, dan sisanya (admin penyedia + biaya layanan)
+        // sebagai adminFee; prabayar memakai harga produk.
+        amount: input.billInquiry
+          ? input.billInquiry.billAmount
+          : input.product.price,
+        adminFee: input.billInquiry
+          ? input.billInquiry.totalAmount.minus(input.billInquiry.billAmount)
+          : input.product.adminFee,
         totalAmount: input.totalAmount,
         status: "PENDING",
         provider: input.provider,
@@ -352,6 +394,9 @@ export class PrismaPpobRepository implements PpobRepository {
   listProductsForPriceSync(): Promise<PpobPriceSyncCandidate[]> {
     return this.prisma.ppobProduct.findMany({
       where: {
+        // Pascabayar punya katalog sendiri (syncPostpaidCatalog); mencocokkannya
+        // dengan daftar harga prabayar akan menonaktifkannya.
+        isPostpaid: false,
         OR: [{ providerSku: { not: null } }, { providerSkus: { not: Prisma.JsonNull } }]
       },
       select: {
@@ -388,5 +433,92 @@ export class PrismaPpobRepository implements PpobRepository {
       )
     );
     return { updated: updates.length };
+  }
+
+  listActivePostpaidProducts(input: {
+    category: PpobCategory;
+    query?: string;
+    limit: number;
+  }): Promise<PpobProductView[]> {
+    const query = input.query?.trim();
+    return this.prisma.ppobProduct.findMany({
+      where: {
+        isActive: true,
+        isPostpaid: true,
+        category: input.category,
+        ...(query
+          ? {
+              OR: [
+                { name: { contains: query, mode: "insensitive" } },
+                { brand: { contains: query, mode: "insensitive" } }
+              ]
+            }
+          : {})
+      },
+      select: PRODUCT_SELECT,
+      orderBy: [{ name: "asc" }],
+      take: input.limit
+    });
+  }
+
+  createBillInquiry(
+    input: Omit<PpobBillInquiryRecord, "id" | "usedAt">
+  ): Promise<PpobBillInquiryRecord> {
+    const { detail, ...rest } = input;
+    return this.prisma.ppobBillInquiry.create({
+      data: { ...rest, detail: detail === null ? Prisma.JsonNull : (detail as Prisma.InputJsonValue) }
+    });
+  }
+
+  findBillInquiry(userId: string, publicReference: string): Promise<PpobBillInquiryRecord | null> {
+    return this.prisma.ppobBillInquiry.findFirst({ where: { userId, publicReference } });
+  }
+
+  async syncPostpaidCatalog(
+    entries: PpobPostpaidCatalogUpsert[],
+    syncedAt: Date
+  ): Promise<{ created: number; updated: number; deactivated: number }> {
+    let created = 0;
+    let updated = 0;
+    let deactivated = 0;
+    await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.ppobProduct.findMany({
+        where: { isPostpaid: true },
+        select: { id: true, sku: true, providerSku: true, isActive: true }
+      });
+      const bySku = new Map(existing.map((row) => [row.sku, row]));
+      const seen = new Set<string>();
+      for (const entry of entries) {
+        seen.add(entry.sku);
+        const data = {
+          category: entry.category,
+          brand: entry.brand.slice(0, 40),
+          name: entry.name.slice(0, 120),
+          description: entry.description ? entry.description.slice(0, 240) : null,
+          providerSku: entry.providerSku.slice(0, 60),
+          // Harga tidak bermakna untuk pascabayar; tagihan dari cek tagihan.
+          price: 0,
+          adminFee: entry.adminFee,
+          isActive: entry.isActive,
+          isPostpaid: true,
+          priceSyncedAt: syncedAt
+        };
+        const current = bySku.get(entry.sku);
+        if (!current) {
+          await tx.ppobProduct.create({ data: { sku: entry.sku, ...data } });
+          created += 1;
+        } else {
+          await tx.ppobProduct.update({ where: { id: current.id }, data });
+          updated += 1;
+        }
+      }
+      for (const row of existing) {
+        if (!seen.has(row.sku) && row.isActive) {
+          await tx.ppobProduct.update({ where: { id: row.id }, data: { isActive: false, priceSyncedAt: syncedAt } });
+          deactivated += 1;
+        }
+      }
+    });
+    return { created, updated, deactivated };
   }
 }

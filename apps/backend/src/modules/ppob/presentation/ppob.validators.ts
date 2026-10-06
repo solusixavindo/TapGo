@@ -32,3 +32,32 @@ export const ppobReferenceSchema = z.object({
     reference: z.string().regex(/^PPB-[A-Z2-9]{10}$/)
   })
 });
+
+const ppobSku = z
+  .string()
+  .trim()
+  .min(3)
+  .max(40)
+  .regex(/^[A-Z0-9_]+$/, "sku harus huruf besar/angka/underscore");
+
+export const ppobBillProductsQuerySchema = z.object({
+  query: z.object({
+    category: z.enum(["BPJS", "PDAM"]),
+    q: z.string().trim().max(60).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50)
+  })
+});
+
+export const ppobBillInquirySchema = z.object({
+  body: z.object({
+    sku: ppobSku,
+    targetNumber: z.string().trim().min(4).max(40)
+  })
+});
+
+export const ppobBillPaySchema = z.object({
+  body: z.object({
+    reference: z.string().regex(/^PPB-[A-Z2-9]{10}$/)
+  }),
+  headers: z.object({}).passthrough()
+});

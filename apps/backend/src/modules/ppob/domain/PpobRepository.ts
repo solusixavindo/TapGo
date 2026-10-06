@@ -10,6 +10,8 @@ export type PpobProductView = {
   adminFee: Prisma.Decimal;
   /// Kode provider per operator (pulsa/data); dipakai klien hanya untuk daftar operator.
   providerSkus?: Prisma.JsonValue | null;
+  /// Produk pascabayar: dibeli lewat cek tagihan, bukan harga tetap.
+  isPostpaid?: boolean;
 };
 
 /// Produk lengkap dengan id internal — hanya dipakai di dalam service.
@@ -33,6 +35,37 @@ export type PpobOpenTransaction = {
   providerSku: string;
 };
 
+/// Hasil cek tagihan yang disimpan (angka dari server, sekali pakai).
+export type PpobBillInquiryRecord = {
+  id: string;
+  publicReference: string;
+  userId: string;
+  productId: string;
+  targetNumber: string;
+  customerName: string;
+  period: string | null;
+  billAmount: Prisma.Decimal;
+  providerAdmin: Prisma.Decimal;
+  providerCost: Prisma.Decimal;
+  serviceFee: Prisma.Decimal;
+  totalAmount: Prisma.Decimal;
+  detail: Prisma.JsonValue | null;
+  expiresAt: Date;
+  usedAt: Date | null;
+};
+
+/// Satu produk pascabayar yang dibuat/diperbarui dari katalog provider.
+export type PpobPostpaidCatalogUpsert = {
+  sku: string;
+  category: PpobCategory;
+  brand: string;
+  name: string;
+  description: string | null;
+  providerSku: string;
+  adminFee: number;
+  isActive: boolean;
+};
+
 export interface PpobRepository {
   transaction<T>(handler: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T>;
 
@@ -42,6 +75,9 @@ export interface PpobRepository {
     sku: string,
     tx?: Prisma.TransactionClient
   ): Promise<PpobProductRecord | null>;
+
+  /// Produk aktif menurut id internal (dipakai alur pascabayar dari hasil cek tagihan).
+  findActiveProductById(id: string): Promise<PpobProductRecord | null>;
 
   findByIdempotencyKey(userId: string, key: string): Promise<PpobTransactionRecord | null>;
 
@@ -61,6 +97,13 @@ export interface PpobRepository {
       /// Kode produk provider yang sudah dipilih untuk transaksi ini.
       providerSku: string;
       idempotencyKey?: string;
+      /**
+       * Pascabayar: transaksi dibuat dari hasil cek tagihan. Inquiry diklaim
+       * (sekali pakai, belum kedaluwarsa, milik user ini) DI DALAM transaksi
+       * yang sama dengan debit; angka transaksi diambil dari inquiry, bukan
+       * dari harga produk.
+       */
+      billInquiry?: PpobBillInquiryRecord;
     },
     tx: Prisma.TransactionClient
   ): Promise<PpobTransactionRecord>;
@@ -130,6 +173,29 @@ export interface PpobRepository {
    * suatu kode, siklus berikutnya harus bisa menghidupkannya kembali.
    */
   listProductsForPriceSync(): Promise<PpobPriceSyncCandidate[]>;
+
+  /// Produk pascabayar aktif; [query] mencari pada nama/brand (tanpa huruf besar-kecil).
+  listActivePostpaidProducts(input: {
+    category: PpobCategory;
+    query?: string;
+    limit: number;
+  }): Promise<PpobProductView[]>;
+
+  createBillInquiry(
+    input: Omit<PpobBillInquiryRecord, "id" | "usedAt">
+  ): Promise<PpobBillInquiryRecord>;
+
+  findBillInquiry(userId: string, publicReference: string): Promise<PpobBillInquiryRecord | null>;
+
+  /**
+   * Membuat/memperbarui produk pascabayar dari katalog provider dan
+   * menonaktifkan produk pascabayar yang tidak ada lagi di katalog. Kategori
+   * lain dan produk prabayar tidak disentuh.
+   */
+  syncPostpaidCatalog(
+    entries: PpobPostpaidCatalogUpsert[],
+    syncedAt: Date
+  ): Promise<{ created: number; updated: number; deactivated: number }>;
 
   /**
    * Menerapkan hasil satu siklus sinkronisasi harga dalam satu transaksi.

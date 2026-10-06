@@ -203,6 +203,10 @@ if (env.PPOB_PRICE_SYNC_ENABLED && env.PPOB_PROVIDER === "digiflazz") {
       if (!result.skipped) {
         logger.info(result, "PPOB price sync cycle completed");
       }
+      const catalog = await priceSyncService.runPostpaidCatalogSync();
+      if (!catalog.skipped) {
+        logger.info(catalog, "PPOB postpaid catalog sync completed");
+      }
     } catch (error) {
       logger.error({ err: error }, "PPOB price sync cycle failed");
     }
