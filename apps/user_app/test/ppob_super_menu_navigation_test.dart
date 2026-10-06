@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tapgo_user_app/features/ppob/application/ppob_providers.dart';
 import 'package:tapgo_user_app/features/ppob/data/ppob_repository.dart';
+import 'package:tapgo_user_app/features/ppob/presentation/ppob_bill_screens.dart';
 import 'package:tapgo_user_app/features/ppob/presentation/ppob_category_screen.dart';
 import 'package:tapgo_user_app/features/ppob/presentation/ppob_home_screen.dart';
 import 'package:tapgo_user_app/main.dart';
@@ -101,12 +102,12 @@ void main() {
     (tester) async {
       await _pumpOpener(
         tester,
-        _repoReturning(_catalogWith(['PULSA', 'DATA'])), // tanpa BPJS
-        'BPJS',
-        'BPJS',
+        _repoReturning(_catalogWith(['PULSA', 'DATA'])), // tanpa tagihan PLN
+        'PLN_POSTPAID',
+        'Tagihan PLN',
       );
       expect(find.byType(PpobCategoryUnavailableScreen), findsOneWidget);
-      expect(find.text('BPJS belum tersedia'), findsOneWidget);
+      expect(find.text('Tagihan PLN belum tersedia'), findsOneWidget);
       expect(find.byType(PpobHomeScreen), findsNothing);
     },
   );
@@ -117,14 +118,24 @@ void main() {
       await _pumpOpener(
         tester,
         _repoReturning(_catalogWith(['PULSA'])),
-        'PDAM',
-        'PDAM',
+        'PLN_POSTPAID',
+        'Tagihan PLN',
       );
-      expect(find.text('PDAM belum tersedia'), findsOneWidget);
+      expect(find.text('Tagihan PLN belum tersedia'), findsOneWidget);
       await tester.tap(find.text('Buka Katalog PPOB'));
       await tester.pumpAndSettle();
       expect(find.byType(PpobHomeScreen), findsOneWidget);
       expect(find.byType(PpobCategoryUnavailableScreen), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'BPJS dan PDAM dibayar lewat cek tagihan: membuka layar tagihan, bukan katalog harga tetap',
+    (tester) async {
+      await _pumpOpener(tester, _repoReturning(_catalogWith(['PULSA'])), 'PDAM', 'PDAM');
+      expect(find.byType(PpobBillProductsScreen), findsOneWidget);
+      expect(find.byType(PpobCategoryUnavailableScreen), findsNothing);
+      expect(find.byType(PpobHomeScreen), findsNothing);
     },
   );
 

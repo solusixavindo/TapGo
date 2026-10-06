@@ -186,6 +186,87 @@ class PpobInquiryResult {
   }
 }
 
+/// Produk pascabayar (BPJS, PDAM) untuk dipilih sebelum cek tagihan.
+class PpobBillProduct {
+  const PpobBillProduct({
+    required this.sku,
+    required this.name,
+    required this.category,
+    required this.targetLabel,
+    this.brand = '',
+  });
+
+  final String sku;
+  final String name;
+  final String brand;
+
+  /// `BPJS` atau `PDAM`.
+  final String category;
+  final String targetLabel;
+
+  factory PpobBillProduct.fromJson(Map<String, dynamic> json) {
+    return PpobBillProduct(
+      sku: _stringFromJson(json['sku']),
+      name: _stringFromJson(json['name']),
+      brand: _stringFromJson(json['brand']),
+      category: _stringFromJson(json['category']),
+      targetLabel: _stringFromJson(json['targetLabel'], 'Nomor Pelanggan'),
+    );
+  }
+}
+
+/// Hasil cek tagihan. Semua angka dihitung server; klien hanya menampilkan dan
+/// mengirim kembali [reference] saat membayar (bukan nominal).
+class PpobBillInquiry {
+  const PpobBillInquiry({
+    required this.reference,
+    required this.productName,
+    required this.targetNumber,
+    required this.customerName,
+    required this.billAmount,
+    required this.feeAmount,
+    required this.totalAmount,
+    required this.ppobBalance,
+    required this.sufficient,
+    this.period,
+    this.expiresAt,
+  });
+
+  final String reference;
+  final String productName;
+  final String targetNumber;
+  final String customerName;
+  final String? period;
+  final double billAmount;
+
+  /// Biaya admin penyedia + biaya layanan TapGo, digabung.
+  final double feeAmount;
+  final double totalAmount;
+  final double ppobBalance;
+  final bool sufficient;
+  final DateTime? expiresAt;
+
+  bool isExpiredAt(DateTime now) => expiresAt != null && !now.isBefore(expiresAt!);
+
+  factory PpobBillInquiry.fromJson(Map<String, dynamic> json) {
+    final product = json['product'];
+    final wallet = json['wallet'];
+    return PpobBillInquiry(
+      reference: _stringFromJson(json['reference']),
+      productName: product is Map<String, dynamic> ? _stringFromJson(product['name']) : '',
+      targetNumber: _stringFromJson(json['targetNumber']),
+      customerName: _stringFromJson(json['customerName']),
+      period: json['period'] is String ? json['period'] as String : null,
+      billAmount: _moneyFromJson(json['billAmount']),
+      feeAmount: _moneyFromJson(json['feeAmount']),
+      totalAmount: _moneyFromJson(json['totalAmount']),
+      ppobBalance: wallet is Map<String, dynamic> ? _moneyFromJson(wallet['ppobBalance']) : 0,
+      sufficient: json['sufficient'] == true,
+      expiresAt: _dateFromJson(json['expiresAt']),
+    );
+  }
+}
+
 enum PpobOrderStatus { pending, processing, success, failed, refunded, unknown }
 
 PpobOrderStatus ppobOrderStatusFromJson(Object? value) {

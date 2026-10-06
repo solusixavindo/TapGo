@@ -31,6 +31,7 @@ import 'services/tls_pinning.dart';
 import 'features/ppob/data/ppob_demo_repository.dart';
 import 'features/ppob/data/ppob_repository.dart';
 import 'features/ppob/domain/ppob_models.dart';
+import 'features/ppob/presentation/ppob_bill_screens.dart';
 import 'features/ppob/presentation/ppob_category_screen.dart';
 import 'features/ppob/presentation/widgets/ppob_shared.dart'
     show ppobCategoryIcon, ppobStatusLabel;
@@ -223,6 +224,29 @@ PpobRepository _buildPpobRepository() {
           ? payload['items'] as List<dynamic>
           : const [];
     }),
+    billProductsRequest: ({required category, query}) => guard(() async {
+      final payload = await _apiClient.get(
+        'ppob/bills/products?category=$category'
+        '${query == null ? '' : '&q=${Uri.encodeQueryComponent(query)}'}',
+      );
+      return payload['items'] is List
+          ? payload['items'] as List<dynamic>
+          : const [];
+    }),
+    billInquiryRequest: ({required sku, required targetNumber}) => guard(
+      () => _apiClient.post(
+        'ppob/bills/inquiry',
+        body: {'sku': sku, 'targetNumber': targetNumber},
+      ),
+    ),
+    // Hanya referensi cek tagihan yang dikirim: nominal dihitung server.
+    billPayRequest: ({required reference, required idempotencyKey}) => guard(
+      () => _apiClient.post(
+        'ppob/bills/pay',
+        body: {'reference': reference},
+        headers: {'Idempotency-Key': idempotencyKey},
+      ),
+    ),
   );
 }
 
@@ -254,6 +278,15 @@ Future<void> tapGoOpenPpobCategory(
   required String label,
 }) async {
   final navigator = Navigator.of(context);
+  // BPJS dan PDAM dibayar lewat cek tagihan (pascabayar), bukan katalog harga tetap.
+  if (categoryCode == 'BPJS' || categoryCode == 'PDAM') {
+    navigator.push(
+      _tapGoPageRoute(
+        (_) => PpobBillProductsScreen(categoryCode: categoryCode, title: label),
+      ),
+    );
+    return;
+  }
   final container = ProviderScope.containerOf(context, listen: false);
   List<PpobCategory>? categories;
   try {

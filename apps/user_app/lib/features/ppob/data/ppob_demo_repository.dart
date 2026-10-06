@@ -25,6 +25,12 @@ PpobRepository createDemoPpobRepository() {
       idempotencyKey: idempotencyKey,
     ),
     ordersRequest: () async => state.ordersJson,
+    billProductsRequest: ({required category, query}) async =>
+        state.billProducts(category, query),
+    billInquiryRequest: ({required sku, required targetNumber}) async =>
+        state.billInquiry(sku: sku, targetNumber: targetNumber),
+    billPayRequest: ({required reference, required idempotencyKey}) async =>
+        state.billPay(reference: reference, idempotencyKey: idempotencyKey),
   );
 }
 
@@ -166,6 +172,75 @@ class _PpobDemoState {
     };
     _orders.add(order);
     return Map<String, dynamic>.from(order);
+  }
+
+  // --- Pascabayar (demo): produk tetap, tagihan tetap, bayar berakhir REFUNDED
+  // seperti prabayar demo karena provider tidak terhubung.
+  static const _billProducts = <Map<String, dynamic>>[
+    {'sku': 'DEMO_BPJS', 'name': 'BPJS KESEHATAN', 'brand': 'BPJS KESEHATAN', 'category': 'BPJS', 'targetLabel': 'Nomor VA BPJS'},
+    {'sku': 'DEMO_PDAM_1', 'name': 'PDAM KOTA CONTOH', 'brand': 'PDAM', 'category': 'PDAM', 'targetLabel': 'ID Pelanggan PDAM'},
+    {'sku': 'DEMO_PDAM_2', 'name': 'PDAM KABUPATEN DEMO', 'brand': 'PDAM', 'category': 'PDAM', 'targetLabel': 'ID Pelanggan PDAM'},
+  ];
+
+  List<dynamic> billProducts(String category, String? query) {
+    final needle = query?.toLowerCase();
+    return [
+      for (final product in _billProducts)
+        if (product['category'] == category &&
+            (needle == null ||
+                (product['name'] as String).toLowerCase().contains(needle)))
+          product,
+    ];
+  }
+
+  Map<String, dynamic> billInquiry({
+    required String sku,
+    required String targetNumber,
+  }) {
+    final product = _billProducts.where((p) => p['sku'] == sku).firstOrNull;
+    if (product == null) {
+      throw const PpobApiException(
+        code: 'PPOB_PRODUCT_NOT_FOUND',
+        message: 'Produk tagihan tidak ditemukan.',
+        statusCode: 404,
+      );
+    }
+    _sequence += 1;
+    return {
+      'reference': 'demo-bill-$_sequence',
+      'product': product,
+      'targetNumber': targetNumber,
+      'customerName': 'PELANGGAN DEMO',
+      'period': '202610',
+      'billAmount': 100000.0,
+      'feeAmount': 2350.0,
+      'totalAmount': 102350.0,
+      'expiresAt': DateTime.now().add(const Duration(minutes: 10)).toIso8601String(),
+      'wallet': {'ppobBalance': _demoPpobBalance},
+      'sufficient': _demoPpobBalance >= 102350.0,
+    };
+  }
+
+  Map<String, dynamic> billPay({
+    required String reference,
+    required String idempotencyKey,
+  }) {
+    final now = DateTime.now().toIso8601String();
+    return {
+      'id': reference,
+      'status': 'REFUNDED',
+      'sku': 'DEMO_BILL',
+      'productName': 'Tagihan (demo)',
+      'categoryCode': 'DEMO',
+      'targetNumber': '-',
+      'amount': 102350.0,
+      'benefitAmount': 0,
+      'balanceAmount': 102350.0,
+      'failureReason': 'Provider PPOB belum terhubung (mode demo).',
+      'createdAt': now,
+      'refundedAt': now,
+      'replayed': false,
+    };
   }
 
   Map<String, dynamic>? _findProduct(String sku) {

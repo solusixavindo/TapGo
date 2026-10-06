@@ -19,3 +19,12 @@ final ppobCatalogProvider = FutureProvider.autoDispose<List<PpobCategory>>((ref)
 final ppobOrdersProvider = FutureProvider.autoDispose<List<PpobOrder>>((ref) {
   return ref.watch(ppobRepositoryProvider).fetchOrders();
 });
+
+/// Produk pascabayar per kategori ("BPJS"/"PDAM") dan kata pencarian.
+final ppobBillProductsProvider = FutureProvider.autoDispose
+    .family<List<PpobBillProduct>, ({String category, String query})>((ref, args) {
+  return ref.watch(ppobRepositoryProvider).fetchBillProducts(
+        category: args.category,
+        query: args.query.isEmpty ? null : args.query,
+      );
+});
