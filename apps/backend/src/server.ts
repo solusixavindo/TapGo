@@ -223,11 +223,20 @@ if (env.PPOB_POSTPAID_CATALOG_SYNC_ENABLED && env.PPOB_PROVIDER === "digiflazz")
     new PrismaPpobRepository(prisma),
     DigiflazzPpobProvider.fromEnv()
   );
+  // Digiflazz membatasi pengecekan daftar harga (rc=83): bila siklus gagal, coba lagi
+  // 15 menit kemudian (maksimal 6 kali berturut-turut) alih-alih menunggu siklus berikutnya.
+  let catalogRetries = 0;
   const runCatalogSync = async () => {
     try {
       const result = await catalogSyncService.runPostpaidCatalogSync();
       if (!result.skipped) {
         logger.info(result, "PPOB postpaid catalog sync completed");
+      }
+      if (!result.skipped && result.errors > 0 && catalogRetries < 6) {
+        catalogRetries += 1;
+        setTimeout(() => void runCatalogSync(), 15 * 60 * 1000).unref();
+      } else if (result.errors === 0) {
+        catalogRetries = 0;
       }
     } catch (error) {
       logger.error({ err: error }, "PPOB postpaid catalog sync failed");
