@@ -260,3 +260,19 @@ describe("nextWibMidnight", () => {
     expect(nextWibMidnight(new Date("2026-10-05T17:10:00Z")).toISOString()).toBe("2026-10-06T17:00:00.000Z");
   });
 });
+
+describe("batas pengecekan daftar harga Digiflazz (rc=83)", () => {
+  it("satu siklus sinkronisasi (harga prabayar + katalog pascabayar) hanya meminta daftar pasca SEKALI", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(init.body as string) as { cmd: string };
+      calls.push(body.cmd);
+      return new Response(JSON.stringify({ data: [] }), { status: 200 });
+    }));
+    const provider = new DigiflazzPpobProvider(config);
+    await provider.fetchPriceList(); // prabayar + pasca
+    await provider.fetchPostpaidCatalog(); // memakai hasil pasca yang sama
+    expect(calls.filter((c) => c === "pasca")).toHaveLength(1);
+    expect(calls.filter((c) => c === "prepaid")).toHaveLength(1);
+  });
+});

@@ -281,6 +281,41 @@ void main() {
     });
   });
 
+  testWidgets('saldo PPOB kurang saat bayar (balapan saldo): pesan jelas, bukan galat generik', (tester) async {
+    final w = _Wires()
+      ..payError = const PpobApiException(
+        code: 'INSUFFICIENT_PPOB_BALANCE',
+        message: 'Saldo PPOB tidak mencukupi',
+        statusCode: 400,
+      );
+    await _pump(tester, w, const PpobBillScreen(product: _bpjsProduct));
+    await tester.enterText(find.byKey(const ValueKey('bill-target')), '1234567890123');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('bill-check')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('bill-pay')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Saldo benefit PPOB tidak cukup'), findsWidgets);
+    expect(find.text('Terjadi kesalahan. Silakan coba lagi.'), findsNothing);
+  });
+
+  test('jam HP salah tidak memengaruhi kedaluwarsa: batas dihitung dari sisa detik server', () {
+    // expiresAt di masa lalu menurut jam HP (HP berjam mundur/maju), tetapi server
+    // menyatakan masih 9 menit.
+    final inquiry = PpobBillInquiry.fromJson({
+      'reference': 'PPB-X',
+      'customerName': 'A',
+      'billAmount': 1,
+      'feeAmount': 1,
+      'totalAmount': 2,
+      'sufficient': true,
+      'expiresAt': '2020-01-01T00:00:00.000Z',
+      'expiresInSeconds': 540,
+    });
+    expect(inquiry.isExpiredAt(DateTime.now()), isFalse);
+    expect(inquiry.isExpiredAt(DateTime.now().add(const Duration(minutes: 10))), isTrue);
+  });
+
   test('model PpobBillInquiry: kedaluwarsa dihitung terhadap waktu yang diberikan', () {
     final inquiry = PpobBillInquiry.fromJson({
       'reference': 'PPB-X',

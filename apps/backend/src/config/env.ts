@@ -237,6 +237,10 @@ const envSchema = z.object({
   /// Biaya layanan TapGo per pembayaran pascabayar (BPJS, PDAM), rupiah
   /// (keputusan Owner 6 Okt 2026: Rp1.000 di atas harga Digiflazz).
   PPOB_POSTPAID_SERVICE_FEE: z.coerce.number().int().min(0).max(10000).default(1000),
+  /// Sinkronisasi katalog pascabayar (BPJS, PDAM, dst) dari daftar harga `pasca`
+  /// Digiflazz, TERPISAH dari sinkronisasi harga prabayar supaya menyalakannya tidak
+  /// mengubah harga prabayar. Memakai interval PPOB_PRICE_SYNC_INTERVAL_MS.
+  PPOB_POSTPAID_CATALOG_SYNC_ENABLED: strictEnvBoolean(false),
   PPOB_PRICE_SYNC_ENABLED: strictEnvBoolean(false),
   PPOB_PRICE_SYNC_INTERVAL_MS: z.coerce.number().int().min(1_800_000).default(21_600_000),
   /// Pengiriman OTP lewat email SMTP (keputusan Owner G3, 24 Agustus 2026).

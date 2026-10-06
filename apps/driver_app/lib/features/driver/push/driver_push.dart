@@ -342,9 +342,12 @@ class DriverPushController {
   }
 
   Future<void> _register(String token) async {
+    // Dicatat SEBELUM menunggu pendaftaran: pendaftaran menunggu pilihan bunyi
+    // terbaca dan tidak lagi ditunggu start(), jadi stop() (logout cepat) harus
+    // tetap dapat mencabut token ini. Mencabut token yang belum sempat terdaftar tidak berbahaya.
+    _token = token;
     try {
       await register(token);
-      _token = token;
     } catch (_) {}
   }
 

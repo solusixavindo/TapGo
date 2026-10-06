@@ -203,10 +203,7 @@ if (env.PPOB_PRICE_SYNC_ENABLED && env.PPOB_PROVIDER === "digiflazz") {
       if (!result.skipped) {
         logger.info(result, "PPOB price sync cycle completed");
       }
-      const catalog = await priceSyncService.runPostpaidCatalogSync();
-      if (!catalog.skipped) {
-        logger.info(catalog, "PPOB postpaid catalog sync completed");
-      }
+
     } catch (error) {
       logger.error({ err: error }, "PPOB price sync cycle failed");
     }
@@ -214,6 +211,31 @@ if (env.PPOB_PRICE_SYNC_ENABLED && env.PPOB_PROVIDER === "digiflazz") {
   ppobPriceSyncTimer = setInterval(() => void runPriceSyncCycle(), env.PPOB_PRICE_SYNC_INTERVAL_MS);
   ppobPriceSyncTimer.unref();
   void runPriceSyncCycle();
+}
+
+/**
+ * Sinkronisasi katalog pascabayar (BPJS, PDAM, dst), dengan saklar sendiri:
+ * menyalakannya tidak menyalakan sinkronisasi harga prabayar.
+ */
+let ppobCatalogSyncTimer: NodeJS.Timeout | undefined;
+if (env.PPOB_POSTPAID_CATALOG_SYNC_ENABLED && env.PPOB_PROVIDER === "digiflazz") {
+  const catalogSyncService = new PpobPriceSyncService(
+    new PrismaPpobRepository(prisma),
+    DigiflazzPpobProvider.fromEnv()
+  );
+  const runCatalogSync = async () => {
+    try {
+      const result = await catalogSyncService.runPostpaidCatalogSync();
+      if (!result.skipped) {
+        logger.info(result, "PPOB postpaid catalog sync completed");
+      }
+    } catch (error) {
+      logger.error({ err: error }, "PPOB postpaid catalog sync failed");
+    }
+  };
+  ppobCatalogSyncTimer = setInterval(() => void runCatalogSync(), env.PPOB_PRICE_SYNC_INTERVAL_MS);
+  ppobCatalogSyncTimer.unref();
+  void runCatalogSync();
 }
 
 const server = httpServer.listen(env.PORT, env.HOST, () => {
@@ -229,6 +251,9 @@ async function shutdown(signal: string) {
   }
   if (ppobPriceSyncTimer) {
     clearInterval(ppobPriceSyncTimer);
+  }
+  if (ppobCatalogSyncTimer) {
+    clearInterval(ppobCatalogSyncTimer);
   }
   server.close(async () => {
     await redis?.quit();

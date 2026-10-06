@@ -372,6 +372,9 @@ ppobRouter.post(
         totalAmount: money(inquiry.totalAmount),
         detail: inquiry.detail,
         expiresAt: inquiry.expiresAt,
+        // Sisa detik menurut jam SERVER: klien menghitung batasnya dari jam sendiri
+        // sejak respons diterima, supaya HP berjam salah tidak salah menilai kedaluwarsa.
+        expiresInSeconds: Math.max(0, Math.floor((inquiry.expiresAt.getTime() - Date.now()) / 1000)),
         wallet: { ppobBalance: money(ppobBalance) },
         sufficient: ppobBalance.gte(inquiry.totalAmount)
       }

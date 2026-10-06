@@ -116,6 +116,8 @@ describe.skipIf(!runIntegration)("PPOB pascabayar — cek tagihan lalu bayar", (
     });
     expect(data.reference).toMatch(/^PPB-[A-Z2-9]{10}$/);
     expect(new Date(data.expiresAt).getTime()).toBeGreaterThan(Date.now());
+    expect(data.expiresInSeconds).toBeGreaterThan(0);
+    expect(data.expiresInSeconds).toBeLessThanOrEqual(600);
     expect(await ppobBalance(user.id)).toBe("500000.00");
     expect(await prisma.ppobTransaction.count()).toBe(0);
     expect(await prisma.walletTransaction.count()).toBe(0);

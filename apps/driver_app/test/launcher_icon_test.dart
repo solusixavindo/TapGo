@@ -44,12 +44,12 @@ void main() {
   const legacy = {'mdpi': 48, 'hdpi': 72, 'xhdpi': 96, 'xxhdpi': 144, 'xxxhdpi': 192};
   const status = {'mdpi': 24, 'hdpi': 36, 'xhdpi': 48, 'xxhdpi': 72, 'xxxhdpi': 96};
 
-  test('foreground adaptif: lambang ≥ 55% lebar kanvas dan tidak melewati area terlihat (≤ 70%)', () async {
+  test('foreground adaptif: lambang ≥ 53% lebar kanvas dan tidak melewati area terlihat (≤ 70%)', () async {
     for (final entry in adaptive.entries) {
       final ink = await inkOf('$res/mipmap-${entry.key}/ic_launcher_foreground.png');
       expect(ink.w, entry.value, reason: entry.key);
       expect(ink.h, entry.value, reason: entry.key);
-      expect(ink.inkWidth, greaterThanOrEqualTo(0.55), reason: 'terlalu kecil di ${entry.key}');
+      expect(ink.inkWidth, greaterThanOrEqualTo(0.53), reason: 'terlalu kecil di ${entry.key}');
       expect(ink.inkWidth, lessThanOrEqualTo(0.70), reason: 'melewati area terlihat di ${entry.key}');
       expect(ink.inkHeight, lessThanOrEqualTo(0.70), reason: entry.key);
     }

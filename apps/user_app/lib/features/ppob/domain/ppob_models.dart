@@ -230,7 +230,8 @@ class PpobBillInquiry {
     required this.sufficient,
     this.period,
     this.expiresAt,
-  });
+    DateTime? deadline,
+  }) : deadline = deadline ?? expiresAt;
 
   final String reference;
   final String productName;
@@ -246,7 +247,12 @@ class PpobBillInquiry {
   final bool sufficient;
   final DateTime? expiresAt;
 
-  bool isExpiredAt(DateTime now) => expiresAt != null && !now.isBefore(expiresAt!);
+  /// Batas bayar menurut jam PERANGKAT: sisa detik dari server ditambahkan ke jam
+  /// HP saat respons diterima, supaya HP berjam salah tidak menganggap tagihan
+  /// segar sudah kedaluwarsa (atau sebaliknya). Cadangan: [expiresAt].
+  final DateTime? deadline;
+
+  bool isExpiredAt(DateTime now) => deadline != null && !now.isBefore(deadline!);
 
   factory PpobBillInquiry.fromJson(Map<String, dynamic> json) {
     final product = json['product'];
@@ -263,6 +269,9 @@ class PpobBillInquiry {
       ppobBalance: wallet is Map<String, dynamic> ? _moneyFromJson(wallet['ppobBalance']) : 0,
       sufficient: json['sufficient'] == true,
       expiresAt: _dateFromJson(json['expiresAt']),
+      deadline: json['expiresInSeconds'] is num
+          ? DateTime.now().add(Duration(seconds: (json['expiresInSeconds'] as num).toInt()))
+          : null,
     );
   }
 }

@@ -481,6 +481,8 @@ export class PrismaPpobRepository implements PpobRepository {
     let created = 0;
     let updated = 0;
     let deactivated = 0;
+    // Katalog PDAM bisa ratusan baris; batas bawaan Prisma (5 detik) terlalu ketat
+    // untuk upsert berurutan di VPS yang sibuk, dan satu kegagalan membatalkan semuanya.
     await this.prisma.$transaction(async (tx) => {
       const existing = await tx.ppobProduct.findMany({
         where: { isPostpaid: true },
@@ -518,7 +520,7 @@ export class PrismaPpobRepository implements PpobRepository {
           deactivated += 1;
         }
       }
-    });
+    }, { timeout: 60000, maxWait: 10000 });
     return { created, updated, deactivated };
   }
 }

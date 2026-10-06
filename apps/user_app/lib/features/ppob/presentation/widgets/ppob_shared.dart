@@ -226,6 +226,10 @@ String ppobErrorMessage(Object error) {
       'PPOB_TARGET_INVALID' => error.message,
       'INSUFFICIENT_BALANCE' =>
         'Saldo Anda tidak cukup. Silakan gunakan nominal lain.',
+      // Kode yang sebenarnya dikirim backend (PrismaPpobRepository); sebelumnya
+      // jatuh ke "Terjadi kesalahan" generik.
+      'INSUFFICIENT_PPOB_BALANCE' =>
+        'Saldo benefit PPOB tidak cukup. Saldo utama tidak dapat dipakai untuk membayar ini.',
       'PPOB_IDEMPOTENCY_CONFLICT' =>
         'Permintaan duplikat terdeteksi. Periksa riwayat transaksi Anda.',
       // Hanya kode domain PPOB_* dan pesan jaringan bawaan adaptor yang
