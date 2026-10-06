@@ -4,17 +4,24 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   AVATAR_FAILED_KEY,
+  ManualTransferInfo,
   ORDER_KEY,
+  PREVIEW_MANUAL_TRANSFER,
   PREVIEW_MODE,
   PREVIEW_PACKAGES,
+  PaymentOptions,
   TOKEN_KEY,
   UpgradeOrder,
-  getOrder,
-  payOrder,
   clearSession,
-  readSession
+  getManualTransfer,
+  getOrder,
+  getPaymentOptions,
+  payOrder,
+  readSession,
+  startManualTransfer
 } from "../api";
 import { formatRupiah, primaryButtonClass, secondaryButtonClass } from "../upgrade-shell";
+import { InvoiceData, PaymentInvoice } from "../payment-invoice";
 
 /** Ringkasan contoh; hanya dipakai saat PREVIEW_MODE menyala. */
 const PREVIEW_ORDER: UpgradeOrder = {
@@ -29,12 +36,36 @@ const PREVIEW_ORDER: UpgradeOrder = {
   correction: null
 };
 
+/** Invoice transfer bank untuk upgrade: harga paket + kode unik = total transfer. */
+function invoiceFor(order: UpgradeOrder, transfer: ManualTransferInfo): InvoiceData {
+  return {
+    number: transfer.invoiceNumber || order.reference,
+    heading: `Upgrade Membership ${transfer.packageName}`,
+    ...(order.createdAt ? { issuedAt: order.createdAt } : {}),
+    buyerName: order.buyerName,
+    lines: [
+      { label: `Paket ${transfer.packageName}`, amount: transfer.baseAmount },
+      { label: "Kode unik", amount: transfer.uniqueCode, hint: "Untuk mengenali transfer Anda" }
+    ],
+    total: transfer.transferAmount,
+    bank: transfer.bank,
+    expiresAt: transfer.expiresAt,
+    expired: transfer.expired,
+    notes: [
+      "Setelah transfer dikonfirmasi, dokumen Anda masuk antrean verifikasi tim TapGo. Membership aktif setelah dokumen diverifikasi.",
+      "Bila dokumen tidak dapat diverifikasi, pembayaran dikembalikan sesuai kebijakan pengembalian dana."
+    ]
+  };
+}
+
 export default function PaymentSummary() {
   const router = useRouter();
   const [order, setOrder] = useState<UpgradeOrder | null>(PREVIEW_MODE ? PREVIEW_ORDER : null);
   const [loading, setLoading] = useState(!PREVIEW_MODE);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [options, setOptions] = useState<PaymentOptions | null>(null);
+  const [transfer, setTransfer] = useState<ManualTransferInfo | null>(PREVIEW_MODE ? PREVIEW_MANUAL_TRANSFER : null);
   const [avatarFailed, setAvatarFailed] = useState(false);
 
   useEffect(() => {
@@ -59,10 +90,20 @@ export default function PaymentSummary() {
 
     let alive = true;
     getOrder(token, orderId)
-      .then((result) => {
+      .then(async (result) => {
         if (!alive) return;
         setOrder(result);
         setError("");
+        // Pilihan pembayaran dan petunjuk transfer yang mungkin sudah dibuat
+        // sebelumnya (mis. halaman dimuat ulang). Kegagalan di sini tidak
+        // boleh menghalangi pembayaran online yang sudah ada.
+        const [opts, existing] = await Promise.all([
+          getPaymentOptions(token).catch(() => null),
+          getManualTransfer(token, orderId).catch(() => null)
+        ]);
+        if (!alive) return;
+        setOptions(opts);
+        setTransfer(existing);
       })
       .catch((caught: unknown) =>
         alive
@@ -106,6 +147,21 @@ export default function PaymentSummary() {
     }
   }
 
+  async function onManualTransfer() {
+    if (busy || !order) return;
+    setBusy(true);
+    setError("");
+    try {
+      setTransfer(await startManualTransfer(readSession(TOKEN_KEY), order.id));
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : "Petunjuk transfer belum dapat dibuat."
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading) {
     return <p className="text-sm font-semibold themed-text-muted">Memuat ringkasan…</p>;
   }
@@ -136,6 +192,12 @@ export default function PaymentSummary() {
     { label: "Nama", value: order.buyerName }
   ].filter((row) => row.value.length > 0);
 
+  // Opsi dari server menentukan tombol. Hanya bila opsi gagal dimuat (null),
+  // jalur online semula tetap ditampilkan agar perilaku lama tidak berubah.
+  const manualAvailable = options?.manualTransfer === true;
+  const showOnline = options === null || options.online === true;
+  const noMethod = options !== null && !options.online && !options.manualTransfer;
+
   return (
     <div>
       <div className="rounded-[1.5rem] border themed-border themed-card-bg p-5">
@@ -158,12 +220,18 @@ export default function PaymentSummary() {
         </div>
       </div>
 
+      {transfer ? (
+        <div className="mt-5">
+          <PaymentInvoice data={invoiceFor(order, transfer)} />
+        </div>
+      ) : null}
+
       <div className="mt-5 flex items-start gap-3 rounded-2xl border border-brand-gold/20 bg-brand-gold/10 px-4 py-3.5">
         <span aria-hidden="true" className="mt-0.5 themed-accent">ⓘ</span>
         <p className="text-xs leading-6 themed-text-secondary">
-          Setelah pembayaran diterima, dokumen Anda masuk antrean verifikasi tim
-          TapGo. Bila dokumen tidak dapat diverifikasi, pembayaran dikembalikan
-          penuh sesuai kebijakan pengembalian dana.
+          {transfer
+            ? "Transfer harus sesuai nominal di atas, termasuk kode uniknya. Tim TapGo memeriksa mutasi rekening lalu mengonfirmasi pembayaran Anda; dokumen kemudian masuk antrean verifikasi. Bila dokumen tidak dapat diverifikasi, pembayaran dikembalikan penuh sesuai kebijakan pengembalian dana."
+            : "Setelah pembayaran diterima, dokumen Anda masuk antrean verifikasi tim TapGo. Bila dokumen tidak dapat diverifikasi, pembayaran dikembalikan penuh sesuai kebijakan pengembalian dana."}
         </p>
       </div>
 
@@ -179,17 +247,54 @@ export default function PaymentSummary() {
         </p>
       ) : null}
 
-      <button type="button" onClick={onPay} disabled={busy} className={`${primaryButtonClass} mt-6`}>
-        {busy ? "Menyiapkan pembayaran…" : `Bayar ${formatRupiah(order.amount)}`}
-      </button>
+      {transfer ? (
+        <>
+          <button
+            type="button"
+            onClick={() => router.push(`/upgrade/status?id=${encodeURIComponent(order.id)}`)}
+            className={`${primaryButtonClass} mt-6`}
+          >
+            Saya sudah transfer
+          </button>
+          {transfer.expired ? (
+            <button type="button" onClick={onManualTransfer} disabled={busy} className={`${secondaryButtonClass} mt-3`}>
+              {busy ? "Menyiapkan…" : "Buat petunjuk transfer baru"}
+            </button>
+          ) : null}
+        </>
+      ) : noMethod ? (
+        <p role="status" className="mt-6 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-300">
+          Pembayaran upgrade belum tersedia saat ini. Silakan coba lagi nanti atau hubungi tim TapGo.
+        </p>
+      ) : (
+        <>
+          {showOnline ? (
+            <button type="button" onClick={onPay} disabled={busy} className={`${primaryButtonClass} mt-6`}>
+              {busy ? "Menyiapkan pembayaran…" : `Bayar ${formatRupiah(order.amount)}`}
+            </button>
+          ) : null}
+          {manualAvailable ? (
+            <button
+              type="button"
+              onClick={onManualTransfer}
+              disabled={busy}
+              className={showOnline ? `${secondaryButtonClass} mt-3` : `${primaryButtonClass} mt-6`}
+            >
+              {busy ? "Menyiapkan petunjuk…" : "Bayar dengan transfer bank"}
+            </button>
+          ) : null}
+        </>
+      )}
 
-      <button
-        type="button"
-        onClick={() => router.push("/upgrade/paket")}
-        className={`${secondaryButtonClass} mt-3`}
-      >
-        Ubah pilihan paket
-      </button>
+      {transfer ? null : (
+        <button
+          type="button"
+          onClick={() => router.push("/upgrade/paket")}
+          className={`${secondaryButtonClass} mt-3`}
+        >
+          Ubah pilihan paket
+        </button>
+      )}
     </div>
   );
 }

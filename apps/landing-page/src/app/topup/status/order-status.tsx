@@ -9,8 +9,11 @@ import {
   PREVIEW_TOPUP_ORDER,
   TOKEN_KEY,
   TOPUP_ORDER_KEY,
+  TOPUP_TARGETS,
   TopUpOrder,
   TopUpOrderStatus,
+  TopUpTarget,
+  getManualTopUp,
   getTopUpOrder,
   readSession,
   writeSession
@@ -41,8 +44,8 @@ const STATUS_VIEW: Record<TopUpOrderStatus, { tone: Tone; label: string; headlin
   PAID: {
     tone: "done",
     label: "Berhasil",
-    headline: "Saldo TapGoPay Anda sudah bertambah",
-    body: "Buka aplikasi TapGo dan tarik layar ke bawah untuk menyegarkan saldo."
+    headline: "Saldo Anda sudah bertambah",
+    body: "Buka aplikasi TapGo dan tarik layar ke bawah untuk menyegarkan saldo. Saldo PPOB tampil di layanan PPOB; Saldo TapGo tampil di dompet."
   },
   REFUNDED: {
     tone: "refund",
@@ -83,6 +86,7 @@ export default function OrderStatus() {
   );
   const [loading, setLoading] = useState(!PREVIEW_MODE);
   const [error, setError] = useState("");
+  const [target, setTarget] = useState<TopUpTarget | null>(PREVIEW_MODE ? "WALLET" : null);
 
   const orderId = readSession(TOPUP_ORDER_KEY) || params.get("id") || "";
 
@@ -103,6 +107,11 @@ export default function OrderStatus() {
       const result = await getTopUpOrder(token, orderId);
       setOrder(result);
       setError("");
+      // Tujuan (Saldo TapGo / Saldo PPOB) ada di rincian transfer manual; gagal
+      // memuatnya tidak boleh menghalangi tampilan status.
+      getManualTopUp(token, orderId)
+        .then((manual) => setTarget(manual.target))
+        .catch(() => undefined);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Status belum dapat dimuat.");
     } finally {
@@ -163,11 +172,25 @@ export default function OrderStatus() {
               <dt className="text-sm themed-text-muted">Nomor pengajuan</dt>
               <dd className="text-right text-sm font-bold themed-text">{order.reference}</dd>
             </div>
+            {target ? (
+              <div className="flex items-start justify-between gap-6">
+                <dt className="text-sm themed-text-muted">Tujuan</dt>
+                <dd className="text-right text-sm font-bold themed-text" data-testid="status-target">
+                  {TOPUP_TARGETS[target].label}
+                </dd>
+              </div>
+            ) : null}
             <div className="flex items-start justify-between gap-6">
               <dt className="text-sm themed-text-muted">Nominal transfer</dt>
               <dd className="text-right text-sm font-bold themed-text">{formatRupiah(order.amount)}</dd>
             </div>
           </dl>
+
+          {status === "PENDING" && !PREVIEW_MODE ? (
+            <Link href="/topup/bayar" className={`${secondaryButtonClass} mt-5`} data-testid="back-to-invoice">
+              Lihat invoice dan rekening tujuan
+            </Link>
+          ) : null}
 
           {error ? (
             <p className="mt-5 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs font-semibold text-amber-300">

@@ -6,31 +6,51 @@ import {
   PREVIEW_MODE,
   TOKEN_KEY,
   TOPUP_MAX_AMOUNT,
-  TOPUP_MIN_AMOUNT,
   TOPUP_ORDER_KEY,
-  TOPUP_QUICK_AMOUNTS,
+  TOPUP_TARGETS,
+  TOPUP_TARGET_KEY,
+  TopUpTarget,
   createManualTopUp,
+  parseTopUpTarget,
   readSession,
   writeSession
 } from "../api";
 import { formatRupiah, primaryButtonClass } from "../../upgrade/upgrade-shell";
 
+const TARGET_ORDER: TopUpTarget[] = ["WALLET", "PPOB"];
+
 export default function AmountForm() {
   const router = useRouter();
-  const [selected, setSelected] = useState<number>(TOPUP_QUICK_AMOUNTS[1]!);
+  const [target, setTarget] = useState<TopUpTarget>("WALLET");
+  const [selected, setSelected] = useState<number>(TOPUP_TARGETS.WALLET.quick[1]!);
   const [custom, setCustom] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  const config = TOPUP_TARGETS[target];
 
   useEffect(() => {
     if (PREVIEW_MODE) return;
     if (!readSession(TOKEN_KEY)) {
       router.replace("/topup");
+      return;
     }
+    // Tujuan dari tautan yang dipilih saat masuk (?tujuan=ppob).
+    const initial = parseTopUpTarget(readSession(TOPUP_TARGET_KEY));
+    if (initial !== "WALLET") chooseTarget(initial);
   }, [router]);
 
+  /** Ganti tujuan: nominal cepat dan batas minimal ikut berganti. */
+  function chooseTarget(next: TopUpTarget) {
+    setTarget(next);
+    setSelected(TOPUP_TARGETS[next].quick[next === "PPOB" ? 0 : 1]!);
+    setCustom("");
+    setError("");
+    writeSession(TOPUP_TARGET_KEY, next);
+  }
+
   const amount = custom.trim() ? Number(custom.replace(/[^0-9]/g, "")) : selected;
-  const valid = Number.isFinite(amount) && amount >= TOPUP_MIN_AMOUNT && amount <= TOPUP_MAX_AMOUNT;
+  const valid = Number.isFinite(amount) && amount >= config.min && amount <= TOPUP_MAX_AMOUNT;
 
   async function onContinue() {
     if (busy || !valid) return;
@@ -42,7 +62,7 @@ export default function AmountForm() {
         return;
       }
       const token = readSession(TOKEN_KEY);
-      const order = await createManualTopUp(token, amount);
+      const order = await createManualTopUp(token, amount, target);
       writeSession(TOPUP_ORDER_KEY, order.id);
       router.push("/topup/bayar");
     } catch (caught) {
@@ -53,13 +73,43 @@ export default function AmountForm() {
 
   return (
     <div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {TOPUP_QUICK_AMOUNTS.map((value) => {
+      <p className="text-xs font-bold uppercase tracking-wider themed-text-muted">Isi saldo untuk</p>
+      <div role="radiogroup" aria-label="Tujuan top up" className="mt-3 grid gap-3 sm:grid-cols-2">
+        {TARGET_ORDER.map((key) => {
+          const item = TOPUP_TARGETS[key];
+          const active = target === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              data-testid={`target-${key.toLowerCase()}`}
+              onClick={() => chooseTarget(key)}
+              className={[
+                "rounded-2xl border-2 px-4 py-4 text-left transition",
+                active ? "border-brand-gold bg-brand-gold/10 shadow-lg" : "themed-border themed-card-bg hover:border-white/20"
+              ].join(" ")}
+            >
+              <span className={`block text-base font-black ${active ? "themed-accent" : "themed-text"}`}>{item.label}</span>
+              <span className="mt-0.5 block text-xs font-semibold themed-text-muted">{item.short}</span>
+              <span className="mt-1.5 block text-xs themed-text-muted">Minimal {formatRupiah(item.min)}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-3 text-xs leading-6 themed-text-muted" data-testid="target-description">
+        {config.description}
+      </p>
+
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {config.quick.map((value) => {
           const active = !custom.trim() && selected === value;
           return (
             <button
               key={value}
               type="button"
+              data-testid="quick-amount"
               onClick={() => {
                 setSelected(value);
                 setCustom("");
@@ -82,7 +132,7 @@ export default function AmountForm() {
             className="mt-2 w-full rounded-2xl border themed-border bg-white px-4 py-3.5 text-base text-brand-navyDeep outline-none transition placeholder:text-slate-400 focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
             type="text"
             inputMode="numeric"
-            placeholder={`Minimal ${formatRupiah(TOPUP_MIN_AMOUNT)}`}
+            placeholder={`Minimal ${formatRupiah(config.min)}`}
             value={custom}
             onChange={(event) => setCustom(event.target.value.replace(/[^0-9]/g, ""))}
           />
@@ -91,7 +141,7 @@ export default function AmountForm() {
 
       {!valid && (custom.trim() || amount) ? (
         <p className="mt-3 text-xs font-semibold text-rose-400">
-          Jumlah harus antara {formatRupiah(TOPUP_MIN_AMOUNT)} dan {formatRupiah(TOPUP_MAX_AMOUNT)}.
+          Jumlah {config.label} harus antara {formatRupiah(config.min)} dan {formatRupiah(TOPUP_MAX_AMOUNT)}.
         </p>
       ) : null}
 
@@ -102,7 +152,7 @@ export default function AmountForm() {
       ) : null}
 
       <button type="button" onClick={onContinue} disabled={busy || !valid} className={`${primaryButtonClass} mt-6`}>
-        {busy ? "Menyiapkan…" : `Lanjut isi ${formatRupiah(amount || 0)}`}
+        {busy ? "Menyiapkan…" : `Lanjut isi ${config.label} ${formatRupiah(amount || 0)}`}
       </button>
     </div>
   );

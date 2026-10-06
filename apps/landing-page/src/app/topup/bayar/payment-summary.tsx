@@ -3,39 +3,18 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
+  BUYER_NAME_KEY,
   ManualTopUpOrder,
   PREVIEW_MANUAL_TOPUP,
   PREVIEW_MODE,
   TOKEN_KEY,
   TOPUP_ORDER_KEY,
+  TOPUP_TARGETS,
   getManualTopUp,
   readSession
 } from "../api";
-import { formatRupiah, primaryButtonClass, secondaryButtonClass } from "../../upgrade/upgrade-shell";
-
-function CopyRow({ label, value, shown }: { label: string; value: string; shown?: string }) {
-  const [copied, setCopied] = useState(false);
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setCopied(false);
-    }
-  }
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="min-w-0">
-        <dt className="text-xs themed-text-muted">{label}</dt>
-        <dd className="mt-0.5 break-all text-base font-black themed-text">{shown ?? value}</dd>
-      </div>
-      <button type="button" onClick={copy} className="shrink-0 rounded-full border themed-border px-3 py-1.5 text-xs font-bold themed-text">
-        {copied ? "Tersalin" : "Salin"}
-      </button>
-    </div>
-  );
-}
+import { InvoiceData, PaymentInvoice } from "../../upgrade/payment-invoice";
+import { primaryButtonClass, secondaryButtonClass } from "../../upgrade/upgrade-shell";
 
 export default function PaymentSummary() {
   const router = useRouter();
@@ -108,35 +87,32 @@ export default function PaymentSummary() {
     );
   }
 
-  const expires = new Date(order.expiresAt);
-  const expiresLabel = Number.isNaN(expires.getTime())
-    ? ""
-    : expires.toLocaleString("id-ID", { dateStyle: "long", timeStyle: "short" });
+  const target = TOPUP_TARGETS[order.target];
+  const expired = !PREVIEW_MODE && new Date(order.expiresAt).getTime() < Date.now();
+  const invoice: InvoiceData = {
+    number: order.reference,
+    heading: `Top Up ${target.label}`,
+    ...(order.createdAt ? { issuedAt: order.createdAt } : {}),
+    buyerName: PREVIEW_MODE ? "Budi Santoso" : readSession(BUYER_NAME_KEY),
+    lines: [
+      { label: `Top up ${target.label}`, amount: order.baseAmount },
+      { label: "Kode unik", amount: order.uniqueCode, hint: "Untuk mengenali transfer Anda; ikut masuk ke saldo" }
+    ],
+    total: order.transferAmount,
+    bank: order.bank,
+    expiresAt: order.expiresAt,
+    expired,
+    notes: [
+      `Seluruh nominal transfer, termasuk kode unik, masuk ke ${target.label} Anda.`,
+      order.target === "PPOB"
+        ? "Saldo PPOB hanya untuk pembelian pulsa, token listrik, dan tagihan. Saldo PPOB tidak dapat ditarik."
+        : "Saldo TapGo dipakai untuk komisi pesanan tunai (driver) dan pembayaran perjalanan."
+    ]
+  };
 
   return (
     <div>
-      <div className="rounded-[1.5rem] border themed-border themed-card-bg p-5">
-        <p className="text-sm themed-text-muted">Transfer tepat sebesar</p>
-        <p className="mt-1 text-3xl font-black themed-accent">{formatRupiah(order.transferAmount)}</p>
-        <p className="mt-2 text-xs leading-6 themed-text-muted">
-          {"Tiga digit terakhir ("}
-          <strong className="themed-text">{String(order.uniqueCode).padStart(3, "0")}</strong>
-          {") adalah kode unik agar transfer Anda mudah dikenali. Saldo yang masuk: "}
-          <strong className="themed-text">{formatRupiah(order.baseAmount)}</strong>. Jangan dibulatkan.
-        </p>
-
-        <dl className="mt-5 space-y-4 border-t border-dashed themed-border pt-5">
-          <CopyRow label="Bank" value={order.bank.bankName} />
-          <CopyRow label="Nomor rekening" value={order.bank.accountNumber} />
-          <CopyRow label="Atas nama" value={order.bank.accountHolder} />
-          <CopyRow label="Nominal transfer" value={String(order.transferAmount)} shown={formatRupiah(order.transferAmount)} />
-        </dl>
-
-        <p className="mt-5 text-xs themed-text-muted">
-          Nomor pengajuan {order.reference}
-          {expiresLabel ? ` · berlaku sampai ${expiresLabel}` : ""}
-        </p>
-      </div>
+      <PaymentInvoice data={invoice} />
 
       {error ? (
         <p role="alert" className="mt-5 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-300">
