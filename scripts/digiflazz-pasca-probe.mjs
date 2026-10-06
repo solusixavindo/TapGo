@@ -6,10 +6,24 @@
 // (3) BENTUK respons satu cek tagihan MODE UJI (testing=true, nomor uji resmi
 // Digiflazz; tidak memotong saldo) berupa nama kunci dan tipe, bukan isinya.
 //
-// Kredensial dibaca dari lingkungan (DIGIFLAZZ_USERNAME, DIGIFLAZZ_API_KEY) dan
-// TIDAK PERNAH dicetak. Pemakaian:
-//   set -a; . apps/backend/.env; set +a; node scripts/digiflazz-pasca-probe.mjs
+// Kredensial dibaca dari berkas .env backend (argumen --env <jalur>) atau dari
+// lingkungan (DIGIFLAZZ_USERNAME, DIGIFLAZZ_API_KEY) dan TIDAK PERNAH dicetak.
+// Pemakaian di VPS:
+//   node digiflazz-pasca-probe.mjs --env /var/www/releases/<rilis aktif>/apps/backend/.env
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+
+const envFlag = process.argv.indexOf("--env");
+if (envFlag !== -1 && process.argv[envFlag + 1]) {
+  // Hanya dua kunci yang diambil; berkas tidak di-source oleh shell.
+  const wanted = new Set(["DIGIFLAZZ_USERNAME", "DIGIFLAZZ_API_KEY", "DIGIFLAZZ_BASE_URL"]);
+  for (const line of readFileSync(process.argv[envFlag + 1], "utf8").split("\n")) {
+    const match = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/.exec(line);
+    if (match && wanted.has(match[1]) && process.env[match[1]] === undefined) {
+      process.env[match[1]] = match[2].replace(/^(["'])(.*)\1$/, "$2");
+    }
+  }
+}
 
 const username = process.env.DIGIFLAZZ_USERNAME;
 const apiKey = process.env.DIGIFLAZZ_API_KEY;
