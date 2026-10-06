@@ -55,3 +55,20 @@ Temuan tambahan dan perbaikannya (diuji di peramban: pemeriksaan otomatis 13 rut
 Terbukti baik: tidak ada overflow horizontal, gambar rusak, gambar tanpa alt, input tanpa label, tombol/tautan tanpa nama pada 20 rute x 2 tema di lebar 375 px; harga dan manfaat paket di beranda sama dengan data paket di API produksi.
 
 Belum diuji dengan akun sungguhan (peraturan: password tidak dimasukkan oleh asisten). Daftar uji untuk pemilik ada di laporan.
+
+---
+
+# Perbaikan server dijalankan (6 Okt 2026, oleh Owner di VPS)
+
+Berkas: `/etc/nginx/sites-enabled/api.tapgolion.id`, blok HTTPS (baris 1-36). Ditambahkan `client_max_body_size 6M;` tepat di bawah `server_name`.
+Cadangan: `/root/api.tapgolion.id.bak-2026-10-06-0838`. `nginx -t` lolos, `systemctl reload nginx` berhasil (tanpa restart).
+
+Verifikasi dari VPS ke API produksi (data kosong, token palsu): 500 KB, 1,5 MB, 3 MB, dan 5 MB dijawab **401 application/json** (sampai ke aplikasi; sebelumnya 413 dari nginx mulai 1.049.000 byte);
+7 MB dijawab **413 text/html** (nginx, di atas 6 MB, sesuai rencana).
+Verifikasi independen dari mesin pengembang dengan header `Origin: https://tapgolion.id`: 1,5 / 3 / 5 MB -> 401 dan **membawa `Access-Control-Allow-Origin: https://tapgolion.id`**,
+yaitu syarat agar peramban menampilkan 401 yang bermakna, bukan "Failed to fetch".
+Catatan: uji ulang dari panel peramban bawaan asisten tidak dapat dilakukan setelah itu (panel memblokir permintaan ke `api.tapgolion.id`, `ERR_BLOCKED_BY_CLIENT`; bukan masalah server).
+Prediksi 5 MB -> 413 JSON keliru: aplikasi menjawab 401 lebih dulu dari pembacaan badan; batas 4/6 MB aplikasi tetap berlaku untuk pengguna yang lolos autentikasi.
+
+Rollback: kembalikan cadangan di atas, `nginx -t`, `systemctl reload nginx` (kembali ke batas bawaan 1 MB).
+Klien lain yang ikut terbantu: driver_app dan user_app (unggah dokumen/foto).
