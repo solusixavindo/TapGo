@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none" role="img" aria-label="TapGo Telkom 3D service icon">
+  <title>Telkom</title>
+  <defs>
+    <linearGradient id="card" x1="18" y1="20" x2="75" y2="76" gradientUnits="userSpaceOnUse"><stop stop-color="#FF9D8D"/><stop offset="0.5" stop-color="#EC3F54"/><stop offset="1" stop-color="#C81E3A"/></linearGradient>
+    <linearGradient id="white" x1="30" y1="28" x2="66" y2="66" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#EEF4FF"/></linearGradient>
+  </defs>
+  <ellipse cx="48" cy="82" rx="27" ry="6" fill="#07213D" opacity="0.14"/>
+  <rect x="20" y="18" width="56" height="56" rx="18" fill="url(#card)"/>
+  <path d="M24 26c8-6 20-6 27 0" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity="0.28"/>
+  <path d="M33 33c2-3 5-3 7-1l4 5c1.5 2 1 4-1 5.2l-3 1.8c2 4 5 7.5 9 9.5l3-2.6c1.5-1.4 3.7-1.2 5 .4l4 4.8c1.5 1.8 1.4 4.4-.4 6-3.4 3-8.6 3.6-13.4 1.2C41 59 33 49 30.7 40.6c-.7-2.800.2-5 2.300-7.600Z" fill="url(#white)"/>
+  <path d="M52 33a14 14 0 0 1 11 11" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" opacity="0.85"/>
+  <path d="M52 26a21 21 0 0 1 18 18" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" opacity="0.5"/>
+</svg>

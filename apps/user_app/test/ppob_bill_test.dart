@@ -1,5 +1,7 @@
 // PPOB pascabayar (BPJS, PDAM): daftar produk, cek tagihan, bayar. Repository
 // di-fake pada port boundary (wire typedefs), tanpa jaringan.
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +9,7 @@ import 'package:tapgo_user_app/features/ppob/application/ppob_providers.dart';
 import 'package:tapgo_user_app/features/ppob/data/ppob_repository.dart';
 import 'package:tapgo_user_app/features/ppob/domain/ppob_models.dart';
 import 'package:tapgo_user_app/features/ppob/presentation/ppob_bill_screens.dart';
+import 'package:tapgo_user_app/main.dart';
 
 class _Wires {
   List<Map<String, dynamic>> products = [
@@ -92,6 +95,8 @@ const _bpjsProduct = PpobBillProduct(
 );
 
 void main() {
+  superMenuIllustrationTests();
+
   group('daftar produk', () {
     testWidgets('PDAM: daftar dengan pencarian per nama daerah', (tester) async {
       final w = _Wires();
@@ -329,5 +334,22 @@ void main() {
     expect(inquiry.billAmount, 100000);
     expect(inquiry.isExpiredAt(DateTime.utc(2026, 10, 6, 9, 59)), isFalse);
     expect(inquiry.isExpiredAt(DateTime.utc(2026, 10, 6, 10, 0)), isTrue);
+  });
+}
+
+// Tile Super Menu harus memakai ilustrasi bergaya sama (aset SVG), bukan ikon
+// Material generik: laporan Owner 6 Okt 2026 ("ikon harus mengikuti gaya yang sudah diterapkan").
+void superMenuIllustrationTests() {
+  test('setiap tile layanan Super Menu punya ilustrasi SVG yang benar-benar ada', () {
+    const accountTiles = {'Kartu Anggota', 'Profil', 'Tiket Bantuan', 'Hapus Akun'};
+    final labels = tapGoSuperMenuLabelsForTests().where((l) => !accountTiles.contains(l));
+    expect(labels, isNotEmpty);
+    final assets = <String>{};
+    for (final label in labels) {
+      final asset = tapGoServiceIllustrationAssetForTests(label);
+      expect(asset, isNotNull, reason: '$label memakai ikon generik');
+      expect(File(asset!).existsSync(), isTrue, reason: '$label: $asset tidak ada');
+      expect(assets.add(asset), isTrue, reason: '$label berbagi ikon dengan tile lain: $asset');
+    }
   });
 }

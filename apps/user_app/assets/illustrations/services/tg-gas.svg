@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none" role="img" aria-label="TapGo Gas 3D service icon">
+  <title>Gas</title>
+  <defs>
+    <linearGradient id="card" x1="18" y1="20" x2="75" y2="76" gradientUnits="userSpaceOnUse"><stop stop-color="#FDBA74"/><stop offset="0.5" stop-color="#F97316"/><stop offset="1" stop-color="#DC2626"/></linearGradient>
+    <linearGradient id="flame" x1="34" y1="24" x2="62" y2="68" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#EEF4FF"/></linearGradient>
+    <linearGradient id="inner" x1="42" y1="48" x2="56" y2="66" gradientUnits="userSpaceOnUse"><stop stop-color="#FFE58A"/><stop offset="0.58" stop-color="#FFBE25"/><stop offset="1" stop-color="#D88A06"/></linearGradient>
+  </defs>
+  <ellipse cx="48" cy="82" rx="27" ry="6" fill="#07213D" opacity="0.14"/>
+  <rect x="20" y="18" width="56" height="56" rx="18" fill="url(#card)"/>
+  <path d="M24 26c8-6 20-6 27 0" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity="0.28"/>
+  <path d="M49 24c2.500 9 14 14 14 27a15 15 0 0 1-30 0c0-6 3-9 6.500-13 .8 4 2.800 6.500 5.500 7.500C43 37 44.500 30 49 24Z" fill="url(#flame)"/>
+  <path d="M48 49c3 4.500 6.500 6.500 6.500 11a6.500 6.500 0 0 1-13 0c0-4 3.500-6.500 6.500-11Z" fill="url(#inner)"/>
+</svg>

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none" role="img" aria-label="TapGo HP Pascabayar 3D service icon">
+  <title>HP Pascabayar</title>
+  <defs>
+    <linearGradient id="card" x1="18" y1="20" x2="75" y2="76" gradientUnits="userSpaceOnUse"><stop stop-color="#45C5FF"/><stop offset="0.55" stop-color="#1E7BFF"/><stop offset="1" stop-color="#1754D8"/></linearGradient>
+    <linearGradient id="phone" x1="33" y1="26" x2="63" y2="70" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#EEF4FF"/></linearGradient>
+    <linearGradient id="gold" x1="56" y1="52" x2="76" y2="72" gradientUnits="userSpaceOnUse"><stop stop-color="#FFE58A"/><stop offset="0.58" stop-color="#FFBE25"/><stop offset="1" stop-color="#D88A06"/></linearGradient>
+  </defs>
+  <ellipse cx="48" cy="82" rx="27" ry="6" fill="#07213D" opacity="0.14"/>
+  <rect x="20" y="18" width="56" height="56" rx="18" fill="url(#card)"/>
+  <path d="M24 26c8-6 20-6 27 0" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity="0.28"/>
+  <rect x="32" y="26" width="28" height="44" rx="9" fill="url(#phone)"/>
+  <rect x="36" y="32" width="20" height="28" rx="5" fill="#CBE8FF"/>
+  <circle cx="46" cy="65" r="2" fill="#1E7BFF" opacity="0.7"/>
+  <circle cx="64" cy="60" r="11" fill="url(#gold)"/>
+  <path d="M59 60l3.500 3.500 6.500-8" stroke="#FFFFFF" stroke-width="3.500" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

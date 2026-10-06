@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none" role="img" aria-label="TapGo BPJS Ketenagakerjaan 3D service icon">
+  <title>BPJS Ketenagakerjaan</title>
+  <defs>
+    <linearGradient id="card" x1="18" y1="20" x2="75" y2="76" gradientUnits="userSpaceOnUse"><stop stop-color="#72E6A4"/><stop offset="1" stop-color="#15803D"/></linearGradient>
+    <linearGradient id="helmet" x1="30" y1="30" x2="66" y2="60" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#EEF4FF"/></linearGradient>
+    <linearGradient id="gold" x1="58" y1="54" x2="76" y2="72" gradientUnits="userSpaceOnUse"><stop stop-color="#FFE58A"/><stop offset="0.58" stop-color="#FFBE25"/><stop offset="1" stop-color="#D88A06"/></linearGradient>
+  </defs>
+  <ellipse cx="48" cy="82" rx="27" ry="6" fill="#07213D" opacity="0.14"/>
+  <rect x="20" y="18" width="56" height="56" rx="18" fill="url(#card)"/>
+  <path d="M24 26c8-6 20-6 27 0" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity="0.28"/>
+  <path d="M28 54a20 20 0 0 1 40 0Z" fill="url(#helmet)"/>
+  <rect x="43" y="34" width="10" height="21" rx="5" fill="#BBF7D0" opacity="0.95"/>
+  <rect x="25" y="53" width="46" height="8" rx="4" fill="url(#helmet)"/>
+  <rect x="25" y="58" width="46" height="3" rx="1.500" fill="#15803D" opacity="0.18"/>
+  <circle cx="66" cy="63" r="10" fill="url(#gold)"/>
+  <circle cx="66" cy="63" r="3.6" stroke="#FFFFFF" stroke-width="3"/>
+</svg>

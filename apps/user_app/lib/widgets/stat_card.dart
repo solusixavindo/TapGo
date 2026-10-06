@@ -413,8 +413,12 @@ class _SuperMenuTile extends StatelessWidget {
                     softWrap: false,
                     overflow: TextOverflow.visible,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Color(0xFF263241),
+                    style: TextStyle(
+                      // Tema gelap: label gelap-di-gelap tidak terbaca (laporan Owner
+                      // 6 Okt 2026, grup Tagihan); tema terang tetap warna semula.
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? const Color(0xFFE2E8F0)
+                          : const Color(0xFF263241),
                       fontSize: 12.5,
                       height: 1,
                       fontWeight: FontWeight.w700,

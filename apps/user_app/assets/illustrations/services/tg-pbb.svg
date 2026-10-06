@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none" role="img" aria-label="TapGo PBB 3D service icon">
+  <title>PBB</title>
+  <defs>
+    <linearGradient id="card" x1="18" y1="20" x2="75" y2="76" gradientUnits="userSpaceOnUse"><stop stop-color="#5EEAD4"/><stop offset="0.5" stop-color="#14B8A6"/><stop offset="1" stop-color="#0F766E"/></linearGradient>
+    <linearGradient id="white" x1="26" y1="28" x2="70" y2="68" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#EEF4FF"/></linearGradient>
+    <linearGradient id="gold" x1="58" y1="26" x2="78" y2="46" gradientUnits="userSpaceOnUse"><stop stop-color="#FFE58A"/><stop offset="0.58" stop-color="#FFBE25"/><stop offset="1" stop-color="#D88A06"/></linearGradient>
+  </defs>
+  <ellipse cx="48" cy="82" rx="27" ry="6" fill="#07213D" opacity="0.14"/>
+  <rect x="20" y="18" width="56" height="56" rx="18" fill="url(#card)"/>
+  <path d="M24 26c8-6 20-6 27 0" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity="0.28"/>
+  <path d="M25 47L48 28l23 19Z" fill="url(#white)"/>
+  <rect x="32" y="45" width="32" height="23" rx="4" fill="url(#white)"/>
+  <rect x="43.500" y="54" width="9" height="14" rx="2.500" fill="#14B8A6" opacity="0.8"/>
+  <circle cx="67" cy="33" r="8" fill="url(#gold)"/>
+  <path d="M63.500 33.200l2.500 2.500 4.500-5.500" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
