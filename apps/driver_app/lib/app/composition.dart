@@ -43,7 +43,11 @@ final locationPortProvider = Provider<DriverLocationPort>((ref) {
   return GeolocatorDriverLocationPort(ref.watch(driverRepositoryProvider));
 });
 final pushPlatformProvider = Provider<DriverPushPlatform?>(
-  (_) => kDriverDemoMode || kIsWeb ? null : FirebaseDriverPushPlatform(),
+  (ref) => kDriverDemoMode || kIsWeb
+      ? null
+      : FirebaseDriverPushPlatform(
+          tone: () => ref.read(driverAlertToneProvider),
+        ),
 );
 final initialScenarioProvider =
     Provider<DriverScenario>((_) => _initialScenarioFromUri());
@@ -107,6 +111,8 @@ final driverControllerProvider =
     repository: ref.watch(driverRepositoryProvider),
     locationPort: ref.watch(locationPortProvider),
     pushPlatform: ref.watch(pushPlatformProvider),
+    alertTone: () => ref.read(driverAlertToneProvider),
+    alertToneReady: () => ref.read(driverAlertToneProvider.notifier).ready,
     initialScenario: ref.watch(initialScenarioProvider),
   );
 });
@@ -155,5 +161,49 @@ DriverScenario? _scenarioByKey(String? key) {
       return DriverScenario.sessionExpired;
     default:
       return null;
+  }
+}
+
+/// Bunyi peringatan pilihan driver (Akun > Notifikasi), tersimpan lewat
+/// SharedPreferences. Berlaku langsung saat aplikasi terbuka, dan dikirim ke
+/// server (lihat DriverController) supaya notifikasi saat aplikasi tertutup
+/// memakai channel bunyi yang sama.
+final driverAlertToneProvider =
+    StateNotifierProvider<DriverAlertToneController, DriverAlertTone>((ref) {
+  return DriverAlertToneController();
+});
+
+class DriverAlertToneController extends StateNotifier<DriverAlertTone> {
+  DriverAlertToneController() : super(DriverAlertTone.tapgo) {
+    _ready = kDriverDemoMode ? Future<void>.value() : _restore();
+  }
+
+  static const _prefsKey = 'tapgo_driver_alert_tone';
+
+  late final Future<void> _ready;
+
+  /// Selesai setelah pilihan tersimpan terbaca, supaya pendaftaran token saat
+  /// aplikasi baru dibuka tidak mengirim bunyi bawaan menimpa pilihan driver.
+  Future<void> get ready => _ready;
+
+  Future<void> _restore() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_prefsKey);
+      if (!mounted) return;
+      state = DriverAlertTone.fromKey(raw);
+    } catch (_) {
+      // Tidak terbaca: tetap bunyi bawaan.
+    }
+  }
+
+  Future<void> select(DriverAlertTone tone) async {
+    state = tone;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefsKey, tone.key);
+    } catch (_) {
+      // Tetap berlaku untuk sesi ini walau gagal disimpan permanen.
+    }
   }
 }

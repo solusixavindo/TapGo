@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Dipakai lewat nama (getIdentifier / string Dart): jangan dibuang oleh penyusutan sumber daya. -->
 <resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@raw/tapgo_alert,@drawable/ic_stat_tapgo" />
+    tools:keep="@raw/tapgo_alert,@raw/tapgo_alert_lonceng,@raw/tapgo_alert_panggilan,@drawable/ic_stat_tapgo" />

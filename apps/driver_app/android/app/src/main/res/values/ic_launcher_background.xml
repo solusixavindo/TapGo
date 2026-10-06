@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      Navy TapGo (#082140, diambil dari latar logo resmi). Lambang emas pada navy
-      memberi kontras tertinggi dan paling dekat dengan logo resmi; latar emas
-      sebelumnya membuat lambang navy tipis tampak kecil dan pucat pada ukuran ikon.
+      Emas TapGo (#FFC857, sama dengan warna `gold` di lib/app/driver_app.dart).
+      Ikon driver sengaja dibedakan dari ikon penumpang (latar navy, lambang emas):
+      driver memakai latar EMAS dengan lambang perisai singa-T NAVY.
     -->
-    <color name="ic_launcher_background">#082140</color>
+    <color name="ic_launcher_background">#FFC857</color>
     <!-- Warna aksen notifikasi (ikon kecil di bilah status): emas TapGo. -->
     <color name="tapgo_notification_accent">#FFC857</color>
 </resources>

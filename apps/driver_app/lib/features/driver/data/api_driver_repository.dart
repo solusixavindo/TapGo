@@ -701,11 +701,15 @@ class ApiDriverRepository implements DriverRepository {
   }
 
   @override
-  Future<void> registerPushToken(String token) async {
+  Future<void> registerPushToken(String token, {String? sound}) async {
     await _request(
       () => _dio.post<dynamic>(
         '/notifications/push-token',
-        data: {'token': token, 'platform': 'android'},
+        data: {
+          'token': token,
+          'platform': 'android',
+          if (sound != null) 'sound': sound,
+        },
       ),
     );
   }

@@ -12,9 +12,13 @@ class DriverController extends StateNotifier<DriverState>
     required DriverLocationPort locationPort,
     required DriverScenario initialScenario,
     DriverPushPlatform? pushPlatform,
+    DriverAlertTone Function()? alertTone,
+    Future<void> Function()? alertToneReady,
   })  : _repository = repository,
         _locationPort = locationPort,
         _pushPlatform = pushPlatform,
+        _alertTone = alertTone ?? (() => DriverAlertTone.tapgo),
+        _alertToneReady = alertToneReady,
         super(DriverState.initial(initialScenario)) {
     WidgetsBinding.instance.addObserver(this);
     if (_repository case final DemoDriverRepository demo) {
@@ -26,7 +30,20 @@ class DriverController extends StateNotifier<DriverState>
   final DriverRepository _repository;
   final DriverLocationPort _locationPort;
   final DriverPushPlatform? _pushPlatform;
+  final DriverAlertTone Function() _alertTone;
+  final Future<void> Function()? _alertToneReady;
   DriverPushController? _push;
+
+  /// Mengirim bunyi pilihan terkini ke server bersama token. Menunggu pilihan
+  /// tersimpan terbaca dulu, supaya pendaftaran saat aplikasi baru dibuka tidak
+  /// menimpa pilihan driver dengan bunyi bawaan.
+  Future<void> _registerPushToken(String token) async {
+    await _alertToneReady?.call();
+    await _repository.registerPushToken(token, sound: _alertTone().key);
+  }
+
+  /// Dipanggil setelah driver mengganti bunyi: server segera memakai bunyi baru.
+  Future<void> refreshPushRegistration() async => _push?.reregister();
 
   /// StateNotifier secara bawaan memberi tahu pendengar bila objek state BERBEDA
   /// IDENTITAS, walau nilainya sama. Poll 12 detik selalu membuat state baru
@@ -42,7 +59,7 @@ class DriverController extends StateNotifier<DriverState>
     if (platform == null || _push != null || state.session == null) return;
     _push = DriverPushController(
       platform: platform,
-      register: _repository.registerPushToken,
+      register: _registerPushToken,
       unregister: _repository.unregisterPushToken,
       shouldAlert: _shouldAlertForeground,
       onMessage: (message, {required bool opened}) {

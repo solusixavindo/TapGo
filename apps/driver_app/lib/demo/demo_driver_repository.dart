@@ -2,10 +2,10 @@ part of '../main.dart';
 
 class DemoDriverRepository implements DriverRepository {
   @override
-  Future<void> registerPushToken(String token) async {}
+  Future<void> registerPushToken(String token, {String? sound}) async {}
 
   @override
-  Future<void> unregisterPushToken(String token) async {}
+  Future<void> unregisterPushToken(String token, {String? sound}) async {}
 
   DemoDriverRepository({DriverScenario initialScenario = DriverScenario.login})
       : _scenario = initialScenario;

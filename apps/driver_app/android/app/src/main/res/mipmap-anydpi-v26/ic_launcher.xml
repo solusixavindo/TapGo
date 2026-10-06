@@ -3,10 +3,9 @@
   Ikon adaptif (Android 8+). Peluncur sendiri yang memotong bentuknya (bulat,
   persegi membulat, tetesan air, dst).
 
-  Latar navy TapGo mengisi penuh kanvas 108dp. Lambang perisai singa-T resmi
+  Latar EMAS TapGo mengisi penuh kanvas 108dp. Lambang perisai singa-T resmi navy
   (dari logo 1280 px, tanpa mobil/motor/teks) diperbesar hingga hampir memenuhi
-  area terlihat 72dp (bagian penting selalu di dalam lingkaran ±70dp). Sebelumnya
-  gambar hanya 48% lebar kanvas dengan garis halus yang hilang pada ukuran ikon.
+  area terlihat 72dp. Dibedakan dari ikon penumpang (latar navy, lambang emas).
 
   Lapisan monokrom dipakai ikon bertema Android 13+.
 -->

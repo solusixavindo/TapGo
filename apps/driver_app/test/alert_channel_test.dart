@@ -8,8 +8,9 @@ import 'package:tapgo_driver_app/main.dart';
 /// Uji HP 6 Okt 2026: driver +10 tidak berbunyi. Channel `tapgo_default` sudah
 /// dibuat oleh APK lama di HP dan suaranya tidak dapat diubah pemasangan baru
 /// (Android 8+), jadi peringatan memakai channel BARU `tapgo_alerts_v3` dan,
-/// saat aplikasi di depan, ringtone notifikasi bawaan HP (tidak bergantung pada
-/// notifikasi). Satu peristiwa = satu bunyi.
+/// saat aplikasi di depan, berkas suara aplikasi sendiri (tidak bergantung pada
+/// notifikasi). Satu peristiwa = satu bunyi. Sejak +14 driver memilih satu dari
+/// tiga bunyi (TapGo, Lonceng, Panggilan), masing-masing punya channel sendiri.
 
 DriverPushMessage msg(String type, {String title = 'Order baru', String body = 'Ada penumpang'}) =>
     DriverPushMessage(
@@ -25,11 +26,16 @@ FirebaseDriverPushPlatform platformWith({
   required bool ringtoneWorks,
   required List<int> ringtoneCalls,
   required List<ShownNotification> shown,
+  DriverAlertTone tone = DriverAlertTone.tapgo,
+  List<DriverAlertTone>? playedTones,
 }) {
+  final sink = playedTones ?? <DriverAlertTone>[];
   return FirebaseDriverPushPlatform(
     isForeground: () => foreground,
-    playRingtone: () async {
+    tone: () => tone,
+    playRingtone: (played) async {
       ringtoneCalls.add(1);
+      sink.add(played);
       return ringtoneWorks;
     },
     showLocal: (id, title, body, details) async =>
@@ -43,7 +49,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('rincian notifikasi lokal', () {
-    test('channel baru tapgo_alerts_v3, Importance.high, suara dan getar menyala', () {
+    test('bunyi bawaan TapGo: channel tapgo_alerts_v3, Importance.high, suara dan getar menyala', () {
       final android = driverAlertNotificationDetails().android!;
       expect(android.channelId, 'tapgo_alerts_v3');
       expect(android.channelName, 'Peringatan TapGo');
@@ -54,6 +60,28 @@ void main() {
       // Tanpa sound: null dan tanpa silent: true.
       expect(android.sound, isNull);
       expect(android.silent, isFalse);
+    });
+
+    test('tiga bunyi, tiga channel berbeda; semuanya bersuara dan Importance.high', () {
+      expect(DriverAlertTone.values.map((t) => t.key), ['tapgo', 'lonceng', 'panggilan']);
+      expect(DriverAlertTone.values.map((t) => t.channelId).toSet(), hasLength(3));
+      expect(DriverAlertTone.lonceng.channelId, 'tapgo_alerts_v3_lonceng');
+      expect(DriverAlertTone.panggilan.channelId, 'tapgo_alerts_v3_panggilan');
+      for (final tone in DriverAlertTone.values) {
+        final android = driverAlertNotificationDetails(tone).android!;
+        expect(android.channelId, tone.channelId);
+        expect(android.importance, Importance.high);
+        expect(android.playSound, isTrue);
+        expect(android.silent, isFalse);
+      }
+    });
+
+    test('kunci tak dikenal atau kosong jatuh ke bunyi bawaan TapGo', () {
+      expect(DriverAlertTone.fromKey('lonceng'), DriverAlertTone.lonceng);
+      expect(DriverAlertTone.fromKey('panggilan'), DriverAlertTone.panggilan);
+      expect(DriverAlertTone.fromKey(null), DriverAlertTone.tapgo);
+      expect(DriverAlertTone.fromKey(''), DriverAlertTone.tapgo);
+      expect(DriverAlertTone.fromKey('../../etc'), DriverAlertTone.tapgo);
     });
   });
 
@@ -93,6 +121,33 @@ void main() {
       expect(shown.single.title, 'Pesan baru dari penumpang');
     });
 
+    test('bunyi pilihan dipakai: di depan memutar bunyi itu, di belakang memakai channel-nya', () async {
+      for (final tone in DriverAlertTone.values) {
+        final played = <DriverAlertTone>[];
+        final shownFront = <ShownNotification>[];
+        await platformWith(
+                foreground: true,
+                ringtoneWorks: true,
+                ringtoneCalls: <int>[],
+                shown: shownFront,
+                tone: tone,
+                playedTones: played)
+            .showForegroundAlert(msg('ride_offer'));
+        expect(played, [tone]);
+        expect(shownFront, isEmpty);
+
+        final shownBack = <ShownNotification>[];
+        await platformWith(
+                foreground: false,
+                ringtoneWorks: true,
+                ringtoneCalls: <int>[],
+                shown: shownBack,
+                tone: tone)
+            .showForegroundAlert(msg('ride_offer'));
+        expect(shownBack.single.details.android!.channelId, tone.channelId);
+      }
+    });
+
     test('pesan tanpa judul dan isi tidak berbunyi', () async {
       final ringtone = <int>[];
       final shown = <ShownNotification>[];
@@ -118,15 +173,20 @@ void main() {
     tearDown(() => TestWidgetsFlutterBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(driverAlertsMethodChannel, null));
 
-    test('memanggil playNotificationSound pada channel tapgo.driver/alerts', () async {
+    test('memanggil playNotificationSound dengan kunci bunyi pada channel tapgo.driver/alerts', () async {
       final calls = <String>[];
+      final sounds = <Object?>[];
       TestWidgetsFlutterBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(driverAlertsMethodChannel, (call) async {
         calls.add(call.method);
+        sounds.add((call.arguments as Map)['sound']);
         return true;
       });
       expect(await driverPlayNotificationRingtone(), isTrue);
-      expect(calls, ['playNotificationSound']);
+      expect(await driverPlayNotificationRingtone(DriverAlertTone.lonceng), isTrue);
+      expect(await driverPlayNotificationRingtone(DriverAlertTone.panggilan), isTrue);
+      expect(calls, ['playNotificationSound', 'playNotificationSound', 'playNotificationSound']);
+      expect(sounds, ['tapgo', 'lonceng', 'panggilan']);
       expect(driverAlertsMethodChannel.name, 'tapgo.driver/alerts');
       expect(messenger, isNotNull);
     });
@@ -149,32 +209,49 @@ void main() {
     final sound = read('android/app/src/main/kotlin/com/xavindo/tapgo/driver/AlertSound.kt');
     final manifest = read('android/app/src/main/AndroidManifest.xml');
 
-    test('AlertSound membuat tapgo_alerts_v3 dengan berkas suara aplikasi, getar, dan USAGE_NOTIFICATION', () {
-      expect(sound, contains('"tapgo_alerts_v3"'));
+    test('AlertSound membuat tiga channel (satu per bunyi) dengan berkas suara aplikasi, getar, dan USAGE_NOTIFICATION', () {
+      for (final id in ['tapgo_alerts_v3', 'tapgo_alerts_v3_lonceng', 'tapgo_alerts_v3_panggilan']) {
+        expect(sound, contains('"$id"'), reason: id);
+      }
+      for (final raw in ['tapgo_alert', 'tapgo_alert_lonceng', 'tapgo_alert_panggilan']) {
+        expect(sound, contains('"$raw"'), reason: raw);
+      }
       expect(sound, contains('"Peringatan TapGo"'));
       expect(sound, contains('NotificationManager.IMPORTANCE_HIGH'));
       expect(sound, contains('enableVibration(true)'));
-      expect(sound, contains('setSound(soundUri(), attributes())'));
-      expect(sound, contains('/raw/\$RAW_NAME'));
+      expect(sound, contains('setSound(soundUri(tone), attributes())'));
+      expect(sound, contains('/raw/\${tone.rawName}'));
       expect(sound, contains('AudioAttributes.USAGE_NOTIFICATION'));
       expect(sound, isNot(contains('setSound(null')));
       expect(sound, isNot(contains('setBypassDnd')));
     });
 
-    test('suara dibuat sebelum notifikasi apa pun (onCreate) dan berkasnya ada', () {
-      final onCreate = main.substring(main.indexOf('override fun onCreate'));
-      expect(onCreate.indexOf('alertSound.createChannel()'),
-          lessThan(onCreate.indexOf('override fun configureFlutterEngine')));
-      expect(File('android/app/src/main/res/raw/tapgo_alert.wav').existsSync(), isTrue);
-      expect(File('android/app/src/main/res/raw/tapgo_alert.wav').lengthSync(), greaterThan(10000));
-      expect(read('android/app/src/main/res/raw/keep.xml'), contains('@raw/tapgo_alert'));
+    test('id channel dan kunci bunyi di Kotlin sama dengan enum Dart', () {
+      for (final tone in DriverAlertTone.values) {
+        expect(sound, contains('"${tone.channelId}"'), reason: tone.channelId);
+        expect(sound, contains('("${tone.key}"'), reason: tone.key);
+      }
     });
 
-    test('MethodChannel tapgo.driver/alerts: putar, diagnostik, status izin', () {
+    test('suara dibuat sebelum notifikasi apa pun (onCreate) dan ketiga berkasnya ada', () {
+      final onCreate = main.substring(main.indexOf('override fun onCreate'));
+      expect(onCreate.indexOf('alertSound.createChannels()'),
+          lessThan(onCreate.indexOf('override fun configureFlutterEngine')));
+      final keep = read('android/app/src/main/res/raw/keep.xml');
+      for (final raw in ['tapgo_alert', 'tapgo_alert_lonceng', 'tapgo_alert_panggilan']) {
+        final file = File('android/app/src/main/res/raw/$raw.wav');
+        expect(file.existsSync(), isTrue, reason: raw);
+        expect(file.lengthSync(), greaterThan(10000), reason: raw);
+        expect(keep, contains('@raw/$raw'), reason: raw);
+      }
+    });
+
+    test('MethodChannel tapgo.driver/alerts: putar bunyi pilihan dan status izin; tanpa layar diagnostik', () {
       expect(main, contains('"tapgo.driver/alerts"'));
       expect(main, contains('"playNotificationSound"'));
-      expect(main, contains('"soundDiagnostics"'));
+      expect(main, contains('call.argument<String>("sound")'));
       expect(main, contains('"areNotificationsEnabled"'));
+      expect(main, isNot(contains('soundDiagnostics')));
       expect(sound, contains('MediaPlayer'));
     });
 
@@ -219,62 +296,6 @@ void main() {
       expect(location, contains("notificationTitle: 'TapGo Driver aktif'"));
       expect(location, contains("notificationChannelName: 'Status online driver'"));
       expect(location, isNot(contains('tapgo_alerts')));
-    });
-  });
-
-  group('uji bunyi: pemeriksaan keadaan HP', () {
-    Map<String, Object?> sehat() => {
-          'notificationsEnabled': true,
-          'soundResourceFound': true,
-          'channelExists': true,
-          'channelImportance': 4,
-          'ringerMode': 2,
-          'volumeNotification': 7,
-          'volumeNotificationMax': 15,
-          'dndFilter': 1,
-          'playError': null,
-        };
-
-    test('HP sehat: semua hijau', () {
-      final checks = driverSoundChecks(sehat());
-      expect(checks.every((c) => c.level == SoundCheckLevel.ok), isTrue);
-    });
-
-    test('tiap penghalang menghasilkan pemeriksaan merah dengan tindakan', () {
-      SoundCheck? bad(Map<String, Object?> patch, String contains) {
-        final info = {...sehat(), ...patch};
-        final hit = driverSoundChecks(info)
-            .where((c) => c.level == SoundCheckLevel.bad && c.title.contains(contains))
-            .toList();
-        return hit.isEmpty ? null : hit.first;
-      }
-
-      expect(bad({'notificationsEnabled': false}, 'Notifikasi dimatikan'), isNotNull);
-      expect(bad({'ringerMode': 0}, 'mode senyap'), isNotNull);
-      expect(bad({'volumeNotification': 0}, 'Volume notifikasi nol'), isNotNull);
-      expect(bad({'dndFilter': 3}, 'Jangan Ganggu'), isNotNull);
-      expect(bad({'channelImportance': 2}, 'tidak berstatus Penting'), isNotNull);
-      expect(bad({'channelExists': false}, 'belum dibuat'), isNotNull);
-      expect(bad({'soundResourceFound': false}, 'Berkas suara'), isNotNull);
-      expect(bad({'playError': 'MediaPlayer error'}, 'gagal diputar')!.detail,
-          'MediaPlayer error');
-    });
-
-    test('mode getar dan volume sangat rendah = peringatan (kuning)', () {
-      expect(
-          driverSoundChecks({...sehat(), 'ringerMode': 1})
-              .any((c) => c.level == SoundCheckLevel.warn),
-          isTrue);
-      expect(
-          driverSoundChecks({...sehat(), 'volumeNotification': 2})
-              .any((c) => c.level == SoundCheckLevel.warn),
-          isTrue);
-    });
-
-    test('laporan teks memuat semua nilai untuk dikirim ke tim', () {
-      final text = driverSoundReportText(sehat());
-      expect(text, contains('ringerMode: 2'));
-      expect(text, contains('volumeNotification: 7'));
     });
   });
 }

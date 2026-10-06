@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// 6 Okt 2026: logo ikon driver terlihat sangat kecil (gambar hanya 48% lebar
 /// kanvas adaptif, bergaris halus, di atas latar emas). Sekarang lambang perisai
 /// singa-T resmi diperbesar hingga hampir memenuhi area terlihat (72 dp dari 108)
-/// di atas latar navy. Tes ini menjaga ukurannya dan kelengkapan berkas.
+/// di atas latar emas dengan lambang navy (dibedakan dari ikon penumpang). Tes ini menjaga ukurannya dan kelengkapan berkas.
 
 const res = 'android/app/src/main/res';
 
@@ -75,13 +75,13 @@ void main() {
     }
   });
 
-  test('XML adaptif: latar navy penuh, foreground, dan monokrom', () {
+  test('XML adaptif: latar emas penuh, foreground, dan monokrom', () {
     final xml = File('$res/mipmap-anydpi-v26/ic_launcher.xml').readAsStringSync();
     expect(xml, contains('@color/ic_launcher_background'));
     expect(xml, contains('@mipmap/ic_launcher_foreground'));
     expect(xml, contains('<monochrome android:drawable="@mipmap/ic_launcher_monochrome"/>'));
     final colors = File('$res/values/ic_launcher_background.xml').readAsStringSync();
-    expect(colors, contains('<color name="ic_launcher_background">#082140</color>'));
+    expect(colors, contains('<color name="ic_launcher_background">#FFC857</color>'));
   });
 
   test('manifest memakai ikon kecil dan warna aksen notifikasi; Dart memakai drawable yang sama', () {
@@ -103,8 +103,8 @@ void main() {
     // Byte 25 kepala PNG: jenis warna (2 = RGB tanpa alpha, 6 = RGBA).
     expect(flat[25], 2);
     expect(flat.length, lessThan(1024 * 1024));
-    // Latar navy (piksel pojok), lambang menempati ±68% lebar.
+    // Latar emas, beda dari ikon penumpang (piksel pojok), lambang menempati ±68% lebar.
     final raw = (await play.image.toByteData(format: ui.ImageByteFormat.rawRgba))!;
-    expect([raw.getUint8(0), raw.getUint8(1), raw.getUint8(2)], [8, 33, 64]);
+    expect([raw.getUint8(0), raw.getUint8(1), raw.getUint8(2)], [255, 200, 87]);
   });
 }

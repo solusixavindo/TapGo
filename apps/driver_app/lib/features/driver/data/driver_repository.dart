@@ -102,7 +102,9 @@ abstract class DriverRepository {
   /// bukan langsung dari UI — port yang mengurus GPS/izin perangkat, repo
   /// ini hanya mengurus jalur HTTP-nya.
   /// Mendaftarkan / mencabut token push perangkat ini pada akun yang masuk.
-  Future<void> registerPushToken(String token);
+  /// [sound] = kunci bunyi pilihan driver (DriverAlertTone.key); server memakainya
+  /// untuk memilih channel notifikasi saat aplikasi tertutup.
+  Future<void> registerPushToken(String token, {String? sound});
   Future<void> unregisterPushToken(String token);
 
   Future<void> sendLocation({

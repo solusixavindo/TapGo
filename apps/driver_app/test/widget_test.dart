@@ -6,10 +6,15 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:tapgo_driver_app/main.dart';
 
 void main() {
+  // Pilihan bunyi dan tema tersimpan di SharedPreferences; tanpa ini panggilan
+  // platformnya tidak pernah selesai di bawah waktu palsu flutter_test.
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('R2.5C login branding dan ikon', () {
@@ -2635,6 +2640,32 @@ void main() {
     });
 
     testWidgets(
+        'token dikirim bersama bunyi pilihan; mengganti bunyi mendaftarkan ulang token yang sama',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      final platform = FakePushPlatform(token: 'tok-123');
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, pushPlatform: platform));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 1));
+      // Belum pernah memilih: bunyi bawaan.
+      expect(repo.registeredPushTokens, ['tok-123']);
+      expect(repo.registeredPushSounds, ['tapgo']);
+
+      final container = ProviderScope.containerOf(
+          tester.element(find.byType(TapGoDriverApp)));
+      await container
+          .read(driverAlertToneProvider.notifier)
+          .select(DriverAlertTone.panggilan);
+      await container
+          .read(driverControllerProvider.notifier)
+          .refreshPushRegistration();
+      await tester.pump(const Duration(seconds: 1));
+      expect(repo.registeredPushTokens, ['tok-123', 'tok-123']);
+      expect(repo.registeredPushSounds, ['tapgo', 'panggilan']);
+    });
+
+    testWidgets(
         'izin ditolak (token null): tidak ada pendaftaran, aplikasi tetap jalan',
         (tester) async {
       final repo = FakeDriverRepository(session: demoSession);
@@ -2812,7 +2843,7 @@ void main() {
 
   group('tab Akun: preferensi, pengajuan mitra, dan bantuan', () {
     testWidgets(
-        'driver aktif dengan kendaraan: kartu Kendaraan tampil, tombol "Ajukan Jadi Mitra Driver" TIDAK tampil',
+        'driver aktif dengan kendaraan: plat kendaraan tampil di profil, tombol "Ajukan Jadi Mitra Driver" TIDAK tampil',
         (tester) async {
       final repo = FakeDriverRepository(session: demoSession)
         ..applicationInfo = const DriverApplicationInfo(
@@ -2821,8 +2852,11 @@ void main() {
       await tester.tap(find.byIcon(Icons.person_rounded));
       await tester.pumpAndSettle();
 
-      expect(find.text('Kendaraan'), findsOneWidget);
-      expect(find.textContaining('Plat:'), findsOneWidget);
+      expect(
+          find.descendant(
+              of: find.byKey(const ValueKey('account-profile')),
+              matching: find.textContaining('Plat:')),
+          findsOneWidget);
       expect(find.text('Ajukan Jadi Mitra Driver'), findsNothing);
       expect(find.byKey(const ValueKey('driver-application-entry')), findsNothing);
     });
@@ -2839,7 +2873,29 @@ void main() {
       expect(find.text('Kendaraan'), findsNothing);
     });
 
-    testWidgets('kartu Tampilan: tiga pilihan tema, memilih Gelap langsung mengubah tema aplikasi',
+    testWidgets('Akun gaya daftar berkategori: profil, Pengaturan, Bantuan, lalu Keluar',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+      await tester.tap(find.byIcon(Icons.person_rounded));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('account-profile')), findsOneWidget);
+      expect(find.text('Pengaturan'), findsOneWidget);
+      expect(find.byKey(const ValueKey('open-appearance')), findsOneWidget);
+      expect(find.byKey(const ValueKey('open-notifications')), findsOneWidget);
+      // Ringkasan pilihan terlihat di barisnya, tanpa membuka halaman.
+      expect(find.text('Ikuti sistem'), findsOneWidget);
+      expect(find.text('Bunyi: TapGo'), findsOneWidget);
+      // Isi halaman TIDAK menumpuk di tab: pilihan tema dan bunyi baru muncul
+      // setelah barisnya diketuk.
+      expect(find.byKey(const ValueKey('theme-choice-dark')), findsNothing);
+      expect(find.byKey(const ValueKey('tone-lonceng')), findsNothing);
+      expect(find.byKey(const ValueKey('open-sound-test')), findsNothing);
+      expect(find.text('Uji bunyi'), findsNothing);
+    });
+
+    testWidgets('Tampilan: tiga pilihan tema, memilih Gelap langsung mengubah tema aplikasi',
         (tester) async {
       final repo = FakeDriverRepository(session: demoSession);
       await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -2858,7 +2914,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byIcon(Icons.person_rounded));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('open-appearance')));
+      await tester.pumpAndSettle();
 
+      expect(find.byType(DriverAppearanceScreen), findsOneWidget);
       expect(find.byKey(const ValueKey('theme-choice-system')), findsOneWidget);
       expect(find.byKey(const ValueKey('theme-choice-light')), findsOneWidget);
       expect(find.byKey(const ValueKey('theme-choice-dark')), findsOneWidget);
@@ -2873,35 +2932,61 @@ void main() {
       expect(updated.themeMode, ThemeMode.dark);
     });
 
-    testWidgets('Pengaturan Notifikasi: berhasil dibuka menampilkan pesan sesuai',
+    testWidgets('Notifikasi: hanya tiga pilihan bunyi, mengetuk memilih dan langsung membunyikan',
         (tester) async {
-      tapGoOpenNotificationSettingsForTests = () async => true;
-      addTearDown(() => tapGoOpenNotificationSettingsForTests = null);
+      final played = <Object?>[];
+      TestWidgetsFlutterBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(driverAlertsMethodChannel, (call) async {
+        if (call.method == 'playNotificationSound') {
+          played.add((call.arguments as Map)['sound']);
+          return true;
+        }
+        return null;
+      });
+      addTearDown(() => TestWidgetsFlutterBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(driverAlertsMethodChannel, null));
       final repo = FakeDriverRepository(session: demoSession);
       await pumpDriver(tester, repo);
       await tester.tap(find.byIcon(Icons.person_rounded));
       await tester.pumpAndSettle();
-
-      await tapReachable(tester, find.byKey(const ValueKey('open-notification-settings')));
+      await tester.tap(find.byKey(const ValueKey('open-notifications')));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Atur suara dan getar'), findsOneWidget);
+
+      expect(find.byType(DriverNotificationScreen), findsOneWidget);
+      // Persis tiga baris pilihan; tanpa tombol uji, laporan, atau pengaturan sistem.
+      expect(find.byType(ListTile), findsNWidgets(3));
+      expect(find.text('TapGo'), findsOneWidget);
+      expect(find.text('Lonceng'), findsOneWidget);
+      expect(find.text('Panggilan'), findsOneWidget);
+      expect(find.byType(OutlinedButton), findsNothing);
+      expect(find.byType(FilledButton), findsNothing);
+      expect(find.byIcon(Icons.radio_button_checked_rounded), findsOneWidget);
+      expect(played, isEmpty);
+
+      await tester.tap(find.byKey(const ValueKey('tone-lonceng')));
+      await tester.pumpAndSettle();
+      expect(played, ['lonceng']);
+      expect(
+          find.descendant(
+              of: find.byKey(const ValueKey('tone-lonceng')),
+              matching: find.byIcon(Icons.radio_button_checked_rounded)),
+          findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('tone-panggilan')));
+      await tester.pumpAndSettle();
+      expect(played, ['lonceng', 'panggilan']);
+      // Mengetuk lagi pilihan yang sama membunyikannya lagi (seperti nada dering).
+      await tester.tap(find.byKey(const ValueKey('tone-panggilan')));
+      await tester.pumpAndSettle();
+      expect(played, ['lonceng', 'panggilan', 'panggilan']);
+
+      // Kembali ke Akun: ringkasan ikut berubah.
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('Bunyi: Panggilan'), findsOneWidget);
     });
 
-    testWidgets('Pengaturan Notifikasi: gagal dibuka menampilkan panduan manual, bukan diam saja',
-        (tester) async {
-      tapGoOpenNotificationSettingsForTests = () async => false;
-      addTearDown(() => tapGoOpenNotificationSettingsForTests = null);
-      final repo = FakeDriverRepository(session: demoSession);
-      await pumpDriver(tester, repo);
-      await tester.tap(find.byIcon(Icons.person_rounded));
-      await tester.pumpAndSettle();
-
-      await tapReachable(tester, find.byKey(const ValueKey('open-notification-settings')));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('Pengaturan HP > Aplikasi'), findsOneWidget);
-    });
-
-    testWidgets('kartu Bantuan: WhatsApp, Kebijakan Privasi, dan Keluar tersedia',
+    testWidgets('Bantuan: WhatsApp dan Kebijakan Privasi tersedia, Keluar memanggil logout',
         (tester) async {
       final repo = FakeDriverRepository(session: demoSession);
       await pumpDriver(tester, repo);
@@ -3364,57 +3449,7 @@ void main() {
       expect(android.playSound, isTrue);
     });
 
-    // ---------------- Uji bunyi dan banner notifikasi mati ----------------
-
-    Map<String, Object?> hpSehat() => {
-          'notificationsEnabled': true,
-          'soundResourceFound': true,
-          'channelExists': true,
-          'channelImportance': 4,
-          'ringerMode': 2,
-          'volumeNotification': 7,
-          'volumeNotificationMax': 15,
-          'dndFilter': 1,
-          'playError': null,
-        };
-
-    Future<void> openSoundTest(WidgetTester tester) async {
-      await tester.tap(find.byIcon(Icons.person_rounded));
-      await tester.pumpAndSettle();
-      await tapReachable(tester, find.byKey(const ValueKey('open-sound-test')));
-      await tester.pumpAndSettle();
-    }
-
-    testWidgets('Uji bunyi: HP sehat → semua hijau dan "Pengaturan HP sudah benar"', (tester) async {
-      driverSoundDiagnosticsForTests = () async => hpSehat();
-      addTearDown(() => driverSoundDiagnosticsForTests = null);
-      await pumpWith(tester, FakeDriverRepository(session: demoSession));
-      await openSoundTest(tester);
-      expect(find.byType(DriverSoundTestScreen), findsOneWidget);
-      expect(find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('sound-check-bad')), findsNothing);
-      expect(find.text('Pengaturan HP sudah benar.'), findsOneWidget);
-      expect(find.byKey(const ValueKey('sound-test-copy')), findsOneWidget);
-    });
-
-    testWidgets('Uji bunyi: volume nol dan Jangan Ganggu tampil merah dengan tindakan', (tester) async {
-      driverSoundDiagnosticsForTests =
-          () async => {...hpSehat(), 'volumeNotification': 0, 'dndFilter': 3};
-      addTearDown(() => driverSoundDiagnosticsForTests = null);
-      await pumpWith(tester, FakeDriverRepository(session: demoSession));
-      await openSoundTest(tester);
-      expect(find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('sound-check-bad')), findsNWidgets(2));
-      expect(find.text('Volume notifikasi nol'), findsOneWidget);
-      expect(find.text('Mode Jangan Ganggu aktif'), findsOneWidget);
-      expect(find.textContaining('Perbaiki yang bertanda merah'), findsOneWidget);
-    });
-
-    testWidgets('Uji bunyi: native tidak ada → pesan tidak tersedia, bukan crash', (tester) async {
-      driverSoundDiagnosticsForTests = () async => null;
-      addTearDown(() => driverSoundDiagnosticsForTests = null);
-      await pumpWith(tester, FakeDriverRepository(session: demoSession));
-      await openSoundTest(tester);
-      expect(find.byKey(const ValueKey('sound-test-unavailable')), findsOneWidget);
-    });
+    // ---------------- Banner notifikasi mati ----------------
 
     testWidgets('Beranda: notifikasi dimatikan → banner dengan tombol pengaturan', (tester) async {
       driverNotificationsEnabledForTests = () async => false;
@@ -3771,11 +3806,14 @@ DriverRide demoRideWithLocation(RideStatus status) => DriverRide(
 class FakeDriverRepository implements DriverRepository {
   String? lastCancelReason;
   final List<String> registeredPushTokens = [];
+  final List<String> registeredPushSounds = [];
   final List<String> unregisteredPushTokens = [];
 
   @override
-  Future<void> registerPushToken(String token) async =>
-      registeredPushTokens.add(token);
+  Future<void> registerPushToken(String token, {String? sound}) async {
+    registeredPushTokens.add(token);
+    registeredPushSounds.add(sound ?? '');
+  }
 
   @override
   Future<void> unregisterPushToken(String token) async =>
@@ -4293,7 +4331,7 @@ class RingtoneProbePlatform extends FirebaseDriverPushPlatform {
   RingtoneProbePlatform._(this.ringtone, this.shown, bool foreground)
       : super(
           isForeground: () => foreground,
-          playRingtone: () async {
+          playRingtone: (_) async {
             ringtone.add(1);
             return true;
           },
