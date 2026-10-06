@@ -3,7 +3,8 @@ import { LegalShell } from "../shared";
 
 export const metadata: Metadata = {
   title: "Privacy Policy | TapGo",
-  description: "Kebijakan Privasi TapGo oleh PT. TapGo Lion Indonesia."
+  description: "Kebijakan Privasi TapGo oleh PT. TapGo Lion Indonesia.",
+  alternates: { canonical: "/privacy-policy/" }
 };
 
 export default function PrivacyPolicy() {

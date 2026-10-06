@@ -3,7 +3,8 @@ import DeleteAccountForm from "./delete-account-form";
 
 export const metadata: Metadata = {
   title: "Hapus Akun TapGo Lion",
-  description: "Ajukan permintaan penghapusan akun TapGo Lion melalui halaman resmi PT. TapGo Lion Indonesia."
+  description: "Ajukan permintaan penghapusan akun TapGo Lion melalui halaman resmi PT. TapGo Lion Indonesia.",
+  alternates: { canonical: "/delete-account/" }
 };
 
 const erasableData = [

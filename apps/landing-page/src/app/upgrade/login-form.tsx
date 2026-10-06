@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
-import { NOTICE_KEY, PREVIEW_MODE, TOKEN_KEY, clearSession, login, readSession, writeSession } from "./api";
+import { NOTICE_KEY, PREVIEW_MODE, TOKEN_KEY, clearSession, login, readSession, takeNextPath, writeSession } from "./api";
 import { Field, inputClass, primaryButtonClass } from "./upgrade-shell";
 
 export default function LoginForm() {
@@ -34,7 +34,7 @@ export default function LoginForm() {
       // Token disimpan hanya untuk sesi tab ini. Tidak ada data sensitif lain
       // yang ditulis ke perangkat.
       writeSession(TOKEN_KEY, result.accessToken);
-      router.push("/upgrade/paket");
+      router.push(takeNextPath("/upgrade", "/upgrade/paket"));
     } catch (caught) {
       setError(
         caught instanceof Error

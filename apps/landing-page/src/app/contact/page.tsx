@@ -3,7 +3,8 @@ import { Reveal } from "../reveal";
 
 export const metadata: Metadata = {
   title: "Contact",
-  description: "Kontak resmi PT. TapGo Lion Indonesia."
+  description: "Kontak resmi PT. TapGo Lion Indonesia.",
+  alternates: { canonical: "/contact/" }
 };
 
 export default function Contact() {

@@ -51,6 +51,16 @@ export function SiteHeader() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // Tombol Escape menutup laci menu (aksesibilitas papan ketik).
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   // Kunci scroll body saat laci mobile terbuka.
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";

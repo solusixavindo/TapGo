@@ -40,9 +40,9 @@ export function SiteFooter() {
             <p key={line}>{line}</p>
           ))}
         </address>
-        <div className="themed-text-secondary flex flex-wrap content-start gap-5 font-semibold">
+        <div className="themed-text-secondary flex flex-wrap content-start gap-x-5 gap-y-1 font-semibold">
           {legalLinks.map((link) => (
-            <a key={link.href} href={link.href} className="hover:opacity-80">
+            <a key={link.href} href={link.href} className="inline-flex min-h-[44px] items-center hover:opacity-80">
               {link.label}
             </a>
           ))}

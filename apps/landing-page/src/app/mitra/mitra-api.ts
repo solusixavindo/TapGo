@@ -9,7 +9,7 @@
  * Penyimpanan memakai sessionStorage (hilang saat tab ditutup), sama seperti
  * alur upgrade dan top up. Data uang tidak pernah disimpan di sini.
  */
-import { API_BASE } from "../upgrade/api";
+import { API_BASE, friendlyMessage } from "../upgrade/api";
 import { ACCEPTED_IMAGE_TYPES, RAW_IMAGE_LIMIT_BYTES, prepareImageForUpload } from "../upgrade/image-prep";
 
 export { API_BASE };
@@ -97,7 +97,7 @@ async function rawRequest<T>(
   };
   if (!response.ok || payload.success === false) {
     throw new ApiError(
-      payload.message ?? "Permintaan belum dapat diproses.",
+      friendlyMessage(payload.code ?? "", response.status, payload.message),
       response.status,
       payload.code ?? ""
     );

@@ -3,7 +3,8 @@ import { LegalShell } from "../shared";
 
 export const metadata: Metadata = {
   title: "Refund & Cancellation Policy",
-  description: "Kebijakan refund dan pembatalan membership TapGo Lion."
+  description: "Kebijakan refund dan pembatalan membership TapGo Lion.",
+  alternates: { canonical: "/refund-policy/" }
 };
 
 export default function RefundPolicy() {

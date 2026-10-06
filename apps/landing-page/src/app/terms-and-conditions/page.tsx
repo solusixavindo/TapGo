@@ -3,7 +3,8 @@ import { LegalShell } from "../shared";
 
 export const metadata: Metadata = {
   title: "Terms & Conditions | TapGo",
-  description: "Syarat dan Ketentuan penggunaan TapGo oleh PT. TapGo Lion Indonesia."
+  description: "Syarat dan Ketentuan penggunaan TapGo oleh PT. TapGo Lion Indonesia.",
+  alternates: { canonical: "/terms-and-conditions/" }
 };
 
 export default function TermsAndConditions() {

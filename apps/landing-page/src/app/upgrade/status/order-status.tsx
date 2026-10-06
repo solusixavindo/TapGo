@@ -4,14 +4,17 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
+  NEXT_KEY,
   ORDER_KEY,
   PREVIEW_MODE,
   TOKEN_KEY,
   UpgradeOrder,
   UpgradeOrderStatus,
   getOrder,
+  listMyOrders,
   readSession,
-  uploadDocument
+  uploadDocument,
+  writeSession
 } from "../api";
 import { formatRupiah, primaryButtonClass, secondaryButtonClass } from "../upgrade-shell";
 import { prepareImageForUpload } from "../image-prep";
@@ -201,14 +204,27 @@ export default function OrderStatus() {
 
   const refresh = useCallback(async () => {
     const token = readSession(TOKEN_KEY);
-    if (!token || !orderId) {
+    if (!token) {
+      // Mis. kembali dari pembayaran di tab/aplikasi lain: sesi tab ini kosong.
+      // Ingat halaman ini supaya setelah masuk pengguna langsung kembali ke sini.
+      writeSession(NEXT_KEY, window.location.pathname + window.location.search);
       setError("Sesi Anda sudah berakhir. Masuk kembali untuk melihat status.");
       setLoading(false);
       return;
     }
     try {
-      const result = await getOrder(token, orderId);
-      setOrder(result);
+      if (orderId) {
+        setOrder(await getOrder(token, orderId));
+      } else {
+        // Tanpa id (tab baru): tampilkan pengajuan terbaru akun ini.
+        const mine = await listMyOrders(token);
+        if (mine.length === 0) {
+          setError("Belum ada pengajuan upgrade pada akun ini.");
+          setLoading(false);
+          return;
+        }
+        setOrder(mine[0]!);
+      }
       setError("");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Status belum dapat dimuat.");

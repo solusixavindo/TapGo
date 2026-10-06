@@ -56,6 +56,11 @@ export default function DeleteAccountForm() {
       setError("Nomor WhatsApp terdaftar wajib diisi.");
       return;
     }
+    const phoneDigits = form.whatsapp.replace(/\D/g, "");
+    if (phoneDigits.length < 9 || phoneDigits.length > 15) {
+      setError("Nomor WhatsApp tidak valid. Contoh: 0812 3456 7890.");
+      return;
+    }
 
     if (!form.consent) {
       setError("Mohon centang persetujuan sebelum mengajukan penghapusan akun.");

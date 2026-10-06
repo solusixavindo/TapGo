@@ -24,6 +24,16 @@ const TIER_LABEL: Record<string, string> = {
   PLATINUM: "Platinum"
 };
 
+const TIER_RANK: Record<string, number> = { BASIC: 0, SILVER: 1, GOLD: 2, PLATINUM: 3 };
+
+/** Paket yang sama atau lebih rendah dari paket aktif ditolak server (downgrade tidak diizinkan). */
+function isBelowOrSame(packageTier: string, currentTier: string): boolean {
+  if (!currentTier) return false;
+  const have = TIER_RANK[currentTier.toUpperCase()];
+  const want = TIER_RANK[packageTier.toUpperCase()];
+  return have !== undefined && want !== undefined && want <= have;
+}
+
 export default function PackagePicker() {
   const router = useRouter();
   const [packages, setPackages] = useState<MembershipPackage[]>(
@@ -81,6 +91,12 @@ export default function PackagePicker() {
     };
   }, [router]);
 
+  // Pilihan awal/tersimpan yang ternyata tidak dapat dibeli dibatalkan.
+  useEffect(() => {
+    const chosen = packages.find((item) => item.id === selected);
+    if (chosen && isBelowOrSame(chosen.tier, currentTier)) setSelected("");
+  }, [packages, selected, currentTier]);
+
   function onContinue() {
     if (!selected) return;
     writeSession(PACKAGE_KEY, selected);
@@ -117,14 +133,17 @@ export default function PackagePicker() {
       <div className="space-y-4">
         {packages.map((item) => {
           const active = selected === item.id;
+          const unavailable = isBelowOrSame(item.tier, currentTier);
           return (
             <button
               key={item.id}
               type="button"
+              disabled={unavailable}
               onClick={() => setSelected(item.id)}
               aria-pressed={active}
               className={[
                 "block w-full rounded-[1.5rem] border-2 p-5 text-left transition",
+                unavailable ? "cursor-not-allowed opacity-50" : "",
                 active
                   ? "border-brand-gold bg-brand-gold/10 shadow-lg"
                   : "themed-border themed-card-bg hover:border-white/20"
@@ -133,6 +152,13 @@ export default function PackagePicker() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xl font-black themed-text">{item.name}</p>
+                  {unavailable ? (
+                    <p className="mt-1 text-xs font-bold themed-text-muted">
+                      {item.tier.toUpperCase() === currentTier.toUpperCase()
+                        ? "Paket aktif Anda"
+                        : "Tidak dapat diturunkan dari paket aktif"}
+                    </p>
+                  ) : null}
                   <p className="mt-1 text-2xl font-black themed-accent">
                     {formatRupiah(item.price)}
                   </p>

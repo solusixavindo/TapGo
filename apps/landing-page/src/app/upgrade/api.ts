@@ -28,6 +28,18 @@ export const TOKEN_KEY = "tapgo.upgrade.token";
 export const REFRESH_KEY = "tapgo.upgrade.refreshToken";
 /** Pesan singkat untuk halaman masuk setelah sesi benar-benar habis. */
 export const NOTICE_KEY = "tapgo.upgrade.notice";
+/** Halaman tujuan setelah masuk (mis. status pesanan dibuka di tab baru tanpa sesi). */
+export const NEXT_KEY = "tapgo.upgrade.next";
+
+/**
+ * Tujuan setelah masuk: halaman yang tadi diminta bila masih satu alur
+ * ([prefix] = "/upgrade" atau "/topup"), selain itu [fallback]. Sekali pakai.
+ */
+export function takeNextPath(prefix: string, fallback: string): string {
+  const saved = readSession(NEXT_KEY);
+  clearSession(NEXT_KEY);
+  return saved.startsWith(`${prefix}/`) && !saved.startsWith("//") ? saved : fallback;
+}
 /** Foto profil gagal terunggah saat pengajuan (ditampilkan di halaman pembayaran). */
 export const AVATAR_FAILED_KEY = "tapgo.upgrade.avatarFailed";
 export const PACKAGE_KEY = "tapgo.upgrade.packageId";
@@ -177,14 +189,54 @@ export class UpgradeApiError extends Error {
   }
 }
 
-/** Kode server yang pesannya berbahasa Inggris dipetakan ke kalimat Indonesia. */
+/**
+ * Kode server yang pesannya berbahasa Inggris dipetakan ke kalimat Indonesia.
+ *
+ * Backend mengirim pesan Inggris untuk banyak galat yang bisa dialami pengunjung
+ * (paling sering: "Invalid phone or password" saat salah password). Tanpa
+ * pemetaan ini teks Inggris itu tampil apa adanya di situs berbahasa Indonesia.
+ */
 const FRIENDLY_MESSAGES: Record<string, string> = {
+  INVALID_CREDENTIALS: "Nomor HP atau password belum sesuai.",
+  ACCOUNT_INACTIVE: "Akun Anda sedang tidak aktif. Hubungi tim TapGo lewat WhatsApp.",
+  SESSION_INVALID: "Sesi Anda berakhir. Silakan masuk kembali.",
+  TOKEN_REUSE_DETECTED: "Sesi Anda berakhir. Silakan masuk kembali.",
+  INTERNAL_SERVER_ERROR: "Server sedang bermasalah. Coba lagi beberapa saat lagi.",
+  VALIDATION_ERROR: "Data belum sesuai. Periksa isian lalu coba lagi.",
+  RATE_LIMITED: "Terlalu banyak percobaan. Coba lagi beberapa saat lagi.",
   MEMBERSHIP_ORDER_PENDING:
     "Anda masih memiliki pengajuan membership yang belum dibayar.",
   MEMBERSHIP_ALREADY_ACTIVATED: "Paket membership ini sudah aktif.",
-  VALIDATION_ERROR: "Data belum sesuai. Periksa isian lalu coba lagi.",
-  RATE_LIMITED: "Terlalu banyak percobaan. Coba lagi beberapa saat lagi."
+  MEMBERSHIP_DOWNGRADE_NOT_ALLOWED:
+    "Paket yang dipilih sama dengan atau lebih rendah dari paket aktif Anda. Pilih paket yang lebih tinggi.",
+  MEMBERSHIP_PACKAGE_UNAVAILABLE: "Paket ini sedang tidak tersedia. Pilih paket lain.",
+  MEMBERSHIP_ORDER_NOT_FOUND: "Pengajuan tidak ditemukan.",
+  MEMBERSHIP_ORDER_FORBIDDEN: "Pengajuan ini bukan milik akun yang sedang masuk.",
+  MEMBERSHIP_ORDER_CLOSED: "Pengajuan ini sudah ditutup.",
+  MEMBERSHIP_INVOICE_NOT_FOUND: "Tagihan pengajuan tidak ditemukan. Hubungi tim TapGo.",
+  MEMBERSHIP_INVOICE_ALREADY_FINALIZED:
+    "Tagihan ini sudah dibayar atau tidak dapat dibayar lagi. Periksa halaman status.",
+  MEMBERSHIP_ORDER_NOT_PAID: "Pengajuan ini belum dibayar.",
+  MEMBERSHIP_DOCUMENT_TYPE_INVALID: "Dokumen harus berformat JPG atau PNG.",
+  MEMBERSHIP_DOCUMENT_TOO_LARGE: "Ukuran dokumen terlalu besar. Pilih foto yang lebih kecil.",
+  MEMBERSHIP_DOCUMENT_NOT_FOUND: "Dokumen belum ada atau sudah dihapus. Unggah ulang dokumen.",
+  MEMBERSHIP_DOCUMENT_EXPIRED:
+    "Dokumen sudah melewati masa simpan dan dihapus. Unggah ulang dokumen.",
+  MEMBERSHIP_PURCHASE_CHANNEL_DISABLED:
+    "Pembelian membership lewat situs sedang dinonaktifkan. Hubungi tim TapGo.",
+  WITHDRAWAL_MINIMUM_NOT_MET: "Jumlah penarikan di bawah batas minimum.",
+  WALLET_TOPUP_ORDER_NOT_FOUND: "Top up tidak ditemukan.",
+  WALLET_TOPUP_ORDER_FORBIDDEN: "Top up ini bukan milik akun yang sedang masuk."
 };
+
+/** Pesan yang aman ditampilkan: pemetaan kode, lalu pesan server; galat server tak dikenal dijadikan umum. */
+export function friendlyMessage(code: string, status: number, serverMessage?: string): string {
+  const mapped = FRIENDLY_MESSAGES[code];
+  if (mapped) return mapped;
+  if (status >= 500) return FRIENDLY_MESSAGES.INTERNAL_SERVER_ERROR!;
+  if (status === 429) return FRIENDLY_MESSAGES.RATE_LIMITED!;
+  return serverMessage ?? "Permintaan belum dapat diproses.";
+}
 
 const NETWORK_MESSAGE =
   "Tidak dapat terhubung ke server. Periksa koneksi internet Anda lalu coba lagi.";
@@ -313,7 +365,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     // internal kepada pengguna.
     const code = payload.code ?? "";
     throw new UpgradeApiError(
-      FRIENDLY_MESSAGES[code] ?? payload.message ?? "Permintaan belum dapat diproses.",
+      friendlyMessage(code, response.status, payload.message),
       code,
       response.status
     );
@@ -413,7 +465,11 @@ async function postImage(
       throw new UpgradeApiError(UPLOAD_TOO_LARGE_MESSAGE, "PAYLOAD_TOO_LARGE", 413);
     }
     const payload = (await response.json().catch(() => ({}))) as { message?: string; code?: string };
-    throw new UpgradeApiError(payload.message ?? fallbackMessage, payload.code ?? "", response.status);
+    throw new UpgradeApiError(
+      friendlyMessage(payload.code ?? "", response.status, payload.message ?? fallbackMessage),
+      payload.code ?? "",
+      response.status
+    );
   }
 }
 

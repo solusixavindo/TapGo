@@ -561,7 +561,7 @@ export default function Home() {
                   ))}
                 </ul>
               ) : (
-                <a href="#membership" className="mt-5 inline-flex items-center gap-2 font-bold themed-accent">
+                <a href="#membership" className="mt-5 inline-flex min-h-[44px] items-center gap-2 font-bold themed-accent">
                   {service.linkLabel} <ArrowIcon />
                 </a>
               )}
@@ -743,7 +743,7 @@ export default function Home() {
         </div>
         <div className="mx-auto mt-10 max-w-4xl space-y-4">
           {articles.map((article) => (
-            <details key={article.id} id={article.id} className="group themed-border themed-card-bg rounded-[1.5rem] border p-6">
+            <details key={article.id} id={`panduan-${article.id}`} className="group themed-border themed-card-bg rounded-[1.5rem] border p-6">
               <summary className="cursor-pointer list-none">
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -811,7 +811,7 @@ export default function Home() {
           <p className="themed-text-muted mt-5 text-lg leading-8">
             Tidak menemukan jawabannya? Tim kami membalas pesan WhatsApp setiap hari.
           </p>
-          <a href={whatsappUrl} className="mt-5 inline-flex items-center gap-2 font-bold themed-accent">
+          <a href={whatsappUrl} className="mt-5 inline-flex min-h-[44px] items-center gap-2 font-bold themed-accent">
             Tanya via WhatsApp <ArrowIcon />
           </a>
         </div>

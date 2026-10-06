@@ -98,6 +98,11 @@ export default function RegisterForm() {
       setError("Nomor WhatsApp wajib diisi.");
       return;
     }
+    const phoneDigits = form.whatsapp.replace(/\D/g, "");
+    if (phoneDigits.length < 9 || phoneDigits.length > 15) {
+      setError("Nomor WhatsApp tidak valid. Contoh: 0812 3456 7890.");
+      return;
+    }
 
     if (!form.packageName) {
       setError("Paket membership wajib dipilih.");

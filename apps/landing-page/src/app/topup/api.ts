@@ -5,10 +5,10 @@
  * (../upgrade/api.ts) — satu akun TapGo, satu token WEB, dua fitur di situs
  * yang sama. Hanya fungsi yang khas top up yang ditambahkan di sini.
  */
-import { API_BASE, PREVIEW_MODE, login, readSession, request, writeSession, clearSession } from "../upgrade/api";
+import { API_BASE, PREVIEW_MODE, login, readSession, request, takeNextPath, writeSession, clearSession } from "../upgrade/api";
 
-export { API_BASE, PREVIEW_MODE, login, readSession, writeSession, clearSession };
-export { NOTICE_KEY, TOKEN_KEY } from "../upgrade/api";
+export { API_BASE, PREVIEW_MODE, login, readSession, takeNextPath, writeSession, clearSession };
+export { NEXT_KEY, NOTICE_KEY, TOKEN_KEY } from "../upgrade/api";
 
 export const TOPUP_ORDER_KEY = "tapgo.topup.orderId";
 

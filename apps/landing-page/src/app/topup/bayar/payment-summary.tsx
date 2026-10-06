@@ -87,6 +87,27 @@ export default function PaymentSummary() {
     );
   }
 
+  // Pengajuan yang sudah tidak menunggu pembayaran tidak boleh lagi menampilkan
+  // petunjuk transfer (nominal berkode unik bisa dipakai pengajuan orang lain).
+  const expiredByTime = new Date(order.expiresAt).getTime() < Date.now();
+  if (order.status !== "PENDING" || expiredByTime) {
+    return (
+      <div className="rounded-2xl border themed-border themed-card-bg px-5 py-6 text-center">
+        <p className="text-sm font-bold themed-text">
+          {order.status === "PAID" ? "Top up ini sudah terkonfirmasi" : "Pengajuan top up ini sudah tidak berlaku"}
+        </p>
+        <p className="mt-2 text-sm leading-7 themed-text-muted">
+          {order.status === "PAID"
+            ? "Saldo Anda sudah bertambah."
+            : "Jangan transfer ke rekening ini untuk pengajuan tersebut. Buat pengajuan top up baru."}
+        </p>
+        <button type="button" onClick={() => router.push("/topup/jumlah")} className={`${primaryButtonClass} mt-5`}>
+          Buat top up baru
+        </button>
+      </div>
+    );
+  }
+
   const expires = new Date(order.expiresAt);
   const expiresLabel = Number.isNaN(expires.getTime())
     ? ""

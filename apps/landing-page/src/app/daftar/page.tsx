@@ -4,7 +4,8 @@ import RegisterForm from "./register-form";
 
 export const metadata: Metadata = {
   title: "Daftar Membership TapGo Lion",
-  description: "Daftar membership TapGo Lion dan pilih paket keanggotaan Basic, Silver, Gold, atau Platinum."
+  description: "Daftar membership TapGo Lion dan pilih paket keanggotaan Basic, Silver, Gold, atau Platinum.",
+  alternates: { canonical: "/daftar/" }
 };
 
 export default function RegisterPage() {

@@ -34,3 +34,24 @@ Bukti:
 Di blok `server` untuk `api.tapgolion.id` pada nginx VPS, tambahkan `client_max_body_size 6M;`, lalu `nginx -t` dan `systemctl reload nginx`.
 Rollback: hapus baris itu lalu reload. Setelah itu uji ulang batas 5 MB dokumen yang sudah ditegakkan backend.
 Landing page yang diperbarui tetap bekerja dengan atau tanpa perubahan ini.
+
+---
+
+# Putaran kedua (audit lebih teliti, perbaikan langsung)
+
+Temuan tambahan dan perbaikannya (diuji di peramban: pemeriksaan otomatis 13 rute ukuran ponsel, dan alur penuh terhadap server tiruan):
+
+1. **Pesan galat server berbahasa Inggris tampil ke pengunjung** — terutama "Invalid phone or password" saat salah password, lalu "Account is not active", "Too many authentication attempts…", "Membership downgrade is not allowed", "Membership package is unavailable", "Membership invoice has already been paid…", dll. Kini ada pemetaan terpusat (`friendlyMessage`) untuk semua kode itu di alur upgrade, top up, dan dashboard mitra; galat server tak dikenal menjadi pesan umum Indonesia.
+2. **Paket aktif atau yang lebih rendah masih bisa dipilih** padahal server menolak downgrade; kini dinonaktifkan dan diberi keterangan.
+3. **Halaman status tanpa sesi buntu** (mis. kembali dari pembayaran di tab/aplikasi lain): "Masuk kembali" membawa ke langkah pilih paket, bukan status. Kini halaman diingat dan setelah masuk pengguna langsung kembali; tanpa id pengajuan, pengajuan terbaru akun ditampilkan.
+4. **Halaman petunjuk transfer top up** tetap menampilkan nomor rekening dan nominal berkode unik untuk pengajuan yang sudah kedaluwarsa/dibatalkan/lunas; kini diganti penjelasan dan tombol "Buat top up baru". Label status top up "Jumlah" diganti "Nominal transfer" (nilainya sudah termasuk kode unik).
+5. **SEO:** semua halaman memakai canonical ke beranda (kini per halaman; /hapus-akun menunjuk /delete-account); sitemap memuat URL tanpa garis miring (301 di Hostinger) dan /mitra yang noindex — dibereskan.
+6. **ID ganda `membership`** di beranda (bagian dan artikel edukasi); artikel kini `panduan-…`.
+7. **Target ketuk kecil** (tautan footer 20 px, "Bandingkan paket" dan "Tanya via WhatsApp" 24 px) — kini 44 px.
+8. **Peringatan hydration React** pada elemen `<html>` (kelas dan tema diatur skrip sebelum render) — `suppressHydrationWarning`.
+9. Tombol Escape kini menutup menu mobile.
+10. Nomor WhatsApp di formulir daftar, kontak, dan hapus akun tidak divalidasi sama sekali; kini 9-15 digit.
+
+Terbukti baik: tidak ada overflow horizontal, gambar rusak, gambar tanpa alt, input tanpa label, tombol/tautan tanpa nama pada 20 rute x 2 tema di lebar 375 px; harga dan manfaat paket di beranda sama dengan data paket di API produksi.
+
+Belum diuji dengan akun sungguhan (peraturan: password tidak dimasukkan oleh asisten). Daftar uji untuk pemilik ada di laporan.

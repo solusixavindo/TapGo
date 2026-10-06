@@ -5,13 +5,15 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   PREVIEW_MODE,
+  NEXT_KEY,
   PREVIEW_TOPUP_ORDER,
   TOKEN_KEY,
   TOPUP_ORDER_KEY,
   TopUpOrder,
   TopUpOrderStatus,
   getTopUpOrder,
-  readSession
+  readSession,
+  writeSession
 } from "../api";
 import { formatRupiah, secondaryButtonClass } from "../../upgrade/upgrade-shell";
 
@@ -87,7 +89,13 @@ export default function OrderStatus() {
   const refresh = useCallback(async () => {
     const token = readSession(TOKEN_KEY);
     if (!token || !orderId) {
-      setError("Sesi Anda sudah berakhir. Masuk kembali untuk melihat status.");
+      // Ingat halaman ini: setelah masuk, pengguna langsung kembali ke sini.
+      if (!token) writeSession(NEXT_KEY, window.location.pathname + window.location.search);
+      setError(
+        !token
+          ? "Sesi Anda sudah berakhir. Masuk kembali untuk melihat status."
+          : "Pengajuan top up tidak ditemukan. Mulai top up dari awal."
+      );
       setLoading(false);
       return;
     }
@@ -156,7 +164,7 @@ export default function OrderStatus() {
               <dd className="text-right text-sm font-bold themed-text">{order.reference}</dd>
             </div>
             <div className="flex items-start justify-between gap-6">
-              <dt className="text-sm themed-text-muted">Jumlah</dt>
+              <dt className="text-sm themed-text-muted">Nominal transfer</dt>
               <dd className="text-right text-sm font-bold themed-text">{formatRupiah(order.amount)}</dd>
             </div>
           </dl>

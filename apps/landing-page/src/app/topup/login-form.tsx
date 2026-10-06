@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
-import { NOTICE_KEY, PREVIEW_MODE, TOKEN_KEY, clearSession, login, readSession, writeSession } from "./api";
+import { NOTICE_KEY, PREVIEW_MODE, TOKEN_KEY, clearSession, login, readSession, takeNextPath, writeSession } from "./api";
 import { Field, inputClass, primaryButtonClass } from "../upgrade/upgrade-shell";
 
 export default function LoginForm() {
@@ -32,7 +32,7 @@ export default function LoginForm() {
     try {
       const result = await login(phone.trim(), password);
       writeSession(TOKEN_KEY, result.accessToken);
-      router.push("/topup/jumlah");
+      router.push(takeNextPath("/topup", "/topup/jumlah"));
     } catch (caught) {
       setError(
         caught instanceof Error ? caught.message : "Nomor HP atau password belum sesuai."
