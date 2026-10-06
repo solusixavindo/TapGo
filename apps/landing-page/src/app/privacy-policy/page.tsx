@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPolicy() {
   return (
-    <LegalShell title="Privacy Policy" updated="30 September 2026">
+    <LegalShell title="Privacy Policy" updated="7 Oktober 2026">
       <p>
         PT. TapGo Lion Indonesia menghormati privasi pengguna TapGo. Kebijakan ini menjelaskan data
         yang dikumpulkan oleh aplikasi TapGo Penumpang untuk Android, aplikasi TapGo Driver untuk
@@ -141,6 +141,19 @@ export default function PrivacyPolicy() {
         tagihan. TapGo juga dapat menggunakan layanan diagnostik atau crash reporting jika
         diaktifkan. Pihak ketiga hanya menerima data yang diperlukan untuk menjalankan layanan
         terkait.
+      </p>
+      <p>
+        <strong>Peta dan pencarian lokasi.</strong> Aplikasi TapGo menampilkan peta dengan gambar
+        peta dari OpenStreetMap (tile.openstreetmap.org); wilayah peta yang ditampilkan diminta dari
+        server tersebut. Saat pengguna mencari tempat di aplikasi TapGo Penumpang, teks pencarian
+        dikirim ke layanan pencarian lokasi OpenStreetMap Nominatim (nominatim.openstreetmap.org)
+        dan Photon oleh Komoot (photon.komoot.io), bersama posisi perangkat saat ini bila izin lokasi
+        diberikan agar hasil terdekat tampil lebih dulu. Untuk mengubah titik di peta menjadi
+        alamat, koordinat titik itu dikirim ke Nominatim. Penyedia layanan tersebut menerima data
+        yang dikirim beserta alamat IP perangkat; TapGo tidak mengirim nama, nomor HP, atau data
+        akun ke layanan tersebut. Pada aplikasi TapGo Driver, tombol navigasi membuka aplikasi
+        Google Maps di luar TapGo dengan koordinat tujuan; setelah itu berlaku kebijakan privasi
+        Google.
       </p>
 
       <h2>Penghapusan Akun</h2>
