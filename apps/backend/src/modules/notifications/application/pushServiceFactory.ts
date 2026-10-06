@@ -25,7 +25,7 @@ async function build(): Promise<PushService> {
   return new Service(
     {
       listTokens: (userId) =>
-        prisma.pushToken.findMany({ where: { userId }, select: { id: true, token: true } }),
+        prisma.pushToken.findMany({ where: { userId }, select: { id: true, token: true, sound: true } }),
       deleteTokens: async (ids) => {
         await prisma.pushToken.deleteMany({ where: { id: { in: ids } } });
       }

@@ -1220,6 +1220,8 @@ model PushToken {
   platform  String   @db.VarChar(20)
   token     String   @unique
   deviceId  String?  @map("device_id") @db.VarChar(120)
+  /// Bunyi peringatan pilihan driver (tapgo | lonceng | panggilan); lihat PUSH_SOUNDS.
+  sound     String   @default("tapgo") @db.VarChar(20)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

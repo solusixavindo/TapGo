@@ -3,7 +3,7 @@ import type { PushMessage, PushSender } from "../infrastructure/FcmClient.js";
 
 /** Bagian Prisma yang dipakai; memudahkan uji tanpa database. */
 export interface PushTokenStore {
-  listTokens(userId: string): Promise<Array<{ id: string; token: string }>>;
+  listTokens(userId: string): Promise<Array<{ id: string; token: string; sound?: string | null }>>;
   deleteTokens(ids: string[]): Promise<void>;
 }
 
@@ -31,8 +31,8 @@ export class PushService {
       if (tokens.length === 0) return;
       const dead: string[] = [];
       await Promise.all(
-        tokens.map(async ({ id, token }) => {
-          const result = await this.sender!.send(token, message);
+        tokens.map(async ({ id, token, sound }) => {
+          const result = await this.sender!.send(token, message, { sound });
           if (result === "invalid_token") dead.push(id);
         })
       );
