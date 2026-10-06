@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DigiflazzPpobProvider,
+  describePayloadShape,
+  extractPriceListRows,
   mapDigiflazzStatus,
   parseBillInquiry
 } from "../../src/modules/ppob/infrastructure/DigiflazzPpobProvider.js";
@@ -283,5 +285,41 @@ describe("batas pengecekan daftar harga Digiflazz (rc=83)", () => {
     await provider.fetchPostpaidCatalog();
     await provider.fetchPostpaidCatalog();
     expect(calls).toEqual(["pasca"]);
+  });
+});
+
+describe("bentuk jawaban daftar harga Digiflazz", () => {
+  const row = { buyer_sku_code: "bpjs", product_name: "BPJS KESEHATAN", brand: "BPJS KESEHATAN", admin: 2500, commission: 1150 };
+
+  it("menerima {data: larik}, larik di tingkat atas, dan objek berisi baris; menolak galat rc", () => {
+    expect(extractPriceListRows({ data: [row] })).toEqual([row]);
+    expect(extractPriceListRows([row])).toEqual([row]);
+    expect(extractPriceListRows({ data: { a: row, b: { ...row, buyer_sku_code: "x" } } })).toHaveLength(2);
+    expect(extractPriceListRows({ data: { rc: "83", message: "limitasi" } })).toBeNull();
+    expect(extractPriceListRows({ data: {} })).toBeNull();
+    expect(extractPriceListRows({ message: "x" })).toBeNull();
+    expect(extractPriceListRows(null)).toBeNull();
+    expect(extractPriceListRows({ data: [] })).toEqual([]);
+  });
+
+  it("pesan galat memuat bentuk jawaban (kunci dan tipe saja, tanpa nilai)", () => {
+    expect(describePayloadShape({ message: "rahasia", data: { rc: "83", note: 5 } })).toBe(
+      "object{message:string,data:object} data{rc:string,note:number}"
+    );
+    expect(describePayloadShape([row])).toBe("array(1){}");
+    expect(describePayloadShape("x")).toBe("string");
+  });
+
+  it("katalog pascabayar dibaca dari jawaban berbentuk objek (bukan hanya larik)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(JSON.stringify({ data: { "0": row, "1": { ...row, buyer_sku_code: "aetra", brand: "PDAM", product_name: "aetra" } } }), { status: 200 })
+    ));
+    const entries = await new DigiflazzPpobProvider(config).fetchPostpaidCatalog();
+    expect(entries.map((e) => e.providerSku)).toEqual(["bpjs", "aetra"]);
+  });
+
+  it("jawaban tak dikenali memunculkan galat berisi bentuknya", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ status: "x", items: 3 }), { status: 200 })));
+    await expect(new DigiflazzPpobProvider(config).fetchPostpaidCatalog()).rejects.toThrow(/bentuk: object\{status:string,items:number\}/);
   });
 });

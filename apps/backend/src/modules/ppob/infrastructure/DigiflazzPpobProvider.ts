@@ -289,11 +289,12 @@ export class DigiflazzPpobProvider implements PpobProviderGateway {
       throw new Error(`Digiflazz price-list returned non-JSON response (HTTP ${response.status})`);
     }
 
-    const rows = payload.data;
-    if (!response.ok || !Array.isArray(rows)) {
-      const detail = rows && !Array.isArray(rows) ? rows : undefined;
+    const rows = extractPriceListRows(payload);
+    if (!response.ok || rows === null) {
+      const data = payload.data;
+      const detail = data && !Array.isArray(data) ? data : undefined;
       throw new Error(
-        `Digiflazz price-list rejected (HTTP ${response.status}, cmd=${cmd}): ${detail?.message ?? "no payload"}${detail?.rc ? ` (rc=${detail.rc})` : ""}`
+        `Digiflazz price-list rejected (HTTP ${response.status}, cmd=${cmd}): ${detail?.message ?? "no payload"}${detail?.rc ? ` (rc=${detail.rc})` : ""} [bentuk: ${describePayloadShape(payload)}]`
       );
     }
     return rows;
@@ -460,4 +461,41 @@ export function parseBillInquiry(
     cost,
     detail: scalarDetail(data.desc)
   };
+}
+
+/**
+ * Baris daftar harga dari berbagai bentuk jawaban Digiflazz: `{data: [...]}`
+ * (prabayar), larik di tingkat atas, atau objek berisi baris-baris (kunci apa pun).
+ * Objek berisi `rc` adalah galat (mis. rc=83), bukan daftar. null = bukan daftar.
+ */
+export function extractPriceListRows(payload: unknown): DigiflazzPriceListRow[] | null {
+  const candidate =
+    payload && typeof payload === "object" && !Array.isArray(payload) && "data" in payload
+      ? (payload as { data?: unknown }).data
+      : payload;
+  if (Array.isArray(candidate)) return candidate as DigiflazzPriceListRow[];
+  if (candidate && typeof candidate === "object" && !("rc" in candidate)) {
+    const values = Object.values(candidate as Record<string, unknown>).filter(
+      (value): value is DigiflazzPriceListRow =>
+        !!value && typeof value === "object" && !Array.isArray(value) && "buyer_sku_code" in value
+    );
+    return values.length > 0 ? values : null;
+  }
+  return null;
+}
+
+/** Ringkasan bentuk jawaban (nama kunci dan tipe, tanpa nilai) untuk pesan galat/log. */
+export function describePayloadShape(payload: unknown): string {
+  const type = (value: unknown): string =>
+    Array.isArray(value) ? `array(${value.length})` : value === null ? "null" : typeof value;
+  if (!payload || typeof payload !== "object") return type(payload);
+  const keys = (obj: object) =>
+    Object.entries(obj as Record<string, unknown>)
+      .slice(0, 8)
+      .map(([key, value]) => `${key.slice(0, 24)}:${type(value)}`)
+      .join(",");
+  const data = Array.isArray(payload) ? payload : (payload as { data?: unknown }).data;
+  const inner =
+    data && typeof data === "object" && !Array.isArray(data) ? ` data{${keys(data as object)}}` : "";
+  return `${type(payload)}{${Array.isArray(payload) ? "" : keys(payload)}}${inner}`;
 }
