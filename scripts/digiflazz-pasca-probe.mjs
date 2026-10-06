@@ -35,12 +35,17 @@ if (!username || !apiKey) {
 
 const md5 = (text) => createHash("md5").update(text).digest("hex");
 async function post(path, body) {
-  const response = await fetch(`${base}${path}`, {
-    method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(20000)
-  });
+  let response;
+  try {
+    response = await fetch(`${base}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20000)
+    });
+  } catch (error) {
+    return { status: 0, json: { data: { message: `tidak terhubung (${error.name})` } } };
+  }
   let json = null;
   try { json = await response.json(); } catch { /* bukan JSON */ }
   return { status: response.status, json };
