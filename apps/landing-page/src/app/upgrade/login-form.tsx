@@ -3,7 +3,7 @@
 import Link from "../hard-nav";
 import { useHardRouter as useRouter } from "../hard-nav";
 import { FormEvent, useEffect, useState } from "react";
-import { NOTICE_KEY, PREVIEW_MODE, TOKEN_KEY, clearSession, login, readSession, takeNextPath, writeSession } from "./api";
+import { NOTICE_KEY, PACKAGE_HINT_KEY, PREVIEW_MODE, TOKEN_KEY, clearSession, login, readSession, takeNextPath, writeSession } from "./api";
 import { Field, inputClass, primaryButtonClass } from "./upgrade-shell";
 
 export default function LoginForm() {
@@ -14,6 +14,12 @@ export default function LoginForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+
+  // Paket yang ditunjuk dari halaman depan (/upgrade/?paket=gold) dipilihkan di langkah paket.
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("paket")?.trim().toUpperCase() ?? "";
+    if (["SILVER", "GOLD", "PLATINUM"].includes(wanted)) writeSession(PACKAGE_HINT_KEY, wanted);
+  }, []);
 
   // Pesan dari sesi yang baru berakhir (lihat endSession di api.ts); sekali tampil.
   useEffect(() => {

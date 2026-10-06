@@ -362,6 +362,12 @@ export default function WithdrawView() {
         </Notice>
       ) : null}
 
+      {!closed && !bank ? (
+        <Notice tone="amber" title="Simpan rekening tujuan terlebih dahulu">
+          Penarikan dapat diajukan setelah rekening bank atas nama Anda tersimpan. Isi di kartu &quot;Rekening tujuan&quot;.
+        </Notice>
+      ) : null}
+
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="space-y-6 lg:col-span-3">
           <Card>
