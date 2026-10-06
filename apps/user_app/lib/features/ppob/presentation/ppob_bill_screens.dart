@@ -67,24 +67,22 @@ class _PpobBillProductsScreenState
     final products = ref.watch(
       ppobBillProductsProvider((category: widget.categoryCode, query: _query)),
     );
-    final isPdam = widget.categoryCode == 'PDAM';
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.title)),
       body: SafeArea(
         child: Column(
           children: [
-            if (isPdam)
-              Padding(
+            Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                 child: TextField(
                   key: const ValueKey('bill-search'),
                   controller: _searchController,
                   onChanged: _onSearchChanged,
                   textInputAction: TextInputAction.search,
-                  decoration: const InputDecoration(
-                    hintText: 'Cari PDAM (nama daerah)',
-                    prefixIcon: Icon(Icons.search_rounded),
+                  decoration: InputDecoration(
+                    hintText: 'Cari ${widget.title}',
+                    prefixIcon: const Icon(Icons.search_rounded),
                   ),
                 ),
               ),
@@ -113,8 +111,8 @@ class _PpobBillProductsScreenState
                             message: 'Coba kata pencarian lain.',
                           );
                   }
-                  // BPJS hanya satu produk: langsung ke isian nomor.
-                  if (!isPdam && items.length == 1 && !_forwarded) {
+                  // Hanya satu produk (mis. BPJS, PLN pascabayar): langsung ke isian nomor.
+                  if (items.length == 1 && _query.isEmpty && !_forwarded) {
                     _forwarded = true;
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       if (mounted) _open(items.single, replace: true);
@@ -192,15 +190,24 @@ class _PpobBillScreenState extends ConsumerState<PpobBillScreen> {
     super.dispose();
   }
 
-  String get _target =>
-      _targetController.text.replaceAll(RegExp(r'[\s-]+'), '').trim();
+  /// Nomor kontrak multifinance boleh memuat tanda hubung dan garis miring;
+  /// kategori lain hanya angka (spasi dan strip dibuang).
+  String get _target => widget.product.category == 'MULTIFINANCE'
+      ? _targetController.text.replaceAll(RegExp(r'\s+'), '').trim()
+      : _targetController.text.replaceAll(RegExp(r'[\s-]+'), '').trim();
 
   bool get _targetReady {
     final target = _target;
     return switch (widget.product.category) {
       'BPJS' => RegExp(r'^\d{13}$').hasMatch(target),
       'PDAM' => RegExp(r'^\d{6,20}$').hasMatch(target),
-      _ => target.length >= 4,
+      'HP_POSTPAID' => RegExp(r'^(08|\+?628)\d{7,11}$').hasMatch(target),
+      'TELKOM' => RegExp(r'^\d{8,14}$').hasMatch(target),
+      'PBB' => RegExp(r'^\d{16,20}$').hasMatch(target),
+      'MULTIFINANCE' => RegExp(r'^[A-Za-z0-9./-]{4,30}$').hasMatch(target),
+      // Lainnya: format pasti ditentukan penyedia; server menolak nomor salah
+      // saat cek tagihan (tanpa uang bergerak).
+      _ => target.length >= 5,
     };
   }
 
@@ -285,7 +292,9 @@ class _PpobBillScreenState extends ConsumerState<PpobBillScreen> {
             TextFormField(
               key: const ValueKey('bill-target'),
               controller: _targetController,
-              keyboardType: TextInputType.number,
+              keyboardType: product.category == 'MULTIFINANCE'
+                  ? TextInputType.text
+                  : TextInputType.number,
               enabled: !_isBusy && result == null,
               onChanged: (_) => _resetTarget(),
               decoration: InputDecoration(

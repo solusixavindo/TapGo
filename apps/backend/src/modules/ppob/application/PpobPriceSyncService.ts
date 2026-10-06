@@ -20,21 +20,49 @@ const PPOB_PRICE_SYNC_LOCK_KEY = 727009;
 const PPOB_POSTPAID_CATALOG_LOCK_KEY = 727010;
 
 /**
- * Kategori pascabayar yang dibuka di aplikasi (keputusan Owner 6 Okt 2026:
- * BPJS dan PDAM dulu). Produk pascabayar di luar ini TIDAK dibuat; brand-nya
- * dilaporkan di hasil sinkronisasi supaya Owner dapat memilih yang berikutnya.
+ * Kategori pascabayar yang dibuka di aplikasi. Keputusan Owner 6 Okt 2026:
+ * BPJS, PDAM dulu, lalu semua yang diminta (PLN pascabayar, BPJS Ketenagakerjaan,
+ * Telkom, internet, TV kabel, HP pascabayar, multifinance, PBB, gas, e-money).
+ * Produk pascabayar di luar daftar ini TIDAK dibuat; brand-nya dilaporkan di hasil
+ * sinkronisasi supaya Owner dapat memilih yang berikutnya.
  */
-const ENABLED_POSTPAID_CATEGORIES: ReadonlySet<PpobCategory> = new Set<PpobCategory>(["BPJS", "PDAM"]);
+const ENABLED_POSTPAID_CATEGORIES: ReadonlySet<PpobCategory> = new Set<PpobCategory>([
+  "BPJS",
+  "PDAM",
+  "PLN_POSTPAID",
+  "BPJS_TK",
+  "TELKOM",
+  "INTERNET",
+  "TV",
+  "HP_POSTPAID",
+  "MULTIFINANCE",
+  "PBB",
+  "GAS",
+  "EMONEY"
+]);
 
-/** Menentukan kategori produk pascabayar dari brand/nama katalog; null = belum dibuka. */
+/**
+ * Menentukan kategori produk pascabayar dari brand/nama katalog Digiflazz; null =
+ * tidak dikenali (dilaporkan, tidak dibuat). Urutan penting: yang lebih spesifik
+ * lebih dulu (mis. "BPJS KETENAGAKERJAAN" sebelum "BPJS").
+ */
 export function classifyPostpaidEntry(entry: { brand: string; name: string }): PpobCategory | null {
-  const brand = entry.brand.toUpperCase();
-  const name = entry.name.toUpperCase();
-  if (brand.includes("PDAM") || name.startsWith("PDAM")) return "PDAM";
-  // Hanya BPJS Kesehatan: BPJS Ketenagakerjaan memakai nomor dan alur lain.
-  if ((brand.includes("BPJS") || name.includes("BPJS")) && !brand.includes("KETENAGAKERJAAN") && !name.includes("KETENAGAKERJAAN")) {
-    return "BPJS";
+  const text = `${entry.brand} ${entry.name}`.toUpperCase();
+  const has = (...words: string[]) => words.some((word) => text.includes(word));
+  if (has("PDAM")) return "PDAM";
+  if (has("BPJS") && has("KETENAGAKERJAAN", "BPJSTK", "BPJS TK")) return "BPJS_TK";
+  if (has("BPJS")) return "BPJS";
+  if (has("PLN") && has("PASCA", "POSTPAID") && !has("NONTAGLIS", "PREPAID", "PRABAYAR")) return "PLN_POSTPAID";
+  if (has("MULTIFINANCE", "MULTI FINANCE")) return "MULTIFINANCE";
+  if (has("PBB")) return "PBB";
+  if (has("PGN", "PERTAGAS", "GAS NEGARA", "GAS PASCA")) return "GAS";
+  if (has("E-MONEY", "EMONEY", "E MONEY")) return "EMONEY";
+  if (has("HP PASCA", "HALO", "XL PASCA", "INDOSAT PASCA", "SMARTFREN PASCA", "TRI PASCA", "TELKOMSEL PASCA", "BYU PASCA")) {
+    return "HP_POSTPAID";
   }
+  if (has("INDIHOME", "INTERNET", "BIZNET", "MYREPUBLIC", "ASTINET")) return "INTERNET";
+  if (has("TV KABEL", "TV PASCA", "TV BERLANGGANAN", "TRANSVISION", "KVISION", "ORANGE TV")) return "TV";
+  if (has("TELKOM", "TELEPON", "TELEPHONE")) return "TELKOM";
   return null;
 }
 

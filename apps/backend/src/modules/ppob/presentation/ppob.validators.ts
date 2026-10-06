@@ -42,7 +42,10 @@ const ppobSku = z
 
 export const ppobBillProductsQuerySchema = z.object({
   query: z.object({
-    category: z.enum(["BPJS", "PDAM"]),
+    category: z.enum([
+      "BPJS", "PDAM", "PLN_POSTPAID", "BPJS_TK", "TELKOM", "INTERNET", "TV",
+      "HP_POSTPAID", "MULTIFINANCE", "PBB", "GAS", "EMONEY"
+    ]),
     q: z.string().trim().max(60).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(50)
   })

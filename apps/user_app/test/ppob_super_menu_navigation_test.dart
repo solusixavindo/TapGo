@@ -103,11 +103,11 @@ void main() {
       await _pumpOpener(
         tester,
         _repoReturning(_catalogWith(['PULSA', 'DATA'])), // tanpa tagihan PLN
-        'PLN_POSTPAID',
-        'Tagihan PLN',
+        'LAYANAN_BARU',
+        'Layanan Baru',
       );
       expect(find.byType(PpobCategoryUnavailableScreen), findsOneWidget);
-      expect(find.text('Tagihan PLN belum tersedia'), findsOneWidget);
+      expect(find.text('Layanan Baru belum tersedia'), findsOneWidget);
       expect(find.byType(PpobHomeScreen), findsNothing);
     },
   );
@@ -118,10 +118,10 @@ void main() {
       await _pumpOpener(
         tester,
         _repoReturning(_catalogWith(['PULSA'])),
-        'PLN_POSTPAID',
-        'Tagihan PLN',
+        'LAYANAN_BARU',
+        'Layanan Baru',
       );
-      expect(find.text('Tagihan PLN belum tersedia'), findsOneWidget);
+      expect(find.text('Layanan Baru belum tersedia'), findsOneWidget);
       await tester.tap(find.text('Buka Katalog PPOB'));
       await tester.pumpAndSettle();
       expect(find.byType(PpobHomeScreen), findsOneWidget);
@@ -136,6 +136,19 @@ void main() {
       expect(find.byType(PpobBillProductsScreen), findsOneWidget);
       expect(find.byType(PpobCategoryUnavailableScreen), findsNothing);
       expect(find.byType(PpobHomeScreen), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'SEMUA kategori pascabayar membuka layar tagihan dengan kategori yang benar',
+    (tester) async {
+      for (final code in tapGoPostpaidCategoryCodes) {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await _pumpOpener(tester, _repoReturning(_catalogWith(['PULSA'])), code, code);
+        final screen = tester.widget<PpobBillProductsScreen>(find.byType(PpobBillProductsScreen));
+        expect(screen.categoryCode, code);
+      }
+      expect(tapGoPostpaidCategoryCodes, hasLength(12));
     },
   );
 

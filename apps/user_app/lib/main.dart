@@ -258,6 +258,23 @@ void tapGoOpenPpobHome(BuildContext context) {
   );
 }
 
+/// Kategori pascabayar (cek tagihan lalu bayar). Harus sama dengan
+/// `ppobBillProductsQuerySchema` di backend.
+const tapGoPostpaidCategoryCodes = <String>{
+  'BPJS',
+  'PDAM',
+  'PLN_POSTPAID',
+  'BPJS_TK',
+  'TELKOM',
+  'INTERNET',
+  'TV',
+  'HP_POSTPAID',
+  'MULTIFINANCE',
+  'PBB',
+  'GAS',
+  'EMONEY',
+};
+
 /// Membuka satu kategori PPOB langsung (dipakai tile Super Menu — Pulsa,
 /// Paket Data, Token PLN, E-Wallet, BPJS, PDAM), bukan lewat grid PpobHomeScreen
 /// dulu.
@@ -278,8 +295,8 @@ Future<void> tapGoOpenPpobCategory(
   required String label,
 }) async {
   final navigator = Navigator.of(context);
-  // BPJS dan PDAM dibayar lewat cek tagihan (pascabayar), bukan katalog harga tetap.
-  if (categoryCode == 'BPJS' || categoryCode == 'PDAM') {
+  // Kategori pascabayar dibayar lewat cek tagihan, bukan katalog harga tetap.
+  if (tapGoPostpaidCategoryCodes.contains(categoryCode)) {
     navigator.push(
       _tapGoPageRoute(
         (_) => PpobBillProductsScreen(categoryCode: categoryCode, title: label),

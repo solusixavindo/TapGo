@@ -204,6 +204,17 @@ void main() {
         'E-Wallet',
         'BPJS',
         'PDAM',
+        // Tagihan pascabayar (keputusan Owner 6 Okt 2026).
+        'PLN Pascabayar',
+        'BPJS TK',
+        'Telkom',
+        'Internet',
+        'TV Kabel',
+        'HP Pascabayar',
+        'Angsuran',
+        'PBB',
+        'Gas',
+        'E-Money',
       ];
 
       expect(labels, contains('Kartu Anggota'));
@@ -225,6 +236,16 @@ void main() {
         'E-Wallet': 'EWALLET',
         'BPJS': 'BPJS',
         'PDAM': 'PDAM',
+        'PLN Pascabayar': 'PLN_POSTPAID',
+        'BPJS TK': 'BPJS_TK',
+        'Telkom': 'TELKOM',
+        'Internet': 'INTERNET',
+        'TV Kabel': 'TV',
+        'HP Pascabayar': 'HP_POSTPAID',
+        'Angsuran': 'MULTIFINANCE',
+        'PBB': 'PBB',
+        'Gas': 'GAS',
+        'E-Money': 'EMONEY',
       }.entries) {
         expect(
           tapGoPpobCategoryCodeForLabelForTests(entry.key),

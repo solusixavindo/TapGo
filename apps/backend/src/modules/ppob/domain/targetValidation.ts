@@ -22,9 +22,17 @@ const BPJS_CARD_NUMBER = /^\d{13}$/;
 /// ID pelanggan PDAM: 6–20 digit (variatif antar daerah).
 const PDAM_CUSTOMER_ID = /^\d{6,20}$/;
 
+/// Pascabayar tambahan (6 Okt 2026): aturan sengaja longgar. Format pasti
+/// ditentukan penyedia, yang menolak nomor salah saat cek tagihan (tanpa uang
+/// bergerak); di sini hanya mencegah isian jelas tidak masuk akal.
+const DIGITS_5_20 = /^\d{5,20}$/;
+const TELKOM_NUMBER = /^\d{8,14}$/;
+const PBB_NOP = /^\d{16,20}$/;
+const CONTRACT_NUMBER = /^[A-Za-z0-9./-]{4,30}$/;
+
 const TARGET_RULES: Record<
   PpobCategory,
-  { pattern: RegExp; example: string; msisdn: boolean }
+  { pattern: RegExp; example: string; msisdn: boolean; keepSymbols?: boolean }
 > = {
   PULSA: { pattern: MSISDN_ID, example: "08xxxxxxxxxx", msisdn: true },
   DATA: { pattern: MSISDN_ID, example: "08xxxxxxxxxx", msisdn: true },
@@ -32,7 +40,16 @@ const TARGET_RULES: Record<
   PLN_PREPAID: { pattern: PLN_CUSTOMER_ID, example: "11–12 digit nomor meter/IDPEL", msisdn: false },
   PLN_POSTPAID: { pattern: PLN_CUSTOMER_ID, example: "11–12 digit IDPEL", msisdn: false },
   BPJS: { pattern: BPJS_CARD_NUMBER, example: "13 digit nomor kartu", msisdn: false },
-  PDAM: { pattern: PDAM_CUSTOMER_ID, example: "6–20 digit ID pelanggan", msisdn: false }
+  PDAM: { pattern: PDAM_CUSTOMER_ID, example: "6–20 digit ID pelanggan", msisdn: false },
+  BPJS_TK: { pattern: DIGITS_5_20, example: "nomor peserta BPJS Ketenagakerjaan", msisdn: false },
+  TELKOM: { pattern: TELKOM_NUMBER, example: "kode area + nomor telepon", msisdn: false },
+  INTERNET: { pattern: DIGITS_5_20, example: "nomor pelanggan internet", msisdn: false },
+  TV: { pattern: DIGITS_5_20, example: "nomor pelanggan TV", msisdn: false },
+  HP_POSTPAID: { pattern: MSISDN_ID, example: "08xxxxxxxxxx", msisdn: true },
+  MULTIFINANCE: { pattern: CONTRACT_NUMBER, example: "nomor kontrak", msisdn: false, keepSymbols: true },
+  PBB: { pattern: PBB_NOP, example: "18 digit NOP", msisdn: false },
+  GAS: { pattern: DIGITS_5_20, example: "nomor pelanggan gas", msisdn: false },
+  EMONEY: { pattern: DIGITS_5_20, example: "nomor e-money", msisdn: false }
 };
 
 /// Menormalkan prefiks +62/62 menjadi 0 untuk nomor seluler Indonesia.
@@ -56,7 +73,12 @@ export function normalizePpobTarget(category: PpobCategory, rawTarget: string): 
       "PPOB_TARGET_INVALID"
     );
   }
-  const normalized = rule.msisdn ? normalizeMsisdn(trimmed) : trimmed.replace(/\D/g, "");
+  // Nomor kontrak multifinance boleh memuat huruf dan tanda baca: hanya spasi dibuang.
+  const normalized = rule.msisdn
+    ? normalizeMsisdn(trimmed)
+    : rule.keepSymbols
+      ? trimmed.replace(/\s+/g, "")
+      : trimmed.replace(/\D/g, "");
 
   if (!rule.pattern.test(normalized)) {
     throw new AppError(

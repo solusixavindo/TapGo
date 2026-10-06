@@ -44,6 +44,15 @@ IconData ppobCategoryIcon(String? iconName, {String? categoryCode}) {
     'BPJS' => Icons.health_and_safety_rounded,
     'EWALLET' => Icons.account_balance_wallet_rounded,
     'PDAM' => Icons.water_drop_rounded,
+    'BPJS_TK' => Icons.engineering_rounded,
+    'TELKOM' => Icons.call_rounded,
+    'INTERNET' => Icons.router_rounded,
+    'TV' => Icons.tv_rounded,
+    'HP_POSTPAID' => Icons.smartphone_rounded,
+    'MULTIFINANCE' => Icons.request_quote_rounded,
+    'PBB' => Icons.home_work_rounded,
+    'GAS' => Icons.local_fire_department_rounded,
+    'EMONEY' => Icons.credit_card_rounded,
     _ => null,
   };
   if (byCode != null) return byCode;
@@ -88,6 +97,15 @@ Color ppobCategoryColor(String categoryCode) {
     'BPJS' => const Color(0xFF16A34A),
     'EWALLET' => const Color(0xFF4F46E5),
     'PDAM' => const Color(0xFF0284C7),
+    'BPJS_TK' => const Color(0xFF15803D),
+    'TELKOM' => const Color(0xFFDC2626),
+    'INTERNET' => const Color(0xFF7C3AED),
+    'TV' => const Color(0xFFDB2777),
+    'HP_POSTPAID' => const Color(0xFF1486B8),
+    'MULTIFINANCE' => const Color(0xFF9A3412),
+    'PBB' => const Color(0xFF0F766E),
+    'GAS' => const Color(0xFFEA580C),
+    'EMONEY' => const Color(0xFF4F46E5),
     _ => const Color(0xFF1486B8),
   };
 }

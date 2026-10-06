@@ -84,7 +84,7 @@ export class PpobService {
     return product;
   }
 
-  listPostpaidProducts(input: { category: "BPJS" | "PDAM"; query?: string; limit: number }) {
+  listPostpaidProducts(input: { category: PpobCategory; query?: string; limit: number }) {
     return this.repository.listActivePostpaidProducts({
       category: input.category,
       limit: Math.min(input.limit, 100),
@@ -238,7 +238,13 @@ export class PpobService {
         )
       );
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      // P2002 (unique) atau P2034 (konflik tulis Serializable): permintaan lain untuk
+      // inquiry yang sama menang lebih dulu. Yang kalah mengambil hasil pemenang
+      // (kunci sama) atau mendapat 409 yang jelas, bukan 500.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        (error.code === "P2002" || error.code === "P2034")
+      ) {
         const winner = await this.repository.findByIdempotencyKey(input.userId, input.idempotencyKey);
         if (winner && winner.publicReference === inquiry.publicReference) {
           return { transaction: winner, replayed: true };
