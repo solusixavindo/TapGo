@@ -90,6 +90,38 @@ describe.skipIf(!runIntegration)("Push token registration", () => {
     expect(rows[0]!.deviceId).toBe("hp-1");
   });
 
+  it("menyimpan bunyi pilihan, menimpanya saat dikirim lagi, dan tidak menimpa saat tidak dikirim", async () => {
+    const user = await createUser("PSHS");
+    const register = (body: Record<string, unknown>) =>
+      api("/api/v1/notifications/push-token", { method: "POST", token: tokenFor(user), body });
+    const soundOf = async () => (await prisma.pushToken.findUniqueOrThrow({ where: { token: T1 } })).sound;
+
+    // APK lama tanpa pilihan bunyi: bawaan.
+    expect((await register({ token: T1, platform: "android" })).status).toBe(204);
+    expect(await soundOf()).toBe("tapgo");
+    expect((await register({ token: T1, platform: "android", sound: "lonceng" })).status).toBe(204);
+    expect(await soundOf()).toBe("lonceng");
+    // Pendaftaran ulang tanpa bunyi (mis. APK lama) tidak menimpa pilihan.
+    expect((await register({ token: T1, platform: "android" })).status).toBe(204);
+    expect(await soundOf()).toBe("lonceng");
+    expect((await register({ token: T1, platform: "android", sound: "panggilan" })).status).toBe(204);
+    expect(await soundOf()).toBe("panggilan");
+  });
+
+  it("menolak bunyi di luar tiga pilihan dan tidak mengubah apa pun", async () => {
+    const user = await createUser("PSHT");
+    await api("/api/v1/notifications/push-token", {
+      method: "POST", token: tokenFor(user), body: { token: T1, platform: "android", sound: "panggilan" }
+    });
+    for (const sound of ["default", "tapgo_alerts_v2", "", "../x", "LONCENG", 3]) {
+      const response = await api("/api/v1/notifications/push-token", {
+        method: "POST", token: tokenFor(user), body: { token: T1, platform: "android", sound }
+      });
+      expect(response.status, String(sound)).toBe(400);
+    }
+    expect((await prisma.pushToken.findUniqueOrThrow({ where: { token: T1 } })).sound).toBe("panggilan");
+  });
+
   it("memindahkan token ke akun yang baru login di perangkat yang sama", async () => {
     const first = await createUser("PSHC");
     const second = await createUser("PSHD");

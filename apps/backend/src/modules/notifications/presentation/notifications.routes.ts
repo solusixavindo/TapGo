@@ -23,16 +23,19 @@ notificationsRouter.post(
   validateRequest(registerPushTokenSchema),
   asyncHandler(async (req, res) => {
     const userId = req.auth!.userId;
-    const { token, platform, deviceId } = req.body as {
+    const { token, platform, deviceId, sound } = req.body as {
       token: string;
       platform: string;
       deviceId?: string;
+      sound?: string;
     };
 
     await prisma.pushToken.upsert({
       where: { token },
-      create: { userId, token, platform, deviceId: deviceId ?? null },
-      update: { userId, platform, deviceId: deviceId ?? null }
+      create: { userId, token, platform, deviceId: deviceId ?? null, ...(sound ? { sound } : {}) },
+      // Bunyi hanya berubah bila dikirim: APK lama (tanpa pilihan bunyi) yang
+      // mendaftar ulang tidak boleh menimpa pilihan yang sudah tersimpan.
+      update: { userId, platform, deviceId: deviceId ?? null, ...(sound ? { sound } : {}) }
     });
 
     const stale = await prisma.pushToken.findMany({

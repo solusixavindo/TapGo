@@ -3,12 +3,14 @@ import { PushService, type PushTokenStore } from "../../src/modules/notification
 import { generateKeyPairSync, createVerify } from "node:crypto";
 import {
   FcmClient,
+  PUSH_SOUNDS,
+  pushChannelForSound,
   ServiceAccountTokenProvider,
   parseServiceAccount,
   type PushSender
 } from "../../src/modules/notifications/infrastructure/FcmClient.js";
 
-function storeWith(tokens: Array<{ id: string; token: string }>) {
+function storeWith(tokens: Array<{ id: string; token: string; sound?: string | null }>) {
   const deleted: string[] = [];
   const store: PushTokenStore = {
     listTokens: async () => tokens,
@@ -41,6 +43,23 @@ describe("PushService", () => {
     };
     await new PushService(store, sender).notifyUser("u", { title: "a", body: "b" });
     expect(deleted).toEqual(["dead"]);
+  });
+
+  it("meneruskan bunyi pilihan tiap perangkat ke pengirim", async () => {
+    const { store } = storeWith([
+      { id: "a", token: "tok-a-" + "x".repeat(20), sound: "lonceng" },
+      { id: "b", token: "tok-b-" + "x".repeat(20), sound: "panggilan" },
+      { id: "c", token: "tok-c-" + "x".repeat(20) }
+    ]);
+    const seen: Record<string, string | null | undefined> = {};
+    const sender: PushSender = {
+      send: async (token, _message, options) => {
+        seen[token.slice(0, 5)] = options?.sound;
+        return "sent";
+      }
+    };
+    await new PushService(store, sender).notifyUser("u", { title: "a", body: "b" });
+    expect(seen).toEqual({ "tok-a": "lonceng", "tok-b": "panggilan", "tok-c": undefined });
   });
 
   it("tidak melempar walau store atau sender gagal", async () => {
@@ -102,6 +121,31 @@ describe("FcmClient", () => {
     expect(JSON.stringify(message.android)).not.toContain("tapgo_alerts_v2");
     // Tidak ada kunci data-only yang membocorkan isi: hanya judul/isi yang dikirim pemanggil.
     expect(message.notification).toEqual({ title: "Pesan baru dari driver", body: "Ketuk untuk membaca." });
+  });
+
+  it("bunyi pilihan menentukan channel; setiap bunyi punya channel sendiri", async () => {
+    expect([...PUSH_SOUNDS]).toEqual(["tapgo", "lonceng", "panggilan"]);
+    const expected: Record<string, string> = {
+      tapgo: "tapgo_alerts_v3",
+      lonceng: "tapgo_alerts_v3_lonceng",
+      panggilan: "tapgo_alerts_v3_panggilan"
+    };
+    for (const sound of PUSH_SOUNDS) {
+      const { client, fetchImpl } = clientWith(200);
+      await client.send("tok", { title: "Order baru", body: "Ada penumpang" }, { sound });
+      const init = (fetchImpl as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls[0]![1];
+      const android = JSON.parse(init.body as string).message.android;
+      expect(android.notification.channel_id).toBe(expected[sound]);
+      expect(android.priority).toBe("HIGH");
+    }
+    expect(new Set(Object.values(expected)).size).toBe(3);
+  });
+
+  it("nilai bunyi tak dikenal, kosong, atau berbahaya jatuh ke channel bawaan (daftar putih)", () => {
+    for (const bad of [undefined, null, "", "default", "LONCENG", "../../x", "tapgo_alerts_v2", "lonceng ", "tapgo_alerts_v3_lonceng"]) {
+      expect(pushChannelForSound(bad)).toBe("tapgo_alerts_v3");
+    }
+    expect(pushChannelForSound("lonceng")).toBe("tapgo_alerts_v3_lonceng");
   });
 
   it("memetakan 404 dan 400 INVALID_ARGUMENT -> invalid_token, lainnya -> failed", async () => {

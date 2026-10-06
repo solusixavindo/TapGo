@@ -10,8 +10,36 @@ export type PushMessage = {
 /** `invalid_token`: token sudah tidak berlaku dan harus dihapus. */
 export type PushSendResult = "sent" | "invalid_token" | "failed";
 
+/**
+ * Bunyi peringatan yang dapat dipilih driver (Akun > Notifikasi). Kunci dan id
+ * channel HARUS sama dengan DriverAlertTone di driver_app dan AlertSound.kt:
+ * suara channel Android tidak bisa diubah setelah dibuat, jadi tiap bunyi punya
+ * channel sendiri dan server memilihnya per perangkat.
+ */
+export const PUSH_SOUNDS = ["tapgo", "lonceng", "panggilan"] as const;
+export type PushSound = (typeof PUSH_SOUNDS)[number];
+
+const DEFAULT_PUSH_CHANNEL = "tapgo_alerts_v3";
+const PUSH_CHANNEL_BY_SOUND: Record<PushSound, string> = {
+  tapgo: DEFAULT_PUSH_CHANNEL,
+  lonceng: "tapgo_alerts_v3_lonceng",
+  panggilan: "tapgo_alerts_v3_panggilan"
+};
+
+/** Daftar putih: nilai tak dikenal, kosong, atau dari data yang rusak jatuh ke channel bawaan. */
+export function pushChannelForSound(sound: string | null | undefined): string {
+  return (PUSH_SOUNDS as readonly string[]).includes(sound ?? "")
+    ? PUSH_CHANNEL_BY_SOUND[sound as PushSound]
+    : DEFAULT_PUSH_CHANNEL;
+}
+
+export type PushSendOptions = {
+  /** Bunyi pilihan perangkat penerima; kosong = bawaan TapGo. */
+  sound?: string | null | undefined;
+};
+
 export interface PushSender {
-  send(token: string, message: PushMessage): Promise<PushSendResult>;
+  send(token: string, message: PushMessage, options?: PushSendOptions): Promise<PushSendResult>;
 }
 
 type ServiceAccount = {
@@ -116,7 +144,7 @@ export class FcmClient implements PushSender {
     this.auth = new ServiceAccountTokenProvider(credentials, FCM_SCOPE, fetchImpl);
   }
 
-  async send(token: string, message: PushMessage): Promise<PushSendResult> {
+  async send(token: string, message: PushMessage, options: PushSendOptions = {}): Promise<PushSendResult> {
     try {
       const accessToken = await this.auth.getAccessToken();
       if (!accessToken) return "failed";
@@ -130,15 +158,16 @@ export class FcmClient implements PushSender {
               token,
               notification: { title: message.title, body: message.body },
               ...(message.data ? { data: message.data } : {}),
-              // Channel tapgo_alerts_v3 (IMPORTANCE_HIGH, suara aplikasi sendiri; dibuat
-              // MainActivity.onCreate di kedua aplikasi). Suara channel yang sudah ada
+              // Channel tapgo_alerts_v3 (bawaan) atau channel bunyi pilihan driver
+              // (lihat PUSH_SOUNDS); IMPORTANCE_HIGH, suara aplikasi sendiri, dibuat
+              // MainActivity.onCreate. Suara channel yang sudah ada
               // tidak dapat diubah dari aplikasi (Android 8+), dan tapgo_default serta
               // tapgo_alerts_v2 sudah terkunci di HP yang pernah memasang APK lama, jadi
               // suara yang diubah selalu butuh id baru. `sound: "default"` tetap eksplisit
               // (hanya berlaku di Android < 8; di 8+ suara ditentukan channel).
               android: {
                 priority: "HIGH",
-                notification: { channel_id: "tapgo_alerts_v3", sound: "default" }
+                notification: { channel_id: pushChannelForSound(options.sound), sound: "default" }
               }
             }
           }),
