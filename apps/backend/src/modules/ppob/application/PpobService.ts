@@ -3,8 +3,17 @@ import { PpobCategory, PpobTransaction, Prisma } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../core/errors/AppError.js";
 import { logger } from "../../../core/logger/logger.js";
-import { PpobRepository, PpobTransactionRecord } from "../domain/PpobRepository.js";
-import { PpobProviderDisabledError, PpobProviderGateway } from "../domain/ppobProvider.js";
+import {
+  PpobBillInquiryRecord,
+  PpobProductRecord,
+  PpobRepository,
+  PpobTransactionRecord
+} from "../domain/PpobRepository.js";
+import {
+  PpobBillInquiryError,
+  PpobProviderDisabledError,
+  PpobProviderGateway
+} from "../domain/ppobProvider.js";
 import { normalizePpobTarget } from "../domain/targetValidation.js";
 import { MobileOperator, OPERATOR_LABEL, detectMobileOperator } from "../domain/operatorDetection.js";
 
@@ -23,11 +32,32 @@ function generatePpobReference(): string {
  */
 const PPOB_RECONCILE_LOCK_KEY = 727008;
 
+/** Biaya layanan TapGo per pembayaran pascabayar (keputusan Owner 6 Okt 2026: Rp1.000). */
+export const DEFAULT_POSTPAID_SERVICE_FEE = 1000;
+/** Masa berlaku hasil cek tagihan; juga tidak melewati tengah malam WIB (aturan Digiflazz). */
+const BILL_INQUIRY_TTL_MS = 10 * 60 * 1000;
+const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+/** Awal hari berikutnya di WIB, sebagai instan UTC. */
+export function nextWibMidnight(now: Date): Date {
+  const wib = new Date(now.getTime() + WIB_OFFSET_MS);
+  return new Date(Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), wib.getUTCDate() + 1) - WIB_OFFSET_MS);
+}
+
 export class PpobService {
   constructor(
     private readonly repository: PpobRepository,
-    private readonly provider: PpobProviderGateway
+    private readonly provider: PpobProviderGateway,
+    private readonly options: { postpaidServiceFee?: number; now?: () => Date } = {}
   ) {}
+
+  private get serviceFee(): number {
+    return this.options.postpaidServiceFee ?? DEFAULT_POSTPAID_SERVICE_FEE;
+  }
+
+  private now(): Date {
+    return this.options.now ? this.options.now() : new Date();
+  }
 
   listProducts(category?: PpobCategory) {
     return this.repository.listActiveProducts(category);
@@ -42,7 +72,189 @@ export class PpobService {
         "PPOB_PRODUCT_NOT_FOUND"
       );
     }
+    // Produk pascabayar bertagihan berubah-ubah (harga produknya 0): tidak boleh
+    // dibeli lewat jalur harga tetap, apa pun SKU yang dikirim klien.
+    if (product.isPostpaid) {
+      throw new AppError(
+        "Produk ini dibayar lewat cek tagihan",
+        StatusCodes.UNPROCESSABLE_ENTITY,
+        "PPOB_USE_BILL_FLOW"
+      );
+    }
     return product;
+  }
+
+  listPostpaidProducts(input: { category: "BPJS" | "PDAM"; query?: string; limit: number }) {
+    return this.repository.listActivePostpaidProducts({
+      category: input.category,
+      limit: Math.min(input.limit, 100),
+      ...(input.query ? { query: input.query } : {})
+    });
+  }
+
+  /**
+   * Pascabayar langkah 1 — cek tagihan. Tidak memotong saldo siapa pun. Angka
+   * dihitung di server dan disimpan sebagai [PpobBillInquiryRecord] sekali pakai:
+   * klien hanya mengirim referensi inquiry saat membayar, bukan nominal.
+   *
+   * Total = tagihan provider (selling_price) + biaya layanan tetap TapGo.
+   */
+  async inquireBill(input: {
+    userId: string;
+    sku: string;
+    targetNumber: string;
+  }): Promise<{ inquiry: PpobBillInquiryRecord; product: PpobProductRecord }> {
+    const product = await this.repository.findActiveProductBySku(input.sku);
+    if (!product || !product.isPostpaid) {
+      throw new AppError(
+        "Produk tagihan tidak ditemukan atau sedang tidak aktif",
+        StatusCodes.NOT_FOUND,
+        "PPOB_PRODUCT_NOT_FOUND"
+      );
+    }
+    const targetNumber = normalizePpobTarget(product.category, input.targetNumber);
+    if (!this.provider.inquireBill) {
+      throw new AppError(
+        "Layanan PPOB sedang tidak tersedia",
+        StatusCodes.SERVICE_UNAVAILABLE,
+        "PPOB_PROVIDER_DISABLED"
+      );
+    }
+    const publicReference = generatePpobReference();
+    let result;
+    try {
+      result = await this.provider.inquireBill({
+        publicReference,
+        providerSku: product.providerSku ?? product.sku,
+        targetNumber
+      });
+    } catch (error) {
+      if (error instanceof PpobBillInquiryError) {
+        throw new AppError(error.userMessage, StatusCodes.UNPROCESSABLE_ENTITY, "PPOB_BILL_INQUIRY_FAILED");
+      }
+      if (error instanceof PpobProviderDisabledError) {
+        throw new AppError(
+          "Layanan PPOB sedang tidak tersedia",
+          StatusCodes.SERVICE_UNAVAILABLE,
+          "PPOB_PROVIDER_DISABLED"
+        );
+      }
+      logger.error({ err: error, sku: product.sku }, "PPOB bill inquiry failed unexpectedly");
+      throw new AppError(
+        "Tagihan tidak dapat diperiksa saat ini. Coba lagi sebentar lagi.",
+        StatusCodes.BAD_GATEWAY,
+        "PPOB_BILL_INQUIRY_FAILED"
+      );
+    }
+
+    const providerCost = new Prisma.Decimal(result.cost);
+    const totalAmount = providerCost.plus(this.serviceFee);
+    // Tagihan murni tidak boleh melebihi total (komisi provider bisa lebih besar
+    // dari admin): sisanya (admin + layanan) tidak pernah negatif.
+    const rawBill = new Prisma.Decimal(result.billAmount);
+    const billAmount = rawBill.gt(totalAmount) ? totalAmount : rawBill;
+    const now = this.now();
+    const expiresAt = new Date(
+      Math.min(now.getTime() + BILL_INQUIRY_TTL_MS, nextWibMidnight(now).getTime())
+    );
+    const inquiry = await this.repository.createBillInquiry({
+      publicReference,
+      userId: input.userId,
+      productId: product.id,
+      targetNumber,
+      customerName: result.customerName,
+      period: result.period,
+      billAmount,
+      providerAdmin: new Prisma.Decimal(result.adminFee),
+      providerCost,
+      serviceFee: new Prisma.Decimal(this.serviceFee),
+      totalAmount,
+      detail: result.detail as Prisma.JsonObject,
+      expiresAt
+    });
+    return { inquiry, product };
+  }
+
+  /**
+   * Pascabayar langkah 2 — bayar. Inquiry diklaim sekali pakai di dalam
+   * transaksi debit (lihat createPurchaseWithDebit); jumlah yang didebit adalah
+   * total inquiry, bukan angka dari klien. Idempotency-Key wajib seperti prabayar.
+   */
+  async payBill(input: {
+    userId: string;
+    inquiryReference: string;
+    idempotencyKey: string;
+  }): Promise<{ transaction: PpobTransactionRecord; replayed: boolean }> {
+    const existing = await this.repository.findByIdempotencyKey(input.userId, input.idempotencyKey);
+    if (existing) {
+      if (existing.publicReference !== input.inquiryReference) {
+        throw new AppError(
+          "Idempotency-Key sudah dipakai untuk permintaan yang berbeda",
+          StatusCodes.CONFLICT,
+          "PPOB_IDEMPOTENCY_CONFLICT"
+        );
+      }
+      return { transaction: existing, replayed: true };
+    }
+
+    const inquiry = await this.repository.findBillInquiry(input.userId, input.inquiryReference);
+    if (!inquiry) {
+      // 404 juga untuk inquiry milik orang lain: keberadaannya tidak bocor.
+      throw new AppError("Tagihan tidak ditemukan. Cek tagihan lagi.", StatusCodes.NOT_FOUND, "PPOB_BILL_INQUIRY_NOT_FOUND");
+    }
+    if (inquiry.usedAt || inquiry.expiresAt.getTime() <= this.now().getTime()) {
+      throw new AppError(
+        "Tagihan sudah kedaluwarsa atau sudah dipakai. Cek tagihan lagi.",
+        StatusCodes.CONFLICT,
+        "PPOB_BILL_INQUIRY_UNUSABLE"
+      );
+    }
+    const product = await this.repository.findActiveProductById(inquiry.productId);
+    if (!product || !product.isPostpaid) {
+      throw new AppError(
+        "Produk tagihan sedang tidak aktif",
+        StatusCodes.CONFLICT,
+        "PPOB_PRODUCT_NOT_FOUND"
+      );
+    }
+    const providerSku = product.providerSku ?? product.sku;
+
+    let pending;
+    try {
+      pending = await this.repository.transaction((tx) =>
+        this.repository.createPurchaseWithDebit(
+          {
+            userId: input.userId,
+            product,
+            publicReference: inquiry.publicReference,
+            targetNumber: inquiry.targetNumber,
+            totalAmount: inquiry.totalAmount,
+            provider: this.provider.name,
+            providerSku,
+            idempotencyKey: input.idempotencyKey,
+            billInquiry: inquiry
+          },
+          tx
+        )
+      );
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const winner = await this.repository.findByIdempotencyKey(input.userId, input.idempotencyKey);
+        if (winner && winner.publicReference === inquiry.publicReference) {
+          return { transaction: winner, replayed: true };
+        }
+        throw new AppError(
+          "Tagihan sudah kedaluwarsa atau sudah dipakai. Cek tagihan lagi.",
+          StatusCodes.CONFLICT,
+          "PPOB_BILL_INQUIRY_UNUSABLE"
+        );
+      }
+      throw error;
+    }
+    return {
+      transaction: await this.dispatchToProvider(pending, providerSku, true),
+      replayed: false
+    };
   }
 
   /**
@@ -186,11 +398,21 @@ export class PpobService {
    */
   private async dispatchToProvider(
     pending: PpobTransaction,
-    providerSku: string
+    providerSku: string,
+    postpaid = false
   ): Promise<PpobTransaction> {
     let outcome;
     try {
-      outcome = await this.provider.purchase({
+      if (postpaid) {
+        if (!this.provider.payBill) {
+          throw new PpobProviderDisabledError();
+        }
+        outcome = await this.provider.payBill({
+          publicReference: pending.publicReference,
+          providerSku,
+          targetNumber: pending.targetNumber
+        });
+      } else outcome = await this.provider.purchase({
         publicReference: pending.publicReference,
         providerSku,
         sku: pending.skuSnapshot,

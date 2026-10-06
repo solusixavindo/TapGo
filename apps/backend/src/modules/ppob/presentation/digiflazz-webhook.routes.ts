@@ -51,6 +51,7 @@ interface DigiflazzWebhookData {
   message?: string;
   sn?: string | null;
   price?: number;
+  selling_price?: number;
 }
 
 export const digiflazzWebhookRouter = Router();
@@ -99,7 +100,13 @@ digiflazzWebhookRouter.post(
         kind: "SUCCESS",
         providerReference: data.ref_id,
         serialNumber: data.sn && data.sn.trim().length > 0 ? data.sn : null,
-        providerCost: typeof data.price === "number" && data.price > 0 ? data.price : null
+        // Pascabayar melaporkan selling_price (biaya kita setelah komisi).
+        providerCost:
+          typeof data.selling_price === "number" && data.selling_price > 0
+            ? data.selling_price
+            : typeof data.price === "number" && data.price > 0
+              ? data.price
+              : null
       };
     } else if (status === "gagal") {
       outcome = {

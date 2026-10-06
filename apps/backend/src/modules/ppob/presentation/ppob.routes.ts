@@ -14,6 +14,9 @@ import { DisabledPpobProvider } from "../infrastructure/DisabledPpobProvider.js"
 import { StubPpobProvider } from "../infrastructure/StubPpobProvider.js";
 import { normalizePpobTarget } from "../domain/targetValidation.js";
 import {
+  ppobBillInquirySchema,
+  ppobBillPaySchema,
+  ppobBillProductsQuerySchema,
   ppobHistoryQuerySchema,
   ppobProductsQuerySchema,
   ppobPurchaseSchema,
@@ -54,7 +57,9 @@ function getService(): PpobService {
   if (!cachedService || cachedService.provider !== current) {
     cachedService = {
       provider: current,
-      service: new PpobService(new PrismaPpobRepository(prisma), resolvePpobProvider())
+      service: new PpobService(new PrismaPpobRepository(prisma), resolvePpobProvider(), {
+        postpaidServiceFee: env.PPOB_POSTPAID_SERVICE_FEE
+      })
     };
   }
   return cachedService.service;
@@ -81,7 +86,8 @@ const PPOB_TARGET_LABELS: Record<string, string> = {
   EWALLET: "Nomor HP Dompet Digital",
   PLN_PREPAID: "Nomor Meter PLN",
   PLN_POSTPAID: "ID Pelanggan PLN",
-  BPJS: "Nomor VA BPJS"
+  BPJS: "Nomor VA BPJS",
+  PDAM: "ID Pelanggan PDAM"
 };
 
 const PPOB_CATEGORY_NAMES: Record<string, string> = {
@@ -90,6 +96,7 @@ const PPOB_CATEGORY_NAMES: Record<string, string> = {
   PLN_PREPAID: "Token PLN",
   PLN_POSTPAID: "Tagihan PLN",
   BPJS: "BPJS",
+  PDAM: "PDAM",
   EWALLET: "E-Wallet"
 };
 
@@ -215,6 +222,23 @@ function idempotencyKeyOf(headerValue: unknown): string | undefined {
   return trimmed;
 }
 
+/**
+ * Idempotency-Key wajib untuk pembayaran tagihan pascabayar (retry jaringan atau
+ * ketuk ganda tidak boleh mendebit dua kali). Hanya dipakai rute pascabayar di
+ * cabang rilis ini; rute prabayar lama tidak diubah.
+ */
+function requireIdempotencyKey(req: Request): string {
+  const key = idempotencyKeyOf(req.headers["idempotency-key"]);
+  if (!key) {
+    throw new AppError(
+      "Header Idempotency-Key wajib disertakan untuk pembayaran PPOB",
+      StatusCodes.BAD_REQUEST,
+      "PPOB_IDEMPOTENCY_REQUIRED"
+    );
+  }
+  return key;
+}
+
 export const ppobRouter = Router();
 
 ppobRouter.use(requireAuth);
@@ -253,6 +277,86 @@ ppobRouter.post(
       targetNumber: req.body.targetNumber
     });
     res.json({ success: true, data });
+  })
+);
+
+// ---- Pascabayar (BPJS, PDAM): daftar produk, cek tagihan, bayar ----
+ppobRouter.get(
+  "/bills/products",
+  validateRequest(ppobBillProductsQuerySchema),
+  asyncHandler(async (req, res) => {
+    const products = await getService().listPostpaidProducts({
+      category: req.query.category as "BPJS" | "PDAM",
+      limit: Number(req.query.limit),
+      ...(typeof req.query.q === "string" && req.query.q.length > 0 ? { query: req.query.q } : {})
+    });
+    res.json({
+      success: true,
+      data: {
+        items: products.map((product) => ({
+          sku: product.sku,
+          name: product.name,
+          brand: product.brand,
+          category: product.category,
+          targetLabel: PPOB_TARGET_LABELS[product.category] ?? "Nomor Pelanggan"
+        }))
+      }
+    });
+  })
+);
+
+ppobRouter.post(
+  "/bills/inquiry",
+  paymentRateLimiter,
+  validateRequest(ppobBillInquirySchema),
+  asyncHandler(async (req, res) => {
+    const userId = req.auth!.userId;
+    const { inquiry, product } = await getService().inquireBill({
+      userId,
+      sku: req.body.sku,
+      targetNumber: req.body.targetNumber
+    });
+    const wallet = await prisma.wallet.findUnique({
+      where: { userId },
+      select: { ppobBalance: true }
+    });
+    const ppobBalance = wallet?.ppobBalance ?? new Prisma.Decimal(0);
+    res.json({
+      success: true,
+      data: {
+        reference: inquiry.publicReference,
+        product: { sku: product.sku, name: product.name, brand: product.brand, category: product.category },
+        targetNumber: inquiry.targetNumber,
+        customerName: inquiry.customerName,
+        period: inquiry.period,
+        billAmount: money(inquiry.billAmount),
+        // Admin penyedia + biaya layanan TapGo, digabung untuk pelanggan.
+        feeAmount: money(inquiry.totalAmount.minus(inquiry.billAmount)),
+        totalAmount: money(inquiry.totalAmount),
+        detail: inquiry.detail,
+        expiresAt: inquiry.expiresAt,
+        wallet: { ppobBalance: money(ppobBalance) },
+        sufficient: ppobBalance.gte(inquiry.totalAmount)
+      }
+    });
+  })
+);
+
+ppobRouter.post(
+  "/bills/pay",
+  paymentRateLimiter,
+  validateRequest(ppobBillPaySchema),
+  asyncHandler(async (req, res) => {
+    const idempotencyKey = requireIdempotencyKey(req);
+    const { transaction, replayed } = await getService().payBill({
+      userId: req.auth!.userId,
+      inquiryReference: req.body.reference,
+      idempotencyKey
+    });
+    res.status(replayed ? 200 : 201).json({
+      success: true,
+      data: serializeOrder(transaction, replayed)
+    });
   })
 );
 

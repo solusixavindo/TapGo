@@ -230,6 +230,9 @@ const envSchema = z.object({
   /// Sinkronisasi harga jual PPOB dengan harga modal Digiflazz (keputusan
   /// Owner 20 Sep 2026). Interval minimum 30 menit: daftar harga Digiflazz
   /// dibatasi ketat (rate limit) dan tidak berubah tiap menit.
+  /// Biaya layanan TapGo per pembayaran pascabayar (BPJS, PDAM), rupiah
+  /// (keputusan Owner 6 Okt 2026: Rp1.000 di atas harga Digiflazz).
+  PPOB_POSTPAID_SERVICE_FEE: z.coerce.number().int().min(0).max(10000).default(1000),
   PPOB_PRICE_SYNC_ENABLED: strictEnvBoolean(false),
   PPOB_PRICE_SYNC_INTERVAL_MS: z.coerce.number().int().min(1_800_000).default(21_600_000),
   /// Pengiriman OTP lewat email SMTP (keputusan Owner G3, 24 Agustus 2026).

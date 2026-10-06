@@ -110,6 +110,7 @@ describe.skipIf(!runIntegration)("Stage R2.12 — sinkronisasi harga PPOB (Digif
     pascaAvailable = false;
     // Baris PpobTransaction lebih dulu (RESTRICT FK) — mungkin ada sisa dari
     // berkas test lain yang berbagi database yang sama.
+    await prisma.ppobBillInquiry.deleteMany();
     await prisma.ppobTransaction.deleteMany();
     await prisma.ppobProduct.deleteMany();
   });
@@ -122,6 +123,7 @@ describe.skipIf(!runIntegration)("Stage R2.12 — sinkronisasi harga PPOB (Digif
       DIGIFLAZZ_API_KEY: undefined,
       DIGIFLAZZ_BASE_URL: undefined
     });
+    await prisma.ppobBillInquiry.deleteMany();
     await prisma.ppobTransaction.deleteMany();
     await prisma.ppobProduct.deleteMany();
     await new Promise<void>((resolve, reject) => {

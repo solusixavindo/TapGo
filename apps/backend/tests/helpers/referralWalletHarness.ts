@@ -90,6 +90,7 @@ export async function cleanDatabase() {
   await prisma.user.deleteMany();
   // User dihapus dulu; PpobTransaction cascade-delete mengikuti user. Produk
   // dibersihkan setelah transaksinya hilang (relation RESTRICT pada produk).
+  await prisma.ppobBillInquiry.deleteMany();
   await prisma.ppobTransaction.deleteMany();
   await prisma.ppobProduct.deleteMany();
   await prisma.membershipBenefit.deleteMany();

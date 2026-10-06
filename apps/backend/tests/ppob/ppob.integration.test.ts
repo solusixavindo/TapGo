@@ -495,6 +495,7 @@ describe.skipIf(!runIntegration)("Stage R2.7 — PPOB foundation", () => {
 // --- Helpers -------------------------------------------------------------------
 
 async function cleanPpobTables() {
+  await prisma.ppobBillInquiry.deleteMany();
   await prisma.ppobTransaction.deleteMany();
   await prisma.ppobProduct.deleteMany();
   await prisma.walletTransaction.deleteMany();

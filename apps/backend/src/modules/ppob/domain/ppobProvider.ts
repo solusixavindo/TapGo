@@ -78,6 +78,77 @@ export interface PpobProviderGateway {
    * PpobPriceSyncService melewati provider yang tidak mendukungnya.
    */
   fetchPriceList?(): Promise<PpobPriceListEntry[]>;
+  /**
+   * Pascabayar (BPJS, PDAM): cek tagihan. Opsional: hanya provider yang
+   * mendukung pascabayar. Gagal = melempar [PpobBillInquiryError] dengan pesan
+   * yang aman ditampilkan ke pelanggan.
+   */
+  inquireBill?(request: PpobBillInquiryRequest): Promise<PpobBillInquiryResult>;
+  /**
+   * Pascabayar: bayar tagihan yang sudah di-inquiry (ref_id yang SAMA dengan
+   * inquiry). Hasil dipetakan seperti pembelian prabayar (SUCCESS/PROCESSING/FAILED);
+   * jawaban tak diketahui (timeout) dilempar dan diperlakukan PROCESSING oleh service.
+   */
+  payBill?(request: PpobBillPayRequest): Promise<PpobPurchaseOutcome>;
+  /**
+   * Katalog produk pascabayar (daftar harga `pasca`). Dipakai sinkronisasi
+   * katalog BPJS/PDAM; produk dibuat/diperbarui dari sini, bukan diketik manual.
+   */
+  fetchPostpaidCatalog?(): Promise<PpobPostpaidCatalogEntry[]>;
+}
+
+/** Kategori yang dibayar lewat alur pascabayar (cek tagihan lalu bayar). */
+export const POSTPAID_CATEGORIES: ReadonlySet<PpobCategory> = new Set<PpobCategory>([
+  "BPJS",
+  "PDAM",
+  "PLN_POSTPAID"
+]);
+
+export interface PpobBillInquiryRequest {
+  /// Dipakai sebagai ref_id; pembayaran memakai ref_id yang sama.
+  publicReference: string;
+  providerSku: string;
+  targetNumber: string;
+}
+
+export interface PpobBillInquiryResult {
+  customerName: string;
+  period: string | null;
+  /// Tagihan murni tanpa admin (rupiah).
+  billAmount: number;
+  /// Biaya admin provider (rupiah).
+  adminFee: number;
+  /// Yang ditagihkan provider ke TapGo (selling_price Digiflazz).
+  cost: number;
+  /// Rincian ringkas untuk tampilan; hanya nilai skalar string/angka.
+  detail: Record<string, string | number>;
+}
+
+export interface PpobBillPayRequest {
+  publicReference: string;
+  providerSku: string;
+  targetNumber: string;
+}
+
+export interface PpobPostpaidCatalogEntry {
+  providerSku: string;
+  name: string;
+  brand: string;
+  adminFee: number;
+  commission: number;
+  active: boolean;
+  description: string | null;
+}
+
+/// Cek tagihan ditolak/gagal; [userMessage] aman ditampilkan ke pelanggan.
+export class PpobBillInquiryError extends Error {
+  constructor(
+    readonly code: string,
+    readonly userMessage: string
+  ) {
+    super(`Bill inquiry failed: ${code}`);
+    this.name = "PpobBillInquiryError";
+  }
 }
 
 /// Provider dimatikan lewat konfigurasi (PPOB_PROVIDER=disabled).

@@ -318,18 +318,19 @@ model User {
   driverApplicationsReviewed RideDriverApplication[]     @relation("DriverApplicationReviewer")
 
   // Release 2 — domain Ride (additive, terpisah dari model Ride legacy).
-  rideDriverProfile      RideDriverProfile?
-  rideQuotes             RideQuote[]
-  ridePassengerOrders    RideOrder[]             @relation("RideOrderPassenger")
-  rideEventsActed        RideEvent[]             @relation("RideEventActor")
-  rideIdempotencyKeys    RideIdempotencyRecord[]
-  rideDriverApplications RideDriverApplication[]
-  driverFaceReference    DriverFaceReference?
-  driverFaceChecks       DriverFaceCheck[]       @relation("DriverFaceCheckUser")
-  driverFaceCheckOverrides DriverFaceCheck[]      @relation("DriverFaceCheckOverride")
+  rideDriverProfile        RideDriverProfile?
+  rideQuotes               RideQuote[]
+  ridePassengerOrders      RideOrder[]             @relation("RideOrderPassenger")
+  rideEventsActed          RideEvent[]             @relation("RideEventActor")
+  rideIdempotencyKeys      RideIdempotencyRecord[]
+  rideDriverApplications   RideDriverApplication[]
+  driverFaceReference      DriverFaceReference?
+  driverFaceChecks         DriverFaceCheck[]       @relation("DriverFaceCheckUser")
+  driverFaceCheckOverrides DriverFaceCheck[]       @relation("DriverFaceCheckOverride")
 
   // Release 2 — domain PPOB (Stage R2.7).
-  ppobTransactions PpobTransaction[]
+  ppobTransactions  PpobTransaction[]
+  ppobBillInquiries PpobBillInquiry[]
 
   // Release 2 — top up & transfer TapGoPay (Stage R2.10).
   walletTopUpOrders       WalletTopUpOrder[]
@@ -490,10 +491,10 @@ model Membership {
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
 
-  users                User[]
-  benefits             MembershipBenefit[]
-  userMemberships      UserMembership[]
-  orders               MembershipOrder[]
+  users           User[]
+  benefits        MembershipBenefit[]
+  userMemberships UserMembership[]
+  orders          MembershipOrder[]
 
   @@index([tier, isActive])
   @@map("memberships")
@@ -511,9 +512,9 @@ model UserMembership {
   createdAt    DateTime             @default(now()) @map("created_at")
   updatedAt    DateTime             @updatedAt @map("updated_at")
 
-  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  membership          Membership           @relation(fields: [membershipId], references: [id])
-  order               MembershipOrder?     @relation(fields: [orderId], references: [id])
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  membership Membership       @relation(fields: [membershipId], references: [id])
+  order      MembershipOrder? @relation(fields: [orderId], references: [id])
 
   @@index([userId, status])
   @@index([membershipId, status])
@@ -768,20 +769,20 @@ model ProfitSharingDistribution {
 }
 
 model Session {
-  id               String    @id @default(uuid()) @db.Uuid
-  userId           String    @map("user_id") @db.Uuid
-  refreshTokenHash String    @map("refresh_token_hash")
+  id                       String    @id @default(uuid()) @db.Uuid
+  userId                   String    @map("user_id") @db.Uuid
+  refreshTokenHash         String    @map("refresh_token_hash")
   /// Hash refresh token SEBELUM rotasi terakhir dan waktunya. Dipakai mengenali
   /// permintaan refresh ganda yang berbarengan (layar/proses ganda di HP yang
   /// sama) tanpa mencabut sesi; pemakaian ulang di luar jendela toleransi
   /// tetap dianggap pencurian dan mencabut sesi.
-  previousRefreshTokenHash String? @map("previous_refresh_token_hash")
-  rotatedAt        DateTime? @map("rotated_at")
-  userAgent        String?   @map("user_agent")
-  ipAddress        String?   @map("ip_address") @db.Inet
-  expiresAt        DateTime  @map("expires_at")
-  revokedAt        DateTime? @map("revoked_at")
-  createdAt        DateTime  @default(now()) @map("created_at")
+  previousRefreshTokenHash String?   @map("previous_refresh_token_hash")
+  rotatedAt                DateTime? @map("rotated_at")
+  userAgent                String?   @map("user_agent")
+  ipAddress                String?   @map("ip_address") @db.Inet
+  expiresAt                DateTime  @map("expires_at")
+  revokedAt                DateTime? @map("revoked_at")
+  createdAt                DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -804,27 +805,27 @@ model OtpChallenge {
 }
 
 model Driver {
-  id             String       @id @default(uuid()) @db.Uuid
-  userId         String       @unique @map("user_id") @db.Uuid
-  status         DriverStatus @default(OFFLINE)
-  kycStatus      KycStatus    @default(NOT_SUBMITTED) @map("kyc_status")
-  licenseNumber  String?      @unique @map("license_number") @db.VarChar(80)
-  vehicleType    String       @default("BIKE") @map("vehicle_type") @db.VarChar(40)
-  vehiclePlate   String?      @map("vehicle_plate") @db.VarChar(24)
+  id                    String       @id @default(uuid()) @db.Uuid
+  userId                String       @unique @map("user_id") @db.Uuid
+  status                DriverStatus @default(OFFLINE)
+  kycStatus             KycStatus    @default(NOT_SUBMITTED) @map("kyc_status")
+  licenseNumber         String?      @unique @map("license_number") @db.VarChar(80)
+  vehicleType           String       @default("BIKE") @map("vehicle_type") @db.VarChar(40)
+  vehiclePlate          String?      @map("vehicle_plate") @db.VarChar(24)
   // Data Diri (wizard pengajuan halaman 2) — diisi ulang tiap pengajuan,
   // sama seperti data kendaraan di atas, bukan riwayat per-siklus.
-  fullName              String?   @map("full_name") @db.VarChar(120)
-  dateOfBirth           DateTime? @map("date_of_birth") @db.Date
-  address               String?   @db.VarChar(255)
-  emergencyContactName  String?   @map("emergency_contact_name") @db.VarChar(120)
-  emergencyContactPhone String?   @map("emergency_contact_phone") @db.VarChar(20)
-  ratingAverage  Decimal      @default(5.0) @map("rating_average") @db.Decimal(3, 2)
-  ratingCount    Int          @default(0) @map("rating_count")
-  currentLat     Decimal?     @map("current_lat") @db.Decimal(10, 7)
-  currentLng     Decimal?     @map("current_lng") @db.Decimal(10, 7)
-  lastLocationAt DateTime?    @map("last_location_at")
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
+  fullName              String?      @map("full_name") @db.VarChar(120)
+  dateOfBirth           DateTime?    @map("date_of_birth") @db.Date
+  address               String?      @db.VarChar(255)
+  emergencyContactName  String?      @map("emergency_contact_name") @db.VarChar(120)
+  emergencyContactPhone String?      @map("emergency_contact_phone") @db.VarChar(20)
+  ratingAverage         Decimal      @default(5.0) @map("rating_average") @db.Decimal(3, 2)
+  ratingCount           Int          @default(0) @map("rating_count")
+  currentLat            Decimal?     @map("current_lat") @db.Decimal(10, 7)
+  currentLng            Decimal?     @map("current_lng") @db.Decimal(10, 7)
+  lastLocationAt        DateTime?    @map("last_location_at")
+  createdAt             DateTime     @default(now()) @map("created_at")
+  updatedAt             DateTime     @updatedAt @map("updated_at")
 
   user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   rides       Ride[]              @relation("RideDriver")
@@ -887,19 +888,19 @@ model DriverDocument {
 /// mudah dibalik menjadi gambar, dan inilah satu-satunya sumber pembanding
 /// yang tersedia untuk verifikasi harian setelah driver aktif berbulan-bulan.
 model DriverFaceReference {
-  id       String @id @default(uuid()) @db.Uuid
-  userId   String @unique @map("user_id") @db.Uuid
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
 
   /// Ciphertext AES-256-GCM dari vektor embedding (bukan foto). Pola identik
   /// DriverDocument, domain kunci terpisah ("driver-face").
-  embeddingCipherText Bytes  @map("embedding_cipher_text")
-  embeddingCipherIv   Bytes  @map("embedding_cipher_iv")
-  embeddingCipherTag  Bytes  @map("embedding_cipher_tag")
-  keyVersion          Int    @map("key_version")
+  embeddingCipherText Bytes    @map("embedding_cipher_text")
+  embeddingCipherIv   Bytes    @map("embedding_cipher_iv")
+  embeddingCipherTag  Bytes    @map("embedding_cipher_tag")
+  keyVersion          Int      @map("key_version")
   /// Nama+versi model yang menghasilkan vektor ini. Wajib dicocokkan dengan
   /// model yang dibundel di aplikasi driver saat pencocokan — embedding dari
   /// model berbeda tidak sebanding secara matematis.
-  modelVersion        String @map("model_version") @db.VarChar(40)
+  modelVersion        String   @map("model_version") @db.VarChar(40)
   computedAt          DateTime @default(now()) @map("computed_at")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -920,22 +921,22 @@ enum DriverFaceCheckStatus {
 /// verifikasi wajah harian HARUS otoritatif di server, bukan state lokal HP —
 /// install ulang aplikasi tidak boleh bisa membuka blokir.
 model DriverFaceCheck {
-  id        String                @id @default(uuid()) @db.Uuid
-  userId    String                @map("user_id") @db.Uuid
+  id                String                @id @default(uuid()) @db.Uuid
+  userId            String                @map("user_id") @db.Uuid
   /// Hari kalender WIB (Asia/Jakarta) yang diwakili baris ini — bukan UTC,
   /// supaya driver tidak diminta verifikasi ulang saat pagi WIB gara-gara
   /// hari UTC sudah berganti tengah malam sebelumnya.
-  checkDate DateTime              @db.Date @map("check_date")
-  status    DriverFaceCheckStatus @default(PENDING)
-  attemptCount    Int      @default(0) @map("attempt_count")
-  similarityScore Decimal? @map("similarity_score") @db.Decimal(5, 4)
-  modelVersion    String?  @map("model_version") @db.VarChar(40)
-  lastAttemptAt   DateTime? @map("last_attempt_at")
-  passedAt        DateTime? @map("passed_at")
-  blockedAt       DateTime? @map("blocked_at")
+  checkDate         DateTime              @map("check_date") @db.Date
+  status            DriverFaceCheckStatus @default(PENDING)
+  attemptCount      Int                   @default(0) @map("attempt_count")
+  similarityScore   Decimal?              @map("similarity_score") @db.Decimal(5, 4)
+  modelVersion      String?               @map("model_version") @db.VarChar(40)
+  lastAttemptAt     DateTime?             @map("last_attempt_at")
+  passedAt          DateTime?             @map("passed_at")
+  blockedAt         DateTime?             @map("blocked_at")
   /// Override admin membuka blokir tanpa memalsukan hasil PASSED asli.
-  adminOverrideById String?  @map("admin_override_by_id") @db.Uuid
-  adminOverrideAt   DateTime? @map("admin_override_at")
+  adminOverrideById String?               @map("admin_override_by_id") @db.Uuid
+  adminOverrideAt   DateTime?             @map("admin_override_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1613,16 +1614,16 @@ model RideDriverApplication {
   /// Optimistic lock untuk service Stage 5.14C.
   version     Int                         @default(0)
 
-  submittedAt        DateTime? @map("submitted_at")
-  approvedAt         DateTime? @map("approved_at")
-  rejectedAt         DateTime? @map("rejected_at")
-  withdrawnAt        DateTime? @map("withdrawn_at")
+  submittedAt           DateTime? @map("submitted_at")
+  approvedAt            DateTime? @map("approved_at")
+  rejectedAt            DateTime? @map("rejected_at")
+  withdrawnAt           DateTime? @map("withdrawn_at")
   /// Bukti persetujuan pernyataan (wizard halaman 5) pada saat pengajuan ini
   /// dikirim — ditegakkan wajib true di schema request, bukan opsional.
   declarationAcceptedAt DateTime? @map("declaration_accepted_at")
   /// Kode alasan keputusan yang dibatasi panjangnya — BUKAN teks bebas dan
   /// BUKAN pesan exception. Kosakata kode ditegakkan application service.
-  decisionReasonCode String?   @map("decision_reason_code") @db.VarChar(60)
+  decisionReasonCode    String?   @map("decision_reason_code") @db.VarChar(60)
 
   // --- Review claim/lease (Stage R2.2) --------------------------------
   /// Admin yang sedang memegang klaim review. Restrict, bukan Cascade:
@@ -1928,35 +1929,76 @@ enum PpobTransactionStatus {
 /// Katalog produk PPOB yang dijual ke member. Harga adalah harga jual final
 /// dalam rupiah; adminFee ditambahkan di atas harga saat checkout.
 model PpobProduct {
-  id           String            @id @default(uuid()) @db.Uuid
+  id            String            @id @default(uuid()) @db.Uuid
   /// Kode produk stabil yang dipakai klien, mis. PULSA_TSEL_10.
-  sku          String            @unique @db.VarChar(40)
-  category     PpobCategory
+  sku           String            @unique @db.VarChar(40)
+  category      PpobCategory
   /// Operator/penyedia layanan, mis. Telkomsel, PLN, BPJS Kesehatan.
-  brand        String            @db.VarChar(40)
-  name         String            @db.VarChar(120)
-  description  String?           @db.VarChar(240)
-  price        Decimal           @db.Decimal(14, 2)
-  adminFee     Decimal           @default(0) @map("admin_fee") @db.Decimal(14, 2)
+  brand         String            @db.VarChar(40)
+  name          String            @db.VarChar(120)
+  description   String?           @db.VarChar(240)
+  price         Decimal           @db.Decimal(14, 2)
+  adminFee      Decimal           @default(0) @map("admin_fee") @db.Decimal(14, 2)
   /// Kode produk di sisi provider (mis. buyer_sku_code Digiflazz). Nullable:
   /// bila kosong, adapter memakai sku internal apa adanya.
-  providerSku  String?           @map("provider_sku") @db.VarChar(60)
+  providerSku   String?           @map("provider_sku") @db.VarChar(60)
   /// Pulsa/data: kode produk provider per operator, mis. {"telkomsel":"s5","xl":"x5"}.
   /// Bila terisi, kode dipilih dari operator nomor tujuan; operator yang tidak
   /// ada di sini ditolak sebelum saldo didebit.
-  providerSkus Json?             @map("provider_skus")
-  isActive     Boolean           @default(true) @map("is_active")
-  sortOrder    Int               @default(0) @map("sort_order")
+  providerSkus  Json?             @map("provider_skus")
+  isActive      Boolean           @default(true) @map("is_active")
+  sortOrder     Int               @default(0) @map("sort_order")
   /// Kapan harga/rute operator produk ini terakhir disinkronkan dari Digiflazz
   /// (PpobPriceSyncService). Null = belum pernah, atau bukan produk yang
   /// dikelola sinkronisasi (tanpa providerSku/providerSkus).
-  priceSyncedAt DateTime?        @map("price_synced_at")
-  createdAt    DateTime          @default(now()) @map("created_at")
-  updatedAt    DateTime          @updatedAt @map("updated_at")
-  transactions PpobTransaction[]
+  priceSyncedAt DateTime?         @map("price_synced_at")
+  /// Produk pascabayar (BPJS, PDAM): tagihan berubah per pelanggan, jadi `price`
+  /// tidak bermakna (0) dan pembelian WAJIB lewat cek tagihan (PpobBillInquiry).
+  /// Tidak ikut sinkronisasi harga prabayar dan tidak tampil di katalog prabayar.
+  isPostpaid    Boolean           @default(false) @map("is_postpaid")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+  transactions  PpobTransaction[]
+  billInquiries PpobBillInquiry[]
 
   @@index([category, isActive, sortOrder])
   @@map("ppob_products")
+}
+
+/// Hasil cek tagihan pascabayar (inq-pasca). Menyimpan angka dari SERVER sehingga
+/// nominal bayar tidak pernah datang dari klien. `publicReference` dipakai
+/// sebagai ref_id Digiflazz dan menjadi referensi transaksi saat dibayar
+/// (pay-pasca memakai ref_id yang sama dengan inquiry). Sekali pakai, kedaluwarsa
+/// sebelum tengah malam WIB (Digiflazz hanya menerima bayar di hari yang sama).
+model PpobBillInquiry {
+  id              String    @id @default(uuid()) @db.Uuid
+  publicReference String    @unique @map("public_reference") @db.VarChar(24)
+  userId          String    @map("user_id") @db.Uuid
+  productId       String    @map("product_id") @db.Uuid
+  targetNumber    String    @map("target_number") @db.VarChar(40)
+  customerName    String    @map("customer_name") @db.VarChar(120)
+  period          String?   @db.VarChar(40)
+  /// Tagihan murni (tanpa admin) menurut provider, untuk ditampilkan.
+  billAmount      Decimal   @map("bill_amount") @db.Decimal(14, 2)
+  /// Biaya admin provider.
+  providerAdmin   Decimal   @map("provider_admin") @db.Decimal(14, 2)
+  /// Yang ditagihkan Digiflazz ke TapGo (selling_price) = HPP.
+  providerCost    Decimal   @map("provider_cost") @db.Decimal(14, 2)
+  /// Biaya layanan TapGo (margin tetap).
+  serviceFee      Decimal   @map("service_fee") @db.Decimal(14, 2)
+  /// Total yang didebit dari saldo PPOB pelanggan.
+  totalAmount     Decimal   @map("total_amount") @db.Decimal(14, 2)
+  /// Rincian dari provider (periode, meter, jumlah peserta) untuk tampilan.
+  detail          Json?
+  expiresAt       DateTime  @map("expires_at")
+  usedAt          DateTime? @map("used_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product PpobProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+  @@map("ppob_bill_inquiries")
 }
 
 model PpobTransaction {

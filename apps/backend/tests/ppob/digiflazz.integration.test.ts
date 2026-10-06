@@ -595,6 +595,7 @@ describe.skipIf(!runIntegration)("Stage R2.8 — Digiflazz real provider integra
 // --- Helpers -------------------------------------------------------------------
 
 async function cleanPpobTables() {
+  await prisma.ppobBillInquiry.deleteMany();
   await prisma.ppobTransaction.deleteMany();
   await prisma.ppobProduct.deleteMany();
   await prisma.walletTransaction.deleteMany();
