@@ -10,6 +10,7 @@
  * alur upgrade dan top up. Data uang tidak pernah disimpan di sini.
  */
 import { API_BASE } from "../upgrade/api";
+import { ACCEPTED_IMAGE_TYPES, RAW_IMAGE_LIMIT_BYTES, prepareImageForUpload } from "../upgrade/image-prep";
 
 export { API_BASE };
 
@@ -515,21 +516,34 @@ export function getOwnAvatar(): Promise<string | null> {
   return request;
 }
 
-export const AVATAR_MAX_BYTES = 4 * 1024 * 1024;
+/** Batas berkas ASLI yang dipilih; foto diperkecil otomatis sebelum dikirim (server menerima 1 MB). */
+export const AVATAR_MAX_BYTES = RAW_IMAGE_LIMIT_BYTES;
 
 export async function uploadOwnAvatar(file: File): Promise<void> {
-  if (file.type !== "image/jpeg" && file.type !== "image/png") {
+  if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
     throw new Error("Foto harus berformat JPG atau PNG.");
   }
   if (file.size > AVATAR_MAX_BYTES) {
-    throw new Error("Ukuran foto maksimal 4 MB.");
+    throw new Error("Ukuran foto terlalu besar (maksimal 25 MB). Pilih foto lain.");
   }
   if (MITRA_PREVIEW) return;
-  const response = await authedFetch("/account/avatar", {
-    method: "POST",
-    headers: { "content-type": file.type },
-    body: file
-  });
+  // Server membatasi badan permintaan 1 MB; foto kamera ponsel 2-8 MB, jadi
+  // diperkecil dulu (lihat upgrade/image-prep.ts).
+  const ready = await prepareImageForUpload(file);
+  let response: Response;
+  try {
+    response = await authedFetch("/account/avatar", {
+      method: "POST",
+      headers: { "content-type": ready.type },
+      body: ready
+    });
+  } catch (caught) {
+    if (caught instanceof ApiError) throw caught;
+    throw new ApiError("Foto belum terkirim. Periksa koneksi internet Anda lalu coba lagi.", 0, "NETWORK");
+  }
+  if (response.status === 413) {
+    throw new Error("Ukuran foto terlalu besar untuk diunggah. Coba pilih foto yang lebih kecil.");
+  }
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { message?: string };
     throw new Error(payload.message ?? "Foto belum dapat diunggah.");

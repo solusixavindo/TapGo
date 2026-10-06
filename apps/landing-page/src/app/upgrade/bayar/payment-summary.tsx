@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
+  AVATAR_FAILED_KEY,
   ORDER_KEY,
   PREVIEW_MODE,
   PREVIEW_PACKAGES,
@@ -10,6 +11,7 @@ import {
   UpgradeOrder,
   getOrder,
   payOrder,
+  clearSession,
   readSession
 } from "../api";
 import { formatRupiah, primaryButtonClass, secondaryButtonClass } from "../upgrade-shell";
@@ -33,6 +35,14 @@ export default function PaymentSummary() {
   const [loading, setLoading] = useState(!PREVIEW_MODE);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [avatarFailed, setAvatarFailed] = useState(false);
+
+  useEffect(() => {
+    if (readSession(AVATAR_FAILED_KEY)) {
+      setAvatarFailed(true);
+      clearSession(AVATAR_FAILED_KEY);
+    }
+  }, []);
 
   useEffect(() => {
     if (PREVIEW_MODE) return;
@@ -156,6 +166,12 @@ export default function PaymentSummary() {
           penuh sesuai kebijakan pengembalian dana.
         </p>
       </div>
+
+      {avatarFailed ? (
+        <p role="status" className="mt-5 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-xs leading-6 themed-accent">
+          Foto profil belum terunggah. Pengajuan Anda tidak terpengaruh; foto dapat diganti kapan saja dari halaman Akun.
+        </p>
+      ) : null}
 
       {error ? (
         <p role="alert" className="mt-5 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-300">

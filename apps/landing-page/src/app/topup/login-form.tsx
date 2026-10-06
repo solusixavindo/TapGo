@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
-import { PREVIEW_MODE, TOKEN_KEY, login, writeSession } from "./api";
+import { FormEvent, useEffect, useState } from "react";
+import { NOTICE_KEY, PREVIEW_MODE, TOKEN_KEY, clearSession, login, readSession, writeSession } from "./api";
 import { Field, inputClass, primaryButtonClass } from "../upgrade/upgrade-shell";
 
 export default function LoginForm() {
@@ -13,6 +13,16 @@ export default function LoginForm() {
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  // Pesan dari sesi yang baru berakhir (lihat endSession di api.ts); sekali tampil.
+  useEffect(() => {
+    const saved = readSession(NOTICE_KEY);
+    if (saved) {
+      setNotice(saved);
+      clearSession(NOTICE_KEY);
+    }
+  }, []);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,6 +44,11 @@ export default function LoginForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-5" noValidate>
+      {notice ? (
+        <p role="status" className="rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm font-semibold themed-accent">
+          {notice}
+        </p>
+      ) : null}
       <Field label="Nomor HP" hint="Nomor yang terdaftar di aplikasi TapGo.">
         <input
           className={inputClass}

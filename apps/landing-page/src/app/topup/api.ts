@@ -5,10 +5,10 @@
  * (../upgrade/api.ts) — satu akun TapGo, satu token WEB, dua fitur di situs
  * yang sama. Hanya fungsi yang khas top up yang ditambahkan di sini.
  */
-import { API_BASE, PREVIEW_MODE, login, readSession, writeSession, clearSession } from "../upgrade/api";
+import { API_BASE, PREVIEW_MODE, login, readSession, request, writeSession, clearSession } from "../upgrade/api";
 
 export { API_BASE, PREVIEW_MODE, login, readSession, writeSession, clearSession };
-export { TOKEN_KEY } from "../upgrade/api";
+export { NOTICE_KEY, TOKEN_KEY } from "../upgrade/api";
 
 export const TOPUP_ORDER_KEY = "tapgo.topup.orderId";
 
@@ -47,26 +47,6 @@ function toOrder(raw: RawTopUpOrder): TopUpOrder {
     status: raw.status,
     createdAt: raw.createdAt
   };
-}
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      "content-type": "application/json",
-      ...(init?.headers ?? {})
-    },
-    credentials: "omit"
-  });
-  const payload = (await response.json().catch(() => ({}))) as {
-    success?: boolean;
-    data?: T;
-    message?: string;
-  };
-  if (!response.ok || payload.success === false) {
-    throw new Error(payload.message ?? "Permintaan belum dapat diproses.");
-  }
-  return payload.data as T;
 }
 
 export async function createTopUpOrder(token: string, amount: number): Promise<TopUpOrder> {

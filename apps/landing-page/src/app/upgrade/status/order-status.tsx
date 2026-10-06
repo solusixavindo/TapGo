@@ -14,6 +14,7 @@ import {
   uploadDocument
 } from "../api";
 import { formatRupiah, primaryButtonClass, secondaryButtonClass } from "../upgrade-shell";
+import { prepareImageForUpload } from "../image-prep";
 
 type Tone = "wait" | "review" | "done" | "refund";
 
@@ -90,12 +91,13 @@ const PREVIEW_ORDER: UpgradeOrder = {
 function CorrectionPanel({ order, onDone }: { order: UpgradeOrder; onDone: () => void }) {
   const [ktp, setKtp] = useState<File | null>(null);
   const [selfie, setSelfie] = useState<File | null>(null);
+  const [preparing, setPreparing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
 
   async function submit() {
-    if (busy || (!ktp && !selfie)) return;
+    if (busy || preparing || (!ktp && !selfie)) return;
     setBusy(true);
     setError("");
     try {
@@ -111,8 +113,26 @@ function CorrectionPanel({ order, onDone }: { order: UpgradeOrder; onDone: () =>
     }
   }
 
-  const pick = (setter: (file: File | null) => void) => (event: React.ChangeEvent<HTMLInputElement>) =>
-    setter(event.target.files?.[0] ?? null);
+  // Foto divalidasi dan diperkecil saat dipilih (server hanya menerima badan
+  // permintaan 1 MB); sebelumnya panel ini tidak memeriksa jenis maupun ukuran.
+  const pick = (setter: (file: File | null) => void) => async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const chosen = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    setError("");
+    if (!chosen) {
+      setter(null);
+      return;
+    }
+    setPreparing(true);
+    try {
+      setter(await prepareImageForUpload(chosen));
+    } catch (caught) {
+      setter(null);
+      setError(caught instanceof Error ? caught.message : "Foto belum dapat diproses.");
+    } finally {
+      setPreparing(false);
+    }
+  };
 
   return (
     <div className="mt-5 rounded-2xl border border-amber-400/40 bg-amber-400/10 p-4" data-testid="correction-panel">
@@ -121,7 +141,7 @@ function CorrectionPanel({ order, onDone }: { order: UpgradeOrder; onDone: () =>
         <p className="mt-2 text-sm leading-7 themed-text">Catatan tim TapGo: “{order.correction.reason}”</p>
       ) : null}
       <p className="mt-2 text-xs leading-6 themed-text-muted">
-        Unggah ulang dokumen yang perlu diganti (JPG atau PNG, maksimal 5 MB). Pembayaran Anda tetap aman dan tidak perlu diulang.
+        Unggah ulang dokumen yang perlu diganti (JPG atau PNG; foto diperkecil otomatis). Pembayaran Anda tetap aman dan tidak perlu diulang.
       </p>
       {done ? (
         <p role="status" className="mt-3 text-sm font-bold text-brand-green">
@@ -142,8 +162,8 @@ function CorrectionPanel({ order, onDone }: { order: UpgradeOrder; onDone: () =>
               {error}
             </p>
           ) : null}
-          <button type="button" onClick={() => void submit()} disabled={busy || (!ktp && !selfie)} className={`${primaryButtonClass} mt-4`}>
-            {busy ? "Mengunggah…" : "Kirim dokumen perbaikan"}
+          <button type="button" onClick={() => void submit()} disabled={busy || preparing || (!ktp && !selfie)} className={`${primaryButtonClass} mt-4`}>
+            {busy ? "Mengunggah…" : preparing ? "Memproses foto…" : "Kirim dokumen perbaikan"}
           </button>
         </>
       )}

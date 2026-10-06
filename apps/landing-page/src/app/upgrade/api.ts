@@ -8,6 +8,8 @@
  * menerjemahkannya menjadi bentuk tampilan, supaya komponen tidak perlu tahu
  * nama kolom maupun cara Prisma membuat serial angka Decimal.
  */
+import { prepareImageForUpload } from "./image-prep";
+
 export const API_BASE =
   process.env.NEXT_PUBLIC_TAPGO_API_BASE_URL ?? "https://api.tapgolion.id/api/v1";
 
@@ -22,6 +24,12 @@ export const PREVIEW_MODE =
   process.env.NEXT_PUBLIC_TAPGO_UPGRADE_PREVIEW === "true";
 
 export const TOKEN_KEY = "tapgo.upgrade.token";
+/** Token akses hanya hidup 15 menit; refresh token menyambungnya tanpa meminta masuk ulang. */
+export const REFRESH_KEY = "tapgo.upgrade.refreshToken";
+/** Pesan singkat untuk halaman masuk setelah sesi benar-benar habis. */
+export const NOTICE_KEY = "tapgo.upgrade.notice";
+/** Foto profil gagal terunggah saat pengajuan (ditampilkan di halaman pembayaran). */
+export const AVATAR_FAILED_KEY = "tapgo.upgrade.avatarFailed";
 export const PACKAGE_KEY = "tapgo.upgrade.packageId";
 export const ORDER_KEY = "tapgo.upgrade.orderId";
 
@@ -178,8 +186,114 @@ const FRIENDLY_MESSAGES: Record<string, string> = {
   RATE_LIMITED: "Terlalu banyak percobaan. Coba lagi beberapa saat lagi."
 };
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+const NETWORK_MESSAGE =
+  "Tidak dapat terhubung ke server. Periksa koneksi internet Anda lalu coba lagi.";
+const SESSION_EXPIRED_MESSAGE = "Sesi Anda berakhir. Silakan masuk kembali.";
+
+/**
+ * fetch dengan galat jaringan yang ramah. Peramban melaporkan SEMUA kegagalan
+ * tingkat jaringan (putus, DNS, ditolak CORS, 413 dari nginx tanpa header CORS)
+ * sebagai TypeError "Failed to fetch"; teks itu tidak boleh sampai ke pengguna.
+ */
+async function send(url: string, init: RequestInit, networkMessage = NETWORK_MESSAGE): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch {
+    throw new UpgradeApiError(networkMessage, "NETWORK", 0);
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+let refreshInFlight: Promise<string> | null = null;
+
+/** Sesi habis total: bersihkan, titipkan pesan untuk halaman masuk, lalu kembali ke sana. */
+function endSession(): never {
+  clearSession(TOKEN_KEY, REFRESH_KEY);
+  if (typeof window !== "undefined") {
+    writeSession(NOTICE_KEY, SESSION_EXPIRED_MESSAGE);
+    const home = window.location.pathname.startsWith("/topup") ? "/topup/" : "/upgrade/";
+    window.setTimeout(() => window.location.replace(home), 1200);
+  }
+  throw new UpgradeApiError(SESSION_EXPIRED_MESSAGE, "SESSION_EXPIRED", 401);
+}
+
+/**
+ * Menukar refresh token dengan token akses baru. Refresh token sekali pakai:
+ * (1) bila penyimpanan sudah berisi token yang lebih baru (permintaan lain
+ * sudah menyegarkan), pakai itu tanpa jaringan; (2) satu penyegaran dipakai
+ * bersama permintaan serentak; (3) jawaban 409 berarti permintaan lain baru
+ * saja merotasi, pakai hasil yang tersimpan. Bila tidak ada jalan lagi: sesi habis.
+ */
+async function refreshAccessToken(failedToken: string): Promise<string> {
+  const latest = readSession(TOKEN_KEY);
+  if (latest && latest !== failedToken) return latest;
+  const refreshToken = readSession(REFRESH_KEY);
+  if (!refreshToken) return endSession();
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      try {
+        const response = await send(`${API_BASE}/web/auth/refresh`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ refreshToken }),
+          credentials: "omit"
+        });
+        if (response.status === 409) {
+          await sleep(300);
+          const after = readSession(TOKEN_KEY);
+          if (after && after !== failedToken) return after;
+        }
+        const payload = (await response.json().catch(() => ({}))) as {
+          data?: { accessToken?: string; refreshToken?: string };
+        };
+        const next = payload.data;
+        if (!response.ok || !next?.accessToken || !next.refreshToken) return endSession();
+        writeSession(TOKEN_KEY, next.accessToken);
+        writeSession(REFRESH_KEY, next.refreshToken);
+        return next.accessToken;
+      } finally {
+        refreshInFlight = null;
+      }
+    })();
+  }
+  return refreshInFlight;
+}
+
+/**
+ * Permintaan berotentikasi: memakai token tersimpan terkini (halaman membaca
+ * token sekali saat dimuat dan bisa basi), dan bila server menjawab 401 menukar
+ * refresh token lalu mengulang SEKALI.
+ */
+async function sendAuthed(
+  url: string,
+  init: RequestInit,
+  networkMessage?: string,
+  requireAuth = false
+): Promise<Response> {
+  const headers = new Headers(init.headers);
+  const passed = (headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  // Hanya permintaan yang MEMBAWA token (atau yang ditandai requireAuth, mis.
+  // unggahan yang memakai token tersimpan) diperlakukan berotentikasi. Masuk
+  // (login) tanpa token tidak boleh memicu penyegaran: 401-nya berarti password
+  // salah, bukan sesi habis.
+  if (!passed && !requireAuth) return send(url, init, networkMessage);
+  const token = readSession(TOKEN_KEY) || passed;
+  if (!token) return endSession();
+
+  headers.set("authorization", `Bearer ${token}`);
+  const first = await send(url, { ...init, headers }, networkMessage);
+  if (first.status !== 401) return first;
+
+  const renewed = await refreshAccessToken(token);
+  headers.set("authorization", `Bearer ${renewed}`);
+  return send(url, { ...init, headers }, networkMessage);
+}
+
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await sendAuthed(`${API_BASE}${path}`, {
     ...init,
     headers: {
       "content-type": "application/json",
@@ -211,10 +325,14 @@ export async function login(phone: string, password: string) {
   // Login lewat kanal WEB (R2.9/K1c): token yang diterbitkan distempel
   // channel="WEB" oleh server, sehingga sah untuk rute /web/membership dan
   // tidak dapat dipakai menembak fitur app (ojek/PPOB).
-  const result = await request<{ accessToken: string }>("/web/auth/login", {
+  const result = await request<{ accessToken: string; refreshToken?: string }>("/web/auth/login", {
     method: "POST",
     body: JSON.stringify({ phone, password })
   });
+  // Refresh token ikut disimpan supaya sesi tidak mati di tengah mengisi
+  // formulir atau menunggu pembayaran (token akses hanya 15 menit).
+  writeSession(TOKEN_KEY, result.accessToken);
+  if (result.refreshToken) writeSession(REFRESH_KEY, result.refreshToken);
   return result;
 }
 
@@ -240,12 +358,6 @@ export async function createOrder(
   return toOrder(result);
 }
 
-/**
- * Mengunggah satu dokumen identitas.
- *
- * Berkasnya dikirim mentah, bukan base64 di dalam JSON: base64 membengkakkan
- * muatan sekitar sepertiga tanpa memberi keuntungan apa pun di sini.
- */
 /** Daftar pengajuan milik akun yang sedang masuk, terbaru dulu. */
 export async function listMyOrders(token: string): Promise<UpgradeOrder[]> {
   const result = await request<RawOrder[] | { items?: RawOrder[] }>(
@@ -263,29 +375,60 @@ export function pickPendingOrder(orders: UpgradeOrder[]): UpgradeOrder | null {
   return orders.find((order) => order.status === "PENDING") ?? null;
 }
 
+const UPLOAD_NETWORK_MESSAGE =
+  "Foto belum terkirim. Periksa koneksi internet Anda lalu coba lagi.";
+const UPLOAD_TOO_LARGE_MESSAGE =
+  "Ukuran foto terlalu besar untuk diunggah. Coba pilih foto yang lebih kecil.";
+
+async function postImage(
+  path: string,
+  file: File,
+  fallbackMessage: string
+): Promise<void> {
+  // Pengaman terakhir: foto selalu diperkecil sebelum dikirim, apa pun jalur
+  // yang memanggil (server membatasi badan permintaan 1 MB).
+  let ready: File;
+  try {
+    ready = await prepareImageForUpload(file);
+  } catch (caught) {
+    throw new UpgradeApiError(
+      caught instanceof Error ? caught.message : fallbackMessage,
+      "IMAGE_INVALID",
+      0
+    );
+  }
+  const response = await sendAuthed(
+    `${API_BASE}${path}`,
+    {
+      method: "POST",
+      headers: { "content-type": ready.type },
+      body: ready,
+      credentials: "omit"
+    },
+    UPLOAD_NETWORK_MESSAGE,
+    true
+  );
+  if (!response.ok) {
+    if (response.status === 413) {
+      throw new UpgradeApiError(UPLOAD_TOO_LARGE_MESSAGE, "PAYLOAD_TOO_LARGE", 413);
+    }
+    const payload = (await response.json().catch(() => ({}))) as { message?: string; code?: string };
+    throw new UpgradeApiError(payload.message ?? fallbackMessage, payload.code ?? "", response.status);
+  }
+}
+
 export async function uploadDocument(
   token: string,
   orderId: string,
   type: "ktp" | "selfie",
   file: File
 ) {
-  const response = await fetch(
-    `${API_BASE}/web/membership/orders/${orderId}/documents/${type}`,
-    {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${token}`,
-        "content-type": file.type
-      },
-      body: file,
-      credentials: "omit"
-    }
+  void token; // token tersimpan dibaca terkini oleh sendAuthed
+  await postImage(
+    `/web/membership/orders/${encodeURIComponent(orderId)}/documents/${type}`,
+    file,
+    "Dokumen belum dapat diunggah."
   );
-
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => ({}))) as { message?: string };
-    throw new Error(payload.message ?? "Dokumen belum dapat diunggah.");
-  }
 }
 
 /**
@@ -294,16 +437,8 @@ export async function uploadDocument(
  * dari dokumen verifikasi: foto KTP/swafoto tidak pernah dijadikan foto profil.
  */
 export async function uploadAvatar(token: string, file: File) {
-  const response = await fetch(`${API_BASE}/account/avatar`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${token}`, "content-type": file.type },
-    body: file,
-    credentials: "omit"
-  });
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => ({}))) as { message?: string };
-    throw new Error(payload.message ?? "Foto profil belum dapat diunggah.");
-  }
+  void token;
+  await postImage("/account/avatar", file, "Foto profil belum dapat diunggah.");
 }
 
 export async function payOrder(token: string, orderId: string): Promise<PaymentHandoff> {

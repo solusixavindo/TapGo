@@ -35,7 +35,6 @@ export default function ProfileAvatar({
 
   if (src && !failed) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={src}
         alt={`Foto profil ${name}`}

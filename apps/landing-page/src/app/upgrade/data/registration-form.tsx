@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import {
+  AVATAR_FAILED_KEY,
   ORDER_KEY,
   PACKAGE_KEY,
   PREVIEW_MODE,
@@ -17,6 +18,7 @@ import {
   writeSession
 } from "../api";
 import { Field, inputClass, primaryButtonClass } from "../upgrade-shell";
+import { ACCEPTED_IMAGE_TYPES, RAW_IMAGE_LIMIT_BYTES, prepareImageForUpload } from "../image-prep";
 
 type DocumentSlot = "ktp" | "selfie" | "avatar";
 
@@ -37,9 +39,6 @@ const DOCUMENT_LABELS: Record<DocumentSlot, { title: string; hint: string }> = {
   }
 };
 
-const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
-const MAX_AVATAR_BYTES = 4 * 1024 * 1024;
-const ALLOWED_TYPES = ["image/png", "image/jpeg"];
 
 function DocumentUpload({
   slot,
@@ -48,7 +47,7 @@ function DocumentUpload({
 }: {
   slot: DocumentSlot;
   document: PickedDocument | null;
-  onPick: (slot: DocumentSlot, file: File | null) => void;
+  onPick: (slot: DocumentSlot, file: File | null) => void | Promise<void>;
 }) {
   const meta = DOCUMENT_LABELS[slot];
   const filled = document !== null;
@@ -88,7 +87,11 @@ function DocumentUpload({
         type="file"
         accept="image/png,image/jpeg"
         className="sr-only"
-        onChange={(event) => onPick(slot, event.target.files?.[0] ?? null)}
+        onChange={(event) => {
+          onPick(slot, event.target.files?.[0] ?? null);
+          // Memungkinkan memilih berkas yang sama lagi setelah gagal.
+          event.target.value = "";
+        }}
       />
     </label>
   );
@@ -117,6 +120,9 @@ export default function RegistrationForm() {
   });
   const [consent, setConsent] = useState(PREVIEW_MODE);
   const [busy, setBusy] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  // Beberapa foto bisa diproses bersamaan: tombol baru aktif setelah SEMUANYA selesai.
+  const preparingCount = useRef(0);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -137,35 +143,43 @@ export default function RegistrationForm() {
     documents.selfie !== null &&
     consent;
 
-  function onPick(slot: DocumentSlot, file: File | null) {
+  async function onPick(slot: DocumentSlot, file: File | null) {
     if (!file) {
       setDocuments((current) => ({ ...current, [slot]: null }));
       return;
     }
     // Divalidasi di sini supaya pengguna tahu berkasnya bermasalah sebelum
     // membayar, bukan setelah.
-    if (!ALLOWED_TYPES.includes(file.type)) {
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
       setError("Dokumen harus berformat JPG atau PNG.");
       return;
     }
-    if (slot === "avatar" && file.size > MAX_AVATAR_BYTES) {
-      setError("Ukuran foto profil maksimal 4 MB.");
+    if (file.size > RAW_IMAGE_LIMIT_BYTES) {
+      setError("Ukuran foto terlalu besar (maksimal 25 MB). Pilih foto lain.");
       return;
     }
-    if (file.size > MAX_DOCUMENT_BYTES) {
-      setError("Ukuran dokumen maksimal 5 MB.");
-      return;
-    }
+    // Foto kamera ponsel biasanya 2-8 MB, sedangkan server hanya menerima badan
+    // permintaan 1 MB: foto diperkecil di sini (tetap terbaca) sebelum dikirim.
     setError("");
-    setDocuments((current) => ({
-      ...current,
-      [slot]: { name: file.name, size: file.size, type: file.type, file }
-    }));
+    preparingCount.current += 1;
+    setPreparing(true);
+    try {
+      const ready = await prepareImageForUpload(file);
+      setDocuments((current) => ({
+        ...current,
+        [slot]: { name: ready.name, size: ready.size, type: ready.type, file: ready }
+      }));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Foto belum dapat diproses.");
+    } finally {
+      preparingCount.current -= 1;
+      setPreparing(preparingCount.current > 0);
+    }
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || preparing) return;
     if (!complete) {
       setError("Lengkapi seluruh data dan kedua dokumen terlebih dahulu.");
       return;
@@ -221,12 +235,18 @@ export default function RegistrationForm() {
         try {
           await uploadAvatar(token, avatarFile);
         } catch {
-          // sengaja diabaikan (lihat catatan di atas)
+          // Tidak menggagalkan pengajuan, tetapi pengguna diberi tahu di halaman
+          // pembayaran (sebelumnya kegagalan ini senyap sepenuhnya).
+          writeSession(AVATAR_FAILED_KEY, "1");
         }
       }
 
       router.push("/upgrade/bayar");
     } catch (caught) {
+      if (caught instanceof UpgradeApiError && caught.code === "SESSION_EXPIRED") {
+        setError(caught.message);
+        return;
+      }
       setError(
         caught instanceof Error ? caught.message : "Pengajuan belum dapat dibuat."
       );
@@ -297,8 +317,8 @@ export default function RegistrationForm() {
         </p>
       ) : null}
 
-      <button type="submit" className={primaryButtonClass} disabled={!complete || busy}>
-        {busy ? "Menyimpan pengajuan…" : "Lanjut ke Pembayaran"}
+      <button type="submit" className={primaryButtonClass} disabled={!complete || busy || preparing}>
+        {busy ? "Menyimpan pengajuan…" : preparing ? "Memproses foto…" : "Lanjut ke Pembayaran"}
       </button>
     </form>
   );
