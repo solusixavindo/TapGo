@@ -64,7 +64,10 @@ function shape(value, depth = 0) {
 const list = await post("/price-list", { cmd: "pasca", username, sign: md5(`${username}${apiKey}pricelist`) });
 const rows = Array.isArray(list.json?.data) ? list.json.data : null;
 if (!rows) {
-  console.log(`Daftar harga pascabayar ditolak (HTTP ${list.status}): rc=${list.json?.data?.rc ?? "?"} pesan=${list.json?.data?.message ?? "?"}`);
+  console.log(`Daftar harga pascabayar ditolak (HTTP ${list.status}). Bentuk respons:`);
+  console.log(JSON.stringify(shape(list.json)));
+  const info = list.json?.data && !Array.isArray(list.json.data) ? list.json.data : list.json;
+  console.log(`rc=${info?.rc ?? "?"} pesan=${info?.message ?? "?"}`);
 } else {
   const byBrand = {};
   for (const row of rows) byBrand[row.brand ?? "(tanpa brand)"] = (byBrand[row.brand ?? "(tanpa brand)"] ?? 0) + 1;
@@ -77,19 +80,27 @@ if (!rows) {
   console.log("Kunci satu baris:", Object.keys(rows[0] ?? {}));
 }
 
-// 2) Bentuk respons cek tagihan mode uji (nomor uji resmi Digiflazz)
-const refId = `probe${Date.now()}`;
-const inquiry = await post("/transaction", {
-  commands: "inq-pasca",
-  username,
-  buyer_sku_code: "pln",
-  customer_no: "530000000001",
-  ref_id: refId,
-  testing: true,
-  sign: md5(`${username}${apiKey}${refId}`)
-});
-console.log(`Cek tagihan mode uji: HTTP ${inquiry.status}`);
-console.log("Bentuk respons (kunci dan tipe):");
-console.log(JSON.stringify(shape(inquiry.json), null, 2));
-const d = inquiry.json?.data;
-if (d) console.log(`status=${d.status} rc=${d.rc} message=${d.message}`);
+// 2) Cek tagihan. Dua percobaan untuk membedakan penyebab "Signature salah":
+//    (a) mode uji (testing=true) — Digiflazz biasanya meminta kunci DEVELOPMENT;
+//    (b) tanpa testing dengan kunci yang sama (kunci PRODUKSI). Hanya cek tagihan
+//        dengan nomor uji: tidak ada pembayaran dan tidak ada saldo bergerak.
+async function tryInquiry(label, testing) {
+  const refId = `probe${Date.now()}${testing ? "t" : "p"}`;
+  const result = await post("/transaction", {
+    commands: "inq-pasca",
+    username,
+    buyer_sku_code: "pln",
+    customer_no: "530000000001",
+    ref_id: refId,
+    ...(testing ? { testing: true } : {}),
+    sign: md5(`${username}${apiKey}${refId}`)
+  });
+  const d = result.json?.data;
+  console.log(`\n[${label}] HTTP ${result.status} status=${d?.status} rc=${d?.rc} message=${d?.message}`);
+  if (d && d.status === "Sukses") {
+    console.log("Bentuk respons sukses (kunci dan tipe):");
+    console.log(JSON.stringify(shape(result.json), null, 2));
+  }
+}
+await tryInquiry("mode uji, testing=true", true);
+await tryInquiry("tanpa testing (kunci produksi)", false);
