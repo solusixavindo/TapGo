@@ -217,21 +217,14 @@ export class DigiflazzPpobProvider implements PpobProviderGateway {
   }
 
   /**
-   * Daftar harga modal Digiflazz terkini (Stage R2.12 — sinkronisasi harga
-   * PPOB). Menggabungkan prepaid dan pascabayar; pascabayar yang belum
-   * diaktifkan Digiflazz untuk akun ini (akun belum berlangganan produk
-   * tersebut) mengembalikan daftar kosong alih-alih menggagalkan siklus.
+   * Daftar harga modal PRABAYAR Digiflazz terkini (Stage R2.12 — sinkronisasi harga
+   * PPOB). Pascabayar sengaja TIDAK ikut: barisnya tak punya `price` (admin dan
+   * commission) sehingga selalu terbuang di sini, sedangkan Digiflazz membatasi
+   * pengecekan daftar harga (rc=83). Katalog pascabayar punya jalur sendiri
+   * (fetchPostpaidCatalog) dengan satu permintaan per siklus.
    */
   async fetchPriceList(): Promise<PpobPriceListEntry[]> {
-    const prepaid = await this.fetchPriceListFor("prepaid");
-    const pasca = await this.fetchPriceListFor("pasca").catch((error: unknown) => {
-      logger.info(
-        { err: error },
-        "Digiflazz price-list pascabayar tidak tersedia untuk akun ini; produk pascabayar dilewati"
-      );
-      return [] as PpobPriceListEntry[];
-    });
-    return [...prepaid, ...pasca];
+    return this.fetchPriceListFor("prepaid");
   }
 
   private async fetchPriceListFor(cmd: "prepaid" | "pasca"): Promise<PpobPriceListEntry[]> {
@@ -249,10 +242,9 @@ export class DigiflazzPpobProvider implements PpobProviderGateway {
   }
 
   /**
-   * Daftar harga pascabayar dipakai dua pemanggil dalam satu siklus (sinkronisasi
-   * harga prabayar menggabungkannya, dan sinkronisasi katalog pascabayar). Digiflazz
-   * membatasi pengecekan daftar harga (rc=83 "limitasi pengecekan pricelist"), jadi
-   * hasilnya disimpan sebentar supaya satu siklus hanya satu permintaan per jenis.
+   * Hasil daftar harga disimpan sebentar: Digiflazz membatasi pengecekan daftar harga
+   * (rc=83 "limitasi pengecekan pricelist"), jadi pemanggil berturut-turut pada
+   * instance yang sama tidak boleh mengulang permintaan yang sama.
    */
   private pricelistCache = new Map<string, { at: number; rows: DigiflazzPriceListRow[] }>();
 
