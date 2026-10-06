@@ -31,6 +31,8 @@ import {
 
 const DEFAULT_BASE_URL = "https://api.digiflazz.com/v1";
 const REQUEST_TIMEOUT_MS = 10000;
+/// Lama hasil daftar harga dipakai ulang (batas pengecekan Digiflazz, rc=83).
+const PRICELIST_CACHE_MS = 2 * 60 * 1000;
 
 interface DigiflazzPriceListRow {
   buyer_sku_code?: string;
@@ -246,7 +248,25 @@ export class DigiflazzPpobProvider implements PpobProviderGateway {
       }));
   }
 
+  /**
+   * Daftar harga pascabayar dipakai dua pemanggil dalam satu siklus (sinkronisasi
+   * harga prabayar menggabungkannya, dan sinkronisasi katalog pascabayar). Digiflazz
+   * membatasi pengecekan daftar harga (rc=83 "limitasi pengecekan pricelist"), jadi
+   * hasilnya disimpan sebentar supaya satu siklus hanya satu permintaan per jenis.
+   */
+  private pricelistCache = new Map<string, { at: number; rows: DigiflazzPriceListRow[] }>();
+
   private async fetchPriceListRows(cmd: "prepaid" | "pasca"): Promise<DigiflazzPriceListRow[]> {
+    const cached = this.pricelistCache.get(cmd);
+    if (cached && Date.now() - cached.at < PRICELIST_CACHE_MS) {
+      return cached.rows;
+    }
+    const rows = await this.requestPriceListRows(cmd);
+    this.pricelistCache.set(cmd, { at: Date.now(), rows });
+    return rows;
+  }
+
+  private async requestPriceListRows(cmd: "prepaid" | "pasca"): Promise<DigiflazzPriceListRow[]> {
     const url = `${this.config.baseUrl.replace(/\/$/, "")}/price-list`;
     // sign untuk price-list BUKAN md5(username+apiKey+ref_id) seperti transaksi —
     // dokumentasi Digiflazz memakai kata kunci tetap "pricelist" di posisi ref_id.
