@@ -14,7 +14,7 @@ class _Probe extends FirebasePushPlatform {
   _Probe._(this.ringtone, this.shown)
       : super(
           isForeground: () => true,
-          playRingtone: () async {
+          playRingtone: (_) async {
             ringtone.add(1);
             return true;
           },

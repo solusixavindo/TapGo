@@ -110,6 +110,8 @@ void main() {
       'Hubungi Kami': 'assets/icons/basic_portal/contact_us.png',
       'Bantuan': 'assets/icons/basic_portal/help.png',
       'Logout': 'assets/icons/basic_portal/logout.png',
+      // Menu Akun > Notifikasi (6 Okt 2026): stiker bergaya sama dengan yang lain.
+      'Notifikasi': 'assets/icons/basic_portal/notifications.png',
     };
 
     for (final entry in expected.entries) {
@@ -125,7 +127,7 @@ void main() {
     }
 
     expect(tapGoServiceIllustrationAssetForTests('Tiket Bantuan'), isNull);
-    for (final label in expected.keys) {
+    for (final label in expected.keys.where((label) => label != 'Notifikasi')) {
       expect(tapGoServiceIllustrationAssetForTests(label), isNull);
     }
   });

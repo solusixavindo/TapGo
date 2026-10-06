@@ -793,10 +793,14 @@ class _TapGoApiClient {
   }
 
   /// Mendaftarkan token push perangkat ini ke akun yang sedang masuk.
-  Future<void> registerPushToken(String token) async {
+  Future<void> registerPushToken(String token, {String? sound}) async {
     await _dio.post<void>(
       _apiPath('notifications/push-token'),
-      data: {'token': token, 'platform': 'android'},
+      data: {
+        'token': token,
+        'platform': 'android',
+        if (sound != null) 'sound': sound,
+      },
     );
   }
 

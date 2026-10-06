@@ -1,0 +1,454 @@
+<title>Play Console Kit</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --paper:#faf7f0;
+    --paper-raised:#ffffff;
+    --ink:#0b1f3a;
+    --ink-soft:#56607a;
+    --ink-faint:#8a92a6;
+    --line:#e4decf;
+    --line-soft:#ece7d9;
+    --gold:#b4740a;
+    --gold-strong:#8a5a08;
+    --gold-soft:#fff3d9;
+    --good:#1f8a5f;
+    --good-soft:#e6f5ee;
+    --warn:#b8720a;
+    --warn-soft:#fdf1de;
+    --gap:#a8393a;
+    --gap-soft:#fbeaea;
+    --shadow: 0 1px 2px rgba(11,31,58,0.04), 0 8px 24px rgba(11,31,58,0.06);
+  }
+
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#0d1424;
+      --paper-raised:#141d33;
+      --ink:#f1efe6;
+      --ink-soft:#aab3cc;
+      --ink-faint:#727d9c;
+      --line:#293252;
+      --line-soft:#212a48;
+      --gold:#ffc94a;
+      --gold-strong:#ffd670;
+      --gold-soft:#2a2311;
+      --good:#4fd39a;
+      --good-soft:#12271f;
+      --warn:#ffb457;
+      --warn-soft:#2c2211;
+      --gap:#ff8a86;
+      --gap-soft:#2c1616;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0d1424;
+    --paper-raised:#141d33;
+    --ink:#f1efe6;
+    --ink-soft:#aab3cc;
+    --ink-faint:#727d9c;
+    --line:#293252;
+    --line-soft:#212a48;
+    --gold:#ffc94a;
+    --gold-strong:#ffd670;
+    --gold-soft:#2a2311;
+    --good:#4fd39a;
+    --good-soft:#12271f;
+    --warn:#ffb457;
+    --warn-soft:#2c2211;
+    --gap:#ff8a86;
+    --gap-soft:#2c1616;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', system-ui, sans-serif;
+    line-height:1.55;
+  }
+  .wrap{max-width:760px; margin:0 auto; padding:40px 24px 96px;}
+
+  .masthead{margin-bottom:28px;}
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11.5px;
+    letter-spacing:0.09em;
+    text-transform:uppercase;
+    color:var(--gold-strong);
+    display:flex; align-items:center; gap:8px;
+  }
+  .eyebrow::before{content:""; width:16px; height:1px; background:var(--gold-strong); display:inline-block;}
+  h1{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:clamp(30px, 5vw, 40px);
+    letter-spacing:-0.01em;
+    margin:10px 0 6px;
+    text-wrap:balance;
+  }
+  .sub{color:var(--ink-soft); font-size:15.5px; max-width:58ch;}
+
+  .status-strip{
+    display:flex; gap:10px; flex-wrap:wrap;
+    margin-top:20px; padding-top:20px; border-top:1px solid var(--line);
+  }
+  .status-chip{
+    display:flex; align-items:center; gap:7px;
+    font-size:12.5px; font-weight:500; color:var(--ink-soft);
+    background:var(--paper-raised); border:1px solid var(--line);
+    padding:6px 12px 6px 10px; border-radius:999px;
+  }
+  .dot{width:7px; height:7px; border-radius:50%; flex:none;}
+  .dot.good{background:var(--good);}
+  .dot.warn{background:var(--warn);}
+  .dot.gap{background:var(--gap);}
+
+  nav.jump{
+    position:sticky; top:0; z-index:5;
+    background:var(--paper);
+    padding:14px 0 12px;
+    margin-bottom:8px;
+    border-bottom:1px solid var(--line);
+    display:flex; gap:4px; overflow-x:auto;
+  }
+  nav.jump a{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px; font-weight:500;
+    color:var(--ink-soft);
+    text-decoration:none;
+    padding:7px 12px;
+    border-radius:7px;
+    white-space:nowrap;
+    border:1px solid transparent;
+  }
+  nav.jump a:hover, nav.jump a:focus-visible{
+    color:var(--ink); border-color:var(--line); background:var(--paper-raised);
+  }
+  nav.jump span.n{color:var(--gold-strong); margin-right:6px;}
+
+  section.block{
+    margin-top:56px;
+    scroll-margin-top:64px;
+  }
+  .block-head{display:flex; align-items:baseline; gap:12px; margin-bottom:6px;}
+  .block-num{
+    font-family:'Fraunces', serif; font-weight:500; font-size:15px;
+    color:var(--gold-strong);
+  }
+  h2{
+    font-family:'Fraunces', serif;
+    font-weight:600; font-size:25px;
+    letter-spacing:-0.01em;
+    margin:0;
+    text-wrap:balance;
+  }
+  .block-purpose{color:var(--ink-soft); font-size:14.5px; margin:6px 0 22px; max-width:58ch;}
+
+  h3{
+    font-family:'IBM Plex Sans', sans-serif;
+    font-weight:600; font-size:14.5px;
+    text-transform:uppercase; letter-spacing:0.04em;
+    color:var(--ink);
+    margin:28px 0 10px;
+  }
+  p{margin:0 0 12px; max-width:64ch;}
+  p.tight{margin-bottom:6px;}
+
+  .field{
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:16px 18px;
+    box-shadow:var(--shadow);
+    margin-bottom:16px;
+  }
+  .field-label{
+    display:flex; justify-content:space-between; align-items:center;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px; letter-spacing:0.06em; text-transform:uppercase;
+    color:var(--ink-faint);
+    margin-bottom:9px;
+  }
+  .field-label .count{
+    font-variant-numeric:tabular-nums;
+    color:var(--ink-soft);
+    text-transform:none; letter-spacing:0;
+  }
+  .field-value{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13.5px;
+    line-height:1.65;
+    color:var(--ink);
+    white-space:pre-wrap;
+  }
+  .field-value.prose{
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:14.5px;
+  }
+  .field-value strong{color:var(--gold-strong);}
+
+  .copy-btn{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px; font-weight:500;
+    background:transparent;
+    border:1px solid var(--line);
+    color:var(--ink-soft);
+    padding:4px 9px;
+    border-radius:6px;
+    cursor:pointer;
+  }
+  .copy-btn:hover{border-color:var(--gold); color:var(--gold-strong);}
+  .copy-btn.copied{border-color:var(--good); color:var(--good);}
+
+  .choice-row{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;}
+  .choice{
+    font-size:13px; font-weight:500;
+    padding:7px 13px; border-radius:8px;
+    border:1px solid var(--line);
+    color:var(--ink-soft);
+  }
+  .choice.pick{
+    border-color:var(--good);
+    color:var(--good);
+    background:var(--good-soft);
+    font-weight:600;
+  }
+  .choice.pick::before{content:"✓ "; }
+
+  ul.plain{margin:0 0 14px; padding-left:20px;}
+  ul.plain li{margin-bottom:5px; color:var(--ink-soft); font-size:14.5px;}
+  ul.plain li b{color:var(--ink); font-weight:600;}
+
+  table.ds{
+    width:100%; border-collapse:collapse;
+    font-size:13.8px;
+    margin-bottom:8px;
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:12px;
+    overflow:hidden;
+    box-shadow:var(--shadow);
+  }
+  table.ds th{
+    text-align:left;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10.5px; letter-spacing:0.05em; text-transform:uppercase;
+    color:var(--ink-faint);
+    font-weight:500;
+    padding:11px 14px;
+    border-bottom:1px solid var(--line);
+    background:var(--line-soft);
+  }
+  table.ds td{
+    padding:12px 14px;
+    border-bottom:1px solid var(--line-soft);
+    vertical-align:top;
+    color:var(--ink-soft);
+  }
+  table.ds tr:last-child td{border-bottom:none;}
+  table.ds td.cat{color:var(--ink); font-weight:600; white-space:nowrap;}
+  table.ds td .evidence{
+    display:block; margin-top:4px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px; color:var(--ink-faint);
+  }
+
+  .pill{
+    display:inline-flex; align-items:center; gap:5px;
+    font-size:11.5px; font-weight:600;
+    padding:3px 9px; border-radius:999px;
+    white-space:nowrap;
+  }
+  .pill.good{background:var(--good-soft); color:var(--good);}
+  .pill.warn{background:var(--warn-soft); color:var(--warn);}
+  .pill.gap{background:var(--gap-soft); color:var(--gap);}
+
+  .callout{
+    border-radius:12px;
+    padding:16px 18px;
+    margin:18px 0;
+    font-size:14px;
+    border:1px solid var(--line);
+  }
+  .callout.gap{background:var(--gap-soft); border-color:color-mix(in srgb, var(--gap) 35%, var(--line));}
+  .callout.warn{background:var(--warn-soft); border-color:color-mix(in srgb, var(--warn) 35%, var(--line));}
+  .callout-title{font-weight:700; margin-bottom:5px; display:flex; align-items:center; gap:7px;}
+  .callout.gap .callout-title{color:var(--gap);}
+  .callout.warn .callout-title{color:var(--warn);}
+  .callout p{margin-bottom:0; color:var(--ink-soft); font-size:13.8px;}
+
+  .verified{
+    margin-top:64px; padding-top:20px; border-top:1px solid var(--line);
+    font-size:12.5px; color:var(--ink-faint);
+    display:flex; flex-direction:column; gap:4px;
+  }
+  .verified b{color:var(--ink-soft);}
+
+  a.src-link{color:var(--gold-strong); text-decoration:none; border-bottom:1px solid color-mix(in srgb, var(--gold-strong) 40%, transparent);}
+  a.src-link:hover{border-color:var(--gold-strong);}
+
+  ::selection{background:var(--gold-soft); color:var(--ink);}
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">TapGo Lion &middot; Play Store release 2</div>
+    <h1>Play Console Kit</h1>
+    <p class="sub">Jawaban siap-tempel untuk tiga hal yang Anda minta: deklarasi Financial Features, temuan Data Safety &amp; Privacy Policy, dan draft Store Listing &mdash; semua disusun dari kode dan kebijakan Google yang sudah diverifikasi, bukan dugaan.</p>
+    <div class="status-strip">
+      <span class="status-chip"><span class="dot good"></span>Financial Features &mdash; siap isi</span>
+      <span class="status-chip"><span class="dot warn"></span>Data Safety &mdash; 1 celah ditemukan</span>
+      <span class="status-chip"><span class="dot good"></span>Store Listing &mdash; draft siap</span>
+    </div>
+  </header>
+
+  <nav class="jump">
+    <a href="#financial"><span class="n">01</span>Financial Features</a>
+    <a href="#datasafety"><span class="n">02</span>Data Safety &amp; Privacy</a>
+    <a href="#listing"><span class="n">03</span>Store Listing</a>
+  </nav>
+
+  <section class="block" id="financial">
+    <div class="block-head"><span class="block-num">01</span><h2>Financial Features Declaration</h2></div>
+    <p class="block-purpose">Form ini ada karena TapGo punya saldo aplikasi (TapGoPay + PPOB). Tujuannya bukan menyembunyikan fitur finansial, tapi menjelaskan dengan jujur bahwa ini <em>bukan</em> pinjaman, EWA, kripto, atau investasi.</p>
+
+    <h3>Kategori yang sesuai</h3>
+    <div class="choice-row">
+      <span class="choice pick">Dompet digital / saldo aplikasi</span>
+      <span class="choice">Bukan pinjaman</span>
+      <span class="choice">Bukan earned wage access</span>
+      <span class="choice">Bukan kripto / trading</span>
+      <span class="choice">Bukan binary options</span>
+    </div>
+    <p style="font-size:13.5px; color:var(--ink-faint);">Nama pilihan persis di form bisa berbeda tampilannya &mdash; pilih opsi yang paling dekat dengan &ldquo;digital wallet&rdquo; / &ldquo;payment processing&rdquo;, lalu isi kolom deskripsi dengan teks di bawah.</p>
+
+    <h3>Teks deskripsi (tempel di kolom penjelasan fitur)</h3>
+    <div class="field">
+      <div class="field-label">Financial feature description <span class="count">743 karakter</span></div>
+      <div class="field-value">TapGo is a membership and mobility-services app for Indonesian users. It includes an in-app wallet (&quot;TapGoPay&quot;) and a PPOB balance used <strong>exclusively</strong> to pay for services inside the app: ride-hailing trips (TapGo Ride/Car) and everyday bill payments (mobile credit, data packages, electricity tokens, e-wallet top-up, BPJS, and water utility bills).
+
+Funds are added through a licensed third-party payment gateway (Midtrans). Balances are <strong>not withdrawable to a bank account, not usable outside the app, and not tied to lending, credit, investment, or cryptocurrency features</strong> of any kind. This version of TapGo does not offer personal loans, buy-now-pay-later, earned wage access, or trading of any financial instrument.</div>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">⚠ Perhatikan sebelum submit</div>
+      <p>Kalimat &ldquo;not withdrawable to a bank account&rdquo; di atas benar untuk build Play (fitur Rekening Bank &amp; Wallet Withdraw sudah dihapus dari build ini sesi lalu). Jangan pakai teks ini untuk build Direct &mdash; di sana withdrawal memang ada.</p>
+    </div>
+  </section>
+
+  <section class="block" id="datasafety">
+    <div class="block-head"><span class="block-num">02</span><h2>Data Safety &amp; Privacy Policy</h2></div>
+    <p class="block-purpose">Dicek langsung dari <code style="font-family:'IBM Plex Mono',monospace; font-size:12.5px;">AndroidManifest.xml</code> dan kode pemanggil izin/API &mdash; bukan dari asumsi fitur. Setiap baris di bawah punya rujukan file aslinya.</p>
+
+    <h3>Yang harus dideklarasikan di Data Safety form</h3>
+    <table class="ds">
+      <tr><th>Kategori</th><th>Kumpulan &amp; tujuan</th><th>Status</th></tr>
+      <tr>
+        <td class="cat">Info pribadi</td>
+        <td>Nama &amp; nomor HP &mdash; untuk akun dan login.<span class="evidence">lib/services/persistent_demo_store.dart</span></td>
+        <td><span class="pill good">Wajib dicentang</span></td>
+      </tr>
+      <tr>
+        <td class="cat">Lokasi</td>
+        <td>Lokasi presisi &amp; perkiraan &mdash; untuk mencocokkan penjemputan TapGo Ride/Car. Izin <code>ACCESS_FINE_LOCATION</code> &amp; <code>ACCESS_COARSE_LOCATION</code> ada di manifest.<span class="evidence">android/app/.../AndroidManifest.xml, lib/services/ride_location_port.dart</span></td>
+        <td><span class="pill gap">Belum di privacy policy</span></td>
+      </tr>
+      <tr>
+        <td class="cat">Foto</td>
+        <td>Foto profil dari kamera/galeri &mdash; personalisasi akun. Izin <code>CAMERA</code>, <code>READ_EXTERNAL_STORAGE</code>.<span class="evidence">lib/screens/dashboard_screen.dart &mdash; _ProfileAvatarEditor</span></td>
+        <td><span class="pill gap">Belum di privacy policy</span></td>
+      </tr>
+      <tr>
+        <td class="cat">Info finansial</td>
+        <td>Saldo TapGoPay/PPOB &amp; riwayat transaksi &mdash; fungsi aplikasi.<span class="evidence">docs/PRIVACY_POLICY.md &sect;1</span></td>
+        <td><span class="pill good">Sudah tercakup</span></td>
+      </tr>
+      <tr>
+        <td class="cat">ID perangkat</td>
+        <td>ID acak buatan aplikasi (bukan IMEI/Android ID) untuk anti-fraud.<span class="evidence">lib/services/tapgo_api_client.dart &mdash; _TapGoDeviceContextStore</span></td>
+        <td><span class="pill good">Sudah tercakup</span> <span style="color:var(--ink-faint);">(sebagai &ldquo;device information&rdquo;)</span></td>
+      </tr>
+      <tr>
+        <td class="cat">Aktivitas aplikasi / crash</td>
+        <td>Dependensi Firebase ada di kode, tapi <b style="color:var(--ink);">belum aktif</b> &mdash; tidak ada <code>google-services.json</code>, init Firebase gagal secara aman saat start.</td>
+        <td><span class="pill warn">Jangan dicentang dulu</span></td>
+      </tr>
+      <tr>
+        <td class="cat">Penghapusan data</td>
+        <td>Menu &ldquo;Hapus Akun&rdquo; tersedia di app, data transaksi ditahan untuk audit sesuai hukum.<span class="evidence">docs/PRIVACY_POLICY.md &sect;6</span></td>
+        <td><span class="pill good">Konsisten</span></td>
+      </tr>
+    </table>
+
+    <div class="callout gap">
+      <div class="callout-title">✕ Celah nyata: Lokasi &amp; Foto belum disebut di Privacy Policy</div>
+      <p><code style="font-family:'IBM Plex Mono',monospace;">docs/PRIVACY_POLICY.md</code> &sect;1 hanya sebut &ldquo;device information, app diagnostics&rdquo; &mdash; tidak ada kata &ldquo;lokasi&rdquo; atau &ldquo;foto&rdquo; sama sekali, padahal keduanya benar-benar dikumpulkan lewat fitur Ojek Online dan foto profil. Google Data Safety mewajibkan lokasi &amp; foto dideklarasikan sebagai kategori sendiri &mdash; kalau policy-nya tidak menyebut ini, ada risiko dianggap tidak konsisten saat review.</p>
+    </div>
+
+    <h3>Tambahan teks untuk Privacy Policy &sect;1 (sisipkan di &ldquo;Data We Collect&rdquo;)</h3>
+    <div class="field">
+      <div class="field-label">Tambahan poin baru</div>
+      <div class="field-value prose">&bull; Location data: precise or approximate location, collected while using ride-hailing features (TapGo Ride/TapGo Car) to match trips and show pickup/drop-off points.
+&bull; Photos: a profile picture voluntarily uploaded by the user via camera or photo gallery.</div>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Catatan tentang KTP/foto selfie</div>
+      <p>Ada alur upload KTP + selfie di kode (<code style="font-family:'IBM Plex Mono',monospace; font-size:12px;">membership_registration_screen.dart</code>), tapi sudah dipastikan <b style="color:var(--ink);">tidak bisa diakses sama sekali</b> dari build Play &mdash; otomatis dialihkan begitu <code style="font-family:'IBM Plex Mono',monospace; font-size:12px;">tapGoIsPlayDistribution</code> aktif. Jadi tidak perlu ditambahkan ke Data Safety form untuk listing Play ini.</p>
+    </div>
+  </section>
+
+  <section class="block" id="listing">
+    <div class="block-head"><span class="block-num">03</span><h2>Store Listing</h2></div>
+    <p class="block-purpose">Bahasanya sengaja menghindari kata yang jadi bendera merah kebijakan Google (&ldquo;dijamin&rdquo;, &ldquo;profit pasti&rdquo;, &ldquo;ROI&rdquo;) &mdash; sesuai catatan tim di <code style="font-family:'IBM Plex Mono',monospace; font-size:12.5px;">docs/release/GOOGLE_PLAY_FINANCIAL_APP_POLICY_REVIEW.md</code>.</p>
+
+    <h3>Judul aplikasi</h3>
+    <div class="field">
+      <div class="field-label">App title <span class="count">10 / 30 karakter</span></div>
+      <div class="field-value">TapGo Lion</div>
+    </div>
+    <p style="font-size:13px; color:var(--ink-faint); margin-top:-8px;">Samakan dengan judul yang sedang live di listing Anda sekarang &mdash; jangan diganti tanpa alasan kuat, perubahan judul bisa memicu review tambahan.</p>
+
+    <h3>Deskripsi singkat</h3>
+    <div class="field">
+      <div class="field-label">Short description <span class="count">60 / 80 karakter</span></div>
+      <div class="field-value">Ojek online, PPOB, dan membership TapGo dalam satu aplikasi.</div>
+    </div>
+
+    <h3>Deskripsi lengkap</h3>
+    <div class="field">
+      <div class="field-label">Full description <span class="count">1112 / 4000 karakter</span></div>
+      <div class="field-value">TapGo Lion adalah aplikasi mobilitas dan gaya hidup digital untuk kebutuhan sehari-hari Anda &mdash; ojek online, pembayaran tagihan, dan kartu keanggotaan dalam satu tempat.
+
+LAYANAN UTAMA
+&bull; TapGo Ride &amp; TapGo Car &mdash; pesan ojek atau mobil online dengan mitra pengemudi TapGo di sekitar Anda.
+&bull; PPOB (Pembayaran Online) &mdash; beli pulsa, paket data, token listrik PLN, e-wallet, bayar BPJS, dan tagihan PDAM langsung dari saldo dalam aplikasi.
+&bull; TapGoPay &mdash; dompet aplikasi untuk mencatat saldo dan riwayat transaksi Anda, memudahkan pembayaran layanan TapGo tanpa perlu uang tunai.
+&bull; Kartu Anggota TapGo &mdash; identitas member digital dengan status keanggotaan yang bisa dilihat kapan saja.
+
+KEAMANAN &amp; PRIVASI
+Akun Anda dilindungi dengan autentikasi token dan penyimpanan terenkripsi. Pembayaran diproses melalui mitra payment gateway berlisensi. TapGo tidak pernah membagikan data pribadi Anda kepada pihak ketiga untuk tujuan iklan.
+
+Unduh TapGo Lion sekarang dan nikmati kemudahan mobilitas serta transaksi digital dalam genggaman Anda.
+
+PT. TapGo Lion Indonesia
+Dukungan: support@tapgolion.id | WhatsApp: +62 838-0025-5588</div>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Soal screenshot</div>
+      <p>Screenshot bersih untuk listing <b style="color:var(--ink);">belum saya siapkan</b> &mdash; yang saya ambil sepanjang sesi ini pakai akun uji (&ldquo;QAClaudeTest&rdquo;, saldo Rp0), tidak cocok tampil ke publik. Kalau perlu, saya bisa ambil ulang dengan akun/data yang lebih representatif sebelum Anda upload ke Play Console.</p>
+    </div>
+  </section>
+
+  <div class="verified">
+    <div><b>Diverifikasi terhadap:</b> Google Play <a class="src-link" href="https://support.google.com/googleplay/android-developer/answer/9858738" target="_blank" rel="noopener">Payments policy</a> &amp; <a class="src-link" href="https://support.google.com/googleplay/android-developer/answer/9876821" target="_blank" rel="noopener">Financial Services policy</a>, dibaca langsung 16 Sep 2026.</div>
+    <div>Temuan kode diverifikasi dari file di repo <code style="font-family:'IBM Plex Mono',monospace;">apps/user_app</code> pada commit kerja sesi ini &mdash; bukan dari dokumentasi lama yang mungkin sudah usang.</div>
+  </div>
+
+</div>

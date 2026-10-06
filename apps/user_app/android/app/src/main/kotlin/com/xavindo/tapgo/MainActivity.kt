@@ -11,28 +11,24 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     // Nama dan method HARUS sama persis dengan sisi Dart
-    // (lib/services/push_notifications.dart dan lib/services/sound_diagnostics.dart).
+    // (lib/services/push_notifications.dart dan lib/services/alert_tone.dart).
     private val alertsChannel = "tapgo.user/alerts"
     private val alertSound by lazy { AlertSound(applicationContext) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Sebelum notifikasi apa pun dapat tampil.
-        alertSound.createChannel()
+        alertSound.createChannels()
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, alertsChannel).setMethodCallHandler { call, result ->
             when (call.method) {
-                // true bila bunyi dimulai (berkas suara aplikasi, atau nada bawaan HP sebagai cadangan).
-                "playNotificationSound" -> result.success(alertSound.play() == null)
-                // Untuk layar "Uji bunyi": keadaan HP + hasil pemutaran (galat atau null).
-                "soundDiagnostics" -> {
-                    val info = alertSound.diagnostics().toMutableMap()
-                    info["playError"] = alertSound.play()
-                    result.success(info)
-                }
+                // true bila bunyi dimulai. Argumen "sound": tapgo | lonceng | panggilan
+                // (tak dikenal = tapgo). Dipakai pratinjau saat memilih nada dan
+                // bunyi peringatan saat aplikasi di depan.
+                "playNotificationSound" -> result.success(alertSound.play(call.argument<String>("sound")) == null)
                 "areNotificationsEnabled" -> result.success(alertSound.notificationsEnabled())
                 "openNotificationSettings" -> result.success(openNotificationSettings())
                 else -> result.notImplemented()

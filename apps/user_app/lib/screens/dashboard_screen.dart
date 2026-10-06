@@ -31,7 +31,7 @@ class _TapGoDashboardState extends State<TapGoDashboard> {
   Widget build(BuildContext context) {
     return _PendingRatingsFlusher(
         child: _ChatInboxPoller(
-        child: Scaffold(
+            child: Scaffold(
       body: SafeArea(
         child: Stack(
           children: [
@@ -2173,6 +2173,8 @@ class AccountScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(_demoSessionProvider);
     final avatarBytes = ref.watch(_accountAvatarBytesProvider).valueOrNull;
+    // Memuat pilihan bunyi tersimpan agar keterangan "Bunyi: ..." benar.
+    unawaited(tapGoAlertToneReady());
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 176),
       child: Column(
@@ -2208,11 +2210,16 @@ class AccountScreen extends ConsumerWidget {
             Icons.volunteer_activism_rounded,
             () => _openDemo(context, const ContactUsScreen()),
           ),
-          _AccountMenuTile(
-            'Uji bunyi',
-            Icons.volume_up_rounded,
-            () => _openDemo(context, const TapGoSoundTestScreen()),
-            subtitle: 'Periksa notifikasi dan suara di HP ini',
+          // Judul "Notifikasi" memakai stiker basic_portal/notifications.png, bergaya
+          // sama dengan ikon menu Akun lain (lihat PremiumTapGoIcon).
+          ValueListenableBuilder<TapGoAlertTone>(
+            valueListenable: tapGoAlertTone,
+            builder: (context, tone, _) => _AccountMenuTile(
+              'Notifikasi',
+              Icons.notifications_rounded,
+              () => _openDemo(context, const NotificationSettingsScreen()),
+              subtitle: 'Bunyi: ${tone.label}',
+            ),
           ),
           _AccountMenuTile(
             'Kebijakan Privasi',
@@ -2370,6 +2377,169 @@ class _ThemeOptionTile extends StatelessWidget {
             Expanded(
               child: Text(
                 preference.label,
+                style: TextStyle(
+                  color: colorScheme.onSurface,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  decoration: TextDecoration.none,
+                ),
+              ),
+            ),
+            if (selected)
+              const Icon(Icons.check_circle_rounded, color: _brandBlue),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Layar "Notifikasi": tiga pilihan bunyi seperti memilih nada dering, sama
+/// dengan aplikasi driver. Mengetuk satu pilihan memilihnya sekaligus
+/// membunyikannya. Pilihan dipakai langsung saat aplikasi terbuka, dan dikirim
+/// ke server untuk notifikasi saat aplikasi tertutup.
+class NotificationSettingsScreen extends StatefulWidget {
+  const NotificationSettingsScreen({super.key});
+
+  @override
+  State<NotificationSettingsScreen> createState() =>
+      _NotificationSettingsScreenState();
+}
+
+class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
+    with WidgetsBindingObserver {
+  bool _enabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(tapGoAlertToneReady());
+    unawaited(_checkEnabled());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Kembali dari pengaturan Android: periksa ulang.
+    if (state == AppLifecycleState.resumed) unawaited(_checkEnabled());
+  }
+
+  Future<void> _checkEnabled() async {
+    final enabled = await tapGoAreNotificationsEnabled();
+    if (mounted && enabled != _enabled) setState(() => _enabled = enabled);
+  }
+
+  Future<void> _choose(TapGoAlertTone tone) async {
+    unawaited(tapGoPlayNotificationRingtone(tone));
+    await tapGoSelectAlertTone(tone);
+    // Server memakai bunyi baru untuk notifikasi saat aplikasi tertutup.
+    unawaited(tapGoReregisterPush());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return ValueListenableBuilder<TapGoAlertTone>(
+      valueListenable: tapGoAlertTone,
+      builder: (context, selected, _) => _DemoScaffold(
+        title: 'Notifikasi',
+        subtitle: 'Pilih bunyi peringatan',
+        child: Column(
+          children: [
+            if (!_enabled)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Container(
+                  key: const ValueKey('notifications-off-notice'),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Notifikasi TapGo dimatikan di HP. Anda tidak akan mendengar '
+                        'pembaruan perjalanan dan pesan saat aplikasi tertutup.',
+                        style: TextStyle(
+                          color: colorScheme.onErrorContainer,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      FilledButton(
+                        key: const ValueKey('notifications-open-settings'),
+                        onPressed: () =>
+                            unawaited(tapGoOpenNotificationSettings()),
+                        child: const Text('Nyalakan Notifikasi'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            for (final tone in TapGoAlertTone.values)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _ToneOptionTile(
+                  tone: tone,
+                  selected: selected == tone,
+                  onSelected: () => unawaited(_choose(tone)),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ToneOptionTile extends StatelessWidget {
+  const _ToneOptionTile({
+    required this.tone,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final TapGoAlertTone tone;
+  final bool selected;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return _TapGoPressable(
+      onTap: onSelected,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        key: ValueKey('tone-${tone.key}'),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? _brandBlue : colorScheme.outlineVariant,
+            width: selected ? 1.4 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              selected
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              color: selected ? _brandBlue : colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                tone.label,
                 style: TextStyle(
                   color: colorScheme.onSurface,
                   fontSize: 16,

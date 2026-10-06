@@ -33,9 +33,10 @@ abstract class TapGoPushPlatform {
   /// Membunyikan peringatan untuk satu peristiwa SAAT APP DI DEPAN. FCM hanya
   /// menampilkan notifikasi otomatis di latar belakang; di depan pesan sampai
   /// ke [foregroundMessages] tanpa bunyi apa pun (SnackBar tidak bersuara).
-  /// Aplikasi di depan = ringtone notifikasi bawaan HP (tidak bergantung pada
-  /// notifikasi); selain itu (atau bila ringtone gagal) = SATU notifikasi lokal
-  /// di channel `tapgo_alerts_v3`. Tidak pernah keduanya untuk peristiwa yang sama.
+  /// Aplikasi di depan = bunyi pilihan pengguna, diputar dari berkas suara
+  /// aplikasi (tidak bergantung pada notifikasi); selain itu (atau bila bunyi
+  /// gagal) = SATU notifikasi lokal di channel milik bunyi pilihan. Tidak pernah
+  /// keduanya untuk peristiwa yang sama.
   Future<void> showForegroundAlert(TapGoPushMessage message);
 }
 
@@ -43,10 +44,10 @@ abstract class TapGoPushPlatform {
 /// Suara/prioritas channel yang sudah ada tidak berubah oleh pemasangan baru,
 /// dan channel lama (`tapgo_default`, `tapgo_alerts_v2`) sudah terkunci di HP
 /// yang pernah memasang APK lama, jadi suara yang diubah SELALU membutuhkan id
-/// baru. v3 memakai berkas suara aplikasi (res/raw/tapgo_alert). Dibuat di
-/// MainActivity.onCreate; id HARUS sama dengan manifest
-/// (default_notification_channel_id) dan payload FCM backend.
-const tapGoAlertChannelId = 'tapgo_alerts_v3';
+/// baru. v3 memakai berkas suara aplikasi (res/raw), satu channel per bunyi
+/// pilihan (lihat [TapGoAlertTone]). Dibuat di MainActivity.onCreate; id HARUS
+/// sama dengan manifest (default_notification_channel_id = channel bawaan) dan
+/// payload FCM backend.
 const tapGoAlertChannelName = 'Peringatan TapGo';
 const tapGoAlertChannelDescription =
     'Pembaruan perjalanan, pesan chat, saldo, dan pembayaran';
@@ -54,12 +55,13 @@ const tapGoAlertChannelDescription =
 /// Nama dan method HARUS sama dengan MainActivity.kt.
 const tapGoAlertsMethodChannel = MethodChannel('tapgo.user/alerts');
 
-/// Rincian notifikasi lokal: channel baru, Importance.high, suara menyala.
-/// Tanpa `sound: null` dan tanpa `silent: true`.
-NotificationDetails tapGoAlertNotificationDetails() =>
-    const NotificationDetails(
+/// Rincian notifikasi lokal: channel milik bunyi pilihan, Importance.high, suara
+/// menyala. Tanpa `sound: null` dan tanpa `silent: true`.
+NotificationDetails tapGoAlertNotificationDetails(
+        [TapGoAlertTone tone = TapGoAlertTone.tapgo]) =>
+    NotificationDetails(
       android: AndroidNotificationDetails(
-        tapGoAlertChannelId,
+        tone.channelId,
         tapGoAlertChannelName,
         channelDescription: tapGoAlertChannelDescription,
         importance: Importance.high,
@@ -69,11 +71,13 @@ NotificationDetails tapGoAlertNotificationDetails() =>
       ),
     );
 
-/// Memutar ringtone notifikasi bawaan HP lewat MethodChannel. false bila gagal.
-Future<bool> tapGoPlayNotificationRingtone() async {
+/// Memutar bunyi pilihan lewat MethodChannel (pratinjau saat memilih, dan bunyi
+/// peringatan saat aplikasi di depan). false bila gagal.
+Future<bool> tapGoPlayNotificationRingtone(
+    [TapGoAlertTone tone = TapGoAlertTone.tapgo]) async {
   try {
     return await tapGoAlertsMethodChannel
-            .invokeMethod<bool>('playNotificationSound') ??
+            .invokeMethod<bool>('playNotificationSound', {'sound': tone.key}) ??
         false;
   } catch (_) {
     return false;
@@ -82,25 +86,28 @@ Future<bool> tapGoPlayNotificationRingtone() async {
 
 class FirebasePushPlatform implements TapGoPushPlatform {
   FirebasePushPlatform({
-    Future<bool> Function()? playRingtone,
+    Future<bool> Function(TapGoAlertTone tone)? playRingtone,
     Future<void> Function(
             int id, String title, String body, NotificationDetails details)?
         showLocal,
     bool Function()? isForeground,
+    TapGoAlertTone Function()? tone,
   })  : _playRingtone = playRingtone ?? tapGoPlayNotificationRingtone,
         _showLocalOverride = showLocal,
-        _isForeground = isForeground ?? _appIsInForeground;
+        _isForeground = isForeground ?? _appIsInForeground,
+        _tone = tone ?? (() => tapGoAlertTone.value);
 
   static bool _appIsInForeground() {
     final state = WidgetsBinding.instance.lifecycleState;
     return state == null || state == AppLifecycleState.resumed;
   }
 
-  final Future<bool> Function() _playRingtone;
+  final Future<bool> Function(TapGoAlertTone tone) _playRingtone;
   final Future<void> Function(
           int id, String title, String body, NotificationDetails details)?
       _showLocalOverride;
   final bool Function() _isForeground;
+  final TapGoAlertTone Function() _tone;
 
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
@@ -128,16 +135,17 @@ class FirebasePushPlatform implements TapGoPushPlatform {
     if (message.title.isEmpty && message.body.isEmpty) {
       return;
     }
-    // Aplikasi di depan: ringtone, BUKAN notifikasi (satu peristiwa = satu bunyi).
-    if (_isForeground() && await _playRingtone()) {
+    // Aplikasi di depan: bunyi pilihan, BUKAN notifikasi (satu peristiwa = satu bunyi).
+    final tone = _tone();
+    if (_isForeground() && await _playRingtone(tone)) {
       return;
     }
-    // Di belakang, atau ringtone gagal: tepat satu notifikasi di channel baru.
+    // Di belakang, atau bunyi gagal: tepat satu notifikasi di channel bunyi pilihan.
     try {
       final override = _showLocalOverride;
       if (override != null) {
         await override(_notificationId++, message.title, message.body,
-            tapGoAlertNotificationDetails());
+            tapGoAlertNotificationDetails(tone));
         return;
       }
       await _ensureLocalNotificationsInitialized();
@@ -148,12 +156,13 @@ class FirebasePushPlatform implements TapGoPushPlatform {
         _notificationId++,
         message.title,
         message.body,
-        tapGoAlertNotificationDetails(),
+        tapGoAlertNotificationDetails(tone),
       );
     } catch (error) {
       // Dicatat juga di rilis (sebelumnya ditelan diam-diam): hanya jenis
       // galat, tanpa isi pesan.
-      debugPrint('[TapGo Push] notifikasi peringatan gagal: ${error.runtimeType}');
+      debugPrint(
+          '[TapGo Push] notifikasi peringatan gagal: ${error.runtimeType}');
     }
   }
 
@@ -313,6 +322,14 @@ class TapGoPushController {
     }
   }
 
+  /// Mendaftarkan ulang token yang sama (mis. setelah pengguna mengganti bunyi,
+  /// supaya server memakai channel bunyi baru). Tanpa token = tidak ada yang
+  /// dilakukan; start() mendaftarkannya dengan pilihan terkini.
+  Future<void> reregister() async {
+    final token = _token;
+    if (token != null) await _register(token);
+  }
+
   /// Berhenti dan cabut token perangkat ini dari akun. Panggil SEBELUM access
   /// token dihapus, karena endpoint hapus memerlukan login.
   Future<void> stop() async {
@@ -349,7 +366,13 @@ TapGoPushController? _tapGoPushController;
 TapGoPushController _tapGoPush() {
   return _tapGoPushController ??= TapGoPushController(
     platform: tapGoPushPlatformForTests ?? FirebasePushPlatform(),
-    register: _apiClient.registerPushToken,
+    register: (token) async {
+      // Pilihan bunyi tersimpan harus terbaca dulu, supaya pendaftaran saat
+      // aplikasi baru dibuka tidak mengirim bunyi bawaan menimpa pilihan pengguna.
+      await tapGoAlertToneReady();
+      await _apiClient.registerPushToken(token,
+          sound: tapGoAlertTone.value.key);
+    },
     unregister: _apiClient.unregisterPushToken,
     onForeground: _tapGoShowForegroundPush,
     onOpened: _tapGoOpenFromPush,
@@ -363,6 +386,14 @@ void tapGoStartPush() {
     return;
   }
   unawaited(_tapGoPush().start());
+}
+
+/// Memberi tahu server bahwa bunyi pilihan berganti (notifikasi saat aplikasi
+/// tertutup memakai channel bunyi baru). Best-effort.
+Future<void> tapGoReregisterPush() async {
+  final controller = _tapGoPushController;
+  if (controller == null) return;
+  await controller.reregister();
 }
 
 /// Dipanggil sebelum sesi dihapus (logout).
@@ -425,7 +456,8 @@ bool _tapGoAlertChat(TapGoPushMessage message, String reference) {
 }
 
 void _tapGoShowForegroundPush(TapGoPushMessage message) {
-  final text = [message.title, message.body].where((s) => s.isNotEmpty).join('\n');
+  final text =
+      [message.title, message.body].where((s) => s.isNotEmpty).join('\n');
   if (text.isEmpty) {
     return;
   }
@@ -434,7 +466,10 @@ void _tapGoShowForegroundPush(TapGoPushMessage message) {
   // SnackBar dan tanpa mengubah status yang tampil.
   if (message.data['type'] == 'ride_search_continues') {
     if (reference != null) {
-      tapGoSearchContinuesRefs.value = {...tapGoSearchContinuesRefs.value, reference};
+      tapGoSearchContinuesRefs.value = {
+        ...tapGoSearchContinuesRefs.value,
+        reference
+      };
     }
     return;
   }
@@ -521,7 +556,10 @@ void _tapGoOpenFromPush(TapGoPushMessage message) {
   if (message.data['type'] == 'ride_search_continues') {
     // Catatan yang sama dengan penerimaan di depan, supaya layar status tidak
     // menunggu poll berikutnya untuk menampilkan pemberitahuannya.
-    tapGoSearchContinuesRefs.value = {...tapGoSearchContinuesRefs.value, reference};
+    tapGoSearchContinuesRefs.value = {
+      ...tapGoSearchContinuesRefs.value,
+      reference
+    };
   }
   _tapGoOpenRide(reference);
 }
