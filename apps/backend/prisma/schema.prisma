@@ -1911,6 +1911,16 @@ enum PpobCategory {
   BPJS
   EWALLET
   PDAM
+  /// Pascabayar (cek tagihan lalu bayar), dibuka 6 Okt 2026 atas keputusan Owner.
+  BPJS_TK
+  TELKOM
+  INTERNET
+  TV
+  HP_POSTPAID
+  MULTIFINANCE
+  PBB
+  GAS
+  EMONEY
 }
 
 enum PpobTransactionStatus {

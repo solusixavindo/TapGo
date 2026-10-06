@@ -11,6 +11,7 @@ import {
   postpaidSkuFor,
   PpobPriceSyncService
 } from "../../src/modules/ppob/application/PpobPriceSyncService.js";
+import { normalizePpobTarget } from "../../src/modules/ppob/domain/targetValidation.js";
 import { nextWibMidnight } from "../../src/modules/ppob/application/PpobService.js";
 
 const config = { username: "tapgo", apiKey: "secret-key", baseUrl: "https://api.digiflazz.test/v1", testing: true };
@@ -155,14 +156,51 @@ describe("mapDigiflazzStatus pascabayar", () => {
   });
 });
 
+describe("validasi nomor tujuan kategori pascabayar", () => {
+  it("nomor sah diterima dan dinormalkan; isian tak masuk akal ditolak", () => {
+    expect(normalizePpobTarget("HP_POSTPAID", "+6281234567890")).toBe("081234567890");
+    expect(normalizePpobTarget("TELKOM", "021-1234 5678")).toBe("02112345678");
+    expect(normalizePpobTarget("INTERNET", "1234 5678 9012")).toBe("123456789012");
+    expect(normalizePpobTarget("PBB", "32.73.010.001.002-0010.0")).toBe("327301000100200100");
+    expect(normalizePpobTarget("MULTIFINANCE", " 5171-712/AB 345 ")).toBe("5171-712/AB345");
+    expect(normalizePpobTarget("TV", "12345678")).toBe("12345678");
+    expect(normalizePpobTarget("GAS", "1234567")).toBe("1234567");
+    expect(normalizePpobTarget("EMONEY", "6032123456")).toBe("6032123456");
+    expect(normalizePpobTarget("BPJS_TK", "12345678901")).toBe("12345678901");
+    for (const [category, bad] of [
+      ["HP_POSTPAID", "12345"], ["TELKOM", "123"], ["INTERNET", "12"], ["PBB", "123456"],
+      ["MULTIFINANCE", "a b"], ["MULTIFINANCE", "<script>alert(1)</script>"], ["GAS", ""], ["EMONEY", "abc"]
+    ] as const) {
+      expect(() => normalizePpobTarget(category, bad), `${category} ${bad}`).toThrow();
+    }
+  });
+});
+
 describe("katalog pascabayar", () => {
-  it("hanya BPJS Kesehatan dan PDAM yang dibuka; lainnya diabaikan", () => {
-    expect(classifyPostpaidEntry({ brand: "PDAM", name: "aetra" })).toBe("PDAM");
-    expect(classifyPostpaidEntry({ brand: "PDAM", name: "PDAM KAB. PURWOREJO" })).toBe("PDAM");
-    expect(classifyPostpaidEntry({ brand: "BPJS KESEHATAN", name: "BPJS KESEHATAN" })).toBe("BPJS");
-    expect(classifyPostpaidEntry({ brand: "BPJS KETENAGAKERJAAN", name: "BPJS KETENAGAKERJAAN" })).toBeNull();
-    expect(classifyPostpaidEntry({ brand: "PLN PASCABAYAR", name: "Pln Postpaid" })).toBeNull();
-    expect(classifyPostpaidEntry({ brand: "TELKOM", name: "Telkom" })).toBeNull();
+  it("semua kategori yang diminta Owner dikenali dari brand/nama katalog; yang tak dikenal dilaporkan", () => {
+    const cases: Array<[string, string, string | null]> = [
+      ["PDAM", "aetra", "PDAM"],
+      ["PDAM", "PDAM KAB. PURWOREJO", "PDAM"],
+      ["BPJS KESEHATAN", "BPJS KESEHATAN", "BPJS"],
+      ["BPJS KETENAGAKERJAAN", "BPJS KETENAGAKERJAAN", "BPJS_TK"],
+      ["PLN PASCABAYAR", "Pln Postpaid", "PLN_POSTPAID"],
+      ["PLN", "Pln Postpaid", "PLN_POSTPAID"],
+      ["PLN NONTAGLIS", "PLN NONTAGLIS PASCA", null],
+      ["TELKOM", "Telkom", "TELKOM"],
+      ["INTERNET PASCABAYAR", "INDIHOME", "INTERNET"],
+      ["TV PASCABAYAR", "TRANSVISION", "TV"],
+      ["HP PASCABAYAR", "HALO", "HP_POSTPAID"],
+      ["HP PASCABAYAR", "XL PASCABAYAR", "HP_POSTPAID"],
+      ["MULTIFINANCE", "BAF", "MULTIFINANCE"],
+      ["PBB", "PBB KOTA BANDUNG", "PBB"],
+      ["GAS NEGARA", "PGN", "GAS"],
+      ["PERTAGAS", "Pertagas", "GAS"],
+      ["E-MONEY", "E-Money", "EMONEY"],
+      ["KARTU KREDIT", "Kartu Kredit", null]
+    ];
+    for (const [brand, name, expected] of cases) {
+      expect(classifyPostpaidEntry({ brand, name }), `${brand} / ${name}`).toBe(expected);
+    }
   });
 
   it("SKU internal stabil, buram, dan lolos validasi klien", () => {
@@ -192,13 +230,13 @@ describe("katalog pascabayar", () => {
         entry("bpjs", "BPJS KESEHATAN", "BPJS KESEHATAN"),
         entry("aetra", "PDAM", "aetra"),
         entry("pln", "PLN PASCABAYAR", "Pln Postpaid"),
-        entry("telkom", "TELKOM", "Telkom"),
-        entry("telkom2", "TELKOM", "Telkom 2")
+        entry("kk", "KARTU KREDIT", "Kartu Kredit A"),
+        entry("kk2", "KARTU KREDIT", "Kartu Kredit B")
       ]
     };
     const service = new PpobPriceSyncService(repository as never, provider as never);
     const result = await service.runPostpaidCatalogSync();
-    expect(result).toMatchObject({ created: 2, ignoredBrands: { "PLN PASCABAYAR": 1, TELKOM: 2 }, errors: 0 });
+    expect(result).toMatchObject({ created: 3, ignoredBrands: { "KARTU KREDIT": 2 }, errors: 0 });
 
     calls.length = 0;
     const empty = new PpobPriceSyncService(repository as never, { ...provider, fetchPostpaidCatalog: async () => [] } as never);

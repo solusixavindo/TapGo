@@ -1,4 +1,4 @@
-import { PpobTransaction, Prisma } from "@prisma/client";
+import { PpobCategory, PpobTransaction, Prisma } from "@prisma/client";
 import { Request, Router } from "express";
 import { StatusCodes } from "http-status-codes";
 import { prisma } from "../../../config/prisma.js";
@@ -89,7 +89,16 @@ const PPOB_TARGET_LABELS: Record<string, string> = {
   PLN_PREPAID: "Nomor Meter PLN",
   PLN_POSTPAID: "ID Pelanggan PLN",
   BPJS: "Nomor VA BPJS",
-  PDAM: "ID Pelanggan PDAM"
+  PDAM: "ID Pelanggan PDAM",
+  BPJS_TK: "Nomor Peserta BPJS Ketenagakerjaan",
+  TELKOM: "Nomor Telepon (dengan kode area)",
+  INTERNET: "Nomor Pelanggan Internet",
+  TV: "Nomor Pelanggan TV",
+  HP_POSTPAID: "Nomor HP Pascabayar",
+  MULTIFINANCE: "Nomor Kontrak",
+  PBB: "NOP (Nomor Objek Pajak)",
+  GAS: "Nomor Pelanggan Gas",
+  EMONEY: "Nomor E-Money"
 };
 
 const PPOB_CATEGORY_NAMES: Record<string, string> = {
@@ -99,6 +108,15 @@ const PPOB_CATEGORY_NAMES: Record<string, string> = {
   PLN_POSTPAID: "Tagihan PLN",
   BPJS: "BPJS",
   PDAM: "PDAM",
+  BPJS_TK: "BPJS Ketenagakerjaan",
+  TELKOM: "Telkom",
+  INTERNET: "Internet",
+  TV: "TV Kabel",
+  HP_POSTPAID: "HP Pascabayar",
+  MULTIFINANCE: "Angsuran",
+  PBB: "PBB",
+  GAS: "Gas",
+  EMONEY: "E-Money",
   EWALLET: "E-Wallet"
 };
 
@@ -288,7 +306,7 @@ ppobRouter.get(
   validateRequest(ppobBillProductsQuerySchema),
   asyncHandler(async (req, res) => {
     const products = await getService().listPostpaidProducts({
-      category: req.query.category as "BPJS" | "PDAM",
+      category: req.query.category as PpobCategory,
       limit: Number(req.query.limit),
       ...(typeof req.query.q === "string" && req.query.q.length > 0 ? { query: req.query.q } : {})
     });

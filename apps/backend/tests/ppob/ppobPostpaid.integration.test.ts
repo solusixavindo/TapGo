@@ -206,7 +206,8 @@ describe.skipIf(!runIntegration)("PPOB pascabayar — cek tagihan lalu bayar", (
     const results = await Promise.all([1, 2, 3, 4, 5].map((i) => pay(user, ref, `race-${i}`)));
     const statuses = results.map((r) => r.status).sort();
     expect(statuses.filter((s) => s === 201)).toHaveLength(1);
-    expect(statuses.filter((s) => s === 201 || s === 409 || s === 400 || s === 500).length).toBe(5);
+    // Yang kalah mendapat 409 (bukan 500) dan tidak ada yang lolos dua kali.
+    expect(statuses.filter((s) => s === 409)).toHaveLength(4);
     expect(await ppobBalance(user.id)).toBe("397650.00");
     expect(await prisma.ppobTransaction.count()).toBe(1);
     expect(await prisma.walletTransaction.count()).toBe(1);
@@ -291,6 +292,22 @@ describe.skipIf(!runIntegration)("PPOB pascabayar — cek tagihan lalu bayar", (
     expect(await ppobBalance(user.id)).toBe("500000.00");
   });
 
+  it("kategori pascabayar lain (HP pascabayar, multifinance) memakai alur dan aturan yang sama", async () => {
+    const user = await userWithBalance("500000");
+    for (const category of ["HP_POSTPAID", "MULTIFINANCE", "TELKOM", "INTERNET", "TV", "PBB", "GAS", "EMONEY", "BPJS_TK", "PLN_POSTPAID"]) {
+      expect((await api(`/api/v1/ppob/bills/products?category=${category}`, { token: tokenFor(user) })).status).toBe(200);
+    }
+    const hp = await inquiryRef(user, "PSC_HPPASCA00001", "+6281234567890");
+    expect((await pay(user, hp, "hp-1")).status).toBe(201);
+    const mf = await inquiryRef(user, "PSC_MULTIFIN0001", "5171-712/AB345");
+    expect((await pay(user, mf, "mf-1")).status).toBe(201);
+    expect(await ppobBalance(user.id)).toBe("295300.00");
+    expect((await prisma.ppobTransaction.findUniqueOrThrow({ where: { publicReference: hp } })).targetNumber).toBe("081234567890");
+    // Nomor HP pascabayar harus nomor seluler; kontrak multifinance tidak boleh memuat markup.
+    expect((await inquire(user, "PSC_HPPASCA00001", "12345")).status).toBe(400);
+    expect((await inquire(user, "PSC_MULTIFIN0001", "<b>x</b>")).status).toBe(400);
+  });
+
   it("PDAM: alur yang sama dengan nomor pelanggan 6-20 digit", async () => {
     const user = await userWithBalance("500000");
     const ref = await inquiryRef(user, "PSC_PDAMSTUB0001", "5121400300");
@@ -314,6 +331,8 @@ async function seed() {
     { sku: "PULSA_TSEL_10", category: "PULSA" as const, brand: "Telkomsel", name: "Pulsa Telkomsel 10.000", price: "11500", isPostpaid: false, providerSku: null, isActive: true },
     { sku: "PSC_BPJS00000001", category: "BPJS" as const, brand: "BPJS KESEHATAN", name: "BPJS KESEHATAN", price: "0", isPostpaid: true, providerSku: "bpjs", isActive: true },
     { sku: "PSC_PDAMSTUB0001", category: "PDAM" as const, brand: "PDAM", name: "PDAM STUB KOTA", price: "0", isPostpaid: true, providerSku: "pdamstubkota", isActive: true },
+    { sku: "PSC_HPPASCA00001", category: "HP_POSTPAID" as const, brand: "HP PASCABAYAR", name: "HALO", price: "0", isPostpaid: true, providerSku: "halo", isActive: true },
+    { sku: "PSC_MULTIFIN0001", category: "MULTIFINANCE" as const, brand: "MULTIFINANCE", name: "BAF", price: "0", isPostpaid: true, providerSku: "baf", isActive: true },
     { sku: "PSC_INACTIVE0001", category: "BPJS" as const, brand: "BPJS KESEHATAN", name: "Nonaktif", price: "0", isPostpaid: true, providerSku: "bpjs2", isActive: false }
   ];
   for (const row of rows) {
