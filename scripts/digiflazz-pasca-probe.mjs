@@ -80,27 +80,26 @@ if (!rows) {
   console.log("Kunci satu baris:", Object.keys(rows[0] ?? {}));
 }
 
-// 2) Cek tagihan. Dua percobaan untuk membedakan penyebab "Signature salah":
-//    (a) mode uji (testing=true) — Digiflazz biasanya meminta kunci DEVELOPMENT;
-//    (b) tanpa testing dengan kunci yang sama (kunci PRODUKSI). Hanya cek tagihan
-//        dengan nomor uji: tidak ada pembayaran dan tidak ada saldo bergerak.
-async function tryInquiry(label, testing) {
-  const refId = `probe${Date.now()}${testing ? "t" : "p"}`;
+// 2) Cek tagihan NYATA (opsional): --inquiry <buyer_sku_code> <nomor pelanggan>
+//    Hanya cek tagihan: tidak ada pembayaran dan tidak ada saldo bergerak. Dipakai
+//    untuk melihat bentuk respons sungguhan. Yang dicetak hanya status, rc, pesan,
+//    serta nama kunci dan tipe; nama pelanggan dan nilai lain TIDAK dicetak.
+//    (Mode uji testing=true butuh kunci Development Digiflazz; kunci produksi
+//    di server menjawab rc=41 "Signature salah" untuk mode itu, wajar.)
+const flag = process.argv.indexOf("--inquiry");
+if (flag !== -1 && process.argv[flag + 2]) {
+  const refId = `probe${Date.now()}`;
   const result = await post("/transaction", {
     commands: "inq-pasca",
     username,
-    buyer_sku_code: "pln",
-    customer_no: "530000000001",
+    buyer_sku_code: process.argv[flag + 1],
+    customer_no: process.argv[flag + 2],
     ref_id: refId,
-    ...(testing ? { testing: true } : {}),
     sign: md5(`${username}${apiKey}${refId}`)
   });
   const d = result.json?.data;
-  console.log(`\n[${label}] HTTP ${result.status} status=${d?.status} rc=${d?.rc} message=${d?.message}`);
-  if (d && d.status === "Sukses") {
-    console.log("Bentuk respons sukses (kunci dan tipe):");
-    console.log(JSON.stringify(shape(result.json), null, 2));
-  }
+  console.log(`\nCek tagihan nyata: HTTP ${result.status} status=${d?.status} rc=${d?.rc} message=${d?.message}`);
+  console.log("Bentuk respons (kunci dan tipe):");
+  console.log(JSON.stringify(shape(result.json), null, 2));
+  if (d && typeof d.price === "number") console.log(`price/selling_price/admin: ${d.price} / ${d.selling_price} / ${d.admin}`);
 }
-await tryInquiry("mode uji, testing=true", true);
-await tryInquiry("tanpa testing (kunci produksi)", false);
