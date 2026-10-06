@@ -11,6 +11,7 @@ import {
   PREVIEW_PACKAGES,
   PaymentOptions,
   TOKEN_KEY,
+  UpgradeApiError,
   UpgradeOrder,
   clearSession,
   getManualTransfer,
@@ -67,6 +68,9 @@ export default function PaymentSummary() {
   const [options, setOptions] = useState<PaymentOptions | null>(null);
   const [transfer, setTransfer] = useState<ManualTransferInfo | null>(PREVIEW_MODE ? PREVIEW_MANUAL_TRANSFER : null);
   const [avatarFailed, setAvatarFailed] = useState(false);
+  // Server menolak transfer bank bila pembayaran online untuk pengajuan ini sudah dimulai
+  // (mencegah bayar dua kali). Tombol transfer lalu disembunyikan dan alasannya dijelaskan.
+  const [onlineStarted, setOnlineStarted] = useState(false);
 
   useEffect(() => {
     if (readSession(AVATAR_FAILED_KEY)) {
@@ -154,6 +158,10 @@ export default function PaymentSummary() {
     try {
       setTransfer(await startManualTransfer(readSession(TOKEN_KEY), order.id));
     } catch (caught) {
+      if (caught instanceof UpgradeApiError && caught.code === "MEMBERSHIP_PAYMENT_ALREADY_STARTED") {
+        setOnlineStarted(true);
+        return;
+      }
       setError(
         caught instanceof Error ? caught.message : "Petunjuk transfer belum dapat dibuat."
       );
@@ -247,6 +255,23 @@ export default function PaymentSummary() {
         </p>
       ) : null}
 
+      {onlineStarted && !transfer ? (
+        <div role="status" className="mt-5 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3.5 text-sm leading-7 themed-text" data-testid="online-started">
+          <p className="font-bold themed-accent">Pembayaran online sudah dimulai untuk pengajuan ini</p>
+          <p className="mt-1 text-xs leading-6 themed-text-muted">
+            Agar Anda tidak membayar dua kali, transfer bank tidak dapat dipilih untuk pengajuan ini. Lanjutkan pembayaran
+            online, atau tunggu pengajuan kedaluwarsa otomatis (24 jam sejak dibuat) lalu buat pengajuan baru dan pilih
+            transfer bank.
+          </p>
+          <a
+            href="https://wa.me/6283800255588?text=Halo%20TapGo%20Lion%2C%20pembayaran%20online%20membership%20saya%20tidak%20dapat%20diselesaikan%20dan%20saya%20ingin%20transfer%20bank."
+            className="mt-2 inline-block text-xs font-bold themed-accent"
+          >
+            Butuh bantuan? Hubungi tim TapGo
+          </a>
+        </div>
+      ) : null}
+
       {transfer ? (
         <>
           <button
@@ -273,7 +298,7 @@ export default function PaymentSummary() {
               {busy ? "Menyiapkan pembayaran…" : `Bayar ${formatRupiah(order.amount)}`}
             </button>
           ) : null}
-          {manualAvailable ? (
+          {manualAvailable && !onlineStarted ? (
             <button
               type="button"
               onClick={onManualTransfer}
