@@ -1,6 +1,6 @@
 # PPOB pascabayar (PLN pasca, BPJS, PDAM) — maksud jawaban Digiflazz dan rencana
 
-Disusun 6 Okt 2026. Status: **analisis dan rencana; belum ada kode PPOB yang diubah.** Pembangunan menunggu keputusan Owner di bagian 5.
+Disusun 6 Okt 2026. Status (diperbarui 6 Okt 2026 siang): **BPJS dan PDAM sudah dibangun** (backend `750c548`, user_app 2.0.5+39) atas keputusan Owner di bawah. Bagian 1-4 adalah analisis awal; bagian 5 berisi keputusan dan hasilnya.
 
 ## 1. Jawaban Digiflazz dan artinya
 
@@ -41,14 +41,18 @@ Taksiran: satu paket kerja sendiri (backend + aplikasi), terpisah dari APK drive
 - Nominal bayar selalu berasal dari inquiry yang tersimpan di server, bukan dari klien.
 - Inquiry kedaluwarsa dan inquiry milik pengguna lain ditolak.
 
-## 5. Keputusan yang dibutuhkan dari Owner
+## 5. Keputusan Owner (6 Okt 2026) dan penerapannya
 
-1. **Kategori yang dibuka dulu**: PLN pascabayar, BPJS, PDAM — semua, atau mulai dari satu (saran: PLN pascabayar dulu, lalu BPJS, lalu PDAM karena PDAM per daerah dan variatif).
-2. **Harga ke pelanggan**: nominal tagihan + biaya admin Digiflazz + biaya layanan TapGo berapa (tetap Rp, persen, atau hanya meneruskan komisi)? Ini menentukan pendapatan per transaksi.
-3. **Produk PDAM**: daftar PDAM mana yang aktif (Digiflazz menyediakan per daerah); pilih beberapa kota utama atau semua yang tersedia.
-4. **Kapan**: dikerjakan setelah APK driver +14 diuji dan Play driver berjalan, atau sebelum.
+1. **Kategori**: BPJS dan PDAM dulu. PLN pascabayar dan lainnya sengaja belum dibuat; brand lain di Digiflazz dilaporkan oleh sinkronisasi katalog (`ignoredBrands`) supaya Owner dapat memilih.
+2. **Harga**: harga Digiflazz + Rp1.000. Diterapkan sebagai `selling_price` (yang ditagihkan Digiflazz ke TapGo, setelah komisi) + Rp1.000 per pembayaran (`PPOB_POSTPAID_SERVICE_FEE`, bawaan 1000). Margin TapGo = tepat Rp1.000. Bila yang dimaksud Owner "harga resmi (`price`) + Rp1.000", margin menjadi komisi + Rp1.000; ubah satu baris di `PpobService.inquireBill`.
+3. **PDAM**: tidak ada daftar dari Owner, jadi **semua PDAM yang tersedia di Digiflazz** dibuat dari daftar harga `pasca` dan dicari lewat kotak pencarian di aplikasi. Daftar nyata baru diketahui setelah `scripts/digiflazz-pasca-probe.mjs` dijalankan di VPS.
+4. **Jadwal**: sekarang (selesai di sisi kode; menunggu cutover backend dan uji).
+
+### Layanan pascabayar lain di Digiflazz (dari dokumentasi resmi)
+PLN pascabayar, BPJS Kesehatan (dibuka), BPJS Ketenagakerjaan, PDAM (dibuka), Telkom (telepon), Internet pascabayar, TV kabel, HP pascabayar (Halo, XL, Indosat, Smartfren, Tri), Multifinance (angsuran kendaraan dan lainnya), PBB (pajak bumi dan bangunan), Gas (PGN/Pertagas), dan E-Money. Ketersediaan per akun dipastikan lewat skrip probe atau hasil sinkronisasi katalog.
 
 ## 6. Yang terbukti dan yang belum
 
 - Terbukti dari pembacaan kode: format transaksi sekarang prabayar saja, dan filter `price > 0` membuang baris pascabayar.
-- Belum terbukti: bentuk respons `inq-pasca`/`pay-pasca` pada akun kita (perlu satu panggilan mode testing dengan kredensial server; saya tidak menjalankannya dan tidak memegang kredensial itu). Rincian bidang diambil dari dokumentasi Digiflazz dan perlu dicocokkan dengan satu respons nyata sebelum dikunci di uji.
+- Terbukti (tes): alur cek-lalu-bayar, debit sekali, balapan, kedaluwarsa, refund, guard jalur harga tetap (lihat REGRESSION_REGISTER).
+- Belum terbukti: bentuk respons `inq-pasca`/`pay-pasca` pada akun kita. Format permintaan mengikuti dokumentasi buyer Digiflazz (halaman test case); bidang respons dibaca dengan parser yang menolak bila angka tidak ada. Jalankan `scripts/digiflazz-pasca-probe.mjs` di VPS (hanya-baca, mode uji) dan kirim keluarannya agar dicocokkan.
