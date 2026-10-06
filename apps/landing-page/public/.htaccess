@@ -76,6 +76,13 @@ ErrorDocument 404 /404.html
 # peringatan keamanan sebelum baris ini dinyalakan.
 <IfModule mod_rewrite.c>
   RewriteEngine On
+
+  # Tautan referral yang dibuat server (https://tapgolion.id/r/KODE) mengarah ke
+  # formulir pendaftaran dengan kode terisi. Situs ini statis dan tidak punya
+  # halaman per kode, jadi tanpa aturan ini tautan itu 404. Hanya karakter kode
+  # yang sah yang diterima; 302 supaya tujuan dapat diganti kelak.
+  RewriteRule ^r/([A-Za-z0-9_-]{1,40})/?$ https://tapgolion.id/daftar/?ref=$1 [R=302,L,NE]
+
   RewriteCond %{HTTPS} off
   RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 </IfModule>

@@ -35,6 +35,10 @@ function LoginPanel({ onLoggedIn, expired }: { onLoggedIn: () => void; expired: 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
+    if (!phone.trim() || !password) {
+      setError("Isi nomor HP dan password terlebih dahulu.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {

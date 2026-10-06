@@ -4,18 +4,22 @@ import { useHardRouter as useRouter } from "../../hard-nav";
 import { useEffect, useState } from "react";
 import {
   MembershipPackage,
+  ORDER_KEY,
   PACKAGE_HINT_KEY,
   PACKAGE_KEY,
   PREVIEW_MODE,
   PREVIEW_PACKAGES,
   TOKEN_KEY,
+  UpgradeOrder,
   getCurrentMembershipTier,
+  listMyOrders,
   listPackages,
   matchPackageByTier,
+  pickPendingOrder,
   readSession,
   writeSession
 } from "../api";
-import { formatRupiah, primaryButtonClass } from "../upgrade-shell";
+import { formatRupiah, primaryButtonClass, secondaryButtonClass } from "../upgrade-shell";
 
 const TIER_LABEL: Record<string, string> = {
   BASIC: "Basic",
@@ -49,6 +53,10 @@ export default function PackagePicker() {
   const [currentTier, setCurrentTier] = useState<string>(
     PREVIEW_MODE ? "BASIC" : ""
   );
+
+  // Pengajuan yang belum dibayar. Server hanya mengizinkan satu pengajuan menunggu
+  // per akun, jadi memilih paket lain di sini tidak akan pernah menggantikannya.
+  const [pending, setPending] = useState<UpgradeOrder | null>(null);
 
   useEffect(() => {
     if (PREVIEW_MODE) return;
@@ -86,6 +94,10 @@ export default function PackagePicker() {
     getCurrentMembershipTier(token)
       .then((tier) => (alive ? setCurrentTier(tier) : undefined))
       .catch(() => undefined);
+    // Gagal memuat daftar pengajuan tidak boleh menghalangi alur: tampilan lama dipakai.
+    listMyOrders(token)
+      .then((orders) => (alive ? setPending(pickPendingOrder(orders)) : undefined))
+      .catch(() => undefined);
     return () => {
       alive = false;
     };
@@ -118,6 +130,49 @@ export default function PackagePicker() {
         >
           Coba lagi
         </button>
+      </div>
+    );
+  }
+
+  if (pending) {
+    return (
+      <div className="rounded-[1.5rem] border border-amber-400/40 bg-amber-400/10 p-5" data-testid="pending-order">
+        <p className="text-base font-black themed-accent">Anda masih punya pengajuan yang belum dibayar</p>
+        <dl className="mt-4 space-y-2 text-sm">
+          <div className="flex justify-between gap-6">
+            <dt className="themed-text-muted">Paket</dt>
+            <dd className="font-bold themed-text">{pending.packageName}</dd>
+          </div>
+          <div className="flex justify-between gap-6">
+            <dt className="themed-text-muted">Nomor pengajuan</dt>
+            <dd className="text-right font-bold themed-text">{pending.reference}</dd>
+          </div>
+          <div className="flex justify-between gap-6">
+            <dt className="themed-text-muted">Total</dt>
+            <dd className="font-bold themed-text">{formatRupiah(pending.amount)}</dd>
+          </div>
+        </dl>
+        <p className="mt-4 text-xs leading-6 themed-text-muted">
+          Satu akun hanya dapat memiliki satu pengajuan yang menunggu pembayaran. Selesaikan pembayarannya untuk melanjutkan.
+          Pengajuan baru atau pergantian paket dapat dibuat setelah pengajuan ini dibayar atau kedaluwarsa otomatis
+          (24 jam sejak dibuat).
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            writeSession(ORDER_KEY, pending.id);
+            router.push("/upgrade/bayar");
+          }}
+          className={`${primaryButtonClass} mt-5`}
+        >
+          Lanjutkan pembayaran
+        </button>
+        <a
+          href="https://wa.me/6283800255588?text=Halo%20TapGo%20Lion%2C%20saya%20ingin%20mengganti%20paket%20membership%20yang%20belum%20dibayar."
+          className={`${secondaryButtonClass} mt-3 block text-center`}
+        >
+          Perlu ganti paket sekarang? Hubungi tim TapGo
+        </a>
       </div>
     );
   }

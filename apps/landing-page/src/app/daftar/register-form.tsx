@@ -42,6 +42,12 @@ function LogoMark() {
   );
 }
 
+/** Kode referral dari tautan (?ref=KODE); hanya karakter kode yang sah, selain itu kosong. */
+function referralFromLink(raw: string | null): string {
+  const value = (raw ?? "").trim();
+  return /^[A-Za-z0-9_-]{1,40}$/.test(value) ? value.toUpperCase() : "";
+}
+
 export default function RegisterForm() {
   const searchParams = useSearchParams();
   const selectedPackage = packageMap[(searchParams.get("package") || "").toLowerCase()] || "";
@@ -51,7 +57,7 @@ export default function RegisterForm() {
     email: "",
     address: "",
     packageName: selectedPackage,
-    referral: "",
+    referral: referralFromLink(searchParams.get("ref")),
     notes: ""
   });
   const [error, setError] = useState("");

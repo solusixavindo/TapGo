@@ -123,6 +123,8 @@ export default function RegistrationForm() {
   const [preparing, setPreparing] = useState(false);
   // Beberapa foto bisa diproses bersamaan: tombol baru aktif setelah SEMUANYA selesai.
   const preparingCount = useRef(0);
+  // Penjaga sinkron: dua ketukan beruntun dapat lolos sebelum state `busy` terpasang.
+  const submitting = useRef(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -179,7 +181,7 @@ export default function RegistrationForm() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || preparing) return;
+    if (busy || preparing || submitting.current) return;
     if (!complete) {
       setError("Lengkapi seluruh data dan kedua dokumen terlebih dahulu.");
       return;
@@ -191,6 +193,7 @@ export default function RegistrationForm() {
       return;
     }
 
+    submitting.current = true;
     setBusy(true);
     try {
       const token = readSession(TOKEN_KEY);
@@ -251,6 +254,7 @@ export default function RegistrationForm() {
         caught instanceof Error ? caught.message : "Pengajuan belum dapat dibuat."
       );
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   }
