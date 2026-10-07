@@ -97,11 +97,25 @@ export interface PpobProviderGateway {
   fetchPostpaidCatalog?(): Promise<PpobPostpaidCatalogEntry[]>;
 }
 
-/** Kategori yang dibayar lewat alur pascabayar (cek tagihan lalu bayar). */
+/**
+ * Kategori yang dibayar lewat alur pascabayar (cek tagihan lalu bayar). Satu-satunya
+ * sumber: sinkronisasi katalog hanya membuat produk di kategori ini, dan pengecekan
+ * status memilih perintah pascabayar (status-pasca) dari sini. Harus sama dengan
+ * `tapGoPostpaidCategoryCodes` di user_app dan `ppobBillProductsQuerySchema`.
+ */
 export const POSTPAID_CATEGORIES: ReadonlySet<PpobCategory> = new Set<PpobCategory>([
   "BPJS",
   "PDAM",
-  "PLN_POSTPAID"
+  "PLN_POSTPAID",
+  "BPJS_TK",
+  "TELKOM",
+  "INTERNET",
+  "TV",
+  "HP_POSTPAID",
+  "MULTIFINANCE",
+  "PBB",
+  "GAS",
+  "EMONEY"
 ]);
 
 export interface PpobBillInquiryRequest {

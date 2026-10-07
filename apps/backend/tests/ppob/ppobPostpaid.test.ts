@@ -7,7 +7,7 @@ import {
   mapDigiflazzStatus,
   parseBillInquiry
 } from "../../src/modules/ppob/infrastructure/DigiflazzPpobProvider.js";
-import { PpobBillInquiryError } from "../../src/modules/ppob/domain/ppobProvider.js";
+import { POSTPAID_CATEGORIES, PpobBillInquiryError } from "../../src/modules/ppob/domain/ppobProvider.js";
 import {
   classifyPostpaidEntry,
   postpaidSkuFor,
@@ -87,6 +87,27 @@ describe("Digiflazz pascabayar — format permintaan", () => {
       targetNumber: "085612345678"
     });
     expect(lastBody(fn)).not.toHaveProperty("commands");
+  });
+
+  it("SEMUA kategori pascabayar yang dibuat sinkronisasi dicek statusnya dengan status-pasca (bukan perintah prabayar)", async () => {
+    // Regresi 7 Okt 2026: POSTPAID_CATEGORIES hanya memuat BPJS/PDAM/PLN pasca, padahal
+    // sinkronisasi membuat 12 kategori; pembayaran tertunda di INTERNET/TV/PBB/dst
+    // dicek ulang dengan perintah prabayar (bisa dijawab GAGAL -> refund padahal sudah terbayar).
+    const fn = mockFetch({ data: { ref_id: "PPB-X", status: "Pending", rc: "03" } });
+    const provider = new DigiflazzPpobProvider(config);
+    expect([...POSTPAID_CATEGORIES].sort()).toEqual(
+      ["BPJS", "BPJS_TK", "EMONEY", "GAS", "HP_POSTPAID", "INTERNET", "MULTIFINANCE", "PBB", "PDAM", "PLN_POSTPAID", "TELKOM", "TV"]
+    );
+    for (const category of POSTPAID_CATEGORIES) {
+      await provider.checkStatus({
+        publicReference: "PPB-X",
+        providerSku: "sku",
+        sku: "PSC_X",
+        category,
+        targetNumber: "1234567890"
+      });
+      expect(lastBody(fn), category).toMatchObject({ commands: "status-pasca", ref_id: "PPB-X" });
+    }
   });
 
   it("jaringan putus saat inquiry = galat inquiry yang aman (tidak ada uang bergerak)", async () => {

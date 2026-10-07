@@ -8,7 +8,7 @@ import {
   PpobPriceSyncUpdate,
   PpobRepository
 } from "../domain/PpobRepository.js";
-import { PpobPriceListEntry, PpobProviderGateway } from "../domain/ppobProvider.js";
+import { POSTPAID_CATEGORIES, PpobPriceListEntry, PpobProviderGateway } from "../domain/ppobProvider.js";
 
 /**
  * Kunci advisory lock Postgres khusus sinkronisasi harga PPOB. Angka arbitrer
@@ -20,26 +20,10 @@ const PPOB_PRICE_SYNC_LOCK_KEY = 727009;
 const PPOB_POSTPAID_CATALOG_LOCK_KEY = 727010;
 
 /**
- * Kategori pascabayar yang dibuka di aplikasi. Keputusan Owner 6 Okt 2026:
- * BPJS, PDAM dulu, lalu semua yang diminta (PLN pascabayar, BPJS Ketenagakerjaan,
- * Telkom, internet, TV kabel, HP pascabayar, multifinance, PBB, gas, e-money).
- * Produk pascabayar di luar daftar ini TIDAK dibuat; brand-nya dilaporkan di hasil
- * sinkronisasi supaya Owner dapat memilih yang berikutnya.
+ * Kategori pascabayar yang dibuka di aplikasi: POSTPAID_CATEGORIES (keputusan Owner
+ * 6 Okt 2026). Produk pascabayar di luar daftar itu TIDAK dibuat; brand-nya dilaporkan
+ * di hasil sinkronisasi supaya Owner dapat memilih yang berikutnya.
  */
-const ENABLED_POSTPAID_CATEGORIES: ReadonlySet<PpobCategory> = new Set<PpobCategory>([
-  "BPJS",
-  "PDAM",
-  "PLN_POSTPAID",
-  "BPJS_TK",
-  "TELKOM",
-  "INTERNET",
-  "TV",
-  "HP_POSTPAID",
-  "MULTIFINANCE",
-  "PBB",
-  "GAS",
-  "EMONEY"
-]);
 
 /**
  * Menentukan kategori produk pascabayar dari brand/nama katalog Digiflazz; null =
@@ -219,7 +203,7 @@ export class PpobPriceSyncService {
     const ignoredBrands: Record<string, number> = {};
     for (const entry of catalog) {
       const category = classifyPostpaidEntry(entry);
-      if (!category || !ENABLED_POSTPAID_CATEGORIES.has(category)) {
+      if (!category || !POSTPAID_CATEGORIES.has(category)) {
         const key = entry.brand || entry.name;
         ignoredBrands[key] = (ignoredBrands[key] ?? 0) + 1;
         continue;
