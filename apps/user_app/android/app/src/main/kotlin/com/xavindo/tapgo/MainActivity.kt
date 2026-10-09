@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import java.security.MessageDigest
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -29,10 +30,28 @@ class MainActivity : FlutterActivity() {
                 // (tak dikenal = tapgo). Dipakai pratinjau saat memilih nada dan
                 // bunyi peringatan saat aplikasi di depan.
                 "playNotificationSound" -> result.success(alertSound.play(call.argument<String>("sound")) == null)
+                // Hash SHA-256 ANDROID_ID (tidak pernah mengirim ID mentah). null bila
+                // kosong atau nilai bawaan rusak. Dipakai sebagai sidik perangkat saat daftar.
+                "deviceHardwareId" -> result.success(hardwareDeviceId())
                 "areNotificationsEnabled" -> result.success(alertSound.notificationsEnabled())
                 "openNotificationSettings" -> result.success(openNotificationSettings())
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    private fun hardwareDeviceId(): String? {
+        return try {
+            val raw = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+            if (raw.isNullOrBlank() || raw == "9774d56d682e549c") {
+                null
+            } else {
+                MessageDigest.getInstance("SHA-256")
+                    .digest("tapgo-user:$raw".toByteArray())
+                    .joinToString("") { "%02x".format(it) }
+            }
+        } catch (_: Exception) {
+            null
         }
     }
 

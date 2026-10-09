@@ -302,6 +302,7 @@ class PpobOrder {
     required this.balanceAmount,
     this.failureReason,
     this.providerRef,
+    this.serialNumber,
     this.createdAt,
     this.completedAt,
     this.refundedAt,
@@ -319,6 +320,11 @@ class PpobOrder {
   final double balanceAmount;
   final String? failureReason;
   final String? providerRef;
+
+  /// Token PLN / nomor referensi dari provider (Digiflazz `sn`). Hanya ada pada
+  /// transaksi sukses. Sebelum 2.0.5+44 server tidak mengirimnya dan aplikasi tidak
+  /// menampilkannya, sehingga pembeli token listrik tidak menerima nomor tokennya.
+  final String? serialNumber;
   final DateTime? createdAt;
   final DateTime? completedAt;
   final DateTime? refundedAt;
@@ -339,6 +345,10 @@ class PpobOrder {
       balanceAmount: _moneyFromJson(json['balanceAmount']),
       failureReason: json['failureReason'] is String ? json['failureReason'] as String : null,
       providerRef: json['providerRef'] is String ? json['providerRef'] as String : null,
+      serialNumber: json['serialNumber'] is String &&
+              (json['serialNumber'] as String).trim().isNotEmpty
+          ? (json['serialNumber'] as String).trim()
+          : null,
       createdAt: _dateFromJson(json['createdAt']),
       completedAt: _dateFromJson(json['completedAt']),
       refundedAt: _dateFromJson(json['refundedAt']),

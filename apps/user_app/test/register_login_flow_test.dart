@@ -43,7 +43,7 @@ Future<void> openAuth(WidgetTester tester) async {
 Future<void> submitRegister(
   WidgetTester tester, {
   String name = 'Pengguna Uji',
-  String phone = '081234567890',
+  String phone = '081355503217',
   String password = 'rahasia-uji-123',
 }) async {
   await tester.tap(find.text('Register').first);

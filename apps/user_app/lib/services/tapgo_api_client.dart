@@ -1127,10 +1127,17 @@ class _TapGoDeviceContextStore {
 
     await _readAppVersion();
     final deviceId = await _readOrCreate(_deviceIdKey, _newDeviceId);
-    final fingerprint = await _readOrCreate(
-      _deviceFingerprintKey,
-      () => 'tapgo:${Platform.operatingSystem}:$deviceId',
-    );
+    // Sidik perangkat dari ID perangkat keras (ANDROID_ID, di-hash di sisi native)
+    // supaya batas "satu HP satu akun" di server tidak lolos hanya dengan hapus-data
+    // atau pasang-ulang. Bila tidak tersedia, jatuh ke sidik lama yang terikat
+    // pemasangan.
+    final hardware = await _readHardwareFingerprint();
+    final fingerprint = hardware != null
+        ? 'tapgo:${Platform.operatingSystem}:hw-$hardware'
+        : await _readOrCreate(
+            _deviceFingerprintKey,
+            () => 'tapgo:${Platform.operatingSystem}:$deviceId',
+          );
     return _TapGoDeviceContext(
       deviceId: deviceId,
       deviceFingerprint: fingerprint,
@@ -1138,6 +1145,28 @@ class _TapGoDeviceContextStore {
       platform: Platform.operatingSystem,
       installer: await _readInstaller(),
     );
+  }
+
+  static String? _hardwareFingerprint;
+  static bool _hardwareFingerprintRead = false;
+
+  /// 32 heksadesimal pertama dari hash ID perangkat keras, atau null bila tidak
+  /// tersedia (bukan Android, ID kosong/bawaan rusak, atau platform tidak menjawab).
+  /// Dibaca sekali per proses.
+  Future<String?> _readHardwareFingerprint() async {
+    if (_hardwareFingerprintRead) return _hardwareFingerprint;
+    _hardwareFingerprintRead = true;
+    try {
+      final value = await tapGoAlertsMethodChannel
+          .invokeMethod<String>('deviceHardwareId')
+          .timeout(const Duration(seconds: 2));
+      if (value != null && RegExp(r'^[0-9a-f]{64}$').hasMatch(value)) {
+        _hardwareFingerprint = value.substring(0, 32);
+      }
+    } catch (error) {
+      _tapGoDebugLog('[TapGo Device] hardware id unavailable: $error');
+    }
+    return _hardwareFingerprint;
   }
 
   Future<void> _readAppVersion() async {

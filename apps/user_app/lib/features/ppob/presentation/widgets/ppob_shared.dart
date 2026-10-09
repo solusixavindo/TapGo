@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../domain/ppob_models.dart';
 
@@ -248,4 +249,152 @@ String ppobErrorMessage(Object error) {
     };
   }
   return 'Koneksi bermasalah. Periksa jaringan Anda dan coba lagi.';
+}
+
+/// Memecah `serialNumber` Digiflazz menjadi bagian utama dan sisanya. Untuk token PLN
+/// bentuknya "NNNN-NNNN-NNNN-NNNN-NNNN/NAMA/R1/1300/12,3": nomor token ada sebelum
+/// garis miring pertama; sisanya keterangan.
+({String primary, String? detail}) ppobSplitSerial(String serial) {
+  final text = serial.trim();
+  final slash = text.indexOf('/');
+  if (slash <= 0) return (primary: text, detail: null);
+  final detail = text.substring(slash + 1).trim();
+  return (
+    primary: text.substring(0, slash).trim(),
+    detail: detail.isEmpty ? null : detail,
+  );
+}
+
+/// Token 20 digit tanpa pemisah ditampilkan berkelompok empat-empat agar mudah dibaca
+/// dan diketik ke meteran; bentuk lain ditampilkan apa adanya.
+String ppobFormatToken(String primary) {
+  if (!RegExp(r'^\d{20}$').hasMatch(primary)) return primary;
+  return [for (var i = 0; i < 20; i += 4) primary.substring(i, i + 4)]
+      .join('-');
+}
+
+String ppobSerialLabel(String categoryCode) =>
+    categoryCode == 'PLN_PREPAID' || categoryCode == 'PLN_TOKEN'
+        ? 'Nomor token listrik'
+        : 'Nomor referensi';
+
+/// Nomor token / referensi dari provider untuk transaksi sukses. Kosong (tanpa tinggi)
+/// untuk transaksi yang belum sukses atau tanpa nomor. [compact] dipakai di daftar
+/// riwayat; bentuk penuh dipakai di kartu hasil transaksi.
+class PpobSerialNumberBlock extends StatelessWidget {
+  const PpobSerialNumberBlock({
+    super.key,
+    required this.order,
+    this.compact = false,
+  });
+
+  final PpobOrder order;
+  final bool compact;
+
+  Future<void> _copy(BuildContext context, String value) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('Nomor disalin')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final serial = order.serialNumber;
+    if (order.status != PpobOrderStatus.success || serial == null) {
+      return const SizedBox.shrink();
+    }
+    final theme = Theme.of(context);
+    final parts = ppobSplitSerial(serial);
+    final primary = ppobFormatToken(parts.primary);
+    final label = ppobSerialLabel(order.categoryCode);
+
+    if (compact) {
+      // Dua baris, selebar kartu riwayat: label kecil lalu token tebal. Satu baris
+      // "label: token" terpotong menjadi "Nomor token listrik:..." dan token hilang.
+      return Container(
+        key: const ValueKey('ppob-serial-compact'),
+        width: double.infinity,
+        margin: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0B7A75).withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: theme.textTheme.bodySmall),
+                  const SizedBox(height: 2),
+                  Text(
+                    primary,
+                    key: const ValueKey('ppob-serial-compact-value'),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              key: const ValueKey('ppob-serial-copy'),
+              tooltip: 'Salin',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.copy_rounded, size: 18),
+              onPressed: () => _copy(context, parts.primary),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      key: const ValueKey('ppob-serial-block'),
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0B7A75).withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border:
+            Border.all(color: const Color(0xFF0B7A75).withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: theme.textTheme.bodySmall),
+                const SizedBox(height: 4),
+                SelectableText(
+                  primary,
+                  key: const ValueKey('ppob-serial-value'),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+                if (parts.detail != null) ...[
+                  const SizedBox(height: 4),
+                  Text(parts.detail!, style: theme.textTheme.bodySmall),
+                ],
+              ],
+            ),
+          ),
+          IconButton(
+            key: const ValueKey('ppob-serial-copy'),
+            tooltip: 'Salin',
+            icon: const Icon(Icons.copy_rounded),
+            onPressed: () => _copy(context, parts.primary),
+          ),
+        ],
+      ),
+    );
+  }
 }

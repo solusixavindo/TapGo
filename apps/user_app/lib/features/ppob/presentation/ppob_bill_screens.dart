@@ -505,6 +505,7 @@ class _BillResultCard extends StatelessWidget {
             Text(ppobFormatRupiah(order.amount),
                 style: theme.textTheme.titleMedium
                     ?.copyWith(fontWeight: FontWeight.w800)),
+            PpobSerialNumberBlock(order: order),
             const SizedBox(height: 8),
             Text(message, style: theme.textTheme.bodySmall),
           ],

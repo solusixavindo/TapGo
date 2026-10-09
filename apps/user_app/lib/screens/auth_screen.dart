@@ -22,6 +22,8 @@ String tapGoAuthErrorMessage(DioException error, {required bool isRegister}) {
   switch (code) {
     case 'PHONE_ALREADY_REGISTERED':
       return 'Nomor HP sudah terdaftar. Silakan pilih Login.';
+    case 'DEVICE_ACCOUNT_LIMIT':
+      return 'HP ini sudah dipakai mendaftarkan akun TapGo. Silakan pilih Login dengan akun tersebut.';
     case 'EMAIL_ALREADY_REGISTERED':
       return 'Email sudah terdaftar. Gunakan email lain atau pilih Login.';
     case 'INVALID_CREDENTIALS':
@@ -122,6 +124,45 @@ bool tapGoIsValidIndonesianPhone(String? value) {
     return phone.startsWith('+628');
   }
   return phone.startsWith('08') || phone.startsWith('628');
+}
+
+/// Nomor seluler Indonesia yang masuk akal untuk PENDAFTARAN: 081–089, 10–13 digit,
+/// bukan deretan digit sama (081111111111) atau berurutan (081234567890). Aturan yang
+/// sama dengan server (`isPlausibleIndonesianMobile`); server tetap penentu akhir.
+/// Login memakai [tapGoIsValidIndonesianPhone] yang lebih longgar karena akun lama
+/// boleh punya nomor di luar pola ini.
+bool tapGoIsPlausibleRegistrationPhone(String? value) {
+  final phone = tapGoSanitizePhoneInput(value);
+  final digits = tapGoDigitsOnly(phone);
+  final String national;
+  if (phone.startsWith('+')) {
+    if (!digits.startsWith('62')) return false;
+    national = '0${digits.substring(2)}';
+  } else if (digits.startsWith('62')) {
+    national = '0${digits.substring(2)}';
+  } else {
+    national = digits;
+  }
+  if (!RegExp(r'^08[1-9]\d{7,10}$').hasMatch(national)) return false;
+  var identical = 1, ascending = 1, descending = 1;
+  for (var i = 1; i < national.length; i++) {
+    final step = national.codeUnitAt(i) - national.codeUnitAt(i - 1);
+    identical = step == 0 ? identical + 1 : 1;
+    ascending = step == 1 ? ascending + 1 : 1;
+    descending = step == -1 ? descending + 1 : 1;
+    if (identical >= 8 || ascending >= 7 || descending >= 7) return false;
+  }
+  return true;
+}
+
+String? tapGoRegistrationPhoneValidatorMessage(String? value) {
+  final phone = tapGoSanitizePhoneInput(value);
+  if (phone.isEmpty) {
+    return 'Nomor HP wajib diisi';
+  }
+  // Pesan sengaja sama dengan aturan lama: tampilan tidak berubah, hanya nomor
+  // rekaan yang kini ikut ditolak.
+  return tapGoIsPlausibleRegistrationPhone(phone) ? null : 'Nomor HP tidak valid';
 }
 
 String? tapGoPhoneValidatorMessage(String? value) {
@@ -749,7 +790,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   }
 
   String? _phoneValidator(String? value) {
-    return tapGoPhoneValidatorMessage(value);
+    return _isRegister
+        ? tapGoRegistrationPhoneValidatorMessage(value)
+        : tapGoPhoneValidatorMessage(value);
   }
 
   /// Opsional, tapi kalau diisi wajib berbentuk email — dipakai untuk lupa

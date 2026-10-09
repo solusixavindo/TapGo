@@ -438,6 +438,7 @@ class _ResultCard extends StatelessWidget {
             _row(context, 'Produk', order.productName),
             _row(context, 'Tujuan', order.targetNumber),
             _row(context, 'Total', ppobFormatRupiah(order.amount)),
+            PpobSerialNumberBlock(order: order),
             if (order.failureReason != null) ...[
               const SizedBox(height: 8),
               Text(
