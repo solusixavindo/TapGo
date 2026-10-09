@@ -7,13 +7,16 @@ Isi rilis (tiga commit di atas `ebc3a5b`):
 1. `dd37db9` — server mengirim `serialNumber` (nomor token PLN) ke aplikasi; satu sesi aktif per akun USER kanal APP (login di HP kedua
    mematikan HP pertama dan menghapus token push-nya); batas satu akun per HP saat mendaftar (409 `DEVICE_ACCOUNT_LIMIT`); pendaftaran hanya
    menerima nomor seluler Indonesia (081-089, 10-13 digit, bukan deretan sama/berurutan; login tidak berubah).
-2. `e95cbed` — rekonsiliasi PPOB menyala bawaan; token PLN "Sukses" tanpa SN ditahan PROCESSING; transaksi terbuka > 30 menit dicatat sebagai error.
+2. `bffeae4` — rekonsiliasi PPOB menyala bawaan; token PLN "Sukses" tanpa SN ditahan PROCESSING; transaksi terbuka > 30 menit dicatat sebagai error.
+3. `e95cbed` — periode tagihan terbaca (Digiflazz memakai `periode`); BPJS Kesehatan menerima nomor kartu 13 digit atau nomor VA 16 digit;
+   bukti pembayaran tagihan membawa `bill` (nama pelanggan, periode, tagihan, biaya, total) dari cek tagihan yang tersimpan. Semua tambahan
+   hanya MENAMBAH kolom pada jawaban `/ppob/orders`; aplikasi +43/+44 mengabaikannya.
 
 Catatan perilaku yang perlu Anda ketahui:
 - Sesi yang sudah ada tetap berlaku sampai pemiliknya login lagi; baru saat login berikutnya HP lain dikeluarkan.
 - Login di HP juga mengakhiri sesi web (halaman /upgrade) akun itu; pengguna cukup login ulang di web.
 - Batas akun per HP bisa diubah tanpa rilis ulang lewat `REGISTRATION_MAX_ACCOUNTS_PER_DEVICE` di `.env` (bawaan 1; 0 = mati), lalu `pm2 restart tapgo-api`.
-- Aplikasi +43 yang beredar tidak mengenal pesan batas akun (menampilkan galat umum); +44 mengenalnya.
+- Aplikasi +43 yang beredar tidak mengenal pesan batas akun (menampilkan galat umum); +44 dan +45 mengenalnya.
 
 ## Langkah 1. Pastikan proses aktif masih `tapgo-ebc3a5b`
 ```bash
