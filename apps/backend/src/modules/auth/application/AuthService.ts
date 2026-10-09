@@ -91,6 +91,7 @@ export class AuthService {
           phone: input.phone,
           passwordHash,
           role: authoritativeRole,
+	          maxAccountsPerDevice: env.REGISTRATION_MAX_ACCOUNTS_PER_DEVICE,
 	          referralCode: await this.generateUniqueReferralCode(input.fullName),
 	          ...(input.referralCode !== undefined && input.referralCode.trim() !== ""
 	            ? { sponsorReferralCode: input.referralCode.trim().toUpperCase() }
@@ -128,7 +129,7 @@ export class AuthService {
       );
     }
 
-    return this.issueTokenPair(userId, authoritativeRole, input.context);
+    return this.issueTokenPair(userId, authoritativeRole, input.context, { replaceExistingSessions: false });
   }
 
   async login(input: { phone: string; password: string; context: AuthClientContext }) {
@@ -261,7 +262,7 @@ export class AuthService {
       );
     }
 
-    return this.issueTokenPair(userId, UserRole.USER, input.context);
+    return this.issueTokenPair(userId, UserRole.USER, input.context, { replaceExistingSessions: false });
   }
 
   private async verifyGoogleIdToken(idToken: string) {
@@ -426,7 +427,12 @@ export class AuthService {
     return toPublicUser(user);
   }
 
-  private async issueTokenPair(userId: string, role: UserRole, context: AuthClientContext) {
+  private async issueTokenPair(
+    userId: string,
+    role: UserRole,
+    context: AuthClientContext,
+    options: { replaceExistingSessions?: boolean } = {}
+  ) {
     // Kanal distempel dari konteks login (server-stamped per endpoint, K1c).
     const channel = context.channel;
     const channelClaim = channel !== undefined ? { channel } : {};
@@ -445,12 +451,27 @@ export class AuthService {
     // tetap dilakukan supaya refresh token lama pun tidak bisa dipakai.
     // Termasuk mencabut sesi dashboard web mitra bila kebetulan sedang
     // terbuka — hanya berarti login ulang sekali di sana, bukan masalah baru.
-    // Tidak berlaku untuk USER/ADMIN (belum ada laporan serupa, blast radius
-    // perlu dipahami terpisah sebelum diperluas), dan TIDAK dipanggil dari
-    // refresh() — jalur itu merotasi sesi yang sama, bukan menerbitkan sesi
-    // baru, sehingga tidak boleh pernah mencabut dirinya sendiri.
-    if (role === UserRole.DRIVER && channel === "APP") {
+    // 9 Okt 2026 (laporan Owner dari Play Store): satu akun USER juga bisa aktif di
+    // beberapa HP sekaligus. Aturan yang sama kini berlaku untuk USER kanal APP. Untuk
+    // USER, token push akun ikut dihapus: tanpa itu HP lama yang sudah dikeluarkan tetap
+    // menerima notifikasi akun ini (chat, saldo, perjalanan). HP yang baru masuk
+    // mendaftarkan token-nya sendiri begitu login selesai (aplikasi memulai push pada
+    // setiap perpindahan ke status masuk). Login lewat kanal WEB (halaman /upgrade)
+    // tidak mencabut apa pun; sebaliknya login di HP mematikan sesi web akun itu karena
+    // authVersion bersifat per akun.
+    // Tidak berlaku untuk ADMIN, dan TIDAK dipanggil dari refresh() — jalur itu
+    // merotasi sesi yang sama, bukan menerbitkan sesi baru, sehingga tidak boleh pernah
+    // mencabut dirinya sendiri. Pendaftaran akun baru juga tidak mencabut (tidak ada
+    // sesi lama; replaceExistingSessions=false).
+    if (
+      options.replaceExistingSessions !== false &&
+      channel === "APP" &&
+      (role === UserRole.DRIVER || role === UserRole.USER)
+    ) {
       await this.authRepository.revokeAllActiveSessions(userId, new Date());
+      if (role === UserRole.USER) {
+        await this.authRepository.deleteAllPushTokens(userId);
+      }
     }
 
     // Versi otorisasi dibaca SEKARANG (SETELAH pencabutan di atas, bila

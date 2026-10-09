@@ -339,6 +339,21 @@ export class DigiflazzPpobProvider implements PpobProviderGateway {
   }
 }
 
+/** Kolom `serial_number` berukuran 120 karakter. */
+const SERIAL_NUMBER_MAX_LENGTH = 120;
+
+/**
+ * Token PLN / serial number dari provider (`sn`), siap disimpan. Dipotong ke panjang
+ * kolom: nilai lebih panjang akan membuat penyimpanan hasil gagal dan transaksi yang
+ * SUDAH sukses di provider tertahan di PROCESSING tanpa nomor token. Nomor token
+ * ada di awal teks `sn`, jadi pemotongan di ujung tidak menghilangkannya.
+ */
+export function normalizeSerialNumber(sn: unknown): string | null {
+  if (typeof sn !== "string" && typeof sn !== "number") return null;
+  const text = String(sn).trim();
+  return text.length > 0 ? text.slice(0, SERIAL_NUMBER_MAX_LENGTH) : null;
+}
+
 /** Pemetaan status Digiflazz → outcome domain. Fail-closed pada nilai asing. */
 export function mapDigiflazzStatus(data: {
   ref_id?: string;
@@ -356,7 +371,7 @@ export function mapDigiflazzStatus(data: {
     return {
       kind: "SUCCESS",
       providerReference,
-      serialNumber: data.sn && data.sn.trim().length > 0 ? data.sn : null,
+      serialNumber: normalizeSerialNumber(data.sn),
       // Pascabayar: yang ditagihkan ke kita adalah selling_price (harga setelah
       // komisi); prabayar tidak punya field itu dan tetap memakai price.
       providerCost:

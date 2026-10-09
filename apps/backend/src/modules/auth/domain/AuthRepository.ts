@@ -16,6 +16,12 @@ export type CreateUserInput = {
   role: UserRole;
   referralCode: string;
   sponsorReferralCode?: string;
+  /**
+   * Batas akun per perangkat saat mendaftar (role USER). Diperiksa di dalam transaksi
+   * yang sama dengan pembuatan akun, di bawah kunci sinyal perangkat, sehingga dua
+   * pendaftaran bersamaan dari HP yang sama tidak bisa lolos keduanya. 0/undefined = tanpa batas.
+   */
+  maxAccountsPerDevice?: number;
   registrationEvent?: {
     deviceFingerprintHash?: string;
     ipAddress?: string;
@@ -87,6 +93,12 @@ export interface AuthRepository {
    * alur refresh (yang merotasi sesi yang sama, bukan menerbitkan sesi baru).
    */
   revokeAllActiveSessions(userId: string, now: Date): Promise<void>;
+  /**
+   * Menghapus semua token push akun. Dipanggil saat login baru mencabut sesi lama:
+   * token HP lama tidak boleh tetap menerima notifikasi akun ini. HP yang baru masuk
+   * mendaftarkan token-nya sendiri setelah login.
+   */
+  deleteAllPushTokens(userId: string): Promise<void>;
 
   /**
    * Menerapkan penggantian password dalam SATU transaksi.

@@ -64,6 +64,11 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(32),
   JWT_ACCESS_TTL: z.string().default("15m"),
   JWT_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  // Batas akun yang boleh didaftarkan dari SATU perangkat aplikasi (sidik perangkat
+  // yang dikirim klien). Sebelumnya hanya ditandai "suspicious", tidak pernah
+  // diblokir, sehingga satu HP bisa membuat banyak akun (dan mengambil bonus
+  // registrasi berkali-kali). 0 = batas dimatikan (tuas darurat tanpa rilis ulang).
+  REGISTRATION_MAX_ACCOUNTS_PER_DEVICE: z.coerce.number().int().min(0).max(20).default(1),
   // Secret khusus digest OTP/recovery. SENGAJA terpisah dari JWT, payment,
   // database, dan KMS: kebocoran satu domain tidak boleh melemahkan yang lain.
   // Optional di sini agar boot tidak gagal pada environment yang belum memakai

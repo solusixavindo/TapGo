@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   digiflazzSign,
-  mapDigiflazzStatus
+  mapDigiflazzStatus,
+  normalizeSerialNumber
 } from "../../src/modules/ppob/infrastructure/DigiflazzPpobProvider.js";
 
 describe("Digiflazz adapter (unit)", () => {
@@ -51,6 +52,25 @@ describe("Digiflazz adapter (unit)", () => {
   it('sn kosong pada "Sukses" tetap SUCCESS dengan serialNumber null', () => {
     const outcome = mapDigiflazzStatus({ ref_id: "PPB-X", status: "Sukses", sn: "" });
     expect(outcome).toMatchObject({ kind: "SUCCESS", serialNumber: null });
+  });
+
+  it("sn token PLN dirapikan dan dipotong ke 120 karakter tanpa menghilangkan nomor token di awalnya", () => {
+    const token = "5412-3456-7890-1234-5678";
+    const long = `${token}/${"NAMA PELANGGAN PANJANG ".repeat(10)}`;
+    const outcome = mapDigiflazzStatus({ ref_id: "PPB-X", status: "Sukses", sn: `  ${long}  ` });
+    expect(outcome).toMatchObject({ kind: "SUCCESS" });
+    const serial = (outcome as { serialNumber: string | null }).serialNumber!;
+    expect(serial.length).toBe(120);
+    expect(serial.startsWith(token)).toBe(true);
+  });
+
+  it("normalizeSerialNumber: kosong, spasi, atau bukan teks menjadi null; angka diterima sebagai teks", () => {
+    expect(normalizeSerialNumber(undefined)).toBeNull();
+    expect(normalizeSerialNumber(null)).toBeNull();
+    expect(normalizeSerialNumber("   ")).toBeNull();
+    expect(normalizeSerialNumber({})).toBeNull();
+    expect(normalizeSerialNumber(12345)).toBe("12345");
+    expect(normalizeSerialNumber(" ABC/1 ")).toBe("ABC/1");
   });
 
   it('status "Pending" memetakan ke PROCESSING', () => {

@@ -490,6 +490,67 @@ describe.skipIf(!runIntegration)("Stage R2.7 — PPOB foundation", () => {
     });
     expect(detail.status).toBe(200);
   });
+
+  // Laporan Owner 9 Okt 2026: pembeli token listrik tidak menerima nomor tokennya walau
+  // transaksi sukses di Digiflazz. Penyebab: serializeOrder (bentuk PpobOrder yang dibaca
+  // aplikasi) tidak memuat serialNumber, padahal tersimpan di database.
+  it("/orders (buat, riwayat, detail) mengirim serialNumber token PLN untuk transaksi SUKSES", async () => {
+    const user = await createUserWithPpobBalance("50000");
+    const created = await api("/api/v1/ppob/orders", {
+      method: "POST",
+      token: tokenFor(user),
+      idempotencyKey: "r2-serial-contract-1",
+      body: { sku: "PLN_TOKEN_20", targetNumber: "12345678901" }
+    });
+    expect(created.status).toBe(201);
+    const createdBody = (await created.json()) as { data: any };
+    expect(createdBody.data.status).toBe("SUCCESS");
+    const expected = `STUB-SN-${createdBody.data.id.slice(4)}`;
+    expect(createdBody.data.serialNumber).toBe(expected);
+
+    const stored = await prisma.ppobTransaction.findUniqueOrThrow({
+      where: { publicReference: createdBody.data.id }
+    });
+    expect(stored.serialNumber).toBe(expected);
+
+    const history = await api("/api/v1/ppob/orders", { token: tokenFor(user) });
+    const historyBody = (await history.json()) as { data: { items: any[] } };
+    expect(historyBody.data.items.find((o) => o.id === createdBody.data.id)?.serialNumber).toBe(expected);
+
+    const detail = await api(`/api/v1/ppob/orders/${createdBody.data.id}`, { token: tokenFor(user) });
+    expect(((await detail.json()) as { data: any }).data.serialNumber).toBe(expected);
+  });
+
+  it("transaksi GAGAL tidak pernah membawa serialNumber", async () => {
+    const user = await createUserWithPpobBalance("50000");
+    const failed = await api("/api/v1/ppob/orders", {
+      method: "POST",
+      token: tokenFor(user),
+      idempotencyKey: "r2-serial-contract-2",
+      body: { sku: "PULSA_TSEL_10", targetNumber: `085612${STUB_FAILURE_TARGET_SUFFIX}` }
+    });
+    const body = (await failed.json()) as { data: any };
+    expect(body.data.status).toBe("FAILED");
+    expect(body.data).toHaveProperty("serialNumber", null);
+  });
+
+  it("serialNumber hanya terlihat oleh pemilik transaksi", async () => {
+    const owner = await createUserWithPpobBalance("50000");
+    const created = await api("/api/v1/ppob/orders", {
+      method: "POST",
+      token: tokenFor(owner),
+      idempotencyKey: "r2-serial-contract-3",
+      body: { sku: "PLN_TOKEN_20", targetNumber: "12345678901" }
+    });
+    const reference = ((await created.json()) as { data: any }).data.id as string;
+
+    const stranger = await createUserWithPpobBalance("50000");
+    const peek = await api(`/api/v1/ppob/orders/${reference}`, { token: tokenFor(stranger) });
+    expect(peek.status).toBe(404);
+    const strangerHistory = await api("/api/v1/ppob/orders", { token: tokenFor(stranger) });
+    const items = ((await strangerHistory.json()) as { data: { items: any[] } }).data.items;
+    expect(JSON.stringify(items)).not.toContain("STUB-SN-");
+  });
 });
 
 // --- Helpers -------------------------------------------------------------------

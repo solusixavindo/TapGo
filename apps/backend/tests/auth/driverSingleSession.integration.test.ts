@@ -16,9 +16,9 @@ import { hashPassword } from "../../src/core/security/passwordHasher.js";
  * SELURUH sesi lama akun itu — persis pola industri (WhatsApp per nomor,
  * Gojek/Grab driver app), bukan pendekatan baru yang belum teruji.
  *
- * Sengaja HANYA untuk role DRIVER dan kanal APP (lihat AuthService.
- * issueTokenPair) — test di bawah juga membuktikan USER tidak terdampak,
- * supaya perubahan ini tidak diam-diam meluas ke akun yang tidak dilaporkan.
+ * Awalnya HANYA untuk role DRIVER; sejak 9 Okt 2026 juga USER (lihat AuthService.
+ * issueTokenPair dan userSessionDeviceAndPhone.integration.test.ts). ADMIN tetap
+ * di luar aturan — test di bawah membuktikannya.
  */
 
 const describeIntegration = runIntegration ? describe : describe.skip;
@@ -52,7 +52,7 @@ async function api(
   return { status: response.status, body: text ? JSON.parse(text) : {} };
 }
 
-async function createAccount(role: "DRIVER" | "USER") {
+async function createAccount(role: "DRIVER" | "USER" | "ADMIN") {
   sequence += 1;
   const phone = `08${String(500000000 + sequence)}`;
   const user = await prisma.user.create({
@@ -149,8 +149,11 @@ describeIntegration("Regresi produksi — satu sesi aktif per akun DRIVER (kanal
     expect(refreshed.status).toBe(401);
   });
 
-  it("akun USER tidak terdampak: login kedua TIDAK mencabut sesi pertama", async () => {
-    const { phone } = await createAccount("USER");
+  it("akun ADMIN tidak terdampak: login kedua TIDAK mencabut sesi pertama", async () => {
+    // Sampai 8 Okt 2026 USER juga dikecualikan di sini. Laporan Owner 9 Okt 2026
+    // (satu akun USER aktif di beberapa HP) membalik keputusan itu; USER kini diuji di
+    // userSessionDeviceAndPhone.integration.test.ts. ADMIN tetap di luar aturan.
+    const { phone } = await createAccount("ADMIN");
 
     const deviceA = await loginApp(phone);
     await loginApp(phone);

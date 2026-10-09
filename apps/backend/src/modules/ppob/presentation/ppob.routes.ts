@@ -206,6 +206,11 @@ function serializeOrder(tx: PpobTransaction, replayed = false) {
     balanceAmount: money(tx.totalAmount.minus(benefitAmount)),
     failureReason: tx.failureReason,
     providerRef: tx.providerReference,
+    // Token PLN / nomor serial dari provider (Digiflazz `sn`). Sebelumnya tersimpan di
+    // database tetapi TIDAK PERNAH dikirim ke aplikasi, sehingga pembeli token listrik
+    // tidak menerima nomor tokennya walau transaksi sukses. Hanya untuk transaksi
+    // SUCCESS; semua rute yang memakai serializeOrder sudah dibatasi ke pemilik.
+    serialNumber: tx.status === "SUCCESS" ? tx.serialNumber : null,
     createdAt: tx.createdAt,
     completedAt: tx.completedAt,
     // Backend tidak punya status REFUNDED terpisah: kegagalan selalu disertai

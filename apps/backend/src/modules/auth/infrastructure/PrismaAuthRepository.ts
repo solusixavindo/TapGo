@@ -64,6 +64,32 @@ export class PrismaAuthRepository implements AuthRepository {
 
   createUser(input: CreateUserInput) {
     return this.runWithSerializationRetry(() => this.prisma.$transaction(async (tx) => {
+      // Batas akun per perangkat. Kunci sinyal (perangkat, IP, referral) diambil di
+      // AWAL transaksi, sebelum kunci kuota di bawah: semua pendaftaran memakai urutan
+      // yang sama (sinyal -> kuota), jadi tidak ada siklus tunggu. Pengambilan ulang di
+      // recordRegistrationEvent adalah no-op karena kunci sudah dipegang transaksi ini.
+      const deviceHash = input.registrationEvent?.deviceFingerprintHash;
+      const maxPerDevice = input.maxAccountsPerDevice ?? 0;
+      if (input.role === UserRole.USER && deviceHash && maxPerDevice > 0) {
+        const sponsorCode = input.sponsorReferralCode?.trim().toUpperCase();
+        await this.lockAbuseSignals(tx, {
+          deviceFingerprintHash: deviceHash,
+          ...(input.registrationEvent?.ipAddress !== undefined ? { ipAddress: input.registrationEvent.ipAddress } : {}),
+          ...(sponsorCode ? { sponsorReferralCode: sponsorCode } : {})
+        });
+        // Akun DELETED tetap dihitung: tanpa itu daftar -> ambil bonus -> hapus -> daftar
+        // lagi membuka bonus registrasi berulang dari satu HP.
+        const registeredOnDevice = await tx.registrationEvent.count({
+          where: { deviceFingerprintHash: deviceHash, userId: { not: null } }
+        });
+        if (registeredOnDevice >= maxPerDevice) {
+          throw new AppError(
+            "Perangkat ini sudah dipakai mendaftarkan akun TapGo. Silakan masuk dengan akun tersebut.",
+            StatusCodes.CONFLICT,
+            "DEVICE_ACCOUNT_LIMIT"
+          );
+        }
+      }
       const basic = await tx.membership.findUnique({ where: { tier: "BASIC" } });
       // P1-4: klaim slot benefit Basic PPOB Rp5.000 secara atomik. Conditional
       // UPDATE ... RETURNING mengambil row lock pada baris kuota sehingga dua
@@ -484,6 +510,10 @@ export class PrismaAuthRepository implements AuthRepository {
       where: { id: sessionId },
       data: { revokedAt: new Date() }
     });
+  }
+
+  async deleteAllPushTokens(userId: string) {
+    await this.prisma.pushToken.deleteMany({ where: { userId } });
   }
 
   async revokeAllActiveSessions(userId: string, now: Date) {

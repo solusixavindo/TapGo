@@ -8,7 +8,7 @@ import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { logger } from "../../../core/logger/logger.js";
 import { PpobService } from "../application/PpobService.js";
 import { PrismaPpobRepository } from "../infrastructure/PrismaPpobRepository.js";
-import { DigiflazzPpobProvider } from "../infrastructure/DigiflazzPpobProvider.js";
+import { DigiflazzPpobProvider, normalizeSerialNumber } from "../infrastructure/DigiflazzPpobProvider.js";
 
 /**
  * Webhook Digiflazz (Stage R2.8) — POST /api/v1/webhooks/ppob/digiflazz.
@@ -99,7 +99,7 @@ digiflazzWebhookRouter.post(
       outcome = {
         kind: "SUCCESS",
         providerReference: data.ref_id,
-        serialNumber: data.sn && data.sn.trim().length > 0 ? data.sn : null,
+        serialNumber: normalizeSerialNumber(data.sn),
         // Pascabayar melaporkan selling_price (biaya kita setelah komisi).
         providerCost:
           typeof data.selling_price === "number" && data.selling_price > 0

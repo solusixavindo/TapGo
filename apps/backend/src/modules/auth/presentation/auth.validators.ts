@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { normalizePhoneNumber } from "../../../core/security/phone.js";
+import { isPlausibleIndonesianMobile, normalizePhoneNumber } from "../../../core/security/phone.js";
 
 export const phoneSchema = z
   .string()
@@ -7,6 +7,15 @@ export const phoneSchema = z
   .max(32)
   .regex(/^(\+?[1-9]\d{7,31}|0\d{7,31})$/)
   .transform(normalizePhoneNumber);
+/**
+ * Nomor untuk PENDAFTARAN akun baru: harus nomor seluler Indonesia yang masuk akal
+ * (081–089, 10–13 digit, bukan pola rekaan). Login tetap memakai [phoneSchema].
+ * Pesan memuat "nomor HP" supaya sampai ke pengguna lewat pemetaan VALIDATION_ERROR
+ * aplikasi lama.
+ */
+export const registrationPhoneSchema = phoneSchema.refine(isPlausibleIndonesianMobile, {
+  message: "Nomor HP tidak valid. Gunakan nomor seluler Indonesia yang aktif, contoh 0812xxxxxxxx."
+});
 export const passwordSchema = z.string().min(6).max(128);
 export const emailSchema = z.string().trim().toLowerCase().email().max(180);
 
@@ -22,7 +31,7 @@ const registerBodySchema = z
     fullName: z.string().min(2).max(120).optional(),
     name: z.string().min(2).max(120).optional(),
     email: z.string().email().max(180).optional(),
-	    phone: phoneSchema,
+	    phone: registrationPhoneSchema,
 	    password: passwordSchema,
 	    referralCode: z.string().min(4).max(24).optional(),
 	    deviceId: z.string().min(8).max(200).optional(),
@@ -93,7 +102,7 @@ export const googleCompleteSchema = z.preprocess(
   z.object({
     body: z.object({
       idToken: z.string().min(20).max(4096),
-      phone: phoneSchema,
+      phone: registrationPhoneSchema,
       fullName: z.string().trim().min(1).max(120).optional()
     })
   })

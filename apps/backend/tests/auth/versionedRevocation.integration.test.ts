@@ -80,6 +80,11 @@ async function createAccount() {
     data: {
       fullName: `Version User ${sequence}`,
       phone,
+      // ADMIN, bukan USER: berkas ini menguji MEKANISME pencabutan berbasis versi dan
+      // mengandaikan login pertama tidak mengubah authVersion. Sejak 9 Okt 2026 login USER
+      // kanal APP mencabut sesi lama dan menaikkan authVersion (satu sesi aktif per akun);
+      // perilaku itu diuji di userSessionDeviceAndPhone.integration.test.ts.
+      role: "ADMIN",
       referralCode: `VRS${String(sequence).padStart(6, "0")}`,
       passwordHash: await hashPassword(OLD_PASSWORD)
     }
