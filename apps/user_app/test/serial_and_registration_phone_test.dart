@@ -117,10 +117,22 @@ void main() {
       expect(find.text('Nomor disalin'), findsOneWidget);
     });
 
-    testWidgets('tidak tampil bila belum sukses, gagal, atau tanpa nomor', (tester) async {
+    testWidgets('token PLN yang masih Diproses menampilkan catatan, pulsa tidak', (tester) async {
+      await tester.pumpWidget(_host(PpobSerialNumberBlock(
+        order: _order(status: PpobOrderStatus.processing),
+      )));
+      expect(find.byKey(const ValueKey('ppob-serial-waiting')), findsOneWidget);
+      expect(find.textContaining('Token listrik sedang disiapkan'), findsOneWidget);
+      expect(find.byKey(const ValueKey('ppob-serial-block')), findsNothing);
+
+      await tester.pumpWidget(_host(PpobSerialNumberBlock(
+        order: _order(status: PpobOrderStatus.processing, category: 'PULSA'),
+      )));
+      expect(find.byKey(const ValueKey('ppob-serial-waiting')), findsNothing);
+    });
+
+    testWidgets('tidak tampil bila sukses tanpa nomor, gagal, atau dikembalikan', (tester) async {
       for (final order in [
-        _order(status: PpobOrderStatus.processing, serial: '1234'),
-        _order(status: PpobOrderStatus.pending, serial: '1234'),
         _order(status: PpobOrderStatus.refunded, serial: '1234'),
         _order(status: PpobOrderStatus.failed, serial: '1234'),
         _order(serial: null),

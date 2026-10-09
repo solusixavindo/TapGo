@@ -302,6 +302,30 @@ class PpobSerialNumberBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final serial = order.serialNumber;
+    final stillOpen = order.status == PpobOrderStatus.pending ||
+        order.status == PpobOrderStatus.processing;
+    if (stillOpen && ppobSerialLabel(order.categoryCode) == 'Nomor token listrik') {
+      // Token listrik yang sudah dibayar tetapi belum diterbitkan penyedia: katakan
+      // terus terang, jangan biarkan pembeli mengira transaksinya hilang.
+      final theme = Theme.of(context);
+      return Container(
+        key: const ValueKey('ppob-serial-waiting'),
+        width: double.infinity,
+        margin: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFD97706).withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          compact
+              ? 'Token sedang disiapkan penyedia.'
+              : 'Token listrik sedang disiapkan penyedia. Nomornya akan muncul di sini '
+                  'dan di Riwayat PPOB. Saldo tidak dipotong dua kali.',
+          style: theme.textTheme.bodySmall,
+        ),
+      );
+    }
     if (order.status != PpobOrderStatus.success || serial == null) {
       return const SizedBox.shrink();
     }

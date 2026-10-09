@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../application/ppob_order_watcher.dart';
 import '../application/ppob_providers.dart';
 import '../domain/ppob_models.dart';
 import 'ppob_history_screen.dart';
@@ -173,6 +174,17 @@ class _PpobBillScreenState extends ConsumerState<PpobBillScreen> {
   PpobBillInquiry? _inquiry;
   PpobOrder? _result;
 
+  // Memantau pembayaran yang masih Menunggu/Diproses sampai final; kartu hasil sudah
+  // menjanjikan "status akan diperbarui otomatis".
+  late final PpobOrderWatcher _watcher = PpobOrderWatcher(
+    fetchOrders: () => ref.read(ppobRepositoryProvider).fetchOrders(),
+    onUpdate: (updated) {
+      if (!mounted) return;
+      setState(() => _result = updated);
+      ref.invalidate(ppobOrdersProvider);
+    },
+  );
+
   @override
   void initState() {
     super.initState();
@@ -186,6 +198,7 @@ class _PpobBillScreenState extends ConsumerState<PpobBillScreen> {
   @override
   void dispose() {
     _expiryTimer?.cancel();
+    _watcher.stop();
     _targetController.dispose();
     super.dispose();
   }
@@ -257,6 +270,7 @@ class _PpobBillScreenState extends ConsumerState<PpobBillScreen> {
           );
       if (!mounted) return;
       setState(() => _result = order);
+      _watcher.watch(order);
       ref.invalidate(ppobOrdersProvider);
     } catch (error) {
       if (!mounted) return;

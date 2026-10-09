@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
+import '../application/ppob_order_watcher.dart';
 import '../application/ppob_providers.dart';
 import '../domain/ppob_models.dart';
 import '../domain/ppob_operator.dart';
@@ -44,8 +45,19 @@ class _PpobCheckoutScreenState extends ConsumerState<PpobCheckoutScreen> {
   PpobInquiryResult? _inquiry;
   PpobOrder? _result;
 
+  // Memantau order yang masih Menunggu/Diproses sampai final (token listrik datang).
+  late final PpobOrderWatcher _watcher = PpobOrderWatcher(
+    fetchOrders: () => ref.read(ppobRepositoryProvider).fetchOrders(),
+    onUpdate: (updated) {
+      if (!mounted) return;
+      setState(() => _result = updated);
+      ref.invalidate(ppobOrdersProvider);
+    },
+  );
+
   @override
   void dispose() {
+    _watcher.stop();
     _targetController.dispose();
     super.dispose();
   }
@@ -143,6 +155,7 @@ class _PpobCheckoutScreenState extends ConsumerState<PpobCheckoutScreen> {
         return;
       }
       setState(() => _result = order);
+      _watcher.watch(order);
       // Riwayat di-refresh agar order baru langsung terlihat.
       ref.invalidate(ppobOrdersProvider);
     } catch (error, stackTrace) {
@@ -442,7 +455,9 @@ class _ResultCard extends StatelessWidget {
             if (order.failureReason != null) ...[
               const SizedBox(height: 8),
               Text(
-                order.status == PpobOrderStatus.refunded
+                order.status == PpobOrderStatus.refunded ||
+                        (order.status == PpobOrderStatus.failed &&
+                            order.refundedAt != null)
                     ? 'Dana dikembalikan penuh ke saldo Anda. ${order.failureReason}'
                     : order.failureReason!,
                 style: theme.textTheme.bodySmall?.copyWith(

@@ -170,6 +170,7 @@ PpobRepository _repoFrom(_FakePpobWires wires) {
         'balanceAmount': order.balanceAmount,
         'failureReason': order.failureReason,
         'providerRef': order.providerRef,
+        'serialNumber': order.serialNumber,
         'createdAt': order.createdAt?.toIso8601String(),
         'completedAt': order.completedAt?.toIso8601String(),
         'refundedAt': order.refundedAt?.toIso8601String(),
@@ -195,7 +196,9 @@ PpobRepository _repoFrom(_FakePpobWires wires) {
               'benefitAmount': order.benefitAmount,
               'balanceAmount': order.balanceAmount,
               'failureReason': order.failureReason,
+              'serialNumber': order.serialNumber,
               'createdAt': order.createdAt?.toIso8601String(),
+              'refundedAt': order.refundedAt?.toIso8601String(),
             })
         .toList(),
   );
@@ -207,7 +210,8 @@ Widget _app(Widget child, PpobRepository repository, {Brightness? brightness}) {
     child: MaterialApp(
       theme: tapGoReadableTheme(),
       darkTheme: tapGoReadableTheme(brightness: Brightness.dark),
-      themeMode: brightness == Brightness.dark ? ThemeMode.dark : ThemeMode.light,
+      themeMode:
+          brightness == Brightness.dark ? ThemeMode.dark : ThemeMode.light,
       home: child,
     ),
   );
@@ -323,7 +327,8 @@ void main() {
       expect(find.text('Saldo benefit PPOB Anda'), findsOneWidget);
     });
 
-    Future<void> pumpMultiOperator(WidgetTester tester, _FakePpobWires wires) async {
+    Future<void> pumpMultiOperator(
+        WidgetTester tester, _FakePpobWires wires) async {
       wires.catalog = [
         _category(products: const [
           PpobProduct(
@@ -368,7 +373,8 @@ void main() {
       expect(cekHargaEnabled(tester), isTrue);
     });
 
-    testWidgets('operator: format +62 dan spasi tetap dikenali', (tester) async {
+    testWidgets('operator: format +62 dan spasi tetap dikenali',
+        (tester) async {
       await pumpMultiOperator(tester, _FakePpobWires());
       await typeNumber(tester, '+62 812-1234-5678');
       expect(find.text('Operator: Telkomsel'), findsOneWidget);
@@ -379,9 +385,10 @@ void main() {
       final wires = _FakePpobWires();
       await pumpMultiOperator(tester, wires);
       await typeNumber(tester, '081512345678'); // Indosat
+      expect(find.byKey(const ValueKey('ppob-operator-unsupported')),
+          findsOneWidget);
       expect(
-          find.byKey(const ValueKey('ppob-operator-unsupported')), findsOneWidget);
-      expect(find.textContaining('belum tersedia untuk Indosat'), findsOneWidget);
+          find.textContaining('belum tersedia untuk Indosat'), findsOneWidget);
       expect(cekHargaEnabled(tester), isFalse);
       expect(wires.inquiryCalls, 0);
     });
@@ -390,7 +397,8 @@ void main() {
         (tester) async {
       await pumpMultiOperator(tester, _FakePpobWires());
       await typeNumber(tester, '080012345678');
-      expect(find.byKey(const ValueKey('ppob-operator-unknown')), findsOneWidget);
+      expect(
+          find.byKey(const ValueKey('ppob-operator-unknown')), findsOneWidget);
       expect(cekHargaEnabled(tester), isFalse);
     });
 
@@ -465,8 +473,76 @@ void main() {
       expect(wires.createCalls, 1);
     });
 
-    testWidgets('hasil REFUNDED menampilkan status dan alasan',
+    testWidgets(
+        'token PLN Diproses: layar hasil memperbarui diri dan menampilkan token '
+        'saat server sudah menyelesaikan (kasus Juhri)', (tester) async {
+      PpobOrder plnOrder(PpobOrderStatus status, {String? serial}) => PpobOrder(
+            id: 'PPB-JUHRI',
+            status: status,
+            sku: 'PULSA_10K',
+            productName: 'Token PLN Rp20.000',
+            categoryCode: 'PLN_PREPAID',
+            targetNumber: '561100520563',
+            amount: 20500,
+            benefitAmount: 20500,
+            balanceAmount: 0,
+            serialNumber: serial,
+          );
+      final wires = _FakePpobWires()
+        ..createResult = plnOrder(PpobOrderStatus.processing);
+      await pumpCheckout(tester, wires);
+      await fillTargetAndInquiry(tester);
+      await tester.tap(find.text('Bayar Sekarang'));
+      await _settle(tester);
+
+      expect(find.text('Diproses'), findsWidgets);
+      expect(find.byKey(const ValueKey('ppob-serial-waiting')), findsOneWidget);
+      expect(find.byKey(const ValueKey('ppob-serial-block')), findsNothing);
+
+      // Server menyelesaikan transaksi (rekonsiliasi): token terbit.
+      wires.orders = [
+        plnOrder(PpobOrderStatus.success,
+            serial: '1061-9332-9912-1453-6226/SAAMAH/R1/450/46,8KWH'),
+      ];
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(seconds: 6));
+      }
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('ppob-serial-waiting')), findsNothing);
+      expect(find.text('1061-9332-9912-1453-6226'), findsOneWidget);
+      expect(find.text('Berhasil'), findsWidgets);
+    });
+
+    testWidgets(
+        'transaksi GAGAL dari server (FAILED + refundedAt) memberi tahu dana dikembalikan',
         (tester) async {
+      final wires = _FakePpobWires()
+        ..createResult = PpobOrder(
+          id: 'PPB-GAGAL',
+          status: PpobOrderStatus.failed,
+          sku: 'PULSA_10K',
+          productName: 'Pulsa Rp10.000',
+          categoryCode: 'PULSA',
+          targetNumber: '081234567890',
+          amount: 11500,
+          benefitAmount: 11500,
+          balanceAmount: 0,
+          failureReason: 'Nomor tujuan tidak valid.',
+          refundedAt: DateTime(2026, 10, 9),
+        );
+      await pumpCheckout(tester, wires);
+      await fillTargetAndInquiry(tester);
+      await tester.tap(find.text('Bayar Sekarang'));
+      await _settle(tester);
+
+      expect(
+        find.textContaining('Dana dikembalikan penuh ke saldo Anda.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('hasil REFUNDED menampilkan status dan alasan', (tester) async {
       final wires = _FakePpobWires();
       await pumpCheckout(tester, wires);
       await fillTargetAndInquiry(tester);
@@ -516,7 +592,8 @@ void main() {
   group('PpobHistoryScreen', () {
     testWidgets('riwayat kosong menampilkan empty state', (tester) async {
       final wires = _FakePpobWires();
-      await tester.pumpWidget(_app(const PpobHistoryScreen(), _repoFrom(wires)));
+      await tester
+          .pumpWidget(_app(const PpobHistoryScreen(), _repoFrom(wires)));
       await _settle(tester);
 
       expect(find.text('Belum ada transaksi'), findsOneWidget);
@@ -551,7 +628,8 @@ void main() {
             createdAt: DateTime(2026, 8, 20),
           ),
         ];
-      await tester.pumpWidget(_app(const PpobHistoryScreen(), _repoFrom(wires)));
+      await tester
+          .pumpWidget(_app(const PpobHistoryScreen(), _repoFrom(wires)));
       await _settle(tester);
 
       expect(find.text('Pulsa Rp10.000'), findsOneWidget);
