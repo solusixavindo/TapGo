@@ -75,6 +75,16 @@ PpobRepository _repo(_Wires w) => PpobRepository(
           'amount': 102350,
           'benefitAmount': 102350,
           'balanceAmount': 0,
+          'serialNumber': w.payStatus == 'SUCCESS' ? '0001234567890/BUDI' : null,
+          'bill': {
+            'customerName': 'BUDI SANTOSO',
+            'period': '202610',
+            'billAmount': 100000,
+            'feeAmount': 2350,
+            'totalAmount': 102350,
+          },
+          'createdAt': '2026-10-09T09:28:41.051Z',
+          'completedAt': '2026-10-09T09:28:43.000Z',
         };
       },
     );
@@ -148,7 +158,7 @@ void main() {
   });
 
   group('cek tagihan dan bayar', () {
-    testWidgets('nomor BPJS harus 13 digit sebelum Cek Tagihan aktif', (tester) async {
+    testWidgets('nomor BPJS harus 13 sampai 16 digit sebelum Cek Tagihan aktif', (tester) async {
       final w = _Wires();
       await _pump(tester, w, const PpobBillScreen(product: _bpjsProduct));
       FilledButton button() => tester.widget<FilledButton>(find.byType(FilledButton));
@@ -163,6 +173,21 @@ void main() {
       await tester.pumpAndSettle();
       // Spasi dan strip dibuang sebelum dikirim.
       expect(w.inquiryTargets, ['1234567890123']);
+    });
+
+    testWidgets('BPJS: nomor VA 16 digit diterima (label kolom "Nomor VA BPJS"), 17 digit tidak', (tester) async {
+      final w = _Wires();
+      await _pump(tester, w, const PpobBillScreen(product: _bpjsProduct));
+      FilledButton button() => tester.widget<FilledButton>(find.byType(FilledButton));
+      await tester.enterText(find.byKey(const ValueKey('bill-target')), '8888801234560001');
+      await tester.pump();
+      expect(button().onPressed, isNotNull);
+      await tester.enterText(find.byKey(const ValueKey('bill-target')), '88888012345600012');
+      await tester.pump();
+      expect(button().onPressed, isNull);
+      await tester.enterText(find.byKey(const ValueKey('bill-target')), '8801234560001');
+      await tester.pump();
+      expect(button().onPressed, isNotNull);
     });
 
     testWidgets('rincian tagihan tampil dari angka server; bayar mengirim hanya referensi dan kunci tetap', (tester) async {
@@ -187,6 +212,21 @@ void main() {
       expect(w.payCalls.single.key, 'ppob-bill-PPB-A2B3C4D5E1');
       expect(find.byKey(const ValueKey('bill-result')), findsOneWidget);
       expect(find.text('Tagihan berhasil dibayar.'), findsOneWidget);
+      // Bukti pembayaran lengkap: nama pelanggan, periode, rincian, nomor referensi,
+      // nomor transaksi, dan waktu.
+      Finder inResult(String text) =>
+          find.descendant(of: find.byKey(const ValueKey('bill-result')), matching: find.text(text));
+      expect(inResult('Nama pelanggan'), findsOneWidget);
+      expect(inResult('BUDI SANTOSO'), findsOneWidget);
+      expect(inResult('Periode'), findsOneWidget);
+      expect(inResult('Okt 2026'), findsOneWidget);
+      expect(inResult('Rp100.000'), findsOneWidget);
+      expect(inResult('Rp2.350'), findsOneWidget);
+      expect(inResult('No. Transaksi'), findsOneWidget);
+      expect(inResult('PPB-A2B3C4D5E1'), findsOneWidget);
+      expect(inResult('Nomor referensi'), findsOneWidget);
+      expect(inResult('0001234567890'), findsOneWidget);
+      expect(inResult('Waktu'), findsOneWidget);
       // Setelah dibayar tidak ada tombol bayar lagi (tidak bisa dibayar dua kali).
       expect(find.byKey(const ValueKey('bill-pay')), findsNothing);
     });

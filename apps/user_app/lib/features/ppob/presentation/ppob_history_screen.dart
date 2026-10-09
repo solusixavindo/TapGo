@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/ppob_providers.dart';
 import '../domain/ppob_models.dart';
+import 'ppob_receipt_screen.dart';
 import 'widgets/ppob_shared.dart';
 
 /// Riwayat transaksi PPOB milik pengguna yang sedang login (backend hanya
@@ -71,65 +72,74 @@ class _PpobOrderTile extends StatelessWidget {
     return Material(
       color: theme.cardColor,
       borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: ppobCategoryColor(order.categoryCode)
-                        .withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        key: ValueKey('ppob-order-tile-${order.id}'),
+        borderRadius: BorderRadius.circular(16),
+        // Ketuk kartu = buka bukti transaksi lengkap (nomor transaksi, waktu, rincian tagihan).
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+              builder: (_) => PpobReceiptScreen(order: order)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: ppobCategoryColor(order.categoryCode)
+                          .withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      ppobCategoryIcon(null, categoryCode: order.categoryCode),
+                      color: ppobCategoryColor(order.categoryCode),
+                      size: 20,
+                    ),
                   ),
-                  child: Icon(
-                    ppobCategoryIcon(null, categoryCode: order.categoryCode),
-                    color: ppobCategoryColor(order.categoryCode),
-                    size: 20,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          order.productName,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          order.targetNumber,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        order.productName,
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
+                        ppobFormatRupiah(order.amount),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        order.targetNumber,
-                        style: theme.textTheme.bodySmall,
-                      ),
+                      const SizedBox(height: 6),
+                      PpobStatusChip(status: order.status),
                     ],
                   ),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      ppobFormatRupiah(order.amount),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    PpobStatusChip(status: order.status),
-                  ],
-                ),
-              ],
-            ),
-            // Selebar kartu (bukan di kolom nama yang sempit): token tidak boleh terpotong.
-            PpobSerialNumberBlock(order: order, compact: true),
-          ],
+                ],
+              ),
+              // Selebar kartu (bukan di kolom nama yang sempit): token tidak boleh terpotong.
+              PpobSerialNumberBlock(order: order, compact: true),
+            ],
+          ),
         ),
       ),
     );

@@ -212,7 +212,8 @@ class _PpobBillScreenState extends ConsumerState<PpobBillScreen> {
   bool get _targetReady {
     final target = _target;
     return switch (widget.product.category) {
-      'BPJS' => RegExp(r'^\d{13}$').hasMatch(target),
+      // Kartu 13 digit atau nomor VA 16 digit (label kolom: "Nomor VA BPJS").
+      'BPJS' => RegExp(r'^\d{13,16}$').hasMatch(target),
       'PDAM' => RegExp(r'^\d{6,20}$').hasMatch(target),
       'HP_POSTPAID' => RegExp(r'^(08|\+?628)\d{7,11}$').hasMatch(target),
       'TELKOM' => RegExp(r'^\d{8,14}$').hasMatch(target),
@@ -402,7 +403,7 @@ class _BillCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             _row(context, 'Nama pelanggan', inquiry.customerName),
-            if (inquiry.period != null) _row(context, 'Periode', inquiry.period!),
+            if (inquiry.period != null) _row(context, 'Periode', ppobFormatPeriod(inquiry.period!)),
             _row(context, 'Tagihan', ppobFormatRupiah(inquiry.billAmount)),
             _row(context, 'Biaya admin & layanan',
                 ppobFormatRupiah(inquiry.feeAmount)),
@@ -519,6 +520,8 @@ class _BillResultCard extends StatelessWidget {
             Text(ppobFormatRupiah(order.amount),
                 style: theme.textTheme.titleMedium
                     ?.copyWith(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            PpobReceiptRows(order: order),
             PpobSerialNumberBlock(order: order),
             const SizedBox(height: 8),
             Text(message, style: theme.textTheme.bodySmall),

@@ -284,7 +284,7 @@ void main() {
     Future<void> pumpCheckout(WidgetTester tester, _FakePpobWires wires) async {
       // Permukaan tinggi agar seluruh isi ListView checkout (ringkasan →
       // rincian → hasil → tombol riwayat) ter-render tanpa lazy-build.
-      tester.view.physicalSize = const Size(900, 1600);
+      tester.view.physicalSize = const Size(900, 2000);
       tester.view.devicePixelRatio = 2.0;
       addTearDown(tester.view.reset);
       final category = wires.catalog.first;

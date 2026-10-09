@@ -62,12 +62,16 @@ class PpobProduct {
       id: _stringFromJson(json['id']),
       sku: _stringFromJson(json['sku']),
       name: _stringFromJson(json['name']),
-      description: json['description'] is String ? json['description'] as String : null,
+      description:
+          json['description'] is String ? json['description'] as String : null,
       price: _moneyFromJson(json['price']),
       adminFee: _moneyFromJson(json['adminFee']),
       targetLabel: _stringFromJson(json['targetLabel'], 'Nomor Tujuan'),
-      targetPattern: json['targetPattern'] is String ? json['targetPattern'] as String : null,
-      sortOrder: json['sortOrder'] is num ? (json['sortOrder'] as num).toInt() : 0,
+      targetPattern: json['targetPattern'] is String
+          ? json['targetPattern'] as String
+          : null,
+      sortOrder:
+          json['sortOrder'] is num ? (json['sortOrder'] as num).toInt() : 0,
       supportedOperators: json['supportedOperators'] is List
           ? (json['supportedOperators'] as List).whereType<String>().toList()
           : const [],
@@ -100,9 +104,11 @@ class PpobCategory {
       id: _stringFromJson(json['id']),
       code: _stringFromJson(json['code']),
       name: _stringFromJson(json['name']),
-      description: json['description'] is String ? json['description'] as String : null,
+      description:
+          json['description'] is String ? json['description'] as String : null,
       icon: json['icon'] is String ? json['icon'] as String : null,
-      sortOrder: json['sortOrder'] is num ? (json['sortOrder'] as num).toInt() : 0,
+      sortOrder:
+          json['sortOrder'] is num ? (json['sortOrder'] as num).toInt() : 0,
       products: rawProducts is List
           ? rawProducts
               .whereType<Map<String, dynamic>>()
@@ -252,26 +258,67 @@ class PpobBillInquiry {
   /// segar sudah kedaluwarsa (atau sebaliknya). Cadangan: [expiresAt].
   final DateTime? deadline;
 
-  bool isExpiredAt(DateTime now) => deadline != null && !now.isBefore(deadline!);
+  bool isExpiredAt(DateTime now) =>
+      deadline != null && !now.isBefore(deadline!);
 
   factory PpobBillInquiry.fromJson(Map<String, dynamic> json) {
     final product = json['product'];
     final wallet = json['wallet'];
     return PpobBillInquiry(
       reference: _stringFromJson(json['reference']),
-      productName: product is Map<String, dynamic> ? _stringFromJson(product['name']) : '',
+      productName: product is Map<String, dynamic>
+          ? _stringFromJson(product['name'])
+          : '',
       targetNumber: _stringFromJson(json['targetNumber']),
       customerName: _stringFromJson(json['customerName']),
       period: json['period'] is String ? json['period'] as String : null,
       billAmount: _moneyFromJson(json['billAmount']),
       feeAmount: _moneyFromJson(json['feeAmount']),
       totalAmount: _moneyFromJson(json['totalAmount']),
-      ppobBalance: wallet is Map<String, dynamic> ? _moneyFromJson(wallet['ppobBalance']) : 0,
+      ppobBalance: wallet is Map<String, dynamic>
+          ? _moneyFromJson(wallet['ppobBalance'])
+          : 0,
       sufficient: json['sufficient'] == true,
       expiresAt: _dateFromJson(json['expiresAt']),
       deadline: json['expiresInSeconds'] is num
-          ? DateTime.now().add(Duration(seconds: (json['expiresInSeconds'] as num).toInt()))
+          ? DateTime.now()
+              .add(Duration(seconds: (json['expiresInSeconds'] as num).toInt()))
           : null,
+    );
+  }
+}
+
+/// Ringkasan tagihan pada bukti pembayaran pascabayar (nama pelanggan, periode, rincian angka),
+/// dari cek tagihan yang tersimpan di server. Null untuk transaksi prabayar.
+class PpobBillSummary {
+  const PpobBillSummary({
+    required this.customerName,
+    required this.billAmount,
+    required this.feeAmount,
+    required this.totalAmount,
+    this.period,
+  });
+
+  final String customerName;
+  final String? period;
+  final double billAmount;
+
+  /// Biaya admin penyedia + biaya layanan TapGo (digabung untuk pelanggan).
+  final double feeAmount;
+  final double totalAmount;
+
+  static PpobBillSummary? tryParse(Object? value) {
+    if (value is! Map) return null;
+    final name = value['customerName'];
+    if (name is! String || name.trim().isEmpty) return null;
+    final period = value['period'];
+    return PpobBillSummary(
+      customerName: name.trim(),
+      period:
+          period is String && period.trim().isNotEmpty ? period.trim() : null,
+      billAmount: _moneyFromJson(value['billAmount']),
+      feeAmount: _moneyFromJson(value['feeAmount']),
+      totalAmount: _moneyFromJson(value['totalAmount']),
     );
   }
 }
@@ -303,6 +350,7 @@ class PpobOrder {
     this.failureReason,
     this.providerRef,
     this.serialNumber,
+    this.bill,
     this.createdAt,
     this.completedAt,
     this.refundedAt,
@@ -325,6 +373,9 @@ class PpobOrder {
   /// transaksi sukses. Sebelum 2.0.5+44 server tidak mengirimnya dan aplikasi tidak
   /// menampilkannya, sehingga pembeli token listrik tidak menerima nomor tokennya.
   final String? serialNumber;
+
+  /// Bukti pembayaran tagihan (nama pelanggan, periode, rincian); null untuk prabayar.
+  final PpobBillSummary? bill;
   final DateTime? createdAt;
   final DateTime? completedAt;
   final DateTime? refundedAt;
@@ -343,12 +394,16 @@ class PpobOrder {
       amount: _moneyFromJson(json['amount']),
       benefitAmount: _moneyFromJson(json['benefitAmount']),
       balanceAmount: _moneyFromJson(json['balanceAmount']),
-      failureReason: json['failureReason'] is String ? json['failureReason'] as String : null,
-      providerRef: json['providerRef'] is String ? json['providerRef'] as String : null,
+      failureReason: json['failureReason'] is String
+          ? json['failureReason'] as String
+          : null,
+      providerRef:
+          json['providerRef'] is String ? json['providerRef'] as String : null,
       serialNumber: json['serialNumber'] is String &&
               (json['serialNumber'] as String).trim().isNotEmpty
           ? (json['serialNumber'] as String).trim()
           : null,
+      bill: PpobBillSummary.tryParse(json['bill']),
       createdAt: _dateFromJson(json['createdAt']),
       completedAt: _dateFromJson(json['completedAt']),
       refundedAt: _dateFromJson(json['refundedAt']),

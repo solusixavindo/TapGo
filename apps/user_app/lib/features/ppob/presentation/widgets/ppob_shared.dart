@@ -251,6 +251,90 @@ String ppobErrorMessage(Object error) {
   return 'Koneksi bermasalah. Periksa jaringan Anda dan coba lagi.';
 }
 
+const _ppobMonths = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'Mei',
+  'Jun',
+  'Jul',
+  'Agu',
+  'Sep',
+  'Okt',
+  'Nov',
+  'Des',
+];
+
+/// "9 Okt 2026, 16.28" (waktu setempat perangkat).
+String ppobFormatDateTime(DateTime value) {
+  final local = value.toLocal();
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${local.day} ${_ppobMonths[local.month - 1]} ${local.year}, '
+      '${two(local.hour)}.${two(local.minute)}';
+}
+
+/// Periode tagihan "202610" -> "Okt 2026"; bentuk lain dikembalikan apa adanya.
+String ppobFormatPeriod(String period) {
+  final match = RegExp(r'^(\d{4})(\d{2})$').firstMatch(period.trim());
+  if (match == null) return period;
+  final month = int.parse(match.group(2)!);
+  if (month < 1 || month > 12) return period;
+  return '${_ppobMonths[month - 1]} ${match.group(1)}';
+}
+
+/// Baris-baris bukti transaksi: untuk tagihan (nama pelanggan, periode, tagihan, biaya) lalu
+/// nomor transaksi dan waktu. Nomor token/referensi ditampilkan terpisah oleh
+/// [PpobSerialNumberBlock].
+class PpobReceiptRows extends StatelessWidget {
+  const PpobReceiptRows({super.key, required this.order, this.showBill = true});
+
+  final PpobOrder order;
+  final bool showBill;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bill = order.bill;
+    final rows = <(String, String)>[
+      if (showBill && bill != null) ...[
+        ('Nama pelanggan', bill.customerName),
+        if (bill.period != null) ('Periode', ppobFormatPeriod(bill.period!)),
+        ('Tagihan', ppobFormatRupiah(bill.billAmount)),
+        ('Biaya admin & layanan', ppobFormatRupiah(bill.feeAmount)),
+      ],
+      ('No. Transaksi', order.id),
+      if ((order.completedAt ?? order.createdAt) != null)
+        ('Waktu', ppobFormatDateTime((order.completedAt ?? order.createdAt)!)),
+    ];
+    return Column(
+      key: const ValueKey('ppob-receipt-rows'),
+      children: [
+        for (final (label, value) in rows)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(label, style: theme.textTheme.bodyMedium),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: SelectableText(
+                    value,
+                    textAlign: TextAlign.end,
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 /// Memecah `serialNumber` Digiflazz menjadi bagian utama dan sisanya. Untuk token PLN
 /// bentuknya "NNNN-NNNN-NNNN-NNNN-NNNN/NAMA/R1/1300/12,3": nomor token ada sebelum
 /// garis miring pertama; sisanya keterangan.
@@ -304,7 +388,8 @@ class PpobSerialNumberBlock extends StatelessWidget {
     final serial = order.serialNumber;
     final stillOpen = order.status == PpobOrderStatus.pending ||
         order.status == PpobOrderStatus.processing;
-    if (stillOpen && ppobSerialLabel(order.categoryCode) == 'Nomor token listrik') {
+    if (stillOpen &&
+        ppobSerialLabel(order.categoryCode) == 'Nomor token listrik') {
       // Token listrik yang sudah dibayar tetapi belum diterbitkan penyedia: katakan
       // terus terang, jangan biarkan pembeli mengira transaksinya hilang.
       final theme = Theme.of(context);
