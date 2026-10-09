@@ -228,9 +228,11 @@ const envSchema = z.object({
   /// SENGAJA terpisah dari API key: keduanya dikonfigurasi di tempat berbeda
   /// pada panel Digiflazz. Endpoint webhook fail-closed (503) bila kosong.
   DIGIFLAZZ_WEBHOOK_SECRET: z.string().min(16).optional(),
-  /// Worker rekonsiliasi PPOB (Stage R2.8). Fail-closed default mati; hanya
-  /// bermakna saat provider mendukung cek status (digiflazz).
-  PPOB_RECONCILE_ENABLED: strictEnvBoolean(false),
+  /// Worker rekonsiliasi PPOB (Stage R2.8). Menyala BAWAAN (9 Okt 2026): saat mati,
+  /// setiap pembelian yang dijawab "Pending" tertahan PROCESSING selamanya dan saldo
+  /// pembeli terkunci (kasus token PLN yang tidak sampai). Hanya bermakna saat provider
+  /// mendukung cek status (digiflazz); isi false secara eksplisit untuk mematikannya.
+  PPOB_RECONCILE_ENABLED: strictEnvBoolean(true),
   PPOB_RECONCILE_INTERVAL_MS: z.coerce.number().int().min(15000).default(60000),
   /// Sinkronisasi harga jual PPOB dengan harga modal Digiflazz (keputusan
   /// Owner 20 Sep 2026). Interval minimum 30 menit: daftar harga Digiflazz

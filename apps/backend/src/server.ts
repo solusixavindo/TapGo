@@ -152,6 +152,17 @@ void purgeExpiredDocuments();
  * menyalakan timer latar.
  */
 let ppobReconcileTimer: NodeJS.Timeout | undefined;
+if (env.PPOB_PROVIDER === "digiflazz" && !env.PPOB_RECONCILE_ENABLED) {
+  logger.error(
+    "PPOB_PROVIDER=digiflazz tetapi PPOB_RECONCILE_ENABLED=false: pembelian yang dijawab Pending " +
+      "tidak akan pernah diselesaikan kecuali lewat webhook"
+  );
+}
+if (env.PPOB_PROVIDER === "digiflazz" && !env.DIGIFLAZZ_WEBHOOK_SECRET) {
+  logger.warn(
+    "DIGIFLAZZ_WEBHOOK_SECRET kosong: webhook Digiflazz ditolak; hasil transaksi hanya diselesaikan oleh rekonsiliasi (per menit)"
+  );
+}
 if (env.PPOB_RECONCILE_ENABLED && env.PPOB_PROVIDER === "digiflazz") {
   const ppobService = new PpobService(
     new PrismaPpobRepository(prisma),
@@ -163,6 +174,14 @@ if (env.PPOB_RECONCILE_ENABLED && env.PPOB_PROVIDER === "digiflazz") {
       if (!result.skipped && (result.escalated > 0 || result.finalized > 0 || result.errors > 0)) {
         // Hanya jumlah — tidak pernah referensi maupun nomor tujuan.
         logger.info(result, "PPOB reconciliation cycle completed");
+      }
+      if (!result.skipped && result.stuck > 0) {
+        // Transaksi terbuka > 30 menit setelah siklus ini: pembeli menunggu dan saldonya
+        // terkunci. logger.error ikut ke Sentry bila aktif; tanpa itu tetap terbaca di log.
+        logger.error(
+          { stuck: result.stuck },
+          "PPOB: ada transaksi tertahan lebih dari 30 menit — periksa penyedia dan status di panel"
+        );
       }
     } catch (error) {
       logger.error({ err: error }, "PPOB reconciliation cycle failed");

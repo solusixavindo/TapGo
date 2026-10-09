@@ -12,7 +12,9 @@ import {
 import {
   PpobBillInquiryError,
   PpobProviderDisabledError,
-  PpobProviderGateway
+  PpobProviderGateway,
+  SERIAL_WAIT_MINUTES,
+  lacksRequiredSerial
 } from "../domain/ppobProvider.js";
 import { normalizePpobTarget } from "../domain/targetValidation.js";
 import { MobileOperator, OPERATOR_LABEL, detectMobileOperator } from "../domain/operatorDetection.js";
@@ -31,6 +33,8 @@ function generatePpobReference(): string {
  * dalam namespace int4 — jangan dipakai modul lain.
  */
 const PPOB_RECONCILE_LOCK_KEY = 727008;
+/** Transaksi terbuka lebih lama dari ini setelah siklus rekonsiliasi dilaporkan sebagai tertahan. */
+const PPOB_STUCK_ALERT_MINUTES = 30;
 
 /** Biaya layanan TapGo per pembayaran pascabayar (keputusan Owner 6 Okt 2026: Rp1.000). */
 export const DEFAULT_POSTPAID_SERVICE_FEE = 1000;
@@ -468,6 +472,16 @@ export class PpobService {
       };
     }
 
+    if (lacksRequiredSerial(pending.category, outcome) && outcome.kind === "SUCCESS") {
+      // Token listrik "sukses" tanpa nomor token: jangan difinalkan (pembeli tidak akan
+      // pernah menerimanya). Tahan PROCESSING; rekonsiliasi menanyakan ulang.
+      logger.warn(
+        { reference: pending.publicReference },
+        "PPOB: token PLN sukses tanpa nomor token; ditahan PROCESSING menunggu rekonsiliasi"
+      );
+      outcome = { kind: "PROCESSING" as const, providerReference: outcome.providerReference };
+    }
+
     return this.repository.transaction((tx) =>
       this.repository.finalizePurchase({ transactionId: pending.id, outcome }, tx)
     );
@@ -509,6 +523,10 @@ export class PpobService {
       // berisiko menimpa outcome otoritatif dari jawaban API.
       return { state: "deferred" };
     }
+    if (lacksRequiredSerial(transaction.category, input.outcome)) {
+      // Sukses tanpa SN untuk token listrik: tunggu pembaruan berikutnya / rekonsiliasi.
+      return { state: "deferred" };
+    }
     await this.repository.transaction((tx) =>
       this.repository.finalizePurchase(
         { transactionId: transaction.id, outcome: input.outcome },
@@ -532,9 +550,9 @@ export class PpobService {
     olderThanMinutes?: number;
     batchSize?: number;
     lockKey?: number;
-  }): Promise<{ skipped: boolean; escalated: number; finalized: number; errors: number }> {
+  }): Promise<{ skipped: boolean; escalated: number; finalized: number; errors: number; stuck: number }> {
     if (!this.provider.checkStatus) {
-      return { skipped: true, escalated: 0, finalized: 0, errors: 0 };
+      return { skipped: true, escalated: 0, finalized: 0, errors: 0, stuck: 0 };
     }
     const olderThanMinutes = options?.olderThanMinutes ?? 5;
     const batchSize = options?.batchSize ?? 50;
@@ -545,7 +563,7 @@ export class PpobService {
       this.repository.tryAcquireReconcileLock(lockKey, tx)
     );
     if (!lockHeld) {
-      return { skipped: true, escalated: 0, finalized: 0, errors: 0 };
+      return { skipped: true, escalated: 0, finalized: 0, errors: 0, stuck: 0 };
     }
 
     const escalated = await this.repository.transaction((tx) =>
@@ -563,10 +581,14 @@ export class PpobService {
     const open = await this.repository.listOpenTransactions(olderThan, batchSize);
     let finalized = 0;
     let errors = 0;
+    let stuck = 0;
+    const stuckBefore = Date.now() - PPOB_STUCK_ALERT_MINUTES * 60 * 1000;
     for (const item of open) {
       if (item.provider !== this.provider.name) {
         continue;
       }
+      // Transaksi yang masih terbuka setelah siklus ini dan sudah lama = tertahan.
+      let finalizedThisItem = false;
       try {
         const outcome = await this.provider.checkStatus({
           publicReference: item.publicReference,
@@ -578,10 +600,21 @@ export class PpobService {
         if (outcome.kind === "PROCESSING") {
           continue;
         }
+        if (lacksRequiredSerial(item.category, outcome)) {
+          const ageMinutes = (Date.now() - item.createdAt.getTime()) / 60000;
+          if (ageMinutes < SERIAL_WAIT_MINUTES) {
+            continue; // sukses tanpa nomor token: tanyakan lagi di siklus berikutnya
+          }
+          logger.error(
+            { reference: item.publicReference },
+            "PPOB: token PLN sukses di provider tetapi nomor token tidak pernah diterima; difinalkan tanpa token — hubungi penyedia"
+          );
+        }
         await this.repository.transaction((tx) =>
           this.repository.finalizePurchase({ transactionId: item.id, outcome }, tx)
         );
         finalized += 1;
+        finalizedThisItem = true;
       } catch (error) {
         // Kegagalan inquiry TIDAK pernah mengubah status — siklus berikutnya
         // mencoba lagi. Hanya jawaban FAILED eksplisit yang memicu refund.
@@ -590,9 +623,13 @@ export class PpobService {
           { err: error, reference: item.publicReference },
           "PPOB reconciliation inquiry failed"
         );
+      } finally {
+        if (!finalizedThisItem && item.createdAt.getTime() < stuckBefore) {
+          stuck += 1;
+        }
       }
     }
-    return { skipped: false, escalated, finalized, errors };
+    return { skipped: false, escalated, finalized, errors, stuck };
   }
 
   listMyTransactions(userId: string, limit: number) {

@@ -590,6 +590,143 @@ describe.skipIf(!runIntegration)("Stage R2.8 — Digiflazz real provider integra
       expect(rows[0]?.acquired).toBe(true);
     });
   });
+
+  // --- Kasus Juhri (9 Okt 2026): token PLN tidak pernah sampai ---------------------
+  // Pembelian dijawab "Pending", lalu Sukses di Digiflazz, tetapi transaksi kita tertahan
+  // PROCESSING selamanya karena worker rekonsiliasi dan webhook mati di produksi.
+
+  async function buyPln(user: { id: string; role: UserRole }) {
+    const purchase = await api("/api/v1/ppob/orders", {
+      method: "POST",
+      token: tokenFor(user),
+      body: { sku: "PLN_TOKEN_20", targetNumber: "561100520563" }
+    });
+    return ((await purchase.json()) as { data: any }).data;
+  }
+
+  async function runReconcile() {
+    const { PpobService } = await import("../../src/modules/ppob/application/PpobService.js");
+    const { PrismaPpobRepository } = await import("../../src/modules/ppob/infrastructure/PrismaPpobRepository.js");
+    const { DigiflazzPpobProvider } = await import("../../src/modules/ppob/infrastructure/DigiflazzPpobProvider.js");
+    return new PpobService(new PrismaPpobRepository(prisma), DigiflazzPpobProvider.fromEnv()).reconcileOpenTransactions({
+      olderThanMinutes: 5,
+      batchSize: 10
+    });
+  }
+
+  async function ageTransaction(reference: string, minutes: number) {
+    await prisma.ppobTransaction.update({
+      where: { publicReference: reference },
+      data: { createdAt: new Date(Date.now() - minutes * 60 * 1000) }
+    });
+  }
+
+  it("PLN dijawab Pending lalu Sukses: ditahan PROCESSING, rekonsiliasi menyimpan token dan pembeli melihatnya", async () => {
+    const user = await createUserWithPpobBalance("100000");
+    stubScenarios.set("*", [
+      { status: "Pending", rc: "03" },
+      { status: "Sukses", rc: "00", sn: "1061-9332-9912-1453-6226/SAAMAH/R1/450/46,8KWH" }
+    ]);
+    const order = await buyPln(user);
+    expect(order.status).toBe("PROCESSING");
+    expect(order.serialNumber).toBeNull();
+
+    await ageTransaction(order.id, 10);
+    const result = await runReconcile();
+    expect(result.finalized).toBe(1);
+    expect(result.stuck).toBe(0);
+
+    const detail = await api(`/api/v1/ppob/orders/${order.id}`, { token: tokenFor(user) });
+    const body = ((await detail.json()) as { data: any }).data;
+    expect(body.status).toBe("SUCCESS");
+    expect(body.serialNumber).toBe("1061-9332-9912-1453-6226/SAAMAH/R1/450/46,8KWH");
+  });
+
+  it("PLN dijawab Sukses TANPA nomor token: tidak difinalkan (PROCESSING), saldo tetap terkunci, bukan SUCCESS kosong", async () => {
+    const user = await createUserWithPpobBalance("100000");
+    stubScenarios.set("*", [{ status: "Sukses", rc: "00", sn: "" }]);
+    const order = await buyPln(user);
+    expect(order.status).toBe("PROCESSING");
+    expect(order.serialNumber).toBeNull();
+    const stored = await prisma.ppobTransaction.findUniqueOrThrow({ where: { publicReference: order.id } });
+    expect(stored.status).toBe("PROCESSING");
+    expect(stored.completedAt).toBeNull();
+  });
+
+  it("rekonsiliasi: sukses-tanpa-token ditanyakan lagi tiap siklus sampai token datang", async () => {
+    const user = await createUserWithPpobBalance("100000");
+    stubScenarios.set("*", [
+      { status: "Sukses", rc: "00", sn: "" }, // jawaban pembelian
+      { status: "Sukses", rc: "00", sn: "" }, // siklus 1: masih tanpa token
+      { status: "Sukses", rc: "00", sn: "5412-3456-7890-1234-5678/BUDI/R1/1300/13,9" } // siklus 2
+    ]);
+    const order = await buyPln(user);
+    await ageTransaction(order.id, 10);
+
+    const first = await runReconcile();
+    expect(first.finalized).toBe(0);
+    expect((await prisma.ppobTransaction.findUniqueOrThrow({ where: { publicReference: order.id } })).status).toBe("PROCESSING");
+
+    const second = await runReconcile();
+    expect(second.finalized).toBe(1);
+    const done = await prisma.ppobTransaction.findUniqueOrThrow({ where: { publicReference: order.id } });
+    expect(done.status).toBe("SUCCESS");
+    expect(done.serialNumber).toBe("5412-3456-7890-1234-5678/BUDI/R1/1300/13,9");
+  });
+
+  it("rekonsiliasi: sukses-tanpa-token lebih dari 90 menit difinalkan juga (tidak menggantung selamanya) dan dilaporkan tertahan sebelumnya", async () => {
+    const user = await createUserWithPpobBalance("100000");
+    stubScenarios.set("*", [{ status: "Sukses", rc: "00", sn: "" }]);
+    const order = await buyPln(user);
+
+    await ageTransaction(order.id, 45);
+    const waiting = await runReconcile();
+    expect(waiting.finalized).toBe(0);
+    expect(waiting.stuck).toBe(1); // > 30 menit masih terbuka = tertahan
+
+    await ageTransaction(order.id, 120);
+    const final = await runReconcile();
+    expect(final.finalized).toBe(1);
+    expect((await prisma.ppobTransaction.findUniqueOrThrow({ where: { publicReference: order.id } })).status).toBe("SUCCESS");
+  });
+
+  it("webhook Sukses tanpa token untuk PLN ditunda (deferred), dengan token difinalkan", async () => {
+    const user = await createUserWithPpobBalance("100000");
+    stubScenarios.set("*", [{ status: "Pending", rc: "03" }]);
+    const order = await buyPln(user);
+
+    const withoutSn = JSON.stringify({ data: { ref_id: order.id, status: "Sukses", rc: "00", sn: "", price: 20500 } });
+    const first = await fetch(`${baseUrl}/api/v1/webhooks/ppob/digiflazz`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-hub-signature": signWebhook(withoutSn) },
+      body: withoutSn
+    });
+    expect(((await first.json()) as { data: any }).data.state).toBe("deferred");
+    expect((await prisma.ppobTransaction.findUniqueOrThrow({ where: { publicReference: order.id } })).status).toBe("PROCESSING");
+
+    const withSn = JSON.stringify({ data: { ref_id: order.id, status: "Sukses", rc: "00", sn: "9999-8888-7777-6666-5555/UJI", price: 20500 } });
+    const second = await fetch(`${baseUrl}/api/v1/webhooks/ppob/digiflazz`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-hub-signature": signWebhook(withSn) },
+      body: withSn
+    });
+    expect(((await second.json()) as { data: any }).data.state).toBe("finalized");
+    const done = await prisma.ppobTransaction.findUniqueOrThrow({ where: { publicReference: order.id } });
+    expect(done.status).toBe("SUCCESS");
+    expect(done.serialNumber).toBe("9999-8888-7777-6666-5555/UJI");
+  });
+
+  it("pulsa dan e-wallet tanpa SN tetap SUCCESS (hanya token PLN yang menunggu SN)", async () => {
+    const user = await createUserWithPpobBalance("100000");
+    stubScenarios.set("*", [{ status: "Sukses", rc: "00", sn: "" }]);
+    const purchase = await api("/api/v1/ppob/orders", {
+      method: "POST",
+      token: tokenFor(user),
+      body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" }
+    });
+    const body = ((await purchase.json()) as { data: any }).data;
+    expect(body.status).toBe("SUCCESS");
+  });
 });
 
 // --- Helpers -------------------------------------------------------------------
@@ -625,6 +762,17 @@ async function seedCatalog() {
       price: new Prisma.Decimal("6500"),
       providerSkus: { telkomsel: "s5", xl: "x5", tri: "t5" },
       sortOrder: 2
+    }
+  });
+  await prisma.ppobProduct.create({
+    data: {
+      sku: "PLN_TOKEN_20",
+      category: "PLN_PREPAID",
+      brand: "PLN",
+      name: "Token PLN 20.000",
+      price: new Prisma.Decimal("20500"),
+      providerSku: "pln20",
+      sortOrder: 3
     }
   });
   await prisma.ppobProduct.create({

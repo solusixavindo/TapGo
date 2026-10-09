@@ -30,6 +30,30 @@ export interface PpobStatusInquiry {
   targetNumber: string;
 }
 
+/**
+ * Kategori yang barang belinya ADALAH nomor serialnya (token listrik prabayar). Jawaban
+ * "Sukses" tanpa SN untuk kategori ini BELUM boleh difinalkan: pembeli kehilangan token
+ * dan transaksi tak bisa diperbaiki lagi karena sudah final. Ditahan PROCESSING; worker
+ * rekonsiliasi menanyakan ulang sampai SN datang (atau SERIAL_WAIT_MINUTES habis).
+ */
+export const SERIAL_IS_PRODUCT_CATEGORIES: ReadonlySet<PpobCategory> = new Set<PpobCategory>([
+  "PLN_PREPAID"
+]);
+
+/** Lama menunggu SN (menit sejak transaksi dibuat) sebelum sukses tanpa SN difinalkan dan dilaporkan. */
+export const SERIAL_WAIT_MINUTES = 90;
+
+export function lacksRequiredSerial(
+  category: PpobCategory,
+  outcome: { kind: string; serialNumber?: string | null }
+): boolean {
+  return (
+    outcome.kind === "SUCCESS" &&
+    SERIAL_IS_PRODUCT_CATEGORIES.has(category) &&
+    !outcome.serialNumber
+  );
+}
+
 export type PpobPurchaseOutcome =
   | {
       kind: "SUCCESS";

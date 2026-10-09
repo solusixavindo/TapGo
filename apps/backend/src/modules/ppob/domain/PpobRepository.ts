@@ -33,6 +33,7 @@ export type PpobOpenTransaction = {
   targetNumber: string;
   provider: string;
   providerSku: string;
+  createdAt: Date;
 };
 
 /// Hasil cek tagihan yang disimpan (angka dari server, sekali pakai).

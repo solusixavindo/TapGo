@@ -324,6 +324,7 @@ export class PrismaPpobRepository implements PpobRepository {
         targetNumber: true,
         provider: true,
         providerSku: true,
+        createdAt: true,
         product: { select: { providerSku: true } }
       },
       orderBy: { createdAt: "asc" },
@@ -337,7 +338,8 @@ export class PrismaPpobRepository implements PpobRepository {
       category: row.category,
       targetNumber: row.targetNumber,
       provider: row.provider,
-      providerSku: row.providerSku ?? row.product.providerSku ?? row.skuSnapshot
+      providerSku: row.providerSku ?? row.product.providerSku ?? row.skuSnapshot,
+      createdAt: row.createdAt
     }));
   }
 
