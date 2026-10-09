@@ -210,6 +210,10 @@ describe("katalog pascabayar", () => {
       ["PLN", "Pln Postpaid", "PLN_POSTPAID"],
       ["PLN NONTAGLIS", "PLN NONTAGLIS PASCA", null],
       ["TELKOM", "Telkom", "TELKOM"],
+      ["TELKOM", "Telepon Rumah", "TELKOM"],
+      // Kasus produksi 9 Okt 2026: brand "Telkomsel Omni" (HP) sempat masuk kategori TELKOM (telepon rumah).
+      ["Telkomsel Omni", "Telkomsel Omni", "HP_POSTPAID"],
+      ["TELKOMSEL", "Halo Postpaid", "HP_POSTPAID"],
       ["INTERNET PASCABAYAR", "INDIHOME", "INTERNET"],
       ["TV PASCABAYAR", "TRANSVISION", "TV"],
       ["HP PASCABAYAR", "HALO", "HP_POSTPAID"],

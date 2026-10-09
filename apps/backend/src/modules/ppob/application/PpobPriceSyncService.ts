@@ -41,7 +41,9 @@ export function classifyPostpaidEntry(entry: { brand: string; name: string }): P
   if (has("PBB")) return "PBB";
   if (has("PGN", "PERTAGAS", "GAS NEGARA", "GAS PASCA")) return "GAS";
   if (has("E-MONEY", "EMONEY", "E MONEY")) return "EMONEY";
-  if (has("HP PASCA", "HALO", "XL PASCA", "INDOSAT PASCA", "SMARTFREN PASCA", "TRI PASCA", "TELKOMSEL PASCA", "BYU PASCA")) {
+  // "TELKOMSEL" (mis. "Telkomsel Omni") harus masuk HP pascabayar SEBELUM aturan TELKOM di bawah,
+  // yang memakai kata "TELKOM" untuk telepon rumah dan kebetulan juga cocok dengan "TELKOMSEL".
+  if (has("HP PASCA", "HALO", "XL PASCA", "INDOSAT PASCA", "SMARTFREN PASCA", "TRI PASCA", "TELKOMSEL", "OMNI", "BYU PASCA")) {
     return "HP_POSTPAID";
   }
   if (has("INDIHOME", "INTERNET", "BIZNET", "MYREPUBLIC", "ASTINET")) return "INTERNET";

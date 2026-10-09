@@ -55,6 +55,7 @@ diserahkan bila salah satunya gagal. **Laporan baru wajib menambah baris di sini
 | 2.0.5+44 (pemeriksaan Owner 9 Okt 2026) | Periode tagihan kosong | `periodOf` membaca `period` dan `desc.tagihan.detail`, Digiflazz mengirim `periode` dan `desc.detail[].periode` | `tests/ppob/allCategoriesReceipt.integration.test.ts` (periode pada 13 produk tagihan) |
 | 2.0.5+44 (pemeriksaan Owner 9 Okt 2026) | Bukti pembayaran tagihan tanpa nama pelanggan, periode, rincian | `serializeOrder` tidak membawa ringkasan cek tagihan | `tests/ppob/allCategoriesReceipt.integration.test.ts` (`bill` pada bayar, detail, riwayat; hanya pemilik) |
 | uji infrastruktur (9 Okt 2026) | Berkas uji yang berjalan setelah uji verifikasi wajah gagal massal di cleanDatabase | `DriverFaceCheck.adminOverrideById` RESTRICT; harness tidak menghapusnya, dan urutan berkas berubah antar-run | `tests/helpers/referralWalletHarness.ts` (cleanDatabase menghapus driverFaceCheck) |
+| 2.0.5+45 (temuan audit 9 Okt 2026) | Produk "Telkomsel Omni" (HP) masuk kategori Telkom (telepon rumah), bukan HP Pascabayar | Aturan TELKOM mencocokkan kata "TELKOM" yang juga ada di "TELKOMSEL"; aturan HP hanya mengenal "TELKOMSEL PASCA" | `tests/ppob/ppobPostpaid.test.ts` (Telkomsel Omni -> HP_POSTPAID; Telepon Rumah tetap TELKOM) |
 
 ## Prosedur sebelum menyerahkan paket
 
