@@ -87,6 +87,10 @@ export async function cleanDatabase() {
   // granted_by_id, dan revoked_by_id. Tanpa baris ini, deleteMany() di bawah
   // ditolak database.
   await prisma.adminScopeGrant.deleteMany();
+  // DriverFaceCheck.adminOverrideById memakai FK RESTRICT ke users. Tanpa baris ini, berkas uji
+  // mana pun yang berjalan SETELAH uji verifikasi wajah gagal di deleteMany() di bawah — urutan
+  // berkas dapat berubah antar-run (vitest mengurutkan berdasarkan hasil run sebelumnya).
+  await prisma.driverFaceCheck.deleteMany();
   await prisma.user.deleteMany();
   // User dihapus dulu; PpobTransaction cascade-delete mengikuti user. Produk
   // dibersihkan setelah transaksinya hilang (relation RESTRICT pada produk).

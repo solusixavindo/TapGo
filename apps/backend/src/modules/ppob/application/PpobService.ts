@@ -632,6 +632,30 @@ export class PpobService {
     return { skipped: false, escalated, finalized, errors, stuck };
   }
 
+  /**
+   * Ringkasan tagihan (nama pelanggan, periode, rincian angka) untuk bukti pembayaran tagihan,
+   * diambil dari cek tagihan yang disimpan dengan referensi yang sama dengan transaksinya.
+   * Hanya milik pemanggil; referensi tanpa cek tagihan (prabayar) tidak muncul di hasil.
+   */
+  async billSummaries(
+    userId: string,
+    references: string[]
+  ): Promise<Map<string, { customerName: string; period: string | null; billAmount: number; feeAmount: number; totalAmount: number }>> {
+    const rows = await this.repository.findBillInquiriesByReferences(userId, references);
+    return new Map(
+      rows.map((row) => [
+        row.publicReference,
+        {
+          customerName: row.customerName,
+          period: row.period,
+          billAmount: Number(row.billAmount.toFixed(0)),
+          feeAmount: Number(row.totalAmount.minus(row.billAmount).toFixed(0)),
+          totalAmount: Number(row.totalAmount.toFixed(0))
+        }
+      ])
+    );
+  }
+
   listMyTransactions(userId: string, limit: number) {
     return this.repository.listUserTransactions(userId, Math.min(limit, 50));
   }

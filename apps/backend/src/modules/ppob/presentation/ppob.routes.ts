@@ -9,7 +9,7 @@ import { validateRequest } from "../../../core/http/validateRequest.js";
 import { requireAuth } from "../../../core/security/authContext.js";
 import { paymentRateLimiter } from "../../../core/security/rateLimit.js";
 import { PpobService } from "../application/PpobService.js";
-import { PpobProviderGateway } from "../domain/ppobProvider.js";
+import { POSTPAID_CATEGORIES, PpobProviderGateway } from "../domain/ppobProvider.js";
 import { PrismaPpobRepository } from "../infrastructure/PrismaPpobRepository.js";
 import { DigiflazzPpobProvider } from "../infrastructure/DigiflazzPpobProvider.js";
 import { DisabledPpobProvider } from "../infrastructure/DisabledPpobProvider.js";
@@ -192,7 +192,15 @@ async function buildInquiryPayload(input: {
 }
 
 /** Transaksi -> bentuk PpobOrder yang dibaca model Flutter. */
-function serializeOrder(tx: PpobTransaction, replayed = false) {
+type BillSummary = { customerName: string; period: string | null; billAmount: number; feeAmount: number; totalAmount: number };
+
+/** Bukti pembayaran tagihan: ringkasan cek tagihan untuk transaksi pascabayar (null untuk prabayar). */
+async function loadBills(userId: string, transactions: PpobTransaction[]): Promise<Map<string, BillSummary>> {
+  const references = transactions.filter((tx) => POSTPAID_CATEGORIES.has(tx.category)).map((tx) => tx.publicReference);
+  return references.length === 0 ? new Map() : getService().billSummaries(userId, references);
+}
+
+function serializeOrder(tx: PpobTransaction, replayed = false, bill: BillSummary | null = null) {
   const benefitAmount = Prisma.Decimal.min(tx.adminFee, tx.totalAmount);
   return {
     id: tx.publicReference,
@@ -211,6 +219,7 @@ function serializeOrder(tx: PpobTransaction, replayed = false) {
     // tidak menerima nomor tokennya walau transaksi sukses. Hanya untuk transaksi
     // SUCCESS; semua rute yang memakai serializeOrder sudah dibatasi ke pemilik.
     serialNumber: tx.status === "SUCCESS" ? tx.serialNumber : null,
+    bill,
     createdAt: tx.createdAt,
     completedAt: tx.completedAt,
     // Backend tidak punya status REFUNDED terpisah: kegagalan selalu disertai
@@ -381,9 +390,10 @@ ppobRouter.post(
       inquiryReference: req.body.reference,
       idempotencyKey
     });
+    const bills = await loadBills(req.auth!.userId, [transaction]);
     res.status(replayed ? 200 : 201).json({
       success: true,
-      data: serializeOrder(transaction, replayed)
+      data: serializeOrder(transaction, replayed, bills.get(transaction.publicReference) ?? null)
     });
   })
 );
@@ -402,9 +412,10 @@ ppobRouter.post(
         ? { idempotencyKey: idempotencyKeyOf(req.headers["idempotency-key"])! }
         : {})
     });
+    const bills = await loadBills(req.auth!.userId, [transaction]);
     res.status(replayed ? 200 : 201).json({
       success: true,
-      data: serializeOrder(transaction, replayed)
+      data: serializeOrder(transaction, replayed, bills.get(transaction.publicReference) ?? null)
     });
   })
 );
@@ -417,9 +428,10 @@ ppobRouter.get(
       req.auth!.userId,
       Number(req.query.limit)
     );
+    const bills = await loadBills(req.auth!.userId, transactions);
     res.json({
       success: true,
-      data: { items: transactions.map((tx) => serializeOrder(tx)) }
+      data: { items: transactions.map((tx) => serializeOrder(tx, false, bills.get(tx.publicReference) ?? null)) }
     });
   })
 );
@@ -432,7 +444,8 @@ ppobRouter.get(
       req.auth!.userId,
       req.params.reference as string
     );
-    res.json({ success: true, data: serializeOrder(transaction) });
+    const bills = await loadBills(req.auth!.userId, [transaction]);
+    res.json({ success: true, data: serializeOrder(transaction, false, bills.get(transaction.publicReference) ?? null) });
   })
 );
 

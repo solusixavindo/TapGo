@@ -17,8 +17,10 @@ import { AppError } from "../../../core/errors/AppError.js";
 const MSISDN_ID = /^08\d{8,11}$/;
 /// ID pelanggan / nomor meter PLN: 11–12 digit.
 const PLN_CUSTOMER_ID = /^\d{11,12}$/;
-/// Nomor kartu BPJS: 13 digit.
-const BPJS_CARD_NUMBER = /^\d{13}$/;
+/// BPJS Kesehatan: nomor kartu 13 digit atau nomor Virtual Account 16 digit (yang tertera di
+/// aplikasi Mobile JKN dan kartu). Sebelumnya hanya 13 digit sehingga nomor VA ditolak.
+/// Penyedia tetap memeriksa saat cek tagihan (tanpa uang bergerak).
+const BPJS_CARD_NUMBER = /^\d{13,16}$/;
 /// ID pelanggan PDAM: 6–20 digit (variatif antar daerah).
 const PDAM_CUSTOMER_ID = /^\d{6,20}$/;
 
@@ -39,7 +41,7 @@ const TARGET_RULES: Record<
   EWALLET: { pattern: MSISDN_ID, example: "08xxxxxxxxxx", msisdn: true },
   PLN_PREPAID: { pattern: PLN_CUSTOMER_ID, example: "11–12 digit nomor meter/IDPEL", msisdn: false },
   PLN_POSTPAID: { pattern: PLN_CUSTOMER_ID, example: "11–12 digit IDPEL", msisdn: false },
-  BPJS: { pattern: BPJS_CARD_NUMBER, example: "13 digit nomor kartu", msisdn: false },
+  BPJS: { pattern: BPJS_CARD_NUMBER, example: "13 digit nomor kartu atau 16 digit nomor VA", msisdn: false },
   PDAM: { pattern: PDAM_CUSTOMER_ID, example: "6–20 digit ID pelanggan", msisdn: false },
   BPJS_TK: { pattern: DIGITS_5_20, example: "nomor peserta BPJS Ketenagakerjaan", msisdn: false },
   TELKOM: { pattern: TELKOM_NUMBER, example: "kode area + nomor telepon", msisdn: false },

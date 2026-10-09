@@ -186,6 +186,8 @@ export interface PpobRepository {
     input: Omit<PpobBillInquiryRecord, "id" | "usedAt">
   ): Promise<PpobBillInquiryRecord>;
 
+  /// Cek tagihan milik [userId] untuk sekumpulan referensi (bukti pembayaran tagihan).
+  findBillInquiriesByReferences(userId: string, references: string[]): Promise<PpobBillInquiryRecord[]>;
   findBillInquiry(userId: string, publicReference: string): Promise<PpobBillInquiryRecord | null>;
 
   /**

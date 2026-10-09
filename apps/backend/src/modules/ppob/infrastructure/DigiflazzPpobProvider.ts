@@ -67,6 +67,8 @@ interface DigiflazzTransactionPayload {
     customer_name?: string;
     admin?: number;
     period?: string;
+    /// Ejaan Digiflazz yang sebenarnya (dokumentasi Cek Tagihan): `periode` di tingkat atas.
+    periode?: string;
     desc?: unknown;
   };
 }
@@ -429,10 +431,17 @@ function scalarDetail(desc: unknown): Record<string, string | number> {
   return out;
 }
 
+/**
+ * Periode tagihan. Digiflazz mengirim `periode` di tingkat atas dan `desc.detail[].periode`
+ * (dokumentasi Cek Tagihan); sebelumnya hanya `period` dan jalur `desc.tagihan.detail` yang
+ * dibaca, jadi periode hampir selalu kosong di layar tagihan dan bukti pembayaran.
+ */
 function periodOf(data: NonNullable<DigiflazzTransactionPayload["data"]>): string | null {
-  if (typeof data.period === "string" && data.period.trim()) return data.period.trim().slice(0, 40);
+  for (const candidate of [data.periode, data.period]) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate.trim().slice(0, 40);
+  }
   const desc = data.desc as Record<string, unknown> | undefined;
-  for (const holder of [desc?.tagihan, desc?.bill]) {
+  for (const holder of [desc, desc?.tagihan, desc?.bill]) {
     const first = (holder as { detail?: Array<Record<string, unknown>> } | undefined)?.detail?.[0];
     const value = first?.periode ?? first?.period;
     if (typeof value === "string" && value.trim()) return value.trim().slice(0, 40);

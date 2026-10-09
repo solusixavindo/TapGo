@@ -472,6 +472,11 @@ export class PrismaPpobRepository implements PpobRepository {
     });
   }
 
+  findBillInquiriesByReferences(userId: string, references: string[]): Promise<PpobBillInquiryRecord[]> {
+    if (references.length === 0) return Promise.resolve([]);
+    return this.prisma.ppobBillInquiry.findMany({ where: { userId, publicReference: { in: references } } });
+  }
+
   findBillInquiry(userId: string, publicReference: string): Promise<PpobBillInquiryRecord | null> {
     return this.prisma.ppobBillInquiry.findFirst({ where: { userId, publicReference } });
   }
