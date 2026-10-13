@@ -4,6 +4,8 @@ import {
   MembershipOrderStatus,
   MembershipTier,
   PaymentStatus,
+  PpobCategory,
+  PpobTransactionStatus,
   Prisma,
   PrismaClient,
   RewardTransactionStatus,
@@ -33,6 +35,9 @@ type MemberListInput = PageInput & {
   registeredDays?: number;
   source?: "PLAY" | "OTHER" | "UNKNOWN";
 };
+
+/** Transaksi PPOB yang masih PENDING/PROCESSING lebih lama dari ini dianggap tertahan (rekonsiliasi belum menyelesaikannya). */
+const DIGIFLAZZ_STUCK_AFTER_MS = 10 * 60 * 1000;
 
 /** Indonesia (WIB) = UTC+7 tanpa DST; hari kalender dibatasi di zona ini. */
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
@@ -1769,6 +1774,135 @@ export class AdminConsoleService {
         total: Object.values(byStatus).reduce((sum, count) => sum + count, 0),
         byStatus,
         overduePending: topUpOverdue + membershipOverdue
+      }
+    };
+  }
+
+  /**
+   * Transaksi PPOB yang dikirim ke Digiflazz, lengkap untuk penelusuran oleh Super Admin: status, kode jawaban
+   * provider, modal, selisih (margin), lama proses, dan apakah saldo pelanggan sudah dikembalikan.
+   *
+   * `publicReference` adalah `ref_id` di dasbor Digiflazz, jadi pencarian memakainya untuk mencocokkan kedua sisi.
+   * Nomor tujuan, nomor HP pelanggan, dan serial/token disamarkan: token PLN dapat dipakai siapa saja yang
+   * memegangnya, dan yang berhak melihatnya hanya pemilik transaksi di aplikasi.
+   */
+  async digiflazzTransactions(
+    input: PageInput & {
+      status?: PpobTransactionStatus;
+      category?: PpobCategory;
+      search?: string;
+      stuckOnly?: boolean;
+      dateFrom?: Date;
+      dateTo?: Date;
+    }
+  ) {
+    const stuckBefore = new Date(Date.now() - DIGIFLAZZ_STUCK_AFTER_MS);
+    const created = this.createdAtRange(input);
+    const search = input.search?.trim();
+    const filters: Prisma.PpobTransactionWhereInput = {
+      ...created,
+      ...(input.category ? { category: input.category } : {}),
+      ...(search
+        ? {
+            OR: [
+              { publicReference: { contains: search, mode: "insensitive" } },
+              { providerReference: { contains: search, mode: "insensitive" } },
+              { skuSnapshot: { contains: search, mode: "insensitive" } },
+              { productNameSnapshot: { contains: search, mode: "insensitive" } },
+              { targetNumber: { contains: search } }
+            ]
+          }
+        : {})
+    };
+    const where: Prisma.PpobTransactionWhereInput = {
+      ...filters,
+      ...(input.stuckOnly
+        ? { status: { in: ["PENDING", "PROCESSING"] }, createdAt: { ...(created.createdAt ?? {}), lt: stuckBefore } }
+        : input.status
+          ? { status: input.status }
+          : {})
+    };
+
+    const [total, rows, statusGroups, stuckCount, successTotals] = await Promise.all([
+      this.prisma.ppobTransaction.count({ where }),
+      this.prisma.ppobTransaction.findMany({
+        where,
+        include: { user: { select: { fullName: true, phone: true } } },
+        orderBy: { createdAt: "desc" },
+        skip: this.skip(input),
+        take: input.pageSize
+      }),
+      this.prisma.ppobTransaction.groupBy({ by: ["status"], where: filters, _count: { _all: true } }),
+      this.prisma.ppobTransaction.count({
+        where: { ...filters, status: { in: ["PENDING", "PROCESSING"] }, createdAt: { ...(created.createdAt ?? {}), lt: stuckBefore } }
+      }),
+      this.prisma.ppobTransaction.aggregate({
+        where: { ...filters, status: "SUCCESS" },
+        _sum: { totalAmount: true, providerCost: true },
+        _count: { _all: true, providerCost: true }
+      })
+    ]);
+
+    const maskTail = (value: string, keep: number) =>
+      value.length > keep + 2 ? `${"*".repeat(Math.min(8, value.length - keep))}${value.slice(-keep)}` : "****";
+    const maskTarget = (value: string) =>
+      value.length > 7 ? `${value.slice(0, 4)}${"*".repeat(Math.min(6, value.length - 7))}${value.slice(-3)}` : "****";
+    const toNumber = (value: Prisma.Decimal | null) => (value === null ? null : Number(value));
+
+    const items = rows.map((row) => {
+      const providerCost = toNumber(row.providerCost);
+      const totalAmount = Number(row.totalAmount);
+      const open = row.status === "PENDING" || row.status === "PROCESSING";
+      return {
+        id: row.id,
+        reference: row.publicReference,
+        status: row.status,
+        category: row.category,
+        productName: row.productNameSnapshot,
+        brand: row.brandSnapshot,
+        sku: row.skuSnapshot,
+        providerSku: row.providerSku,
+        provider: row.provider,
+        providerReference: row.providerReference,
+        targetMasked: maskTarget(row.targetNumber),
+        serialMasked: row.serialNumber ? maskTail(row.serialNumber, 4) : null,
+        amount: Number(row.amount),
+        adminFee: Number(row.adminFee),
+        totalAmount,
+        providerCost,
+        margin: row.status === "SUCCESS" && providerCost !== null ? totalAmount - providerCost : null,
+        failureCode: row.failureCode,
+        failureReason: row.failureReason,
+        refunded: row.refundTransactionId !== null,
+        stuck: open && row.createdAt < stuckBefore,
+        userName: row.user.fullName,
+        phoneMasked: row.user.phone.length > 6 ? `${row.user.phone.slice(0, 4)}****${row.user.phone.slice(-3)}` : "****",
+        createdAt: row.createdAt,
+        completedAt: row.completedAt,
+        durationSeconds: row.completedAt ? Math.max(0, Math.round((row.completedAt.getTime() - row.createdAt.getTime()) / 1000)) : null
+      };
+    });
+
+    const byStatus: Record<string, number> = {};
+    for (const group of statusGroups) {
+      byStatus[group.status] = group._count._all;
+    }
+    const salesTotal = toNumber(successTotals._sum.totalAmount) ?? 0;
+    const costTotal = toNumber(successTotals._sum.providerCost) ?? 0;
+    return {
+      ...this.page(items, total, input),
+      summary: {
+        total: Object.values(byStatus).reduce((sum, count) => sum + count, 0),
+        byStatus,
+        stuck: stuckCount,
+        stuckAfterMinutes: DIGIFLAZZ_STUCK_AFTER_MS / 60_000,
+        success: {
+          count: successTotals._count._all,
+          sales: salesTotal,
+          providerCost: costTotal,
+          // Modal hanya tercatat pada sebagian transaksi sukses; selisih dihitung dari yang bermodal saja.
+          withCostCount: successTotals._count.providerCost
+        }
       }
     };
   }

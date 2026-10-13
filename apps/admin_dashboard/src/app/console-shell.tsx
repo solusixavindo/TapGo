@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import Link from "./hard-nav";
+import { usePathname } from "next/navigation";
+import { useHardRouter as useRouter } from "./hard-nav";
 import { ReactNode, useEffect, useState } from "react";
 import { clearSession, readRole, roleAtLeast } from "../lib/api";
 
@@ -40,6 +41,7 @@ const NAV_GROUPS: Array<{
       { href: "/top-up-manual", label: "Top Up Manual", minimum: "SUPER_ADMIN", icon: "wallet" },
       { href: "/pembayaran-online", label: "Pembayaran Online", minimum: "SUPER_ADMIN", icon: "wallet" },
       { href: "/saldo-digiflazz", label: "Saldo Digiflazz", minimum: "SUPER_ADMIN", icon: "chart" },
+      { href: "/transaksi-digiflazz", label: "Transaksi Digiflazz", minimum: "SUPER_ADMIN", icon: "chart" },
       { href: "/reports", label: "Laporan Keuangan", minimum: "SUPER_ADMIN", icon: "chart" },
       { href: "/laba-rugi", label: "Laba Rugi", minimum: "SUPER_ADMIN_VIP", icon: "scale" }
     ]

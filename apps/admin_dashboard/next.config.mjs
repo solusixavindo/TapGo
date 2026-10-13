@@ -20,11 +20,15 @@
  * di backend. Karena konsol di-export statis, mengganti basePath WAJIB
  * diikuti build ulang: seluruh URL aset terpanggang saat build.
  */
+const basePath = process.env.TAPGO_ADMIN_BASE_PATH ?? "/admin";
+
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   output: "export",
-  basePath: process.env.TAPGO_ADMIN_BASE_PATH ?? "/admin",
+  basePath,
+  // Dibaca src/app/hard-nav.tsx: tautan memakai <a> biasa (muat-ulang penuh), jadi basePath harus ditambahkan sendiri.
+  env: { NEXT_PUBLIC_ADMIN_BASE_PATH: basePath },
   trailingSlash: true,
   images: {
     unoptimized: true

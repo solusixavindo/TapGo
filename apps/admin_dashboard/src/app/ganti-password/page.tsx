@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useHardRouter as useRouter } from "../hard-nav";
 import { useEffect, useState } from "react";
 import ConsoleHeader from "../console-header";
 import { changePassword, clearSession, readRole, readToken } from "../../lib/api";

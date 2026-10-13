@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useHardRouter as useRouter } from "../hard-nav";
 import { useCallback, useEffect, useState } from "react";
 import {
   DigiflazzOverview,
@@ -12,6 +12,7 @@ import {
   roleAtLeast
 } from "../../lib/api";
 import ConsoleHeader from "../console-header";
+import HardLink from "../hard-nav";
 
 /**
  * Saldo deposit Digiflazz. Hanya baca.
@@ -143,6 +144,9 @@ export default function DigiflazzBalancePage() {
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Transaksi tertahan</p>
                 <p className="mt-1 text-xl font-black tabular-nums">{data.inFlight.count}</p>
                 <p className="text-xs text-slate-500">senilai {formatRupiah(data.inFlight.amount)}</p>
+                <HardLink href="/transaksi-digiflazz" className="mt-1 inline-block text-xs font-bold text-brand-navy underline">
+                  Lihat transaksi
+                </HardLink>
               </div>
             </div>
 

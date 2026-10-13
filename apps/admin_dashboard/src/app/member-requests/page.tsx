@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import Link from "../hard-nav";
+import { useHardRouter as useRouter } from "../hard-nav";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   DocumentSummary,

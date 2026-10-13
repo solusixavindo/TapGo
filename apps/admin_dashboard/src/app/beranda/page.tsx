@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useHardRouter as useRouter } from "../hard-nav";
 import { useCallback, useEffect, useState } from "react";
 import {
   CartesianGrid,
@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import Link from "next/link";
+import Link from "../hard-nav";
 import {
   AdminActivityEntry,
   DashboardGrowth,
@@ -54,8 +54,16 @@ const ACTIVITY_LABEL: Record<string, string> = {
  * socket admin di backend (socket.io yang ada khusus alur ride/chat driver).
  * Ini keputusan pragmatis: cukup untuk kebutuhan "live" pemantauan, tanpa
  * membangun infrastruktur realtime baru.
+ *
+ * Hanya angka utama (ringkasan dan keuangan) yang ditarik tiap 10 detik. Pertumbuhan,
+ * dokumen mendekati batas simpan, dan aktivitas admin berubah lambat, jadi ditarik tiap
+ * menit. Pembatas laju admin 80 permintaan/menit per IP: menarik kelima data tiap 10
+ * detik memakai 30 permintaan/menit per tab, dan dua tab atau dua admin sekantor sudah
+ * membuat semua halaman konsol menjawab "Too many admin requests".
  */
 const REFRESH_INTERVAL_MS = 10_000;
+const SLOW_EVERY_TICKS = 6;
+const MIN_VISIBLE_REFRESH_GAP_MS = 5_000;
 
 function formatDateShort(iso: string) {
   const parsed = new Date(`${iso}T00:00:00Z`);
@@ -74,28 +82,33 @@ export default function BerandaPage() {
   const [error, setError] = useState("");
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (full: boolean) => {
     try {
       const isVip = readRole() === "SUPER_ADMIN_VIP";
       // Ringkasan keuangan hanya untuk SUPER_ADMIN ke atas; ADMIN (operator)
       // tidak memanggilnya sama sekali supaya tidak melihat galat izin.
       const canFinance = roleAtLeast(readRole(), "SUPER_ADMIN");
-      const [summaryResult, growthResult, financialResult, retentionResult, activityResult] =
-        await Promise.all([
-          dashboardSummary(),
-          dashboardGrowth(),
-          canFinance ? financialSummaryReport() : Promise.resolve(null),
-          documentsNearingRetention(),
-          // Endpoint ini 403 untuk selain VIP — jangan dipanggil sama sekali,
-          // supaya bukan-VIP tidak melihat pesan galat untuk sesuatu yang
-          // memang bukan haknya.
-          isVip ? recentAdminActivity() : Promise.resolve(null)
-        ]);
+      const [summaryResult, financialResult, slow] = await Promise.all([
+        dashboardSummary(),
+        canFinance ? financialSummaryReport() : Promise.resolve(null),
+        full
+          ? Promise.all([
+              dashboardGrowth(),
+              documentsNearingRetention(),
+              // Endpoint ini 403 untuk selain VIP — jangan dipanggil sama sekali,
+              // supaya bukan-VIP tidak melihat pesan galat untuk sesuatu yang
+              // memang bukan haknya.
+              isVip ? recentAdminActivity() : Promise.resolve(null)
+            ])
+          : Promise.resolve(null)
+      ]);
       setSummary(summaryResult);
-      setGrowth(growthResult);
       setFinancial(financialResult);
-      setRetentionWarnings(retentionResult);
-      setActivity(activityResult);
+      if (slow) {
+        setGrowth(slow[0]);
+        setRetentionWarnings(slow[1]);
+        setActivity(slow[2]);
+      }
       setUpdatedAt(new Date());
       setError("");
     } catch (caught) {
@@ -111,15 +124,27 @@ export default function BerandaPage() {
       return;
     }
     setRole(readRole());
-    void refresh();
+    let ticks = 0;
+    let lastRunAt = Date.now();
+    const run = (full: boolean) => {
+      lastRunAt = Date.now();
+      void refresh(full);
+    };
+    run(true);
     const tick = () => {
-      if (document.visibilityState === "visible") void refresh();
+      if (document.visibilityState !== "visible") return;
+      ticks += 1;
+      run(ticks % SLOW_EVERY_TICKS === 0);
+    };
+    const onVisible = () => {
+      // Tab yang berkedip terlihat/tersembunyi tidak boleh menembakkan lima permintaan tiap kedipan.
+      if (document.visibilityState === "visible" && Date.now() - lastRunAt >= MIN_VISIBLE_REFRESH_GAP_MS) run(true);
     };
     const timer = setInterval(tick, REFRESH_INTERVAL_MS);
-    document.addEventListener("visibilitychange", tick);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       clearInterval(timer);
-      document.removeEventListener("visibilitychange", tick);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [router, refresh]);
 
@@ -128,7 +153,7 @@ export default function BerandaPage() {
       <div className="mx-auto max-w-6xl">
         <ConsoleHeader
           title="Beranda"
-          subtitle={roleAtLeast(role, "SUPER_ADMIN") ? "Ringkasan pendaftaran, aktivitas, dan keuangan TapGo — diperbarui otomatis tiap 10 detik" : "Ringkasan pendaftaran dan antrean kerja TapGo — diperbarui otomatis tiap 10 detik"}
+          subtitle={roleAtLeast(role, "SUPER_ADMIN") ? "Ringkasan pendaftaran, aktivitas, dan keuangan TapGo — angka utama diperbarui otomatis tiap 10 detik" : "Ringkasan pendaftaran dan antrean kerja TapGo — angka utama diperbarui otomatis tiap 10 detik"}
           role={role}
         />
 

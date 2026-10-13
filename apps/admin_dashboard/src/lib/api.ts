@@ -947,6 +947,71 @@ export function getDigiflazzBalance(refresh = false) {
   return request<DigiflazzOverview>(`/admin/ppob/digiflazz-balance${refresh ? "?refresh=1" : ""}`);
 }
 
+export type DigiflazzTxStatus = "PENDING" | "PROCESSING" | "SUCCESS" | "FAILED" | "REFUNDED";
+
+export type DigiflazzTxItem = {
+  id: string;
+  /** `ref_id` di dasbor Digiflazz. */
+  reference: string;
+  status: DigiflazzTxStatus;
+  category: string;
+  productName: string;
+  brand: string;
+  sku: string;
+  providerSku: string | null;
+  provider: string;
+  providerReference: string | null;
+  targetMasked: string;
+  serialMasked: string | null;
+  amount: number;
+  adminFee: number;
+  totalAmount: number;
+  /** Harga modal dari Digiflazz; null bila tidak tercatat. */
+  providerCost: number | null;
+  /** Selisih penjualan dan modal; hanya untuk transaksi sukses yang modalnya tercatat. */
+  margin: number | null;
+  failureCode: string | null;
+  failureReason: string | null;
+  /** Saldo pelanggan sudah dikembalikan. */
+  refunded: boolean;
+  /** Masih PENDING/PROCESSING melebihi batas wajar. */
+  stuck: boolean;
+  userName: string;
+  phoneMasked: string;
+  createdAt: string;
+  completedAt: string | null;
+  durationSeconds: number | null;
+};
+
+export type DigiflazzTxList = {
+  items: DigiflazzTxItem[];
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+  summary: {
+    total: number;
+    byStatus: Record<string, number>;
+    stuck: number;
+    stuckAfterMinutes: number;
+    success: { count: number; sales: number; providerCost: number; withCostCount: number };
+  };
+};
+
+export function listDigiflazzTransactions(params: {
+  page?: number;
+  status?: DigiflazzTxStatus;
+  category?: string;
+  search?: string;
+  stuck?: boolean;
+  dateFrom?: string;
+}) {
+  const query = new URLSearchParams({ page: String(params.page ?? 1), pageSize: "25" });
+  if (params.status) query.set("status", params.status);
+  if (params.category) query.set("category", params.category);
+  if (params.search) query.set("search", params.search);
+  if (params.stuck) query.set("stuck", "1");
+  if (params.dateFrom) query.set("dateFrom", params.dateFrom);
+  return request<DigiflazzTxList>(`/admin/ppob/transactions?${query.toString()}`);
+}
+
 export type ManualTopUpStatus = "PENDING" | "PAID" | "CANCELLED";
 
 /** WALLET = Saldo TapGo (driver, perjalanan); PPOB = Saldo PPOB (tidak dapat ditarik). */

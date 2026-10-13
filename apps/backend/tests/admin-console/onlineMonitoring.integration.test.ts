@@ -218,6 +218,132 @@ describe.skipIf(!runIntegration)("Pemantauan pembayaran online dan saldo Digifla
     });
   });
 
+  describe("transaksi Digiflazz", () => {
+    const minute = 60_000;
+
+    async function seedTransactions() {
+      const buyer = await createUser("USER", "+6281234567890");
+      const pulsa = await prisma.ppobProduct.create({
+        data: { sku: "PULSA_TSEL_10", category: "PULSA", brand: "Telkomsel", name: "Pulsa Telkomsel 10.000", price: new Prisma.Decimal(11_000), providerSku: "tsel10" }
+      });
+      const token = await prisma.ppobProduct.create({
+        data: { sku: "PLN_20", category: "PLN_PREPAID", brand: "PLN", name: "Token PLN 20.000", price: new Prisma.Decimal(21_500), providerSku: "pln20" }
+      });
+      const make = (reference: string, data: Partial<Prisma.PpobTransactionUncheckedCreateInput>) =>
+        prisma.ppobTransaction.create({
+          data: {
+            publicReference: reference, userId: buyer.id, productId: pulsa.id, skuSnapshot: "PULSA_TSEL_10",
+            productNameSnapshot: "Pulsa Telkomsel 10.000", brandSnapshot: "Telkomsel", category: "PULSA",
+            targetNumber: "081298765432", amount: new Prisma.Decimal(11_000), adminFee: new Prisma.Decimal(0),
+            totalAmount: new Prisma.Decimal(11_000), status: "SUCCESS", provider: "digiflazz", ...data
+          }
+        });
+      const created = new Date(Date.now() - 3 * 3_600_000);
+      await make("PPOB-OK1", {
+        createdAt: created, completedAt: new Date(created.getTime() + 7_000), providerCost: new Prisma.Decimal(10_200),
+        providerReference: "DGF-OK1", serialNumber: "SN1234567890ABCD"
+      });
+      await make("PPOB-OK2", { createdAt: created, completedAt: new Date(created.getTime() + 3_000) });
+      await make("PPOB-FAIL", {
+        status: "FAILED", createdAt: created, completedAt: new Date(created.getTime() + 5_000), failureCode: "DIGIFLAZZ_RC_44",
+        failureReason: "Saldo tidak cukup", refundTransactionId: "11111111-1111-4111-8111-111111111111"
+      });
+      await make("PPOB-WAIT", { status: "PROCESSING", createdAt: new Date(Date.now() - 2 * minute), providerReference: "PPOB-WAIT" });
+      await make("PPOB-STUCK", { status: "PROCESSING", createdAt: new Date(Date.now() - 45 * minute), providerReference: "PPOB-STUCK" });
+      await make("PPOB-TOKEN", {
+        productId: token.id, skuSnapshot: "PLN_20", productNameSnapshot: "Token PLN 20.000", brandSnapshot: "PLN",
+        category: "PLN_PREPAID", targetNumber: "14212345678", amount: new Prisma.Decimal(21_500), totalAmount: new Prisma.Decimal(21_500),
+        createdAt: created, completedAt: new Date(created.getTime() + 9_000), providerCost: new Prisma.Decimal(20_900), serialNumber: "5555666677778888999"
+      });
+    }
+
+    async function list(user: User, query = "") {
+      const response = await call(user, `/api/v1/admin/ppob/transactions${query}`);
+      const text = await response.text();
+      return { status: response.status, text, data: response.status === 200 ? JSON.parse(text).data : null };
+    }
+
+    it("hanya SUPER_ADMIN ke atas; ADMIN dan pengguna biasa ditolak", async () => {
+      expect((await list(await createUser("ADMIN"))).status).toBe(403);
+      expect((await list(await createUser("USER"))).status).toBe(403);
+      expect((await list(await createUser("SUPER_ADMIN"))).status).toBe(200);
+      expect((await list(await createUser("SUPER_ADMIN_VIP"))).status).toBe(200);
+    });
+
+    it("menampilkan rincian, ringkasan per status, dan transaksi tertahan", async () => {
+      await seedTransactions();
+      const { data } = await list(await createUser("SUPER_ADMIN_VIP"));
+      expect(data.pagination.total).toBe(6);
+      expect(data.summary.byStatus).toEqual({ SUCCESS: 3, FAILED: 1, PROCESSING: 2 });
+      expect(data.summary.stuck).toBe(1);
+      // Penjualan sukses 11.000 + 11.000 + 21.500; modal tercatat pada 2 dari 3, margin dihitung dari yang bermodal.
+      expect(data.summary.success).toMatchObject({ count: 3, sales: 43_500, providerCost: 31_100, withCostCount: 2 });
+
+      const byRef = Object.fromEntries(data.items.map((item: any) => [item.reference, item]));
+      expect(byRef["PPOB-OK1"]).toMatchObject({
+        status: "SUCCESS", providerReference: "DGF-OK1", providerCost: 10_200, margin: 800, durationSeconds: 7, refunded: false, stuck: false
+      });
+      expect(byRef["PPOB-OK2"]).toMatchObject({ providerCost: null, margin: null });
+      expect(byRef["PPOB-FAIL"]).toMatchObject({
+        status: "FAILED", failureCode: "DIGIFLAZZ_RC_44", failureReason: "Saldo tidak cukup", refunded: true, margin: null
+      });
+      expect(byRef["PPOB-WAIT"]).toMatchObject({ status: "PROCESSING", stuck: false, durationSeconds: null });
+      expect(byRef["PPOB-STUCK"]).toMatchObject({ status: "PROCESSING", stuck: true });
+    });
+
+    it("menyamarkan nomor tujuan, nomor HP, dan serial/token", async () => {
+      await seedTransactions();
+      const { data, text } = await list(await createUser("SUPER_ADMIN"));
+      const byRef = Object.fromEntries(data.items.map((item: any) => [item.reference, item]));
+      expect(byRef["PPOB-OK1"].targetMasked).toBe("0812*****432");
+      expect(byRef["PPOB-OK1"].phoneMasked).toBe("+628****890");
+      expect(byRef["PPOB-OK1"].serialMasked).toBe("********ABCD");
+      expect(byRef["PPOB-TOKEN"].serialMasked.endsWith("8999")).toBe(true);
+      expect(byRef["PPOB-OK2"].serialMasked).toBeNull();
+      for (const secret of ["081298765432", "14212345678", "SN1234567890ABCD", "5555666677778888999", "+6281234567890"]) {
+        expect(text).not.toContain(secret);
+      }
+      expect(text).not.toContain(DIGI_KEY);
+    });
+
+    it("menyaring menurut status, kategori, tertahan, dan pencarian referensi", async () => {
+      await seedTransactions();
+      const vip = await createUser("SUPER_ADMIN_VIP");
+      const failed = (await list(vip, "?status=FAILED")).data;
+      expect(failed.items.map((item: any) => item.reference)).toEqual(["PPOB-FAIL"]);
+      // Ringkasan tidak ikut menyempit oleh filter status, supaya kartu tetap menunjukkan seluruh sebaran.
+      expect(failed.summary.total).toBe(6);
+
+      const stuck = (await list(vip, "?stuck=1")).data;
+      expect(stuck.items.map((item: any) => item.reference)).toEqual(["PPOB-STUCK"]);
+
+      const token = (await list(vip, "?category=PLN_PREPAID")).data;
+      expect(token.items.map((item: any) => item.reference)).toEqual(["PPOB-TOKEN"]);
+      expect(token.summary.total).toBe(1);
+
+      expect((await list(vip, "?search=dgf-ok1")).data.items.map((item: any) => item.reference)).toEqual(["PPOB-OK1"]);
+      expect((await list(vip, "?search=ppob-stuck")).data.items.map((item: any) => item.reference)).toEqual(["PPOB-STUCK"]);
+      expect((await list(vip, "?search=tidak-ada-ini")).data.items).toHaveLength(0);
+    });
+
+    it("menolak nilai filter yang tidak dikenal dan membatasi ukuran halaman", async () => {
+      const vip = await createUser("SUPER_ADMIN_VIP");
+      expect((await list(vip, "?status=BOHONG")).status).toBe(400);
+      expect((await list(vip, "?category=BOHONG")).status).toBe(400);
+      expect((await list(vip, "?pageSize=101")).status).toBe(400);
+    });
+
+    it("membagi halaman dan mengurutkan dari yang terbaru", async () => {
+      await seedTransactions();
+      const vip = await createUser("SUPER_ADMIN_VIP");
+      const first = (await list(vip, "?pageSize=2&page=1")).data;
+      const second = (await list(vip, "?pageSize=2&page=2")).data;
+      expect(first.pagination).toMatchObject({ total: 6, totalPages: 3 });
+      expect(first.items.map((item: any) => item.reference)).toEqual(["PPOB-WAIT", "PPOB-STUCK"]);
+      expect(second.items).toHaveLength(2);
+    });
+  });
+
   describe("saldo Digiflazz", () => {
     async function transaction(reference: string, status: "SUCCESS" | "PROCESSING", cost: number | null, createdAt: Date, total = 20_000) {
       const user = await createUser("USER");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useHardRouter as useRouter } from "../hard-nav";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   AdminRideDriver,

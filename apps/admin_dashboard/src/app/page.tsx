@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useHardRouter as useRouter } from "./hard-nav";
 import { FormEvent, useEffect, useState } from "react";
 import { login, readToken } from "../lib/api";
 

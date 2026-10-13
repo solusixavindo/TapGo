@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "./hard-nav";
 
 /**
  * Judul halaman konsol.

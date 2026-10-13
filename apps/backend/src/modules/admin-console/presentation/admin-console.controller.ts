@@ -114,6 +114,19 @@ export class AdminConsoleController {
     res.json({ success: true, data: result });
   };
 
+  digiflazzTransactions = async (req: Request, res: Response) => {
+    const result = await this.adminConsoleService.digiflazzTransactions({
+      page: Number(req.query.page),
+      pageSize: Number(req.query.pageSize),
+      ...(typeof req.query.status === "string" ? { status: req.query.status as never } : {}),
+      ...(typeof req.query.category === "string" ? { category: req.query.category as never } : {}),
+      ...(typeof req.query.search === "string" ? { search: req.query.search } : {}),
+      ...(req.query.stuck === "1" || req.query.stuck === "true" ? { stuckOnly: true } : {}),
+      ...this.dateRange(req)
+    });
+    res.json({ success: true, data: result });
+  };
+
   digiflazzBalance = async (req: Request, res: Response) => {
     const result = await this.adminConsoleService.digiflazzBalanceOverview({
       force: req.query.refresh === "1" || req.query.refresh === "true"

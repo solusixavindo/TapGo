@@ -4,6 +4,8 @@ import {
   MembershipOrderStatus,
   MembershipTier,
   PaymentStatus,
+  PpobCategory,
+  PpobTransactionStatus,
   RewardTransactionStatus,
   WithdrawalStatus
 } from "@prisma/client";
@@ -47,6 +49,18 @@ export const adminOnlinePaymentQuerySchema = z.object({
     ...paginationQuery,
     kind: z.enum(["TOPUP", "MEMBERSHIP"]).optional(),
     status: z.nativeEnum(PaymentStatus).optional(),
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional()
+  })
+});
+
+export const adminDigiflazzTransactionQuerySchema = z.object({
+  query: z.object({
+    ...paginationQuery,
+    status: z.nativeEnum(PpobTransactionStatus).optional(),
+    category: z.nativeEnum(PpobCategory).optional(),
+    search: z.string().trim().min(1).max(60).optional(),
+    stuck: z.enum(["1", "true"]).optional(),
     dateFrom: z.coerce.date().optional(),
     dateTo: z.coerce.date().optional()
   })

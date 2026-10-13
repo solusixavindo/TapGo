@@ -41,6 +41,7 @@ import {
   adminRoleCandidateSchema,
   adminOnlinePaymentQuerySchema,
   adminDigiflazzBalanceQuerySchema,
+  adminDigiflazzTransactionQuerySchema,
   adminPaymentQuerySchema,
   adminReportQuerySchema,
   adminRewardActionSchema,
@@ -224,6 +225,7 @@ adminConsoleRouter.get("/payments", requireRoles("SUPER_ADMIN"), validateRequest
 // Pemantauan pembayaran online (Midtrans): top up dan pembayaran membership, hanya baca.
 adminConsoleRouter.get("/online-payments", requireRoles("SUPER_ADMIN"), validateRequest(adminOnlinePaymentQuerySchema), asyncHandler(controller.onlinePayments));
 // Saldo deposit Digiflazz beserta konteks pemakaian; hanya baca.
+adminConsoleRouter.get("/ppob/transactions", requireRoles("SUPER_ADMIN"), validateRequest(adminDigiflazzTransactionQuerySchema), asyncHandler(controller.digiflazzTransactions));
 adminConsoleRouter.get("/ppob/digiflazz-balance", requireRoles("SUPER_ADMIN"), validateRequest(adminDigiflazzBalanceQuerySchema), asyncHandler(controller.digiflazzBalance));
 adminConsoleRouter.get("/invoices", requireRoles("SUPER_ADMIN"), validateRequest(adminInvoiceQuerySchema), asyncHandler(controller.invoices));
 adminConsoleRouter.get("/commissions", requireRoles("SUPER_ADMIN"), validateRequest(adminCommissionQuerySchema), asyncHandler(controller.commissions));
