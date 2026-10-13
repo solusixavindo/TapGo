@@ -13,8 +13,8 @@ export const MANUAL_TOPUP_PROVIDER = MANUAL_BANK_PROVIDER;
 const MAX_OPEN_ORDERS_PER_USER = 3;
 
 /**
- * Tujuan top up. WALLET = Saldo TapGo (balance + cashBalance): dipakai driver
- * (komisi pesanan tunai) dan pembayaran perjalanan. PPOB = Saldo PPOB
+ * Tujuan top up. WALLET = Saldo TapGo (balance saja, TIDAK dapat ditarik atau ditransfer):
+ * dipakai driver (komisi pesanan tunai) dan pembayaran perjalanan. PPOB = Saldo PPOB
  * (ppobBalance saja): hanya untuk pembelian pulsa/token/tagihan dan TIDAK dapat
  * ditarik. Disimpan di metadata pesanan (tanpa migrasi); pesanan lama tanpa
  * nilai ini dibaca sebagai WALLET.
