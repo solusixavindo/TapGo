@@ -14,6 +14,8 @@ import { StatusCodes } from "http-status-codes";
 import { midtransFeeFor } from "../../../core/finance/midtransFees.js";
 import { plConfig, prorateMonthlyCost } from "../../../core/finance/plConfig.js";
 import { POSTPAID_CATEGORIES } from "../../ppob/domain/ppobProvider.js";
+import { DigiflazzBalanceService, digiflazzBalanceService } from "../../ppob/application/DigiflazzBalanceService.js";
+import { env } from "../../../config/env.js";
 import { AppError } from "../../../core/errors/AppError.js";
 import { hashPassword } from "../../../core/security/passwordHasher.js";
 import { normalizePhoneNumber, phoneLookupVariants } from "../../../core/security/phone.js";
@@ -87,7 +89,10 @@ const rewardTypes: CommissionType[] = ["REWARD_BONUS"];
 const profitSharingTypes: CommissionType[] = ["PROFIT_SHARING", "PROFIT_SHARING_BONUS"];
 
 export class AdminConsoleService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly digiflazzBalance: DigiflazzBalanceService = digiflazzBalanceService
+  ) {}
 
   async dashboardSummary() {
     const [
@@ -1632,6 +1637,196 @@ export class AdminConsoleService {
     ]);
 
     return this.page(items, total, input);
+  }
+
+  /**
+   * Pemantauan pembayaran online: top up saldo dan pembayaran membership lewat penyedia pembayaran
+   * (Midtrans/DOKU), digabung menjadi satu daftar, terbaru lebih dulu. Hanya baca. Transfer manual tidak
+   * ikut (punya halamannya sendiri). Nomor HP disamarkan: pemantauan tidak memerlukan nomor penuh.
+   */
+  async onlinePayments(input: PageInput & { kind?: "TOPUP" | "MEMBERSHIP"; status?: PaymentStatus; dateFrom?: Date; dateTo?: Date }) {
+    const providers = ["MIDTRANS", "DOKU"];
+    const created = this.createdAtRange(input);
+    const base = { provider: { in: providers }, ...created };
+    const withStatus = input.status ? { ...base, status: input.status } : base;
+    const wantTopUp = input.kind !== "MEMBERSHIP";
+    const wantMembership = input.kind !== "TOPUP";
+    const take = input.page * input.pageSize;
+    const now = new Date();
+
+    const [topUpTotal, membershipTotal, topUpRows, membershipRows, topUpStatuses, membershipStatuses, topUpOverdue, membershipOverdue] =
+      await Promise.all([
+        wantTopUp ? this.prisma.walletTopUpOrder.count({ where: withStatus }) : 0,
+        wantMembership ? this.prisma.membershipPayment.count({ where: withStatus }) : 0,
+        wantTopUp
+          ? this.prisma.walletTopUpOrder.findMany({
+              where: withStatus,
+              include: { user: { select: { fullName: true, phone: true } } },
+              orderBy: { createdAt: "desc" },
+              take
+            })
+          : [],
+        wantMembership
+          ? this.prisma.membershipPayment.findMany({
+              where: withStatus,
+              include: {
+                user: { select: { fullName: true, phone: true } },
+                invoice: { select: { number: true } },
+                order: { select: { expiresAt: true, membership: { select: { name: true } } } }
+              },
+              orderBy: { createdAt: "desc" },
+              take
+            })
+          : [],
+        wantTopUp ? this.prisma.walletTopUpOrder.groupBy({ by: ["status"], where: base, _count: { _all: true } }) : [],
+        wantMembership ? this.prisma.membershipPayment.groupBy({ by: ["status"], where: base, _count: { _all: true } }) : [],
+        wantTopUp ? this.prisma.walletTopUpOrder.count({ where: { ...base, status: "PENDING", expiresAt: { lt: now } } }) : 0,
+        wantMembership
+          ? this.prisma.membershipPayment.count({ where: { ...base, status: "PENDING", order: { expiresAt: { lt: now } } } })
+          : 0
+      ]);
+
+    const asObject = (value: Prisma.JsonValue | null) =>
+      value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+    const maskPhone = (phone: string) => (phone.length > 6 ? `${phone.slice(0, 4)}****${phone.slice(-3)}` : "****");
+    const num = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : null);
+
+    type Item = {
+      kind: "TOPUP" | "MEMBERSHIP";
+      id: string;
+      reference: string;
+      status: PaymentStatus;
+      provider: string | null;
+      method: string | null;
+      description: string;
+      amount: number;
+      baseAmount: number | null;
+      feeAmount: number;
+      userName: string;
+      phoneMasked: string;
+      createdAt: Date;
+      paidAt: Date | null;
+      expiresAt: Date | null;
+      overdue: boolean;
+    };
+    const items: Item[] = [
+      ...topUpRows.map((row): Item => {
+        const meta = asObject(row.metadata);
+        const gross = num(meta.grossAmount);
+        const base = Number(row.amount);
+        return {
+          kind: "TOPUP",
+          id: row.id,
+          reference: row.reference,
+          status: row.status,
+          provider: row.provider,
+          method: typeof meta.paymentType === "string" ? meta.paymentType : null,
+          description: `Top up ${meta.target === "PPOB" ? "Saldo PPOB" : "Saldo TapGo"}`,
+          amount: gross ?? base,
+          baseAmount: base,
+          feeAmount: num(meta.feeAmount) ?? 0,
+          userName: row.user.fullName,
+          phoneMasked: maskPhone(row.user.phone),
+          createdAt: row.createdAt,
+          paidAt: row.paidAt,
+          expiresAt: row.expiresAt,
+          overdue: row.status === "PENDING" && row.expiresAt !== null && row.expiresAt < now
+        };
+      }),
+      ...membershipRows.map((row): Item => {
+        const meta = asObject(row.metadata);
+        const expiresAt = row.order?.expiresAt ?? null;
+        return {
+          kind: "MEMBERSHIP",
+          id: row.id,
+          reference: row.invoice?.number ?? row.providerReference ?? row.id,
+          status: row.status,
+          provider: row.provider,
+          method: typeof meta.paymentType === "string" ? meta.paymentType : null,
+          description: `Membership ${row.order?.membership?.name ?? ""}`.trim(),
+          amount: Number(row.amount),
+          baseAmount: null,
+          feeAmount: 0,
+          userName: row.user.fullName,
+          phoneMasked: maskPhone(row.user.phone),
+          createdAt: row.createdAt,
+          paidAt: row.paidAt,
+          expiresAt,
+          overdue: row.status === "PENDING" && expiresAt !== null && expiresAt < now
+        };
+      })
+    ]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(this.skip(input), this.skip(input) + input.pageSize);
+
+    const byStatus: Record<string, number> = {};
+    for (const row of [...topUpStatuses, ...membershipStatuses]) {
+      byStatus[row.status] = (byStatus[row.status] ?? 0) + row._count._all;
+    }
+    return {
+      ...this.page(items, topUpTotal + membershipTotal, input),
+      summary: {
+        total: Object.values(byStatus).reduce((sum, count) => sum + count, 0),
+        byStatus,
+        overduePending: topUpOverdue + membershipOverdue
+      }
+    };
+  }
+
+  /**
+   * Saldo deposit Digiflazz beserta konteks: pemakaian hari ini dan 7 hari, perkiraan sisa hari, transaksi yang
+   * masih tertahan, dan perbandingan dengan saldo PPOB pelanggan yang beredar (kewajiban menyediakan layanan).
+   */
+  async digiflazzBalanceOverview(options: { force?: boolean } = {}) {
+    const reading = await this.digiflazzBalance.read(options);
+    const nowMs = Date.now();
+    const wibOffset = 7 * 60 * 60 * 1000;
+    const wibMidnight = new Date(Math.floor((nowMs + wibOffset) / 86_400_000) * 86_400_000 - wibOffset);
+    const weekAgo = new Date(nowMs - 7 * 86_400_000);
+
+    const [today, week, inFlight, liability] = await Promise.all([
+      this.prisma.ppobTransaction.aggregate({
+        where: { status: "SUCCESS", createdAt: { gte: wibMidnight } },
+        _sum: { providerCost: true },
+        _count: { _all: true }
+      }),
+      this.prisma.ppobTransaction.aggregate({
+        where: { status: "SUCCESS", createdAt: { gte: weekAgo } },
+        _sum: { providerCost: true },
+        _count: { _all: true }
+      }),
+      this.prisma.ppobTransaction.aggregate({
+        where: { status: { in: ["PENDING", "PROCESSING"] } },
+        _sum: { totalAmount: true },
+        _count: { _all: true }
+      }),
+      this.prisma.wallet.aggregate({ _sum: { ppobBalance: true } })
+    ]);
+
+    const toNumber = (value: Prisma.Decimal | null | undefined) => Number(value ?? 0);
+    const weekCost = toNumber(week._sum.providerCost);
+    const avgPerDay = weekCost / 7;
+    const customerLiability = toNumber(liability._sum.ppobBalance);
+    const balance = reading.balance;
+    const warn = env.DIGIFLAZZ_BALANCE_WARN;
+    const critical = env.DIGIFLAZZ_BALANCE_CRITICAL;
+    const daysLeft = balance !== null && avgPerDay > 0 ? Math.floor((balance / avgPerDay) * 10) / 10 : null;
+    const level: "UNKNOWN" | "OK" | "LOW" | "CRITICAL" =
+      balance === null ? "UNKNOWN" : balance < critical ? "CRITICAL" : balance < warn || (daysLeft !== null && daysLeft < 2) ? "LOW" : "OK";
+
+    return {
+      provider: reading,
+      level,
+      thresholds: { warn, critical },
+      customerPpobLiability: customerLiability,
+      coverageRatio: balance !== null && customerLiability > 0 ? Math.round((balance / customerLiability) * 100) / 100 : null,
+      spend: {
+        today: { count: today._count._all, cost: toNumber(today._sum.providerCost) },
+        last7Days: { count: week._count._all, cost: weekCost, averagePerDay: Math.round(avgPerDay) }
+      },
+      estimatedDaysLeft: daysLeft,
+      inFlight: { count: inFlight._count._all, amount: toNumber(inFlight._sum.totalAmount) }
+    };
   }
 
   async invoices(input: PaymentListInput) {

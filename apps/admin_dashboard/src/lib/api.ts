@@ -878,6 +878,75 @@ export function profitLossReport(params: { dateFrom?: string; dateTo?: string })
   return request<ProfitLossReport>(`/admin/reports/profit-loss${suffix ? `?${suffix}` : ""}`);
 }
 
+// --- Pembayaran online dan saldo Digiflazz (SUPER_ADMIN ke atas, hanya baca) ----
+
+export type OnlinePaymentStatus = "PENDING" | "PAID" | "FAILED" | "EXPIRED" | "CANCELLED" | "AUTHORIZED" | "REFUNDED";
+
+export type OnlinePaymentItem = {
+  kind: "TOPUP" | "MEMBERSHIP";
+  id: string;
+  reference: string;
+  status: OnlinePaymentStatus;
+  provider: string | null;
+  /** Jenis pembayaran dari Midtrans (bank_transfer, echannel, ...); null selama belum dipilih/tercatat. */
+  method: string | null;
+  description: string;
+  /** Yang ditagihkan ke pembeli (top up: nominal + biaya layanan). */
+  amount: number;
+  /** Top up: nominal yang dikreditkan ke saldo. */
+  baseAmount: number | null;
+  feeAmount: number;
+  userName: string;
+  phoneMasked: string;
+  createdAt: string;
+  paidAt: string | null;
+  expiresAt: string | null;
+  /** Masih menunggu pembayaran padahal batas waktunya lewat (menunggu kabar kedaluwarsa dari Midtrans). */
+  overdue: boolean;
+};
+
+export type OnlinePaymentList = {
+  items: OnlinePaymentItem[];
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+  summary: { total: number; byStatus: Record<string, number>; overduePending: number };
+};
+
+export function listOnlinePayments(params: {
+  page?: number;
+  kind?: "TOPUP" | "MEMBERSHIP";
+  status?: OnlinePaymentStatus;
+}) {
+  const query = new URLSearchParams({ page: String(params.page ?? 1), pageSize: "25" });
+  if (params.kind) query.set("kind", params.kind);
+  if (params.status) query.set("status", params.status);
+  return request<OnlinePaymentList>(`/admin/online-payments?${query.toString()}`);
+}
+
+export type DigiflazzOverview = {
+  provider: {
+    provider: string;
+    configured: boolean;
+    balance: number | null;
+    checkedAt: string | null;
+    stale: boolean;
+    error: string | null;
+  };
+  level: "UNKNOWN" | "OK" | "LOW" | "CRITICAL";
+  thresholds: { warn: number; critical: number };
+  customerPpobLiability: number;
+  coverageRatio: number | null;
+  spend: {
+    today: { count: number; cost: number };
+    last7Days: { count: number; cost: number; averagePerDay: number };
+  };
+  estimatedDaysLeft: number | null;
+  inFlight: { count: number; amount: number };
+};
+
+export function getDigiflazzBalance(refresh = false) {
+  return request<DigiflazzOverview>(`/admin/ppob/digiflazz-balance${refresh ? "?refresh=1" : ""}`);
+}
+
 export type ManualTopUpStatus = "PENDING" | "PAID" | "CANCELLED";
 
 /** WALLET = Saldo TapGo (driver, perjalanan); PPOB = Saldo PPOB (tidak dapat ditarik). */

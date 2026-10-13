@@ -42,6 +42,22 @@ export const adminPaymentQuerySchema = z.object({
   })
 });
 
+export const adminOnlinePaymentQuerySchema = z.object({
+  query: z.object({
+    ...paginationQuery,
+    kind: z.enum(["TOPUP", "MEMBERSHIP"]).optional(),
+    status: z.nativeEnum(PaymentStatus).optional(),
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional()
+  })
+});
+
+export const adminDigiflazzBalanceQuerySchema = z.object({
+  query: z.object({
+    refresh: z.enum(["1", "true"]).optional()
+  })
+});
+
 export const adminInvoiceQuerySchema = z.object({
   query: z.object({
     ...paginationQuery,

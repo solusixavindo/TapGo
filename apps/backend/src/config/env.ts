@@ -229,6 +229,10 @@ const envSchema = z.object({
   /// testing SELALU aktif apa pun nilainya — saldo seller nyata tidak pernah
   /// tersentuh oleh UAT.
   DIGIFLAZZ_TESTING: strictEnvBoolean(false),
+  /// Ambang peringatan saldo deposit Digiflazz di konsol admin (rupiah): di bawah WARN status "menipis",
+  /// di bawah CRITICAL status "kritis". Hanya memengaruhi tampilan pemantauan.
+  DIGIFLAZZ_BALANCE_WARN: z.coerce.number().int().min(0).default(500000),
+  DIGIFLAZZ_BALANCE_CRITICAL: z.coerce.number().int().min(0).default(100000),
   /// Secret webhook Digiflazz (X-Hub-Signature = HMAC-SHA1 raw body).
   /// SENGAJA terpisah dari API key: keduanya dikonfigurasi di tempat berbeda
   /// pada panel Digiflazz. Endpoint webhook fail-closed (503) bila kosong.

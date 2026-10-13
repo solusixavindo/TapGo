@@ -103,6 +103,24 @@ export class AdminConsoleController {
     res.json({ success: true, data: result });
   };
 
+  onlinePayments = async (req: Request, res: Response) => {
+    const result = await this.adminConsoleService.onlinePayments({
+      page: Number(req.query.page),
+      pageSize: Number(req.query.pageSize),
+      ...(req.query.kind === "TOPUP" || req.query.kind === "MEMBERSHIP" ? { kind: req.query.kind } : {}),
+      ...(typeof req.query.status === "string" ? { status: req.query.status as never } : {}),
+      ...this.dateRange(req)
+    });
+    res.json({ success: true, data: result });
+  };
+
+  digiflazzBalance = async (req: Request, res: Response) => {
+    const result = await this.adminConsoleService.digiflazzBalanceOverview({
+      force: req.query.refresh === "1" || req.query.refresh === "true"
+    });
+    res.json({ success: true, data: result });
+  };
+
   invoices = async (req: Request, res: Response) => {
     const result = await this.adminConsoleService.invoices({
       page: Number(req.query.page),

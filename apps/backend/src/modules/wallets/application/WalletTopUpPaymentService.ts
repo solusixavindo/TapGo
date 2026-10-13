@@ -351,6 +351,18 @@ export class WalletTopUpPaymentService {
     }
 
     if (transactionStatus === "pending") {
+      // Catat metode yang dipilih pembeli (VA, Mandiri Bill, dll.) supaya pemantauan di konsol admin menampilkannya
+      // walau pembayaran belum lunas. Hanya menambah metadata; status tetap PENDING.
+      const metadata = this.asObject(order.metadata);
+      if (order.status === "PENDING" && payload.payment_type && metadata.paymentType !== payload.payment_type) {
+        await this.walletRepository.updateTopUpOrderPaymentMetadata({
+          orderId: order.id,
+          method: order.method ?? "MIDTRANS_SNAP",
+          provider: order.provider ?? "MIDTRANS",
+          providerReference: order.providerReference ?? order.reference,
+          metadata: { ...metadata, paymentType: payload.payment_type } as Prisma.InputJsonValue,
+        });
+      }
       return { status: "PENDING", idempotent: order.status === "PENDING" };
     }
 
