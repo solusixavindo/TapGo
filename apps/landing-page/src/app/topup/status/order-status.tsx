@@ -12,9 +12,12 @@ import {
   TOPUP_TARGETS,
   TopUpOrder,
   TopUpOrderStatus,
+  TopUpSummary,
   TopUpTarget,
   getManualTopUp,
   getTopUpOrder,
+  getTopUpSummary,
+  isSafePaymentUrl,
   readSession,
   writeSession
 } from "../api";
@@ -73,6 +76,12 @@ const STATUS_VIEW: Record<TopUpOrderStatus, { tone: Tone; label: string; headlin
   }
 };
 
+/** Teks status untuk top up online (otomatis, tanpa konfirmasi tim). */
+const ONLINE_PENDING = {
+  headline: "Menunggu pembayaran",
+  body: "Selesaikan pembayaran di halaman pembayaran. Saldo bertambah otomatis begitu pembayaran kami terima, biasanya dalam hitungan menit."
+};
+
 const LIVE_STATUSES: TopUpOrderStatus[] = ["PENDING", "AUTHORIZED"];
 const POLL_INTERVAL_MS = 10000;
 
@@ -87,6 +96,7 @@ export default function OrderStatus() {
   const [loading, setLoading] = useState(!PREVIEW_MODE);
   const [error, setError] = useState("");
   const [target, setTarget] = useState<TopUpTarget | null>(PREVIEW_MODE ? "WALLET" : null);
+  const [summary, setSummary] = useState<TopUpSummary | null>(null);
 
   const orderId = readSession(TOPUP_ORDER_KEY) || params.get("id") || "";
 
@@ -104,6 +114,22 @@ export default function OrderStatus() {
       return;
     }
     try {
+      // Ringkasan baru memuat tujuan, biaya, dan jenis (online/manual) sekaligus. Server lama belum
+      // memilikinya; saat itu jalur lama (pesanan + rincian transfer manual) tetap dipakai.
+      const fresh = await getTopUpSummary(token, orderId).catch(() => null);
+      if (fresh) {
+        setSummary(fresh);
+        setTarget(fresh.target);
+        setOrder({
+          id: fresh.id,
+          reference: fresh.reference,
+          amount: fresh.baseAmount,
+          status: fresh.status,
+          createdAt: ""
+        });
+        setError("");
+        return;
+      }
       const result = await getTopUpOrder(token, orderId);
       setOrder(result);
       setError("");
@@ -151,8 +177,11 @@ export default function OrderStatus() {
     );
   }
 
-  const view = STATUS_VIEW[status];
+  const onlineOrder = summary?.online === true;
+  const base = STATUS_VIEW[status];
+  const view = onlineOrder && status === "PENDING" ? { ...base, ...ONLINE_PENDING } : base;
   const tone = TONE_STYLE[view.tone];
+  const resumeUrl = onlineOrder && status === "PENDING" && isSafePaymentUrl(summary?.resumeUrl) ? summary!.resumeUrl : null;
 
   return (
     <div>
@@ -181,12 +210,30 @@ export default function OrderStatus() {
               </div>
             ) : null}
             <div className="flex items-start justify-between gap-6">
-              <dt className="text-sm themed-text-muted">Nominal transfer</dt>
+              <dt className="text-sm themed-text-muted">{onlineOrder ? "Jumlah top up" : "Nominal transfer"}</dt>
               <dd className="text-right text-sm font-bold themed-text">{formatRupiah(order.amount)}</dd>
             </div>
+            {onlineOrder && summary ? (
+              <>
+                <div className="flex items-start justify-between gap-6">
+                  <dt className="text-sm themed-text-muted">Biaya layanan pembayaran</dt>
+                  <dd className="text-right text-sm font-bold themed-text" data-testid="status-fee">{formatRupiah(summary.feeAmount)}</dd>
+                </div>
+                <div className="flex items-start justify-between gap-6">
+                  <dt className="text-sm themed-text-muted">Total dibayar</dt>
+                  <dd className="text-right text-sm font-bold themed-text" data-testid="status-total">{formatRupiah(summary.grossAmount)}</dd>
+                </div>
+              </>
+            ) : null}
           </dl>
 
-          {status === "PENDING" && !PREVIEW_MODE ? (
+          {resumeUrl ? (
+            <a href={resumeUrl} className={`${secondaryButtonClass} mt-5`} data-testid="resume-payment">
+              Lanjutkan pembayaran
+            </a>
+          ) : null}
+
+          {status === "PENDING" && !PREVIEW_MODE && !onlineOrder ? (
             <Link href="/topup/bayar" className={`${secondaryButtonClass} mt-5`} data-testid="back-to-invoice">
               Lihat invoice dan rekening tujuan
             </Link>

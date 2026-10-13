@@ -9,8 +9,12 @@ import {
   TOPUP_ORDER_KEY,
   TOPUP_TARGETS,
   TOPUP_TARGET_KEY,
+  TopUpOptions,
   TopUpTarget,
   createManualTopUp,
+  createOnlineTopUp,
+  getTopUpOptions,
+  isSafePaymentUrl,
   parseTopUpTarget,
   readSession,
   writeSession
@@ -26,8 +30,15 @@ export default function AmountForm() {
   const [custom, setCustom] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // undefined = belum dimuat; null = gagal dimuat (kembali ke transfer manual seperti semula).
+  const [options, setOptions] = useState<TopUpOptions | null | undefined>(PREVIEW_MODE ? null : undefined);
 
   const config = TOPUP_TARGETS[target];
+  const online = options?.online === true;
+  const fee = online ? options!.onlineFee : 0;
+  const minimum = options?.minimum?.[target] ?? config.min;
+  const maximum = options?.maximum ?? TOPUP_MAX_AMOUNT;
+  const unavailable = options != null && !options.online && !options.manualTransfer;
 
   useEffect(() => {
     if (PREVIEW_MODE) return;
@@ -38,6 +49,13 @@ export default function AmountForm() {
     // Tujuan dari tautan yang dipilih saat masuk (?tujuan=ppob).
     const initial = parseTopUpTarget(readSession(TOPUP_TARGET_KEY));
     if (initial !== "WALLET") chooseTarget(initial);
+    let alive = true;
+    getTopUpOptions(readSession(TOKEN_KEY))
+      .then((result) => (alive ? setOptions(result) : undefined))
+      .catch(() => (alive ? setOptions(null) : undefined));
+    return () => {
+      alive = false;
+    };
   }, [router]);
 
   /** Ganti tujuan: nominal cepat dan batas minimal ikut berganti. */
@@ -50,7 +68,8 @@ export default function AmountForm() {
   }
 
   const amount = custom.trim() ? Number(custom.replace(/[^0-9]/g, "")) : selected;
-  const valid = Number.isFinite(amount) && amount >= config.min && amount <= TOPUP_MAX_AMOUNT;
+  const valid = Number.isFinite(amount) && amount >= minimum && amount <= maximum && !unavailable && options !== undefined;
+  const total = (amount || 0) + fee;
 
   async function onContinue() {
     if (busy || !valid) return;
@@ -62,6 +81,16 @@ export default function AmountForm() {
         return;
       }
       const token = readSession(TOKEN_KEY);
+      if (online) {
+        const order = await createOnlineTopUp(token, amount, target);
+        if (!isSafePaymentUrl(order.redirectUrl)) {
+          throw new Error("Halaman pembayaran belum dapat dibuka. Coba lagi beberapa saat lagi.");
+        }
+        writeSession(TOPUP_ORDER_KEY, order.id);
+        // Halaman pembayaran penyedia; setelah selesai pelanggan kembali ke halaman status.
+        window.location.assign(order.redirectUrl);
+        return;
+      }
       const order = await createManualTopUp(token, amount, target);
       writeSession(TOPUP_ORDER_KEY, order.id);
       router.push("/topup/bayar");
@@ -93,7 +122,7 @@ export default function AmountForm() {
             >
               <span className={`block text-base font-black ${active ? "themed-accent" : "themed-text"}`}>{item.label}</span>
               <span className="mt-0.5 block text-xs font-semibold themed-text-muted">{item.short}</span>
-              <span className="mt-1.5 block text-xs themed-text-muted">Minimal {formatRupiah(item.min)}</span>
+              <span className="mt-1.5 block text-xs themed-text-muted">Minimal {formatRupiah(options?.minimum?.[key] ?? item.min)}</span>
             </button>
           );
         })}
@@ -132,7 +161,7 @@ export default function AmountForm() {
             className="mt-2 w-full rounded-2xl border themed-border bg-white px-4 py-3.5 text-base text-brand-navyDeep outline-none transition placeholder:text-slate-400 focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
             type="text"
             inputMode="numeric"
-            placeholder={`Minimal ${formatRupiah(config.min)}`}
+            placeholder={`Minimal ${formatRupiah(minimum)}`}
             value={custom}
             onChange={(event) => setCustom(event.target.value.replace(/[^0-9]/g, ""))}
           />
@@ -141,7 +170,36 @@ export default function AmountForm() {
 
       {!valid && (custom.trim() || amount) ? (
         <p className="mt-3 text-xs font-semibold text-rose-400">
-          Jumlah {config.label} harus antara {formatRupiah(config.min)} dan {formatRupiah(TOPUP_MAX_AMOUNT)}.
+          Jumlah {config.label} harus antara {formatRupiah(minimum)} dan {formatRupiah(maximum)}.
+        </p>
+      ) : null}
+
+      {online && amount > 0 ? (
+        <dl
+          className="mt-6 space-y-2.5 rounded-2xl border themed-border themed-card-bg px-4 py-4 text-sm"
+          data-testid="fee-summary"
+        >
+          <div className="flex items-start justify-between gap-6">
+            <dt className="themed-text-muted">Top up {config.label}</dt>
+            <dd className="font-bold themed-text">{formatRupiah(amount)}</dd>
+          </div>
+          <div className="flex items-start justify-between gap-6">
+            <dt className="themed-text-muted">Biaya layanan pembayaran</dt>
+            <dd className="font-bold themed-text" data-testid="fee-amount">{formatRupiah(fee)}</dd>
+          </div>
+          <div className="flex items-start justify-between gap-6 border-t border-dashed themed-border pt-2.5">
+            <dt className="font-bold themed-text">Total yang dibayar</dt>
+            <dd className="font-black themed-accent" data-testid="fee-total">{formatRupiah(total)}</dd>
+          </div>
+          <p className="pt-1 text-xs leading-6 themed-text-muted">
+            Saldo bertambah sebesar {formatRupiah(amount)}. Biaya layanan dipungut penyedia pembayaran dan tidak masuk ke saldo.
+          </p>
+        </dl>
+      ) : null}
+
+      {unavailable ? (
+        <p role="alert" className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-300">
+          Top up sedang tidak tersedia. Silakan coba lagi nanti.
         </p>
       ) : null}
 
@@ -152,7 +210,11 @@ export default function AmountForm() {
       ) : null}
 
       <button type="button" onClick={onContinue} disabled={busy || !valid} className={`${primaryButtonClass} mt-6`}>
-        {busy ? "Menyiapkan…" : `Lanjut isi ${config.label} ${formatRupiah(amount || 0)}`}
+        {busy
+          ? "Menyiapkan…"
+          : online
+            ? `Bayar ${formatRupiah(total)}`
+            : `Lanjut isi ${config.label} ${formatRupiah(amount || 0)}`}
       </button>
     </div>
   );

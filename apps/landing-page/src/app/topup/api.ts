@@ -140,6 +140,69 @@ export const PREVIEW_MANUAL_TOPUP: ManualTopUpOrder = {
   bank: { bankName: "BRI", accountNumber: "0000000000", accountHolder: "PT Contoh" }
 };
 
+/** Opsi top up dari server: apakah bayar online dibuka, biayanya, batas nominal, dan transfer manual. */
+export type TopUpOptions = {
+  online: boolean;
+  onlineFee: number;
+  minimum: Record<TopUpTarget, number>;
+  maximum: number;
+  manualTransfer: boolean;
+};
+
+export async function getTopUpOptions(token: string): Promise<TopUpOptions> {
+  return request<TopUpOptions>("/web/wallet/topup/options", {
+    headers: { authorization: `Bearer ${token}` }
+  });
+}
+
+export type OnlineTopUp = {
+  id: string;
+  reference: string;
+  target: TopUpTarget;
+  baseAmount: number;
+  feeAmount: number;
+  grossAmount: number;
+  redirectUrl: string;
+};
+
+/** Top up online: nominal + biaya layanan ditagih sekali; saldo bertambah sebesar nominal saja. */
+export async function createOnlineTopUp(token: string, amount: number, target: TopUpTarget): Promise<OnlineTopUp> {
+  return request<OnlineTopUp>("/web/wallet/topup/online", {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+    body: JSON.stringify({ amount, target })
+  });
+}
+
+/** Ringkasan satu pesanan (online maupun manual) untuk halaman status. */
+export type TopUpSummary = {
+  id: string;
+  reference: string;
+  status: TopUpOrderStatus;
+  online: boolean;
+  resumeUrl: string | null;
+  target: TopUpTarget;
+  baseAmount: number;
+  feeAmount: number;
+  grossAmount: number;
+};
+
+export async function getTopUpSummary(token: string, orderId: string): Promise<TopUpSummary> {
+  return request<TopUpSummary>(`/web/wallet/topup/online/${orderId}`, {
+    headers: { authorization: `Bearer ${token}` }
+  });
+}
+
+/** Hanya alamat https yang boleh dibuka sebagai halaman pembayaran. */
+export function isSafePaymentUrl(value: string | null | undefined): value is string {
+  if (!value) return false;
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export async function getTopUpOrder(token: string, orderId: string): Promise<TopUpOrder> {
   const result = await request<RawTopUpOrder>(`/web/wallet/topup/orders/${orderId}`, {
     headers: { authorization: `Bearer ${token}` }
