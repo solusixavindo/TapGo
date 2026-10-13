@@ -78,6 +78,15 @@ export function snapEnabledPaymentsPart(): { enabled_payments?: readonly string[
 }
 
 /**
+ * Alamat kembali setelah pelanggan selesai di halaman Snap (`callbacks.finish`), dibangun dari APP_URL.
+ * Tanpa APP_URL tidak dikirim, dan Snap memakai Finish Redirect URL dari dashboard Midtrans.
+ */
+export function snapFinishCallbackPart(path: string): { callbacks?: { finish: string } } {
+  if (!env.APP_URL) return {};
+  return { callbacks: { finish: new URL(path, env.APP_URL).href } };
+}
+
+/**
  * Jenis pembayaran Midtrans yang berupa TRANSFER BANK (virtual account, bill, aggregator). Midtrans menolak
  * refund lewat API untuk semuanya (diuji di sandbox 13 Agu 2026), jadi dananya dikembalikan lewat transfer
  * bank manual dari rekening perusahaan lalu dicatat Super Admin.
@@ -198,6 +207,7 @@ export class MidtransPaymentService {
         gross_amount: Number(new Prisma.Decimal(order.totalAmount).toFixed(0)),
       },
       ...snapEnabledPaymentsPart(),
+      ...snapFinishCallbackPart("/upgrade/status"),
       customer_details: {
         first_name: order.user.fullName,
         email: order.user.email ?? undefined,

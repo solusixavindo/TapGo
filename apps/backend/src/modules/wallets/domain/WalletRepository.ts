@@ -151,6 +151,8 @@ export interface WalletRepository {
   createTopUpOrder(input: {
     userId: string;
     amount: Prisma.Decimal;
+    metadata?: Prisma.InputJsonValue;
+    expiresAt?: Date;
   }): Promise<WalletTopUpOrderItem>;
   findTopUpOrderById(orderId: string): Promise<WalletTopUpOrderItem | null>;
   findTopUpOrderByReference(reference: string): Promise<WalletTopUpOrderItem | null>;

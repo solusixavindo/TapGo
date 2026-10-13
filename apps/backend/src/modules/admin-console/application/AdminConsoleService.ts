@@ -1048,7 +1048,9 @@ export class AdminConsoleService {
     let gatewayUnknown = 0;
     let gatewayTotal = new Prisma.Decimal(0);
     for (const payment of [...membershipPayments, ...topUpPayments]) {
-      const meta = payment.metadata as { paymentType?: string | null } | null;
+      const meta = payment.metadata as { paymentType?: string | null; feeBorneByCustomer?: boolean } | null;
+      // Top up online: biaya gateway sudah dibayar pelanggan (ditambahkan di atas nominal), jadi bukan beban perusahaan.
+      if (meta?.feeBorneByCustomer === true) continue;
       const type = meta?.paymentType ?? null;
       const { known, fee } = midtransFeeFor(type, payment.amount);
       if (!known) {

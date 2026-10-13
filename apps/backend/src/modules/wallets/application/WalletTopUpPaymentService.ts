@@ -2,16 +2,21 @@ import { Prisma, PrismaClient, UserRole } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { env } from "../../../config/env.js";
 import { AppError } from "../../../core/errors/AppError.js";
+import { topUpOnlineFee } from "../../../core/finance/midtransFees.js";
 import { isAdminRole } from "../../../core/security/roleHierarchy.js";
 import { DokuClient } from "../../../lib/doku/client.js";
 import { DokuNotificationPayload } from "../../../lib/doku/types.js";
 import { assertAuthoritativeAmount } from "../../payments/application/authoritativeAmount.js";
-import { snapEnabledPaymentsPart } from "../../payments/application/MidtransPaymentService.js";
+import { snapEnabledPaymentsPart, snapFinishCallbackPart } from "../../payments/application/MidtransPaymentService.js";
 import { verifyMidtransSignature } from "../../payments/application/midtransSignature.js";
 import { lazyPushNotifier } from "../../notifications/application/pushServiceFactory.js";
 import { accountPushMessages, pushQuietly } from "../../notifications/application/accountNotifications.js";
 import type { PushNotifier } from "../../notifications/application/rideNotifications.js";
 import { PrismaWalletRepository } from "../infrastructure/PrismaWalletRepository.js";
+import { minimumAmountFor, topUpTargetOf, type TopUpTarget } from "./ManualTopUpService.js";
+
+const MAX_OPEN_ONLINE_ORDERS_PER_USER = 3;
+const ONLINE_ORDER_EXPIRY_MS = 24 * 3600_000;
 
 type MidtransNotificationPayload = {
   order_id: string;
@@ -81,6 +86,103 @@ export class WalletTopUpPaymentService {
     return order;
   }
 
+  /** Nominal yang ditagihkan gateway: nominal top up + biaya layanan bila ditanggung pelanggan. */
+  private chargedAmount(order: { amount: Prisma.Decimal; metadata: Prisma.JsonValue | null }): Prisma.Decimal {
+    const gross = this.asObject(order.metadata).grossAmount;
+    return typeof gross === "number" && Number.isInteger(gross) && gross >= Number(order.amount)
+      ? new Prisma.Decimal(gross)
+      : new Prisma.Decimal(order.amount);
+  }
+
+  /** Opsi top up yang boleh ditawarkan halaman web saat ini. */
+  onlineOptions() {
+    const gatewayReady = env.DOKU_ENABLED || Boolean(env.MIDTRANS_SERVER_KEY);
+    return {
+      online: env.WALLET_TOPUP_ENABLED && gatewayReady,
+      // DOKU tidak menambah biaya; hanya jalur Midtrans (Snap) yang membebankan biaya ke pelanggan.
+      onlineFee: env.DOKU_ENABLED ? 0 : topUpOnlineFee(),
+      minimum: { WALLET: minimumAmountFor("WALLET"), PPOB: minimumAmountFor("PPOB") },
+      maximum: env.MANUAL_TOPUP_MAX_AMOUNT,
+    };
+  }
+
+  /**
+   * Top up online dalam satu langkah: buat pesanan lalu siapkan pembayaran. Pelanggan membayar nominal
+   * ditambah biaya layanan (Midtrans); saldo yang dikredit hanya nominal top up.
+   */
+  async createOnlineOrder(input: { userId: string; role: UserRole; amount: number; target: TopUpTarget }) {
+    if (!env.WALLET_TOPUP_ENABLED || !(env.DOKU_ENABLED || env.MIDTRANS_SERVER_KEY)) {
+      throw new AppError("Top up online belum tersedia.", StatusCodes.FORBIDDEN, "WALLET_TOPUP_DISABLED");
+    }
+    const minimum = minimumAmountFor(input.target);
+    if (!Number.isInteger(input.amount) || input.amount < minimum || input.amount > env.MANUAL_TOPUP_MAX_AMOUNT) {
+      throw new AppError(
+        `Nominal top up ${input.target === "PPOB" ? "Saldo PPOB" : "Saldo TapGo"} harus antara Rp${minimum.toLocaleString("id-ID")} dan Rp${env.MANUAL_TOPUP_MAX_AMOUNT.toLocaleString("id-ID")}.`,
+        StatusCodes.BAD_REQUEST,
+        "WALLET_TOPUP_AMOUNT_INVALID",
+      );
+    }
+    const now = new Date();
+    const open = await this.prisma.walletTopUpOrder.count({
+      where: { userId: input.userId, status: "PENDING", provider: { in: ["MIDTRANS", "DOKU"] }, createdAt: { gt: new Date(now.getTime() - ONLINE_ORDER_EXPIRY_MS) } },
+    });
+    if (open >= MAX_OPEN_ONLINE_ORDERS_PER_USER) {
+      throw new AppError(
+        "Anda masih memiliki beberapa top up yang belum dibayar. Selesaikan atau tunggu kedaluwarsa dulu.",
+        StatusCodes.TOO_MANY_REQUESTS,
+        "WALLET_TOPUP_TOO_MANY_OPEN",
+      );
+    }
+    const order = await this.walletRepository.createTopUpOrder({
+      userId: input.userId,
+      amount: new Prisma.Decimal(input.amount),
+      metadata: { target: input.target, baseAmount: input.amount },
+      expiresAt: new Date(now.getTime() + ONLINE_ORDER_EXPIRY_MS),
+    });
+    const payInput = { userId: input.userId, role: input.role, orderId: order.id };
+    try {
+      const payment = env.DOKU_ENABLED
+        ? await this.createDokuPayment(payInput)
+        : await this.createMidtransPayment(payInput);
+      const feeAmount = env.DOKU_ENABLED ? 0 : topUpOnlineFee();
+      return {
+        id: order.id,
+        reference: order.reference,
+        target: input.target,
+        baseAmount: input.amount,
+        feeAmount,
+        grossAmount: input.amount + feeAmount,
+        redirectUrl: payment.redirectUrl,
+        expiresAt: order.expiresAt,
+      };
+    } catch (error) {
+      // Pesanan tanpa tautan bayar tidak boleh menumpuk dan menghabiskan jatah pesanan terbuka.
+      await this.walletRepository.markTopUpOrderTerminal({ orderId: order.id, status: "FAILED" });
+      throw error;
+    }
+  }
+
+  /** Ringkasan pesanan untuk halaman status: nominal dasar, biaya, dan tujuan. */
+  orderSummary(order: { id: string; reference: string; status: string; provider: string | null; amount: Prisma.Decimal; metadata: Prisma.JsonValue | null; paidAt: Date | null; createdAt: Date }) {
+    const meta = this.asObject(order.metadata);
+    const online = order.provider === "MIDTRANS" || order.provider === "DOKU";
+    const resumeUrl = typeof meta.redirectUrl === "string" ? meta.redirectUrl : typeof meta.paymentUrl === "string" ? meta.paymentUrl : null;
+    return {
+      id: order.id,
+      reference: order.reference,
+      status: order.status,
+      online,
+      // Pelanggan yang menutup halaman bayar dapat melanjutkan selama pesanan masih menunggu.
+      resumeUrl: online && order.status === "PENDING" ? resumeUrl : null,
+      target: topUpTargetOf(order.metadata),
+      baseAmount: Number(order.amount),
+      feeAmount: typeof meta.feeAmount === "number" ? meta.feeAmount : 0,
+      grossAmount: Number(this.chargedAmount(order)),
+      paidAt: order.paidAt,
+      createdAt: order.createdAt,
+    };
+  }
+
   async createMidtransPayment(input: { userId: string; role: UserRole; orderId: string }) {
     const order = await this.loadPayableOrder(input);
 
@@ -94,6 +196,12 @@ export class WalletTopUpPaymentService {
       };
     }
 
+    // Biaya layanan pembayaran ditanggung pelanggan: yang dibayar di Midtrans = nominal top up + biaya,
+    // sedangkan saldo yang dikredit tetap nominal top up (order.amount).
+    const baseAmount = Number(new Prisma.Decimal(order.amount).toFixed(0));
+    const feeAmount = topUpOnlineFee();
+    const grossAmount = baseAmount + feeAmount;
+
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: order.userId },
       select: { fullName: true, email: true, phone: true },
@@ -102,9 +210,10 @@ export class WalletTopUpPaymentService {
     const snapResponse = await this.createSnapTransaction({
       transaction_details: {
         order_id: order.reference,
-        gross_amount: Number(new Prisma.Decimal(order.amount).toFixed(0)),
+        gross_amount: grossAmount,
       },
       ...snapEnabledPaymentsPart(),
+      ...snapFinishCallbackPart("/topup/status"),
       customer_details: {
         first_name: user.fullName,
         email: user.email ?? undefined,
@@ -113,10 +222,11 @@ export class WalletTopUpPaymentService {
       item_details: [
         {
           id: "wallet-topup",
-          price: Number(new Prisma.Decimal(order.amount).toFixed(0)),
+          price: baseAmount,
           quantity: 1,
           name: "Top Up TapGoPay",
         },
+        { id: "payment-fee", price: feeAmount, quantity: 1, name: "Biaya layanan pembayaran" },
       ],
     });
 
@@ -135,7 +245,17 @@ export class WalletTopUpPaymentService {
       method: "MIDTRANS_SNAP",
       provider: "MIDTRANS",
       providerReference: order.reference,
-      metadata: { snapToken, redirectUrl, midtransOrderId: order.reference, sandbox: !env.MIDTRANS_IS_PRODUCTION },
+      metadata: {
+        ...metadata,
+        snapToken,
+        redirectUrl,
+        midtransOrderId: order.reference,
+        sandbox: !env.MIDTRANS_IS_PRODUCTION,
+        baseAmount,
+        feeAmount,
+        grossAmount,
+        feeBorneByCustomer: true,
+      } as Prisma.InputJsonValue,
     });
 
     return { snapToken, redirectUrl, orderId: order.id, reference: order.reference };
@@ -216,7 +336,7 @@ export class WalletTopUpPaymentService {
       assertAuthoritativeAmount({
         gateway: "Midtrans",
         codePrefix: "MIDTRANS",
-        authoritativeAmount: order.amount,
+        authoritativeAmount: this.chargedAmount(order),
         providedAmount: payload.gross_amount,
         ...(payload.currency !== undefined ? { providedCurrency: payload.currency } : {}),
       });

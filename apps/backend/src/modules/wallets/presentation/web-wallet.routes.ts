@@ -7,12 +7,14 @@ import { paymentRateLimiter, withdrawalRateLimiter } from "../../../core/securit
 import { WalletService } from "../application/WalletService.js";
 import { webManualTopUpRouter } from "./manual-topup.routes.js";
 import { WalletTopUpPaymentService } from "../application/WalletTopUpPaymentService.js";
+import { ManualTopUpService } from "../application/ManualTopUpService.js";
 import { PrismaWalletRepository } from "../infrastructure/PrismaWalletRepository.js";
 import { verifyPassword } from "../../../core/security/passwordHasher.js";
 import { WebWalletController } from "./web-wallet.controller.js";
 import {
   bankAccountSchema,
   topUpCreateSchema,
+  topUpOnlineCreateSchema,
   topUpOrderParamSchema,
   walletTransactionQuerySchema,
   webWithdrawalRequestSchema
@@ -29,6 +31,7 @@ import {
 const repository = new PrismaWalletRepository(prisma);
 const service = new WalletService(repository);
 const topUpPaymentService = new WalletTopUpPaymentService(prisma, repository);
+const manualTopUpService = new ManualTopUpService(prisma);
 const controller = new WebWalletController(
   service,
   topUpPaymentService,
@@ -43,13 +46,26 @@ const controller = new WebWalletController(
     } catch {
       return false;
     }
-  }
+  },
+  () => manualTopUpService.isAvailable()
 );
 
 export const webWalletRouter = Router();
 
 webWalletRouter.use(requireAuth, requireChannel("WEB"));
 webWalletRouter.use(webManualTopUpRouter);
+webWalletRouter.get("/topup/options", asyncHandler(controller.topUpOptions));
+webWalletRouter.post(
+  "/topup/online",
+  paymentRateLimiter,
+  validateRequest(topUpOnlineCreateSchema),
+  asyncHandler(controller.createOnlineOrder)
+);
+webWalletRouter.get(
+  "/topup/online/:orderId",
+  validateRequest(topUpOrderParamSchema),
+  asyncHandler(controller.onlineOrder)
+);
 webWalletRouter.post(
   "/topup/orders",
   paymentRateLimiter,

@@ -36,6 +36,15 @@ const RULES: Record<string, FeeRule> = {
   kredivo: { percent: 2, vatOnFee: true }
 };
 
+/**
+ * Biaya layanan pembayaran yang ditambahkan ke top up online (ditanggung pelanggan), dalam rupiah bulat.
+ * Snap menawarkan transfer bank (Bank Transfer Aggregator), jadi memakai tarif bank_transfer
+ * (Rp4.000 + PPN 11% = Rp4.440). Tarif tetap, tidak bergantung nominal.
+ */
+export function topUpOnlineFee(): number {
+  return midtransFeeFor("bank_transfer", 0).fee.ceil().toNumber();
+}
+
 export function midtransFeeFor(paymentType: string | null | undefined, gross: Prisma.Decimal.Value) {
   const rule = paymentType ? RULES[paymentType.toLowerCase()] : undefined;
   if (!rule) {

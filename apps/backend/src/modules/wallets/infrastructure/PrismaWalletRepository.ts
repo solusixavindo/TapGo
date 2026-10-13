@@ -506,7 +506,12 @@ export class PrismaWalletRepository implements WalletRepository {
 
   // --- Top up via Midtrans/DOKU, kanal WEB saja (Stage R2.10) ---------
 
-  async createTopUpOrder(input: { userId: string; amount: Prisma.Decimal }): Promise<WalletTopUpOrderItem> {
+  async createTopUpOrder(input: {
+    userId: string;
+    amount: Prisma.Decimal;
+    metadata?: Prisma.InputJsonValue;
+    expiresAt?: Date;
+  }): Promise<WalletTopUpOrderItem> {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const reference = generateReference("TOPUP");
       const existing = await this.prisma.walletTopUpOrder.findUnique({ where: { reference } });
@@ -516,7 +521,9 @@ export class PrismaWalletRepository implements WalletRepository {
           userId: input.userId,
           reference,
           amount: input.amount,
-          status: "PENDING"
+          status: "PENDING",
+          ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
+          ...(input.expiresAt ? { expiresAt: input.expiresAt } : {})
         }
       });
     }

@@ -16,6 +16,7 @@ export class WebWalletController {
     private readonly walletService: WalletService,
     private readonly topUpPaymentService: WalletTopUpPaymentService,
     private readonly verifyUserPassword: PasswordVerifier,
+    private readonly manualTopUpAvailable: () => boolean = () => false,
   ) {}
 
   wallet = async (req: Request, res: Response) => {
@@ -119,6 +120,35 @@ export class WebWalletController {
       );
     }
   }
+
+  /** Opsi top up yang ditawarkan (online + biaya, transfer manual, batas nominal). */
+  topUpOptions = async (_req: Request, res: Response) => {
+    res.json({
+      success: true,
+      data: { ...this.topUpPaymentService.onlineOptions(), manualTransfer: this.manualTopUpAvailable() },
+    });
+  };
+
+  /** Top up online satu langkah: pesanan + tautan bayar. Biaya layanan ditanggung pelanggan. */
+  createOnlineOrder = async (req: Request, res: Response) => {
+    const result = await this.topUpPaymentService.createOnlineOrder({
+      userId: req.auth!.userId,
+      role: req.auth!.role,
+      amount: Number(req.body.amount),
+      target: req.body.target,
+    });
+    res.status(StatusCodes.CREATED).json({ success: true, data: result });
+  };
+
+  /** Ringkasan satu pesanan online milik pengguna (halaman status). */
+  onlineOrder = async (req: Request, res: Response) => {
+    const order = await this.walletService.getTopUpOrder({
+      userId: req.auth!.userId,
+      role: req.auth!.role,
+      orderId: String(req.params.orderId),
+    });
+    res.json({ success: true, data: this.topUpPaymentService.orderSummary(order) });
+  };
 
   createOrder = async (req: Request, res: Response) => {
     this.assertTopUpEnabled();

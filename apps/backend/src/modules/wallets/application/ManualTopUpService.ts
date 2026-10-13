@@ -50,6 +50,16 @@ export class ManualTopUpService {
     }
   }
 
+  /** Apakah transfer manual boleh ditawarkan sekarang (tanpa melempar). */
+  isAvailable(): boolean {
+    return Boolean(
+      env.MANUAL_TOPUP_ENABLED &&
+        env.MANUAL_TOPUP_BANK_NAME &&
+        env.MANUAL_TOPUP_ACCOUNT_NUMBER &&
+        env.MANUAL_TOPUP_ACCOUNT_HOLDER,
+    );
+  }
+
   private bankDetails() {
     if (!env.MANUAL_TOPUP_BANK_NAME || !env.MANUAL_TOPUP_ACCOUNT_NUMBER || !env.MANUAL_TOPUP_ACCOUNT_HOLDER) {
       throw new AppError("Rekening tujuan top up belum dikonfigurasi.", StatusCodes.SERVICE_UNAVAILABLE, "MANUAL_TOPUP_NOT_CONFIGURED");

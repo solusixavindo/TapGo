@@ -83,6 +83,14 @@ export const topUpCreateSchema = z.object({
   })
 });
 
+/** Top up online: batas nominal per tujuan diperiksa di layanan (minimum berbeda untuk Saldo TapGo dan Saldo PPOB). */
+export const topUpOnlineCreateSchema = z.object({
+  body: z.object({
+    amount: z.coerce.number().int(),
+    target: z.enum(["WALLET", "PPOB"]).default("WALLET")
+  })
+});
+
 export const topUpOrderParamSchema = z.object({
   params: z.object({
     orderId: z.string().uuid()
