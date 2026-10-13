@@ -5,6 +5,7 @@ import { ChangeEvent, FormEvent, useRef, useState } from "react";
 import { ApiError, MITRA_PREVIEW, changePassword, uploadOwnAvatar } from "./mitra-api";
 import ProfileAvatar from "./profile-avatar";
 import { tierLabel } from "./mitra-format";
+import { COPY_FAILED_HINT, copyText } from "../copy-text";
 import { useMitra } from "./mitra-data";
 import {
   Badge,
@@ -21,11 +22,27 @@ import {
   useToast
 } from "./mitra-ui";
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, copyLabel }: { label: string; value: string; copyLabel?: string }) {
+  const toast = useToast();
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 md:px-6">
       <dt className="text-sm themed-text-muted">{label}</dt>
-      <dd className="text-sm font-bold themed-text">{value || "-"}</dd>
+      <dd className="flex items-center gap-2 text-sm font-bold themed-text">
+        <span className="select-all break-all">{value || "-"}</span>
+        {copyLabel && value ? (
+          <button
+            type="button"
+            data-testid="account-copy-code"
+            onClick={async () => {
+              if (await copyText(value)) toast("success", `${copyLabel} disalin.`);
+              else toast("error", COPY_FAILED_HINT);
+            }}
+            className="shrink-0 rounded-lg border themed-border px-2.5 py-1 text-xs font-bold themed-text"
+          >
+            Salin
+          </button>
+        ) : null}
+      </dd>
     </div>
   );
 }
@@ -127,7 +144,7 @@ export default function AccountView({ onLogout }: { onLogout: () => void }) {
             <dl className="divide-y m-divide">
               <Row label="Nomor HP" value={profile.phone} />
               <Row label="Email" value={profile.email ?? ""} />
-              <Row label="Kode referral" value={summary.referralCode} />
+              <Row label="Kode referral" value={summary.referralCode} copyLabel="Kode referral" />
             </dl>
             <div className="border-t themed-border px-5 py-4 md:px-6">
               <p className="text-xs leading-5 themed-text-muted">

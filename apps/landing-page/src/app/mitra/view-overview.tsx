@@ -11,6 +11,7 @@ import {
   tierLabel
 } from "./mitra-format";
 import { PREVIEW_COMMISSIONS } from "./mitra-preview";
+import { COPY_FAILED_HINT, copyText } from "../copy-text";
 import { useMitra } from "./mitra-data";
 import {
   Badge,
@@ -23,6 +24,7 @@ import {
   Skeleton,
   primaryButtonClass,
   secondaryButtonClass,
+  useToast,
   usePagedList
 } from "./mitra-ui";
 import type { ViewId } from "./mitra-nav";
@@ -87,6 +89,7 @@ function CommissionChart({ series }: { series: ReturnType<typeof buildSeries> })
 
 export default function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => void }) {
   const { core } = useMitra();
+  const toast = useToast();
   const commissions = usePagedList<Commission>(
     (page, size) =>
       MITRA_PREVIEW ? Promise.resolve(PREVIEW_COMMISSIONS) : getCommissions(page, size),
@@ -156,8 +159,19 @@ export default function OverviewView({ onNavigate }: { onNavigate: (view: ViewId
           </div>
           <div className="mt-5 space-y-3">
             <div className="flex items-center gap-2 rounded-xl themed-fill px-3 py-2.5">
-              <p className="min-w-0 flex-1 truncate text-sm font-bold themed-text">{summary.referralCode}</p>
+              <p className="min-w-0 flex-1 select-all break-all text-sm font-bold themed-text" data-testid="overview-referral-code">{summary.referralCode}</p>
               <span className="text-[11px] themed-text-muted">Kode referral</span>
+              <button
+                type="button"
+                data-testid="overview-copy-code"
+                onClick={async () => {
+                  if (await copyText(summary.referralCode)) toast("success", "Kode referral disalin.");
+                  else toast("error", COPY_FAILED_HINT);
+                }}
+                className="shrink-0 rounded-lg border themed-border px-2.5 py-1 text-[11px] font-bold themed-text"
+              >
+                Salin
+              </button>
             </div>
             <Link href="/upgrade" className={`${secondaryButtonClass} w-full`}>
               Kelola paket
