@@ -198,13 +198,23 @@ export class PrismaWalletRepository implements WalletRepository {
   async listWithdrawals(input: {
     userId?: string;
     status?: WithdrawalStatus;
+    dateFrom?: Date;
+    dateTo?: Date;
     page: number;
     pageSize: number;
   }): Promise<WithdrawalItem[]> {
     return this.prisma.withdrawal.findMany({
       where: {
         ...(input.userId ? { userId: input.userId } : {}),
-        ...(input.status ? { status: input.status } : {})
+        ...(input.status ? { status: input.status } : {}),
+        ...(input.dateFrom || input.dateTo
+          ? {
+              requestedAt: {
+                ...(input.dateFrom ? { gte: input.dateFrom } : {}),
+                ...(input.dateTo ? { lte: input.dateTo } : {})
+              }
+            }
+          : {})
       },
       include: {
         user: {

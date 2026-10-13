@@ -109,6 +109,8 @@ export interface WalletRepository {
   listWithdrawals(input: {
     userId?: string;
     status?: WithdrawalStatus;
+    dateFrom?: Date;
+    dateTo?: Date;
     page: number;
     pageSize: number;
   }): Promise<WithdrawalItem[]>;

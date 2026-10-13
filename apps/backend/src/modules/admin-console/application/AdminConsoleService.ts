@@ -695,7 +695,12 @@ export class AdminConsoleService {
       transactionCount: total,
       totalPending: this.decimal(pendingAggregate._sum.totalAmount),
       totalApprovedPaid: this.decimal(successAggregate._sum.totalAmount),
-      ...this.page(items, total, input)
+      // Serial/token (mis. token PLN) dapat dipakai siapa pun yang memegangnya; hanya pemilik transaksi yang berhak.
+      ...this.page(
+        items.map(({ serialNumber: _serialNumber, ...row }) => row),
+        total,
+        input
+      )
     };
   }
 
@@ -899,8 +904,10 @@ export class AdminConsoleService {
         where: { status: { in: ["APPROVED", "PAID"] }, ...this.requestedAtRange(input) },
         _sum: { amount: true }
       }),
+      // Tanggal DIBAYAR, sama dengan laba rugi: invoice yang dibuat di satu periode dan dibayar di periode lain
+      // dihitung di periode pembayarannya.
       this.prisma.invoice.aggregate({
-        where: { status: "PAID", ...this.createdAtRange(input) },
+        where: { status: "PAID", ...this.invoicePaidDateRange(input) },
         _sum: { amount: true }
       }),
       this.membershipBreakdown()
@@ -1450,7 +1457,16 @@ export class AdminConsoleService {
   }
 
   async ppobSummaryReport(input: DateRangeOnlyInput) {
-    const [walletLiability, basic, packageBenefits, packageRows] = await Promise.all([
+    const range = this.createdAtRange(input);
+    const paidRange = input.dateFrom || input.dateTo
+      ? {
+          paidAt: {
+            ...(input.dateFrom ? { gte: input.dateFrom } : {}),
+            ...(input.dateTo ? { lte: input.dateTo } : {})
+          }
+        }
+      : {};
+    const [walletLiability, basic, packageBenefits, packageRows, salesAll, salesCosted, openTx, failedTx, topUpGroups] = await Promise.all([
       this.walletLiabilityReport(input),
       this.prisma.walletTransaction.aggregate({
         where: {
@@ -1473,8 +1489,45 @@ export class AdminConsoleService {
           ...this.createdAtRange(input)
         },
         select: { amount: true, metadata: true }
+      }),
+      // Penjualan PPOB sungguhan (dibayar dari saldo PPOB pelanggan) dan modalnya di Digiflazz.
+      this.prisma.ppobTransaction.aggregate({
+        where: { status: "SUCCESS", ...range },
+        _sum: { totalAmount: true },
+        _count: { _all: true }
+      }),
+      this.prisma.ppobTransaction.aggregate({
+        where: { status: "SUCCESS", providerCost: { not: null }, ...range },
+        _sum: { totalAmount: true, providerCost: true },
+        _count: { _all: true }
+      }),
+      this.prisma.ppobTransaction.aggregate({
+        where: { status: { in: ["PENDING", "PROCESSING"] }, ...range },
+        _sum: { totalAmount: true },
+        _count: { _all: true }
+      }),
+      this.prisma.ppobTransaction.aggregate({
+        where: { status: "FAILED", ...range },
+        _sum: { totalAmount: true },
+        _count: { _all: true }
+      }),
+      // Satu-satunya jalur saldo PPOB yang berasal dari uang tunai pelanggan: top up bertujuan PPOB yang lunas.
+      this.prisma.walletTopUpOrder.groupBy({
+        by: ["provider"],
+        where: { status: "PAID", metadata: { path: ["target"], equals: "PPOB" }, ...paidRange },
+        _sum: { amount: true },
+        _count: { _all: true }
       })
     ]);
+
+    const salesTotal = new Prisma.Decimal(salesAll._sum.totalAmount ?? 0);
+    const costedSales = new Prisma.Decimal(salesCosted._sum.totalAmount ?? 0);
+    const costedCost = new Prisma.Decimal(salesCosted._sum.providerCost ?? 0);
+    const topUpOnline = topUpGroups.filter((row) => row.provider !== "MANUAL_BANK");
+    const topUpManual = topUpGroups.filter((row) => row.provider === "MANUAL_BANK");
+    const sumGroups = (rows: typeof topUpGroups) =>
+      rows.reduce((sum, row) => sum.plus(row._sum.amount ?? 0), new Prisma.Decimal(0));
+    const countGroups = (rows: typeof topUpGroups) => rows.reduce((sum, row) => sum + row._count._all, 0);
 
     const byPackage = new Map<string, Prisma.Decimal>([
       ["SILVER", new Prisma.Decimal(0)],
@@ -1505,6 +1558,30 @@ export class AdminConsoleService {
       packagePpobBenefitTotal: this.decimal(packageBenefits._sum.amount),
       totalPpobLiability: walletLiability.totalPpobBalance,
       totalNonWithdrawablePpob: walletLiability.totalNonWithdrawablePpob,
+      /**
+       * Penjualan PPOB memakai saldo PPOB yang SUDAH dimiliki pelanggan, jadi tidak ada uang baru masuk saat
+       * transaksi. Selisih penjualan dan modal Digiflazz adalah pendapatan perusahaan.
+       */
+      sales: {
+        successCount: salesAll._count._all,
+        salesTotal: this.decimal(salesTotal),
+        costedCount: salesCosted._count._all,
+        providerCost: this.decimal(costedCost),
+        // Selisih hanya dari transaksi yang modalnya tercatat; sisanya belum bisa dihitung.
+        margin: this.decimal(costedSales.minus(costedCost)),
+        withoutCostCount: salesAll._count._all - salesCosted._count._all,
+        openCount: openTx._count._all,
+        openAmount: this.decimal(openTx._sum.totalAmount),
+        failedCount: failedTx._count._all,
+        failedAmount: this.decimal(failedTx._sum.totalAmount)
+      },
+      /** Dari mana saldo PPOB terisi pada periode ini: hanya top up yang berupa uang tunai masuk. */
+      funding: {
+        topUpOnlineCount: countGroups(topUpOnline),
+        topUpOnline: this.decimal(sumGroups(topUpOnline)),
+        topUpManualCount: countGroups(topUpManual),
+        topUpManual: this.decimal(sumGroups(topUpManual))
+      },
       period: this.reportPeriod(input)
     };
   }
@@ -1823,7 +1900,7 @@ export class AdminConsoleService {
           : {})
     };
 
-    const [total, rows, statusGroups, stuckCount, successTotals] = await Promise.all([
+    const [total, rows, statusGroups, stuckCount, successTotals, costedTotals] = await Promise.all([
       this.prisma.ppobTransaction.count({ where }),
       this.prisma.ppobTransaction.findMany({
         where,
@@ -1838,8 +1915,14 @@ export class AdminConsoleService {
       }),
       this.prisma.ppobTransaction.aggregate({
         where: { ...filters, status: "SUCCESS" },
+        _sum: { totalAmount: true },
+        _count: { _all: true }
+      }),
+      // Selisih hanya sah dihitung dari transaksi yang modalnya tercatat; penjualan tanpa modal bukan selisih penuh.
+      this.prisma.ppobTransaction.aggregate({
+        where: { ...filters, status: "SUCCESS", providerCost: { not: null } },
         _sum: { totalAmount: true, providerCost: true },
-        _count: { _all: true, providerCost: true }
+        _count: { _all: true }
       })
     ]);
 
@@ -1888,7 +1971,8 @@ export class AdminConsoleService {
       byStatus[group.status] = group._count._all;
     }
     const salesTotal = toNumber(successTotals._sum.totalAmount) ?? 0;
-    const costTotal = toNumber(successTotals._sum.providerCost) ?? 0;
+    const costTotal = toNumber(costedTotals._sum.providerCost) ?? 0;
+    const costedSales = toNumber(costedTotals._sum.totalAmount) ?? 0;
     return {
       ...this.page(items, total, input),
       summary: {
@@ -1900,8 +1984,10 @@ export class AdminConsoleService {
           count: successTotals._count._all,
           sales: salesTotal,
           providerCost: costTotal,
+          /** Penjualan dari transaksi yang modalnya tercatat: dasar selisih = costedSales - providerCost. */
+          costedSales,
           // Modal hanya tercatat pada sebagian transaksi sukses; selisih dihitung dari yang bermodal saja.
-          withCostCount: successTotals._count.providerCost
+          withCostCount: costedTotals._count._all
         }
       }
     };

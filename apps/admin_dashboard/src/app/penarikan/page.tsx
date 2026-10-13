@@ -1,9 +1,10 @@
 "use client";
 
 import { useHardRouter as useRouter } from "../hard-nav";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AdminWithdrawal,
+  WITHDRAWAL_PAGE_SIZE,
   WITHDRAWAL_VIP_THRESHOLD,
   WithdrawalStatus,
   actOnWithdrawal,
@@ -14,7 +15,9 @@ import {
   readToken,
   roleAtLeast
 } from "../../lib/api";
+import { PeriodState, defaultPeriod, periodQuery } from "../../lib/period";
 import ConsoleHeader from "../console-header";
+import PeriodFilter from "../period-filter";
 
 /**
  * Antrean penarikan dana.
@@ -66,6 +69,10 @@ export default function WithdrawalsPage() {
   const [role, setRole] = useState("");
   const [status, setStatus] = useState<WithdrawalStatus>("PENDING");
   const [items, setItems] = useState<AdminWithdrawal[]>([]);
+  const [period, setPeriod] = useState<PeriodState>(() => defaultPeriod("all"));
+  const range = useMemo(() => periodQuery(period), [period]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -73,18 +80,38 @@ export default function WithdrawalsPage() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const refresh = useCallback(async (next: WithdrawalStatus) => {
-    setLoading(true);
+  const refresh = useCallback(
+    async (next: WithdrawalStatus) => {
+      setLoading(true);
+      try {
+        const result = await listAdminWithdrawals({ status: next, range });
+        setItems(result.items);
+        setHasMore(result.items.length >= WITHDRAWAL_PAGE_SIZE);
+        setError("");
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Data belum dapat dimuat.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [range]
+  );
+
+  // Dulu hanya 20 pengajuan pertama yang tampil dan sisanya tidak pernah terlihat.
+  async function loadMore() {
+    if (loadingMore) return;
+    setLoadingMore(true);
     try {
-      const result = await listAdminWithdrawals({ status: next });
-      setItems(result.items);
-      setError("");
+      const page = Math.floor(items.length / WITHDRAWAL_PAGE_SIZE) + 1;
+      const result = await listAdminWithdrawals({ status, range, page });
+      setItems((current) => [...current, ...result.items.filter((row) => !current.some((existing) => existing.id === row.id))]);
+      setHasMore(result.items.length >= WITHDRAWAL_PAGE_SIZE);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Data belum dapat dimuat.");
     } finally {
-      setLoading(false);
+      setLoadingMore(false);
     }
-  }, []);
+  }
 
   useEffect(() => {
     if (!readToken()) {
@@ -136,6 +163,10 @@ export default function WithdrawalsPage() {
           subtitle={`Persetujuan dan pencatatan transfer. Nominal Rp ${WITHDRAWAL_VIP_THRESHOLD.toLocaleString("id-ID")} ke atas hanya untuk Super Admin VIP.`}
           role={role}
         />
+
+        <div className="mb-4">
+          <PeriodFilter value={period} onChange={setPeriod} allowAll disabled={loading} />
+        </div>
 
         <div className="mb-4 flex flex-wrap gap-1.5" role="tablist" aria-label="Status penarikan">
           {TABS.map((tab) => (
@@ -263,6 +294,25 @@ export default function WithdrawalsPage() {
             </table>
           </div>
         )}
+
+        {!loading && items.length > 0 ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
+            <p>
+              {items.length} pengajuan ditampilkan · jumlah {formatRupiah(items.reduce((sum, item) => sum + Number(item.amount), 0))}
+              {hasMore ? " (belum semua dimuat)" : ""}
+            </p>
+            {hasMore ? (
+              <button
+                type="button"
+                disabled={loadingMore}
+                onClick={() => void loadMore()}
+                className="rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 font-bold disabled:opacity-50"
+              >
+                {loadingMore ? "Memuat…" : "Muat lebih banyak"}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {pending ? (

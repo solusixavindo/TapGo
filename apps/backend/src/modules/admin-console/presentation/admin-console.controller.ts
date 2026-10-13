@@ -9,6 +9,23 @@ import { MembershipRefundService } from "../../memberships/application/Membershi
 import { SystemHealthService } from "../application/SystemHealthService.js";
 import { ErrorMonitoringService, SentryProjectKey } from "../application/ErrorMonitoringService.js";
 
+/** Ekspor CSV mengambil halaman berukuran besar ini sampai habis, dengan batas total baris demi memori server. */
+const CSV_PAGE_SIZE = 1000;
+const CSV_MAX_ROWS = 50_000;
+const PPOB_TRANSACTION_CSV_HEADERS = [
+  "date",
+  "reference",
+  "user",
+  "phone",
+  "category",
+  "product",
+  "amount",
+  "provider_cost",
+  "margin",
+  "status",
+  "failure_code"
+] as const;
+
 const SENTRY_PROJECT_KEYS: SentryProjectKey[] = ["backend", "driver_app", "user_app"];
 
 export class AdminConsoleController {
@@ -172,6 +189,7 @@ export class AdminConsoleController {
   withdrawals = async (req: Request, res: Response) => {
     const result = await this.walletService.listWithdrawals({
       ...(typeof req.query.status === "string" ? { status: req.query.status as never } : {}),
+      ...this.dateRange(req),
       page: Number(req.query.page),
       pageSize: Number(req.query.pageSize)
     });
@@ -479,25 +497,29 @@ export class AdminConsoleController {
   }
 
   bonusReportCsv = async (req: Request, res: Response) => {
-    const result = await this.adminConsoleService.bonusReport({
-      page: 1,
-      pageSize: 100,
-      ...(typeof req.query.type === "string" ? { type: req.query.type as never } : {}),
-      ...(typeof req.query.status === "string" ? { status: req.query.status as never } : {}),
-      ...(typeof req.query.userId === "string" ? { userId: req.query.userId } : {}),
-      ...this.dateRange(req)
-    });
-    this.sendCsv(res, "tapgo-bonus-report.csv", this.commissionRows(result.items));
+    const items = await this.collectAllPages((page) =>
+      this.adminConsoleService.bonusReport({
+        page,
+        pageSize: CSV_PAGE_SIZE,
+        ...(typeof req.query.type === "string" ? { type: req.query.type as never } : {}),
+        ...(typeof req.query.status === "string" ? { status: req.query.status as never } : {}),
+        ...(typeof req.query.userId === "string" ? { userId: req.query.userId } : {}),
+        ...this.dateRange(req)
+      })
+    );
+    this.sendCsv(res, "tapgo-bonus-report.csv", this.commissionRows(items));
   };
 
   ppobReportCsv = async (req: Request, res: Response) => {
-    const result = await this.adminConsoleService.ppobReport({
-      page: 1,
-      pageSize: 100,
-      ...(typeof req.query.userId === "string" ? { userId: req.query.userId } : {}),
-      ...this.dateRange(req)
-    });
-    this.sendCsv(res, "tapgo-ppob-report.csv", this.ppobRows(result.items));
+    const items = await this.collectAllPages((page) =>
+      this.adminConsoleService.ppobReport({
+        page,
+        pageSize: CSV_PAGE_SIZE,
+        ...(typeof req.query.userId === "string" ? { userId: req.query.userId } : {}),
+        ...this.dateRange(req)
+      })
+    );
+    this.sendCsv(res, "tapgo-ppob-report.csv", this.ppobRows(items));
   };
 
   /// Transaksi PPOB SUNGGUHAN (beli pulsa/token/dll) — beda dari ppobReport
@@ -514,25 +536,48 @@ export class AdminConsoleController {
   };
 
   ppobTransactionsReportCsv = async (req: Request, res: Response) => {
-    const result = await this.adminConsoleService.ppobTransactionsReport({
-      page: 1,
-      pageSize: 100,
-      ...(typeof req.query.userId === "string" ? { userId: req.query.userId } : {}),
-      ...this.dateRange(req)
-    });
-    this.sendCsv(res, "tapgo-ppob-transactions-report.csv", this.ppobTransactionRows(result.items));
+    const items = await this.collectAllPages((page) =>
+      this.adminConsoleService.ppobTransactionsReport({
+        page,
+        pageSize: CSV_PAGE_SIZE,
+        ...(typeof req.query.userId === "string" ? { userId: req.query.userId } : {}),
+        ...this.dateRange(req)
+      })
+    );
+    this.sendCsv(res, "tapgo-ppob-transactions-report.csv", this.ppobTransactionRows(items), PPOB_TRANSACTION_CSV_HEADERS);
   };
 
   rewardReportCsv = async (req: Request, res: Response) => {
-    const result = await this.adminConsoleService.rewardReport({
-      page: 1,
-      pageSize: 100,
-      ...(typeof req.query.status === "string" ? { status: req.query.status as never } : {}),
-      ...(typeof req.query.userId === "string" ? { userId: req.query.userId } : {}),
-      ...this.dateRange(req)
-    });
-    this.sendCsv(res, "tapgo-reward-report.csv", this.commissionRows(result.items));
+    const items = await this.collectAllPages((page) =>
+      this.adminConsoleService.rewardReport({
+        page,
+        pageSize: CSV_PAGE_SIZE,
+        ...(typeof req.query.status === "string" ? { status: req.query.status as never } : {}),
+        ...(typeof req.query.userId === "string" ? { userId: req.query.userId } : {}),
+        ...this.dateRange(req)
+      })
+    );
+    this.sendCsv(res, "tapgo-reward-report.csv", this.commissionRows(items));
   };
+
+  /**
+   * Mengambil SEMUA baris untuk ekspor CSV, bukan hanya halaman pertama. Dulu ekspor memanggil layanan dengan
+   * pageSize 100 sehingga laporan tahunan diam-diam hanya memuat 100 baris terbaru. Batas CSV_MAX_ROWS menjaga
+   * memori server; bila tercapai, berkas diberi baris penanda di akhir agar tidak dikira lengkap.
+   */
+  private async collectAllPages<T>(
+    fetchPage: (page: number) => Promise<{ items: T[]; pagination: { totalPages: number } }>
+  ): Promise<T[]> {
+    const items: T[] = [];
+    for (let page = 1; items.length < CSV_MAX_ROWS; page += 1) {
+      const result = await fetchPage(page);
+      items.push(...result.items);
+      if (page >= result.pagination.totalPages) {
+        return items;
+      }
+    }
+    return items;
+  }
 
   private commissionRows(items: Array<Record<string, unknown>>) {
     return items.map((item) => {
@@ -566,28 +611,38 @@ export class AdminConsoleController {
   private ppobTransactionRows(items: Array<Record<string, unknown>>) {
     return items.map((item) => {
       const user = (item.user && typeof item.user === "object" ? item.user : {}) as Record<string, unknown>;
+      const total = Number(item.totalAmount ?? 0);
+      const cost = item.providerCost === null || item.providerCost === undefined ? null : Number(item.providerCost);
+      const success = item.status === "SUCCESS";
       return {
+        date: String(item.createdAt ?? ""),
+        reference: String(item.publicReference ?? ""),
         user: String(user.fullName ?? ""),
         phone: String(user.phone ?? ""),
-        // category (PULSA/DATA/PLN_PREPAID/dst) — field ASLI di
-        // PpobTransaction, bukan "type" (yang tidak ada di tabel ini,
-        // hanya ada di WalletTransaction).
-        type: String(item.category ?? ""),
-        // totalAmount = yang benar-benar dibayar pelanggan (harga + biaya
-        // admin), bukan `amount` (harga produk sebelum biaya admin) —
-        // lebih tepat untuk laporan finansial.
+        // category (PULSA/DATA/PLN_PREPAID/dst) — field ASLI di PpobTransaction.
+        category: String(item.category ?? ""),
+        product: String(item.productNameSnapshot ?? ""),
+        // Yang benar-benar dibayar pelanggan (harga + biaya layanan), bukan `amount` (harga produk saja).
         amount: String(item.totalAmount ?? ""),
+        provider_cost: cost === null ? "" : String(cost),
+        margin: success && cost !== null ? String(total - cost) : "",
         status: String(item.status ?? ""),
-        date: String(item.createdAt ?? "")
+        failure_code: String(item.failureCode ?? "")
       };
     });
   }
 
-  private sendCsv(res: Response, filename: string, rows: Array<Record<string, string>>) {
-    const headers = ["user", "phone", "type", "amount", "status", "date"];
+  private sendCsv(
+    res: Response,
+    filename: string,
+    rows: Array<Record<string, string>>,
+    headers: readonly string[] = ["user", "phone", "type", "amount", "status", "date"]
+  ) {
+    const truncated = rows.length >= CSV_MAX_ROWS;
     const csv = [
       headers.join(","),
-      ...rows.map((row) => headers.map((header) => this.csvCell(row[header] ?? "")).join(","))
+      ...rows.map((row) => headers.map((header) => this.csvCell(row[header] ?? "")).join(",")),
+      ...(truncated ? [this.csvCell(`BERKAS TERPOTONG: hanya ${CSV_MAX_ROWS} baris pertama. Persempit periodenya.`)] : [])
     ].join("\n");
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);

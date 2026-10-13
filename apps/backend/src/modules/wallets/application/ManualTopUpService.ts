@@ -148,11 +148,25 @@ export class ManualTopUpService {
     return this.view(order);
   }
 
-  async listPendingForAdmin(status: "PENDING" | "PAID" | "CANCELLED" = "PENDING") {
+  async listPendingForAdmin(
+    status: "PENDING" | "PAID" | "CANCELLED" = "PENDING",
+    range: { dateFrom?: Date; dateTo?: Date } = {}
+  ) {
     const rows = await this.prisma.walletTopUpOrder.findMany({
-      where: { provider: MANUAL_TOPUP_PROVIDER, status },
+      where: {
+        provider: MANUAL_TOPUP_PROVIDER,
+        status,
+        ...(range.dateFrom || range.dateTo
+          ? {
+              createdAt: {
+                ...(range.dateFrom ? { gte: range.dateFrom } : {}),
+                ...(range.dateTo ? { lte: range.dateTo } : {})
+              }
+            }
+          : {})
+      },
       orderBy: { createdAt: "desc" },
-      take: 100,
+      take: 300,
       include: { user: { select: { fullName: true, phone: true } } },
     });
     return rows.map((r) => ({

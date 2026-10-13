@@ -161,7 +161,7 @@ describe.skipIf(!runIntegration)("Admin console — laporan transaksi PPOB sungg
     const csv = await response.text();
     const lines = csv.trim().split("\n");
 
-    expect(lines[0]).toBe("user,phone,type,amount,status,date");
+    expect(lines[0]).toBe("date,reference,user,phone,category,product,amount,provider_cost,margin,status,failure_code");
     // Bug lama: CSV SELALU hanya 1 baris (header) meski ada transaksi PPOB
     // sungguhan, karena query membaca tabel yang salah sama sekali.
     expect(lines.length).toBeGreaterThan(1);
@@ -189,5 +189,60 @@ describe.skipIf(!runIntegration)("Admin console — laporan transaksi PPOB sungg
     expect(response.status).toBe(200);
     const body = (await response.json()) as { data: { transactionCount: number } };
     expect(body.data.transactionCount).toBe(0);
+  });
+
+  it("CSV memuat SEMUA baris, bukan 100 terbaru saja, dan menyertakan modal serta selisih", async () => {
+    const admin = await createUser("SUPER_ADMIN");
+    const buyer = await createUser("USER");
+    const product = await createProduct();
+    for (let index = 0; index < 120; index += 1) {
+      await createTransaction({ user: buyer, product, status: "SUCCESS", totalAmount: "11000.00" });
+    }
+    const costed = await createTransaction({ user: buyer, product, status: "SUCCESS", totalAmount: "11000.00" });
+    await prisma.ppobTransaction.update({ where: { id: costed.id }, data: { providerCost: "10200.00" } });
+
+    const response = await fetch(`${baseUrl}/api/v1/admin/reports/ppob-transactions.csv`, {
+      headers: { authorization: `Bearer ${tokenFor(admin)}` }
+    });
+    const lines = (await response.text()).trim().split("\n");
+    // 121 transaksi + 1 baris header. Dulu terpotong di 100 baris.
+    expect(lines).toHaveLength(122);
+    const withCost = lines.find((line) => line.includes(costed.publicReference));
+    expect(withCost).toContain('"10200"');
+    expect(withCost).toContain('"800"');
+    expect(withCost).toContain(costed.publicReference);
+  });
+
+  it("CSV mengikuti rentang tanggal", async () => {
+    const admin = await createUser("SUPER_ADMIN");
+    const buyer = await createUser("USER");
+    const product = await createProduct();
+    const old = await createTransaction({ user: buyer, product, status: "SUCCESS", totalAmount: "11000.00" });
+    await prisma.ppobTransaction.update({ where: { id: old.id }, data: { createdAt: new Date("2026-01-15T05:00:00Z") } });
+    const recent = await createTransaction({ user: buyer, product, status: "SUCCESS", totalAmount: "12000.00" });
+
+    const response = await fetch(
+      `${baseUrl}/api/v1/admin/reports/ppob-transactions.csv?dateFrom=2026-01-01T00:00:00Z&dateTo=2026-01-31T23:59:59Z`,
+      { headers: { authorization: `Bearer ${tokenFor(admin)}` } }
+    );
+    const text = await response.text();
+    expect(text).toContain(old.publicReference);
+    expect(text).not.toContain(recent.publicReference);
+  });
+
+  it("JSON laporan tidak membawa serial/token mentah", async () => {
+    const admin = await createUser("SUPER_ADMIN");
+    const buyer = await createUser("USER");
+    const product = await createProduct();
+    const tx = await createTransaction({ user: buyer, product, status: "SUCCESS", totalAmount: "21000.00" });
+    await prisma.ppobTransaction.update({ where: { id: tx.id }, data: { serialNumber: "TOKEN-PLN-1234-5678-9999" } });
+
+    const response = await fetch(`${baseUrl}/api/v1/admin/reports/ppob-transactions`, {
+      headers: { authorization: `Bearer ${tokenFor(admin)}` }
+    });
+    const text = await response.text();
+    expect(response.status).toBe(200);
+    expect(text).not.toContain("TOKEN-PLN-1234-5678-9999");
+    expect(text).not.toContain("serialNumber");
   });
 });

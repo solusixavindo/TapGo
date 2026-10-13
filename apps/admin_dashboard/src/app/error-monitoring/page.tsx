@@ -174,14 +174,19 @@ export default function ErrorMonitoringPage() {
                     {report.issues.map((issue) => (
                       <tr key={issue.id} className="align-top">
                         <td className="px-4 py-3">
-                          <a
-                            href={issue.permalink}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-bold text-brand-blue hover:underline"
-                          >
-                            {issue.title}
-                          </a>
+                          {/^https:\/\//i.test(issue.permalink) ? (
+                            <a
+                              href={issue.permalink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-bold text-brand-blue hover:underline"
+                            >
+                              {issue.title}
+                            </a>
+                          ) : (
+                            // Tautan dari layanan luar hanya dipakai bila https; skema lain (mis. javascript:) tidak dirender.
+                            <span className="font-bold">{issue.title}</span>
+                          )}
                           <p className="mt-1 font-mono text-xs text-slate-500">{issue.shortId}</p>
                           {issue.culprit ? <p className="text-xs text-slate-500">{issue.culprit}</p> : null}
                         </td>

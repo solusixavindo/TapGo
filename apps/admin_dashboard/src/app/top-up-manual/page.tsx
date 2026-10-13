@@ -1,7 +1,7 @@
 "use client";
 
 import { useHardRouter as useRouter } from "../hard-nav";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ManualTopUp,
   ManualTopUpStatus,
@@ -13,7 +13,9 @@ import {
   readToken,
   roleAtLeast
 } from "../../lib/api";
+import { PeriodState, defaultPeriod, periodQuery } from "../../lib/period";
 import ConsoleHeader from "../console-header";
+import PeriodFilter from "../period-filter";
 
 /**
  * Konfirmasi top up manual (transfer bank ke rekening perusahaan).
@@ -36,6 +38,8 @@ export default function ManualTopUpPage() {
   const [role, setRole] = useState("");
   const [status, setStatus] = useState<ManualTopUpStatus>("PENDING");
   const [items, setItems] = useState<ManualTopUp[]>([]);
+  const [period, setPeriod] = useState<PeriodState>(() => defaultPeriod("all"));
+  const range = useMemo(() => periodQuery(period), [period]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -43,17 +47,20 @@ export default function ManualTopUpPage() {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const refresh = useCallback(async (next: ManualTopUpStatus) => {
-    setLoading(true);
-    try {
-      setItems(await listManualTopUps(next));
-      setError("");
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Data belum dapat dimuat.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const refresh = useCallback(
+    async (next: ManualTopUpStatus) => {
+      setLoading(true);
+      try {
+        setItems(await listManualTopUps(next, range));
+        setError("");
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Data belum dapat dimuat.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [range]
+  );
 
   useEffect(() => {
     if (!readToken()) {
@@ -95,6 +102,10 @@ export default function ManualTopUpPage() {
           subtitle="Cocokkan nominal transfer (termasuk kode unik tiga digit) dengan mutasi rekening perusahaan, lalu konfirmasi."
           role={role}
         />
+
+        <div className="mb-4">
+          <PeriodFilter value={period} onChange={setPeriod} allowAll disabled={loading} />
+        </div>
 
         <div className="mb-4 flex flex-wrap gap-1.5" role="tablist" aria-label="Status top up">
           {TABS.map((tab) => (

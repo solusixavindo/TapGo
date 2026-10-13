@@ -5,6 +5,9 @@
  * begitu tab ditutup. Tidak ada data pemohon yang disimpan di perangkat admin —
  * seluruhnya dibaca ulang dari server tiap kali dibutuhkan.
  */
+import { adminHref } from "../app/hard-nav";
+import type { PeriodQuery } from "./period";
+
 export const API_BASE =
   process.env.NEXT_PUBLIC_TAPGO_API_BASE_URL ?? "http://127.0.0.1:4000/api/v1";
 
@@ -60,6 +63,45 @@ export function clearSession() {
   window.sessionStorage.removeItem(ROLE_KEY);
 }
 
+const NOTICE_KEY = "tapgo.admin.notice";
+
+/** Pesan satu kali untuk halaman masuk (mis. sesi berakhir). Dibaca sekali lalu dihapus. */
+export function consumeSessionNotice(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const notice = window.sessionStorage.getItem(NOTICE_KEY) ?? "";
+    window.sessionStorage.removeItem(NOTICE_KEY);
+    return notice;
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Token akses berlaku 15 menit dan konsol tidak memperbaruinya. Tanpa penanganan ini, tab yang dibiarkan terbuka
+ * melewati batas itu menampilkan galat di setiap halaman (Beranda terus menarik data dan terus gagal) sementara
+ * halaman masuk malah mengalihkan kembali ke Beranda karena token lama masih tersimpan. Jawaban 401 saat ada
+ * token berarti token itu tidak berlaku lagi: hapus sesi dan kembali ke halaman masuk dengan pesan yang jelas.
+ */
+function endSessionIfExpired(response: Response) {
+  if (response.status !== 401 || !readToken() || typeof window === "undefined") return;
+  clearSession();
+  try {
+    window.sessionStorage.setItem(NOTICE_KEY, "Sesi Anda berakhir. Masuk lagi untuk melanjutkan.");
+  } catch {
+    // Tanpa pesan pun pengalihan tetap berjalan.
+  }
+  window.location.replace(adminHref("/"));
+}
+
+function periodSuffix(range?: PeriodQuery, existing = false) {
+  const query = new URLSearchParams();
+  if (range?.dateFrom) query.set("dateFrom", range.dateFrom);
+  if (range?.dateTo) query.set("dateTo", range.dateTo);
+  const text = query.toString();
+  return text ? `${existing ? "&" : "?"}${text}` : "";
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -76,6 +118,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     data?: T;
     message?: string;
   };
+
+  // Salah kata sandi saat masuk juga 401, tetapi saat itu belum ada token yang dipegang.
+  if (path !== "/auth/login") endSessionIfExpired(response);
 
   if (!response.ok || payload.success === false) {
     throw new Error(payload.message ?? "Permintaan belum dapat diproses.");
@@ -187,6 +232,7 @@ export async function fetchDocumentObjectUrl(orderId: string, type: DocumentType
     `${API_BASE}/admin/member-requests/${orderId}/documents/${type.toLowerCase()}`,
     { headers: { authorization: `Bearer ${readToken()}` }, credentials: "omit" }
   );
+  endSessionIfExpired(response);
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { message?: string };
@@ -329,6 +375,7 @@ export async function fetchDriverDocumentObjectUrl(
     `${API_BASE}/admin/drivers/${driverId}/documents/${type.toLowerCase()}`,
     { headers: { authorization: `Bearer ${readToken()}` }, credentials: "omit" }
   );
+  endSessionIfExpired(response);
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { message?: string };
@@ -477,6 +524,27 @@ export type PpobSummary = {
   packagePpobBenefitTotal: string;
   totalPpobLiability: string;
   totalNonWithdrawablePpob: string;
+  /** Penjualan PPOB dibayar dari saldo PPOB pelanggan: tidak ada uang baru masuk saat transaksi. */
+  sales: {
+    successCount: number;
+    salesTotal: string;
+    costedCount: number;
+    providerCost: string;
+    /** Selisih penjualan dan modal Digiflazz, hanya dari transaksi yang modalnya tercatat. */
+    margin: string;
+    withoutCostCount: number;
+    openCount: number;
+    openAmount: string;
+    failedCount: number;
+    failedAmount: string;
+  };
+  /** Satu-satunya sumber saldo PPOB yang berupa uang tunai masuk: top up PPOB yang lunas. */
+  funding: {
+    topUpOnlineCount: number;
+    topUpOnline: string;
+    topUpManualCount: number;
+    topUpManual: string;
+  };
 };
 
 export function dashboardSummary() {
@@ -487,12 +555,12 @@ export function dashboardGrowth() {
   return request<DashboardGrowth>("/admin/dashboard/growth");
 }
 
-export function financialSummaryReport() {
-  return request<FinancialSummary>("/admin/reports/financial-summary");
+export function financialSummaryReport(range?: PeriodQuery) {
+  return request<FinancialSummary>(`/admin/reports/financial-summary${periodSuffix(range)}`);
 }
 
-export function ppobSummaryReportApi() {
-  return request<PpobSummary>("/admin/reports/ppob-summary");
+export function ppobSummaryReportApi(range?: PeriodQuery) {
+  return request<PpobSummary>(`/admin/reports/ppob-summary${periodSuffix(range)}`);
 }
 
 /**
@@ -503,11 +571,12 @@ export function ppobSummaryReportApi() {
  * sama dengan fetchDocumentObjectUrl — ambil sebagai blob lalu picu unduhan
  * lewat elemen <a> sementara.
  */
-export async function downloadReportCsv(kind: "bonus" | "ppob" | "ppob-transactions" | "reward") {
-  const response = await fetch(`${API_BASE}/admin/reports/${kind}.csv`, {
+export async function downloadReportCsv(kind: "bonus" | "ppob" | "ppob-transactions" | "reward", range?: PeriodQuery) {
+  const response = await fetch(`${API_BASE}/admin/reports/${kind}.csv${periodSuffix(range)}`, {
     headers: { authorization: `Bearer ${readToken()}` },
     credentials: "omit"
   });
+  endSessionIfExpired(response);
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { message?: string };
     throw new Error(payload.message ?? "Laporan belum dapat diunduh.");
@@ -516,7 +585,8 @@ export async function downloadReportCsv(kind: "bonus" | "ppob" | "ppob-transacti
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `tapgo-${kind}-${new Date().toISOString().slice(0, 10)}.csv`;
+  const stamp = range?.dateFrom ? `${range.dateFrom.slice(0, 10)}_${(range.dateTo ?? "").slice(0, 10)}` : "semua-waktu";
+  link.download = `tapgo-${kind}-${stamp}.csv`;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -784,9 +854,13 @@ export type AdminWithdrawal = {
   user?: { id: string; fullName: string; phone: string } | null;
 };
 
-export function listAdminWithdrawals(params: { status?: WithdrawalStatus; page?: number }) {
-  const query = new URLSearchParams({ page: String(params.page ?? 1), pageSize: "20" });
+export const WITHDRAWAL_PAGE_SIZE = 50;
+
+export function listAdminWithdrawals(params: { status?: WithdrawalStatus; page?: number; range?: PeriodQuery }) {
+  const query = new URLSearchParams({ page: String(params.page ?? 1), pageSize: String(WITHDRAWAL_PAGE_SIZE) });
   if (params.status) query.set("status", params.status);
+  if (params.range?.dateFrom) query.set("dateFrom", params.range.dateFrom);
+  if (params.range?.dateTo) query.set("dateTo", params.range.dateTo);
   return request<{ items: AdminWithdrawal[] }>(`/admin/withdrawals?${query.toString()}`);
 }
 
@@ -915,8 +989,11 @@ export function listOnlinePayments(params: {
   page?: number;
   kind?: "TOPUP" | "MEMBERSHIP";
   status?: OnlinePaymentStatus;
+  range?: PeriodQuery;
 }) {
   const query = new URLSearchParams({ page: String(params.page ?? 1), pageSize: "25" });
+  if (params.range?.dateFrom) query.set("dateFrom", params.range.dateFrom);
+  if (params.range?.dateTo) query.set("dateTo", params.range.dateTo);
   if (params.kind) query.set("kind", params.kind);
   if (params.status) query.set("status", params.status);
   return request<OnlinePaymentList>(`/admin/online-payments?${query.toString()}`);
@@ -991,7 +1068,7 @@ export type DigiflazzTxList = {
     byStatus: Record<string, number>;
     stuck: number;
     stuckAfterMinutes: number;
-    success: { count: number; sales: number; providerCost: number; withCostCount: number };
+    success: { count: number; sales: number; costedSales: number; providerCost: number; withCostCount: number };
   };
 };
 
@@ -1001,14 +1078,15 @@ export function listDigiflazzTransactions(params: {
   category?: string;
   search?: string;
   stuck?: boolean;
-  dateFrom?: string;
+  range?: PeriodQuery;
 }) {
   const query = new URLSearchParams({ page: String(params.page ?? 1), pageSize: "25" });
   if (params.status) query.set("status", params.status);
   if (params.category) query.set("category", params.category);
   if (params.search) query.set("search", params.search);
   if (params.stuck) query.set("stuck", "1");
-  if (params.dateFrom) query.set("dateFrom", params.dateFrom);
+  if (params.range?.dateFrom) query.set("dateFrom", params.range.dateFrom);
+  if (params.range?.dateTo) query.set("dateTo", params.range.dateTo);
   return request<DigiflazzTxList>(`/admin/ppob/transactions?${query.toString()}`);
 }
 
@@ -1032,8 +1110,8 @@ export type ManualTopUp = {
   paidAt: string | null;
 };
 
-export function listManualTopUps(status: ManualTopUpStatus) {
-  return request<ManualTopUp[]>(`/admin/manual-topups?status=${status}`);
+export function listManualTopUps(status: ManualTopUpStatus, range?: PeriodQuery) {
+  return request<ManualTopUp[]>(`/admin/manual-topups?status=${status}${periodSuffix(range, true)}`);
 }
 
 export function actOnManualTopUp(id: string, action: "confirm" | "reject", reason?: string) {

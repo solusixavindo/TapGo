@@ -13,7 +13,13 @@ const createSchema = z.object({
   body: z.object({ amount: z.coerce.number().int(), target: z.enum(["WALLET", "PPOB"]).default("WALLET") }),
 });
 const idSchema = z.object({ params: z.object({ orderId: z.string().uuid() }) });
-const listSchema = z.object({ query: z.object({ status: z.enum(["PENDING", "PAID", "CANCELLED"]).optional() }) });
+const listSchema = z.object({
+  query: z.object({
+    status: z.enum(["PENDING", "PAID", "CANCELLED"]).optional(),
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional()
+  })
+});
 const rejectSchema = z.object({
   params: z.object({ orderId: z.string().uuid() }),
   body: z.object({ reason: z.string().trim().max(200).optional() }).default({}),
@@ -51,7 +57,14 @@ adminManualTopUpRouter.get(
   validateRequest(listSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const status = (req.query.status as "PENDING" | "PAID" | "CANCELLED" | undefined) ?? "PENDING";
-    res.json({ success: true, data: await service.listPendingForAdmin(status) });
+    const { dateFrom, dateTo } = req.query as { dateFrom?: Date; dateTo?: Date };
+    res.json({
+      success: true,
+      data: await service.listPendingForAdmin(status, {
+        ...(dateFrom ? { dateFrom } : {}),
+        ...(dateTo ? { dateTo } : {})
+      })
+    });
   }),
 );
 adminManualTopUpRouter.post(

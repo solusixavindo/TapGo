@@ -276,8 +276,9 @@ describe.skipIf(!runIntegration)("Pemantauan pembayaran online dan saldo Digifla
       expect(data.pagination.total).toBe(6);
       expect(data.summary.byStatus).toEqual({ SUCCESS: 3, FAILED: 1, PROCESSING: 2 });
       expect(data.summary.stuck).toBe(1);
-      // Penjualan sukses 11.000 + 11.000 + 21.500; modal tercatat pada 2 dari 3, margin dihitung dari yang bermodal.
-      expect(data.summary.success).toMatchObject({ count: 3, sales: 43_500, providerCost: 31_100, withCostCount: 2 });
+      // Penjualan sukses 11.000 + 11.000 + 21.500; modal tercatat pada 2 dari 3 (10.200 + 20.900). Selisih dihitung dari
+      // penjualan yang bermodal saja (11.000 + 21.500 = 32.500), jadi 32.500 - 31.100 = 1.400, bukan 43.500 - 31.100.
+      expect(data.summary.success).toMatchObject({ count: 3, sales: 43_500, costedSales: 32_500, providerCost: 31_100, withCostCount: 2 });
 
       const byRef = Object.fromEntries(data.items.map((item: any) => [item.reference, item]));
       expect(byRef["PPOB-OK1"]).toMatchObject({

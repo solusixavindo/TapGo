@@ -2,7 +2,7 @@
 
 import { useHardRouter as useRouter } from "./hard-nav";
 import { FormEvent, useEffect, useState } from "react";
-import { login, readToken } from "../lib/api";
+import { consumeSessionNotice, login, readToken } from "../lib/api";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -11,11 +11,14 @@ export default function AdminLoginPage() {
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     if (readToken()) {
       router.replace("/beranda");
+      return;
     }
+    setNotice(consumeSessionNotice());
   }, [router]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -82,6 +85,12 @@ export default function AdminLoginPage() {
               </button>
             </div>
           </label>
+
+          {notice && !error ? (
+            <p role="status" className="rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+              {notice}
+            </p>
+          ) : null}
 
           {error ? (
             <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2.5 text-sm text-rose-700">

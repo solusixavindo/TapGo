@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   DigiflazzTxItem,
   DigiflazzTxList,
@@ -12,7 +12,9 @@ import {
   readToken,
   roleAtLeast
 } from "../../lib/api";
+import { PeriodState, defaultPeriod, periodQuery } from "../../lib/period";
 import ConsoleHeader from "../console-header";
+import PeriodFilter from "../period-filter";
 import { useHardRouter as useRouter } from "../hard-nav";
 
 /**
@@ -60,22 +62,6 @@ const CATEGORY_OPTIONS: Array<{ id: string; label: string }> = [
 ];
 
 const CATEGORY_LABEL = Object.fromEntries(CATEGORY_OPTIONS.map((option) => [option.id, option.label]));
-
-type Period = "" | "today" | "7d" | "30d";
-const PERIODS: Array<{ id: Period; label: string }> = [
-  { id: "", label: "Semua waktu" },
-  { id: "today", label: "Hari ini" },
-  { id: "7d", label: "7 hari" },
-  { id: "30d", label: "30 hari" }
-];
-
-function periodStart(period: Period): string | undefined {
-  if (!period) return undefined;
-  const start = new Date();
-  if (period === "today") start.setHours(0, 0, 0, 0);
-  else start.setTime(start.getTime() - (period === "7d" ? 7 : 30) * 86_400_000);
-  return start.toISOString();
-}
 
 /** Arti kode jawaban (rc) Digiflazz yang paling sering muncul; kode lain ditampilkan apa adanya. */
 const RC_MEANING: Record<string, string> = {
@@ -189,7 +175,8 @@ export default function DigiflazzTransactionsPage() {
   const [role, setRole] = useState("");
   const [status, setStatus] = useState<DigiflazzTxStatus | "">("");
   const [category, setCategory] = useState("");
-  const [period, setPeriod] = useState<Period>("");
+  const [period, setPeriod] = useState<PeriodState>(() => defaultPeriod("all"));
+  const range = useMemo(() => periodQuery(period), [period]);
   const [stuckOnly, setStuckOnly] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -202,7 +189,6 @@ export default function DigiflazzTransactionsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const dateFrom = periodStart(period);
       setData(
         await listDigiflazzTransactions({
           page,
@@ -210,7 +196,7 @@ export default function DigiflazzTransactionsPage() {
           ...(category ? { category } : {}),
           ...(search ? { search } : {}),
           ...(stuckOnly ? { stuck: true } : {}),
-          ...(dateFrom ? { dateFrom } : {})
+          range
         })
       );
       setError("");
@@ -219,7 +205,7 @@ export default function DigiflazzTransactionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, status, category, period, search, stuckOnly]);
+  }, [page, status, category, range, search, stuckOnly]);
 
   useEffect(() => {
     if (!readToken()) {
@@ -238,7 +224,8 @@ export default function DigiflazzTransactionsPage() {
   const selected = data?.items.find((item) => item.id === openId) ?? null;
   const byStatus = data?.summary.byStatus ?? {};
   const success = data?.summary.success;
-  const margin = success ? success.sales - success.providerCost : 0;
+  // Hanya dari transaksi yang modalnya tercatat; penjualan tanpa modal bukan selisih penuh.
+  const margin = success ? success.costedSales - success.providerCost : 0;
   const cards: Array<{ label: string; value: number; tone: string; hint?: string }> = [
     { label: "Berhasil", value: byStatus.SUCCESS ?? 0, tone: "text-emerald-700" },
     { label: "Diproses / menunggu", value: (byStatus.PROCESSING ?? 0) + (byStatus.PENDING ?? 0), tone: "text-sky-700" },
@@ -300,6 +287,18 @@ export default function DigiflazzTransactionsPage() {
           <div className="mb-5" />
         )}
 
+        <div className="mb-4">
+          <PeriodFilter
+            value={period}
+            onChange={(next) => {
+              setPage(1);
+              setPeriod(next);
+            }}
+            allowAll
+            disabled={loading}
+          />
+        </div>
+
         <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-3">
           <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Status transaksi">
             {STATUS_TABS.map((tab) => (
@@ -337,26 +336,6 @@ export default function DigiflazzTransactionsPage() {
             >
               Tertahan
             </button>
-          </div>
-          <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Periode">
-            {PERIODS.map((option) => (
-              <button
-                key={option.id || "all"}
-                type="button"
-                role="tab"
-                aria-selected={period === option.id}
-                onClick={() => {
-                  setPage(1);
-                  setPeriod(option.id);
-                }}
-                className={[
-                  "rounded-lg border px-3 py-1.5 text-sm font-bold transition",
-                  period === option.id ? "border-brand-navy bg-white text-brand-navy" : "border-transparent bg-white text-slate-500 hover:bg-slate-200"
-                ].join(" ")}
-              >
-                {option.label}
-              </button>
-            ))}
           </div>
           <select
             aria-label="Kategori produk"

@@ -10,7 +10,9 @@ import {
   readToken,
   roleAtLeast
 } from "../../lib/api";
+import { PeriodState, defaultPeriod, periodLabel, periodQuery } from "../../lib/period";
 import ConsoleHeader from "../console-header";
+import PeriodFilter from "../period-filter";
 
 /**
  * Laba rugi manajemen — hanya Super Admin VIP.
@@ -20,37 +22,6 @@ import ConsoleHeader from "../console-header";
  * Angka dihitung dari data operasional sistem, bukan laporan keuangan teraudit; asumsi dan hal yang belum
  * dihitung ditampilkan di panel catatan supaya laba tidak terbaca lebih besar dari kenyataannya.
  */
-
-type PresetId = "this-month" | "last-month" | "last-30" | "this-year";
-
-const PRESETS: Array<{ id: PresetId; label: string }> = [
-  { id: "this-month", label: "Bulan ini" },
-  { id: "last-month", label: "Bulan lalu" },
-  { id: "last-30", label: "30 hari terakhir" },
-  { id: "this-year", label: "Tahun ini" }
-];
-
-function rangeFor(preset: PresetId): { from: Date; to: Date } {
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  switch (preset) {
-    case "this-month":
-      return { from: startOfMonth, to: now };
-    case "last-month":
-      return {
-        from: new Date(now.getFullYear(), now.getMonth() - 1, 1),
-        to: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
-      };
-    case "last-30":
-      return { from: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), to: now };
-    case "this-year":
-      return { from: new Date(now.getFullYear(), 0, 1), to: now };
-  }
-}
-
-function formatDay(date: Date) {
-  return new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "long", year: "numeric" }).format(date);
-}
 
 function delta(current: string, previous: string | undefined) {
   if (previous === undefined) return null;
@@ -117,17 +88,17 @@ const METHOD_LABEL: Record<string, string> = {
 export default function ProfitLossPage() {
   const router = useRouter();
   const [role, setRole] = useState("");
-  const [preset, setPreset] = useState<PresetId>("this-month");
+  const [period, setPeriod] = useState<PeriodState>(() => defaultPeriod("month"));
   const [report, setReport] = useState<ProfitLossReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const range = useMemo(() => rangeFor(preset), [preset]);
+  const range = useMemo(() => periodQuery(period), [period]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setReport(await profitLossReport({ dateFrom: range.from.toISOString(), dateTo: range.to.toISOString() }));
+      setReport(await profitLossReport(range));
       setError("");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Laporan belum dapat dimuat.");
@@ -157,7 +128,7 @@ export default function ProfitLossPage() {
       <div className="mx-auto max-w-5xl">
         <ConsoleHeader
           title="Laba Rugi"
-          subtitle={`Periode ${formatDay(range.from)} – ${formatDay(range.to)}. Laporan manajemen dari data operasional sistem.`}
+          subtitle={`Periode ${periodLabel(period.mode, period.anchor)}. Laporan manajemen dari data operasional sistem.`}
           role={role}
           actions={
             <button
@@ -170,22 +141,8 @@ export default function ProfitLossPage() {
           }
         />
 
-        <div className="mb-5 flex flex-wrap gap-1.5 print:hidden" role="tablist" aria-label="Periode">
-          {PRESETS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={preset === item.id}
-              onClick={() => setPreset(item.id)}
-              className={[
-                "rounded-lg px-3.5 py-1.5 text-sm font-bold transition",
-                preset === item.id ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-200"
-              ].join(" ")}
-            >
-              {item.label}
-            </button>
-          ))}
+        <div className="mb-5 print:hidden">
+          <PeriodFilter value={period} onChange={setPeriod} disabled={loading} />
         </div>
 
         {error ? (

@@ -99,7 +99,9 @@ export const adminWalletTransactionSchema = z.object({
 export const adminWithdrawalQuerySchema = z.object({
   query: z.object({
     ...paginationQuery,
-    status: z.nativeEnum(WithdrawalStatus).optional()
+    status: z.nativeEnum(WithdrawalStatus).optional(),
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional()
   })
 });
 

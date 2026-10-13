@@ -1,7 +1,7 @@
 "use client";
 
 import { useHardRouter as useRouter } from "../hard-nav";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   OnlinePaymentList,
   OnlinePaymentStatus,
@@ -12,7 +12,9 @@ import {
   readToken,
   roleAtLeast
 } from "../../lib/api";
+import { PeriodState, defaultPeriod, periodQuery } from "../../lib/period";
 import ConsoleHeader from "../console-header";
+import PeriodFilter from "../period-filter";
 
 /**
  * Pemantauan pembayaran online (Midtrans): top up saldo dan pembayaran membership. Hanya baca.
@@ -72,6 +74,8 @@ export default function OnlinePaymentsPage() {
   const [status, setStatus] = useState<OnlinePaymentStatus | "">("");
   const [kind, setKind] = useState<"" | "TOPUP" | "MEMBERSHIP">("");
   const [page, setPage] = useState(1);
+  const [period, setPeriod] = useState<PeriodState>(() => defaultPeriod("all"));
+  const range = useMemo(() => periodQuery(period), [period]);
   const [data, setData] = useState<OnlinePaymentList | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -83,7 +87,8 @@ export default function OnlinePaymentsPage() {
         await listOnlinePayments({
           page,
           ...(kind ? { kind } : {}),
-          ...(status ? { status } : {})
+          ...(status ? { status } : {}),
+          range
         })
       );
       setError("");
@@ -92,7 +97,7 @@ export default function OnlinePaymentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, kind, status]);
+  }, [page, kind, status, range]);
 
   useEffect(() => {
     if (!readToken()) {
@@ -143,6 +148,18 @@ export default function OnlinePaymentsPage() {
               {card.hint ? <p className="mt-1 text-xs font-semibold text-amber-700">{card.hint}</p> : null}
             </div>
           ))}
+        </div>
+
+        <div className="mb-4">
+          <PeriodFilter
+            value={period}
+            onChange={(next) => {
+              setPage(1);
+              setPeriod(next);
+            }}
+            allowAll
+            disabled={loading}
+          />
         </div>
 
         <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-3">
