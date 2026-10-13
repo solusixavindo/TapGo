@@ -167,11 +167,17 @@ async function buildInquiryPayload(input: {
   });
   const ppobBalance = wallet?.ppobBalance ?? new Prisma.Decimal(0);
   const totalAmount = product.price.plus(product.adminFee);
-  // Split pembayaran: saldo PPOB (manfaat membership) dipakai lebih dulu,
-  // sisanya dari saldo utama. Ini aturan server; klien hanya menampilkan.
-  const benefitAmount = Prisma.Decimal.min(ppobBalance, totalAmount);
+  // Audit keamanan 30 September 2026 (M1): inquiry SEBELUMNYA menjanjikan
+  // split pembayaran (ppobBalance dulu, sisanya dari saldo utama) yang tidak
+  // pernah benar-benar terjadi — debit sungguhan (PrismaPpobRepository.
+  // createPurchaseWithDebit) HANYA memotong ppobBalance, tidak pernah
+  // menyentuh saldo utama. ppobBalance adalah ember terpisah yang TIDAK BOLEH
+  // tercampur dengan saldo utama. Inquiry mencerminkan itu persis: cukup hanya
+  // bila ppobBalance sendirian menutup total. Penting untuk top up: pelanggan
+  // yang mengisi Saldo TapGo (saldo utama) tidak boleh dijanjikan bisa membayar PPOB.
+  const sufficient = ppobBalance.gte(totalAmount);
+  const benefitAmount = sufficient ? totalAmount : new Prisma.Decimal(0);
   const balanceAmount = totalAmount.minus(benefitAmount);
-  const sufficient = (wallet?.balance ?? new Prisma.Decimal(0)).gte(balanceAmount);
   return {
     product: {
       ...serializeCatalogProduct(product),
@@ -201,7 +207,9 @@ async function loadBills(userId: string, transactions: PpobTransaction[]): Promi
 }
 
 function serializeOrder(tx: PpobTransaction, replayed = false, bill: BillSummary | null = null) {
-  const benefitAmount = Prisma.Decimal.min(tx.adminFee, tx.totalAmount);
+  // M1: transaksi yang SUDAH terjadi didebit 100% dari ppobBalance, jadi benefitAmount
+  // selalu totalAmount penuh dan balanceAmount selalu 0.
+  const benefitAmount = tx.totalAmount;
   return {
     id: tx.publicReference,
     status: tx.status,

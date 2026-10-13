@@ -207,7 +207,7 @@ export class MidtransPaymentService {
         gross_amount: Number(new Prisma.Decimal(order.totalAmount).toFixed(0)),
       },
       ...snapEnabledPaymentsPart(),
-      ...snapFinishCallbackPart("/upgrade/status"),
+      ...snapFinishCallbackPart("/upgrade/status/"),
       customer_details: {
         first_name: order.user.fullName,
         email: order.user.email ?? undefined,

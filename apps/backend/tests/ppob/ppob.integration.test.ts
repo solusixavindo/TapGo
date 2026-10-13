@@ -400,12 +400,13 @@ describe.skipIf(!runIntegration)("Stage R2.7 — PPOB foundation", () => {
     expect(skus).not.toContain("PULSA_INACTIVE");
   });
 
-  it("inquiry menghitung split pembayaran tanpa membuat transaksi", async () => {
-    const user = await createUserWithPpobBalance("5000");
-    await prisma.wallet.update({
-      where: { userId: user.id },
-      data: { balance: new Prisma.Decimal("100000") }
-    });
+  // --- M1 (audit keamanan 30 September 2026): inquiry harus sama dengan debit ---
+  // ppobBalance adalah ember terpisah dari saldo utama. Debit sungguhan hanya memotong
+  // ppobBalance. Inquiry tidak boleh menjanjikan sebaliknya, terutama bagi pelanggan yang
+  // mengisi Saldo TapGo (saldo utama) lewat top up.
+  it("inquiry: ppobBalance cukup sendirian -> sufficient true, seluruhnya dari saldo PPOB, tanpa transaksi", async () => {
+    const user = await createUserWithPpobBalance("20000");
+    await prisma.wallet.update({ where: { userId: user.id }, data: { balance: new Prisma.Decimal("100000") } });
     const res = await api("/api/v1/ppob/orders/inquiry", {
       method: "POST",
       token: tokenFor(user),
@@ -414,18 +415,23 @@ describe.skipIf(!runIntegration)("Stage R2.7 — PPOB foundation", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { data: any };
     expect(body.data.product.sku).toBe("PULSA_TSEL_10");
-    // Target dinormalisasi seperti pada purchase.
     expect(body.data.targetNumber).toBe("085612345678");
-    // Split: saldo PPOB 5000 dipakai dulu, sisanya 6500 dari saldo utama.
-    expect(body.data.payment).toEqual({
-      amount: 11500,
-      benefitAmount: 5000,
-      balanceAmount: 6500,
-      sufficient: true
-    });
-    expect(body.data.wallet.balance).toBe(100000);
-    // Tidak ada transaksi yang tercipta dari inquiry.
+    expect(body.data.payment).toEqual({ amount: 11500, benefitAmount: 11500, balanceAmount: 0, sufficient: true });
     expect(await prisma.ppobTransaction.count()).toBe(0);
+  });
+
+  it("inquiry: ppobBalance kurang -> sufficient false walau saldo utama besar (tidak pernah dipakai menutup)", async () => {
+    const user = await createUserWithPpobBalance("5000");
+    await prisma.wallet.update({ where: { userId: user.id }, data: { balance: new Prisma.Decimal("100000") } });
+    const res = await api("/api/v1/ppob/orders/inquiry", {
+      method: "POST",
+      token: tokenFor(user),
+      body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" }
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: any };
+    expect(body.data.payment).toEqual({ amount: 11500, benefitAmount: 0, balanceAmount: 11500, sufficient: false });
+    expect(body.data.wallet.balance).toBe(100000);
   });
 
   it("inquiry menandai saldo tidak cukup dan menolak sku asing", async () => {

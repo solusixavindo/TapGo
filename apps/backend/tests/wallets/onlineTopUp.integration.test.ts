@@ -238,7 +238,7 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
     } finally {
       backendEnv.APP_URL = original;
     }
-    expect((snapRequests[0] as { callbacks?: { finish: string } }).callbacks).toEqual({ finish: "https://tapgolion.id/topup/status" });
+    expect((snapRequests[0] as { callbacks?: { finish: string } }).callbacks).toEqual({ finish: "https://tapgolion.id/topup/status/" });
   });
 
   it("adds the fee on the older create-then-pay route as well", async () => {

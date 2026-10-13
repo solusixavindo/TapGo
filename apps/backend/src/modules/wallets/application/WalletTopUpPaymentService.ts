@@ -213,7 +213,7 @@ export class WalletTopUpPaymentService {
         gross_amount: grossAmount,
       },
       ...snapEnabledPaymentsPart(),
-      ...snapFinishCallbackPart("/topup/status"),
+      ...snapFinishCallbackPart("/topup/status/"),
       customer_details: {
         first_name: user.fullName,
         email: user.email ?? undefined,
