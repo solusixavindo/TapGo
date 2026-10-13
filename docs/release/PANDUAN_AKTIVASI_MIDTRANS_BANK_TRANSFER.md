@@ -64,8 +64,12 @@ Hasil benar: `APP_URL=https://tapgolion.id`, `MIDTRANS_IS_PRODUCTION=true`, `DOK
 ## Tahap 3. Saklar `.env` (di sini perilaku berubah)
 
 Transfer manual **masih dibiarkan menyala** sampai uji nyata lolos (Tahap 5).
+
+Metode Snap sengaja dibatasi ke VA bank yang aktif di akun (BNI, BRI, CIMB Niaga, Permata, Mandiri). Jangan memakai `all`: GoPay juga aktif di akun
+dan biayanya 2% dari nominal, sedangkan biaya yang ditagihkan ke pelanggan pada top up hanya Rp4.440. Bila kelak BSI/BCA/dst. diaktifkan, tambahkan
+kode metodenya ke daftar ini.
 ```bash
-cd /var/www/releases/tapgo-4a1687a/apps/backend && for kv in "MIDTRANS_ENABLED_PAYMENTS=all" "MEMBERSHIP_ONLINE_PAYMENT_ENABLED=true" "EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED=true" "MEMBERSHIP_PURCHASE_WEB_ENABLED=true" "WALLET_TOPUP_ENABLED=true"; do k=${kv%%=*}; if grep -q "^$k=" .env; then sed -i "s|^$k=.*|$kv|" .env; else echo "$kv" >> .env; fi; done; grep -E '^(MIDTRANS_ENABLED_PAYMENTS|MEMBERSHIP_ONLINE_PAYMENT_ENABLED|EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED|MEMBERSHIP_PURCHASE_WEB_ENABLED|WALLET_TOPUP_ENABLED|APP_URL)=' .env
+cd /var/www/releases/tapgo-4a1687a/apps/backend && for kv in "MIDTRANS_ENABLED_PAYMENTS=bni_va,bri_va,cimb_va,permata_va,echannel" "MEMBERSHIP_ONLINE_PAYMENT_ENABLED=true" "EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED=true" "MEMBERSHIP_PURCHASE_WEB_ENABLED=true" "WALLET_TOPUP_ENABLED=true"; do k=${kv%%=*}; if grep -q "^$k=" .env; then sed -i "s|^$k=.*|$kv|" .env; else echo "$kv" >> .env; fi; done; grep -E '^(MIDTRANS_ENABLED_PAYMENTS|MEMBERSHIP_ONLINE_PAYMENT_ENABLED|EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED|MEMBERSHIP_PURCHASE_WEB_ENABLED|WALLET_TOPUP_ENABLED|APP_URL)=' .env
 ```
 Jika `APP_URL` tidak muncul atau bukan `https://tapgolion.id`, jalankan:
 ```bash
