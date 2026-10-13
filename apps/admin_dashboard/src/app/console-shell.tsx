@@ -14,7 +14,7 @@ import { clearSession, readRole, roleAtLeast } from "../lib/api";
  */
 
 type Minimum = "ADMIN" | "SUPER_ADMIN" | "SUPER_ADMIN_VIP";
-type IconName = "home" | "badge" | "car" | "users" | "wallet" | "chart" | "scale" | "clipboard" | "shield" | "route" | "pulse" | "bug";
+type IconName = "home" | "badge" | "car" | "users" | "wallet" | "chart" | "scale" | "shield" | "route" | "pulse" | "bug";
 
 const NAV_GROUPS: Array<{
   title: string;
@@ -45,7 +45,6 @@ const NAV_GROUPS: Array<{
   {
     title: "Tata Kelola",
     items: [
-      { href: "/log-audit", label: "Log Audit", minimum: "SUPER_ADMIN", icon: "clipboard" },
       { href: "/roles", label: "Pengaturan Role", minimum: "SUPER_ADMIN_VIP", icon: "shield" }
     ]
   },
@@ -82,7 +81,6 @@ const ICONS: Record<IconName, ReactNode> = {
   ),
   chart: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />,
   scale: <path d="M12 4v16M6 20h12M5 8h14M5 8l-3 7a3.5 3.5 0 0 0 6 0L5 8ZM19 8l-3 7a3.5 3.5 0 0 0 6 0L19 8Z" />,
-  clipboard: <path d="M9 4h6v3H9V4ZM7 5.5H6a1 1 0 0 0-1 1V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1h-1M8.5 12h7M8.5 16h5" />,
   shield: <path d="M12 3 5 6v5.5c0 4.3 2.9 8 7 9.5 4.1-1.5 7-5.2 7-9.5V6l-7-3Z" />,
   route: (
     <>

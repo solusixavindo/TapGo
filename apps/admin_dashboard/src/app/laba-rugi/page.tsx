@@ -382,7 +382,7 @@ export default function ProfitLossPage() {
                 </dl>
               </section>
               <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-amber-800">Yang belum dihitung</h2>
+                <h2 className="text-xs font-bold uppercase tracking-wider text-amber-800">Catatan perhitungan</h2>
                 <ul className="mt-3 space-y-2 text-sm leading-6 text-amber-900">
                   {report.notes.map((note) => (
                     <li key={note} className="flex gap-2">

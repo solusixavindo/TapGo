@@ -755,7 +755,7 @@ export function remainingRetention(expiresAt: string | null) {
   return hours > 0 ? `${hours} jam ${minutes} menit lagi` : `${minutes} menit lagi`;
 }
 
-// --- Penarikan dana dan log audit (SUPER_ADMIN ke atas) ----------------------
+// --- Penarikan dana (SUPER_ADMIN ke atas) ----------------------
 
 /** Peringkat peran administratif; sama dengan tangga di backend. */
 const ROLE_RANK: Record<string, number> = { ADMIN: 1, SUPER_ADMIN: 2, SUPER_ADMIN_VIP: 3 };
@@ -795,25 +795,6 @@ export function actOnWithdrawal(id: string, action: "approve" | "reject" | "paid
     method: "POST",
     body: JSON.stringify(note ? { note } : {})
   });
-}
-
-export type AuditLogItem = {
-  id: string;
-  action: string;
-  entityType: string;
-  entityId: string | null;
-  metadata: Record<string, unknown> | null;
-  createdAt: string;
-  actorName: string;
-  actorRole: string | null;
-  ipAddress?: string | null;
-};
-
-export function listAuditLogs(params: { page?: number; action?: string; entityType?: string }) {
-  const query = new URLSearchParams({ page: String(params.page ?? 1), pageSize: "25" });
-  if (params.action) query.set("action", params.action);
-  if (params.entityType) query.set("entityType", params.entityType);
-  return request<{ total: number; items: AuditLogItem[] }>(`/admin/audit-logs?${query.toString()}`);
 }
 
 // --- Laba rugi (hanya SUPER_ADMIN_VIP) ----------------------------------------

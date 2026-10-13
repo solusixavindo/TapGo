@@ -429,12 +429,21 @@ export class AdminConsoleController {
     res.json({ success: true, data: result });
   };
 
+  /**
+   * Rentang tanggal dari query. validateRequest sudah mengubah dateFrom/dateTo menjadi objek Date
+   * (z.coerce.date) dan menggantikan req.query, jadi nilainya bisa Date atau teks. Sebelumnya hanya
+   * teks yang dibaca sehingga rentang diabaikan diam-diam dan laporan selalu menampilkan seluruh waktu.
+   */
   private dateRange(req: Request) {
+    const read = (value: unknown): Date | undefined => {
+      const date = value instanceof Date ? value : typeof value === "string" ? new Date(value) : undefined;
+      return date && !Number.isNaN(date.getTime()) ? date : undefined;
+    };
+    const from = read(req.query.startDate) ?? read(req.query.dateFrom);
+    const to = read(req.query.endDate) ?? read(req.query.dateTo);
     return {
-      ...(typeof req.query.dateFrom === "string" ? { dateFrom: new Date(req.query.dateFrom) } : {}),
-      ...(typeof req.query.startDate === "string" ? { dateFrom: new Date(req.query.startDate) } : {}),
-      ...(typeof req.query.dateTo === "string" ? { dateTo: new Date(req.query.dateTo) } : {}),
-      ...(typeof req.query.endDate === "string" ? { dateTo: new Date(req.query.endDate) } : {})
+      ...(from ? { dateFrom: from } : {}),
+      ...(to ? { dateTo: to } : {})
     };
   }
 

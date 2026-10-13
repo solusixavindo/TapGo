@@ -967,6 +967,7 @@ export class AdminConsoleService {
         ...(current.hpp.missingTiers.length > 0
           ? [`HPP paket ${current.hpp.missingTiers.join(", ")} belum diisi, jadi belum dihitung sebagai beban.`]
           : []),
+        "Penjualan membership dan HPP paket dicatat pada tanggal pembayaran. Pembayaran yang dikembalikan tetap tampil sebagai penjualan lalu dikurangi pada baris pengembalian dana.",
         "HPP paket dicatat saat paket terjual, termasuk saldo PPOB yang diberikan sebagai manfaat.",
         "Biaya gateway dihitung dari tarif publik Midtrans per metode (belum termasuk potongan lain di kontrak Anda). Pembayaran dengan jenis tidak dikenal tidak dihitung.",
         ...(current.operating.gateway.unknownCount > 0
@@ -979,14 +980,29 @@ export class AdminConsoleService {
         "HPP paket sudah memuat saldo PPOB yang diberikan; pembelian PPOB dengan saldo itu ikut tercatat lagi di penjualan dan modal PPOB, jadi sebagian bisa terhitung dua kali.",
         `Server dihitung Rp${new Intl.NumberFormat("id-ID").format(current.operating.server.monthly)} per bulan, dibagi per hari sepanjang periode. Pajak ${current.operating.taxRatePercent}% dari total pendapatan.`,
         "Belum termasuk: gaji dan biaya operasional lain di luar sistem.",
-        "Komisi ojek hanya tercatat untuk perjalanan yang dibayar TapGoPay; ojek tunai belum memotong komisi.",
+        "Komisi ojek hanya tercatat untuk perjalanan yang dibayar TapGoPay; komisi pesanan tunai yang dipotong dari saldo driver belum dihitung sebagai pendapatan.",
         "Saldo dompet dan penarikan tertunda adalah kewajiban, bukan pendapatan atau beban."
       ]
     };
   }
 
+  /**
+   * Rentang untuk invoice: tanggal dibayar; invoice yang (data lama) belum punya paidAt memakai tanggal dibuat.
+   */
+  private invoicePaidDateRange(input: { dateFrom?: Date; dateTo?: Date }) {
+    if (!input.dateFrom && !input.dateTo) {
+      return {};
+    }
+    const bounds = {
+      ...(input.dateFrom ? { gte: input.dateFrom } : {}),
+      ...(input.dateTo ? { lte: input.dateTo } : {})
+    };
+    return { OR: [{ paidAt: bounds }, { paidAt: null, createdAt: bounds }] };
+  }
+
   private async computeProfitLoss(input: DateRangeOnlyInput) {
     const range = this.createdAtRange(input);
+    const invoiceDateRange = this.invoicePaidDateRange(input);
     const [
       invoicesPaid,
       invoicesRefunded,
@@ -1002,8 +1018,11 @@ export class AdminConsoleService {
       ppobWithoutCost,
       firstUser
     ] = await Promise.all([
-      this.prisma.invoice.aggregate({ where: { status: "PAID", ...range }, _sum: { amount: true } }),
-      this.prisma.invoice.aggregate({ where: { status: "REFUNDED", ...range }, _sum: { amount: true } }),
+      // Penjualan membership dicatat pada tanggal DIBAYAR (bukan tanggal invoice dibuat), sama dengan biaya
+      // gateway. Pengembalian dana mengubah invoice dari PAID menjadi REFUNDED, jadi invoice PAID saja =
+      // penjualan bersih; penjualan kotor = PAID + REFUNDED.
+      this.prisma.invoice.aggregate({ where: { status: "PAID", ...invoiceDateRange }, _sum: { amount: true } }),
+      this.prisma.invoice.aggregate({ where: { status: "REFUNDED", ...invoiceDateRange }, _sum: { amount: true } }),
       this.prisma.commission.aggregate({
         where: { type: "RIDE_COMPANY_REVENUE", status: { in: ["PENDING", "POSTED"] }, ...range },
         _sum: { amount: true }
@@ -1018,7 +1037,7 @@ export class AdminConsoleService {
       this.rewardSummaryReport(input),
       this.profitSharingSummaryReport(input),
       this.prisma.invoice.findMany({
-        where: { status: "PAID", ...range },
+        where: { status: "PAID", ...invoiceDateRange },
         select: {
           order: {
             select: {
@@ -1029,7 +1048,8 @@ export class AdminConsoleService {
       }),
       // Biaya gateway: pembayaran Midtrans yang berhasil (paidAt dalam periode).
       this.prisma.membershipPayment.findMany({
-        where: { status: "PAID", provider: "MIDTRANS", ...this.paidAtRange(input) },
+        // REFUNDED ikut: Midtrans tetap memungut biaya transaksi walau dananya dikembalikan ke pembeli.
+        where: { status: { in: ["PAID", "REFUNDED"] }, provider: "MIDTRANS", ...this.paidAtRange(input) },
         select: { amount: true, metadata: true }
       }),
       this.prisma.walletTopUpOrder.findMany({
@@ -1092,8 +1112,10 @@ export class AdminConsoleService {
     const hppTotal = hppTiers.reduce((sum, tier) => sum.plus(tier.total), new Prisma.Decimal(0));
     const hppMissing = hppTiers.filter((tier) => new Prisma.Decimal(tier.unitCost).isZero()).map((tier) => tier.name);
 
-    const membershipSales = new Prisma.Decimal(invoicesPaid._sum.amount ?? 0);
+    // Invoice yang dikembalikan sudah BUKAN PAID, jadi penjualan kotor = PAID + REFUNDED. Sebelumnya hanya PAID
+    // yang dijumlah lalu pengembalian dikurangkan lagi, sehingga pengembalian terpotong dua kali.
     const membershipRefunds = new Prisma.Decimal(invoicesRefunded._sum.amount ?? 0);
+    const membershipSales = new Prisma.Decimal(invoicesPaid._sum.amount ?? 0).plus(membershipRefunds);
     const membershipNet = membershipSales.minus(membershipRefunds);
     const rideRevenue = new Prisma.Decimal(rideCommission._sum.amount ?? 0);
     // Penjualan PPOB = yang dibayar pelanggan (harga + biaya admin); harga
