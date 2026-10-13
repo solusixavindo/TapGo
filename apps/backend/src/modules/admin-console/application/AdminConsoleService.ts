@@ -977,7 +977,7 @@ export class AdminConsoleService {
       notes: [
         "Laporan manajemen dari data sistem TapGo, disusun mengikuti struktur laporan laba rugi SAK Indonesia; bukan laporan keuangan teraudit dan perlu ditinjau akuntan sebelum dipakai untuk pelaporan resmi.",
         current.assumptions.ppnInclusive
-          ? `Pendapatan membership dan PPOB disajikan tanpa PPN ${current.assumptions.ppnRatePercent}% (harga jual sudah termasuk PPN, PKP). PPN keluaran adalah kewajiban kepada negara, bukan pendapatan maupun beban, dan ditampilkan di bagian catatan. Komisi ojek belum dipisahkan dari PPN.`
+          ? `Pendapatan disajikan tanpa PPN ${current.assumptions.ppnRatePercent}% (PKP, harga jual sudah termasuk PPN): membership dan biaya layanan tagihan dikurangi PPN atas seluruh nilainya, sedangkan PPOB prabayar hanya dikurangi PPN atas margin (penjualan dikurangi harga pokok). PPN keluaran adalah kewajiban kepada negara, bukan pendapatan maupun beban, dan ditampilkan di bagian catatan. Komisi ojek belum dipisahkan dari PPN.`
           : "PPN tidak diperhitungkan (PL_PPN_MODE=NONE): pendapatan sama dengan harga yang dibayar pelanggan.",
         current.incomeTax.mode === "FINAL_OMZET"
           ? `Pajak penghasilan memakai PPh final ${current.incomeTax.ratePercent}% dari pendapatan bruto (tanpa PPN). Dasar pengenaan sebenarnya adalah penerimaan bruto menurut ketentuan pajak; angka ini perkiraan.`
@@ -1175,6 +1175,7 @@ export class AdminConsoleService {
 
     // PPOB: prabayar bruto (penjualan - harga pokok); pascabayar neto (hanya biaya layanan TapGo).
     let prepaidSalesIncl = zero;
+    let prepaidCostedSales = zero;
     let prepaidCost = zero;
     let postpaidFeeIncl = zero;
     let ppobSuccessCount = 0;
@@ -1188,16 +1189,21 @@ export class AdminConsoleService {
       if (POSTPAID_CATEGORIES.has(row.category)) {
         postpaidFeeIncl = postpaidFeeIncl.plus(dec(row._sum.totalAmount).minus(dec(row._sum.providerCost)));
       } else {
+        prepaidCostedSales = prepaidCostedSales.plus(dec(row._sum.totalAmount));
         prepaidCost = prepaidCost.plus(dec(row._sum.providerCost));
       }
     }
-    const ppobPrepaidSales = exPpn(prepaidSalesIncl);
+    // PPN atas penjualan prabayar (pulsa, token, paket data) hanya dikenakan pada margin penjualan, bukan seluruh
+    // harga. PPN margin = margin x tarif/(100+tarif); penjualan tanpa harga modal tercatat belum bisa dihitung marginnya.
+    const ppnShare = ppnInclusive ? new Prisma.Decimal(config.ppnRatePercent).div(new Prisma.Decimal(100).plus(config.ppnRatePercent)) : zero;
+    const prepaidPpn = prepaidCostedSales.minus(prepaidCost).mul(ppnShare).toDecimalPlaces(2);
+    const ppobPrepaidSales = prepaidSalesIncl.minus(prepaidPpn);
     const ppobPostpaidFee = exPpn(postpaidFeeIncl);
     const ppobSales = ppobPrepaidSales.plus(ppobPostpaidFee);
     const ppnOutput = ppnInclusive
       ? dec(invoicesPaid._sum.amount)
           .minus(exPpn(dec(invoicesPaid._sum.amount)))
-          .plus(prepaidSalesIncl.minus(ppobPrepaidSales))
+          .plus(prepaidPpn)
           .plus(postpaidFeeIncl.minus(ppobPostpaidFee))
       : zero;
     const totalRevenue = membershipRecognized.plus(rideRevenue).plus(ppobSales);

@@ -76,7 +76,7 @@ describe.skipIf(!runIntegration)("Laba rugi sesuai struktur SAK", () => {
       data: { sourceUserId: buyer.id, triggerType: "TEST", triggerId: "sak-ride", beneficiaryId: vip.id, type: "RIDE_COMPANY_REVENUE", status: "PENDING", amount: new Prisma.Decimal(8_000) }
     });
     const product = await prisma.ppobProduct.create({
-      data: { sku: "SAK_TEST", category: "PULSA", brand: "Telkomsel", name: "Pulsa", price: new Prisma.Decimal(33_300) }
+      data: { sku: "SAK_TEST", category: "PULSA", brand: "Telkomsel", name: "Pulsa", price: new Prisma.Decimal(31_100) }
     });
     async function ppob(reference: string, category: "PULSA" | "BPJS", total: number, cost: number) {
       await prisma.ppobTransaction.create({
@@ -87,7 +87,7 @@ describe.skipIf(!runIntegration)("Laba rugi sesuai struktur SAK", () => {
         }
       });
     }
-    await ppob("PPOB-SAK-1", "PULSA", 33_300, 20_000); // prabayar: bruto, tanpa PPN 30.000, modal 20.000
+    await ppob("PPOB-SAK-1", "PULSA", 31_100, 20_000); // prabayar: margin 11.100 => PPN margin 1.100, pendapatan 30.000, modal 20.000
     await ppob("PPOB-SAK-2", "BPJS", 102_460, 101_350); // pascabayar: neto, biaya layanan 1.110 => 1.000 tanpa PPN
     return vip;
   }
@@ -124,8 +124,8 @@ describe.skipIf(!runIntegration)("Laba rugi sesuai struktur SAK", () => {
     expect(data.netProfit).toBe("814305.00");
     expect(data.totalExpenses).toBe("124695.00");
 
-    // PPN keluaran (kewajiban, bukan pendapatan/beban): 110.000 + 3.300 + 110.
-    expect(data.memo.ppnOutput).toBe("113410.00");
+    // PPN keluaran (kewajiban, bukan pendapatan/beban): membership 110.000 + PPN margin pulsa 1.100 + biaya layanan tagihan 110.
+    expect(data.memo.ppnOutput).toBe("111210.00");
   });
 
   it("PPh badan: 22% dari laba sebelum pajak, nol bila rugi; tanpa PPN bila tidak PKP", async () => {
@@ -133,8 +133,8 @@ describe.skipIf(!runIntegration)("Laba rugi sesuai struktur SAK", () => {
     process.env.PL_PPN_MODE = "NONE";
     const vip = await scenario();
     const data = await report(vip);
-    // Tanpa PPN: membership 1.110.000 - saldo PPOB 111.000 = 999.000; ride 8.000; prabayar 33.300; tagihan neto 1.110.
-    expect(data.revenue.total).toBe("1041410.00");
+    // Tanpa PPN: membership 1.110.000 - saldo PPOB 111.000 = 999.000; ride 8.000; prabayar 31.100; tagihan neto 1.110.
+    expect(data.revenue.total).toBe("1039210.00");
     expect(data.memo.ppnOutput).toBe("0.00");
     expect(data.incomeTax.mode).toBe("CORPORATE");
     const expectedTax = (Number(data.profitBeforeTax) * 0.22).toFixed(2);
