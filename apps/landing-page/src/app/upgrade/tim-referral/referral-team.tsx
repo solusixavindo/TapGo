@@ -14,6 +14,7 @@ import {
   getReferralTeam,
   readSession
 } from "../api";
+import { COPY_FAILED_HINT, copyText } from "../../copy-text";
 import { formatRupiah, secondaryButtonClass } from "../upgrade-shell";
 
 function formatMoment(value: string) {
@@ -42,7 +43,8 @@ export default function ReferralTeam() {
   );
   const [loading, setLoading] = useState(!PREVIEW_MODE);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"kode" | "tautan" | null>(null);
+  const [copyFailed, setCopyFailed] = useState(false);
 
   useEffect(() => {
     if (PREVIEW_MODE) return;
@@ -72,16 +74,15 @@ export default function ReferralTeam() {
     };
   }, [router]);
 
-  async function copyLink() {
-    if (!summary) return;
-    try {
-      await navigator.clipboard.writeText(summary.referralLink);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard API dapat ditolak browser (mis. tanpa izin/permission
-      // policy) — kegagalan diam-diam di sini tidak berbahaya, pengguna masih
-      // bisa menyalin manual dari teks yang tertampil.
+  async function copyValue(kind: "kode" | "tautan", value: string) {
+    const ok = await copyText(value);
+    if (ok) {
+      setCopyFailed(false);
+      setCopied(kind);
+      window.setTimeout(() => setCopied(null), 2000);
+    } else {
+      setCopied(null);
+      setCopyFailed(true);
     }
   }
 
@@ -116,18 +117,34 @@ export default function ReferralTeam() {
         <p className="text-xs font-bold uppercase tracking-wider themed-text-muted">
           Kode referral Anda
         </p>
-        <p className="mt-1 text-2xl font-black themed-text">{summary.referralCode}</p>
-
-        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl border themed-border themed-card-bg px-4 py-3">
-          <p className="flex-1 truncate text-sm themed-text-muted">{summary.referralLink}</p>
+        <div className="mt-1 flex flex-wrap items-center gap-3">
+          <p className="select-all text-2xl font-black themed-text" data-testid="referral-code">{summary.referralCode}</p>
           <button
             type="button"
-            onClick={copyLink}
+            onClick={() => void copyValue("kode", summary.referralCode)}
+            data-testid="copy-code"
             className="shrink-0 rounded-xl bg-brand-gold px-3 py-2 text-xs font-black text-brand-navyDeep transition hover:-translate-y-0.5"
           >
-            {copied ? "Tersalin" : "Salin"}
+            {copied === "kode" ? "Kode tersalin" : "Salin kode"}
           </button>
         </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl border themed-border themed-card-bg px-4 py-3">
+          <p className="min-w-0 flex-1 select-all break-all text-sm themed-text-muted" data-testid="referral-link">{summary.referralLink}</p>
+          <button
+            type="button"
+            onClick={() => void copyValue("tautan", summary.referralLink)}
+            data-testid="copy-link"
+            className="shrink-0 rounded-xl border themed-border px-3 py-2 text-xs font-black themed-text transition hover:-translate-y-0.5"
+          >
+            {copied === "tautan" ? "Tautan tersalin" : "Salin tautan"}
+          </button>
+        </div>
+        {copyFailed ? (
+          <p role="alert" className="mt-3 text-xs font-semibold text-rose-300">
+            {COPY_FAILED_HINT}
+          </p>
+        ) : null}
 
         <div className="mt-5 grid grid-cols-3 gap-3 border-t border-dashed themed-border pt-5">
           <div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { COPY_FAILED_HINT, copyText } from "../copy-text";
 import { useMitra } from "./mitra-data";
 import { MITRA_PREVIEW, TeamMember, getMemberAvatar, getTeam } from "./mitra-api";
 import { PREVIEW_TEAM } from "./mitra-preview";
@@ -103,12 +104,8 @@ function MemberRow({ member }: { member: TeamMember }) {
   const panelId = `member-${member.userId}`;
 
   async function copyCode() {
-    try {
-      await navigator.clipboard.writeText(member.referralCode);
-      toast("success", "Kode referral disalin.");
-    } catch {
-      toast("error", "Tidak dapat menyalin otomatis.");
-    }
+    if (await copyText(member.referralCode)) toast("success", "Kode referral disalin.");
+    else toast("error", COPY_FAILED_HINT);
   }
 
   return (
@@ -134,7 +131,7 @@ function MemberRow({ member }: { member: TeamMember }) {
           <dl className="grid flex-1 grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
             <div>
               <dt className="text-[11px] font-bold uppercase tracking-wider themed-text-muted">Kode referral</dt>
-              <dd className="font-bold themed-text">{member.referralCode}</dd>
+              <dd className="select-all font-bold themed-text">{member.referralCode}</dd>
             </div>
             <div>
               <dt className="text-[11px] font-bold uppercase tracking-wider themed-text-muted">Tingkat</dt>
@@ -272,12 +269,13 @@ export default function NetworkView() {
   }
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(summary.referralLink);
-      toast("success", "Tautan referral disalin.");
-    } catch {
-      toast("error", "Tidak dapat menyalin otomatis. Salin tautan secara manual.");
-    }
+    if (await copyText(summary.referralLink)) toast("success", "Tautan referral disalin.");
+    else toast("error", COPY_FAILED_HINT);
+  }
+
+  async function copyCode() {
+    if (await copyText(summary.referralCode)) toast("success", "Kode referral disalin.");
+    else toast("error", COPY_FAILED_HINT);
   }
 
   const shareText = encodeURIComponent(
@@ -294,11 +292,17 @@ export default function NetworkView() {
             <p className="text-[11px] font-bold uppercase tracking-wider themed-text-muted">Tautan referral Anda</p>
             <div className="mt-2 flex items-center gap-2 rounded-xl themed-fill px-3.5 py-3">
               <Icon name="share" className="h-4 w-4 shrink-0 themed-text-muted" />
-              <p className="min-w-0 flex-1 truncate text-sm font-semibold themed-text">{summary.referralLink}</p>
+              <p className="min-w-0 flex-1 select-all break-all text-sm font-semibold themed-text">{summary.referralLink}</p>
             </div>
-            <p className="mt-2 text-xs themed-text-muted">
-              Kode referral: <span className="font-bold themed-text">{summary.referralCode}</span>
-            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs themed-text-muted">
+              <span>
+                Kode referral: <span className="select-all font-bold themed-text" data-testid="referral-code">{summary.referralCode}</span>
+              </span>
+              <button type="button" onClick={copyCode} data-testid="copy-code" className={`${secondaryButtonClass} !min-h-[32px] !px-3 text-xs`}>
+                <Icon name="copy" className="h-3.5 w-3.5" />
+                Salin kode
+              </button>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={copy} className={primaryButtonClass}>

@@ -1,6 +1,7 @@
 "use client";
 
 import { ReactNode, useState } from "react";
+import { copyText } from "../copy-text";
 import { formatRupiah, secondaryButtonClass } from "./upgrade-shell";
 
 /**
@@ -74,11 +75,10 @@ export function invoiceText(data: InvoiceData): string {
 function CopyRow({ label, value, shown }: { label: string; value: string; shown?: string }) {
   const [copied, setCopied] = useState(false);
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(value);
+    if (await copyText(value)) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
-    } catch {
+    } else {
       setCopied(false);
     }
   }
@@ -105,11 +105,10 @@ export function PaymentInvoice({ data }: { data: InvoiceData }) {
   const expires = formatMoment(data.expiresAt);
 
   async function copyAll() {
-    try {
-      await navigator.clipboard.writeText(invoiceText(data));
+    if (await copyText(invoiceText(data))) {
       setCopiedAll(true);
       window.setTimeout(() => setCopiedAll(false), 2200);
-    } catch {
+    } else {
       setCopiedAll(false);
     }
   }
