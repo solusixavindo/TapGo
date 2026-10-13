@@ -6,6 +6,7 @@ import {
   resolveRefundGateway
 } from "../../payments/application/PaymentRefundGateway.js";
 import { MANUAL_BANK_PROVIDER } from "../../payments/application/manualTransferAmounts.js";
+import { isBankTransferPaymentType } from "../../payments/application/MidtransPaymentService.js";
 
 /**
  * Eksekusi pengembalian dana atas pengajuan yang dokumennya ditolak.
@@ -113,15 +114,25 @@ export class MembershipRefundService {
     return { order, invoice: order.invoice, payment, rejection, refund };
   }
 
+  /**
+   * Pembayaran yang dananya HARUS dikembalikan lewat transfer bank manual: transfer manual (tidak pernah
+   * lewat penyedia) dan transfer bank Midtrans (virtual account/aggregator; Midtrans menolak refund
+   * lewat API). Kartu, GoPay, dan QRIS tetap lewat gateway.
+   */
+  private requiresManualRefund(payment: { provider: string | null; metadata: unknown }): boolean {
+    if (payment.provider === MANUAL_BANK_PROVIDER) return true;
+    return payment.provider === "MIDTRANS" && isBankTransferPaymentType(this.asObject(payment.metadata).paymentType);
+  }
+
   async executeRefund(input: { orderId: string; adminId: string }) {
     const { order, invoice, payment, rejection, refund } = await this.loadPendingRefund(input.orderId);
 
     // Uang transfer manual tidak pernah lewat penyedia, jadi gateway tidak
     // boleh dipanggil (invoice ini tidak dikenal di sana). Dana dikembalikan
     // lewat transfer bank, lalu dicatat dengan confirmManualRefund.
-    if (payment.provider === MANUAL_BANK_PROVIDER) {
+    if (this.requiresManualRefund(payment)) {
       throw new AppError(
-        "Pembayaran ini transfer bank manual. Kembalikan dana lewat transfer bank dari rekening perusahaan, lalu catat dengan konfirmasi pengembalian dana manual.",
+        "Pembayaran ini transfer bank (manual atau virtual account). Kembalikan dana lewat transfer bank dari rekening perusahaan, lalu catat dengan konfirmasi pengembalian dana manual.",
         StatusCodes.CONFLICT,
         REFUND_MANUAL_REQUIRED
       );
@@ -180,9 +191,9 @@ export class MembershipRefundService {
     }
     const { order, invoice, payment, rejection, refund } = await this.loadPendingRefund(input.orderId);
 
-    if (payment.provider !== MANUAL_BANK_PROVIDER) {
+    if (!this.requiresManualRefund(payment)) {
       throw new AppError(
-        "Pengembalian dana manual hanya untuk pembayaran transfer bank manual. Gunakan pengembalian dana lewat penyedia pembayaran.",
+        "Pengembalian dana manual hanya untuk pembayaran transfer bank. Gunakan pengembalian dana lewat penyedia pembayaran.",
         StatusCodes.CONFLICT,
         REFUND_MANUAL_NOT_APPLICABLE
       );

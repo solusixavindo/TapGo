@@ -71,6 +71,32 @@ function manualTransferOf(request: MemberRequest): ManualTransfer | null {
   };
 }
 
+/** Jenis pembayaran Midtrans yang berupa transfer bank (Midtrans menolak refund lewat API untuk semuanya). */
+const MIDTRANS_BANK_TRANSFER_TYPES = new Set([
+  "bank_transfer",
+  "echannel",
+  "permata",
+  "other_va",
+  "bca_va",
+  "bni_va",
+  "bri_va",
+  "cimb_va",
+  "mandiri_va"
+]);
+
+/**
+ * Dana pengajuan ini dikembalikan lewat transfer bank dari rekening perusahaan (lalu dicatat di sini):
+ * transfer bank manual, atau transfer bank lewat Midtrans (virtual account). Kartu, GoPay, dan QRIS
+ * dikembalikan lewat penyedia. Harus sama dengan MembershipRefundService.requiresManualRefund di server.
+ */
+function refundIsManual(request: MemberRequest): boolean {
+  const payment = request.payments?.[0];
+  if (!payment) return false;
+  if (payment.provider === "MANUAL_BANK") return true;
+  const type = payment.metadata?.paymentType;
+  return payment.provider === "MIDTRANS" && typeof type === "string" && MIDTRANS_BANK_TRANSFER_TYPES.has(type.trim().toLowerCase());
+}
+
 type RefundInfo = { status?: string; amount?: string; bankReference?: string };
 
 /** Status pengembalian dana pada pengajuan yang dokumennya ditolak, atau null. */
@@ -557,14 +583,14 @@ export default function MemberRequestsPage() {
                 {selected.status === "CANCELLED" && refundOf(selected)?.status === "PENDING" && roleAtLeast(role, "SUPER_ADMIN") ? (
                   <div className="mt-6 border-t border-slate-200 pt-5 print:hidden" data-testid="manual-refund">
                     <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Pengembalian dana</p>
-                    {selected.payments?.[0]?.provider === "MANUAL_BANK" ? (
+                    {refundIsManual(selected) ? (
                       <>
                         <p className="mt-2 text-sm leading-6 text-slate-600">
-                          Dokumen ditolak, dana wajib kembali penuh. Pemohon mentransfer{" "}
+                          Dokumen ditolak, dana wajib kembali penuh. Pemohon membayar{" "}
                           <strong>{formatRupiah(manualTransferOf(selected)?.transferAmount ?? selected.totalAmount)}</strong>
                           {manualTransferOf(selected)?.uniqueCode ? ` (harga ${formatRupiah(selected.totalAmount)} + kode unik ${manualTransferOf(selected)!.uniqueCode})` : ""}
                           : kembalikan sebesar nominal yang benar-benar ditransfer. Pembayaran ini transfer
-                          bank manual, jadi kembalikan lewat transfer bank dari rekening perusahaan (hubungi pemohon di{" "}
+                          bank (manual atau virtual account Midtrans), jadi kembalikan lewat transfer bank dari rekening perusahaan (hubungi pemohon di{" "}
                           {selected.user?.phone ?? "nomor terdaftar"} untuk rekening tujuan), lalu catat di sini dengan nomor
                           referensi transfer baliknya.
                         </p>

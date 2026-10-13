@@ -247,6 +247,66 @@ describe.skipIf(!runIntegration)("Refund transfer manual membership", () => {
     expect(res.status).toBe(409);
     expect(((await res.json()) as { code?: string }).code).toBe("MEMBERSHIP_REFUND_MANUAL_REQUIRED");
   });
+
+  // ---- Transfer bank lewat Midtrans (virtual account / "Bank Transfer Aggregator") ------------------
+  // 9 Okt 2026: Midtrans hanya mengaktifkan transfer bank. Midtrans menolak refund VA lewat API, jadi
+  // pembayaran jenis itu mengikuti jalur manual yang sama (transfer balik lalu dicatat Super Admin).
+
+  async function asMidtransPayment(orderId: string, paymentType: string | null) {
+    await prisma.membershipPayment.updateMany({
+      where: { orderId },
+      data: {
+        provider: "MIDTRANS",
+        method: "MIDTRANS_SNAP",
+        providerReference: `MIDTRANS-${orderId}`,
+        metadata: { notificationStatus: "settlement", paymentType }
+      }
+    });
+  }
+
+  it("Midtrans transfer bank: refund lewat gateway ditolak (gateway TIDAK dipanggil) dan konfirmasi manual berhasil", async () => {
+    for (const paymentType of ["bank_transfer", "echannel", "other_va", "permata"]) {
+      await cleanDatabase();
+      await seedMemberships();
+      const scenario = await rejectedManualOrder();
+      await asMidtransPayment(scenario.orderId, paymentType);
+      const gateway = new FakeGateway();
+      const service = new RefundModule.MembershipRefundService(prisma, gateway);
+
+      await expect(service.executeRefund({ orderId: scenario.orderId, adminId: scenario.finance.id }), paymentType).rejects.toMatchObject({
+        code: "MEMBERSHIP_REFUND_MANUAL_REQUIRED",
+        statusCode: 409
+      });
+      expect(gateway.requests, paymentType).toHaveLength(0);
+
+      const result = await service.confirmManualRefund({
+        orderId: scenario.orderId,
+        adminId: scenario.finance.id,
+        bankReference: `TRF-VA-${paymentType}`
+      });
+      expect(result).toMatchObject({ status: "REFUNDED", provider: "MANUAL_BANK" });
+      expect((await prisma.membershipPayment.findFirstOrThrow({ where: { orderId: scenario.orderId } })).status).toBe("REFUNDED");
+    }
+  });
+
+  it("Midtrans kartu, GoPay, dan QRIS tetap lewat gateway dan TIDAK boleh dicatat manual", async () => {
+    for (const paymentType of ["credit_card", "gopay", "qris", null]) {
+      await cleanDatabase();
+      await seedMemberships();
+      const scenario = await rejectedManualOrder();
+      await asMidtransPayment(scenario.orderId, paymentType);
+      const gateway = new FakeGateway();
+      const service = new RefundModule.MembershipRefundService(prisma, gateway);
+
+      await expect(
+        service.confirmManualRefund({ orderId: scenario.orderId, adminId: scenario.finance.id, bankReference: "TRF-X" }),
+        String(paymentType)
+      ).rejects.toMatchObject({ code: "MEMBERSHIP_REFUND_MANUAL_NOT_APPLICABLE" });
+
+      await service.executeRefund({ orderId: scenario.orderId, adminId: scenario.finance.id });
+      expect(gateway.requests, String(paymentType)).toHaveLength(1);
+    }
+  });
 });
 
 // ---- bantuan ---------------------------------------------------------------

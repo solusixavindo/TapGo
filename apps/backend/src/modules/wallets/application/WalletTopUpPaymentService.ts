@@ -6,7 +6,7 @@ import { isAdminRole } from "../../../core/security/roleHierarchy.js";
 import { DokuClient } from "../../../lib/doku/client.js";
 import { DokuNotificationPayload } from "../../../lib/doku/types.js";
 import { assertAuthoritativeAmount } from "../../payments/application/authoritativeAmount.js";
-import { REFUNDABLE_PAYMENT_METHODS } from "../../payments/application/MidtransPaymentService.js";
+import { snapEnabledPaymentsPart } from "../../payments/application/MidtransPaymentService.js";
 import { verifyMidtransSignature } from "../../payments/application/midtransSignature.js";
 import { lazyPushNotifier } from "../../notifications/application/pushServiceFactory.js";
 import { accountPushMessages, pushQuietly } from "../../notifications/application/accountNotifications.js";
@@ -104,7 +104,7 @@ export class WalletTopUpPaymentService {
         order_id: order.reference,
         gross_amount: Number(new Prisma.Decimal(order.amount).toFixed(0)),
       },
-      enabled_payments: REFUNDABLE_PAYMENT_METHODS,
+      ...snapEnabledPaymentsPart(),
       customer_details: {
         first_name: user.fullName,
         email: user.email ?? undefined,

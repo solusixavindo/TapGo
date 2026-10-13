@@ -50,6 +50,54 @@ export const REFUNDABLE_PAYMENT_METHODS = [
   "other_qris",  // QRIS lewat aplikasi pembayaran mana pun
 ] as const;
 
+/**
+ * Daftar `enabled_payments` untuk permintaan Snap, atau undefined bila daftar TIDAK boleh dikirim.
+ *
+ *  - MIDTRANS_ENABLED_PAYMENTS kosong  -> REFUNDABLE_PAYMENT_METHODS (perilaku lama).
+ *  - "all"                             -> undefined: Snap menampilkan semua metode yang aktif di akun.
+ *  - "a,b,c"                           -> daftar itu (huruf kecil, hanya a-z, 0-9, garis bawah).
+ */
+export function resolveMidtransEnabledPayments(raw: string | undefined): readonly string[] | undefined {
+  const value = (raw ?? "").trim().toLowerCase();
+  if (value === "") return REFUNDABLE_PAYMENT_METHODS;
+  if (value === "all") return undefined;
+  const methods = value
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+  if (methods.length === 0 || methods.some((item) => !/^[a-z0-9_]{2,40}$/.test(item))) {
+    throw new Error("MIDTRANS_ENABLED_PAYMENTS tidak valid: gunakan nama metode dipisah koma, atau \"all\"");
+  }
+  return methods;
+}
+
+/** Bagian permintaan Snap untuk `enabled_payments`: kosong bila daftar tidak boleh dikirim. */
+export function snapEnabledPaymentsPart(): { enabled_payments?: readonly string[] } {
+  const methods = resolveMidtransEnabledPayments(env.MIDTRANS_ENABLED_PAYMENTS);
+  return methods === undefined ? {} : { enabled_payments: methods };
+}
+
+/**
+ * Jenis pembayaran Midtrans yang berupa TRANSFER BANK (virtual account, bill, aggregator). Midtrans menolak
+ * refund lewat API untuk semuanya (diuji di sandbox 13 Agu 2026), jadi dananya dikembalikan lewat transfer
+ * bank manual dari rekening perusahaan lalu dicatat Super Admin.
+ */
+const BANK_TRANSFER_PAYMENT_TYPES = new Set([
+  "bank_transfer",
+  "echannel",
+  "permata",
+  "other_va",
+  "bca_va",
+  "bni_va",
+  "bri_va",
+  "cimb_va",
+  "mandiri_va"
+]);
+
+export function isBankTransferPaymentType(paymentType: unknown): boolean {
+  return typeof paymentType === "string" && BANK_TRANSFER_PAYMENT_TYPES.has(paymentType.trim().toLowerCase());
+}
+
 type MidtransSnapResponse = {
   token?: string;
   redirect_url?: string;
@@ -149,7 +197,7 @@ export class MidtransPaymentService {
         order_id: order.invoice.number,
         gross_amount: Number(new Prisma.Decimal(order.totalAmount).toFixed(0)),
       },
-      enabled_payments: REFUNDABLE_PAYMENT_METHODS,
+      ...snapEnabledPaymentsPart(),
       customer_details: {
         first_name: order.user.fullName,
         email: order.user.email ?? undefined,

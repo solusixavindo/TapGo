@@ -109,6 +109,11 @@ const envSchema = z.object({
   MIDTRANS_IS_PRODUCTION: strictEnvBoolean(false),
   MIDTRANS_NOTIFICATION_SECRET: z.string().optional(),
   MIDTRANS_SNAP_URL: z.string().url().optional(),
+  /// Metode bayar yang ditawarkan di Snap, dipisah koma (mis. "other_va,permata_va"), atau "all" untuk
+  /// TIDAK mengirim daftar sama sekali sehingga Snap menampilkan semua metode yang aktif di akun Midtrans.
+  /// Kosong = daftar tertutup bawaan (kartu, GoPay, QRIS; semuanya dapat direfund lewat API). Midtrans
+  /// mengaktifkan akun TapGo hanya dengan "Bank Transfer Aggregator" (9 Okt 2026), jadi produksi memakai "all".
+  MIDTRANS_ENABLED_PAYMENTS: z.string().trim().max(200).optional(),
   // Satu flag ini dulu mengendalikan tiga hal sekaligus: visibilitas paket
   // berbayar, pembelian membership, dan pencairan saldo wallet. Akibatnya
   // menyalakan penjualan di web ikut membuka pencairan saldo di rilis Google
