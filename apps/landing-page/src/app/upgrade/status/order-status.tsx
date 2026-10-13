@@ -36,7 +36,7 @@ const STATUS_VIEW: Record<
     tone: "wait",
     label: "Menunggu pembayaran",
     headline: "Pembayaran belum kami terima",
-    body: "Selesaikan pembayaran sebelum batas waktu. Untuk transfer bank, tim TapGo mengonfirmasi setelah mutasi rekening dicek. Pengajuan otomatis kedaluwarsa setelah 24 jam."
+    body: "Selesaikan pembayaran sebelum batas waktu. Pembayaran online terkonfirmasi otomatis begitu diterima, biasanya dalam hitungan menit (transfer manual dikonfirmasi tim TapGo setelah mutasi rekening dicek). Pengajuan otomatis kedaluwarsa setelah 24 jam."
   },
   PAID_AWAITING_VERIFICATION: {
     tone: "review",
@@ -54,7 +54,7 @@ const STATUS_VIEW: Record<
     tone: "refund",
     label: "Dokumen ditolak",
     headline: "Dokumen tidak dapat diverifikasi",
-    body: "Pembayaran Anda dikembalikan penuh. Untuk pembayaran online, dana kembali ke metode pembayaran semula mengikuti waktu penyedia. Untuk transfer bank, tim TapGo menghubungi Anda untuk rekening tujuan lalu mentransfer balik sebesar pembayaran Anda."
+    body: "Pembayaran Anda dikembalikan penuh. Karena pembayaran lewat transfer bank, tim TapGo menghubungi Anda untuk rekening tujuan lalu mentransfer balik sebesar pembayaran Anda."
   },
   EXPIRED: {
     tone: "wait",

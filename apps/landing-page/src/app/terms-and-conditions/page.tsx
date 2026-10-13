@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function TermsAndConditions() {
   return (
-    <LegalShell title="Terms & Conditions" updated="11 Juni 2026">
+    <LegalShell title="Terms & Conditions" updated="13 Oktober 2026">
       <p>
         Dengan menggunakan TapGo, pengguna menyetujui syarat dan ketentuan yang ditetapkan oleh PT.
         TapGo Lion Indonesia. Layanan TapGo mencakup membership, referral reward, PPOB benefit,
@@ -48,10 +48,16 @@ export default function TermsAndConditions() {
 
       <h2>Pembayaran via Midtrans</h2>
       <p>
-        Pembayaran membership dapat diproses melalui Midtrans atau penyedia pembayaran resmi lain.
-        Membership, reward, dan benefit hanya diproses setelah pembayaran terkonfirmasi melalui
-        backend TapGo. Pembayaran pending, gagal, expired, dibatalkan, atau tidak tervalidasi tidak
-        mengaktifkan benefit.
+        Pembayaran membership dan top up saldo TapGoPay dapat diproses melalui Midtrans atau
+        penyedia pembayaran resmi lain, dengan transfer bank virtual account. Membership, reward,
+        dan benefit hanya diproses setelah pembayaran terkonfirmasi melalui backend TapGo.
+        Pembayaran pending, gagal, expired, dibatalkan, atau tidak tervalidasi tidak mengaktifkan
+        benefit dan tidak menambah saldo.
+      </p>
+      <p>
+        Top up saldo dikenai biaya layanan pembayaran yang ditampilkan sebelum Anda membayar. Saldo
+        bertambah sebesar nominal top up; biaya layanan tidak masuk ke saldo. Bayarlah tepat sesuai
+        total yang tertera sebelum batas waktu pembayaran berakhir.
       </p>
 
       <h2>Refund dan Cancel</h2>

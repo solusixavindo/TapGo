@@ -122,7 +122,7 @@ const articles = [
       { heading: "Mengapa disatukan?" },
       "Karena uangnya berputar di tempat yang sama. Penghasilan seorang mitra driver dapat langsung dipakai membeli token listrik. Saldo PPOB seorang anggota dapat dipakai melayani tetangga. Tidak perlu memindahkan dana antaraplikasi, dan tidak perlu mendaftar dua kali.",
       { heading: "Siapa yang berdiri di belakangnya" },
-      "Layanan ini dijalankan PT. TapGo Lion Indonesia, badan usaha berbadan hukum di Indonesia. Aplikasinya dapat diunduh gratis di Google Play Store, dan pembayaran dilakukan lewat transfer bank sesuai petunjuk di halaman pembayaran atau payment gateway berlisensi — bukan transfer ke rekening pribadi."
+      "Layanan ini dijalankan PT. TapGo Lion Indonesia, badan usaha berbadan hukum di Indonesia. Aplikasinya dapat diunduh gratis di Google Play Store, dan pembayaran diproses lewat payment gateway berlisensi (Midtrans) dengan transfer bank virtual account — bukan transfer ke rekening pribadi."
     ]
   },
   {
@@ -243,7 +243,7 @@ const articles = [
           "Masuk di situs ini. Gunakan nomor ponsel dan password yang sama dengan aplikasi. Tidak perlu membuat akun baru.",
           "Pilih paket. Paket hanya dapat dinaikkan, tidak dapat diturunkan.",
           "Lengkapi data dan dokumen. Nama sesuai KTP, alamat domisili, foto KTP, dan swafoto memegang KTP.",
-          "Selesaikan pembayaran. Lewat transfer bank sesuai petunjuk di halaman pembayaran (dengan kode unik) atau payment gateway berlisensi.",
+          "Selesaikan pembayaran. Lewat transfer bank virtual account di halaman pembayaran payment gateway berlisensi (Midtrans).",
           "Tunggu verifikasi. Manfaat aktif setelah dokumen diperiksa tim kami."
         ]
       },
@@ -268,7 +268,7 @@ const articles = [
       { heading: "Setiap akses tercatat" },
       "Ketika petugas membuka dokumen Anda, sistem mencatat siapa yang membuka, dokumen milik siapa, dan kapan. Catatan ini tidak dapat dihapus lewat jalur biasa.",
       { heading: "Pembayaran tidak lewat rekening pribadi" },
-      "Pembayaran hanya dilakukan lewat petunjuk di halaman pembayaran tapgolion.id setelah Anda masuk (transfer bank dengan kode unik) atau payment gateway berlisensi. Kami tidak pernah meminta transfer ke rekening pribadi siapa pun. Bila ada yang mengaku dari TapGo dan meminta hal tersebut, itu penipuan — mohon laporkan kepada kami.",
+      "Pembayaran hanya dilakukan lewat halaman pembayaran payment gateway berlisensi (Midtrans) yang dibuka dari tapgolion.id setelah Anda masuk. Kami tidak pernah meminta transfer ke rekening pribadi siapa pun. Bila ada yang mengaku dari TapGo dan meminta hal tersebut, itu penipuan — mohon laporkan kepada kami.",
       { heading: "Hak Anda" },
       "Anda dapat meminta penghapusan akun melalui halaman hapus akun. Rincian selengkapnya ada pada Kebijakan Privasi."
     ]
@@ -724,7 +724,7 @@ export default function Home() {
         </div>
         <p className="themed-text-muted mx-auto mt-8 max-w-3xl text-center text-sm leading-7">
           Harga sudah termasuk seluruh biaya — tidak ada iuran bulanan dan tidak ada potongan tersembunyi.
-          Pembayaran lewat transfer bank sesuai petunjuk di halaman pembayaran atau payment gateway berlisensi. Bila dokumen identitas tidak dapat diverifikasi,
+          Pembayaran lewat transfer bank virtual account melalui payment gateway berlisensi (Midtrans). Bila dokumen identitas tidak dapat diverifikasi,
           pembayaran dikembalikan penuh sesuai kebijakan pengembalian dana.
         </p>
       </section>

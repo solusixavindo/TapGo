@@ -9,10 +9,12 @@ export const metadata: Metadata = {
 
 export default function RefundPolicy() {
   return (
-    <LegalShell title="Refund & Cancellation Policy" updated="4 Juni 2026">
-      <p>Kebijakan ini menjelaskan kondisi refund atau pembatalan pembayaran membership TapGo.</p>
+    <LegalShell title="Refund & Cancellation Policy" updated="13 Oktober 2026">
+      <p>Kebijakan ini menjelaskan kondisi refund atau pembatalan pembayaran membership dan top up TapGo.</p>
       <h2>Pembayaran Membership</h2>
       <p>Pembayaran membership diproses melalui kanal resmi perusahaan atau payment gateway. Pengguna wajib memastikan paket dan data akun sudah benar sebelum melakukan pembayaran.</p>
+      <h2>Top Up Saldo TapGoPay</h2>
+      <p>Top up diproses melalui payment gateway dengan transfer bank virtual account. Saldo bertambah sebesar nominal top up; biaya layanan pembayaran yang tertera sebelum Anda membayar tidak masuk ke saldo dan tidak dikembalikan. Top up yang sudah berhasil tidak dikembalikan otomatis ke rekening pembayar; hubungi support bila terjadi pembayaran ganda atau kesalahan nominal yang terverifikasi.</p>
       <h2>Kondisi Refund Jika Berlaku</h2>
       <p>Refund dapat dipertimbangkan jika terjadi pembayaran ganda, kesalahan nominal yang terverifikasi, atau transaksi gagal yang dananya tetap terdebit.</p>
       <h2>Pembayaran yang Sudah Diproses</h2>

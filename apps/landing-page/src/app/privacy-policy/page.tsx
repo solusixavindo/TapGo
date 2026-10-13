@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPolicy() {
   return (
-    <LegalShell title="Privacy Policy" updated="7 Oktober 2026">
+    <LegalShell title="Privacy Policy" updated="13 Oktober 2026">
       <p>
         PT. TapGo Lion Indonesia menghormati privasi pengguna TapGo. Kebijakan ini menjelaskan data
         yang dikumpulkan oleh aplikasi TapGo Penumpang untuk Android, aplikasi TapGo Driver untuk
@@ -136,7 +136,7 @@ export default function PrivacyPolicy() {
 
       <h2>Pihak Ketiga</h2>
       <p>
-        TapGo menggunakan Midtrans untuk pemrosesan pembayaran membership, Google Firebase untuk
+        TapGo menggunakan Midtrans untuk pemrosesan pembayaran membership dan top up saldo, Google Firebase untuk
         pengiriman notifikasi, dan penyedia layanan PPOB untuk memproses pembelian pulsa dan
         tagihan. TapGo juga dapat menggunakan layanan diagnostik atau crash reporting jika
         diaktifkan. Pihak ketiga hanya menerima data yang diperlukan untuk menjalankan layanan

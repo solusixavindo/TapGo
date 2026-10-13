@@ -245,8 +245,8 @@ export default function PackagePicker() {
       </div>
 
       <p className="mt-6 rounded-2xl border themed-border themed-card-bg px-4 py-3 text-xs leading-6 themed-text-muted">
-        Harga sudah termasuk seluruh biaya. Pembayaran lewat transfer bank sesuai
-        petunjuk di halaman pembayaran atau payment gateway berlisensi. Manfaat aktif
+        Harga sudah termasuk seluruh biaya. Pembayaran lewat transfer bank virtual
+        account melalui payment gateway berlisensi (Midtrans). Manfaat aktif
         setelah dokumen identitas diverifikasi.
       </p>
 
