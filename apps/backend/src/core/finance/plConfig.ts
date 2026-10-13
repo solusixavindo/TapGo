@@ -1,17 +1,29 @@
 /**
- * Asumsi biaya operasional untuk laporan laba rugi. Bisa diubah lewat
- * environment tanpa deploy kode: PL_SERVER_COST_MONTHLY (rupiah per bulan) dan
- * PL_TAX_RATE_PERCENT (persen dari total pendapatan).
+ * Asumsi laporan laba rugi. Bisa diubah lewat environment tanpa deploy kode:
+ *  - PL_SERVER_COST_MONTHLY: biaya server (rupiah per bulan).
+ *  - PL_PPN_MODE: INCLUSIVE (PKP, harga jual sudah termasuk PPN; bawaan) atau NONE (tanpa PPN).
+ *  - PL_PPN_RATE_PERCENT: tarif PPN efektif (bawaan 11).
+ *  - PL_INCOME_TAX_MODE: FINAL_OMZET (PPh final dari omzet; bawaan), CORPORATE (PPh badan dari laba sebelum pajak),
+ *    atau NONE (pajak penghasilan belum dihitung).
+ *  - PL_FINAL_TAX_RATE_PERCENT (bawaan 0,5) dan PL_CORPORATE_TAX_RATE_PERCENT (bawaan 22).
  */
 function positiveNumber(raw: string | undefined, fallback: number) {
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
+export type IncomeTaxMode = "FINAL_OMZET" | "CORPORATE" | "NONE";
+
 export function plConfig() {
+  const taxMode = (process.env.PL_INCOME_TAX_MODE ?? "FINAL_OMZET").trim().toUpperCase();
+  const incomeTaxMode: IncomeTaxMode = taxMode === "CORPORATE" || taxMode === "NONE" ? taxMode : "FINAL_OMZET";
   return {
     serverCostMonthly: positiveNumber(process.env.PL_SERVER_COST_MONTHLY, 1_500_000),
-    taxRatePercent: positiveNumber(process.env.PL_TAX_RATE_PERCENT, 11)
+    ppnMode: (process.env.PL_PPN_MODE ?? "INCLUSIVE").trim().toUpperCase() === "NONE" ? ("NONE" as const) : ("INCLUSIVE" as const),
+    ppnRatePercent: positiveNumber(process.env.PL_PPN_RATE_PERCENT, 11),
+    incomeTaxMode,
+    finalTaxRatePercent: positiveNumber(process.env.PL_FINAL_TAX_RATE_PERCENT, 0.5),
+    corporateTaxRatePercent: positiveNumber(process.env.PL_CORPORATE_TAX_RATE_PERCENT, 22)
   };
 }
 

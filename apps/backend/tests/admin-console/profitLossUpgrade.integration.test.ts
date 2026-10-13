@@ -24,6 +24,10 @@ describe.skipIf(!runIntegration)("Laba rugi: upgrade member memengaruhi pendapat
     }
     process.env.NODE_ENV = "test";
     process.env.PL_SERVER_COST_MONTHLY = "0";
+    // Uji ini mengukur logika pembukuan, bukan perlakuan pajak: tanpa PPN, pajak penghasilan 11% dari pendapatan.
+    process.env.PL_PPN_MODE = "NONE";
+    process.env.PL_INCOME_TAX_MODE = "FINAL_OMZET";
+    process.env.PL_FINAL_TAX_RATE_PERCENT = "11";
     process.env.DATABASE_URL = testDatabaseUrl;
     process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET ?? "test-access-secret-pl-upgrade-0000000";
     process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? "test-refresh-secret-pl-upgrade-000000";
@@ -54,6 +58,9 @@ describe.skipIf(!runIntegration)("Laba rugi: upgrade member memengaruhi pendapat
 
   afterAll(async () => {
     delete process.env.PL_SERVER_COST_MONTHLY;
+    delete process.env.PL_PPN_MODE;
+    delete process.env.PL_INCOME_TAX_MODE;
+    delete process.env.PL_FINAL_TAX_RATE_PERCENT;
     backendEnv.EXTERNAL_MEMBERSHIP_PAYMENTS_ENABLED = false;
     backendEnv.MEMBERSHIP_PURCHASE_APP_ENABLED = false;
     await cleanDatabase();
@@ -76,26 +83,30 @@ describe.skipIf(!runIntegration)("Laba rugi: upgrade member memengaruhi pendapat
 
     await buy(buyer, "SILVER");
     const afterSilver = await report(vip);
-    // Silver Rp500.000: pendapatan; HPP 190.000; bonus sponsor 8% = 40.000; pajak 11% = 55.000.
+    // Silver Rp500.000: saldo PPOB 100.000 ditangguhkan => pendapatan diakui 400.000; HPP 190.000 - saldo PPOB 100.000 = 90.000;
+    // bonus sponsor 8% = 40.000; bonus tingkat 1 = 40.000; pajak (uji ini 11%) x 400.000 = 44.000.
     expect(afterSilver.revenue.membershipNet).toBe("500000.00");
-    expect(afterSilver.expenses.hppPackages).toBe("190000.00");
-    expect(afterSilver.expenses.sponsorBonus).toBe("40000.00");
-    expect(afterSilver.expenses.levelBonus).toBe("40000.00");
-    expect(afterSilver.expenses.tax).toBe("55000.00");
+    expect(afterSilver.revenue.membershipRecognized).toBe("400000.00");
+    expect(afterSilver.cogs.hppPackages).toBe("90000.00");
+    expect(afterSilver.opex.sponsorBonus).toBe("40000.00");
+    expect(afterSilver.opex.levelBonus).toBe("40000.00");
+    expect(afterSilver.incomeTax.amount).toBe("44000.00");
 
     await buy(buyer, "GOLD");
     const afterGold = await report(vip);
-    // Upgrade ke Gold membayar harga penuh Rp3.000.000.
+    // Upgrade ke Gold membayar harga penuh Rp3.000.000; saldo PPOB Gold 600.000 ditangguhkan => diakui 2.400.000.
     expect(afterGold.revenue.membershipNet).toBe("3500000.00");
-    expect(afterGold.revenue.total).toBe("3500000.00");
-    // Pengeluaran bertambah: HPP Gold 1.230.000, bonus sponsor 8% (240.000), bonus tingkat 1 8% (240.000), pajak 11% (330.000).
-    expect(afterGold.expenses.hppPackages).toBe("1420000.00");
-    expect(afterGold.expenses.sponsorBonus).toBe("280000.00");
-    expect(afterGold.expenses.levelBonus).toBe("280000.00");
-    expect(afterGold.expenses.tax).toBe("385000.00");
-    const added = 1_230_000 + 240_000 + 240_000 + 330_000;
-    expect(Number(afterGold.expenses.total) - Number(afterSilver.expenses.total)).toBe(added);
-    expect(Number(afterGold.operatingProfit) - Number(afterSilver.operatingProfit)).toBe(3_000_000 - added);
+    expect(afterGold.revenue.membershipRecognized).toBe("2800000.00");
+    expect(afterGold.revenue.total).toBe("2800000.00");
+    // Pengeluaran bertambah: HPP Gold 1.230.000 - saldo PPOB 600.000 = 630.000, bonus sponsor 8% (240.000),
+    // bonus tingkat 1 8% (240.000), pajak (uji ini 11%) x 2.400.000 = 264.000.
+    expect(afterGold.cogs.hppPackages).toBe("720000.00");
+    expect(afterGold.opex.sponsorBonus).toBe("280000.00");
+    expect(afterGold.opex.levelBonus).toBe("280000.00");
+    expect(afterGold.incomeTax.amount).toBe("308000.00");
+    const added = 630_000 + 240_000 + 240_000 + 264_000;
+    expect(Number(afterGold.totalExpenses) - Number(afterSilver.totalExpenses)).toBe(added);
+    expect(Number(afterGold.netProfit) - Number(afterSilver.netProfit)).toBe(2_400_000 - added);
   });
 
   it("upgrade yang membuat sponsor mencapai milestone reward menambah pengeluaran saat tercapai, walau belum dibayar", async () => {
@@ -120,15 +131,15 @@ describe.skipIf(!runIntegration)("Laba rugi: upgrade member memengaruhi pendapat
     expect(reward.amount.toFixed(2)).toBe("500000.00");
 
     const data = await report(vip);
-    expect(data.expenses.rewardAccrued).toBe("500000.00");
-    expect(data.expenses.rewardPaid).toBe("0.00");
+    expect(data.opex.rewardAccrued).toBe("500000.00");
+    expect(data.opex.rewardPaid).toBe("0.00");
     // Ditolak tidak dihitung; dibayar tetap dihitung sekali.
     await prisma.rewardTransaction.update({ where: { id: reward.id }, data: { status: "REJECTED" } });
-    expect((await report(vip)).expenses.rewardAccrued).toBe("0.00");
+    expect((await report(vip)).opex.rewardAccrued).toBe("0.00");
     await prisma.rewardTransaction.update({ where: { id: reward.id }, data: { status: "PAID", paidAt: new Date() } });
     const paid = await report(vip);
-    expect(paid.expenses.rewardAccrued).toBe("500000.00");
-    expect(paid.expenses.rewardPaid).toBe("500000.00");
+    expect(paid.opex.rewardAccrued).toBe("500000.00");
+    expect(paid.opex.rewardPaid).toBe("500000.00");
   });
 });
 

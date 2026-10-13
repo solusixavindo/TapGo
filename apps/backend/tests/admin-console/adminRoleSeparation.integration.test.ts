@@ -33,6 +33,10 @@ describe.skipIf(!runIntegration)("Admin role separation", () => {
     process.env.NODE_ENV = "test";
     // Biaya server dimatikan agar angka laporan tidak bergantung pada tanggal uji.
     process.env.PL_SERVER_COST_MONTHLY = "0";
+    // Uji ini mengukur logika pembukuan, bukan perlakuan pajak: tanpa PPN, pajak penghasilan 11% dari pendapatan.
+    process.env.PL_PPN_MODE = "NONE";
+    process.env.PL_INCOME_TAX_MODE = "FINAL_OMZET";
+    process.env.PL_FINAL_TAX_RATE_PERCENT = "11";
     process.env.DATABASE_URL = testDatabaseUrl;
     process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET ?? "test-access-secret-admin-role-separation";
     process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? "test-refresh-secret-admin-role-separation";
@@ -54,6 +58,9 @@ describe.skipIf(!runIntegration)("Admin role separation", () => {
 
   afterAll(async () => {
     delete process.env.PL_SERVER_COST_MONTHLY;
+    delete process.env.PL_PPN_MODE;
+    delete process.env.PL_INCOME_TAX_MODE;
+    delete process.env.PL_FINAL_TAX_RATE_PERCENT;
     await cleanDatabase();
     await new Promise<void>((resolve, reject) => {
       if (!server) return resolve();
@@ -236,16 +243,22 @@ describe.skipIf(!runIntegration)("Admin role separation", () => {
     expect(response.status).toBe(200);
     const data = ((await response.json()) as { data: any }).data;
     expect(data.revenue.membershipNet).toBe("500000.00");
+    // Saldo PPOB Silver Rp100.000 ditangguhkan (pendapatan diterima di muka): diakui Rp400.000.
+    expect(data.revenue.membershipDeferred).toBe("100000.00");
+    expect(data.revenue.membershipRecognized).toBe("400000.00");
     expect(data.revenue.rideCommission).toBe("8000.00");
-    expect(data.revenue.total).toBe("508000.00");
-    expect(data.expenses.sponsorBonus).toBe("40000.00");
-    expect(data.expenses.levelBonus).toBe("10000.00");
-    // Pajak 11% x pendapatan Rp508.000 = Rp55.880; server dimatikan pada uji ini.
-    expect(data.expenses.tax).toBe("55880.00");
-    expect(data.expenses.serverCost).toBe("0.00");
-    expect(data.expenses.total).toBe("105880.00");
-    expect(data.operatingProfit).toBe("402120.00");
-    expect(data.operatingMarginPercent).toBe("79.2");
+    expect(data.revenue.total).toBe("408000.00");
+    expect(data.opex.sponsorBonus).toBe("40000.00");
+    expect(data.opex.levelBonus).toBe("10000.00");
+    // Pajak (uji ini: 11% dari pendapatan) = Rp44.880; server dimatikan pada uji ini.
+    expect(data.incomeTax.amount).toBe("44880.00");
+    expect(data.opex.serverCost).toBe("0.00");
+    expect(data.totalExpenses).toBe("94880.00");
+    expect(data.grossProfit).toBe("408000.00");
+    expect(data.operatingProfit).toBe("358000.00");
+    expect(data.profitBeforeTax).toBe("358000.00");
+    expect(data.netProfit).toBe("313120.00");
+    expect(data.netMarginPercent).toBe("76.7");
     expect(Array.isArray(data.notes)).toBe(true);
     expect(data.notes.length).toBeGreaterThan(0);
   });
@@ -286,15 +299,19 @@ describe.skipIf(!runIntegration)("Admin role separation", () => {
     const data = ((await response.json()) as { data: any }).data;
 
     // 2 paket Platinum x Rp2.095.000; Silver belum diisi HPP-nya.
-    expect(data.expenses.hppPackages).toBe("4190000.00");
-    expect(data.revenue.total).toBe("11500000.00");
-    // Beban = HPP 4.190.000 + pajak 11% x 11.500.000 (1.265.000) = 5.455.000.
-    expect(data.expenses.tax).toBe("1265000.00");
-    expect(data.operatingProfit).toBe("6045000.00");
+    // HPP tanpa saldo PPOB (Rp1.000.000 per paket Platinum): 2 x (2.095.000 - 1.000.000).
+    expect(data.cogs.hppPackages).toBe("2190000.00");
+    // Penjualan 11.500.000 dikurangi saldo PPOB yang ditangguhkan (2 x 1.000.000 + 100.000 Silver) = 9.400.000.
+    expect(data.revenue.total).toBe("9400000.00");
+    // Pajak (uji ini: 11%) x 9.400.000 = 1.034.000; laba bersih = 9.400.000 - 2.190.000 - 1.034.000.
+    expect(data.incomeTax.amount).toBe("1034000.00");
+    expect(data.netProfit).toBe("6176000.00");
     const platinumRow = data.hpp.tiers.find((tier: any) => tier.tier === "PLATINUM");
     expect(platinumRow.units).toBe(2);
-    expect(platinumRow.unitCost).toBe("2095000.00");
-    expect(platinumRow.total).toBe("4190000.00");
+    expect(platinumRow.fullUnitCost).toBe("2095000.00");
+    expect(platinumRow.ppobBenefit).toBe("1000000.00");
+    expect(platinumRow.unitCost).toBe("1095000.00");
+    expect(platinumRow.total).toBe("2190000.00");
     expect(platinumRow.items).toHaveLength(2);
     expect(data.hpp.missingTiers).toEqual(["Silver"]);
     expect(data.notes.some((note: string) => note.includes("Silver") && note.includes("belum diisi"))).toBe(true);
@@ -383,7 +400,7 @@ describe.skipIf(!runIntegration)("Admin role separation", () => {
     }
 
     // Gateway: 18.315 + 2.000 + 7.000 + 1.400 (top-up) = 28.715
-    expect(data.expenses.gatewayFee).toBe("28715.00");
+    expect(data.opex.gatewayFee).toBe("28715.00");
     expect(data.operating.gateway.unknownCount).toBe(1);
     const byType = Object.fromEntries(data.operating.gateway.byMethod.map((row: any) => [row.type, row]));
     expect(byType.credit_card.fee).toBe("18315.00");
@@ -392,17 +409,17 @@ describe.skipIf(!runIntegration)("Admin role separation", () => {
 
     // PPOB: penjualan 2 x 21.500; modal hanya yang tercatat (20.074); 1 tanpa modal.
     expect(data.revenue.ppobSales).toBe("43000.00");
-    expect(data.expenses.ppobCost).toBe("20074.00");
+    expect(data.cogs.ppobCost).toBe("20074.00");
     expect(data.operating.ppob).toEqual({ successCount: 2, withoutCostCount: 1 });
 
     // Server: Rp1.500.000/bulan dibagi per hari, periode = dari akun pertama sampai sekarang.
     expect(data.operating.server.monthly).toBe(1_500_000);
-    expect(Number(data.expenses.serverCost)).toBeGreaterThan(0);
-    expect(Number(data.expenses.serverCost)).toBeLessThan(1_500_000 * 2);
+    expect(Number(data.opex.serverCost)).toBeGreaterThan(0);
+    expect(Number(data.opex.serverCost)).toBeLessThan(1_500_000 * 2);
 
-    // Pajak 11% dari total pendapatan (membership 1.900.000 + PPOB 43.000).
-    expect(data.revenue.total).toBe("1943000.00");
-    expect(data.expenses.tax).toBe("213730.00");
+    // Pendapatan: membership 1.900.000 dikurangi saldo PPOB ditangguhkan (4 x 100.000) + PPOB 43.000; pajak uji 11%.
+    expect(data.revenue.total).toBe("1543000.00");
+    expect(data.incomeTax.amount).toBe("169730.00");
     expect(data.notes.some((n: string) => n.includes("tanpa jenis pembayaran"))).toBe(true);
     expect(data.notes.some((n: string) => n.includes("tanpa harga modal"))).toBe(true);
   });

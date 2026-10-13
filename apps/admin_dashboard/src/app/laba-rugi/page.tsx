@@ -15,10 +15,10 @@ import ConsoleHeader from "../console-header";
 /**
  * Laba rugi manajemen — hanya Super Admin VIP.
  *
- * Angka dihitung dari data operasional sistem, bukan laporan keuangan
- * teraudit. Halaman ini sengaja menampilkan apa yang BELUM dihitung (biaya
- * gateway, harga modal PPOB, gaji, server, pajak) langsung di bawah angka
- * laba, supaya laba tidak terbaca lebih besar dari kenyataannya.
+ * Disusun mengikuti urutan laporan laba rugi menurut SAK Indonesia: pendapatan usaha (tanpa PPN), beban pokok
+ * pendapatan, laba kotor, beban usaha, laba usaha, laba sebelum pajak, beban pajak penghasilan, laba bersih.
+ * Angka dihitung dari data operasional sistem, bukan laporan keuangan teraudit; asumsi dan hal yang belum
+ * dihitung ditampilkan di panel catatan supaya laba tidak terbaca lebih besar dari kenyataannya.
  */
 
 type PresetId = "this-month" | "last-month" | "last-30" | "this-year";
@@ -199,12 +199,12 @@ export default function ProfitLossPage() {
         ) : (
           <>
             <div className="grid gap-4 md:grid-cols-3">
-              <Kpi label="Pendapatan" value={formatRupiah(report.revenue.total)} note={delta(report.revenue.total, report.previous?.totalRevenue)} />
-              <Kpi label="Beban (insentif + HPP)" value={formatRupiah(report.expenses.total)} note={delta(report.expenses.total, report.previous?.totalExpenses)} />
+              <Kpi label="Pendapatan usaha" value={formatRupiah(report.revenue.total)} note={delta(report.revenue.total, report.previous?.totalRevenue)} />
+              <Kpi label="Total beban (pokok + usaha + pajak)" value={formatRupiah(report.totalExpenses)} note={delta(report.totalExpenses, report.previous?.totalExpenses)} />
               <Kpi
-                label={`Laba operasional${report.operatingMarginPercent ? ` · margin ${report.operatingMarginPercent}%` : ""}`}
-                value={formatRupiah(report.operatingProfit)}
-                note={delta(report.operatingProfit, report.previous?.operatingProfit)}
+                label={`Laba bersih${report.netMarginPercent ? ` · margin ${report.netMarginPercent}%` : ""}`}
+                value={formatRupiah(report.netProfit)}
+                note={delta(report.netProfit, report.previous?.netProfit)}
                 tone="profit"
               />
             </div>
@@ -221,40 +221,51 @@ export default function ProfitLossPage() {
                 <tbody className="divide-y divide-slate-100">
                   <tr>
                     <td colSpan={3} className="bg-slate-50 px-5 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                      Pendapatan
+                      Pendapatan usaha (tanpa PPN)
                     </td>
                   </tr>
                   <Line label="Penjualan membership" value={report.revenue.membershipSales} revenue={revenueTotal} indent />
                   <Line label="Pengembalian dana membership" value={report.revenue.membershipRefunds} revenue={revenueTotal} indent negative />
+                  <Line label="Saldo PPOB manfaat paket (pendapatan diterima di muka, diakui saat dipakai)" value={report.revenue.membershipDeferred} revenue={revenueTotal} indent negative />
                   <Line label="Komisi platform ojek (TapGoPay)" value={report.revenue.rideCommission} revenue={revenueTotal} indent />
-                  <Line label="Penjualan PPOB" value={report.revenue.ppobSales} revenue={revenueTotal} indent />
-                  <Line label="Total pendapatan" value={report.revenue.total} revenue={revenueTotal} bold />
+                  <Line label="Penjualan PPOB prabayar (bruto)" value={report.revenue.ppobPrepaid} revenue={revenueTotal} indent />
+                  <Line label="Biaya layanan tagihan pascabayar (neto)" value={report.revenue.ppobPostpaidFee} revenue={revenueTotal} indent />
+                  <Line label="Total pendapatan usaha" value={report.revenue.total} revenue={revenueTotal} bold />
                   <tr>
                     <td colSpan={3} className="bg-slate-50 px-5 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                      Beban
+                      Beban pokok pendapatan
                     </td>
                   </tr>
+                  <Line label="HPP paket membership (perlengkapan dan BPJS, tanpa saldo PPOB)" value={report.cogs.hppPackages} revenue={revenueTotal} indent negative />
+                  <Line label="Harga pokok PPOB prabayar (Digiflazz)" value={report.cogs.ppobCost} revenue={revenueTotal} indent negative />
+                  <Line label="Total beban pokok pendapatan" value={report.cogs.total} revenue={revenueTotal} bold negative />
+                  <Line label="Laba kotor" value={report.grossProfit} revenue={revenueTotal} bold />
                   <tr>
-                    <td colSpan={3} className="px-5 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                      Biaya langsung
+                    <td colSpan={3} className="bg-slate-50 px-5 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                      Beban usaha
                     </td>
                   </tr>
-                  <Line label="Bonus referral" value={report.expenses.sponsorBonus} revenue={revenueTotal} indent negative />
-                  <Line label="Bonus tingkat" value={report.expenses.levelBonus} revenue={revenueTotal} indent negative />
-                  <Line label="Reward milestone (saat tercapai)" value={report.expenses.rewardAccrued} revenue={revenueTotal} indent negative />
-                  <Line label="Bagi hasil dibayar" value={report.expenses.profitSharing} revenue={revenueTotal} indent negative />
-                  <Line label="HPP paket membership (perlengkapan, BPJS, saldo PPOB)" value={report.expenses.hppPackages} revenue={revenueTotal} indent negative />
-                  <Line label="Harga modal PPOB (Digiflazz)" value={report.expenses.ppobCost} revenue={revenueTotal} indent negative />
-                  <tr>
-                    <td colSpan={3} className="px-5 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                      Biaya operasional
-                    </td>
-                  </tr>
-                  <Line label="Biaya gateway pembayaran (Midtrans)" value={report.expenses.gatewayFee} revenue={revenueTotal} indent negative />
-                  <Line label="Server" value={report.expenses.serverCost} revenue={revenueTotal} indent negative />
-                  <Line label={`Pajak (${report.operating.taxRatePercent}% dari pendapatan)`} value={report.expenses.tax} revenue={revenueTotal} indent negative />
-                  <Line label="Total beban" value={report.expenses.total} revenue={revenueTotal} bold negative />
-                  <Line label="Laba operasional" value={report.operatingProfit} revenue={revenueTotal} bold />
+                  <Line label="Bonus referral (sponsor)" value={report.opex.sponsorBonus} revenue={revenueTotal} indent negative />
+                  <Line label="Bonus tingkat" value={report.opex.levelBonus} revenue={revenueTotal} indent negative />
+                  <Line label="Reward milestone (saat tercapai)" value={report.opex.rewardAccrued} revenue={revenueTotal} indent negative />
+                  <Line label="Bagi hasil dibayar" value={report.opex.profitSharing} revenue={revenueTotal} indent negative />
+                  <Line label="Biaya gateway pembayaran (Midtrans)" value={report.opex.gatewayFee} revenue={revenueTotal} indent negative />
+                  <Line label="Server" value={report.opex.serverCost} revenue={revenueTotal} indent negative />
+                  <Line label="Total beban usaha" value={report.opex.total} revenue={revenueTotal} bold negative />
+                  <Line label="Laba usaha" value={report.operatingProfit} revenue={revenueTotal} bold />
+                  <Line label="Laba sebelum pajak" value={report.profitBeforeTax} revenue={revenueTotal} bold />
+                  <Line
+                    label={report.incomeTax.mode === "FINAL_OMZET"
+                      ? `Beban pajak penghasilan (PPh final ${report.incomeTax.ratePercent}% dari pendapatan)`
+                      : report.incomeTax.mode === "CORPORATE"
+                        ? `Beban pajak penghasilan (PPh badan ${report.incomeTax.ratePercent}% dari laba sebelum pajak)`
+                        : "Beban pajak penghasilan (belum dihitung)"}
+                    value={report.incomeTax.amount}
+                    revenue={revenueTotal}
+                    indent
+                    negative
+                  />
+                  <Line label="Laba bersih" value={report.netProfit} revenue={revenueTotal} bold />
                 </tbody>
               </table>
             </div>
@@ -312,7 +323,16 @@ export default function ProfitLossPage() {
                   </div>
                   <div>
                     <dt className="font-bold">Pajak</dt>
-                    <dd className="mt-1 text-slate-600">{report.operating.taxRatePercent}% dari total pendapatan.</dd>
+                    <dd className="mt-1 text-slate-600">
+                      {report.incomeTax.mode === "FINAL_OMZET"
+                        ? `PPh final ${report.incomeTax.ratePercent}% dari pendapatan bruto tanpa PPN.`
+                        : report.incomeTax.mode === "CORPORATE"
+                          ? `PPh badan ${report.incomeTax.ratePercent}% dari laba sebelum pajak (nol bila rugi).`
+                          : "Pajak penghasilan belum dihitung."}
+                      {report.assumptions.ppnInclusive
+                        ? ` Harga jual sudah termasuk PPN ${report.assumptions.ppnRatePercent}%; PPN dikeluarkan dari pendapatan.`
+                        : " PPN tidak diperhitungkan."}
+                    </dd>
                   </div>
                 </dl>
               </div>
@@ -328,6 +348,7 @@ export default function ProfitLossPage() {
                       <div key={tier.tier}>
                         <p className="text-sm font-bold">
                           {tier.name} · {tier.units} paket terjual × {formatRupiah(tier.unitCost)} = {formatRupiah(tier.total)}
+                          {Number(tier.ppobBenefit) > 0 ? ` (HPP penuh ${formatRupiah(tier.fullUnitCost)} dikurangi saldo PPOB ${formatRupiah(tier.ppobBenefit)} yang ditangguhkan)` : ""}
                         </p>
                         <table className="mt-2 w-full text-left text-sm">
                           <thead className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
@@ -374,6 +395,10 @@ export default function ProfitLossPage() {
                   <div className="flex justify-between gap-4">
                     <dt className="text-slate-600">Penarikan menunggu/disetujui</dt>
                     <dd className="font-bold tabular-nums">{formatRupiah(report.memo.withdrawalsOutstanding)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-slate-600">PPN keluaran atas penjualan (kewajiban ke negara)</dt>
+                    <dd className="font-bold tabular-nums">{formatRupiah(report.memo.ppnOutput)}</dd>
                   </div>
                   <div className="flex justify-between gap-4">
                     <dt className="text-slate-600">Penjualan kotor PPOB (info)</dt>

@@ -25,6 +25,10 @@ describe.skipIf(!runIntegration)("Laporan laba rugi: ketepatan hitungan", () => 
     }
     process.env.NODE_ENV = "test";
     process.env.PL_SERVER_COST_MONTHLY = "0";
+    // Uji ini mengukur logika pembukuan, bukan perlakuan pajak: tanpa PPN, pajak penghasilan 11% dari pendapatan.
+    process.env.PL_PPN_MODE = "NONE";
+    process.env.PL_INCOME_TAX_MODE = "FINAL_OMZET";
+    process.env.PL_FINAL_TAX_RATE_PERCENT = "11";
     process.env.DATABASE_URL = testDatabaseUrl;
     process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET ?? "test-access-secret-profit-loss-accuracy";
     process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? "test-refresh-secret-profit-loss-accuracy";
@@ -45,6 +49,9 @@ describe.skipIf(!runIntegration)("Laporan laba rugi: ketepatan hitungan", () => 
 
   afterAll(async () => {
     delete process.env.PL_SERVER_COST_MONTHLY;
+    delete process.env.PL_PPN_MODE;
+    delete process.env.PL_INCOME_TAX_MODE;
+    delete process.env.PL_FINAL_TAX_RATE_PERCENT;
     await cleanDatabase();
     await new Promise<void>((resolve, reject) => {
       if (!server) return resolve();
@@ -68,9 +75,11 @@ describe.skipIf(!runIntegration)("Laporan laba rugi: ketepatan hitungan", () => 
     expect(data.revenue.membershipSales).toBe("1000000.00");
     expect(data.revenue.membershipRefunds).toBe("500000.00");
     expect(data.revenue.membershipNet).toBe("500000.00");
-    expect(data.revenue.total).toBe("500000.00");
-    // Pajak 11% x 500.000 = 55.000; laba = 500.000 - 55.000.
-    expect(data.operatingProfit).toBe("445000.00");
+    // Saldo PPOB Silver Rp100.000 ditangguhkan: diakui 400.000.
+    expect(data.revenue.membershipRecognized).toBe("400000.00");
+    expect(data.revenue.total).toBe("400000.00");
+    // Pajak (uji ini 11%) x 400.000 = 44.000; laba bersih = 400.000 - 44.000.
+    expect(data.netProfit).toBe("356000.00");
   });
 
   it("penjualan dicatat pada tanggal dibayar, bukan tanggal invoice dibuat", async () => {
@@ -110,7 +119,7 @@ describe.skipIf(!runIntegration)("Laporan laba rugi: ketepatan hitungan", () => 
 
     const data = await report(vip);
     // Dihitung: 2 pembayaran membership Midtrans (PAID + REFUNDED) + 1 top up tanpa penanda = 3 x Rp4.440.
-    expect(data.expenses.gatewayFee).toBe("13320.00");
+    expect(data.opex.gatewayFee).toBe("13320.00");
     expect(data.operating.gateway.byMethod).toEqual([{ type: "bank_transfer", count: 3, gross: "1050000.00", fee: "13320.00" }]);
   });
 });

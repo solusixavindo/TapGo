@@ -801,27 +801,41 @@ export function actOnWithdrawal(id: string, action: "approve" | "reject" | "paid
 
 export type ProfitLossReport = {
   period: { from?: string | null; to?: string | null; dateFrom?: string | null; dateTo?: string | null } | null;
+  /** Pendapatan usaha, tanpa PPN. */
   revenue: {
     membershipSales: string;
     membershipRefunds: string;
     membershipNet: string;
+    /** Saldo PPOB manfaat paket: pendapatan diterima di muka, diakui saat dipakai. */
+    membershipDeferred: string;
+    membershipRecognized: string;
     rideCommission: string;
+    ppobPrepaid: string;
+    ppobPostpaidFee: string;
     ppobSales: string;
     total: string;
   };
-  expenses: {
+  cogs: { hppPackages: string; ppobCost: string; total: string };
+  grossProfit: string;
+  opex: {
     sponsorBonus: string;
     levelBonus: string;
     rewardAccrued: string;
     rewardPaid: string;
     profitSharing: string;
-    hppPackages: string;
     gatewayFee: string;
-    ppobCost: string;
     serverCost: string;
-    tax: string;
     total: string;
   };
+  operatingProfit: string;
+  profitBeforeTax: string;
+  incomeTax: { mode: "FINAL_OMZET" | "CORPORATE" | "NONE"; ratePercent: number; amount: string };
+  netProfit: string;
+  totalExpenses: string;
+  grossMarginPercent: string | null;
+  operatingMarginPercent: string | null;
+  netMarginPercent: string | null;
+  assumptions: { ppnInclusive: boolean; ppnRatePercent: number };
   operating: {
     gateway: {
       byMethod: Array<{ type: string; count: number; gross: string; fee: string }>;
@@ -829,24 +843,25 @@ export type ProfitLossReport = {
     };
     ppob: { successCount: number; withoutCostCount: number };
     server: { monthly: number; days: number };
-    taxRatePercent: number;
   };
   hpp: {
     tiers: Array<{
       tier: string;
       name: string;
       units: number;
+      /** HPP per paket yang diakui sebagai beban pokok (tanpa saldo PPOB). */
       unitCost: string;
+      fullUnitCost: string;
+      ppobBenefit: string;
       total: string;
       items: Array<{ name: string; quantity: number; unit: string; cost: number }> | null;
     }>;
     missingTiers: string[];
   };
-  operatingProfit: string;
-  operatingMarginPercent: string | null;
-  previous: { totalRevenue: string; totalExpenses: string; operatingProfit: string } | null;
+  previous: { totalRevenue: string; totalExpenses: string; netProfit: string } | null;
   memo: {
     ppobGrossSales: string;
+    ppnOutput: string;
     walletLiabilityWallet: string;
     walletLiabilityCash: string;
     walletLiabilityPpob: string;

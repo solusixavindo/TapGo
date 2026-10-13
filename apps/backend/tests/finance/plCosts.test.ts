@@ -49,22 +49,46 @@ describe("Biaya server bulanan dibagi per hari (WIB)", () => {
   });
 });
 
-describe("Asumsi biaya operasional", () => {
-  it("bawaan: server Rp1.500.000/bulan dan pajak 11%; nilai env tak valid diabaikan", () => {
-    const saved = { s: process.env.PL_SERVER_COST_MONTHLY, t: process.env.PL_TAX_RATE_PERCENT };
+describe("Asumsi laporan laba rugi", () => {
+  const KEYS = [
+    "PL_SERVER_COST_MONTHLY",
+    "PL_PPN_MODE",
+    "PL_PPN_RATE_PERCENT",
+    "PL_INCOME_TAX_MODE",
+    "PL_FINAL_TAX_RATE_PERCENT",
+    "PL_CORPORATE_TAX_RATE_PERCENT"
+  ] as const;
+
+  it("bawaan: server Rp1.500.000/bulan, PKP harga termasuk PPN 11%, PPh final 0,5% dari omzet; nilai env tak valid diabaikan", () => {
+    const saved = Object.fromEntries(KEYS.map((key) => [key, process.env[key]]));
     try {
-      delete process.env.PL_SERVER_COST_MONTHLY;
-      delete process.env.PL_TAX_RATE_PERCENT;
-      expect(plConfig()).toEqual({ serverCostMonthly: 1_500_000, taxRatePercent: 11 });
+      for (const key of KEYS) delete process.env[key];
+      const defaults = {
+        serverCostMonthly: 1_500_000,
+        ppnMode: "INCLUSIVE",
+        ppnRatePercent: 11,
+        incomeTaxMode: "FINAL_OMZET",
+        finalTaxRatePercent: 0.5,
+        corporateTaxRatePercent: 22
+      };
+      expect(plConfig()).toEqual(defaults);
+
       process.env.PL_SERVER_COST_MONTHLY = "abc";
-      process.env.PL_TAX_RATE_PERCENT = "-5";
-      expect(plConfig()).toEqual({ serverCostMonthly: 1_500_000, taxRatePercent: 11 });
+      process.env.PL_PPN_RATE_PERCENT = "-5";
+      process.env.PL_INCOME_TAX_MODE = "ngawur";
+      process.env.PL_FINAL_TAX_RATE_PERCENT = "x";
+      expect(plConfig()).toEqual(defaults);
+
       process.env.PL_SERVER_COST_MONTHLY = "2000000";
-      process.env.PL_TAX_RATE_PERCENT = "10";
-      expect(plConfig()).toEqual({ serverCostMonthly: 2_000_000, taxRatePercent: 10 });
+      process.env.PL_PPN_MODE = "none";
+      process.env.PL_INCOME_TAX_MODE = "corporate";
+      process.env.PL_CORPORATE_TAX_RATE_PERCENT = "25";
+      expect(plConfig()).toEqual({ ...defaults, serverCostMonthly: 2_000_000, ppnMode: "NONE", incomeTaxMode: "CORPORATE", corporateTaxRatePercent: 25 });
     } finally {
-      if (saved.s === undefined) delete process.env.PL_SERVER_COST_MONTHLY; else process.env.PL_SERVER_COST_MONTHLY = saved.s;
-      if (saved.t === undefined) delete process.env.PL_TAX_RATE_PERCENT; else process.env.PL_TAX_RATE_PERCENT = saved.t;
+      for (const key of KEYS) {
+        const value = saved[key];
+        if (value === undefined) delete process.env[key]; else process.env[key] = value;
+      }
     }
   });
 });
