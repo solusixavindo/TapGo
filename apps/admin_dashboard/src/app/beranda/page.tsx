@@ -30,6 +30,7 @@ import {
   roleAtLeast
 } from "../../lib/api";
 import ConsoleHeader from "../console-header";
+import VipInsightsView from "./vip-insights";
 
 const ACTIVITY_LABEL: Record<string, string> = {
   ADMIN_ROLE_ASSIGNED: "Mengubah role admin",
@@ -148,9 +149,11 @@ export default function BerandaPage() {
     };
   }, [router, refresh]);
 
+  const isVip = roleAtLeast(role, "SUPER_ADMIN_VIP");
+
   return (
-    <main className="min-h-screen bg-slate-100 p-6 text-slate-950">
-      <div className="mx-auto max-w-6xl">
+    <main className="min-h-screen bg-slate-100 p-4 text-slate-950 sm:p-6">
+      <div className={`mx-auto ${isVip ? "max-w-7xl" : "max-w-6xl"}`}>
         <ConsoleHeader
           title="Beranda"
           subtitle={roleAtLeast(role, "SUPER_ADMIN") ? "Ringkasan pendaftaran, aktivitas, dan keuangan TapGo — angka utama diperbarui otomatis tiap 10 detik" : "Ringkasan pendaftaran dan antrean kerja TapGo — angka utama diperbarui otomatis tiap 10 detik"}
@@ -174,6 +177,9 @@ export default function BerandaPage() {
           <p className="text-sm text-slate-500">Memuat…</p>
         ) : (
           <>
+            {isVip ? <VipInsightsView /> : null}
+
+            {!isVip ? (
             <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
               <KpiCard href="/members" label="Total member" value={String(summary?.totalMembers ?? 0)} />
               <KpiCard
@@ -197,6 +203,7 @@ export default function BerandaPage() {
                 )}
               />
             </section>
+            ) : null}
 
             {growth && growth.pendingApprovals.total > 0 ? (
               <section className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
@@ -246,6 +253,7 @@ export default function BerandaPage() {
               </section>
             ) : null}
 
+            {!isVip ? (
             <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
               <h2 className="text-sm font-bold text-slate-700">Tren pendaftaran 30 hari</h2>
               <div className="mt-4 h-64">
@@ -268,6 +276,7 @@ export default function BerandaPage() {
                 </ResponsiveContainer>
               </div>
             </section>
+            ) : null}
 
             {roleAtLeast(role, "SUPER_ADMIN") ? (
             <section className="mt-6">

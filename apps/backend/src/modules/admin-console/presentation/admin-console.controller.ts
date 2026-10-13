@@ -1,7 +1,10 @@
 import { Request, Response } from "express";
+import { StatusCodes } from "http-status-codes";
 import { env } from "../../../config/env.js";
+import { AppError } from "../../../core/errors/AppError.js";
 import { roleSatisfies } from "../../../core/security/roleHierarchy.js";
 import { AdminConsoleService } from "../application/AdminConsoleService.js";
+import { AdminInsightsService } from "../application/AdminInsightsService.js";
 import { WalletService } from "../../wallets/application/WalletService.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
 import { AdminRoleService } from "../application/AdminRoleService.js";
@@ -36,8 +39,21 @@ export class AdminConsoleController {
     private readonly adminRoleService: AdminRoleService,
     private readonly membershipRefundService: MembershipRefundService,
     private readonly systemHealthService: SystemHealthService,
-    private readonly errorMonitoringService: ErrorMonitoringService
+    private readonly errorMonitoringService: ErrorMonitoringService,
+    private readonly insightsService: AdminInsightsService
   ) {}
+
+  /** Wawasan Beranda VIP. Tanpa rentang: 30 hari terakhir. */
+  insights = async (req: Request, res: Response) => {
+    const { dateFrom, dateTo } = this.dateRange(req);
+    const to = dateTo ?? new Date();
+    const from = dateFrom ?? new Date(to.getTime() - 30 * 86_400_000);
+    if (from.getTime() > to.getTime()) {
+      throw new AppError("Rentang tanggal tidak valid", StatusCodes.BAD_REQUEST, "INVALID_DATE_RANGE");
+    }
+    const result = await this.insightsService.vipInsights({ from, to });
+    res.json({ success: true, data: result });
+  };
 
   summary = async (_req: Request, res: Response) => {
     const result = await this.adminConsoleService.dashboardSummary();

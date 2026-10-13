@@ -8,6 +8,7 @@ import { requireAuth, requireRoles } from "../../../core/security/authContext.js
 import { maskForOperator } from "../../../core/security/adminMasking.js";
 import { adminManualTopUpRouter } from "../../wallets/presentation/manual-topup.routes.js";
 import { AdminConsoleService } from "../application/AdminConsoleService.js";
+import { AdminInsightsService } from "../application/AdminInsightsService.js";
 import { SystemHealthService } from "../application/SystemHealthService.js";
 import { ErrorMonitoringService } from "../application/ErrorMonitoringService.js";
 import { AdminConsoleController } from "./admin-console.controller.js";
@@ -42,6 +43,7 @@ import {
   adminOnlinePaymentQuerySchema,
   adminDigiflazzBalanceQuerySchema,
   adminDigiflazzTransactionQuerySchema,
+  adminInsightsQuerySchema,
   adminPaymentQuerySchema,
   adminReportQuerySchema,
   adminRewardActionSchema,
@@ -70,6 +72,12 @@ const errorMonitoringService = new ErrorMonitoringService({
     user_app: env.SENTRY_PROJECT_SLUG_USER_APP
   }
 });
+const insightsService = new AdminInsightsService(prisma, {
+  digiflazz: async () => {
+    const overview = await service.digiflazzBalanceOverview();
+    return { level: overview.level, balance: overview.provider.balance };
+  }
+});
 const controller = new AdminConsoleController(
   service,
   walletService,
@@ -77,7 +85,8 @@ const controller = new AdminConsoleController(
   adminRoleService,
   membershipRefundService,
   systemHealthService,
-  errorMonitoringService
+  errorMonitoringService,
+  insightsService
 );
 const documentController = new MembershipDocumentController(
   new MembershipDocumentService(prisma)
@@ -101,6 +110,12 @@ adminConsoleRouter.get(
 // Aktivitas ini mengungkap siapa memegang/mengubah otoritas admin — gerbang
 // yang sama dengan /roles (VIP saja), bukan ADMIN+ seperti endpoint dashboard
 // lain.
+adminConsoleRouter.get(
+  "/dashboard/insights",
+  requireRoles("SUPER_ADMIN_VIP"),
+  validateRequest(adminInsightsQuerySchema),
+  asyncHandler(controller.insights)
+);
 adminConsoleRouter.get(
   "/dashboard/activity",
   requireRoles("SUPER_ADMIN_VIP"),

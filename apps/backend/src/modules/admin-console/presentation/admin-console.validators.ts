@@ -66,6 +66,13 @@ export const adminDigiflazzTransactionQuerySchema = z.object({
   })
 });
 
+export const adminInsightsQuerySchema = z.object({
+  query: z.object({
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional()
+  })
+});
+
 export const adminDigiflazzBalanceQuerySchema = z.object({
   query: z.object({
     refresh: z.enum(["1", "true"]).optional()

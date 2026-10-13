@@ -38,9 +38,12 @@ type Props = {
   /** Tampilkan tab "Semua" (seluruh waktu). Laporan yang membandingkan dengan periode sebelumnya tidak memakainya. */
   allowAll?: boolean;
   disabled?: boolean;
+  /** `dark` untuk di atas latar navy (Beranda VIP): tab terpilih berwarna emas supaya tetap terlihat. */
+  tone?: "light" | "dark";
 };
 
-export default function PeriodFilter({ value, onChange, allowAll = false, disabled = false }: Props) {
+export default function PeriodFilter({ value, onChange, allowAll = false, disabled = false, tone = "light" }: Props) {
+  const dark = tone === "dark";
   // Label dan batas tanggal bergantung pada jam peramban; jangan dirender di HTML statis (hasil build) supaya
   // tidak berbeda dengan render pertama di peramban.
   const [mounted, setMounted] = useState(false);
@@ -66,7 +69,13 @@ export default function PeriodFilter({ value, onChange, allowAll = false, disabl
             onClick={() => onChange(mode.id === value.mode ? value : defaultPeriod(mode.id))}
             className={[
               "rounded-lg px-3.5 py-1.5 text-sm font-bold transition disabled:opacity-50",
-              value.mode === mode.id ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-200"
+              value.mode === mode.id
+                ? dark
+                  ? "bg-brand-gold text-brand-navy"
+                  : "bg-brand-navy text-white"
+                : dark
+                  ? "bg-white/10 text-slate-200 hover:bg-white/20"
+                  : "bg-white text-slate-600 hover:bg-slate-200"
             ].join(" ")}
           >
             {mode.label}
@@ -75,7 +84,7 @@ export default function PeriodFilter({ value, onChange, allowAll = false, disabl
       </div>
 
       {isAll ? (
-        <p className="text-sm font-semibold text-slate-600">Seluruh data sejak awal</p>
+        <p className={`text-sm font-semibold ${dark ? "text-slate-200" : "text-slate-600"}`}>Seluruh data sejak awal</p>
       ) : (
         <div className="flex flex-wrap items-center gap-1.5">
           <button
@@ -83,11 +92,11 @@ export default function PeriodFilter({ value, onChange, allowAll = false, disabl
             aria-label="Periode sebelumnya"
             disabled={disabled}
             onClick={() => onChange({ mode: value.mode, anchor: shiftAnchor(value.mode, value.anchor, -1) })}
-            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className={dark ? "rounded-lg border border-white/20 bg-white/5 px-2.5 py-1.5 text-sm font-bold text-white hover:bg-white/15 disabled:opacity-50" : "rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"}
           >
             ‹
           </button>
-          <p className="min-w-[10rem] px-1 text-center text-sm font-bold text-slate-900" data-testid="period-label" aria-live="polite">
+          <p className={`min-w-[10rem] px-1 text-center text-sm font-bold ${dark ? "text-white" : "text-slate-900"}`} data-testid="period-label" aria-live="polite">
             {periodLabel(value.mode, value.anchor)}
           </p>
           <button
@@ -95,7 +104,7 @@ export default function PeriodFilter({ value, onChange, allowAll = false, disabl
             aria-label="Periode berikutnya"
             disabled={disabled || atCurrent}
             onClick={() => onChange({ mode: value.mode, anchor: shiftAnchor(value.mode, value.anchor, 1) })}
-            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+            className={dark ? "rounded-lg border border-white/20 bg-white/5 px-2.5 py-1.5 text-sm font-bold text-white hover:bg-white/15 disabled:opacity-30" : "rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40"}
           >
             ›
           </button>
@@ -109,14 +118,14 @@ export default function PeriodFilter({ value, onChange, allowAll = false, disabl
               const anchor = fromDateInputValue(event.target.value);
               if (anchor !== null) onChange({ mode: value.mode, anchor });
             }}
-            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 disabled:opacity-50"
+            className={dark ? "rounded-lg border border-white/20 bg-white/10 px-2.5 py-1.5 text-sm text-white [color-scheme:dark] disabled:opacity-50" : "rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 disabled:opacity-50"}
           />
           {!atCurrent ? (
             <button
               type="button"
               disabled={disabled}
               onClick={() => onChange(defaultPeriod(value.mode))}
-              className="rounded-lg px-2.5 py-1.5 text-sm font-bold text-brand-blue hover:underline disabled:opacity-50"
+              className={`rounded-lg px-2.5 py-1.5 text-sm font-bold hover:underline disabled:opacity-50 ${dark ? "text-brand-gold" : "text-brand-blue"}`}
             >
               {CURRENT_LABEL[value.mode]}
             </button>

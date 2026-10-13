@@ -1090,6 +1090,73 @@ export function listDigiflazzTransactions(params: {
   return request<DigiflazzTxList>(`/admin/ppob/transactions?${query.toString()}`);
 }
 
+// --- Wawasan Beranda Super Admin VIP --------------------------------------------------------
+
+export type RegionCount = { name: string; count: number };
+export type RegionTally = { total: number; unreadable: number; cities: RegionCount[]; provinces: RegionCount[] };
+export type InsightDriverCard = { name: string; average: number; count: number };
+
+export type VipInsights = {
+  period: { from: string; to: string; bucket: "hour" | "day" | "month"; labels: string[] };
+  totals: {
+    members: number;
+    drivers: number;
+    driversActive: number;
+    driversOnline: number;
+    registrations: { current: number; previous: number };
+    revenue: { current: number; previous: number };
+    ridesCompleted: { current: number; previous: number };
+    rating: { average: number | null; count: number };
+  };
+  series: {
+    registrations: { members: number[]; drivers: number[] };
+    revenue: { membership: number[]; ppobMargin: number[]; rideCommission: number[] };
+    rides: { total: number[]; completed: number[] };
+  };
+  revenueBreakdown: { membership: number; ppobSales: number; ppobMargin: number; ppobWithoutCost: number; rideCommission: number };
+  composition: {
+    tiers: Array<{ tier: string; count: number }>;
+    signupSources: { play: number; other: number; unknown: number };
+    rideStatus: Array<{ status: string; count: number }>;
+    rideServices: Array<{ type: string; count: number }>;
+    driverStatus: Array<{ status: string; count: number }>;
+  };
+  rides: { total: number; completed: number; cancelled: number; completionRate: number | null; heatmap: number[][] };
+  regions: { members: RegionTally; drivers: RegionTally; pickups: RegionTally };
+  driverAges: {
+    buckets: Array<{ label: string; count: number }>;
+    counted: number;
+    unknown: number;
+    average: number | null;
+    youngest: number | null;
+    oldest: number | null;
+  };
+  ratings: {
+    periodAverage: number | null;
+    periodCount: number;
+    distribution: Array<{ stars: number; count: number }>;
+    topDrivers: InsightDriverCard[];
+    attentionDrivers: InsightDriverCard[];
+    recent: Array<{ stars: number; note: string | null; createdAt: string; driverName: string; passengerName: string; service: string }>;
+  };
+  attention: {
+    stuckPpob: number;
+    withdrawalsPending: number;
+    withdrawalsPendingAmount: number;
+    memberRequestsAwaiting: number;
+    driverApplicationsPending: number;
+    overdueOnlinePayments: number;
+    openSupportTickets: number;
+    lowRatingsThisWeek: number;
+    digiflazz: { level: string; balance: number | null } | null;
+  };
+  notes: string[];
+};
+
+export function getVipInsights(range?: PeriodQuery) {
+  return request<VipInsights>(`/admin/dashboard/insights${periodSuffix(range)}`);
+}
+
 export type ManualTopUpStatus = "PENDING" | "PAID" | "CANCELLED";
 
 /** WALLET = Saldo TapGo (driver, perjalanan); PPOB = Saldo PPOB (tidak dapat ditarik). */
