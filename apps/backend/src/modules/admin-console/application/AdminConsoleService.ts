@@ -968,6 +968,7 @@ export class AdminConsoleService {
           ? [`HPP paket ${current.hpp.missingTiers.join(", ")} belum diisi, jadi belum dihitung sebagai beban.`]
           : []),
         "Penjualan membership dan HPP paket dicatat pada tanggal pembayaran. Pembayaran yang dikembalikan tetap tampil sebagai penjualan lalu dikurangi pada baris pengembalian dana.",
+        "Reward milestone dihitung saat milestone tercapai (status menunggu, disetujui, atau dibayar); yang ditolak tidak dihitung.",
         "HPP paket dicatat saat paket terjual, termasuk saldo PPOB yang diberikan sebagai manfaat.",
         "Biaya gateway dihitung dari tarif publik Midtrans per metode (belum termasuk potongan lain di kontrak Anda). Pembayaran dengan jenis tidak dikenal tidak dihitung.",
         ...(current.operating.gateway.unknownCount > 0
@@ -1127,6 +1128,11 @@ export class AdminConsoleService {
     const sponsorBonus = new Prisma.Decimal(sponsor._sum.amount ?? 0);
     const levelBonus = new Prisma.Decimal(level._sum.amount ?? 0);
     const rewardPaid = new Prisma.Decimal(reward.totalPaid ?? 0);
+    // Reward milestone adalah kewajiban yang lahir saat milestone tercapai (mis. upgrade member membuat sponsor
+    // mencapai 10 Silver langsung), bukan saat admin membayarnya. Yang REJECTED tidak dihitung.
+    const rewardAccrued = rewardPaid
+      .plus(new Prisma.Decimal(reward.totalApproved ?? 0))
+      .plus(new Prisma.Decimal(reward.totalPending ?? 0));
     const profitSharingPaid = new Prisma.Decimal(profitSharing.totalPaid ?? 0);
     // Biaya operasional: server (tetap per bulan, dibagi per hari) dan pajak
     // (persentase dari total pendapatan) — asumsi bisa diubah lewat environment.
@@ -1140,7 +1146,7 @@ export class AdminConsoleService {
       : new Prisma.Decimal(0);
     const totalExpenses = sponsorBonus
       .plus(levelBonus)
-      .plus(rewardPaid)
+      .plus(rewardAccrued)
       .plus(profitSharingPaid)
       .plus(hppTotal)
       .plus(gatewayTotal)
@@ -1165,6 +1171,7 @@ export class AdminConsoleService {
       expenses: {
         sponsorBonus: sponsorBonus.toFixed(2),
         levelBonus: levelBonus.toFixed(2),
+        rewardAccrued: rewardAccrued.toFixed(2),
         rewardPaid: rewardPaid.toFixed(2),
         profitSharing: profitSharingPaid.toFixed(2),
         hppPackages: hppTotal.toFixed(2),

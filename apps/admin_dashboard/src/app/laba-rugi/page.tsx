@@ -241,7 +241,7 @@ export default function ProfitLossPage() {
                   </tr>
                   <Line label="Bonus referral" value={report.expenses.sponsorBonus} revenue={revenueTotal} indent negative />
                   <Line label="Bonus tingkat" value={report.expenses.levelBonus} revenue={revenueTotal} indent negative />
-                  <Line label="Reward dibayar" value={report.expenses.rewardPaid} revenue={revenueTotal} indent negative />
+                  <Line label="Reward milestone (saat tercapai)" value={report.expenses.rewardAccrued} revenue={revenueTotal} indent negative />
                   <Line label="Bagi hasil dibayar" value={report.expenses.profitSharing} revenue={revenueTotal} indent negative />
                   <Line label="HPP paket membership (perlengkapan, BPJS, saldo PPOB)" value={report.expenses.hppPackages} revenue={revenueTotal} indent negative />
                   <Line label="Harga modal PPOB (Digiflazz)" value={report.expenses.ppobCost} revenue={revenueTotal} indent negative />

@@ -812,6 +812,7 @@ export type ProfitLossReport = {
   expenses: {
     sponsorBonus: string;
     levelBonus: string;
+    rewardAccrued: string;
     rewardPaid: string;
     profitSharing: string;
     hppPackages: string;
