@@ -239,6 +239,8 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('bill-check')));
       await tester.pumpAndSettle();
       expect(find.textContaining('Saldo benefit PPOB tidak cukup'), findsOneWidget);
+      // Jalan keluar: isi Saldo PPOB di situs (Saldo TapGo tidak dapat membayar PPOB).
+      expect(find.byKey(const ValueKey('ppob-topup-button')), findsOneWidget);
       expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed, isNull);
     });
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../domain/ppob_models.dart';
 
@@ -365,6 +366,40 @@ String ppobSerialLabel(String categoryCode) =>
 /// Nomor token / referensi dari provider untuk transaksi sukses. Kosong (tanpa tinggi)
 /// untuk transaksi yang belum sukses atau tanpa nomor. [compact] dipakai di daftar
 /// riwayat; bentuk penuh dipakai di kartu hasil transaksi.
+/// Alamat isi Saldo PPOB di situs: top up diproses di web (pembayaran eksternal in-app menuntut
+/// Play Billing), dan `tujuan=ppob` memilihkan Saldo PPOB sejak awal. Saldo TapGo tidak dapat
+/// membayar PPOB, jadi pelanggan yang kurang saldo diarahkan ke sini, bukan ke Saldo TapGo.
+const ppobTopUpUrl = 'https://tapgolion.id/topup?tujuan=ppob';
+
+/// Tombol "Isi Saldo PPOB" yang ditampilkan di bawah pesan saldo PPOB tidak cukup.
+class PpobTopUpButton extends StatelessWidget {
+  const PpobTopUpButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        key: const ValueKey('ppob-topup-button'),
+        onPressed: () async {
+          final opened = await launchUrl(
+            Uri.parse(ppobTopUpUrl),
+            mode: LaunchMode.externalApplication,
+          );
+          if (!opened && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content: Text('Halaman top up belum dapat dibuka.')),
+            );
+          }
+        },
+        icon: const Icon(Icons.add_card_rounded),
+        label: const Text('Isi Saldo PPOB di tapgolion.id'),
+      ),
+    );
+  }
+}
+
 class PpobSerialNumberBlock extends StatelessWidget {
   const PpobSerialNumberBlock({
     super.key,

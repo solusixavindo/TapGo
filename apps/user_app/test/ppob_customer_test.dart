@@ -12,6 +12,7 @@ import 'package:tapgo_user_app/features/ppob/domain/ppob_models.dart';
 import 'package:tapgo_user_app/features/ppob/presentation/ppob_checkout_screen.dart';
 import 'package:tapgo_user_app/features/ppob/presentation/ppob_history_screen.dart';
 import 'package:tapgo_user_app/features/ppob/presentation/ppob_home_screen.dart';
+import 'package:tapgo_user_app/features/ppob/presentation/widgets/ppob_shared.dart';
 import 'package:tapgo_user_app/main.dart';
 
 PpobCategory _category({
@@ -423,6 +424,9 @@ void main() {
               'Saldo benefit PPOB tidak cukup untuk transaksi ini. Saldo utama '
               'tidak dapat dipakai untuk menutup kekurangan ini.'),
           findsOneWidget);
+      // Jalan keluar: isi Saldo PPOB di situs (Saldo TapGo tidak dapat membayar PPOB).
+      expect(find.byKey(const ValueKey('ppob-topup-button')), findsOneWidget);
+      expect(ppobTopUpUrl, 'https://tapgolion.id/topup?tujuan=ppob');
       // FilledButton.icon menghasilkan subclass _FilledButtonWithIcon, jadi
       // pencarian memakai predicate subtype, bukan byType.
       final button = tester.widget<FilledButton>(

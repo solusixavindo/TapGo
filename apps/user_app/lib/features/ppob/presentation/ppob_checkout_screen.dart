@@ -380,6 +380,7 @@ class _BreakdownCard extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              const PpobTopUpButton(),
             ],
           ],
         ),

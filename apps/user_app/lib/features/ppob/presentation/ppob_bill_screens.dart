@@ -422,6 +422,7 @@ class _BillCard extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              const PpobTopUpButton(),
             ],
             if (expired) ...[
               const SizedBox(height: 10),
