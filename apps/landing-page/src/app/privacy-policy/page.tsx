@@ -68,7 +68,8 @@ export default function PrivacyPolicy() {
       </p>
       <p>
         <strong>Data penghasilan dan saldo.</strong> Aplikasi menyimpan riwayat perjalanan, komisi,
-        saldo dompet driver, riwayat top up, dan pencairan (withdrawal).
+        saldo dompet driver, riwayat top up, dan pencairan (withdrawal), termasuk rekening bank tujuan
+        pencairan (nama bank, nomor rekening, dan nama pemilik rekening) yang Anda simpan sendiri.
       </p>
       <p>
         <strong>Kontak dukungan.</strong> Tombol Bantuan di aplikasi membuka WhatsApp resmi TapGo
@@ -85,7 +86,8 @@ export default function PrivacyPolicy() {
       <p>
         Situs mengumpulkan data akun, kode referral, relasi sponsor atau mitra, status membership,
         data wallet, PPOB benefit, riwayat transaksi, invoice, withdrawal, pesan kontak, dan
-        permintaan dukungan. Saat pengguna membeli membership di https://tapgolion.id/upgrade,
+        permintaan dukungan. Untuk pencairan saldo, situs menyimpan rekening bank tujuan (nama bank,
+        nomor rekening, dan nama pemilik rekening) yang pengguna isi sendiri. Saat pengguna membeli membership di https://tapgolion.id/upgrade,
         situs juga meminta nama lengkap, alamat, foto KTP, dan swafoto dengan KTP untuk verifikasi
         identitas, serta foto profil secara opsional.
       </p>
@@ -138,9 +140,22 @@ export default function PrivacyPolicy() {
       <p>
         TapGo menggunakan Midtrans untuk pemrosesan pembayaran membership dan top up saldo, Google Firebase untuk
         pengiriman notifikasi, dan penyedia layanan PPOB untuk memproses pembelian pulsa dan
-        tagihan. TapGo juga dapat menggunakan layanan diagnostik atau crash reporting jika
-        diaktifkan. Pihak ketiga hanya menerima data yang diperlukan untuk menjalankan layanan
+        tagihan. Pihak ketiga hanya menerima data yang diperlukan untuk menjalankan layanan
         terkait.
+      </p>
+      <p>
+        <strong>Pembayaran.</strong> Pembayaran membership dan top up saldo dilakukan di halaman
+        pembayaran Midtrans melalui transfer bank virtual account. TapGo meneruskan nama, alamat
+        email, nomor HP, dan nominal tagihan ke Midtrans agar pembayaran dapat dibuat. TapGo hanya
+        menyimpan status pembayaran dan jenis pembayaran; TapGo tidak menyimpan nomor kartu maupun
+        rekening bank pembayar.
+      </p>
+      <p>
+        <strong>Laporan kerusakan dan diagnostik.</strong> Aplikasi TapGo Penumpang dan TapGo Driver
+        dapat mengirim laporan galat dan performa ke layanan Sentry untuk memperbaiki kerusakan.
+        Laporan berisi jenis galat, jejak kode, versi aplikasi, serta model dan versi Android
+        perangkat; aplikasi diatur agar tidak mengirim nama, nomor HP, atau data akun ke Sentry.
+        Data ini tidak dipakai untuk iklan.
       </p>
       <p>
         <strong>Peta dan pencarian lokasi.</strong> Aplikasi TapGo menampilkan peta dengan gambar
