@@ -252,6 +252,32 @@ describe.skipIf(!runIntegration)("Stage R2.8 — Digiflazz real provider integra
     expect(await prisma.ppobTransaction.count({ where: { userId: user.id } })).toBe(0);
   });
 
+  it("paket data satu operator: nomor operator lain ditolak sebelum saldo didebit, nomor yang cocok dirutekan ke kodenya", async () => {
+    await prisma.ppobProduct.create({
+      data: {
+        sku: "DATA_XL_FLEX_S", category: "DATA", brand: "XL", name: "XL Xtra Combo Flex S 28 Hari", price: new Prisma.Decimal("32600"),
+        providerSkus: { xl: "flexs" }, sortOrder: 7
+      }
+    });
+    const user = await createUserWithPpobBalance("100000");
+    stubScenarios.set("*", [{ status: "Sukses", rc: "00", price: 31790 }]);
+    const buy = (targetNumber: string, idempotencyKey: string) =>
+      api("/api/v1/ppob/transactions", { method: "POST", token: tokenFor(user), idempotencyKey, body: { sku: "DATA_XL_FLEX_S", targetNumber } });
+
+    const wrong = await buy("081212345678", "digiflazz-data-wrong"); // Telkomsel
+    expect(wrong.status).toBe(422);
+    expect(((await wrong.json()) as { code?: string }).code).toBe("PPOB_OPERATOR_UNSUPPORTED");
+    expect(stubRequests).toHaveLength(0);
+    expect((await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } })).ppobBalance.toFixed(2)).toBe("100000.00");
+
+    const right = await buy("081712345678", "digiflazz-data-right"); // XL
+    expect(right.status).toBe(201);
+    expect(stubRequests.map((r) => r.buyer_sku_code)).toEqual(["flexs"]);
+    expect((await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } })).ppobBalance.toFixed(2)).toBe("67400.00");
+    // Modal 31.790 vs jual 32.600: bersih ±Rp567, produk tetap aktif (tidak rugi).
+    expect((await prisma.ppobProduct.findUniqueOrThrow({ where: { sku: "DATA_XL_FLEX_S" } })).isActive).toBe(true);
+  });
+
   it("katalog memuat daftar operator yang didukung untuk produk multi-operator", async () => {
     const user = await createUserWithPpobBalance("1000");
     const res = await api("/api/v1/ppob/catalog", { token: tokenFor(user) });
