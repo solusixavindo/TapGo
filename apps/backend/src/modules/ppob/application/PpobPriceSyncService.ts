@@ -8,6 +8,7 @@ import {
   PpobPriceSyncUpdate,
   PpobRepository
 } from "../domain/PpobRepository.js";
+import { expandOperatorPool } from "../domain/operatorPool.js";
 import { POSTPAID_CATEGORIES, PpobPriceListEntry, PpobProviderGateway } from "../domain/ppobProvider.js";
 
 /**
@@ -235,11 +236,14 @@ export class PpobPriceSyncService {
     costBySku: Map<string, { cost: number; active: boolean }>
   ): { price: number; isActive: boolean; providerSkus?: Record<string, string> } | null {
     if (candidate.providerSkus) {
-      const map = asRecord(candidate.providerSkus);
-      const keys = Object.keys(map);
-      if (keys.length === 0) {
+      const current = asRecord(candidate.providerSkus);
+      if (Object.keys(current).length === 0) {
         return null;
       }
+      // Daftar operator LENGKAP (bukan hanya yang lolos siklus lalu): operator yang pernah tersingkir band harga bisa
+      // kembali begitu modalnya berdekatan lagi. Lihat operatorPool.ts.
+      const map = expandOperatorPool(candidate.category, current);
+      const keys = Object.keys(map);
       const costs = keys
         .map((key) => {
           const sku = map[key];
@@ -256,10 +260,10 @@ export class PpobPriceSyncService {
         return { price: Number(candidate.price), isActive: false };
       }
 
-      const band = selectPricingBand(costs);
+      const band = selectPricingBand(costs, undefined, Object.keys(current));
       const providerSkus: Record<string, string> = {};
       for (const key of band.included) {
-        providerSkus[key] = map[key] as string;
+        providerSkus[key] = map[key]!;
       }
       return { price: band.price, isActive: true, providerSkus };
     }

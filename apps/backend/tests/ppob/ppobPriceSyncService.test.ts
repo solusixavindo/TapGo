@@ -267,3 +267,63 @@ describe("PpobPriceSyncService — ketahanan per-produk", () => {
     expect(repo.applied[0]!.updates).toEqual([{ id: "good", price: 6000, isActive: true }]); // 5405 -> 6000
   });
 });
+
+describe("PpobPriceSyncService — daftar operator lengkap (harga akun nyata 14 Okt 2026)", () => {
+  const entry = (providerSku: string, cost: number, buyerProductStatus = true): PpobPriceListEntry => ({ providerSku, cost, buyerProductStatus });
+
+  async function run(c: PpobPriceSyncCandidate, entries: PpobPriceListEntry[]) {
+    const repo = new FakeRepository();
+    repo.candidates = [c];
+    const service = new PpobPriceSyncService(repo as unknown as PpobRepository, fakeProvider(entries));
+    await service.runSyncCycle();
+    return repo.applied[0]!.updates[0];
+  }
+
+  it("20K yang menyusut ke Indosat saja kembali melayani Tri dan Telkomsel (modal 19.010 / 19.589 / 20.049)", async () => {
+    // Harga seller akun: Indosat i20 19.010, Tri t20 19.589, Telkomsel s20 20.049. Satu harga hanya cocok untuk
+    // dua operator yang berdekatan; dua operator (Tri, Telkomsel) mengalahkan satu (Indosat).
+    const update = await run(
+      candidate({ sku: "PULSA_20K", price: new Prisma.Decimal(19700), providerSkus: { indosat: "i20" } }),
+      [entry("i20", 19010), entry("t20", 19589), entry("s20", 20049)]
+    );
+    expect(update).toMatchObject({ price: 20800, isActive: true });
+    expect(update!.providerSkus).toEqual({ tri: "t20", telkomsel: "s20" });
+  });
+
+  it("50K: Tri kembali bersama Indosat, Telkomsel (50.045) tetap di luar band", async () => {
+    const update = await run(
+      candidate({ sku: "PULSA_50K", price: new Prisma.Decimal(49700), providerSkus: { indosat: "i50" } }),
+      [entry("i50", 48785), entry("t50", 48925), entry("s50", 50045)]
+    );
+    expect(update).toMatchObject({ price: 49800, isActive: true });
+    expect(update!.providerSkus).toEqual({ indosat: "i50", tri: "t50" });
+  });
+
+  it("kode turunan yang tidak ada atau ditutup di daftar harga dilewati, tidak pernah dijual", async () => {
+    const update = await run(
+      candidate({ sku: "PULSA_20K", price: new Prisma.Decimal(19700), providerSkus: { indosat: "i20" } }),
+      [entry("i20", 19010), entry("t20", 19589, false) /* ditutup */ /* s20 tidak ada sama sekali */]
+    );
+    // Hasilnya sama dengan kondisi sekarang (Indosat saja, harga 19.700): tidak ada yang ditulis.
+    expect(update).toBeUndefined();
+  });
+
+  it("100K: Telkomsel yang sedang dijual tidak digantikan Indosat hanya karena harganya lebih rendah", async () => {
+    // Satu operator masing-masing (modal terlalu berjauhan untuk satu harga): operator yang sedang dijual dipertahankan.
+    const update = await run(
+      candidate({ sku: "PULSA_100K", price: new Prisma.Decimal(97800), providerSkus: { telkomsel: "s100" } }),
+      [entry("s100", 96690), entry("i100", 94915)]
+    );
+    expect(update).toBeUndefined(); // harga dan peta sudah tepat: tidak ada yang ditulis
+  });
+
+  it("produk bukan pulsa dengan peta serupa tidak diperluas", async () => {
+    const update = await run(
+      candidate({ sku: "DATA_1GB", category: "DATA", price: new Prisma.Decimal(16500), providerSkus: { telkomsel: "s20" } }),
+      [entry("s20", 15160), entry("i20", 100)]
+    );
+    // Kalau ada pembaruan, petanya tetap hanya Telkomsel (i20 tidak boleh ikut walau ada di daftar harga).
+    if (update?.providerSkus !== undefined) expect(Object.keys(update.providerSkus)).toEqual(["telkomsel"]);
+    expect(update?.isActive ?? true).toBe(true);
+  });
+});

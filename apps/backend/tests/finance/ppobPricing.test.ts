@@ -170,3 +170,35 @@ describe("selectPricingBand: kelompok operator multi-operator", () => {
     }
   });
 });
+
+describe("selectPricingBand — kestabilan operator saat sama banyak", () => {
+  // Telkomsel 96.690 dan Indosat 94.915 tidak bisa berbagi satu harga (selisih modal terlalu jauh): masing-masing band
+  // berisi satu operator. Tanpa preferensi, harga terendah menang (Indosat); dengan preferensi, yang sedang dijual menang.
+  const costs = [
+    { key: "telkomsel", cost: 96_690 },
+    { key: "indosat", cost: 94_915 }
+  ];
+
+  it("tanpa preferensi: harga jual terendah menang (perilaku lama)", () => {
+    const band = selectPricingBand(costs);
+    expect(band.included).toEqual(["indosat"]);
+    expect(band.price).toBe(96_100);
+  });
+
+  it("operator yang sedang dijual dipertahankan pada skor sama", () => {
+    const band = selectPricingBand(costs, undefined, ["telkomsel"]);
+    expect(band.included).toEqual(["telkomsel"]);
+    expect(band.price).toBe(97_800);
+  });
+
+  it("jumlah operator tetap menang atas preferensi", () => {
+    const three = [
+      { key: "xl", cost: 5_862 },
+      { key: "tri", cost: 5_820 },
+      { key: "axis", cost: 5_902 },
+      { key: "telkomsel", cost: 5_405 }
+    ];
+    expect(selectPricingBand(three, undefined, ["telkomsel"]).included.sort()).toEqual(["axis", "telkomsel", "tri", "xl"]);
+  });
+});
+

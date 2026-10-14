@@ -109,7 +109,12 @@ export interface PricingBandResult {
  * O(n log n) untuk pengurutan, O(n) untuk sliding window. Aman untuk daftar
  * kosong (mengembalikan price 0, included/excluded kosong).
  */
-export function selectPricingBand(costs: readonly OperatorCost[], options?: PricingOptions): PricingBandResult {
+export function selectPricingBand(
+  costs: readonly OperatorCost[],
+  options?: PricingOptions,
+  /** Operator yang sedang dijual: bila dua band sama banyak operatornya, band yang memuat lebih banyak dari mereka menang. */
+  preferredKeys: readonly string[] = []
+): PricingBandResult {
   if (costs.length === 0) {
     return { price: 0, included: [], excluded: [] };
   }
@@ -127,8 +132,10 @@ export function selectPricingBand(costs: readonly OperatorCost[], options?: Pric
   let bestStart = 0;
   let bestEnd = 0;
   let bestLength = 0;
+  let bestOverlap = -1;
   let bestPrice = 0;
   let start = 0;
+  const preferred = new Set(preferredKeys);
 
   for (let end = 0; end < sorted.length; end += 1) {
     const price = ppobSellingPriceFor(sorted[end]!.cost, options);
@@ -136,8 +143,18 @@ export function selectPricingBand(costs: readonly OperatorCost[], options?: Pric
       start += 1;
     }
     const length = end - start + 1;
-    if (length > bestLength || (length === bestLength && price < bestPrice)) {
+    let overlap = 0;
+    for (let index = start; index <= end; index += 1) {
+      if (preferred.has(sorted[index]!.key)) overlap += 1;
+    }
+    // Terbanyak operator dulu; sama banyak -> pertahankan operator yang sedang dijual (supaya operator besar tidak
+    // berganti hanya karena selisih harga kecil); masih sama -> harga jual terendah.
+    if (
+      length > bestLength ||
+      (length === bestLength && (overlap > bestOverlap || (overlap === bestOverlap && price < bestPrice)))
+    ) {
       bestLength = length;
+      bestOverlap = overlap;
       bestStart = start;
       bestEnd = end;
       bestPrice = price;
