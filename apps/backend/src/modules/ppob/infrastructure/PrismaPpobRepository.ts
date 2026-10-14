@@ -189,7 +189,7 @@ export class PrismaPpobRepository implements PpobRepository {
    * menghitung harga baru dan mengaktifkannya lagi. Kerugian dengan begitu terbatas pada satu transaksi per produk,
    * bukan terus berulang selama sampai enam jam.
    *
-   * Hanya produk yang dikelola sinkronisasi (priceSyncedAt terisi): produk lain tidak punya mekanisme yang
+   * Hanya produk yang dikelola sinkronisasi (punya kode provider; bukan priceSyncedAt, yang hanya terisi saat harga berubah): produk lain tidak punya mekanisme yang
    * mengaktifkannya kembali, sehingga penonaktifan otomatis akan menjadi penonaktifan permanen. Pascabayar tidak
    * dicakup: biaya layanannya tetap di atas tagihan yang sama.
    */
@@ -203,13 +203,20 @@ export class PrismaPpobRepository implements PpobRepository {
 
     const product = await tx.ppobProduct.findUnique({
       where: { id: record.productId },
-      select: { id: true, sku: true, isActive: true, priceSyncedAt: true }
+      select: { id: true, sku: true, isActive: true, providerSku: true, providerSkus: true }
     });
     logger.warn(
       { reference: record.publicReference, sku: product?.sku, salePrice: Number(record.totalAmount), cost: Number(record.providerCost), netMargin: Math.round(net) },
       "PPOB prabayar sukses dengan untung bersih nol atau negatif"
     );
-    if (!product || !product.isActive || product.priceSyncedAt === null) return;
+    // Hanya produk yang dikelola sinkronisasi harga (punya kode provider): hanya merekalah yang bisa dinyalakan lagi
+    // oleh sinkronisasi berikutnya. `priceSyncedAt` TIDAK dipakai: sinkronisasi hanya mengisinya saat harga berubah,
+    // sehingga produk yang harganya sudah tepat (mis. DANA 50K) tidak punya cap waktu padahal dikelola sinkronisasi.
+    const managedBySync =
+      product !== null &&
+      ((typeof product.providerSku === "string" && product.providerSku !== "") ||
+        (product.providerSkus !== null && typeof product.providerSkus === "object" && Object.keys(product.providerSkus).length > 0));
+    if (!product || !product.isActive || !managedBySync) return;
     await tx.ppobProduct.update({ where: { id: product.id }, data: { isActive: false } });
     await tx.auditLog.create({
       data: {

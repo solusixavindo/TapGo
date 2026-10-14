@@ -37,7 +37,7 @@ let sequence = 0;
 /// diketahui) — persis kondisi Temuan 2 yang kini harus menjadi PROCESSING.
 const stubScenarios = new Map<
   string,
-  Array<{ status: string; rc?: string; sn?: string; message?: string; dropConnection?: boolean }>
+  Array<{ status: string; rc?: string; sn?: string; message?: string; dropConnection?: boolean; price?: number }>
 >();
 const stubRequests: Array<Record<string, unknown>> = [];
 
@@ -94,7 +94,7 @@ describe.skipIf(!runIntegration)("Stage R2.8 — Digiflazz real provider integra
               rc: step.rc ?? "00",
               sn: step.sn ?? "",
               buyer_last_saldo: 999000,
-              price: 11500
+              price: step.price ?? 11500
             }
           })
         );
@@ -205,6 +205,8 @@ describe.skipIf(!runIntegration)("Stage R2.8 — Digiflazz real provider integra
 
   it("rute per operator: kode provider dipilih dari prefiks nomor dan disimpan di transaksi", async () => {
     const user = await createUserWithPpobBalance("100000");
+    // Modal realistis (produk dijual Rp6.500): modal di atas harga jual dianggap rugi dan mematikan produk (stop-loss).
+    stubScenarios.set("*", [{ status: "Sukses", rc: "00", price: 5400 }]);
     const buy = (targetNumber: string, idempotencyKey: string) =>
       api("/api/v1/ppob/transactions", {
         method: "POST",

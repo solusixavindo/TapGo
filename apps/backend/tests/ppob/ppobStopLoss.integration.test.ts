@@ -20,7 +20,7 @@ async function clean() {
   await cleanDatabase();
 }
 
-async function seedPending(options: { category?: PpobCategory; total: number; synced: boolean; active?: boolean }) {
+async function seedPending(options: { category?: PpobCategory; total: number; synced: boolean; active?: boolean; providerSku?: string | null }) {
   sequence += 1;
   const user = await prisma.user.create({
     data: { fullName: `Stop Loss ${sequence}`, phone: `+6285${String(sequence).padStart(9, "0")}`, referralCode: `STOP${String(sequence).padStart(6, "0")}`, role: "USER" }
@@ -28,7 +28,7 @@ async function seedPending(options: { category?: PpobCategory; total: number; sy
   const category = options.category ?? "PULSA";
   const product = await prisma.ppobProduct.create({
     data: {
-      sku: `STOP_${sequence}`, category, brand: "Telkomsel", name: "Pulsa uji", price: new Prisma.Decimal(options.total), providerSku: `stop${sequence}`,
+      sku: `STOP_${sequence}`, category, brand: "Telkomsel", name: "Pulsa uji", price: new Prisma.Decimal(options.total), providerSku: options.providerSku === undefined ? `stop${sequence}` : options.providerSku,
       isActive: options.active ?? true, priceSyncedAt: options.synced ? new Date() : null, isPostpaid: category === "BPJS"
     }
   });
@@ -86,8 +86,16 @@ describe.skipIf(!runIntegration)("Stop-loss PPOB: produk rugi bersih dinonaktifk
     expect(await audits()).toHaveLength(0);
   });
 
-  it("produk yang belum pernah disinkronkan harganya (katalog awal) tidak disentuh", async () => {
+  it("produk dikelola sinkronisasi yang harganya sudah tepat (tanpa cap waktu sinkronisasi) tetap dilindungi", async () => {
+    // Sinkronisasi hanya mengisi priceSyncedAt saat harga berubah; DANA 50K di produksi tidak pernah berubah sehingga kosong.
     const { product, transaction } = await seedPending({ total: 11_000, synced: false });
+    await succeed(transaction.id, 11_000);
+    expect(await isActive(product.id)).toBe(false);
+    expect(await audits()).toHaveLength(1);
+  });
+
+  it("produk tanpa kode provider (tidak dikelola sinkronisasi) tidak disentuh: tidak akan ada yang menyalakannya lagi", async () => {
+    const { product, transaction } = await seedPending({ total: 11_000, synced: true, providerSku: null });
     await succeed(transaction.id, 11_000);
     expect(await isActive(product.id)).toBe(true);
     expect(await audits()).toHaveLength(0);
