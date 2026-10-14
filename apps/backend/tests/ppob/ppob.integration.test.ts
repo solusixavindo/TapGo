@@ -409,6 +409,72 @@ describe.skipIf(!runIntegration)("Stage R2.7 — PPOB foundation", () => {
     expect(await prisma.walletTransaction.count({ where: { walletId: wallet.id } })).toBe(0);
   });
 
+  // Build user_app lama (< 2.0.5+33) belum mengirim Idempotency-Key. Mereka tetap dilayani seperti sebelum audit H1,
+  // tetapi hanya bila MENYATAKAN build lamanya; klien tanpa header versi atau build baru tanpa kunci tetap ditolak.
+  describe("kelonggaran Idempotency-Key untuk build lama", () => {
+    const buy = (user: { id: string; role: UserRole }, version?: string) =>
+      api("/api/v1/ppob/orders", {
+        method: "POST",
+        token: tokenFor(user),
+        body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" },
+        ...(version ? { headers: { "x-tapgo-app-version": version } } : {})
+      });
+
+    it("build 2.0.5+32 tanpa kunci: dilayani, saldo didebit sekali, tanpa kunci tersimpan", async () => {
+      const user = await createUserWithPpobBalance("100000");
+      const res = await buy(user, "2.0.5+32");
+      expect(res.status).toBe(201);
+      const tx = await prisma.ppobTransaction.findFirstOrThrow({ where: { userId: user.id } });
+      expect(tx.idempotencyKey).toBeNull();
+      expect((await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } })).ppobBalance.toFixed(2)).toBe("88500.00");
+    });
+
+    it("build 2.0.5+33 ke atas tanpa kunci: ditolak", async () => {
+      const user = await createUserWithPpobBalance("100000");
+      for (const version of ["2.0.5+33", "2.0.5+44"]) {
+        const res = await buy(user, version);
+        expect(res.status).toBe(400);
+        expect(((await res.json()) as { code?: string }).code).toBe("PPOB_IDEMPOTENCY_REQUIRED");
+      }
+      expect(await prisma.ppobTransaction.count({ where: { userId: user.id } })).toBe(0);
+    });
+
+    it("tanpa header versi, atau versi yang tidak terbaca: ditolak", async () => {
+      const user = await createUserWithPpobBalance("100000");
+      for (const version of [undefined, "tidak-ada-build", "2.0.5"]) {
+        expect((await buy(user, version)).status).toBe(400);
+      }
+      expect(await prisma.ppobTransaction.count({ where: { userId: user.id } })).toBe(0);
+    });
+
+    it("dengan kunci, build lama tetap terlindungi dari debit ganda", async () => {
+      const user = await createUserWithPpobBalance("100000");
+      const call = () =>
+        api("/api/v1/ppob/orders", {
+          method: "POST",
+          token: tokenFor(user),
+          idempotencyKey: "uji-build-lama-1",
+          body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" },
+          headers: { "x-tapgo-app-version": "2.0.5+32" }
+        });
+      expect((await call()).status).toBe(201);
+      expect((await call()).status).toBe(200);
+      expect(await prisma.ppobTransaction.count({ where: { userId: user.id } })).toBe(1);
+    });
+
+    it("batas 0: kunci wajib untuk semua build", async () => {
+      const { env } = await import("../../src/config/env.js");
+      const before = env.PPOB_IDEMPOTENCY_REQUIRED_FROM_BUILD;
+      (env as { PPOB_IDEMPOTENCY_REQUIRED_FROM_BUILD: number }).PPOB_IDEMPOTENCY_REQUIRED_FROM_BUILD = 0;
+      try {
+        const user = await createUserWithPpobBalance("100000");
+        expect((await buy(user, "2.0.5+32")).status).toBe(400);
+      } finally {
+        (env as { PPOB_IDEMPOTENCY_REQUIRED_FROM_BUILD: number }).PPOB_IDEMPOTENCY_REQUIRED_FROM_BUILD = before;
+      }
+    });
+  });
+
   // --- Kontrak klien Release 2 (Flutter): /catalog, /orders/inquiry, /orders ---
   // App customer membaca path + bentuk payload ini; perubahan apa pun di sini
   // adalah perubahan kontrak — lihat ppob.routes.ts.
@@ -677,11 +743,13 @@ async function api(
     token?: string;
     body?: unknown;
     idempotencyKey?: string;
+    headers?: Record<string, string>;
   } = {}
 ) {
   return fetch(`${baseUrl}${path}`, {
     method: options.method ?? "GET",
     headers: {
+      ...(options.headers ?? {}),
       ...(options.token ? { authorization: `Bearer ${options.token}` } : {}),
       ...(options.body ? { "content-type": "application/json" } : {}),
       ...(options.idempotencyKey ? { "idempotency-key": options.idempotencyKey } : {})

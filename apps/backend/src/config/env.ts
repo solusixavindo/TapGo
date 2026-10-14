@@ -137,6 +137,12 @@ const envSchema = z.object({
   // 2.0.5+32). 0 = tidak ada batas. Hanya berlaku bila
   // MOBILE_LEGACY_CLIENT_BLOCK_ENABLED=true.
   MOBILE_MIN_APP_BUILD: z.coerce.number().int().min(0).default(0),
+  /// Pembelian PPOB prabayar wajib membawa Idempotency-Key (audit H1). Build user_app lama yang SECARA TERBUKA
+  /// menyatakan nomor build di bawah angka ini (header X-TapGo-App-Version) belum mengirim kunci itu (dikirim sejak
+  /// 2.0.5+33), sehingga tetap dilayani seperti sebelumnya dan dicatat di log. Klien tanpa header versi tetap ditolak.
+  /// 0 = kunci wajib untuk semua. Naikkan MOBILE_MIN_APP_BUILD ke angka yang sama lalu setel ini ke 0 setelah
+  /// pengguna memperbarui aplikasi.
+  PPOB_IDEMPOTENCY_REQUIRED_FROM_BUILD: z.coerce.number().int().min(0).default(33),
   /// Sama seperti MOBILE_LEGACY_CLIENT_BLOCK_ENABLED tapi KHUSUS driver_app —
   /// env TERPISAH secara sengaja (E4, DRIVER_APP_READINESS_PLAN.md): sebelum
   /// ini, driver_app tidak mengirim header identitas apa pun sehingga APK

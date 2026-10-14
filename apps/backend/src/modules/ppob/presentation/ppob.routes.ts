@@ -5,6 +5,8 @@ import { prisma } from "../../../config/prisma.js";
 import { env } from "../../../config/env.js";
 import { AppError } from "../../../core/errors/AppError.js";
 import { asyncHandler } from "../../../core/http/asyncHandler.js";
+import { parseBuildNumber } from "../../../core/http/legacyMobileClientGate.js";
+import { logger } from "../../../core/logger/logger.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
 import { requireAuth } from "../../../core/security/authContext.js";
 import { paymentRateLimiter } from "../../../core/security/rateLimit.js";
@@ -270,6 +272,24 @@ function idempotencyKeyOf(headerValue: unknown): string | undefined {
  * tidak boleh mendebit saldo dua kali. Diperiksa di sini, sebelum purchase()
  * dipanggil; unique constraint dan logika P2002 di PpobService tetap apa adanya.
  */
+/**
+ * Pembelian PRABAYAR: kunci wajib, kecuali klien user_app lama yang menyatakan build di bawah
+ * PPOB_IDEMPOTENCY_REQUIRED_FROM_BUILD (belum mengirimnya). Mereka dilayani seperti sebelum audit H1 (tanpa
+ * perlindungan retry, perilaku lama) dan dicatat; klien tanpa header versi tetap ditolak. Pascabayar tidak
+ * memakai kelonggaran ini: fiturnya baru ada di build yang sudah mengirim kunci.
+ */
+function prepaidIdempotencyKey(req: Request): string | undefined {
+  const key = idempotencyKeyOf(req.headers["idempotency-key"]);
+  if (key) return key;
+  const build = parseBuildNumber(req.header("x-tapgo-app-version"));
+  const cutoff = env.PPOB_IDEMPOTENCY_REQUIRED_FROM_BUILD;
+  if (build !== null && build < cutoff) {
+    logger.warn({ build, cutoff, userId: req.auth?.userId }, "PPOB prabayar tanpa Idempotency-Key dari build lama dilayani");
+    return undefined;
+  }
+  return requireIdempotencyKey(req);
+}
+
 function requireIdempotencyKey(req: Request): string {
   const key = idempotencyKeyOf(req.headers["idempotency-key"]);
   if (!key) {
@@ -413,12 +433,12 @@ ppobRouter.post(
   paymentRateLimiter,
   validateRequest(ppobPurchaseSchema),
   asyncHandler(async (req, res) => {
-    const idempotencyKey = requireIdempotencyKey(req);
+    const idempotencyKey = prepaidIdempotencyKey(req);
     const { transaction, replayed } = await getService().purchase({
       userId: req.auth!.userId,
       sku: req.body.sku,
       targetNumber: req.body.targetNumber,
-      idempotencyKey
+      ...(idempotencyKey !== undefined ? { idempotencyKey } : {})
     });
     const bills = await loadBills(req.auth!.userId, [transaction]);
     res.status(replayed ? 200 : 201).json({
@@ -486,12 +506,12 @@ ppobRouter.post(
   paymentRateLimiter,
   validateRequest(ppobPurchaseSchema),
   asyncHandler(async (req, res) => {
-    const idempotencyKey = requireIdempotencyKey(req);
+    const idempotencyKey = prepaidIdempotencyKey(req);
     const { transaction, replayed } = await getService().purchase({
       userId: req.auth!.userId,
       sku: req.body.sku,
       targetNumber: req.body.targetNumber,
-      idempotencyKey
+      ...(idempotencyKey !== undefined ? { idempotencyKey } : {})
     });
     // Replay mengembalikan 200 (permintaan sudah pernah diproses), pembelian
     // baru 201 — klien dapat membedakan keduanya tanpa field tambahan.
