@@ -1,4 +1,4 @@
-import { User, UserRole } from "@prisma/client";
+import { Prisma, User, UserRole } from "@prisma/client";
 import http, { Server } from "node:http";
 import { AddressInfo } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -217,6 +217,31 @@ describe.skipIf(!runIntegration)("Wawasan Beranda VIP", () => {
       });
       // PPOB_PROVIDER bukan Digiflazz di uji: statusnya tidak diketahui, bukan galat.
       expect(data.attention.digiflazz).toEqual({ level: "UNKNOWN", balance: null });
+    });
+
+    it("perlu perhatian: transaksi PPOB rugi atau di bawah target untung bersih dalam 7 hari", async () => {
+      await seedInsightsData(prisma);
+      const vip = await createUser("SUPER_ADMIN_VIP");
+      // Seed dasar: dua penjualan 11.000/10.200 (bersih 666, memenuhi target Rp500) -> tidak ada peringatan.
+      const base = (await insights(vip)).data.attention;
+      expect(base).toMatchObject({ ppobLossWeek: 0, ppobBelowTargetWeek: 0 });
+
+      const buyer = await prisma.user.findFirstOrThrow({ where: { role: "USER" } });
+      const product = await prisma.ppobProduct.findFirstOrThrow({ where: { sku: "PULSA_INS_10" } });
+      const add = (reference: string, category: "PULSA" | "BPJS", total: number, cost: number, daysAgo: number) =>
+        prisma.ppobTransaction.create({
+          data: {
+            publicReference: reference, userId: buyer.id, productId: product.id, skuSnapshot: product.sku, productNameSnapshot: product.name,
+            brandSnapshot: product.brand, category, targetNumber: "081298765432", amount: new Prisma.Decimal(total), totalAmount: new Prisma.Decimal(total),
+            status: "SUCCESS", provider: "digiflazz", providerCost: new Prisma.Decimal(cost), createdAt: new Date(Date.now() - daysAgo * 86_400_000)
+          }
+        });
+      await add("INS-LOSS", "PULSA", 11_000, 11_000, 1); // bersih -55
+      await add("INS-LOW", "PULSA", 11_000, 10_500, 2); // bersih 396 < 500
+      await add("INS-POST-LOW", "BPJS", 101_000, 100_000, 3); // bersih 896 < 1.000
+      await add("INS-OLD-LOSS", "PULSA", 11_000, 11_000, 10); // di luar 7 hari: tidak dihitung
+      const { data } = await insights(vip);
+      expect(data.attention).toMatchObject({ ppobLossWeek: 1, ppobBelowTargetWeek: 2 });
     });
 
     it("rentang harian memakai bucket per jam, tahunan per bulan", async () => {

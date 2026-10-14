@@ -1,5 +1,6 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { tallyRegions } from "../../../core/geo/indonesiaRegions.js";
+import { scanPpobMargins } from "../../ppob/application/ppobMarginAudit.js";
 
 /**
  * Wawasan untuk Beranda Super Admin VIP: pertumbuhan, pendapatan, perjalanan, wilayah, usia pengemudi, rating dan
@@ -460,14 +461,16 @@ export class AdminInsightsService {
   private async attentionCounts(now: Date) {
     const stuckBefore = new Date(now.getTime() - PPOB_STUCK_AFTER_MS);
     const weekAgo = new Date(now.getTime() - 7 * DAY_MS);
-    const [stuckPpob, withdrawals, memberRequests, driverApplications, overduePayments, openTickets, lowRatings] = await Promise.all([
+    const [stuckPpob, withdrawals, memberRequests, driverApplications, overduePayments, openTickets, lowRatings, marginWeek] = await Promise.all([
       this.prisma.ppobTransaction.count({ where: { status: { in: ["PENDING", "PROCESSING"] }, createdAt: { lt: stuckBefore } } }),
       this.prisma.withdrawal.aggregate({ where: { status: "PENDING" }, _sum: { amount: true }, _count: { _all: true } }),
       this.prisma.membershipOrder.count({ where: { status: "PAID", userMembership: null } }),
       this.prisma.rideDriverProfile.count({ where: { status: "PENDING" } }),
       this.prisma.walletTopUpOrder.count({ where: { status: "PENDING", provider: { in: ["MIDTRANS", "DOKU"] }, expiresAt: { lt: now } } }),
       this.prisma.supportTicket.count({ where: { status: { in: ["OPEN", "IN_PROGRESS"] } } }),
-      this.prisma.rideRating.count({ where: { stars: { lte: 2 }, createdAt: { gte: weekAgo } } })
+      this.prisma.rideRating.count({ where: { stars: { lte: 2 }, createdAt: { gte: weekAgo } } }),
+      // Untung bersih PPOB terhadap target (Rp500 prabayar, Rp1.000 pascabayar) pada 7 hari terakhir.
+      scanPpobMargins(this.prisma, { createdAt: { gte: weekAgo } })
     ]);
     return {
       stuckPpob,
@@ -477,7 +480,9 @@ export class AdminInsightsService {
       driverApplicationsPending: driverApplications,
       overdueOnlinePayments: overduePayments,
       openSupportTickets: openTickets,
-      lowRatingsThisWeek: lowRatings
+      lowRatingsThisWeek: lowRatings,
+      ppobLossWeek: marginWeek.loss,
+      ppobBelowTargetWeek: marginWeek.belowTarget
     };
   }
 }

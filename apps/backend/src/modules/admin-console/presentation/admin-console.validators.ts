@@ -61,6 +61,7 @@ export const adminDigiflazzTransactionQuerySchema = z.object({
     category: z.nativeEnum(PpobCategory).optional(),
     search: z.string().trim().min(1).max(60).optional(),
     stuck: z.enum(["1", "true"]).optional(),
+    marginIssue: z.enum(["1", "true"]).optional(),
     dateFrom: z.coerce.date().optional(),
     dateTo: z.coerce.date().optional()
   })

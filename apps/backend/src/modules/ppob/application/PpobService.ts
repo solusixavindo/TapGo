@@ -1,3 +1,4 @@
+import { postpaidServiceFeeFor } from "../../../core/finance/ppobPricing.js";
 import { randomBytes } from "node:crypto";
 import { PpobCategory, PpobTransaction, Prisma } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
@@ -37,7 +38,6 @@ const PPOB_RECONCILE_LOCK_KEY = 727008;
 const PPOB_STUCK_ALERT_MINUTES = 30;
 
 /** Biaya layanan TapGo per pembayaran pascabayar (keputusan Owner 6 Okt 2026: Rp1.000). */
-export const DEFAULT_POSTPAID_SERVICE_FEE = 1000;
 /** Masa berlaku hasil cek tagihan; juga tidak melewati tengah malam WIB (aturan Digiflazz). */
 const BILL_INQUIRY_TTL_MS = 10 * 60 * 1000;
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
@@ -55,8 +55,12 @@ export class PpobService {
     private readonly options: { postpaidServiceFee?: number; now?: () => Date } = {}
   ) {}
 
+  /**
+   * Biaya layanan pascabayar: tidak pernah di bawah angka yang menghasilkan untung bersih minimal (keputusan Owner
+   * 14 Okt 2026: Rp1.000 bersih per transaksi), meski nilai yang dikonfigurasi lebih kecil.
+   */
   private get serviceFee(): number {
-    return this.options.postpaidServiceFee ?? DEFAULT_POSTPAID_SERVICE_FEE;
+    return Math.max(this.options.postpaidServiceFee ?? 0, postpaidServiceFeeFor());
   }
 
   private now(): Date {

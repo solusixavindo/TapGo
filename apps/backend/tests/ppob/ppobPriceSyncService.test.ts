@@ -121,13 +121,14 @@ describe("PpobPriceSyncService — produk kode tunggal", () => {
     );
     const result = await service.runSyncCycle();
     expect(result).toEqual({ skipped: false, considered: 1, updated: 1, deactivated: 0, reactivated: 0, errors: 0 });
-    expect(repo.applied[0]!.updates).toEqual([{ id: "pln100", price: 102_500, isActive: true }]);
+    // Modal 101.600 -> harga jual 102.800 (selisih 1.200, untung bersih 570,14 setelah PPN dan PPh final); lihat tests/finance/ppobPricing.test.ts.
+    expect(repo.applied[0]!.updates).toEqual([{ id: "pln100", price: 102_800, isActive: true }]);
   });
 
   it("harga tidak berubah: TIDAK menulis apa pun (bukan menulis nilai yang sama)", async () => {
     const repo = new FakeRepository();
-    // 101095 -> ppobSellingPriceFor = 102000 (lihat tests/finance/ppobPricing.test.ts).
-    repo.candidates = [candidate({ id: "pln100", providerSku: "pln100", price: new Prisma.Decimal("102000") })];
+    // 101095 -> ppobSellingPriceFor = 102300 (selisih 1.205, bersih 574,68; lihat tests/finance/ppobPricing.test.ts).
+    repo.candidates = [candidate({ id: "pln100", providerSku: "pln100", price: new Prisma.Decimal("102300") })];
     const service = new PpobPriceSyncService(
       repo as unknown as PpobRepository,
       fakeProvider([{ providerSku: "pln100", cost: 101_095, buyerProductStatus: true }])
@@ -194,8 +195,9 @@ describe("PpobPriceSyncService — produk multi-operator", () => {
     const result = await service.runSyncCycle();
     expect(result.updated).toBe(1);
     const update = repo.applied[0]!.updates[0]!;
-    expect(update.price).toBe(11_500);
-    expect(update.providerSkus).toEqual({ telkomsel: "s10", axis: "ax10", xl: "x10" });
+    // Tri (termurah, modal 10.165) dikeluarkan; empat lainnya berbagi Rp11.800 (lihat tests/finance/ppobPricing.test.ts).
+    expect(update.price).toBe(11_800);
+    expect(update.providerSkus).toEqual({ telkomsel: "s10", axis: "ax10", xl: "x10", smartfren: "sm10" });
   });
 
   it("operator yang buyerProductStatus=false diperlakukan sebagai tidak tersedia (bukan cost 0)", async () => {

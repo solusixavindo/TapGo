@@ -1,26 +1,41 @@
 import { describe, expect, it } from "vitest";
+import { ppobNetMargin } from "../../src/core/finance/ppobMargin.js";
 import {
-  PPOB_MAX_MARKUP,
-  PPOB_MIN_MARKUP,
+  PPOB_BASE_MAX_MARKUP,
+  PPOB_MARKUP_SPREAD,
+  ppobMaxMarkupFor,
   ppobSellingPriceFor,
+  postpaidServiceFeeFor,
   selectPricingBand
 } from "../../src/core/finance/ppobPricing.js";
 
-describe("ppobSellingPriceFor — harga satu biaya modal", () => {
-  it("margin selalu di dalam [500, 1000] untuk berbagai modal", () => {
-    for (const cost of [0, 1, 499, 500, 501, 5405, 6500, 10662, 20000, 20499, 96600, 1_000_000]) {
+const prepaidNet = (price: number, cost: number) => ppobNetMargin({ salePrice: price, cost, kind: "PREPAID" });
+
+describe("ppobSellingPriceFor: harga satu biaya modal (untung bersih minimal Rp500)", () => {
+  it("untung bersih selalu >= 500, dan satu langkah pembulatan lebih murah akan di bawah 500 (harga minimal)", () => {
+    for (const cost of [0, 1, 499, 500, 501, 5405, 6500, 10662, 20000, 20499, 96600, 101095, 1_000_000]) {
       const price = ppobSellingPriceFor(cost);
-      const margin = price - cost;
-      expect(margin, `cost=${cost} price=${price}`).toBeGreaterThanOrEqual(PPOB_MIN_MARKUP);
-      expect(margin, `cost=${cost} price=${price}`).toBeLessThanOrEqual(PPOB_MAX_MARKUP);
-      expect(price % 500).toBe(0);
+      expect(prepaidNet(price, cost), `cost=${cost} price=${price}`).toBeGreaterThanOrEqual(500 - 1e-9);
+      expect(prepaidNet(price - 100, cost), `cost=${cost} satu langkah di bawah`).toBeLessThan(500);
+      expect(price % 100).toBe(0);
     }
   });
 
-  it("nilai nyata Digiflazz (harga contoh sesi ini)", () => {
-    expect(ppobSellingPriceFor(5405)).toBe(6000); // margin 595
-    expect(ppobSellingPriceFor(96600)).toBe(97500); // margin 900
-    expect(ppobSellingPriceFor(101095)).toBe(102000); // margin 905
+  it("nilai nyata Digiflazz, dihitung dengan rumus terpisah", () => {
+    expect(ppobSellingPriceFor(5405)).toBe(6000); // selisih 595, bersih 506,33
+    expect(ppobSellingPriceFor(96600)).toBe(97700); // selisih 1.100, bersih 503,04
+    expect(ppobSellingPriceFor(101095)).toBe(102300); // selisih 1.205, bersih 574,68
+    expect(ppobSellingPriceFor(10662)).toBe(11300); // selisih 638, bersih 518,59
+  });
+
+  it("nominal besar butuh selisih kotor lebih besar karena PPh final dari omzet", () => {
+    expect(ppobSellingPriceFor(100_000) - 100_000).toBe(1200);
+    expect(ppobSellingPriceFor(1_000_000) - 1_000_000).toBe(6200);
+  });
+
+  it("target dan pembulatan dapat diatur", () => {
+    expect(ppobSellingPriceFor(5405, { targetNet: 500, rounding: 500 })).toBe(6000);
+    expect(ppobSellingPriceFor(5405, { targetNet: 1000, rounding: 100 })).toBeGreaterThan(6000);
   });
 
   it("menolak biaya modal negatif atau bukan angka", () => {
@@ -30,7 +45,19 @@ describe("ppobSellingPriceFor — harga satu biaya modal", () => {
   });
 });
 
-describe("selectPricingBand — kelompok operator multi-operator", () => {
+describe("postpaidServiceFeeFor: biaya layanan pascabayar (untung bersih minimal Rp1.000)", () => {
+  it("Rp1.150: bersih 1.030,86; Rp1.100 hanya 986,04 sehingga belum cukup", () => {
+    expect(postpaidServiceFeeFor()).toBe(1150);
+    expect(ppobNetMargin({ salePrice: 1150, cost: 0, kind: "POSTPAID" })).toBeGreaterThanOrEqual(1000);
+    expect(ppobNetMargin({ salePrice: 1100, cost: 0, kind: "POSTPAID" })).toBeLessThan(1000);
+  });
+
+  it("target dan pembulatan dapat diatur", () => {
+    expect(postpaidServiceFeeFor({ targetNet: 2000, rounding: 100 })).toBe(2300);
+  });
+});
+
+describe("selectPricingBand: kelompok operator multi-operator", () => {
   it("daftar kosong: tidak ada yang dijual, tidak melempar", () => {
     expect(selectPricingBand([])).toEqual({ price: 0, included: [], excluded: [] });
   });
@@ -42,37 +69,44 @@ describe("selectPricingBand — kelompok operator multi-operator", () => {
     expect(result.price).toBe(ppobSellingPriceFor(5405));
   });
 
-  it("kasus nyata Pulsa Rp10.000 (harga Digiflazz sesi ini): Tri (termurah) dan Smartfren (termahal) dikeluarkan", () => {
-    // telkomsel 10662, axis 10857, xl 10860, smartfren 11140 (termahal), tri 10165 (termurah)
+  it("kasus nyata Pulsa Rp10.000: Tri (termurah) dikeluarkan, empat lainnya berbagi Rp11.800", () => {
+    // Harga minimum tiap operator: tri 10.800, telkomsel 11.300, axis dan xl 11.500, smartfren 11.800.
+    // Pada Rp11.800 selisih Telkomsel 1.138 (batas wajarnya 638 + 500 = 1.138), Tri 1.635 (batas 1.135) tidak lolos.
     const costs = { telkomsel: 10662, axis: 10857, xl: 10860, smartfren: 11140, tri: 10165 };
     const result = selectPricingBand(Object.entries(costs).map(([key, cost]) => ({ key, cost })));
-    // Kelompok terpadat: telkomsel+axis+xl berbagi Rp11.500. Tri terlalu murah untuk
-    // harga itu (margin akan >1.000); Smartfren terlalu mahal (margin akan <500).
-    expect(new Set(result.included)).toEqual(new Set(["telkomsel", "axis", "xl"]));
-    expect(new Set(result.excluded)).toEqual(new Set(["tri", "smartfren"]));
-    expect(result.price).toBe(11500);
+    expect(new Set(result.included)).toEqual(new Set(["telkomsel", "axis", "xl", "smartfren"]));
+    expect(result.excluded).toEqual(["tri"]);
+    expect(result.price).toBe(11800);
     for (const key of result.included) {
-      const margin = result.price - costs[key as keyof typeof costs];
-      expect(margin, key).toBeGreaterThanOrEqual(PPOB_MIN_MARKUP);
-      expect(margin, key).toBeLessThanOrEqual(PPOB_MAX_MARKUP);
+      const cost = costs[key as keyof typeof costs];
+      expect(prepaidNet(result.price, cost), key).toBeGreaterThanOrEqual(500);
+      expect(result.price - cost, key).toBeLessThanOrEqual(ppobMaxMarkupFor(cost));
     }
-    expect(result.price - costs.tri).toBeGreaterThan(PPOB_MAX_MARKUP);
-    expect(result.price - costs.smartfren).toBeLessThan(PPOB_MIN_MARKUP);
+    expect(result.price - costs.tri).toBeGreaterThan(ppobMaxMarkupFor(costs.tri));
   });
 
-  it("kasus nyata Pulsa Rp5.000: Telkomsel jauh lebih murah dari tiga lainnya, dikeluarkan sendiri", () => {
+  it("kasus nyata Pulsa Rp5.000: empat operator berbagi Rp6.500 (selisih Telkomsel tepat di batas wajarnya, 1.095)", () => {
     const costs = { telkomsel: 5405, axis: 5882, tri: 5820, xl: 5862 };
     const result = selectPricingBand(Object.entries(costs).map(([key, cost]) => ({ key, cost })));
-    // tri, xl, axis berbagi Rp6.500; menambahkan Telkomsel akan mendorong harga naik
-    // untuk menampung operator lain, membuat margin Telkomsel sendiri melewati 1.000.
-    expect(new Set(result.included)).toEqual(new Set(["tri", "xl", "axis"]));
-    expect(result.excluded).toEqual(["telkomsel"]);
+    expect(new Set(result.included)).toEqual(new Set(["telkomsel", "tri", "xl", "axis"]));
+    expect(result.excluded).toEqual([]);
     expect(result.price).toBe(6500);
-    expect(result.price - costs.telkomsel).toBeGreaterThan(PPOB_MAX_MARKUP);
+    expect(result.price - costs.telkomsel).toBe(ppobMaxMarkupFor(costs.telkomsel));
   });
 
-  it("seri panjang kelompok: memilih harga (dan kelompok termahal) yang lebih rendah", () => {
-    // Dua kelompok terpisah jauh, masing-masing berisi 2 operator yang rapat.
+  it("operator yang jauh lebih murah dikeluarkan sendiri", () => {
+    const result = selectPricingBand([
+      { key: "murah", cost: 4000 },
+      { key: "a", cost: 5820 },
+      { key: "b", cost: 5862 },
+      { key: "c", cost: 5882 }
+    ]);
+    // Pada Rp6.500 selisih 'murah' = 2.500, jauh di atas batas wajarnya (harga minimumnya 4.600, selisih 600, jadi batas wajarnya 600 + 500 = 1.100).
+    expect(result.excluded).toEqual(["murah"]);
+    expect(result.price).toBe(6500);
+  });
+
+  it("seri panjang kelompok: memilih kelompok dengan harga lebih rendah", () => {
     const result = selectPricingBand([
       { key: "a", cost: 1000 },
       { key: "b", cost: 1100 },
@@ -80,7 +114,6 @@ describe("selectPricingBand — kelompok operator multi-operator", () => {
       { key: "d", cost: 5100 }
     ]);
     expect(result.included.length).toBe(2);
-    // Kelompok termurah (a,b) dipilih karena harganya lebih rendah untuk pelanggan.
     expect(new Set(result.included)).toEqual(new Set(["a", "b"]));
   });
 
@@ -102,7 +135,12 @@ describe("selectPricingBand — kelompok operator multi-operator", () => {
     ).toThrow(/duplikat/);
   });
 
-  it("properti acak: setiap operator yang termasuk selalu bermargin sah, pada 200 skenario acak", () => {
+  it("batas wajar tidak pernah di bawah batas dasar Rp1.000 dan tumbuh bersama harga minimum", () => {
+    expect(ppobMaxMarkupFor(5405)).toBe(Math.max(PPOB_BASE_MAX_MARKUP, 595 + PPOB_MARKUP_SPREAD));
+    expect(ppobMaxMarkupFor(1_000_000)).toBe(6200 + PPOB_MARKUP_SPREAD);
+  });
+
+  it("properti acak: setiap operator yang termasuk memenuhi untung bersih dan batas wajar, pada 200 skenario", () => {
     for (let trial = 0; trial < 200; trial += 1) {
       const n = 1 + Math.floor(Math.random() * 8);
       const costs: { key: string; cost: number }[] = Array.from({ length: n }, (_, i) => ({
@@ -113,12 +151,11 @@ describe("selectPricingBand — kelompok operator multi-operator", () => {
       const byKey = new Map(costs.map((c) => [c.key, c.cost]));
       expect(result.included.length + result.excluded.length).toBe(n);
       for (const key of result.included) {
-        const margin = result.price - byKey.get(key)!;
-        expect(margin, JSON.stringify({ costs, result })).toBeGreaterThanOrEqual(PPOB_MIN_MARKUP);
-        expect(margin, JSON.stringify({ costs, result })).toBeLessThanOrEqual(PPOB_MAX_MARKUP);
+        const cost = byKey.get(key)!;
+        expect(prepaidNet(result.price, cost), JSON.stringify({ costs, result })).toBeGreaterThanOrEqual(500 - 1e-9);
+        expect(result.price - cost, JSON.stringify({ costs, result })).toBeLessThanOrEqual(ppobMaxMarkupFor(cost));
       }
-      // Tidak ada operator yang lebih murah dari termurah yang termasuk namun dikeluarkan
-      // padahal seharusnya masih sah pada harga terpilih (band harus "padat" pada window sortir).
+      // Operator yang bermodal di antara dua operator yang termasuk tidak boleh dikeluarkan.
       if (result.included.length > 0) {
         const includedCosts = result.included.map((k) => byKey.get(k)!).sort((a, b) => a - b);
         const minIncluded = includedCosts[0]!;
@@ -126,13 +163,7 @@ describe("selectPricingBand — kelompok operator multi-operator", () => {
         for (const key of result.excluded) {
           const cost = byKey.get(key)!;
           if (cost > minIncluded && cost < maxIncluded) {
-            // Operator ini berada DI ANTARA rentang yang termasuk — pasti sah pula.
-            const margin = result.price - cost;
-            expect(margin).toBeGreaterThanOrEqual(PPOB_MIN_MARKUP);
-            expect(margin).toBeLessThanOrEqual(PPOB_MAX_MARKUP);
-            throw new Error(
-              `Operator ${key} (cost=${cost}) berada di dalam rentang termasuk tetapi dikeluarkan`
-            );
+            throw new Error(`Operator ${key} (cost=${cost}) berada di dalam rentang termasuk tetapi dikeluarkan`);
           }
         }
       }

@@ -292,6 +292,56 @@ describe.skipIf(!runIntegration)("Pemantauan pembayaran online dan saldo Digifla
       expect(byRef["PPOB-STUCK"]).toMatchObject({ status: "PROCESSING", stuck: true });
     });
 
+    it("untung bersih per transaksi: rugi, di bawah target, memenuhi; prabayar Rp500 dan pascabayar Rp1.000", async () => {
+      await seedTransactions();
+      const buyer = await prisma.user.findFirstOrThrow({ where: { role: "USER" } });
+      const pulsa = await prisma.ppobProduct.findUniqueOrThrow({ where: { sku: "PULSA_TSEL_10" } });
+      const extra = (reference: string, category: "PULSA" | "BPJS", totalAmount: number, providerCost: number) =>
+        prisma.ppobTransaction.create({
+          data: {
+            publicReference: reference, userId: buyer.id, productId: pulsa.id, skuSnapshot: "PULSA_TSEL_10", productNameSnapshot: "Produk uji",
+            brandSnapshot: "Uji", category, targetNumber: "081298765432", amount: new Prisma.Decimal(totalAmount), totalAmount: new Prisma.Decimal(totalAmount),
+            status: "SUCCESS", provider: "digiflazz", providerCost: new Prisma.Decimal(providerCost), createdAt: new Date(Date.now() - 2 * 3_600_000),
+            completedAt: new Date(Date.now() - 2 * 3_600_000 + 4_000)
+          }
+        });
+      // Angka bersih dihitung terpisah (PPN 11% inklusif atas selisih, PPh final 0,5% dari omzet):
+      // prabayar 11.000/11.000 = -55; pascabayar (omzet = biaya layanan tanpa PPN) 101.150/100.000 = 1.031 dan 101.000/100.000 = 896.
+      await extra("PPOB-LOSS", "PULSA", 11_000, 11_000);
+      await extra("PPOB-POST-OK", "BPJS", 101_150, 100_000);
+      await extra("PPOB-POST-LOW", "BPJS", 101_000, 100_000);
+
+      const vip = await createUser("SUPER_ADMIN_VIP");
+      const { data } = await list(vip);
+      const byRef = Object.fromEntries(data.items.map((item: any) => [item.reference, item]));
+      expect(byRef["PPOB-OK1"]).toMatchObject({ netMargin: 666, marginStatus: "OK" });
+      expect(byRef["PPOB-TOKEN"]).toMatchObject({ netMargin: 433, marginStatus: "BELOW_TARGET" });
+      expect(byRef["PPOB-LOSS"]).toMatchObject({ netMargin: -55, marginStatus: "LOSS" });
+      expect(byRef["PPOB-POST-OK"]).toMatchObject({ netMargin: 1031, marginStatus: "OK" });
+      expect(byRef["PPOB-POST-LOW"]).toMatchObject({ netMargin: 896, marginStatus: "BELOW_TARGET" });
+      // Tanpa modal tercatat atau tidak sukses: tidak dinilai.
+      expect(byRef["PPOB-OK2"]).toMatchObject({ netMargin: null, marginStatus: null });
+      expect(byRef["PPOB-FAIL"]).toMatchObject({ netMargin: null, marginStatus: null });
+
+      expect(data.summary.success).toMatchObject({
+        netMargin: 2972,
+        lossCount: 1,
+        belowTargetCount: 2,
+        targets: { prepaid: 500, postpaid: 1000 }
+      });
+
+      // Filter "di bawah target atau rugi" hanya memuat tiga transaksi itu; ringkasan tetap menghitung semua.
+      const issues = (await list(vip, "?marginIssue=1")).data;
+      expect(issues.items.map((item: any) => item.reference).sort()).toEqual(["PPOB-LOSS", "PPOB-POST-LOW", "PPOB-TOKEN"]);
+      expect(issues.pagination.total).toBe(3);
+      expect(issues.summary.success.lossCount).toBe(1);
+      // Digabung dengan pencarian: hanya yang cocok dan bermasalah.
+      expect((await list(vip, "?marginIssue=1&search=ppob-loss")).data.items.map((item: any) => item.reference)).toEqual(["PPOB-LOSS"]);
+      expect((await list(vip, "?marginIssue=1&search=ppob-ok1")).data.items).toHaveLength(0);
+      // Nilai marginIssue sembarang ditolak.
+      expect((await list(vip, "?marginIssue=ya")).status).toBe(400);
+    });
+
     it("menyamarkan nomor tujuan, nomor HP, dan serial/token", async () => {
       await seedTransactions();
       const { data, text } = await list(await createUser("SUPER_ADMIN"));

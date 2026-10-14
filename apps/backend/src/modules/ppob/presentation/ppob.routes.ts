@@ -62,7 +62,7 @@ function getService(): PpobService {
     cachedService = {
       provider: current,
       service: new PpobService(new PrismaPpobRepository(prisma), resolvePpobProvider(), {
-        postpaidServiceFee: env.PPOB_POSTPAID_SERVICE_FEE
+        ...(env.PPOB_POSTPAID_SERVICE_FEE !== undefined ? { postpaidServiceFee: env.PPOB_POSTPAID_SERVICE_FEE } : {})
       })
     };
   }

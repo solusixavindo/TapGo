@@ -263,7 +263,9 @@ const envSchema = z.object({
   /// dibatasi ketat (rate limit) dan tidak berubah tiap menit.
   /// Biaya layanan TapGo per pembayaran pascabayar (BPJS, PDAM), rupiah
   /// (keputusan Owner 6 Okt 2026: Rp1.000 di atas harga Digiflazz).
-  PPOB_POSTPAID_SERVICE_FEE: z.coerce.number().int().min(0).max(10000).default(1000),
+  /// Biaya layanan pascabayar minimum. Tanpa nilai: dihitung dari target untung bersih (PPOB_NET_MARGIN_POSTPAID, bawaan
+  /// Rp1.000 bersih = Rp1.150 setelah PPN dan PPh). Bila diisi, biaya yang dipakai adalah nilai terbesar dari keduanya.
+  PPOB_POSTPAID_SERVICE_FEE: z.coerce.number().int().min(0).max(10000).optional(),
   /// Sinkronisasi katalog pascabayar (BPJS, PDAM, dst) dari daftar harga `pasca`
   /// Digiflazz, TERPISAH dari sinkronisasi harga prabayar supaya menyalakannya tidak
   /// mengubah harga prabayar. Memakai interval PPOB_PRICE_SYNC_INTERVAL_MS.

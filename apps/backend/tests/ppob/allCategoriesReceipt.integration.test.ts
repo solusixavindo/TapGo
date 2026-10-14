@@ -210,7 +210,7 @@ describe.skipIf(!runIntegration)("Semua kategori Digital dan Tagihan sampai bukt
       const token = signAccessToken({ sub: u.id, role: "USER", sessionId: `s-${u.id}` });
       const inquiry = await call("/api/v1/ppob/bills/inquiry", token, { method: "POST", body: { sku: row.sku, targetNumber: row.target } });
       expect(inquiry.status, JSON.stringify(inquiry.json)).toBe(200);
-      expect(inquiry.json.data).toMatchObject({ customerName: "BUDI SANTOSO", period: "202610", billAmount: 100000, totalAmount: 102350 });
+      expect(inquiry.json.data).toMatchObject({ customerName: "BUDI SANTOSO", period: "202610", billAmount: 100000, totalAmount: 102500 });
 
       const paid = await call("/api/v1/ppob/bills/pay", token, { method: "POST", key: `pay-${row.sku}`, body: { reference: inquiry.json.data.reference } });
       expect(paid.status, JSON.stringify(paid.json)).toBe(201);
@@ -218,7 +218,7 @@ describe.skipIf(!runIntegration)("Semua kategori Digital dan Tagihan sampai bukt
       expect(order.status).toBe("SUCCESS");
       expect(order.serialNumber).toBe(row.sn);
       expect(order.id).toBe(inquiry.json.data.reference);
-      expect(order.bill).toEqual({ customerName: "BUDI SANTOSO", period: "202610", billAmount: 100000, feeAmount: 2350, totalAmount: 102350 });
+      expect(order.bill).toEqual({ customerName: "BUDI SANTOSO", period: "202610", billAmount: 100000, feeAmount: 2500, totalAmount: 102500 });
       expect(order.completedAt).toBeTruthy();
 
       const detail = await call(`/api/v1/ppob/orders/${order.id}`, token);

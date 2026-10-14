@@ -1,6 +1,9 @@
 import { PpobCategory, Prisma, PrismaClient } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../core/errors/AppError.js";
+import { ppobMarginStatus, ppobNetMargin } from "../../../core/finance/ppobMargin.js";
+import { logger } from "../../../core/logger/logger.js";
+import { POSTPAID_CATEGORIES } from "../domain/ppobProvider.js";
 import {
   PpobBillInquiryRecord,
   PpobOpenTransaction,
@@ -180,6 +183,51 @@ export class PrismaPpobRepository implements PpobRepository {
     });
   }
 
+  /**
+   * Henti-rugi (keputusan Owner 14 Okt 2026, Pilihan A): bila satu transaksi PRABAYAR sukses berakhir rugi BERSIH
+   * (modal Digiflazz melonjak di antara dua sinkronisasi harga), produknya dinonaktifkan sampai sinkronisasi berikutnya
+   * menghitung harga baru dan mengaktifkannya lagi. Kerugian dengan begitu terbatas pada satu transaksi per produk,
+   * bukan terus berulang selama sampai enam jam.
+   *
+   * Hanya produk yang dikelola sinkronisasi (priceSyncedAt terisi): produk lain tidak punya mekanisme yang
+   * mengaktifkannya kembali, sehingga penonaktifan otomatis akan menjadi penonaktifan permanen. Pascabayar tidak
+   * dicakup: biaya layanannya tetap di atas tagihan yang sama.
+   */
+  private async stopLossIfNeeded(
+    record: { id: string; publicReference: string; productId: string; category: PpobCategory; totalAmount: Prisma.Decimal; providerCost: Prisma.Decimal | null },
+    tx: Prisma.TransactionClient
+  ): Promise<void> {
+    if (record.providerCost === null || POSTPAID_CATEGORIES.has(record.category)) return;
+    const net = ppobNetMargin({ salePrice: Number(record.totalAmount), cost: Number(record.providerCost), kind: "PREPAID" });
+    if (ppobMarginStatus(net, "PREPAID") !== "LOSS") return;
+
+    const product = await tx.ppobProduct.findUnique({
+      where: { id: record.productId },
+      select: { id: true, sku: true, isActive: true, priceSyncedAt: true }
+    });
+    logger.warn(
+      { reference: record.publicReference, sku: product?.sku, salePrice: Number(record.totalAmount), cost: Number(record.providerCost), netMargin: Math.round(net) },
+      "PPOB prabayar sukses dengan untung bersih nol atau negatif"
+    );
+    if (!product || !product.isActive || product.priceSyncedAt === null) return;
+    await tx.ppobProduct.update({ where: { id: product.id }, data: { isActive: false } });
+    await tx.auditLog.create({
+      data: {
+        action: "ppob.product.auto_deactivated",
+        entityType: "PpobProduct",
+        entityId: product.sku,
+        metadata: {
+          reason: "NET_LOSS",
+          transactionReference: record.publicReference,
+          salePrice: Number(record.totalAmount),
+          providerCost: Number(record.providerCost),
+          netMargin: Math.round(net)
+        }
+      }
+    });
+    logger.warn({ sku: product.sku }, "Produk PPOB dinonaktifkan otomatis karena rugi bersih; aktif lagi pada sinkronisasi harga berikutnya");
+  }
+
   async finalizePurchase(
     input: {
       transactionId: string;
@@ -198,7 +246,7 @@ export class PrismaPpobRepository implements PpobRepository {
     const { outcome } = input;
 
     if (outcome.kind === "SUCCESS") {
-      await tx.ppobTransaction.updateMany({
+      const finalized = await tx.ppobTransaction.updateMany({
         where: { id: input.transactionId, status: { in: ["PENDING", "PROCESSING"] } },
         data: {
           status: "SUCCESS",
@@ -208,7 +256,12 @@ export class PrismaPpobRepository implements PpobRepository {
           completedAt: new Date()
         }
       });
-      return tx.ppobTransaction.findUniqueOrThrow({ where: { id: input.transactionId } });
+      const record = await tx.ppobTransaction.findUniqueOrThrow({ where: { id: input.transactionId } });
+      // Hanya pada transisi yang baru terjadi: webhook ganda tidak mengulang pemeriksaan.
+      if (finalized.count === 1) {
+        await this.stopLossIfNeeded(record, tx);
+      }
+      return record;
     }
 
     if (outcome.kind === "PROCESSING") {

@@ -16,6 +16,7 @@ import { StatusCodes } from "http-status-codes";
 import { midtransFeeFor } from "../../../core/finance/midtransFees.js";
 import { plConfig, prorateMonthlyCost } from "../../../core/finance/plConfig.js";
 import { POSTPAID_CATEGORIES } from "../../ppob/domain/ppobProvider.js";
+import { assessPpobMargin, scanPpobMargins } from "../../ppob/application/ppobMarginAudit.js";
 import { DigiflazzBalanceService, digiflazzBalanceService } from "../../ppob/application/DigiflazzBalanceService.js";
 import { env } from "../../../config/env.js";
 import { AppError } from "../../../core/errors/AppError.js";
@@ -1869,6 +1870,8 @@ export class AdminConsoleService {
       category?: PpobCategory;
       search?: string;
       stuckOnly?: boolean;
+      /** Hanya transaksi sukses yang rugi bersih atau di bawah target untung bersih. */
+      marginIssueOnly?: boolean;
       dateFrom?: Date;
       dateTo?: Date;
     }
@@ -1891,8 +1894,10 @@ export class AdminConsoleService {
           }
         : {})
     };
+    const marginScan = await scanPpobMargins(this.prisma, filters, { collectIssueIds: input.marginIssueOnly === true });
     const where: Prisma.PpobTransactionWhereInput = {
       ...filters,
+      ...(input.marginIssueOnly ? { id: { in: marginScan.issueIds } } : {}),
       ...(input.stuckOnly
         ? { status: { in: ["PENDING", "PROCESSING"] }, createdAt: { ...(created.createdAt ?? {}), lt: stuckBefore } }
         : input.status
@@ -1954,6 +1959,12 @@ export class AdminConsoleService {
         totalAmount,
         providerCost,
         margin: row.status === "SUCCESS" && providerCost !== null ? totalAmount - providerCost : null,
+        // Untung bersih (setelah PPN atas selisih dan PPh) dan statusnya terhadap target; null bila belum ada modal.
+        netMargin: row.status === "SUCCESS" && providerCost !== null ? Math.round(assessPpobMargin({ totalAmount: row.totalAmount, providerCost: row.providerCost!, category: row.category }).netMargin) : null,
+        marginStatus:
+          row.status === "SUCCESS" && providerCost !== null
+            ? assessPpobMargin({ totalAmount: row.totalAmount, providerCost: row.providerCost!, category: row.category }).status
+            : null,
         failureCode: row.failureCode,
         failureReason: row.failureReason,
         refunded: row.refundTransactionId !== null,
@@ -1987,7 +1998,12 @@ export class AdminConsoleService {
           /** Penjualan dari transaksi yang modalnya tercatat: dasar selisih = costedSales - providerCost. */
           costedSales,
           // Modal hanya tercatat pada sebagian transaksi sukses; selisih dihitung dari yang bermodal saja.
-          withCostCount: costedTotals._count._all
+          withCostCount: costedTotals._count._all,
+          /** Untung bersih seluruh transaksi sukses bermodal dalam filter, dan berapa yang rugi atau di bawah target. */
+          netMargin: marginScan.netTotal,
+          lossCount: marginScan.loss,
+          belowTargetCount: marginScan.belowTarget,
+          targets: marginScan.targets
         }
       }
     };

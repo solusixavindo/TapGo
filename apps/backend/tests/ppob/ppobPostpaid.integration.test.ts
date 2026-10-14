@@ -15,7 +15,7 @@ const BPJS_OK = "1234567890123";
 const BPJS_NO_BILL = "1234567890000";
 const BPJS_PAY_FAIL = "1234567899999";
 const BPJS_PAY_PENDING = "1234567897777";
-const TOTAL = 102350;
+const TOTAL = 102500;
 
 function resetRateLimits() {
   for (const key of ["127.0.0.1", "::1", "::ffff:127.0.0.1"]) {
@@ -109,7 +109,7 @@ describe.skipIf(!runIntegration)("PPOB pascabayar — cek tagihan lalu bayar", (
       customerName: "PELANGGAN STUB",
       period: "202610",
       billAmount: 100000,
-      feeAmount: 2350,
+      feeAmount: 2500,
       totalAmount: TOTAL,
       sufficient: true,
       wallet: { ppobBalance: 500000 }
@@ -123,7 +123,8 @@ describe.skipIf(!runIntegration)("PPOB pascabayar — cek tagihan lalu bayar", (
     expect(await prisma.walletTransaction.count()).toBe(0);
     const stored = await prisma.ppobBillInquiry.findUniqueOrThrow({ where: { publicReference: data.reference } });
     expect(stored.providerCost.toFixed(2)).toBe("101350.00");
-    expect(stored.serviceFee.toFixed(2)).toBe("1000.00");
+    // Biaya layanan minimal Rp1.150 (untung bersih Rp1.000 setelah PPN dan PPh final), walau env menyetel 1000.
+    expect(stored.serviceFee.toFixed(2)).toBe("1150.00");
     expect(stored.usedAt).toBeNull();
   });
 
@@ -152,16 +153,16 @@ describe.skipIf(!runIntegration)("PPOB pascabayar — cek tagihan lalu bayar", (
     for (const internal of ["userId", "productId", "provider", "idempotencyKey", "walletTransactionId"]) {
       expect(data).not.toHaveProperty(internal);
     }
-    expect(await ppobBalance(user.id)).toBe("397650.00");
+    expect(await ppobBalance(user.id)).toBe("397500.00");
     const tx = await prisma.ppobTransaction.findUniqueOrThrow({ where: { publicReference: ref } });
     expect(tx.amount.toFixed(2)).toBe("100000.00");
-    expect(tx.adminFee.toFixed(2)).toBe("2350.00");
-    expect(tx.totalAmount.toFixed(2)).toBe("102350.00");
+    expect(tx.adminFee.toFixed(2)).toBe("2500.00");
+    expect(tx.totalAmount.toFixed(2)).toBe("102500.00");
     expect(tx.providerCost?.toFixed(2)).toBe("101350.00");
     const ledger = await prisma.walletTransaction.findMany();
     expect(ledger).toHaveLength(1);
     expect(ledger[0]!.type).toBe("PPOB_PURCHASE");
-    expect(ledger[0]!.amount.toFixed(2)).toBe("-102350.00");
+    expect(ledger[0]!.amount.toFixed(2)).toBe("-102500.00");
     expect(ledger[0]!.referenceId).toBe(ref);
     expect((await prisma.ppobBillInquiry.findUniqueOrThrow({ where: { publicReference: ref } })).usedAt).not.toBeNull();
   });
@@ -193,13 +194,13 @@ describe.skipIf(!runIntegration)("PPOB pascabayar — cek tagihan lalu bayar", (
     expect(((await replay.json()) as { data: any }).data).toMatchObject({ id: ref, replayed: true });
     const second = await pay(user, ref, "k2");
     expect(second.status).toBe(409);
-    expect(await ppobBalance(user.id)).toBe("397650.00");
+    expect(await ppobBalance(user.id)).toBe("397500.00");
     expect(await prisma.ppobTransaction.count()).toBe(1);
     expect(await prisma.walletTransaction.count()).toBe(1);
     // Key yang sama untuk inquiry lain = konflik, bukan pembelian kedua.
     const other = await inquiryRef(user, "PSC_PDAMSTUB0001", "5121400300");
     expect((await pay(user, other, "k1")).status).toBe(409);
-    expect(await ppobBalance(user.id)).toBe("397650.00");
+    expect(await ppobBalance(user.id)).toBe("397500.00");
   });
 
   it("lima pembayaran serentak untuk satu inquiry: tepat satu berhasil, saldo terdebit sekali", async () => {
@@ -210,7 +211,7 @@ describe.skipIf(!runIntegration)("PPOB pascabayar — cek tagihan lalu bayar", (
     expect(statuses.filter((s) => s === 201)).toHaveLength(1);
     // Yang kalah mendapat 409 (bukan 500) dan tidak ada yang lolos dua kali.
     expect(statuses.filter((s) => s === 409)).toHaveLength(4);
-    expect(await ppobBalance(user.id)).toBe("397650.00");
+    expect(await ppobBalance(user.id)).toBe("397500.00");
     expect(await prisma.ppobTransaction.count()).toBe(1);
     expect(await prisma.walletTransaction.count()).toBe(1);
   });
@@ -255,7 +256,7 @@ describe.skipIf(!runIntegration)("PPOB pascabayar — cek tagihan lalu bayar", (
     expect((await prisma.ppobBillInquiry.findUniqueOrThrow({ where: { publicReference: ref } })).usedAt).toBeNull();
     await prisma.wallet.update({ where: { userId: user.id }, data: { ppobBalance: new Prisma.Decimal("200000") } });
     expect((await pay(user, ref, "poor-2")).status).toBe(201);
-    expect(await ppobBalance(user.id)).toBe("97650.00");
+    expect(await ppobBalance(user.id)).toBe("97500.00");
   });
 
   it("bayar gagal di penyedia: refund penuh tepat sekali, status FAILED", async () => {
@@ -267,7 +268,7 @@ describe.skipIf(!runIntegration)("PPOB pascabayar — cek tagihan lalu bayar", (
     expect(await ppobBalance(user.id)).toBe("500000.00");
     const ledger = await prisma.walletTransaction.findMany({ orderBy: { createdAt: "asc" } });
     expect(ledger.map((l) => l.type)).toEqual(["PPOB_PURCHASE", "PPOB_REFUND"]);
-    expect(ledger[1]!.amount.toFixed(2)).toBe("102350.00");
+    expect(ledger[1]!.amount.toFixed(2)).toBe("102500.00");
     // Mengulang bayar tidak menggandakan refund maupun debit.
     expect((await pay(user, ref, "fail-1")).status).toBe(200);
     expect(await ppobBalance(user.id)).toBe("500000.00");
@@ -280,7 +281,7 @@ describe.skipIf(!runIntegration)("PPOB pascabayar — cek tagihan lalu bayar", (
     const res = await pay(user, ref, "pending-1");
     expect(res.status).toBe(201);
     expect(((await res.json()) as { data: any }).data.status).toBe("PROCESSING");
-    expect(await ppobBalance(user.id)).toBe("397650.00");
+    expect(await ppobBalance(user.id)).toBe("397500.00");
     expect(await prisma.walletTransaction.count()).toBe(1);
   });
 
@@ -303,7 +304,7 @@ describe.skipIf(!runIntegration)("PPOB pascabayar — cek tagihan lalu bayar", (
     expect((await pay(user, hp, "hp-1")).status).toBe(201);
     const mf = await inquiryRef(user, "PSC_MULTIFIN0001", "5171-712/AB345");
     expect((await pay(user, mf, "mf-1")).status).toBe(201);
-    expect(await ppobBalance(user.id)).toBe("295300.00");
+    expect(await ppobBalance(user.id)).toBe("295000.00");
     expect((await prisma.ppobTransaction.findUniqueOrThrow({ where: { publicReference: hp } })).targetNumber).toBe("081234567890");
     // Nomor HP pascabayar harus nomor seluler; kontrak multifinance tidak boleh memuat markup.
     expect((await inquire(user, "PSC_HPPASCA00001", "12345")).status).toBe(400);
@@ -314,7 +315,7 @@ describe.skipIf(!runIntegration)("PPOB pascabayar — cek tagihan lalu bayar", (
     const user = await userWithBalance("500000");
     const ref = await inquiryRef(user, "PSC_PDAMSTUB0001", "5121400300");
     expect((await pay(user, ref, "pdam-1")).status).toBe(201);
-    expect(await ppobBalance(user.id)).toBe("397650.00");
+    expect(await ppobBalance(user.id)).toBe("397500.00");
     expect((await inquire(user, "PSC_PDAMSTUB0001", "12")).status).toBe(400);
   });
 });

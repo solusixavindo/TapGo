@@ -155,6 +155,7 @@ export class AdminConsoleController {
       ...(typeof req.query.category === "string" ? { category: req.query.category as never } : {}),
       ...(typeof req.query.search === "string" ? { search: req.query.search } : {}),
       ...(req.query.stuck === "1" || req.query.stuck === "true" ? { stuckOnly: true } : {}),
+      ...(req.query.marginIssue === "1" || req.query.marginIssue === "true" ? { marginIssueOnly: true } : {}),
       ...this.dateRange(req)
     });
     res.json({ success: true, data: result });

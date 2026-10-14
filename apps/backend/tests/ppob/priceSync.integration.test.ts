@@ -207,7 +207,7 @@ describe.skipIf(!runIntegration)("Stage R2.12 — sinkronisasi harga PPOB (Digif
 
     expect(result).toMatchObject({ skipped: false, considered: 1, updated: 1, errors: 0 });
     const stored = await prisma.ppobProduct.findUniqueOrThrow({ where: { sku: "PLN_100K_SYNC" } });
-    expect(stored.price.toFixed(2)).toBe("102500.00"); // 101600 + 900 (dibulatkan ke Rp500)
+    expect(stored.price.toFixed(2)).toBe("102800.00"); // 101600 + 1.200: untung bersih >= Rp500 setelah PPN dan PPh final
     expect(stored.priceSyncedAt).not.toBeNull();
   });
 
@@ -223,11 +223,10 @@ describe.skipIf(!runIntegration)("Stage R2.12 — sinkronisasi harga PPOB (Digif
       }
     });
     // axis TIDAK muncul lagi di daftar harga (mis. Digiflazz menghentikannya).
-    // Sisa tiga: telkomsel jauh lebih murah dari tri/xl (pola nyata Digiflazz
-    // sesi ini) — band memilih tri+xl dan mengeluarkan telkomsel sendiri,
-    // persis kasus yang sudah dikunci di tests/finance/ppobPricing.test.ts.
+    // Sisa tiga: telkomsel (modal 5.000) jauh lebih murah dari tri/xl — band memilih tri+xl di Rp6.500 dan
+    // mengeluarkan telkomsel sendiri (selisihnya akan 1.500, di atas batas wajarnya 1.100).
     prepaidRows = [
-      { buyer_sku_code: "s5-sync", price: 5405, buyer_product_status: true },
+      { buyer_sku_code: "s5-sync", price: 5000, buyer_product_status: true },
       { buyer_sku_code: "t5-sync", price: 5820, buyer_product_status: true },
       { buyer_sku_code: "x5-sync", price: 5862, buyer_product_status: true }
     ];
@@ -302,7 +301,7 @@ describe.skipIf(!runIntegration)("Stage R2.12 — sinkronisasi harga PPOB (Digif
     expect(body.data.considered).toBe(1);
     expect(body.data.updated).toBe(1);
     const stored = await prisma.ppobProduct.findUniqueOrThrow({ where: { sku: "PLN_100K_ADMIN" } });
-    expect(stored.price.toFixed(2)).toBe("102500.00");
+    expect(stored.price.toFixed(2)).toBe("102800.00");
   });
 
   it("POST /admin/ppob/sync-prices: PPOB_PROVIDER bukan digiflazz -> 503, bukan 500", async () => {
