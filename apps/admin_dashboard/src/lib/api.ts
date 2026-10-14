@@ -1026,6 +1026,8 @@ export function getDigiflazzBalance(refresh = false) {
 
 export type DigiflazzTxStatus = "PENDING" | "PROCESSING" | "SUCCESS" | "FAILED" | "REFUNDED";
 
+export type DigiflazzMarginStatus = "LOSS" | "BELOW_TARGET" | "OK";
+
 export type DigiflazzTxItem = {
   id: string;
   /** `ref_id` di dasbor Digiflazz. */
@@ -1047,6 +1049,10 @@ export type DigiflazzTxItem = {
   providerCost: number | null;
   /** Selisih penjualan dan modal; hanya untuk transaksi sukses yang modalnya tercatat. */
   margin: number | null;
+  /** Untung bersih setelah PPN atas selisih dan PPh; null bila bukan transaksi sukses atau modal tidak tercatat. */
+  netMargin: number | null;
+  /** Terhadap target untung bersih (Rp500 prabayar, Rp1.000 pascabayar): rugi, di bawah target, atau memenuhi. */
+  marginStatus: DigiflazzMarginStatus | null;
   failureCode: string | null;
   failureReason: string | null;
   /** Saldo pelanggan sudah dikembalikan. */
@@ -1068,7 +1074,18 @@ export type DigiflazzTxList = {
     byStatus: Record<string, number>;
     stuck: number;
     stuckAfterMinutes: number;
-    success: { count: number; sales: number; costedSales: number; providerCost: number; withCostCount: number };
+    success: {
+      count: number;
+      sales: number;
+      costedSales: number;
+      providerCost: number;
+      withCostCount: number;
+      /** Untung bersih seluruh transaksi sukses yang modalnya tercatat, dan berapa yang rugi atau di bawah target. */
+      netMargin: number;
+      lossCount: number;
+      belowTargetCount: number;
+      targets: { prepaid: number; postpaid: number };
+    };
   };
 };
 
@@ -1078,6 +1095,8 @@ export function listDigiflazzTransactions(params: {
   category?: string;
   search?: string;
   stuck?: boolean;
+  /** Hanya transaksi sukses yang rugi bersih atau di bawah target untung bersih. */
+  marginIssue?: boolean;
   range?: PeriodQuery;
 }) {
   const query = new URLSearchParams({ page: String(params.page ?? 1), pageSize: "25" });
@@ -1085,6 +1104,7 @@ export function listDigiflazzTransactions(params: {
   if (params.category) query.set("category", params.category);
   if (params.search) query.set("search", params.search);
   if (params.stuck) query.set("stuck", "1");
+  if (params.marginIssue) query.set("marginIssue", "1");
   if (params.range?.dateFrom) query.set("dateFrom", params.range.dateFrom);
   if (params.range?.dateTo) query.set("dateTo", params.range.dateTo);
   return request<DigiflazzTxList>(`/admin/ppob/transactions?${query.toString()}`);
@@ -1141,6 +1161,9 @@ export type VipInsights = {
   };
   attention: {
     stuckPpob: number;
+    /** Transaksi PPOB prabayar/pascabayar 7 hari terakhir yang rugi bersih, dan yang di bawah target untung bersih. */
+    ppobLossWeek: number;
+    ppobBelowTargetWeek: number;
     withdrawalsPending: number;
     withdrawalsPendingAmount: number;
     memberRequestsAwaiting: number;

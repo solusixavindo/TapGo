@@ -85,6 +85,10 @@ function attentionItems(data: VipInsights): AttentionItem[] {
     });
   }
   if (a.stuckPpob > 0) items.push({ key: "ppob", label: `${a.stuckPpob} transaksi PPOB tertahan`, detail: "lebih dari 10 menit", href: "/transaksi-digiflazz", tone: "rose" });
+  if (a.ppobLossWeek > 0)
+    items.push({ key: "ppob-loss", label: `${a.ppobLossWeek} transaksi PPOB rugi bersih`, detail: "7 hari terakhir", href: "/transaksi-digiflazz?margin=1", tone: "rose" });
+  if (a.ppobBelowTargetWeek > 0)
+    items.push({ key: "ppob-low", label: `${a.ppobBelowTargetWeek} transaksi PPOB di bawah target untung`, detail: "7 hari terakhir", href: "/transaksi-digiflazz?margin=1", tone: "amber" });
   if (a.withdrawalsPending > 0)
     items.push({ key: "wd", label: `${a.withdrawalsPending} penarikan menunggu`, detail: formatRupiah(a.withdrawalsPendingAmount), href: "/penarikan?status=PENDING", tone: "amber" });
   if (a.memberRequestsAwaiting > 0) items.push({ key: "member", label: `${a.memberRequestsAwaiting} pengajuan member menunggu verifikasi`, href: "/member-requests", tone: "amber" });

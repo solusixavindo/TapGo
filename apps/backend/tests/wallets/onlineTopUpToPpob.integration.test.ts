@@ -139,17 +139,17 @@ describe.skipIf(!runIntegration)("Top up online lalu bayar PPOB dan tagihan", ()
     expect(await prisma.ppobTransaction.count()).toBe(0);
   });
 
-  it("top up Saldo PPOB lalu bayar tagihan BPJS: total Rp102.350 dipotong dari saldo PPOB", async () => {
+  it("top up Saldo PPOB lalu bayar tagihan BPJS: total Rp102.500 dipotong dari saldo PPOB", async () => {
     const user = await createUser();
     await topUpAndSettle(user, 200000, "PPOB");
     const inquiry = await api("/api/v1/ppob/bills/inquiry", { method: "POST", token: tokenFor(user, "APP"), body: { sku: "PSC_BPJS00000001", targetNumber: "1234567890123" } });
     expect(inquiry.status).toBe(200);
     const { reference, totalAmount, sufficient } = ((await inquiry.json()) as { data: { reference: string; totalAmount: number; sufficient: boolean } }).data;
-    expect(totalAmount).toBe(102350);
+    expect(totalAmount).toBe(102500);
     expect(sufficient).toBe(true);
     const paid = await api("/api/v1/ppob/bills/pay", { method: "POST", token: tokenFor(user, "APP"), idempotencyKey: "e2e-bpjs-1", body: { reference } });
     expect(paid.status).toBeLessThan(300);
-    expect(await wallet(user.id)).toEqual({ balance: "0.00", ppob: "97650.00" });
+    expect(await wallet(user.id)).toEqual({ balance: "0.00", ppob: "97500.00" });
   });
 
   async function createUser(): Promise<User> {

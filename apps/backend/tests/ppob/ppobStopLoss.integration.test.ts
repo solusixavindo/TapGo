@@ -1,6 +1,6 @@
 import { Prisma, PpobCategory } from "@prisma/client";
 import { beforeEach, describe, expect, it } from "vitest";
-import { prisma, runIntegration, testDatabaseUrl } from "../helpers/referralWalletHarness.js";
+import { cleanDatabase, prisma, runIntegration, testDatabaseUrl } from "../helpers/referralWalletHarness.js";
 import { PrismaPpobRepository } from "../../src/modules/ppob/infrastructure/PrismaPpobRepository.js";
 
 /**
@@ -17,9 +17,7 @@ async function clean() {
   await prisma.ppobBillInquiry.deleteMany();
   await prisma.ppobTransaction.deleteMany();
   await prisma.ppobProduct.deleteMany();
-  await prisma.walletTransaction.deleteMany();
-  await prisma.wallet.deleteMany();
-  await prisma.user.deleteMany();
+  await cleanDatabase();
 }
 
 async function seedPending(options: { category?: PpobCategory; total: number; synced: boolean; active?: boolean }) {

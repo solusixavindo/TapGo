@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  DigiflazzMarginStatus,
   DigiflazzTxItem,
   DigiflazzTxList,
   DigiflazzTxStatus,
@@ -39,6 +40,13 @@ const STATUS_STYLE: Record<string, { label: string; className: string }> = {
   PENDING: { label: "Menunggu", className: "bg-amber-100 text-amber-800" },
   FAILED: { label: "Gagal", className: "bg-rose-100 text-rose-800" },
   REFUNDED: { label: "Dibatalkan", className: "bg-violet-100 text-violet-800" }
+};
+
+/** Status untung bersih terhadap target. Warna baris dan lencana mengikuti: merah rugi, kuning di bawah target. */
+const MARGIN_STYLE: Record<DigiflazzMarginStatus, { label: string; badge: string; row: string; text: string }> = {
+  LOSS: { label: "Rugi", badge: "bg-rose-100 text-rose-800", row: "bg-rose-50/70", text: "text-rose-700" },
+  BELOW_TARGET: { label: "Di bawah target", badge: "bg-amber-100 text-amber-900", row: "bg-amber-50/70", text: "text-amber-800" },
+  OK: { label: "Memenuhi target", badge: "bg-emerald-100 text-emerald-800", row: "", text: "text-emerald-700" }
 };
 
 const CATEGORY_OPTIONS: Array<{ id: string; label: string }> = [
@@ -122,6 +130,8 @@ function DetailPanel({ item, onClose }: { item: DigiflazzTxItem; onClose: () => 
     ["Total dibayar", formatRupiah(item.totalAmount)],
     ["Modal Digiflazz", item.providerCost === null ? "Tidak tercatat" : formatRupiah(item.providerCost)],
     ["Selisih", item.margin === null ? "—" : formatRupiah(item.margin)],
+    ["Untung bersih (setelah PPN dan PPh)", item.netMargin === null ? "—" : formatRupiah(item.netMargin)],
+    ["Terhadap target untung", item.marginStatus === null ? "—" : MARGIN_STYLE[item.marginStatus].label],
     ["Lama proses", duration(item.durationSeconds)],
     ["Dibuat", formatMoment(item.createdAt)],
     ["Selesai", formatMoment(item.completedAt)]
@@ -178,6 +188,7 @@ export default function DigiflazzTransactionsPage() {
   const [period, setPeriod] = useState<PeriodState>(() => defaultPeriod("all"));
   const range = useMemo(() => periodQuery(period), [period]);
   const [stuckOnly, setStuckOnly] = useState(false);
+  const [marginIssueOnly, setMarginIssueOnly] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -196,6 +207,7 @@ export default function DigiflazzTransactionsPage() {
           ...(category ? { category } : {}),
           ...(search ? { search } : {}),
           ...(stuckOnly ? { stuck: true } : {}),
+          ...(marginIssueOnly ? { marginIssue: true } : {}),
           range
         })
       );
@@ -205,7 +217,7 @@ export default function DigiflazzTransactionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, status, category, range, search, stuckOnly]);
+  }, [page, status, category, range, search, stuckOnly, marginIssueOnly]);
 
   useEffect(() => {
     if (!readToken()) {
@@ -220,6 +232,11 @@ export default function DigiflazzTransactionsPage() {
     setRole(current);
     void load();
   }, [router, load]);
+
+  // Kartu "Perlu perhatian" di Beranda membuka halaman ini dengan ?margin=1.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("margin") === "1") setMarginIssueOnly(true);
+  }, []);
 
   const selected = data?.items.find((item) => item.id === openId) ?? null;
   const byStatus = data?.summary.byStatus ?? {};
@@ -281,6 +298,26 @@ export default function DigiflazzTransactionsPage() {
                 {" "}
                 (modal tercatat pada {success.withCostCount} dari {success.count} transaksi, jadi selisih belum utuh)
               </span>
+            ) : null}
+            {success.withCostCount > 0 ? (
+              <>
+                <br />
+                Untung bersih setelah PPN dan PPh{" "}
+                <strong className={`tabular-nums ${success.netMargin > 0 ? "text-emerald-700" : "text-rose-700"}`} data-testid="dg-net">
+                  {formatRupiah(success.netMargin)}
+                </strong>{" "}
+                · target per transaksi {formatRupiah(success.targets.prepaid)} (prabayar) dan {formatRupiah(success.targets.postpaid)} (pascabayar)
+                {success.lossCount > 0 ? (
+                  <>
+                    {" "}· <strong className="text-rose-700">{success.lossCount} rugi</strong>
+                  </>
+                ) : null}
+                {success.belowTargetCount > 0 ? (
+                  <>
+                    {" "}· <strong className="text-amber-700">{success.belowTargetCount} di bawah target</strong>
+                  </>
+                ) : null}
+              </>
             ) : null}
           </p>
         ) : (
@@ -352,6 +389,20 @@ export default function DigiflazzTransactionsPage() {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            aria-pressed={marginIssueOnly}
+            onClick={() => {
+              setPage(1);
+              setMarginIssueOnly((value) => !value);
+            }}
+            className={[
+              "rounded-lg px-3.5 py-1.5 text-sm font-bold transition",
+              marginIssueOnly ? "bg-rose-600 text-white" : "bg-white text-rose-700 hover:bg-rose-50"
+            ].join(" ")}
+          >
+            Rugi atau di bawah target
+          </button>
           <form
             className="flex gap-1.5"
             onSubmit={(event) => {
@@ -421,7 +472,12 @@ export default function DigiflazzTransactionsPage() {
                     const style = STATUS_STYLE[item.status] ?? { label: item.status, className: "bg-slate-200 text-slate-700" };
                     const open = openId === item.id;
                     return (
-                      <tr key={item.id} className={open ? "bg-slate-50 align-top" : "align-top"} data-testid="dg-row">
+                      <tr
+                        key={item.id}
+                        className={["align-top", open ? "bg-slate-50" : item.marginStatus ? MARGIN_STYLE[item.marginStatus].row : ""].join(" ")}
+                        data-testid="dg-row"
+                        data-margin-status={item.marginStatus ?? undefined}
+                      >
                         <td className="px-4 py-3">
                           <p className="font-bold">{item.productName}</p>
                           <p className="font-mono text-[11px] text-slate-400">{item.reference}</p>
@@ -437,7 +493,13 @@ export default function DigiflazzTransactionsPage() {
                           ) : (
                             <>
                               <p>{formatRupiah(item.providerCost)}</p>
-                              {item.margin !== null ? <p className="text-[11px] text-emerald-700">selisih {formatRupiah(item.margin)}</p> : null}
+                              {item.margin !== null ? <p className="text-[11px] text-slate-500">selisih {formatRupiah(item.margin)}</p> : null}
+                              {item.netMargin !== null && item.marginStatus ? (
+                                <p className={`text-[11px] font-bold ${MARGIN_STYLE[item.marginStatus].text}`}>
+                                  bersih {formatRupiah(item.netMargin)}
+                                  {item.marginStatus !== "OK" ? ` · ${MARGIN_STYLE[item.marginStatus].label.toLowerCase()}` : ""}
+                                </p>
+                              ) : null}
                             </>
                           )}
                         </td>
