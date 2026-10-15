@@ -910,6 +910,8 @@ export type ProfitLossReport = {
     membershipDeferred: string;
     membershipRecognized: string;
     rideCommission: string;
+    /** Bagian komisi dari pesanan tunai yang sudah final; tidak ada pada server lama. */
+    rideCommissionCash?: string;
     ppobPrepaid: string;
     ppobPostpaidFee: string;
     ppobSales: string;

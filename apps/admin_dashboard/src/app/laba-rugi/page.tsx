@@ -184,7 +184,10 @@ export default function ProfitLossPage() {
                   <Line label="Penjualan membership" value={report.revenue.membershipSales} revenue={revenueTotal} indent />
                   <Line label="Pengembalian dana membership" value={report.revenue.membershipRefunds} revenue={revenueTotal} indent negative />
                   <Line label="Saldo PPOB manfaat paket (pendapatan diterima di muka, diakui saat dipakai)" value={report.revenue.membershipDeferred} revenue={revenueTotal} indent negative />
-                  <Line label="Komisi platform ojek (TapGoPay)" value={report.revenue.rideCommission} revenue={revenueTotal} indent />
+                  <Line label="Komisi platform ojek (pesanan tunai dan TapGoPay)" value={report.revenue.rideCommission} revenue={revenueTotal} indent />
+                  {report.revenue.rideCommissionCash !== undefined && Number(report.revenue.rideCommissionCash) > 0 ? (
+                    <Line label="  di antaranya komisi pesanan tunai (ditahan dari Saldo TapGo driver)" value={report.revenue.rideCommissionCash} revenue={revenueTotal} indent />
+                  ) : null}
                   <Line label="Penjualan PPOB prabayar (bruto)" value={report.revenue.ppobPrepaid} revenue={revenueTotal} indent />
                   <Line label="Biaya layanan tagihan pascabayar (neto)" value={report.revenue.ppobPostpaidFee} revenue={revenueTotal} indent />
                   <Line label="Total pendapatan usaha" value={report.revenue.total} revenue={revenueTotal} bold />
