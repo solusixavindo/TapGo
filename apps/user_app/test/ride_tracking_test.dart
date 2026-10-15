@@ -98,6 +98,26 @@ void main() {
   });
 
   group('RideDriverTracker', () {
+    testWidgets(
+        'selang bawaan 1,5 detik: posisi driver diambil beberapa kali dalam 3 detik',
+        (tester) async {
+      expect(kRideDriverTrackInterval, const Duration(milliseconds: 1500));
+      var calls = 0;
+      final tracker = RideDriverTracker(
+        reference: 'RID-1',
+        fetch: (_) async {
+          calls += 1;
+          return fixJson(lat: -6.1 - calls / 1000);
+        },
+        onFix: (_) {},
+      )..start();
+      await pumpMs(tester, 100);
+      expect(calls, 1);
+      await pumpMs(tester, 3000);
+      expect(calls, 3, reason: 'ambil langsung, lalu tiap 1,5 detik');
+      tracker.dispose();
+    });
+
     testWidgets('memuat langsung lalu berkala, berhenti saat dilepas',
         (tester) async {
       var calls = 0;

@@ -1246,12 +1246,16 @@ class DriverController extends StateNotifier<DriverState>
   /// tepat mengikuti kondisi yang sama dengan polling tawaran di atas, jadi
   /// dimulai/dihentikan dari titik yang sama (bukan orkestrasi terpisah).
   ///
-  /// Detak 5 detik: saat ada perjalanan aktif lokasi dikirim tiap detak agar
-  /// penumpang melihat posisi bergerak; saat hanya online tanpa perjalanan,
-  /// dikirim tiap 3 detak (15 detik) seperti sebelumnya.
+  /// Detak 1 detik; tiap detak memutuskan apakah lokasi dikirim:
+  /// - menuju titik jemput / menunggu penumpang (assigned, toPickup, arrived): TIAP detak (1 dtk), agar
+  ///   penumpang melihat kendaraan bergerak dan jeda tampil di ponselnya tidak melebihi ~3 dtk;
+  /// - sedang mengantar (inTrip): tiap 2 detak (2 dtk);
+  /// - hanya online tanpa perjalanan: tiap 15 detak (15 dtk), seperti sebelumnya.
+  /// Pengiriman tidak pernah menumpuk: bila kiriman sebelumnya belum selesai, detak ini dilewati (jaringan
+  /// lambat tidak boleh membuat antrean kiriman usang yang tiba terbalik urutannya di server).
   void _startLocationUpdates() {
     _locationTimer ??= Timer.periodic(
-      const Duration(seconds: 5),
+      _locationTick,
       (_) => unawaited(_sendLocationSilently()),
     );
     _syncTracking();
@@ -1272,10 +1276,33 @@ class DriverController extends StateNotifier<DriverState>
       state.availability != DriverAvailability.offline;
 
   int _locationTicks = 0;
+  static const _locationTick = Duration(seconds: 1);
+  bool _fastTracking = false;
+  bool _locationInFlight = false;
+
+  /// Sampai kapan pengiriman lokasi berlangsung tiap detik: hanya selagi driver bergerak menuju/menunggu
+  /// di titik jemput.
+  static bool _isApproachingPickup(DriverRide? ride) =>
+      ride != null &&
+      (ride.status == RideStatus.driverAssigned ||
+          ride.status == RideStatus.driverToPickup ||
+          ride.status == RideStatus.driverArrived);
+
+  /// Selang kirim dalam detak untuk keadaan sekarang. Terlihat agar uji dapat memeriksanya.
+  @visibleForTesting
+  static int locationEveryTicksFor(DriverRide? ride) {
+    if (ride == null || ride.isTerminal) return 15;
+    return _isApproachingPickup(ride) ? 1 : 2;
+  }
 
   void _stopLocationUpdates() {
     _locationTimer?.cancel();
     _locationTimer = null;
+    _locationTicks = 0;
+    if (_fastTracking) {
+      _fastTracking = false;
+      unawaited(_locationPort.setFastTracking(false));
+    }
   }
 
   /// Berbeda dari [sendLocationIfAvailable]: dipanggil sendiri oleh timer,
@@ -1300,9 +1327,15 @@ class DriverController extends StateNotifier<DriverState>
   /// locationIssue terisi, independen dari state.message.
   Future<void> _sendLocationSilently() async {
     final ride = state.activeRide;
-    final onRide = ride != null && !ride.isTerminal;
+    final fast = _isApproachingPickup(ride);
+    if (fast != _fastTracking) {
+      _fastTracking = fast;
+      unawaited(_locationPort.setFastTracking(fast));
+    }
     final tick = _locationTicks++;
-    if (!onRide && tick % 3 != 0) return;
+    if (tick % locationEveryTicksFor(ride) != 0) return;
+    if (_locationInFlight) return;
+    _locationInFlight = true;
     try {
       final status = await _locationPort.checkAvailability();
       if (!status.isAvailable) {
@@ -1317,6 +1350,8 @@ class DriverController extends StateNotifier<DriverState>
       await _locationPort.sendCurrentLocation();
     } catch (_) {
       // Kegagalan jaringan/server tetap diam sengaja — lihat catatan di atas.
+    } finally {
+      _locationInFlight = false;
     }
   }
 

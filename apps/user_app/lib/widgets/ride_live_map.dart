@@ -27,8 +27,11 @@ class _RideLiveMapState extends State<_RideLiveMap>
   final MapController _controller = MapController();
   late final AnimationController _move = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 900),
+    // Selaras dengan selang ambil posisi (1,5 dtk): marker bergeser terus ke titik berikut alih-alih sampai lalu
+    // berhenti menunggu. Bila fix berikutnya datang lebih awal, gerak berlanjut dari posisi marker saat itu.
+    duration: kRideDriverTrackInterval,
   );
+  DateTime? _lastRefit;
   LatLng? _from;
   LatLng? _to;
   bool _follow = true;
@@ -40,7 +43,7 @@ class _RideLiveMapState extends State<_RideLiveMap>
       return null;
     }
     final from = _from ?? to;
-    final t = Curves.easeOutCubic.transform(_move.value);
+    final t = Curves.linear.transform(_move.value);
     return LatLng(
       from.latitude + (to.latitude - from.latitude) * t,
       from.longitude + (to.longitude - from.longitude) * t,
@@ -89,10 +92,20 @@ class _RideLiveMapState extends State<_RideLiveMap>
     super.dispose();
   }
 
-  void _refit() {
+  /// Kamera dipasang ulang paling sering tiap 4 detik: posisi datang tiap 1,5 detik, dan kamera yang melompat
+  /// sebanyak itu terasa mengganggu. Marker tetap bergerak halus di dalam bingkai yang sama.
+  static const _refitEvery = Duration(seconds: 4);
+
+  void _refit({bool force = false}) {
     if (!_follow || !_mapReady) {
       return;
     }
+    final now = DateTime.now();
+    final last = _lastRefit;
+    if (!force && last != null && now.difference(last) < _refitEvery) {
+      return;
+    }
+    _lastRefit = now;
     final driver = _to;
     final points = [
       if (driver != null) driver,
@@ -142,7 +155,7 @@ class _RideLiveMapState extends State<_RideLiveMap>
                       ),
                       onMapReady: () {
                         _mapReady = true;
-                        _refit();
+                        _refit(force: true);
                       },
                       onPositionChanged: (camera, hasGesture) {
                         if (hasGesture && _follow) {
@@ -246,7 +259,7 @@ class _RideLiveMapState extends State<_RideLiveMap>
                   foregroundColor: _brandBlue,
                   onPressed: () {
                     setState(() => _follow = true);
-                    _refit();
+                    _refit(force: true);
                   },
                   child: const Icon(Icons.my_location_rounded),
                 ),

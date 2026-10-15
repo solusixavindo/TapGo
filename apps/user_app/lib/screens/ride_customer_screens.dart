@@ -1594,7 +1594,7 @@ class RideStatusScreen extends ConsumerStatefulWidget {
     this.cancelRequest,
     this.ratingRequest,
     this.driverLocationRequest,
-    this.trackInterval = const Duration(seconds: 5),
+    this.trackInterval = kRideDriverTrackInterval,
   });
 
   final String reference;

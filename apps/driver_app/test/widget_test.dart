@@ -2723,8 +2723,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(location.sendCalls, 0);
 
-      // Timer berkala 15 detik — pump waktu palsu, bukan menunggu nyata.
-      await tester.pump(const Duration(seconds: 16));
+      // Detak 1 detik, kirim tiap 15 detak saat idle — pump waktu palsu, bukan menunggu nyata.
+      await tester.pump(const Duration(seconds: 14));
       expect(location.sendCalls, 1);
 
       await tester.pump(const Duration(seconds: 15));
@@ -2794,7 +2794,7 @@ void main() {
       expect(find.byType(NavigationBar), findsNothing);
     });
 
-    testWidgets('saat ada perjalanan aktif lokasi terkirim tiap 5 detik',
+    testWidgets('sedang mengantar (inTrip): lokasi terkirim tiap 2 detik, GPS mode hemat',
         (tester) async {
       final repo = FakeDriverRepository(
         session: demoSession,
@@ -2806,12 +2806,67 @@ void main() {
       await tester.pumpAndSettle();
       final before = location.sendCalls;
 
-      await tester.pump(const Duration(seconds: 5));
-      expect(location.sendCalls, before + 1);
-      await tester.pump(const Duration(seconds: 5));
-      expect(location.sendCalls, before + 2);
-      await tester.pump(const Duration(seconds: 5));
-      expect(location.sendCalls, before + 3);
+      await tester.pump(const Duration(seconds: 6));
+      expect(location.sendCalls - before, 3);
+      expect(location.fastTrackingRequests, isEmpty,
+          reason: 'mengantar tidak memerlukan GPS tiap detik');
+    });
+
+    for (final status in [
+      RideStatus.driverAssigned,
+      RideStatus.driverToPickup,
+      RideStatus.driverArrived,
+    ]) {
+      testWidgets(
+          '$status: menuju/menunggu di titik jemput: lokasi terkirim tiap 1 detik dan GPS mode cepat',
+          (tester) async {
+        final repo = FakeDriverRepository(
+          session: demoSession,
+          current: demoRide(status),
+        );
+        final location = RecordingLocationPort(available: true);
+        await tester.pumpWidget(
+            buildTestableDriverApp(repository: repo, locationPort: location));
+        await tester.pumpAndSettle();
+        final before = location.sendCalls;
+
+        await tester.pump(const Duration(seconds: 3));
+        expect(location.sendCalls - before, 3,
+            reason: 'jeda antar kiriman harus 1 detik agar penumpang melihat gerak <= 3 detik');
+        expect(location.fastTrackingRequests, [true]);
+      });
+    }
+
+    testWidgets('jaringan lambat: kiriman lokasi tidak menumpuk (satu pada satu waktu)',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        current: demoRide(RideStatus.driverToPickup),
+      );
+      final location = RecordingLocationPort(available: true)
+        ..sendGate = Completer<void>();
+      await tester.pumpWidget(
+          buildTestableDriverApp(repository: repo, locationPort: location));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 8));
+      expect(location.sendCalls, 1,
+          reason: 'selama kiriman pertama menggantung, detak berikutnya dilewati');
+      expect(location.maxSendInFlight, 1);
+
+      location.sendGate!.complete();
+      await tester.pump(const Duration(seconds: 2));
+      expect(location.sendCalls, greaterThan(1));
+      expect(location.maxSendInFlight, 1);
+    });
+
+    test('selang kirim lokasi menurut keadaan perjalanan', () {
+      expect(DriverController.locationEveryTicksFor(null), 15);
+      expect(DriverController.locationEveryTicksFor(demoRide(RideStatus.driverAssigned)), 1);
+      expect(DriverController.locationEveryTicksFor(demoRide(RideStatus.driverToPickup)), 1);
+      expect(DriverController.locationEveryTicksFor(demoRide(RideStatus.driverArrived)), 1);
+      expect(DriverController.locationEveryTicksFor(demoRide(RideStatus.inTrip)), 2);
+      expect(DriverController.locationEveryTicksFor(demoRide(RideStatus.completed)), 15);
+      expect(DriverController.locationEveryTicksFor(demoRide(RideStatus.cancelledByPassenger)), 15);
     });
 
     testWidgets('offline: layanan latar depan tidak menyala', (tester) async {
@@ -2840,9 +2895,9 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
       await tester.pump();
       final sendsBefore = location.sendCalls;
-      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(seconds: 4));
       expect(location.stopTrackingCalls, stopsBefore);
-      expect(location.sendCalls, sendsBefore + 1);
+      expect(location.sendCalls, greaterThan(sendsBefore));
     });
 
   group('push notifikasi driver', () {
@@ -4536,6 +4591,14 @@ class RecordingLocationPort implements DriverLocationPort {
   int startTrackingCalls = 0;
   int stopTrackingCalls = 0;
 
+  /// Riwayat permintaan mode GPS cepat (true = menuju titik jemput).
+  final List<bool> fastTrackingRequests = [];
+
+  /// Bila diisi, sendCurrentLocation menunggu di sini (meniru jaringan lambat).
+  Completer<void>? sendGate;
+  int sendInFlight = 0;
+  int maxSendInFlight = 0;
+
   @override
   Future<void> startTracking() async {
     startTrackingCalls += 1;
@@ -4553,8 +4616,20 @@ class RecordingLocationPort implements DriverLocationPort {
   Future<DriverLocationAvailability> checkAvailability() async => availabilityStatus;
 
   @override
+  Future<void> setFastTracking(bool fast) async {
+    fastTrackingRequests.add(fast);
+  }
+
+  @override
   Future<void> sendCurrentLocation() async {
     sendCalls += 1;
+    sendInFlight += 1;
+    if (sendInFlight > maxSendInFlight) maxSendInFlight = sendInFlight;
+    try {
+      await sendGate?.future;
+    } finally {
+      sendInFlight -= 1;
+    }
   }
 
   // Null secara default meniru GPS/izin belum siap; test SOS mengisinya.

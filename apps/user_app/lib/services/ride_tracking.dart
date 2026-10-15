@@ -88,14 +88,19 @@ String tapGoRideDistanceLabel(int meters) {
   return '${(meters / 1000).toStringAsFixed(1).replaceAll('.', ',')} km';
 }
 
-/// Poller posisi driver. Jarak antar permintaan 5 detik; saat server menolak
+/// Selang bawaan pengambilan posisi driver. Driver mengirim posisi tiap 1 detik saat menuju titik jemput, jadi
+/// dengan 1,5 detik di sini posisi yang tampil paling banyak tertinggal sekitar 2,5 detik ditambah waktu jaringan
+/// (batas yang dijanjikan ke Owner: gerak driver terlihat tidak lebih lambat dari ~3 detik).
+const Duration kRideDriverTrackInterval = Duration(milliseconds: 1500);
+
+/// Poller posisi driver. Jarak antar permintaan 1,5 detik; saat server menolak
 /// atau jaringan gagal, jeda digandakan (maksimal 20 detik) lalu kembali normal
 /// begitu berhasil, supaya tidak menghujani server ketika terbatasi laju.
 class RideDriverTracker {
   RideDriverTracker({
     required this.reference,
     required this.onFix,
-    this.interval = const Duration(seconds: 5),
+    this.interval = kRideDriverTrackInterval,
     this.maxBackoff = const Duration(seconds: 20),
     Future<Map<String, dynamic>> Function(String reference)? fetch,
   }) : _fetch = fetch ?? ((ref) => _apiClient.rideDriverLocation(ref));

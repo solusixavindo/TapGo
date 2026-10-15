@@ -63,6 +63,11 @@ abstract class DriverLocationPort {
   /// berulang.
   Future<void> startTracking();
   Future<void> stopTracking();
+
+  /// Menaikkan/menurunkan kerapatan fix GPS. `true` saat driver menuju titik jemput atau menunggu penumpang: GPS
+  /// dibaca tiap ~1 detik tanpa filter jarak agar penumpang melihat kendaraan bergerak. `false` (bawaan) saat
+  /// hanya online atau di tengah perjalanan: hemat baterai. Aman dipanggil berulang dengan nilai yang sama.
+  Future<void> setFastTracking(bool fast);
 }
 
 class NoDriverLocationPort implements DriverLocationPort {
@@ -92,6 +97,9 @@ class NoDriverLocationPort implements DriverLocationPort {
 
   @override
   Future<void> stopTracking() async {}
+
+  @override
+  Future<void> setFastTracking(bool fast) async {}
 }
 
 /// GPS asli lewat package geolocator. Hanya mengurus perangkat + izin lokasi
@@ -103,16 +111,27 @@ class GeolocatorDriverLocationPort implements DriverLocationPort {
   final DriverRepository _repository;
   StreamSubscription<Position>? _trackingSubscription;
   Position? _lastTracked;
+  bool _fast = false;
+
+  /// Umur terbesar fix tersimpan yang masih dipakai ulang. Mode cepat mengirim tiap detik, jadi fix 3 detik
+  /// sudah basi dan diganti pembacaan baru; mode hemat boleh sampai 15 detik.
+  Duration get _maxFixAge => Duration(seconds: _fast ? 3 : 15);
 
   @override
   Future<void> startTracking() async {
     if (_trackingSubscription != null) return;
     if (!await isAvailable) return;
+    _openStream();
+  }
+
+  void _openStream() {
     _trackingSubscription = Geolocator.getPositionStream(
       locationSettings: AndroidSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 5,
-        intervalDuration: const Duration(seconds: 5),
+        // Mode cepat: semua fix dilewatkan (tanpa filter jarak) tiap detik. Mode hemat: tiap 5 detik dan
+        // hanya bila bergeser >= 5 m, seperti sebelumnya.
+        distanceFilter: _fast ? 0 : 5,
+        intervalDuration: Duration(seconds: _fast ? 1 : 5),
         foregroundNotificationConfig: const ForegroundNotificationConfig(
           notificationTitle: 'TapGo Driver aktif',
           notificationText:
@@ -125,6 +144,19 @@ class GeolocatorDriverLocationPort implements DriverLocationPort {
       (position) => _lastTracked = position,
       onError: (_) {},
     );
+  }
+
+  @override
+  Future<void> setFastTracking(bool fast) async {
+    if (_fast == fast) return;
+    _fast = fast;
+    // Hanya membuka ulang aliran yang sedang berjalan; bila belum/tidak sedang melacak, nilai baru berlaku
+    // pada startTracking berikutnya.
+    final running = _trackingSubscription;
+    if (running == null) return;
+    _trackingSubscription = null;
+    await running.cancel();
+    _openStream();
   }
 
   @override
@@ -188,7 +220,7 @@ class GeolocatorDriverLocationPort implements DriverLocationPort {
   Future<Position> _getPosition() async {
     final cached = _lastTracked;
     if (cached != null &&
-        DateTime.now().difference(cached.timestamp).inSeconds < 15) {
+        DateTime.now().difference(cached.timestamp) < _maxFixAge) {
       return cached;
     }
     return Geolocator.getCurrentPosition(
