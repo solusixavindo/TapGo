@@ -113,10 +113,15 @@ async function createReviewer(scopes: AdminScope[] = REVIEW_SCOPES) {
   return admin;
 }
 
-async function submitApplication(account: { token: string }, plate = "B 1234 UJI") {
+async function submitApplication(
+  account: { token: string },
+  plate = "B 1234 UJI",
+  extra: Record<string, unknown> = {}
+) {
   return api("/api/v1/driver/applications", {
     token: account.token,
     body: {
+      ...extra,
       serviceType: "MOTORCYCLE",
       plateNumber: plate,
       brand: "Honda",
@@ -276,6 +281,32 @@ describe.skipIf(!runIntegration)("H1 — pengajuan mandiri mitra driver", () => 
       where: { userId: calon.user.id }
     });
     expect(stored?.declarationAcceptedAt).not.toBeNull();
+  });
+
+  it("versi teks pernyataan yang disetujui dicatat di audit; versi tidak valid ditolak; tanpa versi tetap diterima", async () => {
+    const calon = await createAccount("CALON");
+    await uploadAllDocuments(calon);
+    const invalid = await submitApplication(calon, "B 1234 UJI", { declarationVersion: "<script>" });
+    expect(invalid.status).toBe(400);
+
+    const ok = await submitApplication(calon, "B 1234 UJI", { declarationVersion: "2026-10-16" });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(201);
+    const audit = await prisma.auditLog.findFirst({
+      where: { actorId: calon.user.id, action: "driver.application.declaration_accepted" }
+    });
+    expect(audit).not.toBeNull();
+    expect((audit!.metadata as { declarationVersion: string }).declarationVersion).toBe("2026-10-16");
+
+    // Aplikasi lama (tanpa versi) tetap bisa mengajukan; auditnya mencatat versi null.
+    await api("/api/v1/driver/applications/withdraw", { token: calon.token, body: {} });
+    const legacy = await submitApplication(calon);
+    expect(legacy.status, JSON.stringify(legacy.body)).toBe(201);
+    const audits = await prisma.auditLog.findMany({
+      where: { actorId: calon.user.id, action: "driver.application.declaration_accepted" },
+      orderBy: { createdAt: "asc" }
+    });
+    expect(audits).toHaveLength(2);
+    expect((audits[1]!.metadata as { declarationVersion: null }).declarationVersion).toBeNull();
   });
 
   it("withdraw mengakhiri pengajuan terbuka; pengajuan baru bisa dibuat lagi", async () => {

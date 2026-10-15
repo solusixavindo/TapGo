@@ -182,6 +182,7 @@ export class DriverApplicationService {
     address?: string;
     emergencyContactName?: string;
     emergencyContactPhone?: string;
+    declarationVersion?: string;
   }): Promise<DriverApplicationSummary> {
     const plate = normalizePlate(input.plateNumber);
     if (!PLATE_PATTERN.test(plate)) {
@@ -261,6 +262,21 @@ export class DriverApplicationService {
           version: true,
           submittedAt: true,
           decisionReasonCode: true
+        }
+      });
+
+      // Bukti TEKS MANA yang disetujui: waktu persetujuan sudah ada di baris pengajuan, versi teksnya dicatat
+      // di audit supaya sengketa kelak dapat merujuk ke naskah yang benar.
+      await tx.auditLog.create({
+        data: {
+          actorId: input.userId,
+          action: "driver.application.declaration_accepted",
+          entityType: "RideDriverApplication",
+          entityId: application.id,
+          metadata: {
+            cycleNumber: application.cycleNumber,
+            declarationVersion: input.declarationVersion ?? null
+          }
         }
       });
 

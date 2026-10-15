@@ -37,7 +37,10 @@ const submitSchema = z.object({
     // Wajib true, bukan opsional — tanpa persetujuan pernyataan, pengajuan
     // ditolak fail-closed di sini, bukan diterima diam-diam tanpa bukti
     // persetujuan.
-    declarationAccepted: z.literal(true)
+    declarationAccepted: z.literal(true),
+    // Versi teks pernyataan yang ditampilkan di aplikasi saat disetujui (mis. "2026-10-16"). Opsional agar
+    // aplikasi lama tetap bisa mengajukan; bila ada, dicatat di audit sebagai bukti teks mana yang disetujui.
+    declarationVersion: z.string().trim().regex(/^[A-Za-z0-9._-]{1,40}$/).optional()
   })
 });
 
@@ -62,6 +65,9 @@ driverApplicationRouter.post(
       userId: req.auth!.userId,
       serviceType: req.body.serviceType,
       plateNumber: req.body.plateNumber,
+      ...(req.body.declarationVersion !== undefined
+        ? { declarationVersion: req.body.declarationVersion }
+        : {}),
       ...(req.body.brand !== undefined ? { brand: req.body.brand } : {}),
       ...(req.body.model !== undefined ? { model: req.body.model } : {}),
       ...(req.body.color !== undefined ? { color: req.body.color } : {}),
