@@ -110,6 +110,10 @@ export default function LoginForm() {
         </div>
       </Field>
 
+      <p className="-mt-2 text-xs leading-6 themed-text-muted" data-testid="google-driver-hint">
+        Driver yang mendaftar dengan Google: atur password lebih dulu di aplikasi TapGo Driver, menu Akun &gt; Password tapgolion.id.
+      </p>
+
       {error ? (
         <p role="alert" className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-300">
           {error}

@@ -32,11 +32,16 @@ export default function AmountForm() {
   const [custom, setCustom] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  // undefined = belum dimuat; null = gagal dimuat (kembali ke transfer manual seperti semula).
+  // undefined = belum dimuat; null = server lama tanpa endpoint opsi (kembali ke transfer manual seperti semula).
   const [options, setOptions] = useState<TopUpOptions | null | undefined>(PREVIEW_MODE ? null : undefined);
+  // Opsi gagal dimuat karena jaringan/server (bukan server lama): jangan diam-diam beralih ke transfer manual.
+  const [optionsError, setOptionsError] = useState("");
+  const [optionsAttempt, setOptionsAttempt] = useState(0);
 
-  // Penawaran harga per metode untuk nominal ini (dari server); null selama belum dimuat atau server lama.
-  const [quotes, setQuotes] = useState<TopUpQuote[] | null>(null);
+  // Penawaran harga per metode (dari server), disimpan bersama kunci nominal+tujuan yang diminta supaya biaya
+  // dari nominal sebelumnya tidak pernah tampil untuk nominal yang baru diketik.
+  const [quoteSet, setQuoteSet] = useState<{ key: string; list: TopUpQuote[] } | null>(null);
+  const [quoteError, setQuoteError] = useState(false);
   const [method, setMethod] = useState<TopUpMethodId | null>(null);
 
   const config = TOPUP_TARGETS[target];
@@ -55,13 +60,23 @@ export default function AmountForm() {
     const initial = parseTopUpTarget(readSession(TOPUP_TARGET_KEY));
     if (initial !== "WALLET") chooseTarget(initial);
     let alive = true;
+    setOptionsError("");
     getTopUpOptions(readSession(TOKEN_KEY))
       .then((result) => (alive ? setOptions(result) : undefined))
-      .catch(() => (alive ? setOptions(null) : undefined));
+      .catch((caught: unknown) => {
+        if (!alive) return;
+        // 404 = server lama tanpa endpoint opsi: pakai alur lama. Selain itu (jaringan, 429, 5xx) tampilkan galat
+        // dengan tombol coba lagi; beralih ke transfer manual di sini akan menyesatkan driver yang manualnya dimatikan.
+        if ((caught as { status?: number } | null)?.status === 404) {
+          setOptions(null);
+        } else {
+          setOptionsError(caught instanceof Error ? caught.message : "Opsi top up belum dapat dimuat.");
+        }
+      });
     return () => {
       alive = false;
     };
-  }, [router]);
+  }, [router, optionsAttempt]);
 
   /** Ganti tujuan: nominal cepat dan batas minimal ikut berganti. */
   function chooseTarget(next: TopUpTarget) {
@@ -76,9 +91,11 @@ export default function AmountForm() {
   const amountOk = Number.isFinite(amount) && amount >= minimum && amount <= maximum;
 
   // Muat penawaran harga tiap metode setiap kali nominal atau tujuan berubah (jeda singkat saat mengetik).
+  const quoteKey = `${target}:${amount}`;
   useEffect(() => {
+    setQuoteError(false);
     if (PREVIEW_MODE || !online || !amountOk || !options?.methods?.length) {
-      setQuotes(null);
+      setQuoteSet(null);
       return;
     }
     let alive = true;
@@ -86,11 +103,15 @@ export default function AmountForm() {
       getTopUpOptions(readSession(TOKEN_KEY), { amount, target })
         .then((result) => {
           if (!alive) return;
-          setQuotes(result.quotes ?? null);
+          setQuoteSet({ key: `${target}:${amount}`, list: result.quotes ?? [] });
           // Pertahankan metode pilihan bila masih tersedia; selain itu pakai yang pertama.
           setMethod((current) => (result.quotes?.some((q) => q.method === current) ? current : (result.quotes?.[0]?.method ?? null)));
         })
-        .catch(() => (alive ? setQuotes(null) : undefined));
+        .catch(() => {
+          if (!alive) return;
+          setQuoteSet(null);
+          setQuoteError(true);
+        });
     }, 250);
     return () => {
       alive = false;
@@ -98,12 +119,14 @@ export default function AmountForm() {
     };
   }, [online, amountOk, amount, target, options]);
 
+  // Hanya penawaran untuk nominal+tujuan yang sedang tampil yang dipakai.
+  const quotes = quoteSet?.key === quoteKey ? quoteSet.list : null;
   const quote = quotes?.find((item) => item.method === method) ?? null;
   // Server lama (tanpa metode): satu biaya tunggal. Server baru: biaya metode terpilih.
   const hasMethods = (options?.methods?.length ?? 0) > 0;
   const fee = !online ? 0 : hasMethods ? (quote?.fee ?? 0) : (options?.onlineFee ?? 0);
   const quoteReady = !hasMethods || quote !== null;
-  const valid = amountOk && !unavailable && options !== undefined && (!online || quoteReady);
+  const valid = amountOk && !unavailable && options !== undefined && !optionsError && (!online || quoteReady);
   const total = (amount || 0) + fee;
 
   async function onContinue() {
@@ -203,7 +226,7 @@ export default function AmountForm() {
         </label>
       </div>
 
-      {!valid && (custom.trim() || amount) ? (
+      {!amountOk && (custom.trim() || amount) ? (
         <p className="mt-3 text-xs font-semibold text-rose-400">
           Jumlah {config.label} harus antara {formatRupiah(minimum)} dan {formatRupiah(maximum)}.
         </p>
@@ -235,7 +258,7 @@ export default function AmountForm() {
                     <span className="mt-0.5 block text-xs themed-text-muted">{item.description}</span>
                   </span>
                   <span className="shrink-0 text-right text-xs font-bold themed-text">
-                    {itemQuote ? `Biaya ${formatRupiah(itemQuote.fee)}` : "…"}
+                    {itemQuote ? `Biaya ${formatRupiah(itemQuote.fee)}` : quoteError ? "—" : "…"}
                   </span>
                 </button>
               );
@@ -255,11 +278,11 @@ export default function AmountForm() {
           </div>
           <div className="flex items-start justify-between gap-6">
             <dt className="themed-text-muted">Biaya layanan pembayaran</dt>
-            <dd className="font-bold themed-text" data-testid="fee-amount">{formatRupiah(fee)}</dd>
+            <dd className="font-bold themed-text" data-testid="fee-amount">{quoteReady ? formatRupiah(fee) : "…"}</dd>
           </div>
           <div className="flex items-start justify-between gap-6 border-t border-dashed themed-border pt-2.5">
             <dt className="font-bold themed-text">Total yang dibayar</dt>
-            <dd className="font-black themed-accent" data-testid="fee-total">{formatRupiah(total)}</dd>
+            <dd className="font-black themed-accent" data-testid="fee-total">{quoteReady ? formatRupiah(total) : "…"}</dd>
           </div>
           <p className="pt-1 text-xs leading-6 themed-text-muted">
             Saldo bertambah sebesar {formatRupiah(amount)}. Biaya layanan dipungut penyedia pembayaran dan tidak masuk ke saldo.
@@ -268,6 +291,26 @@ export default function AmountForm() {
               : ""}
           </p>
         </dl>
+      ) : null}
+
+      {optionsError ? (
+        <div role="alert" className="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-300">
+          <p>{optionsError}</p>
+          <button
+            type="button"
+            data-testid="retry-options"
+            onClick={() => setOptionsAttempt((count) => count + 1)}
+            className="mt-2 underline underline-offset-2"
+          >
+            Coba lagi
+          </button>
+        </div>
+      ) : null}
+
+      {quoteError ? (
+        <p role="alert" data-testid="quote-error" className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-300">
+          Biaya layanan belum dapat dimuat. Periksa koneksi, lalu ubah nominal sedikit atau muat ulang halaman ini.
+        </p>
       ) : null}
 
       {unavailable ? (
@@ -286,7 +329,9 @@ export default function AmountForm() {
         {busy
           ? "Menyiapkan…"
           : online
-            ? `Bayar ${formatRupiah(total)}`
+            ? quoteReady
+              ? `Bayar ${formatRupiah(total)}`
+              : "Menghitung biaya…"
             : `Lanjut isi ${config.label} ${formatRupiah(amount || 0)}`}
       </button>
     </div>

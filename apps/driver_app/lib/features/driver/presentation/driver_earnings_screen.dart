@@ -35,8 +35,41 @@ class DriverEarningsScreen extends ConsumerStatefulWidget {
   ConsumerState<DriverEarningsScreen> createState() => _DriverEarningsScreenState();
 }
 
-class _DriverEarningsScreenState extends ConsumerState<DriverEarningsScreen> {
+class _DriverEarningsScreenState extends ConsumerState<DriverEarningsScreen>
+    with WidgetsBindingObserver {
   String _range = 'today';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Driver mengisi Saldo TapGo di peramban lalu kembali ke aplikasi: saldo yang tampil harus sudah yang baru, tanpa
+  /// harus berpindah tab atau menutup aplikasi (pesanan tunai ditolak selama saldo di layar masih tampak kurang).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.invalidate(driverWalletProvider);
+    }
+  }
+
+  Future<void> _refreshAll() async {
+    ref.invalidate(driverWalletProvider);
+    ref.invalidate(driverEarningsProvider(_range));
+    ref.invalidate(driverPerformanceProvider);
+    try {
+      await ref.read(driverWalletProvider.future);
+    } catch (_) {
+      // Galat sudah ditampilkan kartu saldo dengan tombol coba lagi.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +77,11 @@ class _DriverEarningsScreenState extends ConsumerState<DriverEarningsScreen> {
     final performance = ref.watch(driverPerformanceProvider);
     final topPadding = kDriverDemoMode ? 52.0 : 20.0;
 
-    return ListView(
+    return RefreshIndicator(
+      key: const ValueKey('earnings-refresh'),
+      onRefresh: _refreshAll,
+      child: ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.fromLTRB(16, topPadding, 16, 120),
       children: [
         Text('Pendapatan', style: Theme.of(context).textTheme.headlineSmall),
@@ -101,6 +138,7 @@ class _DriverEarningsScreenState extends ConsumerState<DriverEarningsScreen> {
           const DemoScenarioSelector(),
         ],
       ],
+      ),
     );
   }
 }

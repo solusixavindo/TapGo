@@ -2472,6 +2472,44 @@ void main() {
       expect(find.byKey(const ValueKey('wallet-topup-button')), findsOneWidget);
     });
 
+    testWidgets(
+        'setelah isi saldo di peramban: kembali ke aplikasi memuat ulang saldo, tarik layar juga memuat ulang',
+        (tester) async {
+      DriverWalletSummary wallet(int balance) => DriverWalletSummary(
+            balance: balance,
+            commissionEnabled: true,
+            commissionPercent: 8,
+            topUpUrl: 'https://tapgolion.id/topup',
+            entries: const [],
+          );
+      final repo = FakeDriverRepository(session: demoSession)
+        ..walletResult = wallet(1000);
+      await pumpDriver(tester, repo);
+      await tester.tap(find.byIcon(Icons.savings_rounded));
+      await tester.pumpAndSettle();
+      expect(find.text('Rp1.000'), findsOneWidget);
+
+      // Driver mengisi saldo di peramban; server kini mencatat Rp26.000.
+      repo.walletResult = wallet(26000);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.text('Rp26.000'), findsOneWidget);
+      expect(find.text('Rp1.000'), findsNothing);
+
+      // Tarik layar ke bawah juga memuat ulang.
+      repo.walletResult = wallet(31000);
+      final callsBefore = repo.walletCalls;
+      await tester.fling(find.byKey(const ValueKey('earnings-refresh')), const Offset(0, 400), 1000);
+      await tester.pumpAndSettle();
+      expect(repo.walletCalls, greaterThan(callsBefore));
+      expect(find.text('Rp31.000'), findsOneWidget);
+    });
+
     testWidgets('komisi mati: tidak ada catatan komisi, saldo nol tetap tampil',
         (tester) async {
       final repo = FakeDriverRepository(session: demoSession);
@@ -4418,8 +4456,11 @@ class FakeDriverRepository implements DriverRepository {
   DriverWalletSummary? walletResult;
   Object? walletError;
 
+  int walletCalls = 0;
+
   @override
   Future<DriverWalletSummary> walletSummary() async {
+    walletCalls += 1;
     if (walletError != null) throw walletError!;
     return walletResult ??
         const DriverWalletSummary(
