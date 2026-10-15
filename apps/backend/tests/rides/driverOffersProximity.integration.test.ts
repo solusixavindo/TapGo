@@ -181,6 +181,32 @@ describe.skipIf(!runIntegration)("Tawaran berbasis jarak dan batas waktu pencari
     expect(offers.every((o) => o.status === "SEARCHING_DRIVER")).toBe(true);
   });
 
+  it("tawaran memuat batas pencarian (untuk hitung mundur di aplikasi) dan komisi bila komisi menyala", async () => {
+    const { user } = await createDriver();
+    const near = await createOrder(north(2)); // tarif 9.000 pada pabrik uji
+    type Offer = { reference: string; createdAt: Date; searchExpiresAt: Date; commissionFee: number | null; commissionPercent: number | null; totalFare: number };
+    const read = async () => (await service().listOffersForDriver(user.id)) as unknown as Offer[];
+
+    const wasEnabled = backendEnv.DRIVER_COMMISSION_ENABLED;
+    try {
+      backendEnv.DRIVER_COMMISSION_ENABLED = false;
+      const off = (await read())[0]!;
+      // Batas = waktu dibuat + RIDE_SEARCH_TIMEOUT_SECONDS, persis aturan penyapu kedaluwarsa.
+      expect(off.searchExpiresAt.getTime() - off.createdAt.getTime()).toBe(backendEnv.RIDE_SEARCH_TIMEOUT_SECONDS * 1000);
+      expect(off.commissionFee).toBeNull();
+      expect(off.commissionPercent).toBeNull();
+
+      backendEnv.DRIVER_COMMISSION_ENABLED = true;
+      backendEnv.DRIVER_COMMISSION_PERCENT = 8;
+      const on = (await read())[0]!;
+      expect(on.reference).toBe(near.order.publicReference);
+      expect(on.commissionPercent).toBe(8);
+      expect(on.commissionFee).toBe(Math.ceil((on.totalFare * 8) / 100)); // dibulatkan ke atas, sama dengan yang ditahan saat accept
+    } finally {
+      backendEnv.DRIVER_COMMISSION_ENABLED = wasEnabled;
+    }
+  });
+
   it("pesanan yang lebih tua dari batas waktu pencarian tidak tampil", async () => {
     const { user } = await createDriver();
     await createOrder(north(1), { ageSeconds: 240 });

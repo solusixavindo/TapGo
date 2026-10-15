@@ -3050,6 +3050,12 @@ export class RideService {
       totalFare: order.totalFare,
       currency: "IDR",
       createdAt: order.createdAt,
+      // Batas pencarian yang SAMA dengan penyapu kedaluwarsa (rideSearchExpiry): tawaran menghilang setelah ini, jadi
+      // aplikasi driver dapat menampilkan hitung mundur yang jujur.
+      searchExpiresAt: new Date(order.createdAt.getTime() + env.RIDE_SEARCH_TIMEOUT_SECONDS * 1000),
+      // Komisi yang akan ditahan saat tawaran diterima (null bila komisi mati). Pesanan tunai saja: tidak ada tawaran digital.
+      commissionFee: env.DRIVER_COMMISSION_ENABLED ? this.cashCommissionFee(order.totalFare).toNumber() : null,
+      commissionPercent: env.DRIVER_COMMISSION_ENABLED ? env.DRIVER_COMMISSION_PERCENT : null,
     };
   }
 
