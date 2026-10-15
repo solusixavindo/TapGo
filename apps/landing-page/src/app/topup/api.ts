@@ -5,9 +5,9 @@
  * (../upgrade/api.ts) — satu akun TapGo, satu token WEB, dua fitur di situs
  * yang sama. Hanya fungsi yang khas top up yang ditambahkan di sini.
  */
-import { API_BASE, PREVIEW_MODE, login, readSession, request, takeNextPath, writeSession, clearSession } from "../upgrade/api";
+import { API_BASE, PREVIEW_MODE, isSafePaymentUrl, login, readSession, request, takeNextPath, writeSession, clearSession } from "../upgrade/api";
 
-export { API_BASE, PREVIEW_MODE, login, readSession, takeNextPath, writeSession, clearSession };
+export { API_BASE, PREVIEW_MODE, isSafePaymentUrl, login, readSession, takeNextPath, writeSession, clearSession };
 export { BUYER_NAME_KEY, NEXT_KEY, NOTICE_KEY, TOKEN_KEY } from "../upgrade/api";
 
 export const TOPUP_ORDER_KEY = "tapgo.topup.orderId";
@@ -218,16 +218,6 @@ export async function getTopUpSummary(token: string, orderId: string): Promise<T
   return request<TopUpSummary>(`/web/wallet/topup/online/${orderId}`, {
     headers: { authorization: `Bearer ${token}` }
   });
-}
-
-/** Hanya alamat https yang boleh dibuka sebagai halaman pembayaran. */
-export function isSafePaymentUrl(value: string | null | undefined): value is string {
-  if (!value) return false;
-  try {
-    return new URL(value).protocol === "https:";
-  } catch {
-    return false;
-  }
 }
 
 export async function getTopUpOrder(token: string, orderId: string): Promise<TopUpOrder> {

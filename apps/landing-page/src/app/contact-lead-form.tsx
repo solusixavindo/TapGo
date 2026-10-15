@@ -74,6 +74,7 @@ export default function ContactLeadForm() {
         <span className="text-sm font-bold themed-text">Nama lengkap</span>
         <input
           value={form.name}
+          maxLength={100}
           onChange={(event) => updateField("name", event.target.value)}
           className="mt-2 w-full rounded-2xl border border-brand-blue/10 bg-white px-4 py-3 text-brand-navy outline-none transition focus:border-brand-green focus:ring-4 focus:ring-brand-green/10"
           placeholder="Nama Anda"
@@ -83,6 +84,7 @@ export default function ContactLeadForm() {
         <span className="text-sm font-bold themed-text">Nomor WhatsApp</span>
         <input
           value={form.whatsapp}
+          maxLength={20}
           onChange={(event) => updateField("whatsapp", event.target.value)}
           className="mt-2 w-full rounded-2xl border border-brand-blue/10 bg-white px-4 py-3 text-brand-navy outline-none transition focus:border-brand-green focus:ring-4 focus:ring-brand-green/10"
           placeholder="08xxxxxxxxxx"
@@ -105,6 +107,7 @@ export default function ContactLeadForm() {
         <span className="text-sm font-bold themed-text">Pesan</span>
         <textarea
           value={form.message}
+          maxLength={600}
           onChange={(event) => updateField("message", event.target.value)}
           className="mt-2 min-h-24 w-full rounded-2xl border border-brand-blue/10 bg-white px-4 py-3 text-brand-navy outline-none transition focus:border-brand-green focus:ring-4 focus:ring-brand-green/10"
           placeholder="Tulis pertanyaan Anda"

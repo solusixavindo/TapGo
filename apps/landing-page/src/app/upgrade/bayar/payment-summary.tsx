@@ -17,6 +17,7 @@ import {
   getManualTransfer,
   getOrder,
   getPaymentOptions,
+  isSafePaymentUrl,
   payOrder,
   readSession,
   startManualTransfer
@@ -136,6 +137,10 @@ export default function PaymentSummary() {
 
       const handoff = await payOrder(readSession(TOKEN_KEY), order.id);
       if (handoff.redirectUrl) {
+        // Hanya https: URL dengan skema lain (javascript:, data:) tidak pernah dibuka.
+        if (!isSafePaymentUrl(handoff.redirectUrl)) {
+          throw new Error("Halaman pembayaran belum dapat dibuka. Coba lagi beberapa saat lagi.");
+        }
         // Pengguna berpindah ke halaman penyedia pembayaran. Aktivasi tetap
         // hanya boleh datang dari webhook penyedia, bukan dari kembalinya
         // pengguna ke situs ini.

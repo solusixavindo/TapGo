@@ -159,6 +159,7 @@ export default function RegisterForm() {
               <span className="themed-text text-sm font-bold">Nama lengkap *</span>
               <input
                 value={form.name}
+                maxLength={100}
                 onChange={(event) => updateField("name", event.target.value)}
                 className="mt-2 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
                 placeholder="Nama sesuai identitas"
@@ -169,6 +170,7 @@ export default function RegisterForm() {
               <span className="themed-text text-sm font-bold">Nomor WhatsApp *</span>
               <input
                 value={form.whatsapp}
+                maxLength={20}
                 onChange={(event) => updateField("whatsapp", event.target.value)}
                 className="mt-2 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
                 placeholder="08xxxxxxxxxx"
@@ -180,6 +182,7 @@ export default function RegisterForm() {
               <span className="themed-text text-sm font-bold">Email</span>
               <input
                 value={form.email}
+                maxLength={120}
                 onChange={(event) => updateField("email", event.target.value)}
                 className="mt-2 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
                 placeholder="nama@email.com"
@@ -205,6 +208,7 @@ export default function RegisterForm() {
               <span className="themed-text text-sm font-bold">Alamat</span>
               <textarea
                 value={form.address}
+                maxLength={300}
                 onChange={(event) => updateField("address", event.target.value)}
                 className="mt-2 min-h-24 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
                 placeholder="Alamat domisili"
@@ -215,6 +219,7 @@ export default function RegisterForm() {
               <span className="themed-text text-sm font-bold">Kode referral jika ada</span>
               <input
                 value={form.referral}
+                maxLength={40}
                 onChange={(event) => updateField("referral", event.target.value)}
                 className="mt-2 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
                 placeholder="Opsional"
@@ -225,6 +230,7 @@ export default function RegisterForm() {
               <span className="themed-text text-sm font-bold">Catatan tambahan</span>
               <input
                 value={form.notes}
+                maxLength={300}
                 onChange={(event) => updateField("notes", event.target.value)}
                 className="mt-2 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
                 placeholder="Opsional"

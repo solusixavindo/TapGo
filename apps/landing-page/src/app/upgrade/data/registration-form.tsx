@@ -265,6 +265,7 @@ export default function RegistrationForm() {
         <input
           className={inputClass}
           value={fullName}
+          maxLength={120}
           onChange={(event) => setFullName(event.target.value)}
           placeholder="Nama lengkap"
           autoComplete="name"
@@ -276,6 +277,7 @@ export default function RegistrationForm() {
         <textarea
           className={`${inputClass} min-h-[96px] resize-y`}
           value={address}
+          maxLength={300}
           onChange={(event) => setAddress(event.target.value)}
           placeholder="Jalan, kelurahan, kecamatan, kota"
           required

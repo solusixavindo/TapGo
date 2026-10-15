@@ -504,6 +504,19 @@ export async function uploadAvatar(token: string, file: File) {
   await postImage("/account/avatar", file, "Foto profil belum dapat diunggah.");
 }
 
+/**
+ * Hanya alamat https yang boleh dibuka sebagai halaman pembayaran. URL pembayaran datang dari server kita, tetapi
+ * `window.location.assign` dengan skema lain (javascript:, data:) akan menjalankan kode; jadi selalu diperiksa dulu.
+ */
+export function isSafePaymentUrl(value: string | null | undefined): value is string {
+  if (!value) return false;
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export async function payOrder(token: string, orderId: string): Promise<PaymentHandoff> {
   const result = await request<{ redirectUrl?: string | null; paid?: boolean }>(
     `/web/membership/orders/${orderId}/pay`,

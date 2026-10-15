@@ -82,6 +82,7 @@ export default function DeleteAccountForm() {
           <span className="themed-text text-sm font-bold">Nama lengkap *</span>
           <input
             value={form.name}
+            maxLength={100}
             onChange={(event) => updateField("name", event.target.value)}
             className="mt-2 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
             placeholder="Nama lengkap"
@@ -92,6 +93,7 @@ export default function DeleteAccountForm() {
           <span className="themed-text text-sm font-bold">Nomor WhatsApp terdaftar *</span>
           <input
             value={form.whatsapp}
+            maxLength={20}
             onChange={(event) => updateField("whatsapp", event.target.value)}
             className="mt-2 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
             placeholder="+62 atau 08..."
@@ -103,6 +105,7 @@ export default function DeleteAccountForm() {
           <span className="themed-text text-sm font-bold">Email jika ada</span>
           <input
             value={form.email}
+            maxLength={120}
             onChange={(event) => updateField("email", event.target.value)}
             className="mt-2 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
             placeholder="nama@email.com"
@@ -114,6 +117,7 @@ export default function DeleteAccountForm() {
           <span className="themed-text text-sm font-bold">Alasan penghapusan akun</span>
           <textarea
             value={form.reason}
+            maxLength={500}
             onChange={(event) => updateField("reason", event.target.value)}
             className="mt-2 min-h-28 w-full rounded-2xl border themed-border bg-white px-4 py-3 text-brand-navyDeep outline-none transition focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20"
             placeholder="Opsional"
