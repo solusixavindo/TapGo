@@ -461,7 +461,7 @@ export class AdminInsightsService {
   private async attentionCounts(now: Date) {
     const stuckBefore = new Date(now.getTime() - PPOB_STUCK_AFTER_MS);
     const weekAgo = new Date(now.getTime() - 7 * DAY_MS);
-    const [stuckPpob, withdrawals, memberRequests, driverApplications, overduePayments, openTickets, lowRatings, marginWeek] = await Promise.all([
+    const [stuckPpob, withdrawals, memberRequests, driverApplications, overduePayments, openTickets, lowRatings, marginWeek, openSos] = await Promise.all([
       this.prisma.ppobTransaction.count({ where: { status: { in: ["PENDING", "PROCESSING"] }, createdAt: { lt: stuckBefore } } }),
       this.prisma.withdrawal.aggregate({ where: { status: "PENDING" }, _sum: { amount: true }, _count: { _all: true } }),
       this.prisma.membershipOrder.count({ where: { status: "PAID", userMembership: null } }),
@@ -470,9 +470,12 @@ export class AdminInsightsService {
       this.prisma.supportTicket.count({ where: { status: { in: ["OPEN", "IN_PROGRESS"] } } }),
       this.prisma.rideRating.count({ where: { stars: { lte: 2 }, createdAt: { gte: weekAgo } } }),
       // Untung bersih PPOB terhadap target (Rp500 prabayar, Rp1.000 pascabayar) pada 7 hari terakhir.
-      scanPpobMargins(this.prisma, { createdAt: { gte: weekAgo } })
+      scanPpobMargins(this.prisma, { createdAt: { gte: weekAgo } }),
+      // Sinyal SOS driver yang belum ditutup (baru atau sedang ditangani): paling mendesak di daftar perhatian.
+      this.prisma.rideSosAlert.count({ where: { status: { in: ["OPEN", "ACKNOWLEDGED"] } } })
     ]);
     return {
+      openSos,
       stuckPpob,
       withdrawalsPending: withdrawals._count._all,
       withdrawalsPendingAmount: Number(withdrawals._sum.amount ?? 0),

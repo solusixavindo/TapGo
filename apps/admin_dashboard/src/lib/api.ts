@@ -871,6 +871,32 @@ export function actOnWithdrawal(id: string, action: "approve" | "reject" | "paid
   });
 }
 
+// --- Sinyal SOS driver ---------------------------------------------------------------------
+
+export type SosAlert = {
+  id: string;
+  status: "OPEN" | "ACKNOWLEDGED" | "RESOLVED";
+  lat: number;
+  lng: number;
+  accuracyMeters: number | null;
+  rideOrderId: string | null;
+  resolvedAt: string | null;
+  resolutionNote: string | null;
+  createdAt: string;
+  driver: { driverProfileId: string; userId: string; fullName: string; phone: string };
+};
+
+/** Tanpa status: yang masih aktif (OPEN dan ACKNOWLEDGED). */
+export function listSosAlerts(status?: SosAlert["status"]) {
+  const query = new URLSearchParams({ limit: "100" });
+  if (status) query.set("status", status);
+  return request<SosAlert[]>(`/admin/rides/sos?${query.toString()}`);
+}
+
+export function resolveSosAlert(id: string, note: string) {
+  return request<SosAlert>(`/admin/rides/sos/${id}/resolve`, { method: "PATCH", body: JSON.stringify({ note }) });
+}
+
 // --- Laba rugi (hanya SUPER_ADMIN_VIP) ----------------------------------------
 
 export type ProfitLossReport = {
@@ -1160,6 +1186,8 @@ export type VipInsights = {
     recent: Array<{ stars: number; note: string | null; createdAt: string; driverName: string; passengerName: string; service: string }>;
   };
   attention: {
+    /** Sinyal SOS driver yang belum ditutup. */
+    openSos: number;
     stuckPpob: number;
     /** Transaksi PPOB prabayar/pascabayar 7 hari terakhir yang rugi bersih, dan yang di bawah target untung bersih. */
     ppobLossWeek: number;

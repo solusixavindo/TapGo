@@ -75,6 +75,7 @@ type AttentionItem = { key: string; label: string; detail?: string; href?: strin
 function attentionItems(data: VipInsights): AttentionItem[] {
   const a = data.attention;
   const items: AttentionItem[] = [];
+  if (a.openSos > 0) items.push({ key: "sos", label: `${a.openSos} sinyal SOS driver aktif`, detail: "hubungi driver sekarang", href: "/sos", tone: "rose" });
   if (a.digiflazz && (a.digiflazz.level === "CRITICAL" || a.digiflazz.level === "LOW")) {
     items.push({
       key: "digiflazz",

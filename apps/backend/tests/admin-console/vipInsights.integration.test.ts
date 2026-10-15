@@ -219,6 +219,18 @@ describe.skipIf(!runIntegration)("Wawasan Beranda VIP", () => {
       expect(data.attention.digiflazz).toEqual({ level: "UNKNOWN", balance: null });
     });
 
+    it("perlu perhatian: sinyal SOS driver yang belum ditutup dihitung; yang sudah selesai tidak", async () => {
+      const { profiles } = await seedInsightsData(prisma);
+      const vip = await createUser("SUPER_ADMIN_VIP");
+      expect((await insights(vip)).data.attention.openSos).toBe(0);
+      const sos = (status: "OPEN" | "ACKNOWLEDGED" | "RESOLVED") =>
+        prisma.rideSosAlert.create({ data: { driverProfileId: profiles[0]!.id, lat: new Prisma.Decimal("-6.2000000"), lng: new Prisma.Decimal("106.8000000"), status } });
+      await sos("OPEN");
+      await sos("ACKNOWLEDGED");
+      await sos("RESOLVED");
+      expect((await insights(vip)).data.attention.openSos).toBe(2);
+    });
+
     it("perlu perhatian: transaksi PPOB rugi atau di bawah target untung bersih dalam 7 hari", async () => {
       await seedInsightsData(prisma);
       const vip = await createUser("SUPER_ADMIN_VIP");

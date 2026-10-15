@@ -31,7 +31,8 @@ const NAV_GROUPS: Array<{
       { href: "/member-requests", label: "Persetujuan Member", minimum: "ADMIN", icon: "badge" },
       { href: "/driver-documents", label: "Dokumen Driver", minimum: "ADMIN", icon: "car" },
       { href: "/members", label: "Direktori Member", minimum: "ADMIN", icon: "users" },
-      { href: "/rides", label: "Monitoring Perjalanan", minimum: "ADMIN", icon: "route" }
+      { href: "/rides", label: "Monitoring Perjalanan", minimum: "ADMIN", icon: "route" },
+      { href: "/sos", label: "SOS Darurat", minimum: "ADMIN", icon: "shield" }
     ]
   },
   {
