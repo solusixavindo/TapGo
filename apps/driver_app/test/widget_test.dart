@@ -617,6 +617,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Halaman 5 — Pernyataan.
+      await readDeclarationToEnd(tester);
       await tester.tap(find.byKey(const ValueKey('wizard-declaration-checkbox')));
       await tester.pumpAndSettle();
       await tester.tap(nextKey);
@@ -631,6 +632,78 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Pengajuan #1'), findsOneWidget);
+    });
+
+    testWidgets(
+        'pernyataan: naskah lengkap tampil, kotak persetujuan terkunci sampai naskah digulir habis, dan versi naskah ikut terkirim',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        currentError: const DriverApiException(
+          code: 'RIDE_DRIVER_NOT_ACTIVE',
+          message: 'Akun driver belum aktif untuk menerima perjalanan.',
+          statusCode: 403,
+        ),
+      );
+      for (final kind in DriverDocumentKind.values) {
+        await repo.uploadDocument(
+          kind: kind,
+          bytes: Uint8List.fromList([1, 2, 3]),
+          contentType: 'image/png',
+        );
+      }
+      await pumpDriver(tester, repo);
+      final nextKey = find.byKey(const ValueKey('driver-application-wizard-next'));
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('start-application-wizard')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.byKey(const ValueKey('start-application-wizard')));
+      await tester.pumpAndSettle();
+      await tester.tap(nextKey);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('wizard-full-name')), 'Budi Santoso');
+      await tester.enterText(find.byKey(const ValueKey('wizard-address')), 'Jl. Melati No. 5');
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('wizard-date-of-birth')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('wizard-emergency-name')), 'Siti');
+      await tester.enterText(find.byKey(const ValueKey('wizard-emergency-phone')), '081234567890');
+      await tester.pump();
+      await tester.tap(nextKey);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('wizard-plate')), 'B 1234 UJI');
+      await tester.pump();
+      await tester.tap(nextKey);
+      await tester.pumpAndSettle();
+      await tester.tap(nextKey);
+      await tester.pumpAndSettle();
+
+      // Terkunci: belum digulir, kotak tidak bisa dicentang dan tombol kirim mati.
+      expect(find.byKey(const ValueKey('driver-terms')), findsOneWidget);
+      expect(find.byKey(const ValueKey('wizard-declaration-scroll-hint')), findsOneWidget);
+      final locked = tester.widget<CheckboxListTile>(
+        find.byKey(const ValueKey('wizard-declaration-checkbox'), skipOffstage: false),
+      );
+      expect(locked.onChanged, isNull);
+      expect(tester.widget<FilledButton>(nextKey).onPressed, isNull);
+
+      await readDeclarationToEnd(tester);
+      expect(find.byKey(const ValueKey('wizard-declaration-scroll-hint')), findsNothing);
+      final unlocked = tester.widget<CheckboxListTile>(
+        find.byKey(const ValueKey('wizard-declaration-checkbox')),
+      );
+      expect(unlocked.onChanged, isNotNull);
+
+      await tester.tap(find.byKey(const ValueKey('wizard-declaration-checkbox')));
+      await tester.pumpAndSettle();
+      await tester.tap(nextKey);
+      await tester.pumpAndSettle();
+      expect(repo.submitCalls, 1);
+      expect(repo.submittedForms.single['declarationVersion'], kDriverTermsVersion);
     });
 
     testWidgets(
@@ -688,6 +761,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(nextKey);
       await tester.pumpAndSettle();
+      await readDeclarationToEnd(tester);
       await tester.tap(find.byKey(const ValueKey('wizard-declaration-checkbox')));
       await tester.pumpAndSettle();
       await tester.tap(nextKey);
@@ -1897,6 +1971,77 @@ void main() {
       await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Akun')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('open-web-password')), findsOneWidget);
+    });
+  });
+
+  group('Pernyataan kemitraan', () {
+    test('naskah memuat semua topik yang diminta Owner dan versinya terisi', () {
+      expect(RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(kDriverTermsVersion), isTrue);
+      final titles = kDriverTermsSections.map((s) => s.title.toLowerCase()).join(' | ');
+      for (final topic in [
+        'hak anda',
+        'kewajiban anda',
+        'hak dan kewajiban tapgo',
+        'risiko perjalanan',
+        'penyelewengan',
+        'sanksi',
+        'komisi',
+        'data pribadi',
+        'pengakhiran',
+        'sengketa',
+      ]) {
+        expect(titles, contains(topic), reason: 'bagian "$topic" harus ada');
+      }
+      // Nomor bagian berurutan 1..N agar rujukan "lihat bagian 6/8" tetap benar.
+      for (var i = 0; i < kDriverTermsSections.length; i++) {
+        expect(kDriverTermsSections[i].title, startsWith('${i + 1}. '));
+      }
+      expect(kDriverTermsSections[5].title.toLowerCase(), contains('penyelewengan'));
+      expect(kDriverTermsSections[7].title.toLowerCase(), contains('data pribadi'));
+      // Tidak ada butir kosong.
+      for (final section in kDriverTermsSections) {
+        for (final group in section.groups) {
+          expect(group.items, isNotEmpty);
+          for (final item in group.items) {
+            expect(item.trim().length, greaterThan(20), reason: item);
+          }
+        }
+      }
+    });
+
+    test('angka komisi di naskah sama dengan komisi yang berlaku (8%)', () {
+      final all = kDriverTermsSections
+          .expand((s) => [s.intro ?? '', s.outro ?? '', ...s.groups.expand((g) => g.items)])
+          .join('\n');
+      expect(all, contains('8% dari tarif'));
+      expect(all, contains('112'));
+      expect(all, contains('SOS'));
+    });
+
+    testWidgets('Akun > Bantuan > Pernyataan Kemitraan membuka naskah lengkap yang bisa digulir',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+      await tester.tap(find.byIcon(Icons.person_rounded));
+      await tester.pumpAndSettle();
+      await tester.dragUntilVisible(
+        find.byKey(const ValueKey('support-terms')),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tapReachable(tester, find.byKey(const ValueKey('support-terms')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('driver-terms')), findsOneWidget);
+      expect(find.text('Versi $kDriverTermsVersion'), findsOneWidget);
+      // Bagian pertama terlihat; bagian terakhir dicapai dengan menggulir.
+      expect(find.text('1. Status kemitraan'), findsOneWidget);
+      await tester.dragUntilVisible(
+        find.byKey(const ValueKey('driver-terms-section-10')),
+        find.byKey(const ValueKey('driver-terms-scroll')),
+        const Offset(0, -300),
+      );
+      expect(find.text('10. Perubahan dan penyelesaian sengketa'), findsOneWidget);
     });
   });
 
@@ -4056,6 +4201,20 @@ const demoOffer = DriverRide(
   totalFare: 9000,
 );
 
+/// Menggulir naskah pernyataan sampai akhir; kotak persetujuan baru aktif setelah itu.
+Future<void> readDeclarationToEnd(WidgetTester tester) async {
+  final scrollable = find
+      .ancestor(
+        of: find.byKey(const ValueKey('driver-terms')),
+        matching: find.byType(Scrollable),
+      )
+      .first;
+  for (var i = 0; i < 3; i++) {
+    await tester.drag(scrollable, const Offset(0, -20000));
+    await tester.pumpAndSettle();
+  }
+}
+
 DriverRide demoRide(RideStatus status) => DriverRide(
       reference: 'RIDE-DEMO-001',
       serviceType: 'MOTORCYCLE',
@@ -4424,6 +4583,7 @@ class FakeDriverRepository implements DriverRepository {
     String? emergencyContactName,
     String? emergencyContactPhone,
     required bool declarationAccepted,
+    String? declarationVersion,
   }) async {
     if (submitError != null) throw submitError!;
     submitCalls += 1;
@@ -4439,6 +4599,7 @@ class FakeDriverRepository implements DriverRepository {
       'emergencyContactName': emergencyContactName,
       'emergencyContactPhone': emergencyContactPhone,
       'declarationAccepted': declarationAccepted,
+      'declarationVersion': declarationVersion,
     });
     applicationInfo = const DriverApplicationInfo(
       id: 'fake-application',

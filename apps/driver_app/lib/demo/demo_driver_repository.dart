@@ -331,6 +331,7 @@ class DemoDriverRepository implements DriverRepository {
     String? emergencyContactName,
     String? emergencyContactPhone,
     required bool declarationAccepted,
+    String? declarationVersion,
   }) async {
     _demoApplication = const DriverApplicationInfo(
       id: 'demo-application',

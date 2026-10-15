@@ -82,6 +82,7 @@ abstract class DriverRepository {
     String? emergencyContactName,
     String? emergencyContactPhone,
     required bool declarationAccepted,
+    String? declarationVersion,
   });
 
   /// Menarik pengajuan yang masih terbuka.

@@ -53,6 +53,7 @@ part 'features/driver/presentation/driver_account_pages.dart';
 part 'features/driver/presentation/driver_documents.dart';
 part 'features/driver/presentation/driver_application.dart';
 part 'features/driver/presentation/driver_application_wizard.dart';
+part 'features/driver/presentation/driver_terms.dart';
 part 'tapgo_app_guards.dart';
 
 void _runTapGoDriverApp() {

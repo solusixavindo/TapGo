@@ -1529,6 +1529,13 @@ class DriverAccountScreen extends ConsumerWidget {
               onTap: _openWhatsApp,
             ),
             _AccountRow(
+              key: const ValueKey('support-terms'),
+              icon: Icons.gavel_rounded,
+              title: 'Pernyataan Kemitraan',
+              subtitle: 'Hak, kewajiban, risiko perjalanan, sanksi',
+              onTap: () => _push(context, const DriverTermsScreen()),
+            ),
+            _AccountRow(
               key: const ValueKey('support-privacy-policy'),
               icon: Icons.privacy_tip_outlined,
               title: 'Kebijakan Privasi',

@@ -846,6 +846,7 @@ class DriverController extends StateNotifier<DriverState>
     String? emergencyContactName,
     String? emergencyContactPhone,
     required bool declarationAccepted,
+    String? declarationVersion,
   }) async {
     if (!_startFlight('application-submit')) return;
     state = state.copyWith(isBusy: true, clearMessage: true);
@@ -862,6 +863,7 @@ class DriverController extends StateNotifier<DriverState>
         emergencyContactName: emergencyContactName,
         emergencyContactPhone: emergencyContactPhone,
         declarationAccepted: declarationAccepted,
+        declarationVersion: declarationVersion,
       );
       state = state.copyWith(
         application: snapshot.application,

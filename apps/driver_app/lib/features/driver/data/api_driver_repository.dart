@@ -588,6 +588,7 @@ class ApiDriverRepository implements DriverRepository {
     String? emergencyContactName,
     String? emergencyContactPhone,
     required bool declarationAccepted,
+    String? declarationVersion,
   }) async {
     await _request(
       () => _dio.post<dynamic>(
@@ -608,6 +609,8 @@ class ApiDriverRepository implements DriverRepository {
               emergencyContactPhone.isNotEmpty)
             'emergencyContactPhone': emergencyContactPhone,
           'declarationAccepted': declarationAccepted,
+          if (declarationVersion != null && declarationVersion.isNotEmpty)
+            'declarationVersion': declarationVersion,
         },
       ),
     );

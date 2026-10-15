@@ -161,12 +161,24 @@ class _DriverApplicationWizardScreenState
   String? _brand;
   String? _model;
 
-  // Halaman 5 — Pernyataan.
+  // Halaman 5 — Pernyataan. Kotak persetujuan baru aktif setelah naskah digulir sampai bawah: persetujuan atas
+  // naskah yang tidak pernah terlihat bukan persetujuan.
   bool _declarationAccepted = false;
+  bool _declarationReadToEnd = false;
+  final _declarationScroll = ScrollController();
+
+  void _onDeclarationScroll() {
+    if (_declarationReadToEnd || !_declarationScroll.hasClients) return;
+    final position = _declarationScroll.position;
+    if (position.maxScrollExtent - position.pixels <= 48) {
+      setState(() => _declarationReadToEnd = true);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    _declarationScroll.addListener(_onDeclarationScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.read(driverControllerProvider.notifier).refreshDocuments();
@@ -175,6 +187,7 @@ class _DriverApplicationWizardScreenState
 
   @override
   void dispose() {
+    _declarationScroll.dispose();
     _pageController.dispose();
     _fullNameController.dispose();
     _addressController.dispose();
@@ -249,6 +262,7 @@ class _DriverApplicationWizardScreenState
       emergencyContactName: _emergencyContactNameController.text.trim(),
       emergencyContactPhone: _emergencyContactPhoneController.text.trim(),
       declarationAccepted: _declarationAccepted,
+      declarationVersion: kDriverTermsVersion,
     );
     if (!mounted) return;
     // Berhasil = server mengembalikan pengajuan terbuka. Tidak boleh dibaca
@@ -330,6 +344,7 @@ class _DriverApplicationWizardScreenState
                 ),
                 _WizardStep(
                   title: 'Pernyataan',
+                  controller: _declarationScroll,
                   child: _buildDeclaration(),
                 ),
               ],
@@ -509,24 +524,29 @@ class _DriverApplicationWizardScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'Dengan mengirim pengajuan ini, saya menyatakan bahwa:\n\n'
-            '1. Seluruh data dan dokumen yang saya lampirkan adalah benar '
-            'dan sesuai identitas asli saya.\n'
-            '2. Saya bersedia mematuhi kebijakan dan standar layanan TapGo '
-            'sebagai mitra driver.\n'
-            '3. Saya memahami bahwa data yang tidak sesuai dapat '
-            'menyebabkan pengajuan ditolak atau akun dinonaktifkan.',
-          ),
-          const SizedBox(height: 16),
+          const DriverTermsView(),
+          const Divider(height: 24),
+          if (!_declarationReadToEnd)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Gulir sampai akhir naskah untuk dapat menyetujui.',
+                key: const ValueKey('wizard-declaration-scroll-hint'),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
           CheckboxListTile(
             key: const ValueKey('wizard-declaration-checkbox'),
             controlAffinity: ListTileControlAffinity.leading,
             contentPadding: EdgeInsets.zero,
             value: _declarationAccepted,
-            onChanged: (value) =>
-                setState(() => _declarationAccepted = value ?? false),
-            title: const Text('Saya menyetujui pernyataan di atas.'),
+            onChanged: _declarationReadToEnd
+                ? (value) => setState(() => _declarationAccepted = value ?? false)
+                : null,
+            title: const Text(kDriverTermsAcceptance),
           ),
         ],
       ),
@@ -535,14 +555,16 @@ class _DriverApplicationWizardScreenState
 }
 
 class _WizardStep extends StatelessWidget {
-  const _WizardStep({required this.title, required this.child});
+  const _WizardStep({required this.title, required this.child, this.controller});
 
   final String title;
   final Widget child;
+  final ScrollController? controller;
 
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
+      controller: controller,
       padding: const EdgeInsets.only(bottom: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
