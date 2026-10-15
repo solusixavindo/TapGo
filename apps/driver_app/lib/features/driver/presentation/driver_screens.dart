@@ -1506,6 +1506,13 @@ class DriverAccountScreen extends ConsumerWidget {
               subtitle: 'Bunyi: ${tone.label}',
               onTap: () => _push(context, const DriverNotificationScreen()),
             ),
+            _AccountRow(
+              key: const ValueKey('open-web-password'),
+              icon: Icons.lock_outline_rounded,
+              title: 'Password tapgolion.id',
+              subtitle: 'Untuk isi Saldo TapGo di web',
+              onTap: () => _push(context, const DriverWebPasswordScreen()),
+            ),
           ],
         ),
         const SizedBox(height: 20),
@@ -1919,9 +1926,20 @@ class OfferDetailSheet extends ConsumerWidget {
         return Material(
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           clipBehavior: Clip.antiAlias,
-          child: ListView(
+          child: _OfferClock(
+            key: ValueKey('offer-clock-${ride.reference}'),
+            expiresAt: ride.searchExpiresAt,
+            onExpired: controller.closeOffer,
+            builder: (context, remaining) {
+              final expired = remaining != null && remaining <= Duration.zero;
+              // Isi bisa digulir, tetapi tombol Terima/Tolak dipasang TETAP di bawah: aksi yang dibatasi waktu tidak
+              // boleh terdorong keluar layar oleh kartu komisi atau alamat panjang di HP kecil.
+              return Column(
+                children: [
+                  Expanded(
+                    child: ListView(
             controller: scrollController,
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
             children: [
               Center(
                 child: Container(
@@ -1936,8 +1954,19 @@ class OfferDetailSheet extends ConsumerWidget {
               const SizedBox(height: 18),
               Text('Detail Tawaran',
                   style: Theme.of(context).textTheme.titleLarge),
+              if (remaining != null) ...[
+                const SizedBox(height: 12),
+                _OfferCountdownBar(
+                  remaining: remaining,
+                  total: _offerTotalWindow(ride, remaining),
+                ),
+              ],
               const SizedBox(height: 16),
               _RideSummary(ride: ride),
+              if (ride.commissionFee != null && ride.totalFare != null) ...[
+                const SizedBox(height: 14),
+                _OfferEarningsCard(ride: ride),
+              ],
               const SizedBox(height: 20),
               _TimelineStep(
                 icon: Icons.my_location_rounded,
@@ -1962,26 +1991,265 @@ class OfferDetailSheet extends ConsumerWidget {
                 title: 'Tujuan',
                 value: ride.dropoffAddress,
               ),
-              const SizedBox(height: 20),
-              FilledButton(
-                key: const ValueKey('accept-offer-button'),
-                onPressed:
-                    state.isBusy || ride.status != RideStatus.searchingDriver
-                        ? null
-                        : controller.acceptSelectedOffer,
-                child: const Text('Terima Perjalanan'),
-              ),
-              const SizedBox(height: 10),
-              OutlinedButton(
-                key: const ValueKey('reject-offer-button'),
-                onPressed: state.isBusy ? null : controller.rejectSelectedOffer,
-                child: const Text('Tolak'),
-              ),
-              const SizedBox(height: 24),
             ],
+                    ),
+                  ),
+                  SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          FilledButton(
+                            key: const ValueKey('accept-offer-button'),
+                            onPressed: state.isBusy ||
+                                    expired ||
+                                    ride.status != RideStatus.searchingDriver
+                                ? null
+                                : controller.acceptSelectedOffer,
+                            child: Text(expired
+                                ? 'Tawaran berakhir'
+                                : 'Terima Perjalanan'),
+                          ),
+                          const SizedBox(height: 10),
+                          OutlinedButton(
+                            key: const ValueKey('reject-offer-button'),
+                            onPressed: state.isBusy
+                                ? null
+                                : controller.rejectSelectedOffer,
+                            child: const Text('Tolak'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         );
       },
+    );
+  }
+}
+
+/// Jendela total tawaran untuk batang hitung mundur: dari tawaran dibuat sampai batas pencarian; bila waktu dibuat
+/// tidak diketahui, memakai 3 menit (RIDE_SEARCH_TIMEOUT_SECONDS bawaan server). Tidak pernah lebih kecil dari sisa waktu.
+Duration _offerTotalWindow(DriverRide ride, Duration remaining) {
+  final expires = ride.searchExpiresAt;
+  final created = ride.updatedAt;
+  final window = expires != null && created != null
+      ? expires.difference(created)
+      : const Duration(seconds: 180);
+  return window < remaining ? remaining : window;
+}
+
+/// Menjalankan hitung mundur satu detik sekali bagi isi lembar tawaran. Tanpa [expiresAt] (server lama) tidak ada
+/// timer sama sekali. Sisa waktu dihitung ulang dari jam perangkat saat aplikasi kembali ke depan, karena timer
+/// berhenti ketika aplikasi di latar belakang. Server tetap satu-satunya penentu: menerima tawaran yang sudah
+/// berakhir ditolak server (RIDE_OFFER_EXPIRED).
+class _OfferClock extends StatefulWidget {
+  const _OfferClock({
+    required this.expiresAt,
+    required this.onExpired,
+    required this.builder,
+    super.key,
+  });
+
+  final DateTime? expiresAt;
+  final VoidCallback onExpired;
+  final Widget Function(BuildContext context, Duration? remaining) builder;
+
+  @override
+  State<_OfferClock> createState() => _OfferClockState();
+}
+
+class _OfferClockState extends State<_OfferClock> with WidgetsBindingObserver {
+  Timer? _timer;
+  Timer? _closeTimer;
+  Duration? _remaining;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _start();
+  }
+
+  @override
+  void didUpdateWidget(covariant _OfferClock oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.expiresAt != widget.expiresAt) {
+      _timer?.cancel();
+      _closeTimer?.cancel();
+      _closeTimer = null;
+      _start();
+    }
+  }
+
+  void _start() {
+    final at = widget.expiresAt;
+    if (at == null) {
+      _remaining = null;
+      return;
+    }
+    _remaining = at.difference(DateTime.now());
+    if (_remaining! <= Duration.zero) {
+      _remaining = Duration.zero;
+      _scheduleClose();
+      return;
+    }
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _remaining = _remaining! - const Duration(seconds: 1));
+      if (_remaining! <= Duration.zero) {
+        _remaining = Duration.zero;
+        _timer?.cancel();
+        _scheduleClose();
+      }
+    });
+  }
+
+  void _scheduleClose() {
+    // Sebentar menampilkan "Tawaran berakhir" sebelum lembar ditutup dan tawaran berikutnya (bila ada) dibuka.
+    _closeTimer ??= Timer(const Duration(milliseconds: 1800), () {
+      if (mounted) widget.onExpired();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final at = widget.expiresAt;
+    if (state != AppLifecycleState.resumed || at == null || !mounted) return;
+    setState(() => _remaining = at.difference(DateTime.now()));
+    if (_remaining! <= Duration.zero) {
+      _remaining = Duration.zero;
+      _timer?.cancel();
+      _scheduleClose();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _timer?.cancel();
+    _closeTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context, _remaining);
+}
+
+class _OfferCountdownBar extends StatelessWidget {
+  const _OfferCountdownBar({required this.remaining, required this.total});
+  final Duration remaining;
+  final Duration total;
+
+  String get _label {
+    if (remaining <= Duration.zero) return 'Tawaran berakhir';
+    final minutes = remaining.inMinutes;
+    final seconds = (remaining.inSeconds % 60).toString().padLeft(2, '0');
+    return 'Tawaran berakhir dalam $minutes:$seconds';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final urgent = remaining < const Duration(seconds: 30);
+    final color = urgent ? scheme.error : scheme.primary;
+    final fraction = total.inMilliseconds <= 0
+        ? 0.0
+        : (remaining.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0);
+    return Column(
+      key: const ValueKey('offer-countdown'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _label,
+          key: const ValueKey('offer-countdown-label'),
+          style: TextStyle(color: color, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(99),
+          child: LinearProgressIndicator(
+            value: fraction,
+            minHeight: 8,
+            color: color,
+            backgroundColor: scheme.surfaceContainerHighest,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Rincian pendapatan satu tawaran saat komisi menyala: tarif, komisi yang ditahan dari Saldo TapGo ketika tawaran
+/// diterima, dan sisanya. Angka komisi datang dari server (dibulatkan ke atas, sama dengan yang ditahan).
+class _OfferEarningsCard extends StatelessWidget {
+  const _OfferEarningsCard({required this.ride});
+  final DriverRide ride;
+
+  @override
+  Widget build(BuildContext context) {
+    final fare = ride.totalFare!;
+    final fee = ride.commissionFee!;
+    final percent = ride.commissionPercent;
+    final theme = Theme.of(context);
+    Widget row(String label, String value, {bool strong = false, Key? key}) =>
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: strong
+                    ? const TextStyle(fontWeight: FontWeight.w800)
+                    : null,
+              ),
+            ),
+            Text(
+              value,
+              key: key,
+              style: TextStyle(
+                fontWeight: strong ? FontWeight.w800 : FontWeight.w600,
+              ),
+            ),
+          ],
+        );
+    return Container(
+      key: const ValueKey('offer-earnings'),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          row('Tarif (tunai dari penumpang)', _rupiah(fare)),
+          const SizedBox(height: 6),
+          row(
+            percent == null ? 'Komisi TapGo' : 'Komisi TapGo $percent%',
+            '-${_rupiah(fee)}',
+            key: const ValueKey('offer-commission-fee'),
+          ),
+          const Divider(height: 18),
+          row(
+            'Pendapatan bersih',
+            _rupiah(fare - fee),
+            strong: true,
+            key: const ValueKey('offer-net-earnings'),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Komisi ditahan dari Saldo TapGo Anda saat tawaran diterima, dan dikembalikan bila perjalanan dibatalkan.',
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1675,6 +1675,213 @@ void main() {
     });
   });
 
+  group('Hitung mundur dan komisi pada tawaran', () {
+    DriverRide offer({DateTime? expiresAt, int? fee, int? percent, DateTime? createdAt}) => DriverRide(
+          reference: 'RIDE-CD-001',
+          serviceType: 'MOTORCYCLE',
+          status: RideStatus.searchingDriver,
+          pickupAddress: 'JEMPUT_CD',
+          dropoffAddress: 'TUJUAN_CD',
+          distanceMeters: 2500,
+          durationSeconds: 600,
+          totalFare: 9000,
+          updatedAt: createdAt,
+          searchExpiresAt: expiresAt,
+          commissionFee: fee,
+          commissionPercent: percent,
+        );
+
+    // Sheet terbuka otomatis lewat polling; pumpAndSettle TIDAK boleh dipakai setelahnya karena hitung mundur
+    // menjadwalkan frame tiap detik.
+    Future<FakeDriverRepository> open(WidgetTester tester, DriverRide ride) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        availability: DriverAvailability.online,
+        offerItems: [ride],
+      );
+      await pumpDriverOrders(tester, repo);
+      // Tawaran masuk membuka lembar sendiri (tanpa ketukan); beri waktu animasinya selesai.
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byKey(const ValueKey('accept-offer-button')), findsOneWidget);
+      return repo;
+    }
+
+    Text label(WidgetTester tester) => tester.widget<Text>(find.byKey(const ValueKey('offer-countdown-label')));
+    bool acceptEnabled(WidgetTester tester) =>
+        tester.widget<FilledButton>(find.byKey(const ValueKey('accept-offer-button'))).onPressed != null;
+    String? selectedRef(WidgetTester tester) => ProviderScope.containerOf(tester.element(find.byType(TapGoDriverApp)))
+        .read(driverControllerProvider)
+        .selectedOffer
+        ?.reference;
+
+    testWidgets('batas pencarian dari server tampil sebagai hitung mundur yang berjalan', (tester) async {
+      await open(
+        tester,
+        offer(expiresAt: DateTime.now().add(const Duration(seconds: 90)), createdAt: DateTime.now().subtract(const Duration(seconds: 90))),
+      );
+      expect(find.byKey(const ValueKey('offer-countdown')), findsOneWidget);
+      expect(label(tester).data, startsWith('Tawaran berakhir dalam 1:'));
+      expect(acceptEnabled(tester), isTrue);
+      await tester.pump(const Duration(seconds: 61));
+      expect(label(tester).data, startsWith('Tawaran berakhir dalam 0:'));
+    });
+
+    testWidgets('waktu habis: tombol terima mati, tulisan berubah, lalu lembar menutup sendiri', (tester) async {
+      await open(tester, offer(expiresAt: DateTime.now().add(const Duration(seconds: 2))));
+      expect(acceptEnabled(tester), isTrue);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(label(tester).data, 'Tawaran berakhir');
+      expect(acceptEnabled(tester), isFalse);
+      expect(find.text('Tawaran berakhir'), findsWidgets);
+      expect(selectedRef(tester), 'RIDE-CD-001'); // masih terbuka sebentar
+      await tester.pump(const Duration(milliseconds: 1900));
+      expect(selectedRef(tester), isNull);
+    });
+
+    testWidgets('tawaran yang sudah lewat batas saat dibuka langsung berakhir dan menutup', (tester) async {
+      await open(tester, offer(expiresAt: DateTime.now().subtract(const Duration(seconds: 5))));
+      expect(label(tester).data, 'Tawaran berakhir');
+      expect(acceptEnabled(tester), isFalse);
+      await tester.pump(const Duration(milliseconds: 1900));
+      expect(selectedRef(tester), isNull);
+    });
+
+    testWidgets('komisi menyala: tarif, komisi 8%, dan pendapatan bersih tampil', (tester) async {
+      await open(tester, offer(expiresAt: DateTime.now().add(const Duration(minutes: 3)), fee: 720, percent: 8));
+      expect(find.byKey(const ValueKey('offer-earnings')), findsOneWidget);
+      expect(find.text('Komisi TapGo 8%'), findsOneWidget);
+      expect(tester.widget<Text>(find.byKey(const ValueKey('offer-commission-fee'))).data, '-Rp720');
+      expect(tester.widget<Text>(find.byKey(const ValueKey('offer-net-earnings'))).data, 'Rp8.280');
+    });
+
+    testWidgets('server lama (tanpa batas dan komisi): tidak ada hitung mundur maupun rincian komisi, tombol tetap aktif',
+        (tester) async {
+      await open(tester, offer());
+      expect(find.byKey(const ValueKey('offer-countdown')), findsNothing);
+      expect(find.byKey(const ValueKey('offer-earnings')), findsNothing);
+      expect(acceptEnabled(tester), isTrue);
+      // Tanpa timer: aman memakai pumpAndSettle.
+      await tester.pumpAndSettle();
+    });
+  });
+
+  group('Password tapgolion.id untuk akun Google', () {
+    Widget webPasswordApp(FakeDriverRepository repo, Future<({String idToken, String email})?> Function() token) =>
+        ProviderScope(
+          overrides: [
+            driverRepositoryProvider.overrideWithValue(repo),
+            driverGoogleIdTokenProvider.overrideWithValue(token),
+            locationPortProvider.overrideWithValue(NoDriverLocationPort()),
+            pushPlatformProvider.overrideWithValue(null),
+          ],
+          child: const MaterialApp(home: DriverWebPasswordScreen()),
+        );
+
+    Future<FakeDriverRepository> pumpScreen(
+      WidgetTester tester,
+      Future<({String idToken, String email})?> Function() token, {
+      DriverApiException? error,
+    }) async {
+      final repo = FakeDriverRepository(session: demoSession)..webPasswordError = error;
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(webPasswordApp(repo, token));
+      await tester.pumpAndSettle();
+      return repo;
+    }
+
+    Future<({String idToken, String email})?> goodToken() async => (idToken: 'ID_TOKEN_BARU', email: 'sopir@gmail.com');
+
+    bool saveEnabled(WidgetTester tester) =>
+        tester.widget<FilledButton>(find.byKey(const ValueKey('web-password-save'))).onPressed != null;
+
+    testWidgets('sebelum verifikasi Google: isian dan tombol simpan mati', (tester) async {
+      await pumpScreen(tester, goodToken);
+      expect(find.byKey(const ValueKey('web-password-verify-button')), findsOneWidget);
+      expect(tester.widget<TextField>(find.byKey(const ValueKey('web-password-new'))).enabled, isFalse);
+      expect(saveEnabled(tester), isFalse);
+    });
+
+    testWidgets('verifikasi lalu simpan: ID token baru dan password dikirim sekali, layar sukses tampil', (tester) async {
+      final repo = await pumpScreen(tester, goodToken);
+      await tester.tap(find.byKey(const ValueKey('web-password-verify-button')));
+      await tester.pumpAndSettle();
+      expect(find.text('Terverifikasi: sopir@gmail.com'), findsOneWidget);
+
+      await tester.enterText(find.byKey(const ValueKey('web-password-new')), 'pendek');
+      await tester.enterText(find.byKey(const ValueKey('web-password-confirm')), 'pendek');
+      await tester.tap(find.byKey(const ValueKey('web-password-save')));
+      await tester.pumpAndSettle();
+      expect(tester.widget<Text>(find.byKey(const ValueKey('web-password-error'))).data, contains('minimal 8'));
+      expect(repo.webPasswordCalls, 0);
+
+      await tester.enterText(find.byKey(const ValueKey('web-password-new')), 'KataSandi-Panjang');
+      await tester.enterText(find.byKey(const ValueKey('web-password-confirm')), 'KataSandi-Beda');
+      await tester.tap(find.byKey(const ValueKey('web-password-save')));
+      await tester.pumpAndSettle();
+      expect(tester.widget<Text>(find.byKey(const ValueKey('web-password-error'))).data, contains('belum sama'));
+      expect(repo.webPasswordCalls, 0);
+
+      await tester.enterText(find.byKey(const ValueKey('web-password-confirm')), 'KataSandi-Panjang');
+      await tester.tap(find.byKey(const ValueKey('web-password-save')));
+      await tester.pumpAndSettle();
+      expect(repo.webPasswordCalls, 1);
+      expect(repo.lastWebPasswordIdToken, 'ID_TOKEN_BARU');
+      expect(repo.lastWebPassword, 'KataSandi-Panjang');
+      expect(find.byKey(const ValueKey('web-password-done')), findsOneWidget);
+      expect(find.byKey(const ValueKey('web-password-open-topup')), findsOneWidget);
+    });
+
+    testWidgets('server menolak akun Google lain: pesan tampil dan verifikasi diulang dari awal', (tester) async {
+      final repo = await pumpScreen(
+        tester,
+        goodToken,
+        error: const DriverApiException(
+          code: 'GOOGLE_ACCOUNT_MISMATCH',
+          message: 'Akun Google ini bukan akun TapGo Anda.',
+          statusCode: 403,
+        ),
+      );
+      await tester.tap(find.byKey(const ValueKey('web-password-verify-button')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('web-password-new')), 'KataSandi-Panjang');
+      await tester.enterText(find.byKey(const ValueKey('web-password-confirm')), 'KataSandi-Panjang');
+      await tester.tap(find.byKey(const ValueKey('web-password-save')));
+      await tester.pumpAndSettle();
+      expect(repo.webPasswordCalls, 1);
+      expect(find.text('Akun Google ini bukan akun TapGo Anda.'), findsOneWidget);
+      expect(find.byKey(const ValueKey('web-password-done')), findsNothing);
+      // Token lama tidak dipakai lagi: tombol verifikasi muncul kembali dan simpan mati.
+      expect(find.byKey(const ValueKey('web-password-verify-button')), findsOneWidget);
+      expect(saveEnabled(tester), isFalse);
+    });
+
+    testWidgets('membatalkan pilihan akun Google: tidak ada galat dan tidak ada yang terkirim', (tester) async {
+      final repo = await pumpScreen(tester, () async => null);
+      await tester.tap(find.byKey(const ValueKey('web-password-verify-button')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('web-password-verified')), findsNothing);
+      expect(find.byKey(const ValueKey('web-password-error')), findsNothing);
+      expect(repo.webPasswordCalls, 0);
+    });
+
+    testWidgets('Google gagal: pesan ramah tampil, bukan layar kosong', (tester) async {
+      await pumpScreen(tester, () async => throw const DriverApiException(code: 'GOOGLE_TOKEN_MISSING', message: 'Google tidak mengembalikan token yang valid.'));
+      await tester.tap(find.byKey(const ValueKey('web-password-verify-button')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('web-password-error')), findsOneWidget);
+    });
+
+    testWidgets('titik masuk: tab Akun memuat baris Password tapgolion.id', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession, availability: DriverAvailability.online);
+      await pumpDriver(tester, repo);
+      await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Akun')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('open-web-password')), findsOneWidget);
+    });
+  });
+
   group('Tombol SOS darurat', () {
     testWidgets(
         'kirim SOS berhasil: lokasi terlampir, dialog tertutup, SnackBar tampil',
@@ -2368,6 +2575,8 @@ void main() {
       expect(find.byKey(const ValueKey('earnings-summary-card')), findsOneWidget);
       expect(find.text('3'), findsOneWidget);
       expect(find.text('Rp27.000'), findsWidgets);
+      // Kartu performa ada di bawah kartu saldo (yang kini memuat tautan atur password web): gulir dulu.
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('performance-card')), 300);
       expect(find.byKey(const ValueKey('performance-card')), findsOneWidget);
       expect(find.text('80%'), findsOneWidget);
       expect(find.text('90%'), findsOneWidget);
@@ -3818,6 +4027,22 @@ class FakeDriverRepository implements DriverRepository {
   @override
   Future<void> unregisterPushToken(String token) async =>
       unregisteredPushTokens.add(token);
+
+  int webPasswordCalls = 0;
+  String? lastWebPasswordIdToken;
+  String? lastWebPassword;
+  DriverApiException? webPasswordError;
+
+  @override
+  Future<void> setWebPasswordWithGoogle({
+    required String idToken,
+    required String newPassword,
+  }) async {
+    webPasswordCalls += 1;
+    lastWebPasswordIdToken = idToken;
+    lastWebPassword = newPassword;
+    if (webPasswordError != null) throw webPasswordError!;
+  }
 
   FakeDriverRepository({
     required this.session,

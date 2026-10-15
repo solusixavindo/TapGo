@@ -13,9 +13,12 @@ Widget buildTestableDriverApp({
   // SplashScreen/OnboardingScreen memakainya langsung sebagai widget,
   // bukan lewat helper ini.
   bool skipSplash = true,
+  Future<({String idToken, String email})?> Function()? googleIdToken,
 }) {
   return ProviderScope(
     overrides: [
+      if (googleIdToken != null)
+        driverGoogleIdTokenProvider.overrideWithValue(googleIdToken),
       driverRepositoryProvider.overrideWithValue(repository),
       locationPortProvider
           .overrideWithValue(locationPort ?? NoDriverLocationPort()),
@@ -52,6 +55,29 @@ final pushPlatformProvider = Provider<DriverPushPlatform?>(
 final initialScenarioProvider =
     Provider<DriverScenario>((_) => _initialScenarioFromUri());
 final testThemeModeProvider = Provider<ThemeMode?>((_) => null);
+
+/// Meminta ID token Google BARU untuk akun yang dipilih driver (dipakai menyetel password tapgolion.id). Null bila
+/// driver membatalkan pilihan akun. Dipisah sebagai provider supaya uji dapat menggantinya tanpa plugin Google.
+final driverGoogleIdTokenProvider =
+    Provider<Future<({String idToken, String email})?> Function()>((ref) {
+  return () async {
+    final account = await GoogleSignIn(
+      scopes: const ['email'],
+      serverClientId:
+          kGoogleServerClientId.isEmpty ? null : kGoogleServerClientId,
+    ).signIn();
+    if (account == null) return null;
+    final auth = await account.authentication;
+    final idToken = auth.idToken;
+    if (idToken == null) {
+      throw const DriverApiException(
+        code: 'GOOGLE_TOKEN_MISSING',
+        message: 'Google tidak mengembalikan token yang valid.',
+      );
+    }
+    return (idToken: idToken, email: account.email);
+  };
+});
 final testSkipSplashProvider = Provider<bool>((_) => false);
 
 /// Preferensi tema pilihan driver sendiri (Terang/Gelap/Ikuti sistem),

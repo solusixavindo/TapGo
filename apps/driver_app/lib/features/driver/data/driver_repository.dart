@@ -97,6 +97,14 @@ abstract class DriverRepository {
   Future<void> sendChatMessage(String rideReference, String message);
   Future<void> markChatRead(String rideReference);
 
+  /// Menyetel password untuk tapgolion.id (isi saldo) pada akun yang mendaftar dengan Google, yang passwordnya
+  /// acak dan tidak pernah diketahui. [idToken] harus BARU dari Google dengan email akun ini; server menolak
+  /// email lain (GOOGLE_ACCOUNT_MISMATCH). Sesi aplikasi tidak dicabut.
+  Future<void> setWebPasswordWithGoogle({
+    required String idToken,
+    required String newPassword,
+  });
+
   /// Mengirim satu titik lokasi driver ke backend (mengisi peta live di
   /// Beranda untuk penumpang/admin). Dipanggil oleh [DriverLocationPort],
   /// bukan langsung dari UI — port yang mengurus GPS/izin perangkat, repo

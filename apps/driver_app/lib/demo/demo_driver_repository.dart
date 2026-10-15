@@ -357,6 +357,12 @@ class DemoDriverRepository implements DriverRepository {
   }
 
   @override
+  Future<void> setWebPasswordWithGoogle({
+    required String idToken,
+    required String newPassword,
+  }) async {}
+
+  @override
   Future<void> sendChatMessage(String rideReference, String message) async {
     _demoChatMessages.add({
       'id': 'demo-${_demoChatMessages.length}',

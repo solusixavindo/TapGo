@@ -221,3 +221,198 @@ class _NotificationOffBannerState extends State<_NotificationOffBanner>
     );
   }
 }
+
+/// Atur password untuk tapgolion.id (halaman isi Saldo TapGo). Akun yang mendaftar dengan Google dibuat dengan password
+/// acak yang tidak diketahui siapa pun, sehingga tanpa layar ini driver tidak bisa masuk ke web untuk mengisi saldo,
+/// padahal komisi pesanan tunai ditahan dari saldo itu. Dua langkah: (1) buktikan akun Google yang sama, (2) pilih password.
+class DriverWebPasswordScreen extends ConsumerStatefulWidget {
+  const DriverWebPasswordScreen({super.key});
+
+  @override
+  ConsumerState<DriverWebPasswordScreen> createState() =>
+      _DriverWebPasswordScreenState();
+}
+
+class _DriverWebPasswordScreenState
+    extends ConsumerState<DriverWebPasswordScreen> {
+  static const int _minLength = 8;
+  final _password = TextEditingController();
+  final _confirm = TextEditingController();
+  String? _idToken;
+  String? _email;
+  String? _error;
+  bool _busy = false;
+  bool _done = false;
+  bool _visible = false;
+
+  @override
+  void dispose() {
+    _password.dispose();
+    _confirm.dispose();
+    super.dispose();
+  }
+
+  Future<void> _verify() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final result = await ref.read(driverGoogleIdTokenProvider)();
+      if (!mounted) return;
+      if (result != null) {
+        setState(() {
+          _idToken = result.idToken;
+          _email = result.email;
+        });
+      }
+    } catch (error) {
+      if (mounted) setState(() => _error = googleSignInFailureMessage(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _save() async {
+    if (_busy || _idToken == null) return;
+    final password = _password.text;
+    if (password.length < _minLength) {
+      setState(() => _error = 'Password minimal $_minLength karakter.');
+      return;
+    }
+    if (password != _confirm.text) {
+      setState(() => _error = 'Konfirmasi password belum sama.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final message = await ref
+        .read(driverControllerProvider.notifier)
+        .setWebPassword(idToken: _idToken!, newPassword: password);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      if (message == null) {
+        _done = true;
+        _password.clear();
+        _confirm.clear();
+      } else {
+        // Token Google dipakai sekali per percobaan; minta verifikasi ulang agar tidak mengirim token yang sama.
+        _error = message;
+        _idToken = null;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Password tapgolion.id')),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          if (_done) ...[
+            Icon(Icons.check_circle_rounded,
+                size: 56, color: theme.colorScheme.primary),
+            const SizedBox(height: 12),
+            Text('Password tersimpan',
+                key: const ValueKey('web-password-done'),
+                style: theme.textTheme.titleLarge),
+            const SizedBox(height: 8),
+            const Text(
+              'Masuk ke tapgolion.id dengan nomor HP akun TapGo Anda dan password yang baru Anda buat, lalu isi Saldo TapGo.',
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              key: const ValueKey('web-password-open-topup'),
+              onPressed: () => launchUrl(
+                Uri.parse('https://tapgolion.id/topup'),
+                mode: LaunchMode.externalApplication,
+              ),
+              icon: const Icon(Icons.add_card_rounded),
+              label: const Text('Buka halaman isi saldo'),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton(
+              onPressed: () => Navigator.of(context).maybePop(),
+              child: const Text('Selesai'),
+            ),
+          ] else ...[
+            Text(
+              'Saldo TapGo diisi lewat tapgolion.id. Halaman itu masuk dengan nomor HP dan password. '
+              'Akun yang mendaftar dengan Google belum punya password yang Anda ketahui, jadi buat di sini.',
+              style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 20),
+            Text('1. Verifikasi dengan Google',
+                style: theme.textTheme.titleMedium),
+            const SizedBox(height: 8),
+            if (_idToken == null)
+              OutlinedButton.icon(
+                key: const ValueKey('web-password-verify-button'),
+                onPressed: _busy ? null : _verify,
+                icon: const Icon(Icons.verified_user_outlined),
+                label: Text(_busy ? 'Memeriksa…' : 'Pilih akun Google saya'),
+              )
+            else
+              Row(
+                key: const ValueKey('web-password-verified'),
+                children: [
+                  Icon(Icons.check_circle_rounded,
+                      color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('Terverifikasi: ${_email ?? ''}')),
+                ],
+              ),
+            const SizedBox(height: 24),
+            Text('2. Buat password', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 8),
+            TextField(
+              key: const ValueKey('web-password-new'),
+              controller: _password,
+              enabled: _idToken != null && !_busy,
+              obscureText: !_visible,
+              autofillHints: const [AutofillHints.newPassword],
+              decoration: InputDecoration(
+                labelText: 'Password baru (minimal $_minLength karakter)',
+                suffixIcon: IconButton(
+                  tooltip: _visible ? 'Sembunyikan password' : 'Tampilkan password',
+                  icon: Icon(_visible
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined),
+                  onPressed: () => setState(() => _visible = !_visible),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('web-password-confirm'),
+              controller: _confirm,
+              enabled: _idToken != null && !_busy,
+              obscureText: !_visible,
+              decoration: const InputDecoration(labelText: 'Ulangi password'),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                key: const ValueKey('web-password-error'),
+                style: TextStyle(color: theme.colorScheme.error),
+              ),
+            ],
+            const SizedBox(height: 20),
+            FilledButton(
+              key: const ValueKey('web-password-save'),
+              onPressed: _idToken == null || _busy ? null : _save,
+              child: Text(_busy && _idToken != null ? 'Menyimpan…' : 'Simpan password'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}

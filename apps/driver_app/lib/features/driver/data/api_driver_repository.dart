@@ -663,6 +663,19 @@ class ApiDriverRepository implements DriverRepository {
   }
 
   @override
+  Future<void> setWebPasswordWithGoogle({
+    required String idToken,
+    required String newPassword,
+  }) async {
+    await _request(
+      () => _dio.post<dynamic>(
+        '/auth/google/set-password',
+        data: {'idToken': idToken, 'newPassword': newPassword},
+      ),
+    );
+  }
+
+  @override
   Future<void> markChatRead(String rideReference) async {
     await _request(
       () => _dio.post<dynamic>('/chat/rides/$rideReference/read'),

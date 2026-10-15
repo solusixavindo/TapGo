@@ -154,6 +154,18 @@ class _WalletCard extends StatelessWidget {
               icon: const Icon(Icons.add_card_rounded),
               label: const Text('Isi saldo di tapgolion.id'),
             ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                key: const ValueKey('wallet-web-password-hint'),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const DriverWebPasswordScreen(),
+                  ),
+                ),
+                child: const Text('Daftar dengan Google? Atur password web di sini'),
+              ),
+            ),
             if (wallet.entries.isNotEmpty) ...[
               const Divider(height: 28),
               Text('Riwayat saldo', style: theme.textTheme.titleMedium),

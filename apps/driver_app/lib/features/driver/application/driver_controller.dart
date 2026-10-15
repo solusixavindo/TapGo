@@ -993,6 +993,25 @@ class DriverController extends StateNotifier<DriverState>
     }
   }
 
+  /// Menyetel password tapgolion.id untuk akun Google. Mengembalikan null bila berhasil, atau pesan galat untuk
+  /// ditampilkan layar pemanggil (layar itu memegang status memuatnya sendiri, jadi tidak memakai isBusy global).
+  Future<String?> setWebPassword({
+    required String idToken,
+    required String newPassword,
+  }) async {
+    try {
+      await _repository.setWebPasswordWithGoogle(
+        idToken: idToken,
+        newPassword: newPassword,
+      );
+      return null;
+    } on DriverApiException catch (error) {
+      return error.message;
+    } catch (_) {
+      return 'Password belum tersimpan. Periksa koneksi lalu coba lagi.';
+    }
+  }
+
   /// Tombol SOS. Mengembalikan true bila sinyal berhasil terkirim ke server
   /// — pemanggil (dialog konfirmasi) tetap menampilkan jalur WhatsApp CS
   /// sebagai cadangan APA PUN hasilnya, karena ini fitur keselamatan.

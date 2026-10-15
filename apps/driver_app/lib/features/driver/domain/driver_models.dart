@@ -595,6 +595,9 @@ class DriverRide {
     this.updatedAt,
     this.paymentMethod = 'CASH',
     this.distanceToPickupMeters,
+    this.searchExpiresAt,
+    this.commissionFee,
+    this.commissionPercent,
   });
 
   factory DriverRide.fromJson(Map<String, dynamic> json) {
@@ -631,8 +634,20 @@ class DriverRide {
           ? 'DIGITAL'
           : 'CASH',
       distanceToPickupMeters: _intOf(json['distanceToPickupMeters']),
+      searchExpiresAt: DateTime.tryParse('${json['searchExpiresAt'] ?? ''}'),
+      commissionFee: _intOf(json['commissionFee']),
+      commissionPercent: _intOf(json['commissionPercent']),
     );
   }
+
+  /// Batas pencarian menurut server: setelah ini tawaran hilang. Hanya ada pada
+  /// daftar tawaran; null pada server lama (hitung mundur tidak ditampilkan).
+  final DateTime? searchExpiresAt;
+
+  /// Komisi yang ditahan dari Saldo TapGo saat tawaran diterima, dan persentasenya.
+  /// Null bila komisi mati atau server lama.
+  final int? commissionFee;
+  final int? commissionPercent;
 
   /// Jarak dari posisi driver ke titik jemput, dihitung server saat tawaran
   /// dimuat (hanya ada pada daftar tawaran).
