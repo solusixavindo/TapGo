@@ -366,6 +366,35 @@ describe.skipIf(!runIntegration)("Komisi pesanan tunai dari saldo driver (D4)", 
     expect((rows[1]!.metadata as { reversedFrom: string }).reversedFrom).toBe(rows[0]!.id);
   });
 
+  it("saldo hasil top up online (hanya balance, cashBalance nol): komisi tetap bisa ditahan, dan pembatalan TIDAK mengubahnya jadi saldo yang bisa ditarik", async () => {
+    // Kebijakan 14 Okt 2026: top up Saldo TapGo hanya menambah `balance`. Driver yang mengisi saldo lewat tapgolion.id
+    // berada persis di keadaan ini. Komisi harus tetap berjalan, dan uang top up tidak boleh bocor ke cashBalance.
+    const { user } = await createDriver();
+    await prisma.wallet.upsert({
+      where: { userId: user.id },
+      update: { balance: 10_000, cashBalance: 0 },
+      create: { userId: user.id, balance: 10_000, cashBalance: 0 }
+    });
+    const { order } = await createOrder(north(1)); // komisi 720
+    await service().acceptOrder({ userId: user.id, publicReference: order.publicReference });
+    let wallet = await walletOf(user.id);
+    expect(wallet.balance.toNumber()).toBe(9_280);
+    expect(wallet.cashBalance.toNumber()).toBe(0);
+
+    await service().cancelByDriver({ userId: user.id, publicReference: order.publicReference, reason: "OTHER" });
+    wallet = await walletOf(user.id);
+    expect(wallet.balance.toNumber()).toBe(10_000);
+    expect(wallet.cashBalance.toNumber()).toBe(0); // tetap tidak dapat ditarik/ditransfer
+
+    // Dan selesai normal: komisi 720 berpindah, cashBalance tetap nol.
+    const second = await createOrder(north(2));
+    await service().acceptOrder({ userId: user.id, publicReference: second.order.publicReference });
+    await drive(user.id, second.order.publicReference);
+    wallet = await walletOf(user.id);
+    expect(wallet.balance.toNumber()).toBe(9_280);
+    expect(wallet.cashBalance.toNumber()).toBe(0);
+  });
+
   it("pesanan dibatalkan PENUMPANG setelah driver ditugaskan juga melepaskan hold", async () => {
     const { user } = await createDriver();
     await fund(user.id, 10_000);

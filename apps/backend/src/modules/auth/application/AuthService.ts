@@ -418,6 +418,38 @@ export class AuthService {
     });
   }
 
+  /**
+   * Akun yang mendaftar lewat Google dibuat dengan password acak yang tidak pernah diberitahukan, sehingga tidak bisa
+   * masuk ke tapgolion.id (isi saldo, dll.) yang memakai nomor HP + password. Metode ini membiarkan pemiliknya menyetel
+   * password SENDIRI, dengan syarat membuktikan lagi kepemilikan akun Google yang sama (ID token baru, diverifikasi
+   * kriptografis) di atas sesi yang sedang login. Email dibaca HANYA dari token yang sah, tidak pernah dari body.
+   *
+   * Sesi tidak dicabut: password sebelumnya acak dan tidak diketahui siapa pun.
+   */
+  async setPasswordWithGoogle(input: { userId: string; idToken: string; newPassword: string }) {
+    const user = await this.authRepository.findUserById(input.userId);
+    if (!user) {
+      throw new AppError("User not found", StatusCodes.NOT_FOUND, "USER_NOT_FOUND");
+    }
+    if (user.status !== "ACTIVE") {
+      throw new AppError("Account is not active", StatusCodes.FORBIDDEN, "ACCOUNT_INACTIVE");
+    }
+    const payload = await this.verifyGoogleIdToken(input.idToken);
+    const email = payload.email.toLowerCase();
+    // Hanya akun yang emailnya SUDAH terverifikasi dan sama persis dengan email di token Google.
+    if (!user.email || user.emailVerifiedAt === null || user.email.toLowerCase() !== email) {
+      throw new AppError(
+        "Akun Google ini bukan akun TapGo Anda.",
+        StatusCodes.FORBIDDEN,
+        "GOOGLE_ACCOUNT_MISMATCH"
+      );
+    }
+    await this.authRepository.setPasswordFromGoogle({
+      userId: user.id,
+      passwordHash: await hashPassword(input.newPassword)
+    });
+  }
+
   async me(userId: string) {
     const user = await this.authRepository.findUserById(userId);
     if (!user) {

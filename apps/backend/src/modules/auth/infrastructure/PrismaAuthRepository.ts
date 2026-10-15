@@ -553,6 +553,15 @@ export class PrismaAuthRepository implements AuthRepository {
     ]);
   }
 
+  async setPasswordFromGoogle(input: { userId: string; passwordHash: string }) {
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: input.userId }, data: { passwordHash: input.passwordHash } }),
+      this.prisma.auditLog.create({
+        data: { actorId: input.userId, action: "auth.password.set_via_google", entityType: "User", entityId: input.userId }
+      })
+    ]);
+  }
+
   async createOtpChallenge(input: {
     phone: string;
     codeHash: string;

@@ -258,4 +258,97 @@ describe.skipIf(!runIntegration)("Daftar/masuk dengan Google (driver_app)", () =
       backendEnv.GOOGLE_OAUTH_CLIENT_ID = AUDIENCE;
     }
   });
+
+  describe("atur password web untuk akun Google (isi saldo di tapgolion.id)", () => {
+    async function registerWithGoogle() {
+      const phone = nextPhone();
+      const res = await postGoogleComplete({ idToken: googleIdToken(), phone });
+      expect(res.status).toBe(201);
+      return { phone, token: (res.body.data as { accessToken: string }).accessToken };
+    }
+
+    async function setPassword(token: string | null, body: Record<string, unknown>) {
+      const res = await fetch(`${baseUrl}/api/v1/auth/google/set-password`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify(body)
+      });
+      return { status: res.status, text: await res.text() };
+    }
+
+    async function webLogin(phone: string, password: string) {
+      const res = await fetch(`${baseUrl}/api/v1/web/auth/login`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ phone, password })
+      });
+      return res.status;
+    }
+
+    it("menyetel password: 204, login web dengan nomor HP + password baru berhasil, sesi aplikasi tetap sah, audit tercatat", async () => {
+      const { phone, token } = await registerWithGoogle();
+      // Sebelum menyetel, tidak ada password yang bisa dipakai masuk ke web.
+      expect(await webLogin(phone, "password-tebakan")).toBe(401);
+
+      const res = await setPassword(token, { idToken: googleIdToken(), newPassword: "KataSandiBaru-7" });
+      expect(res.status).toBe(204);
+
+      expect(await webLogin(phone, "KataSandiBaru-7")).toBe(200);
+      expect(await webLogin(phone, "KataSandiBaru-8")).toBe(401);
+      // Password acak lama tidak pernah diketahui, jadi sesi tidak dicabut: aplikasi tetap masuk.
+      const me = await fetch(`${baseUrl}/api/v1/auth/me`, { headers: { authorization: `Bearer ${token}` } });
+      expect(me.status).toBe(200);
+
+      const user = await prisma.user.findFirstOrThrow({ where: { phone: storedPhone(phone) } });
+      const audit = await prisma.auditLog.findMany({ where: { action: "auth.password.set_via_google", entityId: user.id } });
+      expect(audit).toHaveLength(1);
+      expect(audit[0]!.actorId).toBe(user.id);
+      // Isi audit tidak memuat password maupun hash.
+      expect(JSON.stringify(audit[0])).not.toContain("KataSandiBaru");
+    });
+
+    it("ID token Google milik email LAIN ditolak 403 dan password tidak berubah", async () => {
+      const { phone, token } = await registerWithGoogle();
+      const before = await prisma.user.findFirstOrThrow({ where: { phone: storedPhone(phone) } });
+      const res = await setPassword(token, { idToken: googleIdToken({ email: "orang.lain@gmail.com" }), newPassword: "KataSandiBaru-7" });
+      expect(res.status).toBe(403);
+      expect(res.text).toContain("GOOGLE_ACCOUNT_MISMATCH");
+      const after = await prisma.user.findFirstOrThrow({ where: { phone: storedPhone(phone) } });
+      expect(after.passwordHash).toBe(before.passwordHash);
+      expect(await webLogin(phone, "KataSandiBaru-7")).toBe(401);
+    });
+
+    it("tanpa login: 401; ID token tidak sah atau kedaluwarsa: 401", async () => {
+      const { token } = await registerWithGoogle();
+      expect((await setPassword(null, { idToken: googleIdToken(), newPassword: "KataSandiBaru-7" })).status).toBe(401);
+      expect((await setPassword(token, { idToken: "bukan-token-yang-sah-sama-sekali", newPassword: "KataSandiBaru-7" })).status).toBe(401);
+    });
+
+    it("email akun belum terverifikasi: ditolak 403 walau token Google sah dengan email yang sama", async () => {
+      const { phone, token } = await registerWithGoogle();
+      await prisma.user.updateMany({ where: { phone: storedPhone(phone) }, data: { emailVerifiedAt: null } });
+      const res = await setPassword(token, { idToken: googleIdToken(), newPassword: "KataSandiBaru-7" });
+      expect(res.status).toBe(403);
+      expect(res.text).toContain("GOOGLE_ACCOUNT_MISMATCH");
+    });
+
+    it("password terlalu pendek ditolak 400; field email di body diabaikan", async () => {
+      const { phone, token } = await registerWithGoogle();
+      expect((await setPassword(token, { idToken: googleIdToken(), newPassword: "abc" })).status).toBe(400);
+      const res = await setPassword(token, { idToken: googleIdToken(), newPassword: "KataSandiBaru-7", email: "palsu@evil.com" });
+      expect(res.status).toBe(204);
+      const user = await prisma.user.findFirstOrThrow({ where: { phone: storedPhone(phone) } });
+      expect(user.email).toBe("sandikanur404@gmail.com");
+    });
+
+    it("GOOGLE_OAUTH_CLIENT_ID belum diisi: 503 fail-closed", async () => {
+      const { token } = await registerWithGoogle();
+      backendEnv.GOOGLE_OAUTH_CLIENT_ID = undefined;
+      try {
+        expect((await setPassword(token, { idToken: googleIdToken(), newPassword: "KataSandiBaru-7" })).status).toBe(503);
+      } finally {
+        backendEnv.GOOGLE_OAUTH_CLIENT_ID = AUDIENCE;
+      }
+    });
+  });
 });

@@ -108,6 +108,16 @@ export const googleCompleteSchema = z.preprocess(
   })
 );
 
+export const googleSetPasswordSchema = z.preprocess(
+  wrapBody,
+  z.object({
+    body: z.object({
+      idToken: z.string().min(20).max(4096),
+      newPassword: passwordSchema
+    })
+  })
+);
+
 export const otpRequestSchema = z.preprocess(
   wrapBody,
   z.object({

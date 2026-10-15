@@ -71,6 +71,15 @@ export class AuthController {
     res.status(StatusCodes.NO_CONTENT).send();
   };
 
+  googleSetPassword = async (req: Request, res: Response) => {
+    await this.authService.setPasswordWithGoogle({
+      userId: req.auth!.userId,
+      idToken: req.body.idToken,
+      newPassword: req.body.newPassword
+    });
+    res.status(StatusCodes.NO_CONTENT).send();
+  };
+
   me = async (req: Request, res: Response) => {
     const user = await this.authService.me(req.auth!.userId);
     res.json({ success: true, data: user });

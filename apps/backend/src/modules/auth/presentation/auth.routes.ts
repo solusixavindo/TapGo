@@ -22,6 +22,7 @@ import {
   changePasswordSchema,
   googleAuthSchema,
   googleCompleteSchema,
+  googleSetPasswordSchema,
   loginSchema,
   refreshSchema,
   registerSchema
@@ -89,6 +90,15 @@ authRouter.post(
   registerPhoneRateLimiter,
   validateRequest(googleCompleteSchema),
   asyncHandler(controller.googleComplete)
+);
+// Atur password web untuk akun Google (driver_app): wajib login DAN ID token Google baru. authRateLimiter karena token
+// dapat dicoba berulang.
+authRouter.post(
+  "/google/set-password",
+  requireAuth,
+  authRateLimiter,
+  validateRequest(googleSetPasswordSchema),
+  asyncHandler(controller.googleSetPassword)
 );
 authRouter.post("/refresh", refreshRateLimiter, validateRequest(refreshSchema), asyncHandler(controller.refresh));
 authRouter.post("/logout", requireAuth, asyncHandler(controller.logout));

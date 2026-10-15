@@ -113,6 +113,11 @@ export interface AuthRepository {
     passwordHash: string;
     now: Date;
   }): Promise<void>;
+  /**
+   * Menyetel password TANPA mencabut sesi. Hanya untuk akun yang passwordnya acak dan tak pernah diketahui siapa pun
+   * (daftar lewat Google): tidak ada pihak lain yang perlu dikeluarkan dari sesi. Audit dicatat dalam transaksi yang sama.
+   */
+  setPasswordFromGoogle(input: { userId: string; passwordHash: string }): Promise<void>;
   createOtpChallenge(input: {
     phone: string;
     codeHash: string;
