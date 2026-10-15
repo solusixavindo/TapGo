@@ -118,22 +118,29 @@ export class WalletTopUpPaymentService {
     return availableTopUpMethods(this.enabledPayments()).filter((method) => allowed.includes(method));
   }
 
+  /** Pemilik akun punya profil driver (status apa pun): top up Saldo TapGo-nya menjadi komisi, jadi biaya dibatasi. */
+  private async isDriverAccount(userId: string): Promise<boolean> {
+    const profile = await this.prisma.rideDriverProfile.findUnique({ where: { userId }, select: { id: true } });
+    return profile !== null;
+  }
+
   /** Biaya yang ditagihkan ke pelanggan untuk kombinasi tujuan, metode, dan nominal ini. */
-  private customerFeeFor(target: TopUpTarget, method: TopUpMethod, amount: number) {
-    return customerTopUpFee({ target, method, amount, walletCap: env.WALLET_TOPUP_FEE_CAP });
+  private customerFeeFor(target: TopUpTarget, method: TopUpMethod, amount: number, payerIsDriver: boolean) {
+    return customerTopUpFee({ target, method, amount, walletCap: env.WALLET_TOPUP_FEE_CAP, payerIsDriver });
   }
 
   /**
    * Opsi top up yang boleh ditawarkan halaman web saat ini. Bila `amount` dan `target` diberikan, tiap metode
    * disertai penawaran harga (biaya dan total) supaya pelanggan melihat biaya sebelum membayar.
    */
-  onlineOptions(query: { amount?: number; target?: TopUpTarget } = {}) {
+  async onlineOptions(query: { userId: string; amount?: number; target?: TopUpTarget }) {
+    const payerIsDriver = await this.isDriverAccount(query.userId);
     const gatewayReady = env.DOKU_ENABLED || Boolean(env.MIDTRANS_SERVER_KEY);
     const methods = env.DOKU_ENABLED ? [] : this.offeredMethods();
     const quotes =
       query.amount !== undefined && query.target !== undefined && Number.isInteger(query.amount) && query.amount > 0
         ? methods.map((method) => {
-            const fee = this.customerFeeFor(query.target!, method, query.amount!);
+            const fee = this.customerFeeFor(query.target!, method, query.amount!, payerIsDriver);
             return { method, fee, gross: query.amount! + fee };
           })
         : undefined;
@@ -143,7 +150,8 @@ export class WalletTopUpPaymentService {
       onlineFee: env.DOKU_ENABLED ? 0 : topUpOnlineFee(),
       methods: methods.map((id) => ({ id, label: TOPUP_METHODS[id].label, description: TOPUP_METHODS[id].description })),
       ...(quotes ? { quotes } : {}),
-      walletFeeCap: env.WALLET_TOPUP_FEE_CAP,
+      // Hanya untuk akun driver; akun lain membayar biaya penuh sehingga tidak ada batas yang perlu ditampilkan.
+      walletFeeCap: payerIsDriver ? env.WALLET_TOPUP_FEE_CAP : null,
       minimum: { WALLET: minimumAmountFor("WALLET"), PPOB: minimumAmountFor("PPOB") },
       maximum: env.MANUAL_TOPUP_MAX_AMOUNT,
     };
@@ -195,7 +203,7 @@ export class WalletTopUpPaymentService {
     // Metode dan biaya ditetapkan SEKARANG (sebelum pesanan dibuat) dan tersimpan di pesanan, sehingga yang ditagihkan
     // persis sama dengan yang ditampilkan ke pelanggan.
     const method = env.DOKU_ENABLED ? null : this.resolveMethod(input.method);
-    const plannedFee = method ? this.customerFeeFor(input.target, method, input.amount) : 0;
+    const plannedFee = method ? this.customerFeeFor(input.target, method, input.amount, await this.isDriverAccount(input.userId)) : 0;
     const order = await this.walletRepository.createTopUpOrder({
       userId: input.userId,
       amount: new Prisma.Decimal(input.amount),
@@ -274,7 +282,7 @@ export class WalletTopUpPaymentService {
     const feeAmount =
       typeof storedFee === "number" && Number.isInteger(storedFee) && storedFee >= 0 && metadata.method === method
         ? storedFee
-        : this.customerFeeFor(topUpTargetOf(order.metadata), method, baseAmount);
+        : this.customerFeeFor(topUpTargetOf(order.metadata), method, baseAmount, await this.isDriverAccount(order.userId));
     const grossAmount = baseAmount + feeAmount;
     const snapCodes = snapCodesFor(method, this.enabledPayments());
     if (snapCodes.length === 0) {

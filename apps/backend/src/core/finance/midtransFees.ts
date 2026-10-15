@@ -130,12 +130,21 @@ export type TopUpFeeTarget = "WALLET" | "PPOB";
  *
  * - Saldo PPOB: pelanggan menanggung biaya penuh (untung PPOB hanya Rp500-1.000 per transaksi, tidak cukup menanggung
  *   biaya gateway).
- * - Saldo TapGo (komisi driver): pelanggan menanggung biaya penuh sampai batas `walletCap` (Rp2.500 bawaan); selisihnya
- *   ditanggung perusahaan karena top up ini menjadi komisi pesanan. Tidak pernah ditagih lebih dari biaya sebenarnya.
+ * - Saldo TapGo milik DRIVER (`payerIsDriver`): seluruh top up menjadi komisi pesanan tunai, jadi pelanggan membayar
+ *   sampai batas `walletCap` (Rp2.500 bawaan) dan selisihnya ditanggung perusahaan. Tidak pernah ditagih lebih dari
+ *   biaya sebenarnya.
+ * - Saldo TapGo milik NON-driver (penumpang): top up dipakai membayar perjalanan digital, yang memberi perusahaan hanya
+ *   8% dari tarif, jadi biaya penuh dibebankan ke pelanggan.
  */
-export function customerTopUpFee(input: { target: TopUpFeeTarget; method: TopUpMethod; amount: number; walletCap: number }): number {
+export function customerTopUpFee(input: {
+  target: TopUpFeeTarget;
+  method: TopUpMethod;
+  amount: number;
+  walletCap: number;
+  payerIsDriver: boolean;
+}): number {
   const full = fullTopUpFee(input.method, input.amount);
-  return input.target === "WALLET" ? Math.min(full, input.walletCap) : full;
+  return input.target === "WALLET" && input.payerIsDriver ? Math.min(full, input.walletCap) : full;
 }
 
 /** Bagian biaya Midtrans yang ditanggung perusahaan (>= 0) untuk total tagihan `gross` dengan biaya pelanggan `customerFee`. */

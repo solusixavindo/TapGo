@@ -3031,7 +3031,17 @@ export class RideService {
     durationSeconds: number;
     totalFare: number;
     createdAt: Date;
+    paymentMethod: "CASH" | "DIGITAL";
   }) {
+    // Bagian perusahaan: tunai = komisi yang DITAHAN dari Saldo TapGo driver saat tawaran diterima (hanya bila komisi
+    // menyala); digital = 8% dari tarif yang DIPOTONG dari pendapatan (bagi hasil 92:8, selalu berlaku). Aplikasi driver
+    // menampilkan keduanya dengan kalimat yang berbeda.
+    const digital = order.paymentMethod === "DIGITAL";
+    const commission = digital
+      ? { fee: Math.round((order.totalFare * (100 - 92)) / 100), percent: 100 - 92, kind: "DEDUCTED" as const }
+      : env.DRIVER_COMMISSION_ENABLED
+        ? { fee: this.cashCommissionFee(order.totalFare).toNumber(), percent: env.DRIVER_COMMISSION_PERCENT, kind: "HELD" as const }
+        : null;
     return {
       reference: order.publicReference,
       // Kedua caller listOffersForDriver() SELALU memfilter status:
@@ -3053,9 +3063,11 @@ export class RideService {
       // Batas pencarian yang SAMA dengan penyapu kedaluwarsa (rideSearchExpiry): tawaran menghilang setelah ini, jadi
       // aplikasi driver dapat menampilkan hitung mundur yang jujur.
       searchExpiresAt: new Date(order.createdAt.getTime() + env.RIDE_SEARCH_TIMEOUT_SECONDS * 1000),
-      // Komisi yang akan ditahan saat tawaran diterima (null bila komisi mati). Pesanan tunai saja: tidak ada tawaran digital.
-      commissionFee: env.DRIVER_COMMISSION_ENABLED ? this.cashCommissionFee(order.totalFare).toNumber() : null,
-      commissionPercent: env.DRIVER_COMMISSION_ENABLED ? env.DRIVER_COMMISSION_PERCENT : null,
+      // Metode bayar: tawaran digital sudah dibayar penumpang lewat TapGoPay (driver tidak menagih tunai).
+      payment: { method: order.paymentMethod },
+      commissionFee: commission?.fee ?? null,
+      commissionPercent: commission?.percent ?? null,
+      commissionKind: commission?.kind ?? null,
     };
   }
 

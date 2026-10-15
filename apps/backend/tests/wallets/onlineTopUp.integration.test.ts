@@ -128,7 +128,7 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
   });
 
   it("offers a quote per payment method: the driver (WALLET) pays at most the cap, PPOB pays the full fee", async () => {
-    const user = await createUser("ONL000020");
+    const user = await createDriverUser("ONL000020");
     type Options = { data: { methods: Array<{ id: string }>; walletFeeCap: number; quotes: Array<{ method: string; fee: number; gross: number }> } };
     const read = async (query: string) => ((await (await api(`/api/v1/web/wallet/topup/options?${query}`, { token: tokenFor(user, "WEB") })).json()) as Options).data;
 
@@ -154,7 +154,7 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
   });
 
   it("charges the driver the capped fee on a bank transfer: Snap is limited to the bank codes and the fee line sums to the total", async () => {
-    const user = await createUser("ONL000021");
+    const user = await createDriverUser("ONL000021");
     const created = await createOnline(user, 50000, "WALLET", "WEB", "bank_transfer");
     expect(created.status).toBe(201);
     const body = (await created.json()) as { data: { reference: string; method: string; feeAmount: number; grossAmount: number } };
@@ -173,7 +173,7 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
   });
 
   it("a percentage method charges only its real cost and restricts Snap to that method", async () => {
-    const user = await createUser("ONL000022");
+    const user = await createDriverUser("ONL000022");
     const created = await createOnline(user, 50000, "WALLET", "WEB", "gopay");
     expect(created.status).toBe(201);
     const body = (await created.json()) as { data: { reference: string; feeAmount: number; grossAmount: number } };
@@ -192,6 +192,23 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
     expect((await createOnline(user, 50000, "WALLET", "WEB", "bitcoin")).status).toBe(400);
     expect(await prisma.walletTopUpOrder.count()).toBe(0);
     expect(snapRequests).toHaveLength(0);
+  });
+
+  it("a passenger (no driver profile) pays the full fee on the TapGo balance: the cap is only for drivers", async () => {
+    // Top up penumpang dipakai membayar perjalanan digital yang hanya memberi perusahaan 8% dari tarif, jadi biaya penuh.
+    const passenger = await createUser("ONL000026");
+    const options = await api("/api/v1/web/wallet/topup/options?amount=50000&target=WALLET", { token: tokenFor(passenger, "WEB") });
+    const body = (await options.json()) as { data: { walletFeeCap: number | null; quotes: Array<{ method: string; fee: number }> } };
+    expect(body.data.walletFeeCap).toBeNull();
+    expect(body.data.quotes).toEqual([
+      { method: "bank_transfer", fee: 4440, gross: 54440 },
+      { method: "gopay", fee: 1021, gross: 51021 },
+      { method: "qris", fee: 353, gross: 50353 }
+    ]);
+    const created = await createOnline(passenger, 50000, "WALLET", "WEB", "bank_transfer");
+    expect(((await created.json()) as { data: { feeAmount: number; grossAmount: number } }).data).toMatchObject({ feeAmount: 4440, grossAmount: 54440 });
+    const order = await prisma.walletTopUpOrder.findFirstOrThrow({ where: { userId: passenger.id } });
+    expect(order.metadata).toMatchObject({ feeAmount: 4440, feeBorneByCustomer: true });
   });
 
   it("by default only bank transfer is offered, even when other methods are active at Midtrans", async () => {
@@ -216,7 +233,7 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
   });
 
   it("accepts the Rp25.000 option for the TapGo balance", async () => {
-    const user = await createUser("ONL000024");
+    const user = await createDriverUser("ONL000024");
     const created = await createOnline(user, 25000, "WALLET", "WEB", "bank_transfer");
     expect(created.status).toBe(201);
     expect(((await created.json()) as { data: { grossAmount: number } }).data.grossAmount).toBe(27500);
@@ -268,7 +285,7 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
   });
 
   it("rejects a settlement for the base amount alone, because the fee was not paid", async () => {
-    const user = await createUser("ONL000004");
+    const user = await createDriverUser("ONL000004");
     const created = await createOnline(user, 100000, "WALLET");
     const body = (await created.json()) as { data: { reference: string } };
 
@@ -279,7 +296,7 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
   });
 
   it("credits the TapGo balance for the WALLET target", async () => {
-    const user = await createUser("ONL000005");
+    const user = await createDriverUser("ONL000005");
     const created = await createOnline(user, 100000, "WALLET");
     const body = (await created.json()) as { data: { reference: string } };
     expect((await notify(body.data.reference, "102500.00")).status).toBe(200);
@@ -349,7 +366,7 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
   });
 
   it("adds the fee on the older create-then-pay route as well", async () => {
-    const user = await createUser("ONL000011");
+    const user = await createDriverUser("ONL000011");
     const created = await api("/api/v1/web/wallet/topup/orders", { method: "POST", token: tokenFor(user, "WEB"), body: { amount: 100000 } });
     const body = (await created.json()) as { data: { id: string; reference: string } };
     const paid = await api(`/api/v1/web/wallet/topup/orders/${body.data.id}/pay`, { method: "POST", token: tokenFor(user, "WEB") });
@@ -393,6 +410,13 @@ function createOnline(user: User, amount: number, target: "WALLET" | "PPOB", cha
     token: tokenFor(user, channel),
     body: { amount, target, ...(method ? { method } : {}) }
   });
+}
+
+/** Akun dengan profil driver: top up Saldo TapGo-nya menjadi komisi, sehingga biaya dibatasi Rp2.500. */
+async function createDriverUser(referralCode: string): Promise<User> {
+  const user = await createUser(referralCode);
+  await prisma.rideDriverProfile.create({ data: { userId: user.id, status: "ACTIVE", availability: "OFFLINE" } });
+  return user;
 }
 
 async function createUser(referralCode: string): Promise<User> {

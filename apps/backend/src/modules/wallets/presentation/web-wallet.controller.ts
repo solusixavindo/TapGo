@@ -128,10 +128,11 @@ export class WebWalletController {
     res.json({
       success: true,
       data: {
-        ...this.topUpPaymentService.onlineOptions({
+        ...(await this.topUpPaymentService.onlineOptions({
+          userId: req.auth!.userId,
           ...(amount !== undefined ? { amount } : {}),
           ...(target !== undefined ? { target } : {}),
-        }),
+        })),
         manualTransfer: this.manualTopUpAvailable(),
       },
     });

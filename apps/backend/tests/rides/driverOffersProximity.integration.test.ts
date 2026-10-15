@@ -184,7 +184,10 @@ describe.skipIf(!runIntegration)("Tawaran berbasis jarak dan batas waktu pencari
   it("tawaran memuat batas pencarian (untuk hitung mundur di aplikasi) dan komisi bila komisi menyala", async () => {
     const { user } = await createDriver();
     const near = await createOrder(north(2)); // tarif 9.000 pada pabrik uji
-    type Offer = { reference: string; createdAt: Date; searchExpiresAt: Date; commissionFee: number | null; commissionPercent: number | null; totalFare: number };
+    type Offer = {
+      reference: string; createdAt: Date; searchExpiresAt: Date; commissionFee: number | null; commissionPercent: number | null;
+      commissionKind: string | null; payment: { method: string }; totalFare: number;
+    };
     const read = async () => (await service().listOffersForDriver(user.id)) as unknown as Offer[];
 
     const wasEnabled = backendEnv.DRIVER_COMMISSION_ENABLED;
@@ -202,6 +205,20 @@ describe.skipIf(!runIntegration)("Tawaran berbasis jarak dan batas waktu pencari
       expect(on.reference).toBe(near.order.publicReference);
       expect(on.commissionPercent).toBe(8);
       expect(on.commissionFee).toBe(Math.ceil((on.totalFare * 8) / 100)); // dibulatkan ke atas, sama dengan yang ditahan saat accept
+      expect(on.commissionKind).toBe("HELD");
+      expect(on.payment.method).toBe("CASH");
+
+      // Tawaran DIGITAL (TapGoPay): sudah dibayar penumpang; 8% dipotong dari tarif (bagi hasil 92:8), bukan ditahan dari saldo,
+      // dan berlaku walau komisi tunai mati.
+      await prisma.rideOrder.update({ where: { id: near.order.id }, data: { paymentMethod: "DIGITAL", paymentState: "DIGITAL_HELD" } });
+      for (const enabled of [true, false]) {
+        backendEnv.DRIVER_COMMISSION_ENABLED = enabled;
+        const digital = (await read())[0]!;
+        expect(digital.payment.method).toBe("DIGITAL");
+        expect(digital.commissionKind).toBe("DEDUCTED");
+        expect(digital.commissionPercent).toBe(8);
+        expect(digital.commissionFee).toBe(720); // 8% x 9.000
+      }
     } finally {
       backendEnv.DRIVER_COMMISSION_ENABLED = wasEnabled;
     }
