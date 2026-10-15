@@ -8,6 +8,7 @@ import { initSentry } from "./core/monitoring/sentry.js";
 import { disconnectRateLimitStore } from "./core/security/rateLimitStore.js";
 import { DriverDocumentService } from "./modules/drivers/application/DriverDocumentService.js";
 import { expireStaleRideSearches } from "./modules/rides/application/rideSearchExpiry.js";
+import { purgeOldDriverLocations } from "./modules/rides/application/rideLocationRetention.js";
 import { MembershipDocumentService } from "./modules/memberships/application/MembershipDocumentService.js";
 import { PpobService } from "./modules/ppob/application/PpobService.js";
 import { PpobPriceSyncService } from "./modules/ppob/application/PpobPriceSyncService.js";
@@ -145,9 +146,27 @@ async function sweepStaleRideSearches() {
 const rideSearchTimer = setInterval(() => void sweepStaleRideSearches(), RIDE_SEARCH_SWEEP_INTERVAL_MS);
 rideSearchTimer.unref();
 
+const LOCATION_PURGE_INTERVAL_MS = 60 * 60 * 1000;
+
+/** Titik lokasi driver lewat masa simpan dibuang tiap jam (lihat rideLocationRetention.ts). */
+async function purgeDriverLocations() {
+  try {
+    const purged = await purgeOldDriverLocations(prisma);
+    if (purged > 0) {
+      logger.info({ purged }, "Old driver location points purged");
+    }
+  } catch (error) {
+    logger.error({ err: error }, "Failed to purge old driver location points");
+  }
+}
+
+const locationPurgeTimer = setInterval(() => void purgeDriverLocations(), LOCATION_PURGE_INTERVAL_MS);
+locationPurgeTimer.unref();
+
 const purgeTimer = setInterval(() => void purgeExpiredDocuments(), PURGE_INTERVAL_MS);
 purgeTimer.unref();
 void purgeExpiredDocuments();
+void purgeDriverLocations();
 
 /**
  * Worker rekonsiliasi PPOB (Stage R2.8).
@@ -274,6 +293,7 @@ async function shutdown(signal: string) {
   logger.info({ signal }, "Shutting down server");
   clearInterval(purgeTimer);
   clearInterval(rideSearchTimer);
+  clearInterval(locationPurgeTimer);
   if (ppobReconcileTimer) {
     clearInterval(ppobReconcileTimer);
   }

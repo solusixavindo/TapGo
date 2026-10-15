@@ -176,12 +176,43 @@ export const verificationRateLimiter = rateLimit({
   message: recoveryRateLimitMessage
 });
 
+/**
+ * Dua rute posisi hidup: POST /driver/location (driver mengirim) dan GET /rides/:ref/driver-location (penumpang
+ * membaca). Keduanya dipanggil tiap 1-2 detik saat perjalanan berlangsung, jadi satu ponsel saja sudah
+ * menghabiskan 40-60 permintaan/menit. Batas umum 120/menit per IP akan langsung penuh bila dua-tiga ponsel
+ * berbagi satu IP publik operator seluler (CGNAT), lalu SEMUA permintaan mereka, termasuk status pesanan dan
+ * tombol SOS, ditolak 429. Kedua rute ini punya batas per akun sendiri (rideLocationRateLimiter,
+ * rideTrackingRateLimiter) ditambah plafon IP yang longgar (liveRideIpRateLimiter) di bawah.
+ */
+const LIVE_RIDE_POSITION_PATH =
+  /^\/api\/v1\/(?:driver\/location|rides\/[A-Za-z0-9-]+\/driver-location)\/?$/;
+
+export function isLiveRidePositionRequest(req: { method?: string; path?: string }): boolean {
+  const path = req.path ?? "";
+  if (!LIVE_RIDE_POSITION_PATH.test(path)) return false;
+  return path.includes("/driver-location") ? req.method === "GET" : req.method === "POST";
+}
+
 export const apiRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 120,
   standardHeaders: true,
   legacyHeaders: false,
-  ...rateLimitStore("api", "open")
+  ...rateLimitStore("api", "open"),
+  skip: (req) => isLiveRidePositionRequest(req)
+});
+
+/**
+ * Plafon per IP khusus rute posisi hidup. Sengaja longgar (CGNAT: puluhan ponsel di satu IP) — pembatas yang
+ * sebenarnya per akun. Tujuannya hanya menahan banjir permintaan dari satu sumber yang tak punya akun.
+ */
+export const liveRideIpRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 3000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  ...rateLimitStore("ride-live-ip", "open"),
+  skip: (req) => !isLiveRidePositionRequest(req)
 });
 
 export const adminRateLimiter = rateLimit({
@@ -224,13 +255,28 @@ export const rideWriteRateLimiter = rateLimit({
   }
 });
 
-/** Update lokasi driver — frekuensi tinggi tetapi tetap dibatasi. */
+/**
+ * Kunci per akun, bukan per IP: jaringan seluler operator membagi satu IP publik ke banyak ponsel, dan
+ * pembaruan posisi sekarang tiap 1-2 detik. Dengan kunci IP, beberapa driver/penumpang di satu menara
+ * saling menghabiskan jatah dan mendapat 429 tepat saat posisi seharusnya bergerak. Rute ini selalu
+ * di belakang requireAuth; kembali ke IP hanya bila konteks auth entah mengapa tidak ada.
+ */
+function perAccountKey(prefix: string) {
+  return (req: { auth?: { userId?: string } | undefined; ip?: string | undefined }): string =>
+    `${prefix}:${req.auth?.userId ?? req.ip ?? "unknown"}`;
+}
+
+/**
+ * Update lokasi driver — frekuensi tinggi (1 dtk saat menuju titik jemput = 60/mnt) tetapi tetap dibatasi.
+ * 180/mnt memberi ruang bagi kiriman ulang setelah sinyal putus tanpa membuka pintu penyalahgunaan.
+ */
 export const rideLocationRateLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 120,
+  max: 180,
   standardHeaders: true,
   legacyHeaders: false,
   ...rateLimitStore("ride-location", "open"),
+  keyGenerator: perAccountKey("ride-location-user"),
   message: {
     success: false,
     code: "RIDE_LOCATION_RATE_LIMITED",
@@ -238,13 +284,14 @@ export const rideLocationRateLimiter = rateLimit({
   }
 });
 
-/** Penumpang memantau posisi driver (polling tiap beberapa detik). */
+/** Penumpang memantau posisi driver (polling tiap 1,5 dtk = 40/mnt; batas memberi ruang untuk susulan). */
 export const rideTrackingRateLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 60,
+  max: 120,
   standardHeaders: true,
   legacyHeaders: false,
   ...rateLimitStore("ride-tracking", "open"),
+  keyGenerator: perAccountKey("ride-tracking-user"),
   message: {
     success: false,
     code: "RIDE_TRACKING_RATE_LIMITED",

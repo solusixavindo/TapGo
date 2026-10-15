@@ -252,6 +252,9 @@ const envSchema = z.object({
   RIDE_OFFER_RADIUS_METERS: z.coerce.number().int().min(500).max(50000).default(5000),
   /// Pesanan yang belum mendapat driver setelah selama ini otomatis menjadi NO_DRIVER.
   RIDE_SEARCH_TIMEOUT_SECONDS: z.coerce.number().int().min(30).max(1800).default(180),
+  /// Berapa hari jejak lokasi driver yang terkait sebuah perjalanan disimpan (bukti sengketa/keselamatan).
+  /// Titik tanpa perjalanan (driver hanya online) dibuang setelah 1 hari. Lihat rideLocationRetention.ts.
+  RIDE_LOCATION_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(14),
   /// Adapter provider PPOB (Stage R2.7/R2.8). Default "disabled": setiap
   /// pembelian dibatalkan dengan refund penuh dan 503 PPOB_PROVIDER_DISABLED.
   /// "stub" menyalakan adapter sintetis deterministik untuk UAT. "digiflazz"

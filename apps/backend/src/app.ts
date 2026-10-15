@@ -9,7 +9,7 @@ import { adminWebOnly } from "./core/http/adminWebOnly.js";
 import { legacyMobileClientGate } from "./core/http/legacyMobileClientGate.js";
 import { auditRequestLogger } from "./core/http/auditRequestLogger.js";
 import { logger } from "./core/logger/logger.js";
-import { adminRateLimiter, apiRateLimiter, paymentRateLimiter } from "./core/security/rateLimit.js";
+import { adminRateLimiter, apiRateLimiter, liveRideIpRateLimiter, paymentRateLimiter } from "./core/security/rateLimit.js";
 import { authRouter, webAuthRouter } from "./modules/auth/presentation/auth.routes.js";
 import { accountRouter } from "./modules/account/presentation/account.routes.js";
 import { adminConsoleRouter } from "./modules/admin-console/presentation/admin-console.routes.js";
@@ -70,6 +70,7 @@ export function createApp() {
   app.use(express.urlencoded({ extended: true }));
   app.use(pinoHttp({ logger }));
   app.use(apiRateLimiter);
+  app.use(liveRideIpRateLimiter);
 
   // Dipasang di prefix, SEBELUM semua router /api/v1/admin/* di bawah
   // (profit-sharing, rides, driver-review, scope-grants, support, ppob,

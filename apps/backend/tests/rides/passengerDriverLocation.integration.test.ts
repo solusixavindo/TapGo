@@ -228,19 +228,35 @@ describe.skipIf(!runIntegration)("Tahap B1 — posisi driver untuk penumpang", (
     }
   });
 
-  it("dibatasi laju: permintaan ke-61 dalam semenit ditolak 429", async () => {
+  it("dibatasi laju per akun: permintaan ke-121 dalam semenit ditolak 429, penumpang lain di IP yang sama tidak terkena", async () => {
     const driver = await createDriver({ status: "ACTIVE" });
     const order = await createRideOrder(driver, "DRIVER_TO_PICKUP");
+    const other = await createRideOrder(driver, "DRIVER_ASSIGNED");
     const token = tokenFor(order.passenger);
     let last = 0;
     let code = "";
-    for (let i = 0; i < 61; i += 1) {
+    for (let i = 0; i < 121; i += 1) {
       const res = await driverLocation(token, order.publicReference);
       last = res.status;
       code = res.body.code ?? "";
     }
     expect(last).toBe(429);
     expect(code).toBe("RIDE_TRACKING_RATE_LIMITED");
+
+    // Jaringan seluler membagi satu IP ke banyak ponsel: akun lain dari IP yang sama tetap dilayani.
+    const neighbour = await driverLocation(tokenFor(other.passenger), other.publicReference);
+    expect(neighbour.status).toBe(200);
+  });
+
+  it("polling tiap 1,5 detik (40/menit) tidak pernah kena batas", async () => {
+    const driver = await createDriver({ status: "ACTIVE" });
+    const order = await createRideOrder(driver, "DRIVER_TO_PICKUP");
+    await addFix(driver, order.id);
+    const token = tokenFor(order.passenger);
+    for (let i = 0; i < 40; i += 1) {
+      const res = await driverLocation(token, order.publicReference);
+      expect(res.status).toBe(200);
+    }
   });
 });
 
