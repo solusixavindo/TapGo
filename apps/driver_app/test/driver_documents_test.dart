@@ -52,12 +52,27 @@ void main() {
       buildTestableDriverApp(repository: repository, scenario: scenario),
     );
     await tester.pumpAndSettle();
-    // Dokumen sekarang berada di halaman 1 wizard pengajuan, bukan lagi
+    // Dokumen sekarang berada di halaman 2 wizard pengajuan (setelah Pernyataan), bukan lagi
     // ditumpuk langsung di layar kapabilitas — masuk dulu bila CTA-nya ada
     // (tidak ada sama sekali saat akses dihentikan, dengan sengaja).
     final startWizard = find.byKey(const ValueKey('start-application-wizard'));
     if (startWizard.evaluate().isNotEmpty) {
       await tester.tap(startWizard);
+      await tester.pumpAndSettle();
+      // Halaman 1 wizard adalah Pernyataan (sebelum unggah dokumen): baca sampai akhir, setujui, lanjut.
+      final scrollable = find
+          .ancestor(
+            of: find.byKey(const ValueKey('driver-terms')),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      for (var i = 0; i < 3; i++) {
+        await tester.drag(scrollable, const Offset(0, -20000));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.byKey(const ValueKey('wizard-declaration-checkbox')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('driver-application-wizard-next')));
       await tester.pumpAndSettle();
     }
   }
@@ -81,7 +96,7 @@ void main() {
       await pump(tester, repository, scenario: DriverScenario.rejected);
 
       // Inilah pemeriksaan terpenting: driver yang ditolak WAJIB punya jalan
-      // memperbaiki berkasnya. Halaman pertama wizard hanya memuat keempat
+      // memperbaiki berkasnya. Halaman dokumen wizard hanya memuat keempat
       // dokumen inti — SKCK punya halamannya sendiri (halaman 4) dan diuji
       // terpisah di widget_test.dart bersama alur wizard penuh.
       expect(find.byType(DriverDocumentsSection), findsOneWidget);
