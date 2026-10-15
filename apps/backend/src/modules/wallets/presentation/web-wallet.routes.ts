@@ -15,6 +15,7 @@ import {
   bankAccountSchema,
   topUpCreateSchema,
   topUpOnlineCreateSchema,
+  topUpOptionsSchema,
   topUpOrderParamSchema,
   walletTransactionQuerySchema,
   webWithdrawalRequestSchema
@@ -54,7 +55,7 @@ export const webWalletRouter = Router();
 
 webWalletRouter.use(requireAuth, requireChannel("WEB"));
 webWalletRouter.use(webManualTopUpRouter);
-webWalletRouter.get("/topup/options", asyncHandler(controller.topUpOptions));
+webWalletRouter.get("/topup/options", validateRequest(topUpOptionsSchema), asyncHandler(controller.topUpOptions));
 webWalletRouter.post(
   "/topup/online",
   paymentRateLimiter,

@@ -19,7 +19,7 @@ let baseUrl = "";
 let signAccessToken: SignAccessToken;
 let backendEnv: typeof import("../../src/config/env.js").env;
 let sequence = 0;
-const saved = { topUp: undefined as boolean | undefined, key: undefined as string | undefined };
+const saved = { topUp: undefined as boolean | undefined, key: undefined as string | undefined, enabledPayments: undefined as string | undefined, doku: undefined as boolean | undefined };
 
 describe.skipIf(!runIntegration)("Top up online lalu bayar PPOB dan tagihan", () => {
   beforeAll(async () => {
@@ -40,8 +40,14 @@ describe.skipIf(!runIntegration)("Top up online lalu bayar PPOB dan tagihan", ()
     backendEnv = envModule.env;
     saved.topUp = backendEnv.WALLET_TOPUP_ENABLED;
     saved.key = backendEnv.MIDTRANS_SERVER_KEY;
+    saved.enabledPayments = backendEnv.MIDTRANS_ENABLED_PAYMENTS;
+    saved.doku = backendEnv.DOKU_ENABLED;
+    // Jalur Midtrans (Snap) saja: .env lokal yang menyalakan DOKU tidak boleh mengubah hasil uji ini.
+    backendEnv.DOKU_ENABLED = false;
     backendEnv.WALLET_TOPUP_ENABLED = true;
     backendEnv.MIDTRANS_SERVER_KEY = SERVER_KEY;
+    // Metode Snap seperti produksi (VA bank): biaya tetap Rp4.440 untuk Saldo PPOB, dibatasi Rp2.500 untuk Saldo TapGo.
+    backendEnv.MIDTRANS_ENABLED_PAYMENTS = "bni_va,bri_va,cimb_va,permata_va,echannel";
     signAccessToken = tokenService.signAccessToken;
     server = http.createServer(createApp());
     await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve));
@@ -82,6 +88,8 @@ describe.skipIf(!runIntegration)("Top up online lalu bayar PPOB dan tagihan", ()
 
   afterAll(async () => {
     backendEnv.WALLET_TOPUP_ENABLED = saved.topUp ?? false;
+    backendEnv.MIDTRANS_ENABLED_PAYMENTS = saved.enabledPayments;
+    backendEnv.DOKU_ENABLED = saved.doku ?? false;
     backendEnv.MIDTRANS_SERVER_KEY = saved.key;
     await cleanDatabase();
     await new Promise<void>((resolve, reject) => {
@@ -94,7 +102,7 @@ describe.skipIf(!runIntegration)("Top up online lalu bayar PPOB dan tagihan", ()
     const created = await api("/api/v1/web/wallet/topup/online", { method: "POST", token: tokenFor(user, "WEB"), body: { amount, target } });
     expect(created.status).toBe(201);
     const { data } = (await created.json()) as { data: { reference: string; grossAmount: number } };
-    expect(data.grossAmount).toBe(amount + 4440);
+    expect(data.grossAmount).toBe(amount + (target === "WALLET" ? 2500 : 4440));
     const orderId = data.reference;
     const grossAmount = `${data.grossAmount}.00`;
     const signature = createHash("sha512").update(`${orderId}200${grossAmount}${SERVER_KEY}`).digest("hex");

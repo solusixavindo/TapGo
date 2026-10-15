@@ -174,12 +174,18 @@ const envSchema = z.object({
   MANUAL_TOPUP_BANK_NAME: z.string().trim().max(60).optional(),
   MANUAL_TOPUP_ACCOUNT_NUMBER: z.string().trim().max(40).optional(),
   MANUAL_TOPUP_ACCOUNT_HOLDER: z.string().trim().max(120).optional(),
-  MANUAL_TOPUP_MIN_AMOUNT: z.coerce.number().int().min(1000).default(50000),
+  /// Minimal top up Saldo TapGo (driver: komisi pesanan tunai). Bawaan Rp25.000 (keputusan Owner 16 Okt 2026: pilihan
+  /// Rp25.000 tetap ada; Rp50.000 dipilihkan lebih dulu di halaman top up).
+  MANUAL_TOPUP_MIN_AMOUNT: z.coerce.number().int().min(1000).default(25000),
   /// Minimal top up untuk tujuan SALDO PPOB (kredit ppobBalance saja). Terpisah
   /// dari MANUAL_TOPUP_MIN_AMOUNT (Saldo TapGo: driver dan perjalanan) karena
   /// pembelian PPOB (pulsa, token, tagihan) bernominal kecil.
   MANUAL_TOPUP_PPOB_MIN_AMOUNT: z.coerce.number().int().min(1000).default(25000),
   MANUAL_TOPUP_MAX_AMOUNT: z.coerce.number().int().max(50000000).default(5000000),
+  /// Batas biaya layanan pembayaran yang ditagihkan ke pelanggan pada top up SALDO TAPGO (driver). Selisih dengan
+  /// biaya Midtrans sebenarnya ditanggung perusahaan (keputusan Owner 16 Okt 2026: Rp2.500). Saldo PPOB tidak memakai
+  /// batas ini: pelanggan menanggung biaya penuh.
+  WALLET_TOPUP_FEE_CAP: z.coerce.number().int().min(0).max(20000).default(2500),
   MANUAL_TOPUP_EXPIRY_HOURS: z.coerce.number().int().min(1).max(168).default(24),
   /// Pembayaran membership lewat transfer bank manual (kode unik + konfirmasi
   /// Super Admin), kanal WEB saja. Dipakai selama gateway (Midtrans/DOKU) belum

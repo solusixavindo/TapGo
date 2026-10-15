@@ -13,7 +13,13 @@ import {
 } from "@prisma/client";
 import crypto from "node:crypto";
 import { StatusCodes } from "http-status-codes";
-import { midtransFeeFor } from "../../../core/finance/midtransFees.js";
+import {
+  TOPUP_METHODS,
+  companyBorneGatewayFee,
+  isTopUpMethod,
+  midtransFeeFor,
+  type TopUpMethod
+} from "../../../core/finance/midtransFees.js";
 import { plConfig, prorateMonthlyCost } from "../../../core/finance/plConfig.js";
 import { POSTPAID_CATEGORIES } from "../../ppob/domain/ppobProvider.js";
 import { assessPpobMargin, scanPpobMargins } from "../../ppob/application/ppobMarginAudit.js";
@@ -1045,6 +1051,7 @@ export class AdminConsoleService {
       invoicesPaid,
       invoicesRefunded,
       rideCommission,
+      cashCommission,
       ppobAllByCategory,
       ppobCostedByCategory,
       sponsor,
@@ -1064,6 +1071,13 @@ export class AdminConsoleService {
       this.prisma.invoice.aggregate({ where: { status: "REFUNDED", ...invoiceDateRange }, _sum: { amount: true } }),
       this.prisma.commission.aggregate({
         where: { type: "RIDE_COMPANY_REVENUE", status: { in: ["PENDING", "POSTED"] }, ...range },
+        _sum: { amount: true }
+      }),
+      // Komisi pesanan TUNAI yang sudah final (ditahan dari Saldo TapGo driver saat diterima, menjadi biaya final saat
+      // perjalanan selesai). Tidak masuk tabel komisi: hanya tercatat di buku saldo. Yang masih ditahan (HELD) atau
+      // sudah dikembalikan (RELEASED, perjalanan dibatalkan) bukan pendapatan.
+      this.prisma.walletTransaction.aggregate({
+        where: { type: "PAYMENT", referenceType: "RIDE_COMMISSION_FEE", metadata: { path: ["status"], equals: "FINALIZED" }, ...range },
         _sum: { amount: true }
       }),
       this.prisma.ppobTransaction.groupBy({
@@ -1121,23 +1135,49 @@ export class AdminConsoleService {
     const gatewayByType = new Map<string, { count: number; gross: Prisma.Decimal; fee: Prisma.Decimal }>();
     let gatewayUnknown = 0;
     let gatewayTotal = zero;
-    for (const payment of [...membershipPayments, ...topUpPayments]) {
-      const meta = payment.metadata as { paymentType?: string | null; feeBorneByCustomer?: boolean } | null;
-      // Top up online: biaya gateway sudah dibayar pelanggan (ditambahkan di atas nominal), jadi bukan beban perusahaan.
-      if (meta?.feeBorneByCustomer === true) continue;
+    const addGateway = (type: string | null, gross: Prisma.Decimal.Value, fee: Prisma.Decimal) => {
+      const key = String(type).toLowerCase();
+      const row = gatewayByType.get(key) ?? { count: 0, gross: zero, fee: zero };
+      row.count += 1;
+      row.gross = row.gross.plus(gross);
+      row.fee = row.fee.plus(fee);
+      gatewayByType.set(key, row);
+      gatewayTotal = gatewayTotal.plus(fee);
+    };
+    // Membership: seluruh biaya Midtrans adalah beban perusahaan (harga membership tidak ditambah biaya).
+    for (const payment of membershipPayments) {
+      const meta = payment.metadata as { paymentType?: string | null } | null;
       const type = meta?.paymentType ?? null;
       const { known, fee } = midtransFeeFor(type, payment.amount);
       if (!known) {
         gatewayUnknown += 1;
         continue;
       }
-      const key = String(type).toLowerCase();
-      const row = gatewayByType.get(key) ?? { count: 0, gross: zero, fee: zero };
-      row.count += 1;
-      row.gross = row.gross.plus(payment.amount);
-      row.fee = row.fee.plus(fee);
-      gatewayByType.set(key, row);
-      gatewayTotal = gatewayTotal.plus(fee);
+      addGateway(type, payment.amount, fee);
+    }
+    // Top up online: beban perusahaan = biaya Midtrans sebenarnya (dari metode yang dibayar, atas total tagihan)
+    // dikurangi biaya layanan yang dibayar pelanggan. Saldo PPOB: pelanggan menanggung penuh, jadi selisihnya nol.
+    // Saldo TapGo: pelanggan membayar sampai batas (Rp2.500 bawaan), sisanya beban perusahaan.
+    for (const payment of topUpPayments) {
+      const meta = payment.metadata as {
+        paymentType?: string | null;
+        method?: string | null;
+        feeBorneByCustomer?: boolean;
+        feeAmount?: number;
+        grossAmount?: number;
+      } | null;
+      // Pesanan lama (sebelum biaya per metode): ditandai ditanggung penuh oleh pelanggan, tanpa rincian biaya.
+      if (meta?.feeBorneByCustomer === true && meta.feeAmount === undefined) continue;
+      const gross = typeof meta?.grossAmount === "number" ? meta.grossAmount : Number(payment.amount);
+      const customerFee = typeof meta?.feeAmount === "number" ? meta.feeAmount : 0;
+      const type = meta?.paymentType ?? (isTopUpMethod(meta?.method) ? TOPUP_METHODS[meta!.method as TopUpMethod].paymentType : null);
+      const { known, fee } = companyBorneGatewayFee(type, gross, customerFee);
+      if (!known) {
+        gatewayUnknown += 1;
+        continue;
+      }
+      if (fee.isZero()) continue;
+      addGateway(type, gross, fee);
     }
 
     // ---- HPP paket: jumlah paket terjual x harga pokok per paket, TANPA saldo PPOB yang diberikan ----------
@@ -1189,7 +1229,9 @@ export class AdminConsoleService {
     const membershipNet = membershipSales.minus(membershipRefunds);
     const membershipDeferred = exPpn(deferredPpobIncl);
     const membershipRecognized = membershipNet.minus(membershipDeferred);
-    const rideRevenue = dec(rideCommission._sum.amount);
+    // Komisi digital (tabel komisi) + komisi tunai final (buku saldo; nominalnya tercatat negatif sebagai debit driver).
+    const rideCommissionCash = dec(cashCommission._sum.amount).abs();
+    const rideRevenue = dec(rideCommission._sum.amount).plus(rideCommissionCash);
 
     // PPOB: prabayar bruto (penjualan - harga pokok); pascabayar neto (hanya biaya layanan TapGo).
     let prepaidSalesIncl = zero;
@@ -1277,6 +1319,7 @@ export class AdminConsoleService {
         membershipDeferred: membershipDeferred.toFixed(2),
         membershipRecognized: membershipRecognized.toFixed(2),
         rideCommission: rideRevenue.toFixed(2),
+        rideCommissionCash: rideCommissionCash.toFixed(2),
         ppobPrepaid: ppobPrepaidSales.toFixed(2),
         ppobPostpaidFee: ppobPostpaidFee.toFixed(2),
         ppobSales: ppobSales.toFixed(2),

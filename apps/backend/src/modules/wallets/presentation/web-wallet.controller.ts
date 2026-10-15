@@ -122,10 +122,18 @@ export class WebWalletController {
   }
 
   /** Opsi top up yang ditawarkan (online + biaya, transfer manual, batas nominal). */
-  topUpOptions = async (_req: Request, res: Response) => {
+  topUpOptions = async (req: Request, res: Response) => {
+    const amount = req.query.amount === undefined ? undefined : Number(req.query.amount);
+    const target = req.query.target === "WALLET" || req.query.target === "PPOB" ? req.query.target : undefined;
     res.json({
       success: true,
-      data: { ...this.topUpPaymentService.onlineOptions(), manualTransfer: this.manualTopUpAvailable() },
+      data: {
+        ...this.topUpPaymentService.onlineOptions({
+          ...(amount !== undefined ? { amount } : {}),
+          ...(target !== undefined ? { target } : {}),
+        }),
+        manualTransfer: this.manualTopUpAvailable(),
+      },
     });
   };
 
@@ -136,6 +144,7 @@ export class WebWalletController {
       role: req.auth!.role,
       amount: Number(req.body.amount),
       target: req.body.target,
+      ...(req.body.method ? { method: req.body.method } : {}),
     });
     res.status(StatusCodes.CREATED).json({ success: true, data: result });
   };

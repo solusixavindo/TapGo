@@ -122,6 +122,52 @@ describe.skipIf(!runIntegration)("Laporan laba rugi: ketepatan hitungan", () => 
     expect(data.opex.gatewayFee).toBe("13320.00");
     expect(data.operating.gateway.byMethod).toEqual([{ type: "bank_transfer", count: 3, gross: "1050000.00", fee: "13320.00" }]);
   });
+
+  it("top up online: beban perusahaan = biaya Midtrans sebenarnya dikurangi biaya yang dibayar pelanggan", async () => {
+    const vip = await createUser("SUPER_ADMIN_VIP");
+    const user = await createUser("USER");
+    const paidAt = new Date();
+    const topUp = (reference: string, amount: number, metadata: Record<string, unknown>) =>
+      prisma.walletTopUpOrder.create({
+        data: { userId: user.id, reference, status: "PAID", amount: new Prisma.Decimal(amount), provider: "MIDTRANS", paidAt, metadata: metadata as Prisma.InputJsonValue }
+      });
+    // Saldo TapGo lewat VA: driver bayar Rp2.500 dari biaya Rp4.440 -> perusahaan menanggung Rp1.940.
+    await topUp("TOPUP-PL-W1", 50_000, { paymentType: "bank_transfer", feeAmount: 2500, grossAmount: 52_500 });
+    // Saldo PPOB lewat VA: pelanggan menanggung penuh -> tidak ada beban.
+    await topUp("TOPUP-PL-P1", 50_000, { paymentType: "bank_transfer", feeAmount: 4440, grossAmount: 54_440, feeBorneByCustomer: true });
+    // GoPay 200.000: biaya 2% x 202.500 = 4.050, driver bayar 2.500 -> perusahaan menanggung 1.550.
+    await topUp("TOPUP-PL-W2", 200_000, { paymentType: "gopay", feeAmount: 2500, grossAmount: 202_500 });
+    // QRIS Saldo PPOB: biaya di-gross-up penuh oleh pelanggan -> tidak ada beban.
+    await topUp("TOPUP-PL-P2", 50_000, { paymentType: "qris", feeAmount: 353, grossAmount: 50_353 });
+
+    const data = await report(vip);
+    expect(data.opex.gatewayFee).toBe("3490.00"); // 1.940 + 1.550
+    expect(data.operating.gateway.byMethod).toEqual(
+      expect.arrayContaining([
+        { type: "bank_transfer", count: 1, gross: "52500.00", fee: "1940.00" },
+        { type: "gopay", count: 1, gross: "202500.00", fee: "1550.00" }
+      ])
+    );
+  });
+
+  it("komisi pesanan tunai yang sudah final menjadi pendapatan; yang masih ditahan atau sudah dikembalikan bukan", async () => {
+    const vip = await createUser("SUPER_ADMIN_VIP");
+    const driver = await createUser("USER");
+    const wallet = await prisma.wallet.create({ data: { userId: driver.id } });
+    const row = (amount: number, status: string, reference: string) =>
+      prisma.walletTransaction.create({
+        data: { walletId: wallet.id, type: "PAYMENT", amount: new Prisma.Decimal(amount), referenceType: "RIDE_COMMISSION_FEE", referenceId: reference, metadata: { status } }
+      });
+    await row(-720, "FINALIZED", "RIDE-PL-1");
+    await row(-1_096, "FINALIZED", "RIDE-PL-2");
+    await row(-500, "HELD", "RIDE-PL-3"); // perjalanan masih berjalan
+    await row(-300, "RELEASED", "RIDE-PL-4"); // dibatalkan, dikembalikan ke driver
+
+    const data = await report(vip);
+    expect(data.revenue.rideCommissionCash).toBe("1816.00");
+    expect(data.revenue.rideCommission).toBe("1816.00");
+    expect(data.revenue.total).toBe("1816.00");
+  });
 });
 
 /* ------------------------------ helper ------------------------------ */

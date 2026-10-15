@@ -127,6 +127,7 @@ export class AdminInsightsService {
       invoices,
       ppobRows,
       commissionRows,
+      cashCommissionRows,
       rideRows,
       tierCounts,
       memberships,
@@ -167,6 +168,12 @@ export class AdminInsightsService {
       }),
       this.prisma.commission.findMany({
         where: { type: "RIDE_COMPANY_REVENUE", status: { in: ["PENDING", "POSTED"] }, createdAt: inRange },
+        select: { amount: true, createdAt: true },
+        take: ROW_CAP
+      }),
+      // Komisi pesanan tunai yang sudah final (buku saldo driver; nominal tercatat negatif sebagai debit driver).
+      this.prisma.walletTransaction.findMany({
+        where: { type: "PAYMENT", referenceType: "RIDE_COMMISSION_FEE", metadata: { path: ["status"], equals: "FINALIZED" }, createdAt: inRange },
         select: { amount: true, createdAt: true },
         take: ROW_CAP
       }),
@@ -274,8 +281,8 @@ export class AdminInsightsService {
       const position = index.get(bucketLabel(row.createdAt.getTime(), bucket));
       if (position !== undefined) ppobMargin[position]! += margin;
     }
-    for (const row of commissionRows) {
-      const amount = Number(row.amount);
+    for (const row of [...commissionRows, ...cashCommissionRows]) {
+      const amount = Math.abs(Number(row.amount));
       rideCommissionTotal += amount;
       const position = index.get(bucketLabel(row.createdAt.getTime(), bucket));
       if (position !== undefined) rideCommission[position]! += amount;
@@ -434,7 +441,7 @@ export class AdminInsightsService {
 
   /** Total periode sebelumnya (rentang sama panjang) untuk perbandingan kenaikan/penurunan. */
   private async previousTotals(_range: InsightRange, inPrevious: { gte: Date; lte: Date }) {
-    const [registrations, invoices, ppobCosted, commissions, rides] = await Promise.all([
+    const [registrations, invoices, ppobCosted, commissions, cashCommissions, rides] = await Promise.all([
       this.prisma.user.count({ where: { role: { in: ["USER", "DRIVER"] }, createdAt: inPrevious } }),
       this.prisma.invoice.aggregate({
         where: { status: "PAID", OR: [{ paidAt: inPrevious }, { paidAt: null, createdAt: inPrevious }] },
@@ -446,13 +453,17 @@ export class AdminInsightsService {
         where: { type: "RIDE_COMPANY_REVENUE", status: { in: ["PENDING", "POSTED"] }, createdAt: inPrevious },
         _sum: { amount: true }
       }),
+      this.prisma.walletTransaction.aggregate({
+        where: { type: "PAYMENT", referenceType: "RIDE_COMMISSION_FEE", metadata: { path: ["status"], equals: "FINALIZED" }, createdAt: inPrevious },
+        _sum: { amount: true }
+      }),
       this.prisma.rideOrder.count({ where: { status: "COMPLETED", createdAt: inPrevious } })
     ]);
     const dec = (value: Prisma.Decimal | null | undefined) => Number(value ?? 0);
     const margin = dec(ppobCosted._sum.totalAmount) - dec(ppobCosted._sum.providerCost);
     return {
       registrations,
-      revenue: dec(invoices._sum.amount) + margin + dec(commissions._sum.amount),
+      revenue: dec(invoices._sum.amount) + margin + dec(commissions._sum.amount) + Math.abs(dec(cashCommissions._sum.amount)),
       ridesCompleted: rides
     };
   }

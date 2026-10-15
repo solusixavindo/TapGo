@@ -2,12 +2,21 @@ import { Prisma, PrismaClient, UserRole } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { env } from "../../../config/env.js";
 import { AppError } from "../../../core/errors/AppError.js";
-import { topUpOnlineFee } from "../../../core/finance/midtransFees.js";
+import {
+  TOPUP_METHODS,
+  availableTopUpMethods,
+  customerTopUpFee,
+  gatewayFeeFor,
+  isTopUpMethod,
+  snapCodesFor,
+  topUpOnlineFee,
+  type TopUpMethod
+} from "../../../core/finance/midtransFees.js";
 import { isAdminRole } from "../../../core/security/roleHierarchy.js";
 import { DokuClient } from "../../../lib/doku/client.js";
 import { DokuNotificationPayload } from "../../../lib/doku/types.js";
 import { assertAuthoritativeAmount } from "../../payments/application/authoritativeAmount.js";
-import { snapEnabledPaymentsPart, snapFinishCallbackPart } from "../../payments/application/MidtransPaymentService.js";
+import { resolveMidtransEnabledPayments, snapFinishCallbackPart } from "../../payments/application/MidtransPaymentService.js";
 import { verifyMidtransSignature } from "../../payments/application/midtransSignature.js";
 import { lazyPushNotifier } from "../../notifications/application/pushServiceFactory.js";
 import { accountPushMessages, pushQuietly } from "../../notifications/application/accountNotifications.js";
@@ -94,23 +103,63 @@ export class WalletTopUpPaymentService {
       : new Prisma.Decimal(order.amount);
   }
 
-  /** Opsi top up yang boleh ditawarkan halaman web saat ini. */
-  onlineOptions() {
+  /** Daftar `enabled_payments` yang berlaku (undefined = semua metode aktif di akun Midtrans). */
+  private enabledPayments() {
+    return resolveMidtransEnabledPayments(env.MIDTRANS_ENABLED_PAYMENTS);
+  }
+
+  /** Biaya yang ditagihkan ke pelanggan untuk kombinasi tujuan, metode, dan nominal ini. */
+  private customerFeeFor(target: TopUpTarget, method: TopUpMethod, amount: number) {
+    return customerTopUpFee({ target, method, amount, walletCap: env.WALLET_TOPUP_FEE_CAP });
+  }
+
+  /**
+   * Opsi top up yang boleh ditawarkan halaman web saat ini. Bila `amount` dan `target` diberikan, tiap metode
+   * disertai penawaran harga (biaya dan total) supaya pelanggan melihat biaya sebelum membayar.
+   */
+  onlineOptions(query: { amount?: number; target?: TopUpTarget } = {}) {
     const gatewayReady = env.DOKU_ENABLED || Boolean(env.MIDTRANS_SERVER_KEY);
+    const methods = env.DOKU_ENABLED ? [] : availableTopUpMethods(this.enabledPayments());
+    const quotes =
+      query.amount !== undefined && query.target !== undefined && Number.isInteger(query.amount) && query.amount > 0
+        ? methods.map((method) => {
+            const fee = this.customerFeeFor(query.target!, method, query.amount!);
+            return { method, fee, gross: query.amount! + fee };
+          })
+        : undefined;
     return {
       online: env.WALLET_TOPUP_ENABLED && gatewayReady,
-      // DOKU tidak menambah biaya; hanya jalur Midtrans (Snap) yang membebankan biaya ke pelanggan.
+      // Biaya transfer bank penuh; dipertahankan untuk halaman lama. Halaman baru memakai `quotes` per metode.
       onlineFee: env.DOKU_ENABLED ? 0 : topUpOnlineFee(),
+      methods: methods.map((id) => ({ id, label: TOPUP_METHODS[id].label, description: TOPUP_METHODS[id].description })),
+      ...(quotes ? { quotes } : {}),
+      walletFeeCap: env.WALLET_TOPUP_FEE_CAP,
       minimum: { WALLET: minimumAmountFor("WALLET"), PPOB: minimumAmountFor("PPOB") },
       maximum: env.MANUAL_TOPUP_MAX_AMOUNT,
     };
+  }
+
+  /** Metode terpilih untuk pesanan Midtrans: yang diminta bila tersedia, atau yang pertama tersedia bila tidak diminta. */
+  private resolveMethod(requested: string | undefined | null): TopUpMethod {
+    const available = availableTopUpMethods(this.enabledPayments());
+    if (requested !== undefined && requested !== null && requested !== "") {
+      if (!isTopUpMethod(requested) || !available.includes(requested)) {
+        throw new AppError("Metode pembayaran itu belum tersedia.", StatusCodes.BAD_REQUEST, "WALLET_TOPUP_METHOD_UNAVAILABLE");
+      }
+      return requested;
+    }
+    const first = available[0];
+    if (!first) {
+      throw new AppError("Top up online belum tersedia.", StatusCodes.FORBIDDEN, "WALLET_TOPUP_DISABLED");
+    }
+    return first;
   }
 
   /**
    * Top up online dalam satu langkah: buat pesanan lalu siapkan pembayaran. Pelanggan membayar nominal
    * ditambah biaya layanan (Midtrans); saldo yang dikredit hanya nominal top up.
    */
-  async createOnlineOrder(input: { userId: string; role: UserRole; amount: number; target: TopUpTarget }) {
+  async createOnlineOrder(input: { userId: string; role: UserRole; amount: number; target: TopUpTarget; method?: string }) {
     if (!env.WALLET_TOPUP_ENABLED || !(env.DOKU_ENABLED || env.MIDTRANS_SERVER_KEY)) {
       throw new AppError("Top up online belum tersedia.", StatusCodes.FORBIDDEN, "WALLET_TOPUP_DISABLED");
     }
@@ -133,10 +182,18 @@ export class WalletTopUpPaymentService {
         "WALLET_TOPUP_TOO_MANY_OPEN",
       );
     }
+    // Metode dan biaya ditetapkan SEKARANG (sebelum pesanan dibuat) dan tersimpan di pesanan, sehingga yang ditagihkan
+    // persis sama dengan yang ditampilkan ke pelanggan.
+    const method = env.DOKU_ENABLED ? null : this.resolveMethod(input.method);
+    const plannedFee = method ? this.customerFeeFor(input.target, method, input.amount) : 0;
     const order = await this.walletRepository.createTopUpOrder({
       userId: input.userId,
       amount: new Prisma.Decimal(input.amount),
-      metadata: { target: input.target, baseAmount: input.amount },
+      metadata: {
+        target: input.target,
+        baseAmount: input.amount,
+        ...(method ? { method, feeAmount: plannedFee, grossAmount: input.amount + plannedFee } : {}),
+      },
       expiresAt: new Date(now.getTime() + ONLINE_ORDER_EXPIRY_MS),
     });
     const payInput = { userId: input.userId, role: input.role, orderId: order.id };
@@ -144,11 +201,12 @@ export class WalletTopUpPaymentService {
       const payment = env.DOKU_ENABLED
         ? await this.createDokuPayment(payInput)
         : await this.createMidtransPayment(payInput);
-      const feeAmount = env.DOKU_ENABLED ? 0 : topUpOnlineFee();
+      const feeAmount = plannedFee;
       return {
         id: order.id,
         reference: order.reference,
         target: input.target,
+        method,
         baseAmount: input.amount,
         feeAmount,
         grossAmount: input.amount + feeAmount,
@@ -175,6 +233,7 @@ export class WalletTopUpPaymentService {
       // Pelanggan yang menutup halaman bayar dapat melanjutkan selama pesanan masih menunggu.
       resumeUrl: online && order.status === "PENDING" ? resumeUrl : null,
       target: topUpTargetOf(order.metadata),
+      method: isTopUpMethod(meta.method) ? meta.method : null,
       baseAmount: Number(order.amount),
       feeAmount: typeof meta.feeAmount === "number" ? meta.feeAmount : 0,
       grossAmount: Number(this.chargedAmount(order)),
@@ -196,11 +255,22 @@ export class WalletTopUpPaymentService {
       };
     }
 
-    // Biaya layanan pembayaran ditanggung pelanggan: yang dibayar di Midtrans = nominal top up + biaya,
-    // sedangkan saldo yang dikredit tetap nominal top up (order.amount).
+    // Yang dibayar di Midtrans = nominal top up + biaya layanan pelanggan, sedangkan saldo yang dikredit tetap nominal
+    // top up (order.amount). Metode dan biaya sudah ditetapkan saat pesanan dibuat; pesanan dari jalur lama (buat lalu
+    // bayar) belum memilikinya, jadi dihitung di sini dengan metode pertama yang tersedia.
     const baseAmount = Number(new Prisma.Decimal(order.amount).toFixed(0));
-    const feeAmount = topUpOnlineFee();
+    const method = this.resolveMethod(typeof metadata.method === "string" ? metadata.method : undefined);
+    const storedFee = metadata.feeAmount;
+    const feeAmount =
+      typeof storedFee === "number" && Number.isInteger(storedFee) && storedFee >= 0 && metadata.method === method
+        ? storedFee
+        : this.customerFeeFor(topUpTargetOf(order.metadata), method, baseAmount);
     const grossAmount = baseAmount + feeAmount;
+    const snapCodes = snapCodesFor(method, this.enabledPayments());
+    if (snapCodes.length === 0) {
+      throw new AppError("Metode pembayaran itu belum tersedia.", StatusCodes.BAD_REQUEST, "WALLET_TOPUP_METHOD_UNAVAILABLE");
+    }
+    const gatewayFeeEstimate = gatewayFeeFor(method, grossAmount);
 
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: order.userId },
@@ -212,7 +282,7 @@ export class WalletTopUpPaymentService {
         order_id: order.reference,
         gross_amount: grossAmount,
       },
-      ...snapEnabledPaymentsPart(),
+      enabled_payments: snapCodes,
       ...snapFinishCallbackPart("/topup/status/"),
       customer_details: {
         first_name: user.fullName,
@@ -226,7 +296,7 @@ export class WalletTopUpPaymentService {
           quantity: 1,
           name: "Top Up TapGoPay",
         },
-        { id: "payment-fee", price: feeAmount, quantity: 1, name: "Biaya layanan pembayaran" },
+        ...(feeAmount > 0 ? [{ id: "payment-fee", price: feeAmount, quantity: 1, name: "Biaya layanan pembayaran" }] : []),
       ],
     });
 
@@ -254,7 +324,11 @@ export class WalletTopUpPaymentService {
         baseAmount,
         feeAmount,
         grossAmount,
-        feeBorneByCustomer: true,
+        method,
+        // Perkiraan biaya Midtrans untuk total ini; biaya sebenarnya dihitung ulang dari metode yang benar-benar
+        // dibayar. Selisih di atas feeAmount ditanggung perusahaan (lihat Laba Rugi).
+        gatewayFeeEstimate: gatewayFeeEstimate.toFixed(2),
+        feeBorneByCustomer: feeAmount >= gatewayFeeEstimate.toNumber(),
       } as Prisma.InputJsonValue,
     });
 

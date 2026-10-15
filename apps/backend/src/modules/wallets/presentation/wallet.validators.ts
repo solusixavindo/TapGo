@@ -92,7 +92,16 @@ export const topUpCreateSchema = z.object({
 export const topUpOnlineCreateSchema = z.object({
   body: z.object({
     amount: z.coerce.number().int(),
-    target: z.enum(["WALLET", "PPOB"]).default("WALLET")
+    target: z.enum(["WALLET", "PPOB"]).default("WALLET"),
+    // Metode bayar (biaya tiap metode berbeda). Tanpa ini, metode pertama yang tersedia dipakai (klien lama).
+    method: z.enum(["bank_transfer", "gopay", "qris", "dana"]).optional()
+  })
+});
+
+export const topUpOptionsSchema = z.object({
+  query: z.object({
+    amount: z.coerce.number().int().min(1).max(100_000_000).optional(),
+    target: z.enum(["WALLET", "PPOB"]).optional()
   })
 });
 

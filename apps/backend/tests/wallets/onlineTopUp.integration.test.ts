@@ -23,7 +23,10 @@ let signAccessToken: SignAccessToken;
 let backendEnv: typeof import("../../src/config/env.js").env;
 let snapRequests: Array<Record<string, unknown>> = [];
 let snapShouldFail = false;
+// Daftar metode Snap seperti di produksi (VA bank) ditambah metode persen yang sedang diaktifkan di Midtrans.
+const ENABLED_PAYMENTS = "bni_va,bri_va,cimb_va,permata_va,echannel,gopay,other_qris";
 const saved = {
+  enabledPayments: undefined as string | undefined,
   topUp: undefined as boolean | undefined,
   key: undefined as string | undefined,
   doku: undefined as boolean | undefined,
@@ -58,6 +61,8 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
     saved.key = backendEnv.MIDTRANS_SERVER_KEY;
     saved.doku = backendEnv.DOKU_ENABLED;
     saved.manual = backendEnv.MANUAL_TOPUP_ENABLED;
+    saved.enabledPayments = backendEnv.MIDTRANS_ENABLED_PAYMENTS;
+    backendEnv.MIDTRANS_ENABLED_PAYMENTS = ENABLED_PAYMENTS;
     backendEnv.WALLET_TOPUP_ENABLED = true;
     backendEnv.MIDTRANS_SERVER_KEY = SERVER_KEY;
     backendEnv.DOKU_ENABLED = false;
@@ -98,6 +103,7 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
       backendEnv.MIDTRANS_SERVER_KEY = saved.key;
       backendEnv.DOKU_ENABLED = saved.doku ?? false;
       backendEnv.MANUAL_TOPUP_ENABLED = saved.manual ?? false;
+      backendEnv.MIDTRANS_ENABLED_PAYMENTS = saved.enabledPayments;
     }
     await new Promise<void>((resolve, reject) => {
       if (!server) return resolve();
@@ -112,7 +118,82 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
     const body = (await response.json()) as { data: { online: boolean; onlineFee: number; minimum: { WALLET: number; PPOB: number }; maximum: number } };
     expect(body.data.online).toBe(true);
     expect(body.data.onlineFee).toBe(4440);
-    expect(body.data.minimum.PPOB).toBeLessThan(body.data.minimum.WALLET);
+    // Rp25.000 untuk kedua tujuan (keputusan Owner 16 Okt 2026: pilihan Rp25.000 tetap ada untuk driver).
+    expect(body.data.minimum).toEqual({ WALLET: 25000, PPOB: 25000 });
+  });
+
+  it("offers a quote per payment method: the driver (WALLET) pays at most the cap, PPOB pays the full fee", async () => {
+    const user = await createUser("ONL000020");
+    type Options = { data: { methods: Array<{ id: string }>; walletFeeCap: number; quotes: Array<{ method: string; fee: number; gross: number }> } };
+    const read = async (query: string) => ((await (await api(`/api/v1/web/wallet/topup/options?${query}`, { token: tokenFor(user, "WEB") })).json()) as Options).data;
+
+    const wallet = await read("amount=50000&target=WALLET");
+    expect(wallet.methods.map((m) => m.id)).toEqual(["bank_transfer", "gopay", "qris"]); // dana belum diaktifkan
+    expect(wallet.walletFeeCap).toBe(2500);
+    expect(wallet.quotes).toEqual([
+      { method: "bank_transfer", fee: 2500, gross: 52500 },
+      { method: "gopay", fee: 1021, gross: 51021 },
+      { method: "qris", fee: 353, gross: 50353 }
+    ]);
+
+    const ppob = await read("amount=50000&target=PPOB");
+    expect(ppob.quotes).toEqual([
+      { method: "bank_transfer", fee: 4440, gross: 54440 },
+      { method: "gopay", fee: 1021, gross: 51021 },
+      { method: "qris", fee: 353, gross: 50353 }
+    ]);
+
+    // Tanpa nominal: tidak ada penawaran harga. Nominal tak sah ditolak.
+    expect((await read("")).quotes).toBeUndefined();
+    expect((await api("/api/v1/web/wallet/topup/options?amount=abc", { token: tokenFor(user, "WEB") })).status).toBe(400);
+  });
+
+  it("charges the driver the capped fee on a bank transfer: Snap is limited to the bank codes and the fee line sums to the total", async () => {
+    const user = await createUser("ONL000021");
+    const created = await createOnline(user, 50000, "WALLET", "WEB", "bank_transfer");
+    expect(created.status).toBe(201);
+    const body = (await created.json()) as { data: { reference: string; method: string; feeAmount: number; grossAmount: number } };
+    expect(body.data).toMatchObject({ method: "bank_transfer", feeAmount: 2500, grossAmount: 52500 });
+    const request = snapRequests[0] as { transaction_details: { gross_amount: number }; enabled_payments: string[]; item_details: Array<{ price: number; quantity: number }> };
+    expect(request.enabled_payments).toEqual(["bni_va", "bri_va", "cimb_va", "permata_va", "echannel"]);
+    expect(request.transaction_details.gross_amount).toBe(52500);
+    expect(request.item_details.reduce((sum, item) => sum + item.price * item.quantity, 0)).toBe(52500);
+
+    expect((await notify(body.data.reference, "52500.00", "bank_transfer")).status).toBe(200);
+    const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
+    expect(decimalString(wallet.balance)).toBe("50000.00"); // saldo bertambah sebesar nominal saja
+    const order = await prisma.walletTopUpOrder.findFirstOrThrow({ where: { userId: user.id } });
+    // Biaya Midtrans sebenarnya Rp4.440, driver membayar Rp2.500: perusahaan menanggung selisihnya (bukan ditanggung pelanggan penuh).
+    expect(order.metadata).toMatchObject({ method: "bank_transfer", feeAmount: 2500, grossAmount: 52500, gatewayFeeEstimate: "4440.00", feeBorneByCustomer: false });
+  });
+
+  it("a percentage method charges only its real cost and restricts Snap to that method", async () => {
+    const user = await createUser("ONL000022");
+    const created = await createOnline(user, 50000, "WALLET", "WEB", "gopay");
+    expect(created.status).toBe(201);
+    const body = (await created.json()) as { data: { reference: string; feeAmount: number; grossAmount: number } };
+    expect(body.data).toMatchObject({ feeAmount: 1021, grossAmount: 51021 });
+    expect((snapRequests[0] as { enabled_payments: string[] }).enabled_payments).toEqual(["gopay"]);
+    expect((await notify(body.data.reference, "51021.00", "gopay")).status).toBe(200);
+    const order = await prisma.walletTopUpOrder.findFirstOrThrow({ where: { userId: user.id } });
+    expect(order.metadata).toMatchObject({ method: "gopay", feeBorneByCustomer: true });
+  });
+
+  it("rejects a method that is not available or not recognised, before any order is created", async () => {
+    const user = await createUser("ONL000023");
+    const unavailable = await createOnline(user, 50000, "WALLET", "WEB", "dana"); // dana tidak ada di daftar aktif
+    expect(unavailable.status).toBe(400);
+    expect(((await unavailable.json()) as { code?: string }).code).toBe("WALLET_TOPUP_METHOD_UNAVAILABLE");
+    expect((await createOnline(user, 50000, "WALLET", "WEB", "bitcoin")).status).toBe(400);
+    expect(await prisma.walletTopUpOrder.count()).toBe(0);
+    expect(snapRequests).toHaveLength(0);
+  });
+
+  it("accepts the Rp25.000 option for the TapGo balance", async () => {
+    const user = await createUser("ONL000024");
+    const created = await createOnline(user, 25000, "WALLET", "WEB", "bank_transfer");
+    expect(created.status).toBe(201);
+    expect(((await created.json()) as { data: { grossAmount: number } }).data.grossAmount).toBe(27500);
   });
 
   it("hides the online option when top up is switched off", async () => {
@@ -175,7 +256,7 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
     const user = await createUser("ONL000005");
     const created = await createOnline(user, 100000, "WALLET");
     const body = (await created.json()) as { data: { reference: string } };
-    expect((await notify(body.data.reference, "104440.00")).status).toBe(200);
+    expect((await notify(body.data.reference, "102500.00")).status).toBe(200);
     const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
     expect(decimalString(wallet.balance)).toBe("100000.00");
     expect(decimalString(wallet.ppobBalance)).toBe("0.00");
@@ -184,7 +265,7 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
   it("enforces the minimum per balance, an integer amount, and the web channel", async () => {
     const user = await createUser("ONL000006");
     expect((await createOnline(user, 10000, "PPOB")).status).toBe(400);
-    expect((await createOnline(user, 49999, "WALLET")).status).toBe(400);
+    expect((await createOnline(user, 24999, "WALLET")).status).toBe(400);
     expect((await createOnline(user, 50000.5, "WALLET")).status).toBe(400);
     expect((await createOnline(user, 99999999, "WALLET")).status).toBe(400);
     expect((await createOnline(user, 50000, "WALLET", "APP")).status).toBe(403);
@@ -247,9 +328,9 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
     const body = (await created.json()) as { data: { id: string; reference: string } };
     const paid = await api(`/api/v1/web/wallet/topup/orders/${body.data.id}/pay`, { method: "POST", token: tokenFor(user, "WEB") });
     expect(paid.status).toBe(200);
-    expect((snapRequests[0] as { transaction_details: { gross_amount: number } }).transaction_details.gross_amount).toBe(104440);
+    expect((snapRequests[0] as { transaction_details: { gross_amount: number } }).transaction_details.gross_amount).toBe(102500);
     expect((await notify(body.data.reference, "100000.00")).status).toBe(400);
-    expect((await notify(body.data.reference, "104440.00")).status).toBe(200);
+    expect((await notify(body.data.reference, "102500.00")).status).toBe(200);
   });
 
   it("records that the customer paid the gateway fee, which the cost report relies on", async () => {
@@ -280,11 +361,11 @@ function notify(orderId: string, grossAmount: string, paymentType?: string) {
   });
 }
 
-function createOnline(user: User, amount: number, target: "WALLET" | "PPOB", channel: "APP" | "WEB" = "WEB") {
+function createOnline(user: User, amount: number, target: "WALLET" | "PPOB", channel: "APP" | "WEB" = "WEB", method?: string) {
   return api("/api/v1/web/wallet/topup/online", {
     method: "POST",
     token: tokenFor(user, channel),
-    body: { amount, target }
+    body: { amount, target, ...(method ? { method } : {}) }
   });
 }
 

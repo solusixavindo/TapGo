@@ -219,6 +219,23 @@ describe.skipIf(!runIntegration)("Wawasan Beranda VIP", () => {
       expect(data.attention.digiflazz).toEqual({ level: "UNKNOWN", balance: null });
     });
 
+    it("pendapatan: komisi pesanan tunai yang sudah final ikut dihitung (ditahan atau dikembalikan tidak)", async () => {
+      const { drivers } = await seedInsightsData(prisma);
+      const wallet = await prisma.wallet.upsert({ where: { userId: drivers[0]!.id }, update: {}, create: { userId: drivers[0]!.id } });
+      const row = (amount: number, status: string, reference: string) =>
+        prisma.walletTransaction.create({
+          data: { walletId: wallet.id, type: "PAYMENT", amount: new Prisma.Decimal(amount), referenceType: "RIDE_COMMISSION_FEE", referenceId: reference, metadata: { status } }
+        });
+      await row(-720, "FINALIZED", "RIDE-INS-1");
+      await row(-1_096, "FINALIZED", "RIDE-INS-2");
+      await row(-500, "HELD", "RIDE-INS-3");
+      await row(-300, "RELEASED", "RIDE-INS-4");
+      const { data } = await insights(await createUser("SUPER_ADMIN_VIP"));
+      expect(data.revenueBreakdown.rideCommission).toBe(1816);
+      // Upgrade 190.000 + selisih PPOB 1.600 + komisi tunai 1.816.
+      expect(data.totals.revenue.current).toBe(190_000 + 1_600 + 1_816);
+    });
+
     it("perlu perhatian: sinyal SOS driver yang belum ditutup dihitung; yang sudah selesai tidak", async () => {
       const { profiles } = await seedInsightsData(prisma);
       const vip = await createUser("SUPER_ADMIN_VIP");
