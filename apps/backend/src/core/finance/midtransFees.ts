@@ -70,6 +70,19 @@ export const TOPUP_METHODS: Record<
 
 export const TOPUP_METHOD_ORDER: readonly TopUpMethod[] = ["bank_transfer", "gopay", "qris", "dana"];
 
+/** Membaca daftar metode dari konfigurasi (dipisah koma). Nama yang tidak dikenal = galat, bukan diabaikan diam-diam. */
+export function parseTopUpMethodList(raw: string): TopUpMethod[] {
+  const items = raw
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter((item) => item.length > 0);
+  const unknown = items.filter((item) => !isTopUpMethod(item));
+  if (unknown.length > 0) {
+    throw new Error(`WALLET_TOPUP_METHODS memuat metode yang tidak dikenal: ${unknown.join(", ")}`);
+  }
+  return TOPUP_METHOD_ORDER.filter((method) => items.includes(method));
+}
+
 export function isTopUpMethod(value: unknown): value is TopUpMethod {
   return typeof value === "string" && Object.prototype.hasOwnProperty.call(TOPUP_METHODS, value);
 }

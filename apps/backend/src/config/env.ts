@@ -185,6 +185,10 @@ const envSchema = z.object({
   /// Batas biaya layanan pembayaran yang ditagihkan ke pelanggan pada top up SALDO TAPGO (driver). Selisih dengan
   /// biaya Midtrans sebenarnya ditanggung perusahaan (keputusan Owner 16 Okt 2026: Rp2.500). Saldo PPOB tidak memakai
   /// batas ini: pelanggan menanggung biaya penuh.
+  /// Metode bayar yang DITAWARKAN di halaman top up (daftar dipisah koma: bank_transfer, gopay, qris, dana). Terpisah dari
+  /// MIDTRANS_ENABLED_PAYMENTS (yang juga dipakai membership) supaya metode baru tidak tampil di top up sebelum kita
+  /// memutuskannya. Bawaan hanya transfer bank (keputusan Owner 16 Okt 2026: GoPay QRIS dan DANA belum aktif).
+  WALLET_TOPUP_METHODS: z.string().trim().max(100).default("bank_transfer"),
   WALLET_TOPUP_FEE_CAP: z.coerce.number().int().min(0).max(20000).default(2500),
   MANUAL_TOPUP_EXPIRY_HOURS: z.coerce.number().int().min(1).max(168).default(24),
   /// Pembayaran membership lewat transfer bank manual (kode unik + konfirmasi

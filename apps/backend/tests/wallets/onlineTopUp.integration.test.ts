@@ -27,6 +27,7 @@ let snapShouldFail = false;
 const ENABLED_PAYMENTS = "bni_va,bri_va,cimb_va,permata_va,echannel,gopay,other_qris";
 const saved = {
   enabledPayments: undefined as string | undefined,
+  topUpMethods: undefined as string | undefined,
   topUp: undefined as boolean | undefined,
   key: undefined as string | undefined,
   doku: undefined as boolean | undefined,
@@ -63,6 +64,9 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
     saved.manual = backendEnv.MANUAL_TOPUP_ENABLED;
     saved.enabledPayments = backendEnv.MIDTRANS_ENABLED_PAYMENTS;
     backendEnv.MIDTRANS_ENABLED_PAYMENTS = ENABLED_PAYMENTS;
+    saved.topUpMethods = backendEnv.WALLET_TOPUP_METHODS;
+    // Semua metode dinyalakan untuk uji per-metode; bawaan produksi (hanya transfer bank) diuji terpisah di bawah.
+    backendEnv.WALLET_TOPUP_METHODS = "bank_transfer,gopay,qris,dana";
     backendEnv.WALLET_TOPUP_ENABLED = true;
     backendEnv.MIDTRANS_SERVER_KEY = SERVER_KEY;
     backendEnv.DOKU_ENABLED = false;
@@ -104,6 +108,7 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
       backendEnv.DOKU_ENABLED = saved.doku ?? false;
       backendEnv.MANUAL_TOPUP_ENABLED = saved.manual ?? false;
       backendEnv.MIDTRANS_ENABLED_PAYMENTS = saved.enabledPayments;
+      backendEnv.WALLET_TOPUP_METHODS = saved.topUpMethods ?? "bank_transfer";
     }
     await new Promise<void>((resolve, reject) => {
       if (!server) return resolve();
@@ -187,6 +192,27 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
     expect((await createOnline(user, 50000, "WALLET", "WEB", "bitcoin")).status).toBe(400);
     expect(await prisma.walletTopUpOrder.count()).toBe(0);
     expect(snapRequests).toHaveLength(0);
+  });
+
+  it("by default only bank transfer is offered, even when other methods are active at Midtrans", async () => {
+    const user = await createUser("ONL000025");
+    backendEnv.WALLET_TOPUP_METHODS = "bank_transfer"; // bawaan produksi
+    try {
+      const options = await api("/api/v1/web/wallet/topup/options?amount=50000&target=WALLET", { token: tokenFor(user, "WEB") });
+      const body = (await options.json()) as { data: { methods: Array<{ id: string }>; quotes: Array<{ method: string }> } };
+      expect(body.data.methods.map((m) => m.id)).toEqual(["bank_transfer"]);
+      expect(body.data.quotes.map((q) => q.method)).toEqual(["bank_transfer"]);
+      // GoPay aktif di daftar Snap tetapi belum dinyalakan untuk top up: ditolak sebelum pesanan dibuat.
+      const gopay = await createOnline(user, 50000, "WALLET", "WEB", "gopay");
+      expect(gopay.status).toBe(400);
+      expect(await prisma.walletTopUpOrder.count()).toBe(0);
+      // Klien lama tanpa metode tetap berhasil dengan transfer bank.
+      const legacy = await createOnline(user, 50000, "WALLET");
+      expect(legacy.status).toBe(201);
+      expect((snapRequests[0] as { enabled_payments: string[] }).enabled_payments).toEqual(["bni_va", "bri_va", "cimb_va", "permata_va", "echannel"]);
+    } finally {
+      backendEnv.WALLET_TOPUP_METHODS = "bank_transfer,gopay,qris,dana";
+    }
   });
 
   it("accepts the Rp25.000 option for the TapGo balance", async () => {

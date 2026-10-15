@@ -5,6 +5,7 @@ import {
   customerTopUpFee,
   fullTopUpFee,
   gatewayFeeFor,
+  parseTopUpMethodList,
   snapCodesFor
 } from "../../src/core/finance/midtransFees.js";
 
@@ -99,5 +100,17 @@ describe("metode yang tersedia menurut daftar enabled_payments", () => {
     expect(snapCodesFor("bank_transfer", ["bni_va", "echannel", "gopay"])).toEqual(["bni_va", "echannel"]);
     expect(snapCodesFor("gopay", ["bni_va"])).toEqual([]);
     expect(snapCodesFor("qris", undefined)).toEqual(["other_qris"]);
+  });
+});
+
+describe("parseTopUpMethodList (WALLET_TOPUP_METHODS)", () => {
+  it("membaca daftar dipisah koma dalam urutan tetap, mengabaikan spasi dan huruf besar", () => {
+    expect(parseTopUpMethodList("bank_transfer")).toEqual(["bank_transfer"]);
+    expect(parseTopUpMethodList(" QRIS , bank_transfer ")).toEqual(["bank_transfer", "qris"]);
+    expect(parseTopUpMethodList("")).toEqual([]);
+  });
+
+  it("nama yang tidak dikenal adalah galat, bukan diabaikan diam-diam", () => {
+    expect(() => parseTopUpMethodList("bank_transfer,bitcoin")).toThrow(/bitcoin/);
   });
 });

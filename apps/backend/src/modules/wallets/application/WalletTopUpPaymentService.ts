@@ -6,6 +6,7 @@ import {
   TOPUP_METHODS,
   availableTopUpMethods,
   customerTopUpFee,
+  parseTopUpMethodList,
   gatewayFeeFor,
   isTopUpMethod,
   snapCodesFor,
@@ -108,6 +109,15 @@ export class WalletTopUpPaymentService {
     return resolveMidtransEnabledPayments(env.MIDTRANS_ENABLED_PAYMENTS);
   }
 
+  /**
+   * Metode yang ditawarkan: aktif menurut daftar Snap DAN dinyalakan untuk top up lewat WALLET_TOPUP_METHODS
+   * (bawaan hanya transfer bank).
+   */
+  private offeredMethods(): TopUpMethod[] {
+    const allowed = parseTopUpMethodList(env.WALLET_TOPUP_METHODS);
+    return availableTopUpMethods(this.enabledPayments()).filter((method) => allowed.includes(method));
+  }
+
   /** Biaya yang ditagihkan ke pelanggan untuk kombinasi tujuan, metode, dan nominal ini. */
   private customerFeeFor(target: TopUpTarget, method: TopUpMethod, amount: number) {
     return customerTopUpFee({ target, method, amount, walletCap: env.WALLET_TOPUP_FEE_CAP });
@@ -119,7 +129,7 @@ export class WalletTopUpPaymentService {
    */
   onlineOptions(query: { amount?: number; target?: TopUpTarget } = {}) {
     const gatewayReady = env.DOKU_ENABLED || Boolean(env.MIDTRANS_SERVER_KEY);
-    const methods = env.DOKU_ENABLED ? [] : availableTopUpMethods(this.enabledPayments());
+    const methods = env.DOKU_ENABLED ? [] : this.offeredMethods();
     const quotes =
       query.amount !== undefined && query.target !== undefined && Number.isInteger(query.amount) && query.amount > 0
         ? methods.map((method) => {
@@ -141,7 +151,7 @@ export class WalletTopUpPaymentService {
 
   /** Metode terpilih untuk pesanan Midtrans: yang diminta bila tersedia, atau yang pertama tersedia bila tidak diminta. */
   private resolveMethod(requested: string | undefined | null): TopUpMethod {
-    const available = availableTopUpMethods(this.enabledPayments());
+    const available = this.offeredMethods();
     if (requested !== undefined && requested !== null && requested !== "") {
       if (!isTopUpMethod(requested) || !available.includes(requested)) {
         throw new AppError("Metode pembayaran itu belum tersedia.", StatusCodes.BAD_REQUEST, "WALLET_TOPUP_METHOD_UNAVAILABLE");
