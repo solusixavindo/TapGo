@@ -152,6 +152,9 @@ export class WalletTopUpPaymentService {
       ...(quotes ? { quotes } : {}),
       // Hanya untuk akun driver; akun lain membayar biaya penuh sehingga tidak ada batas yang perlu ditampilkan.
       walletFeeCap: payerIsDriver ? env.WALLET_TOPUP_FEE_CAP : null,
+      // Persen komisi pesanan tunai, hanya untuk driver dan hanya bila komisi menyala: halaman top up memakainya untuk
+      // menunjukkan seberapa banyak pesanan tunai yang dibuka oleh saldo yang diisi (nilai riil biaya Rp2.500 bagi driver).
+      commissionPercent: payerIsDriver && env.DRIVER_COMMISSION_ENABLED ? env.DRIVER_COMMISSION_PERCENT : null,
       minimum: { WALLET: minimumAmountFor("WALLET"), PPOB: minimumAmountFor("PPOB") },
       maximum: env.MANUAL_TOPUP_MAX_AMOUNT,
     };

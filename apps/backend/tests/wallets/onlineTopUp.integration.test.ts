@@ -127,6 +127,27 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
     expect(body.data.minimum).toEqual({ WALLET: 25000, PPOB: 25000 });
   });
 
+  it("options carry the cash-commission percent only for drivers and only while the commission is on", async () => {
+    const driver = await createDriverUser("ONL000021");
+    const passenger = await createUser("ONL000022");
+    const read = async (user: User) =>
+      ((await (await api("/api/v1/web/wallet/topup/options?amount=25000&target=WALLET", { token: tokenFor(user, "WEB") })).json()) as {
+        data: { commissionPercent: number | null };
+      }).data.commissionPercent;
+    const saved = { enabled: backendEnv.DRIVER_COMMISSION_ENABLED, percent: backendEnv.DRIVER_COMMISSION_PERCENT };
+    try {
+      backendEnv.DRIVER_COMMISSION_ENABLED = true;
+      backendEnv.DRIVER_COMMISSION_PERCENT = 8;
+      expect(await read(driver)).toBe(8);
+      expect(await read(passenger)).toBeNull();
+      backendEnv.DRIVER_COMMISSION_ENABLED = false;
+      expect(await read(driver)).toBeNull();
+    } finally {
+      backendEnv.DRIVER_COMMISSION_ENABLED = saved.enabled;
+      backendEnv.DRIVER_COMMISSION_PERCENT = saved.percent;
+    }
+  });
+
   it("offers a quote per payment method: the driver (WALLET) pays at most the cap, PPOB pays the full fee", async () => {
     const user = await createDriverUser("ONL000020");
     type Options = { data: { methods: Array<{ id: string }>; walletFeeCap: number; quotes: Array<{ method: string; fee: number; gross: number }> } };
