@@ -209,7 +209,8 @@ export default function AmountForm() {
         </p>
       ) : null}
 
-      {online && hasMethods && amountOk ? (
+      {/* Satu metode saja (bawaan: transfer bank) tidak perlu pilihan; biayanya sudah tampil di rincian di bawah. */}
+      {online && (options?.methods?.length ?? 0) > 1 && amountOk ? (
         <div className="mt-6" data-testid="method-picker">
           <p className="text-xs font-bold uppercase tracking-wider themed-text-muted">Bayar dengan</p>
           <div role="radiogroup" aria-label="Metode pembayaran" className="mt-3 space-y-2.5">
