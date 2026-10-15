@@ -31,10 +31,27 @@ dipakai: Google Play membatasinya untuk aplikasi panggilan/alarm dan itu risiko 
   memberi perusahaan 8% dari tarif, tidak cukup menanggung Rp1.940).
 - Driver_app belum punya layar tarik saldo/dompet: penarikan penghasilan digital lewat tapgolion.id (butuh password web: fitur Akun > Password tapgolion.id).
 
+## Pemeriksaan menyeluruh 16 Okt 2026 (sebelum push)
+| # | Temuan / permintaan | Tindakan | Bukti |
+|---|---|---|---|
+| 1 | Posisi driver menuju titik jemput harus terlihat penumpang <= 3 detik | driver_app 1 dtk (menuju/menunggu penumpang), 2 dtk (mengantar), 15 dtk (idle), GPS mode cepat; user_app ambil tiap 1,5 dtk dengan marker bergerak halus | e2e HTTP nyata: umur posisi saat diterima penumpang 218-808 ms |
+| 2 | Pembatas laju per IP (CGNAT operator seluler) menjerat posisi, tulis perjalanan, dan polling umum | pembatas posisi dan tulis perjalanan per akun; dua rute posisi dikecualikan dari batas umum 120/mnt per IP (plafon IP longgar sebagai gantinya) | `passengerDriverLocation`, `liveRidePositionRateLimit`, e2e |
+| 3 | Tabel `ride_driver_locations` tidak pernah dibersihkan | `purgeOldDriverLocations` tiap jam; jejak perjalanan 14 hari (`RIDE_LOCATION_RETENTION_DAYS`), titik idle 1 hari | `rideLocationRetention` |
+| 4 | Halaman Pernyataan hanya 3 butir | 10 bagian lengkap, persetujuan terkunci sampai naskah digulir habis, halaman baca ulang di Akun > Bantuan, versi naskah dicatat di audit | `widget_test`, `driverApplication` |
+| 5 | Saldo driver basi setelah isi saldo di peramban | muat ulang saat kembali ke aplikasi + tarik layar | `widget_test` |
+| 6 | Halaman top up: biaya basi, galat diam, pesan rentang keliru | diperbaiki dan diperiksa di peramban terhadap backend lab | lihat REGRESSION_REGISTER |
+| 7 | Driver tidak melihat nilai biaya terhadap pendapatan yang dibuka | halaman top up menulis kapasitas komisi ("cukup untuk komisi 8% pesanan tunai senilai sekitar ...") | `onlineTopUp.integration` |
+
+Catatan keterbatasan: uji ujung-ke-ujung berjalan di satu mesin dengan jaringan lokal; waktu radio seluler dan penerimaan GPS HP
+ditambahkan di atas angka itu, jadi batas 3 detik harus dikonfirmasi lagi pada uji lapangan dua HP.
+
+Temuan yang BUKAN bagian pekerjaan ini tetapi perlu diketahui: biaya pembatalan penumpang Rp2.000 dicatat di pesanan (`cancellationFee`)
+tetapi tidak ditagihkan (dana digital dikembalikan penuh), jadi pernyataan driver sengaja tidak menjanjikan kompensasi pembatalan.
+
 ## Syarat sebelum rilis ke produksi
 Backend (Owner di VPS, dipandu satu langkah per pesan): cadangan DB; latihan 2 migrasi (`ride_sos_alerts`,
 `driver_fatigue_and_face_recheck`) di database sementara; cutover; env `DRIVER_COMMISSION_ENABLED=true`
-(`DRIVER_COMMISSION_PERCENT` bawaan 8); pastikan `GOOGLE_OAUTH_CLIENT_ID` terisi; `DRIVER_FACE_CHECK_ENABLED` TIDAK diset;
+(`DRIVER_COMMISSION_PERCENT` bawaan 8); pastikan `GOOGLE_OAUTH_CLIENT_ID` terisi dan `WALLET_TOPUP_ENABLED=true`; `DRIVER_FACE_CHECK_ENABLED` TIDAK diset;
 pasang zip konsol admin baru.
 
 Aplikasi: versi `1.0.0+16`, gerbang rilis lolos, APK diuji Owner di HP (**uji lapangan dua HP, 8 skenario, dua hari berbeda**),
