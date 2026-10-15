@@ -289,9 +289,6 @@ export default function AmountForm() {
             {target === "WALLET" && options?.walletFeeCap
               ? ` Untuk Saldo TapGo, biaya layanan paling banyak ${formatRupiah(options.walletFeeCap)}; selebihnya ditanggung TapGo.`
               : ""}
-            {target === "PPOB" && options?.ppobFeeCap
-              ? ` Untuk Saldo PPOB, biaya layanan paling banyak ${formatRupiah(options.ppobFeeCap)}; selebihnya ditanggung TapGo.`
-              : ""}
           </p>
           {target === "WALLET" && options?.commissionPercent && options.commissionPercent > 0 ? (
             <p className="rounded-xl bg-brand-gold/10 px-3 py-2 text-xs font-semibold leading-6 themed-text" data-testid="commission-capacity">
