@@ -63,6 +63,10 @@ export const COMMISSION_STATUS_LABELS: Record<string, string> = {
 
 export const WALLET_TYPE_LABELS: Record<string, string> = {
   TOPUP: "Top up saldo",
+  PAYMENT: "Pembayaran",
+  REFUND: "Pengembalian dana",
+  WITHDRAWAL: "Penarikan",
+  PROFIT_SHARING_BONUS: "Bagi hasil",
   COMMISSION: "Komisi",
   BASIC_SPONSOR_BONUS: "Bonus referral",
   SPONSOR_BONUS: "Bonus referral",
