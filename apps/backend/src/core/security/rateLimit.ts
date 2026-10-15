@@ -241,20 +241,6 @@ export const paymentRateLimiter = rateLimit({
   }
 });
 
-/** Pembuatan quote/order ride — aksi bernilai, dibatasi lebih ketat. */
-export const rideWriteRateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  ...rateLimitStore("ride-write", "open"),
-  message: {
-    success: false,
-    code: "RIDE_RATE_LIMITED",
-    message: "Terlalu banyak permintaan perjalanan. Silakan coba lagi nanti."
-  }
-});
-
 /**
  * Kunci per akun, bukan per IP: jaringan seluler operator membagi satu IP publik ke banyak ponsel, dan
  * pembaruan posisi sekarang tiap 1-2 detik. Dengan kunci IP, beberapa driver/penumpang di satu menara
@@ -265,6 +251,23 @@ function perAccountKey(prefix: string) {
   return (req: { auth?: { userId?: string } | undefined; ip?: string | undefined }): string =>
     `${prefix}:${req.auth?.userId ?? req.ip ?? "unknown"}`;
 }
+
+/** Pembuatan quote/order ride — aksi bernilai, dibatasi lebih ketat. */
+export const rideWriteRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  ...rateLimitStore("ride-write", "open"),
+  // Per akun: 20 aksi/menit per IP publik operator seluler (CGNAT) habis oleh beberapa ponsel saja, dan
+  // pemesanan, terima tawaran, serta batal akan ditolak 429 untuk semua orang di menara yang sama.
+  keyGenerator: perAccountKey("ride-write-user"),
+  message: {
+    success: false,
+    code: "RIDE_RATE_LIMITED",
+    message: "Terlalu banyak permintaan perjalanan. Silakan coba lagi nanti."
+  }
+});
 
 /**
  * Update lokasi driver — frekuensi tinggi (1 dtk saat menuju titik jemput = 60/mnt) tetapi tetap dibatasi.
