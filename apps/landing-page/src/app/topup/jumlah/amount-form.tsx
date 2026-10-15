@@ -286,13 +286,10 @@ export default function AmountForm() {
           </div>
           <p className="pt-1 text-xs leading-6 themed-text-muted">
             Saldo bertambah sebesar {formatRupiah(amount)}. Biaya layanan dipungut penyedia pembayaran dan tidak masuk ke saldo.
-            {target === "WALLET" && options?.walletFeeCap
-              ? ` Untuk Saldo TapGo, biaya layanan paling banyak ${formatRupiah(options.walletFeeCap)}; selebihnya ditanggung TapGo.`
-              : ""}
           </p>
           {target === "WALLET" && options?.commissionPercent && options.commissionPercent > 0 ? (
             <p className="rounded-xl bg-brand-gold/10 px-3 py-2 text-xs font-semibold leading-6 themed-text" data-testid="commission-capacity">
-              Saldo {formatRupiah(amount)} cukup untuk komisi {options.commissionPercent}% pesanan tunai senilai sekitar{" "}
+              Saldo {formatRupiah(amount)} cukup untuk pesanan tunai senilai sekitar{" "}
               {formatRupiah(Math.floor((amount * 100) / options.commissionPercent))}.
             </p>
           ) : null}
