@@ -2198,6 +2198,7 @@ class _OfferEarningsCard extends StatelessWidget {
     final fare = ride.totalFare!;
     final fee = ride.commissionFee!;
     final percent = ride.commissionPercent;
+    final deducted = ride.commissionDeducted;
     final theme = Theme.of(context);
     Widget row(String label, String value, {bool strong = false, Key? key}) =>
         Row(
@@ -2229,10 +2230,15 @@ class _OfferEarningsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          row('Tarif (tunai dari penumpang)', _rupiah(fare)),
+          row(
+            deducted
+                ? 'Tarif (sudah dibayar penumpang, TapGoPay)'
+                : 'Tarif (tunai dari penumpang)',
+            _rupiah(fare),
+          ),
           const SizedBox(height: 6),
           row(
-            percent == null ? 'Komisi TapGo' : 'Komisi TapGo $percent%',
+            '${percent == null ? 'Komisi TapGo' : 'Komisi TapGo $percent%'}${deducted ? ' (dari tarif)' : ''}',
             '-${_rupiah(fee)}',
             key: const ValueKey('offer-commission-fee'),
           ),
@@ -2245,7 +2251,10 @@ class _OfferEarningsCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Komisi ditahan dari Saldo TapGo Anda saat tawaran diterima, dan dikembalikan bila perjalanan dibatalkan.',
+            deducted
+                ? 'Penumpang sudah membayar lewat TapGoPay. Pendapatan bersih masuk ke saldo Anda saat perjalanan selesai.'
+                : 'Komisi ditahan dari Saldo TapGo Anda saat tawaran diterima, dan dikembalikan bila perjalanan dibatalkan.',
+            key: const ValueKey('offer-earnings-note'),
             style: theme.textTheme.bodySmall,
           ),
         ],

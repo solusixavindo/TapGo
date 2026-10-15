@@ -20,10 +20,16 @@ dipakai: Google Play membatasinya untuk aplikasi panggilan/alarm dan itu risiko 
 ## Perilaku komisi saat peluncuran
 - Menerima pesanan **tunai** menahan 8% tarif (dibulatkan ke atas) dari Saldo TapGo driver; saldo kurang = tawaran ditolak
   dengan pesan jelas. Dibatalkan = ditahan dikembalikan utuh; selesai = menjadi biaya final.
-- Driver wajib punya saldo sebelum bisa menerima: Saldo TapGo diisi lewat tapgolion.id/topup. Top up online memakai Midtrans
-  dengan biaya Rp4.440 yang ditanggung pengisi; **transfer manual tidak berbiaya** (dikonfirmasi Super Admin). Karena itu
-  `MANUAL_TOPUP_ENABLED` sebaiknya TETAP menyala selama driver memakai jalur ini.
-- Pembayaran digital penumpang tetap mati (`RIDE_DIGITAL_PAYMENT_ENABLED` tidak diset): semua perjalanan tunai.
+- Driver wajib punya saldo sebelum bisa menerima pesanan tunai: Saldo TapGo diisi lewat tapgolion.id/topup (Midtrans). Biaya untuk
+  driver dibatasi Rp2.500 (`WALLET_TOPUP_FEE_CAP`); selisih biaya Midtrans ditanggung perusahaan. Keputusan Owner 16 Okt 2026:
+  transfer manual TIDAK dipertahankan (`MANUAL_TOPUP_ENABLED=false`), dimatikan setelah uji top up nyata lolos. Metode yang
+  ditawarkan diatur `WALLET_TOPUP_METHODS` (bawaan hanya transfer bank; GoPay QRIS dan DANA belum aktif).
+- **Koreksi 16 Okt 2026:** `RIDE_DIGITAL_PAYMENT_ENABLED=true` di produksi (terbaca dari `.env`), jadi perjalanan DIGITAL (TapGoPay) juga ada.
+  Perjalanan digital: penumpang membayar dari Saldo TapGo, driver menerima 92% ke saldo (dapat ditarik lewat tapgolion.id), perusahaan 8%
+  (dipotong dari tarif, bukan ditahan dari saldo driver). Komisi tahan-saldo hanya untuk perjalanan TUNAI.
+- Batas biaya top up Rp2.500 berlaku hanya untuk akun yang punya profil driver; penumpang membayar biaya penuh (top up penumpang hanya
+  memberi perusahaan 8% dari tarif, tidak cukup menanggung Rp1.940).
+- Driver_app belum punya layar tarik saldo/dompet: penarikan penghasilan digital lewat tapgolion.id (butuh password web: fitur Akun > Password tapgolion.id).
 
 ## Syarat sebelum rilis ke produksi
 Backend (Owner di VPS, dipandu satu langkah per pesan): cadangan DB; latihan 2 migrasi (`ride_sos_alerts`,

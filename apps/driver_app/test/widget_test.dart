@@ -1676,7 +1676,7 @@ void main() {
   });
 
   group('Hitung mundur dan komisi pada tawaran', () {
-    DriverRide offer({DateTime? expiresAt, int? fee, int? percent, DateTime? createdAt}) => DriverRide(
+    DriverRide offer({DateTime? expiresAt, int? fee, int? percent, DateTime? createdAt, String? kind, String payment = 'CASH'}) => DriverRide(
           reference: 'RIDE-CD-001',
           serviceType: 'MOTORCYCLE',
           status: RideStatus.searchingDriver,
@@ -1689,6 +1689,8 @@ void main() {
           searchExpiresAt: expiresAt,
           commissionFee: fee,
           commissionPercent: percent,
+          commissionKind: kind,
+          paymentMethod: payment,
         );
 
     // Sheet terbuka otomatis lewat polling; pumpAndSettle TIDAK boleh dipakai setelahnya karena hitung mundur
@@ -1753,6 +1755,22 @@ void main() {
       expect(find.text('Komisi TapGo 8%'), findsOneWidget);
       expect(tester.widget<Text>(find.byKey(const ValueKey('offer-commission-fee'))).data, '-Rp720');
       expect(tester.widget<Text>(find.byKey(const ValueKey('offer-net-earnings'))).data, 'Rp8.280');
+      expect(tester.widget<Text>(find.byKey(const ValueKey('offer-earnings-note'))).data, contains('ditahan'));
+    });
+
+    testWidgets('tawaran digital: komisi dipotong dari tarif yang sudah dibayar penumpang, bukan ditahan dari saldo', (tester) async {
+      await open(
+        tester,
+        offer(expiresAt: DateTime.now().add(const Duration(minutes: 3)), fee: 720, percent: 8, kind: 'DEDUCTED', payment: 'DIGITAL'),
+      );
+      expect(find.text('Tarif (sudah dibayar penumpang, TapGoPay)'), findsOneWidget);
+      expect(find.text('Komisi TapGo 8% (dari tarif)'), findsOneWidget);
+      expect(tester.widget<Text>(find.byKey(const ValueKey('offer-net-earnings'))).data, 'Rp8.280');
+      final note = tester.widget<Text>(find.byKey(const ValueKey('offer-earnings-note'))).data!;
+      expect(note, contains('TapGoPay'));
+      expect(note, isNot(contains('ditahan')));
+      // Tawaran digital ditandai: driver tidak menagih tunai.
+      expect(find.text('TapGoPay'), findsWidgets);
     });
 
     testWidgets('server lama (tanpa batas dan komisi): tidak ada hitung mundur maupun rincian komisi, tombol tetap aktif',

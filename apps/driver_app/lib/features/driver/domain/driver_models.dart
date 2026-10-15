@@ -598,6 +598,7 @@ class DriverRide {
     this.searchExpiresAt,
     this.commissionFee,
     this.commissionPercent,
+    this.commissionKind,
   });
 
   factory DriverRide.fromJson(Map<String, dynamic> json) {
@@ -637,6 +638,7 @@ class DriverRide {
       searchExpiresAt: DateTime.tryParse('${json['searchExpiresAt'] ?? ''}'),
       commissionFee: _intOf(json['commissionFee']),
       commissionPercent: _intOf(json['commissionPercent']),
+      commissionKind: json['commissionKind'] as String?,
     );
   }
 
@@ -648,6 +650,11 @@ class DriverRide {
   /// Null bila komisi mati atau server lama.
   final int? commissionFee;
   final int? commissionPercent;
+
+  /// 'HELD' = ditahan dari Saldo TapGo saat tawaran diterima (pesanan tunai); 'DEDUCTED' = dipotong dari tarif yang sudah
+  /// dibayar penumpang (TapGoPay, bagi hasil 92:8). Null (server lama) diperlakukan sebagai ditahan.
+  final String? commissionKind;
+  bool get commissionDeducted => commissionKind == 'DEDUCTED';
 
   /// Jarak dari posisi driver ke titik jemput, dihitung server saat tawaran
   /// dimuat (hanya ada pada daftar tawaran).
