@@ -267,7 +267,7 @@ export default function AmountForm() {
         </div>
       ) : null}
 
-      {online && amount > 0 ? (
+      {online && amountOk ? (
         <dl
           className="mt-6 space-y-2.5 rounded-2xl border themed-border themed-card-bg px-4 py-4 text-sm"
           data-testid="fee-summary"
@@ -290,6 +290,12 @@ export default function AmountForm() {
               ? ` Untuk Saldo TapGo, biaya layanan paling banyak ${formatRupiah(options.walletFeeCap)}; selebihnya ditanggung TapGo.`
               : ""}
           </p>
+          {target === "WALLET" && options?.commissionPercent && options.commissionPercent > 0 ? (
+            <p className="rounded-xl bg-brand-gold/10 px-3 py-2 text-xs font-semibold leading-6 themed-text" data-testid="commission-capacity">
+              Saldo {formatRupiah(amount)} cukup untuk komisi {options.commissionPercent}% pesanan tunai senilai sekitar{" "}
+              {formatRupiah(Math.floor((amount * 100) / options.commissionPercent))}.
+            </p>
+          ) : null}
         </dl>
       ) : null}
 
@@ -328,10 +334,14 @@ export default function AmountForm() {
       <button type="button" onClick={onContinue} disabled={busy || !valid} className={`${primaryButtonClass} mt-6`}>
         {busy
           ? "Menyiapkan…"
-          : online
-            ? quoteReady
-              ? `Bayar ${formatRupiah(total)}`
-              : "Menghitung biaya…"
+          : optionsError || options === undefined
+            ? "Memuat opsi pembayaran…"
+            : online
+            ? !amountOk
+              ? "Masukkan jumlah yang valid"
+              : quoteReady
+                ? `Bayar ${formatRupiah(total)}`
+                : "Menghitung biaya…"
             : `Lanjut isi ${config.label} ${formatRupiah(amount || 0)}`}
       </button>
     </div>

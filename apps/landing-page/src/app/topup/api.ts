@@ -159,6 +159,8 @@ export type TopUpOptions = {
   quotes?: TopUpQuote[];
   /** Batas biaya layanan Saldo TapGo; selisihnya ditanggung TapGo. */
   walletFeeCap?: number | null;
+  /** Persen komisi pesanan tunai; hanya untuk akun driver saat komisi menyala (null selainnya). */
+  commissionPercent?: number | null;
   minimum: Record<TopUpTarget, number>;
   maximum: number;
   manualTransfer: boolean;
