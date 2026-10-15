@@ -93,8 +93,8 @@ class _DriverApplicationEntryPointState
             ),
             const SizedBox(height: 8),
             const Text(
-              'Lengkapi dokumen, data diri, data kendaraan, dan pernyataan '
-              'untuk mengajukan diri sebagai mitra driver.',
+              'Baca dan setujui pernyataan kemitraan, lalu lengkapi dokumen, '
+              'data diri, dan data kendaraan untuk mengajukan diri sebagai mitra driver.',
             ),
             const SizedBox(height: 16),
             FilledButton(
@@ -120,8 +120,9 @@ const List<DriverDocumentKind> _kCoreDocumentKinds = [
   DriverDocumentKind.selfie,
 ];
 
-/// Wizard 5 langkah: Upload Dokumen -> Data Diri -> Data Kendaraan ->
-/// Upload Data Tambahan (SKCK) -> Pernyataan. Setiap langkah menyimpan
+/// Wizard 5 langkah: Pernyataan -> Upload Dokumen -> Data Diri -> Data Kendaraan ->
+/// Upload Data Tambahan (SKCK). Pernyataan di AWAL (keputusan Owner 16 Okt 2026): calon driver membaca dan
+/// menyetujui hak, kewajiban, dan kebijakan data SEBELUM mengunggah KTP, SIM, STNK, dan foto diri. Setiap langkah menyimpan
 /// input-nya di state widget ini (bukan provider) — hanya dikirim ke
 /// server sekali, di langkah terakhir.
 class DriverApplicationWizardScreen extends ConsumerStatefulWidget {
@@ -161,7 +162,7 @@ class _DriverApplicationWizardScreenState
   String? _brand;
   String? _model;
 
-  // Halaman 5 — Pernyataan. Kotak persetujuan baru aktif setelah naskah digulir sampai bawah: persetujuan atas
+  // Halaman 1 — Pernyataan. Kotak persetujuan baru aktif setelah naskah digulir sampai bawah: persetujuan atas
   // naskah yang tidak pernah terlihat bukan persetujuan.
   bool _declarationAccepted = false;
   bool _declarationReadToEnd = false;
@@ -201,25 +202,25 @@ class _DriverApplicationWizardScreenState
   bool _canAdvanceFrom(int page, DriverState state) {
     switch (page) {
       case 0:
+        return _declarationAccepted;
+      case 1:
         return _kCoreDocumentKinds
             .every((kind) => state.documentOf(kind)?.available == true);
-      case 1:
+      case 2:
         // Seluruh field Data Diri wajib diisi — tidak ada yang opsional.
         return _fullNameController.text.trim().isNotEmpty &&
             _addressController.text.trim().isNotEmpty &&
             _dateOfBirth != null &&
             _emergencyContactNameController.text.trim().isNotEmpty &&
             _emergencyContactPhoneController.text.trim().isNotEmpty;
-      case 2:
+      case 3:
         // Dicek langsung dari controller, bukan lewat
         // GlobalKey<FormState>.currentState?.validate() — halaman yang
         // sedang tidak tampil di PageView bisa saja belum ter-mount, dan
         // canAdvance dihitung dari _page manapun tanpa syarat itu.
         return _isValidPlate(_plateController.text);
-      case 3:
-        return state.documentOf(DriverDocumentKind.skck)?.available == true;
       case 4:
-        return _declarationAccepted;
+        return state.documentOf(DriverDocumentKind.skck)?.available == true;
       default:
         return true;
     }
@@ -318,6 +319,11 @@ class _DriverApplicationWizardScreenState
               physics: const NeverScrollableScrollPhysics(),
               onPageChanged: (index) => setState(() => _page = index),
               children: [
+                _WizardStep(
+                  title: 'Pernyataan',
+                  controller: _declarationScroll,
+                  child: _buildDeclaration(),
+                ),
                 const _WizardStep(
                   title: 'Upload Dokumen',
                   child: Padding(
@@ -341,11 +347,6 @@ class _DriverApplicationWizardScreenState
                       showHeader: false,
                     ),
                   ),
-                ),
-                _WizardStep(
-                  title: 'Pernyataan',
-                  controller: _declarationScroll,
-                  child: _buildDeclaration(),
                 ),
               ],
             ),

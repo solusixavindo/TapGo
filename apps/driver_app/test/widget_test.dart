@@ -534,11 +534,17 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('start-application-wizard')));
       await tester.pumpAndSettle();
 
-      // Dokumen belum lengkap -> tombol Lanjut terkunci di halaman pertama.
-      final next = tester.widget<FilledButton>(
-        find.byKey(const ValueKey('driver-application-wizard-next')),
-      );
-      expect(next.onPressed, isNull);
+      // Halaman pertama = Pernyataan: tombol Lanjut terkunci sampai naskah dibaca dan disetujui.
+      final nextKey = find.byKey(const ValueKey('driver-application-wizard-next'));
+      expect(tester.widget<FilledButton>(nextKey).onPressed, isNull);
+      await readDeclarationToEnd(tester);
+      await tester.tap(find.byKey(const ValueKey('wizard-declaration-checkbox')));
+      await tester.pumpAndSettle();
+      await tester.tap(nextKey);
+      await tester.pumpAndSettle();
+      // Halaman kedua = Upload Dokumen: dokumen belum lengkap -> Lanjut terkunci.
+      expect(find.byKey(const ValueKey('driver-terms')), findsNothing);
+      expect(tester.widget<FilledButton>(nextKey).onPressed, isNull);
     });
 
     testWidgets(
@@ -573,11 +579,18 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('start-application-wizard')));
       await tester.pumpAndSettle();
 
-      // Halaman 1 — Upload Dokumen: sudah lengkap lewat repository di atas.
+      // Halaman 1 — Pernyataan (di awal, sebelum unggah dokumen).
+      await readDeclarationToEnd(tester);
+      await tester.tap(find.byKey(const ValueKey('wizard-declaration-checkbox')));
+      await tester.pumpAndSettle();
       await tester.tap(nextKey);
       await tester.pumpAndSettle();
 
-      // Halaman 2 — Data Diri: seluruh field wajib diisi, tidak ada opsional.
+      // Halaman 2 — Upload Dokumen: sudah lengkap lewat repository di atas.
+      await tester.tap(nextKey);
+      await tester.pumpAndSettle();
+
+      // Halaman 3 — Data Diri: seluruh field wajib diisi, tidak ada opsional.
       await tester.enterText(
         find.byKey(const ValueKey('wizard-full-name')),
         'Budi Santoso',
@@ -603,7 +616,7 @@ void main() {
       await tester.tap(nextKey);
       await tester.pumpAndSettle();
 
-      // Halaman 3 — Data Kendaraan.
+      // Halaman 4 — Data Kendaraan.
       await tester.enterText(
         find.byKey(const ValueKey('wizard-plate')),
         'B 1234 UJI',
@@ -612,14 +625,7 @@ void main() {
       await tester.tap(nextKey);
       await tester.pumpAndSettle();
 
-      // Halaman 4 — Upload Data Tambahan (SKCK): sudah lengkap juga.
-      await tester.tap(nextKey);
-      await tester.pumpAndSettle();
-
-      // Halaman 5 — Pernyataan.
-      await readDeclarationToEnd(tester);
-      await tester.tap(find.byKey(const ValueKey('wizard-declaration-checkbox')));
-      await tester.pumpAndSettle();
+      // Halaman 5 — Upload Data Tambahan (SKCK): sudah lengkap; Kirim Pengajuan.
       await tester.tap(nextKey);
       await tester.pumpAndSettle();
 
@@ -661,28 +667,8 @@ void main() {
       );
       await tester.tap(find.byKey(const ValueKey('start-application-wizard')));
       await tester.pumpAndSettle();
-      await tester.tap(nextKey);
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byKey(const ValueKey('wizard-full-name')), 'Budi Santoso');
-      await tester.enterText(find.byKey(const ValueKey('wizard-address')), 'Jl. Melati No. 5');
-      await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('wizard-date-of-birth')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('OK'));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byKey(const ValueKey('wizard-emergency-name')), 'Siti');
-      await tester.enterText(find.byKey(const ValueKey('wizard-emergency-phone')), '081234567890');
-      await tester.pump();
-      await tester.tap(nextKey);
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byKey(const ValueKey('wizard-plate')), 'B 1234 UJI');
-      await tester.pump();
-      await tester.tap(nextKey);
-      await tester.pumpAndSettle();
-      await tester.tap(nextKey);
-      await tester.pumpAndSettle();
 
-      // Terkunci: belum digulir, kotak tidak bisa dicentang dan tombol kirim mati.
+      // Pernyataan adalah halaman PERTAMA. Terkunci: belum digulir, kotak tidak bisa dicentang dan Lanjut mati.
       expect(find.byKey(const ValueKey('driver-terms')), findsOneWidget);
       expect(find.byKey(const ValueKey('wizard-declaration-scroll-hint')), findsOneWidget);
       final locked = tester.widget<CheckboxListTile>(
@@ -700,7 +686,27 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('wizard-declaration-checkbox')));
       await tester.pumpAndSettle();
-      await tester.tap(nextKey);
+      await tester.tap(nextKey); // -> Upload Dokumen (lengkap)
+      await tester.pumpAndSettle();
+      await tester.tap(nextKey); // -> Data Diri
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('wizard-full-name')), 'Budi Santoso');
+      await tester.enterText(find.byKey(const ValueKey('wizard-address')), 'Jl. Melati No. 5');
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('wizard-date-of-birth')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('wizard-emergency-name')), 'Siti');
+      await tester.enterText(find.byKey(const ValueKey('wizard-emergency-phone')), '081234567890');
+      await tester.pump();
+      await tester.tap(nextKey); // -> Data Kendaraan
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('wizard-plate')), 'B 1234 UJI');
+      await tester.pump();
+      await tester.tap(nextKey); // -> SKCK
+      await tester.pumpAndSettle();
+      await tester.tap(nextKey); // Kirim Pengajuan
       await tester.pumpAndSettle();
       expect(repo.submitCalls, 1);
       expect(repo.submittedForms.single['declarationVersion'], kDriverTermsVersion);
@@ -741,6 +747,11 @@ void main() {
       );
       await tester.tap(find.byKey(const ValueKey('start-application-wizard')));
       await tester.pumpAndSettle();
+      await readDeclarationToEnd(tester);
+      await tester.tap(find.byKey(const ValueKey('wizard-declaration-checkbox')));
+      await tester.pumpAndSettle();
+      await tester.tap(nextKey);
+      await tester.pumpAndSettle();
       await tester.tap(nextKey);
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('wizard-full-name')), 'Budi Santoso');
@@ -757,18 +768,15 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('wizard-plate')), 'B 1234 UJI');
       await tester.pump();
-      await tester.tap(nextKey);
+      await tester.tap(nextKey); // -> SKCK
       await tester.pumpAndSettle();
-      await tester.tap(nextKey);
-      await tester.pumpAndSettle();
-      await readDeclarationToEnd(tester);
-      await tester.tap(find.byKey(const ValueKey('wizard-declaration-checkbox')));
-      await tester.pumpAndSettle();
-      await tester.tap(nextKey);
+      await tester.tap(nextKey); // Kirim Pengajuan (gagal)
       await tester.pumpAndSettle();
 
       expect(repo.submitCalls, 0);
-      expect(find.byKey(const ValueKey('wizard-declaration-checkbox')), findsOneWidget);
+      // Wizard tetap terbuka di halaman terakhir; pengajuan tidak dianggap terkirim.
+      expect(nextKey, findsOneWidget);
+      expect(find.byKey(const ValueKey('driver-application-open')), findsNothing);
     });
 
     testWidgets('H1: pengajuan terbuka dapat ditarik lewat dialog konfirmasi',
