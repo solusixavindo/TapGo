@@ -59,7 +59,7 @@ memakainya (atau sekadar memindahkannya antar-akun) menjadi kerugian murni Rp1.9
 3. **Opsi D untuk penumpang** (batas Rp2.500 hanya bila top up >= Rp100.000): perubahan kecil di `customerTopUpFee` (satu ambang). Perusahaan
    hanya menanggung bila penumpang memilih VA pada nominal besar, dan komisi yang dibuka (>= Rp8.000) menutup subsidi Rp1.940 empat kali lipat.
    Opsi ini saya anjurkan **setelah** QRIS aktif dan setelah ada data nyata (lihat bagian 6); sekarang belum perlu dikode.
-4. Jangan menanggung biaya top up PPOB: margin bersih pulsa/tagihan hanya Rp500 sampai Rp1.000, lebih kecil dari biaya.
+4. ~~Jangan menanggung biaya top up PPOB~~ (rekomendasi awal saya: margin bersih pulsa/tagihan hanya Rp500 sampai Rp1.000). **Diputuskan Owner 16 Okt 2026: batas Rp2.500 berlaku untuk SEMUA nominal Saldo PPOB**, selisih ditanggung perusahaan. Lihat bagian 7.
 5. Dorong driver menggunakan **perjalanan digital**: komisi dipotong langsung dari tarif (92% masuk saldo), sehingga driver yang menerima
    banyak pesanan digital hampir tidak perlu top up sama sekali. Ini pengurang biaya terbesar dalam jangka panjang.
 6. Tanyakan penawaran biaya VA dari Midtrans untuk volume Anda, dan bandingkan dengan DOKU (kode integrasinya sudah ada di backend).
@@ -91,3 +91,16 @@ ORDER BY 1, 2, 3;
 Catatan batas analisis: saya tidak punya data konversi nyata (top up online baru aktif 13-14 Oktober), jadi dugaan "penumpang memilih tunai" adalah
 penalaran dari struktur biaya, bukan pengukuran. Angka rata-rata tarif perjalanan yang dipakai di tabel adalah asumsi (komisi dihitung dari
 nominal top up penuh, bukan dari rata-rata tarif).
+
+## 7. Keputusan Owner: Saldo PPOB dibatasi Rp2.500 untuk semua nominal (16 Okt 2026)
+
+Berlaku untuk semua pelanggan (`PPOB_TOPUP_FEE_CAP`, bawaan 2500; mengubah ke 4440 atau lebih mengembalikan biaya penuh tanpa kode baru).
+Biaya tidak pernah ditagih lebih dari biaya sebenarnya, jadi QRIS (Rp177 pada Rp25.000) tetap murah.
+
+Risiko yang diterima dengan sadar: VA menghabiskan Rp1.940 bagi perusahaan per top up, sedangkan margin PPOB hanya Rp500 (prepaid) atau
+Rp1.000 (pascabayar) per transaksi. Top up Rp25.000 yang dipakai untuk satu pulsa rugi sekitar Rp1.440; baru impas sekitar 4 transaksi prepaid
+per top up. Beban ini otomatis tercatat di Laba Rugi sebagai biaya gateway (biaya sebenarnya dikurangi biaya pelanggan).
+
+Pengamanan: (1) aktifkan QRIS lalu tampilkan lebih dulu, karena biaya perusahaan jadi nol di bawah Rp2.500; (2) jalankan query bagian 6
+setelah 2-4 minggu, tambahkan kolom jumlah transaksi PPOB per pengguna bila perlu, dan bandingkan beban gateway di Laba Rugi dengan margin PPOB;
+(3) bila beban melebihi margin, naikkan `PPOB_TOPUP_FEE_CAP` atau beri ambang nominal.

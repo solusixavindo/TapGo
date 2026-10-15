@@ -40,6 +40,7 @@ dipakai: Google Play membatasinya untuk aplikasi panggilan/alarm dan itu risiko 
 | 4 | Halaman Pernyataan hanya 3 butir | 10 bagian lengkap, persetujuan terkunci sampai naskah digulir habis, halaman baca ulang di Akun > Bantuan, versi naskah dicatat di audit | `widget_test`, `driverApplication` |
 | 5 | Saldo driver basi setelah isi saldo di peramban | muat ulang saat kembali ke aplikasi + tarik layar | `widget_test` |
 | 6 | Halaman top up: biaya basi, galat diam, pesan rentang keliru | diperbaiki dan diperiksa di peramban terhadap backend lab | lihat REGRESSION_REGISTER |
+| 8 | Keputusan Owner: biaya top up Saldo PPOB dibatasi Rp2.500 untuk semua nominal dan semua pelanggan | `PPOB_TOPUP_FEE_CAP` (bawaan 2500), landing menuliskan batasnya, beban tercatat di Laba Rugi | `midtransTopUpFees`, `onlineTopUp.integration` |
 | 7 | Driver tidak melihat nilai biaya terhadap pendapatan yang dibuka | halaman top up menulis kapasitas komisi ("cukup untuk komisi 8% pesanan tunai senilai sekitar ...") | `onlineTopUp.integration` |
 
 Catatan keterbatasan: uji ujung-ke-ujung berjalan di satu mesin dengan jaringan lokal; waktu radio seluler dan penerimaan GPS HP
