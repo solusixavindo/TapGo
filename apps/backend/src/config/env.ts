@@ -190,6 +190,8 @@ const envSchema = z.object({
   /// memutuskannya. Bawaan hanya transfer bank (keputusan Owner 16 Okt 2026: GoPay QRIS dan DANA belum aktif).
   WALLET_TOPUP_METHODS: z.string().trim().max(100).default("bank_transfer"),
   WALLET_TOPUP_FEE_CAP: z.coerce.number().int().min(0).max(20000).default(2500),
+  /// Batas biaya top up Saldo PPOB untuk SEMUA pelanggan (keputusan Owner 16 Okt 2026); selisih biaya Midtrans ditanggung perusahaan.
+  PPOB_TOPUP_FEE_CAP: z.coerce.number().int().min(0).max(20000).default(2500),
   MANUAL_TOPUP_EXPIRY_HOURS: z.coerce.number().int().min(1).max(168).default(24),
   /// Pembayaran membership lewat transfer bank manual (kode unik + konfirmasi
   /// Super Admin), kanal WEB saja. Dipakai selama gateway (Midtrans/DOKU) belum

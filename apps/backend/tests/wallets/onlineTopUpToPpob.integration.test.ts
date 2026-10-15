@@ -102,7 +102,8 @@ describe.skipIf(!runIntegration)("Top up online lalu bayar PPOB dan tagihan", ()
     const created = await api("/api/v1/web/wallet/topup/online", { method: "POST", token: tokenFor(user, "WEB"), body: { amount, target } });
     expect(created.status).toBe(201);
     const { data } = (await created.json()) as { data: { reference: string; grossAmount: number } };
-    expect(data.grossAmount).toBe(amount + 4440); // bukan driver: biaya penuh untuk kedua tujuan
+    // Bukan driver: Saldo TapGo membayar biaya penuh; Saldo PPOB dibatasi Rp2.500 untuk semua pelanggan.
+    expect(data.grossAmount).toBe(amount + (target === "PPOB" ? 2500 : 4440));
     const orderId = data.reference;
     const grossAmount = `${data.grossAmount}.00`;
     const signature = createHash("sha512").update(`${orderId}200${grossAmount}${SERVER_KEY}`).digest("hex");

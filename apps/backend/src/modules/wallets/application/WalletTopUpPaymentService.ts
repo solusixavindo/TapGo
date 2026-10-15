@@ -126,7 +126,7 @@ export class WalletTopUpPaymentService {
 
   /** Biaya yang ditagihkan ke pelanggan untuk kombinasi tujuan, metode, dan nominal ini. */
   private customerFeeFor(target: TopUpTarget, method: TopUpMethod, amount: number, payerIsDriver: boolean) {
-    return customerTopUpFee({ target, method, amount, walletCap: env.WALLET_TOPUP_FEE_CAP, payerIsDriver });
+    return customerTopUpFee({ target, method, amount, walletCap: env.WALLET_TOPUP_FEE_CAP, ppobCap: env.PPOB_TOPUP_FEE_CAP, payerIsDriver });
   }
 
   /**
@@ -152,6 +152,8 @@ export class WalletTopUpPaymentService {
       ...(quotes ? { quotes } : {}),
       // Hanya untuk akun driver; akun lain membayar biaya penuh sehingga tidak ada batas yang perlu ditampilkan.
       walletFeeCap: payerIsDriver ? env.WALLET_TOPUP_FEE_CAP : null,
+      // Berlaku untuk semua akun: biaya top up Saldo PPOB dibatasi sebesar ini, selisihnya ditanggung perusahaan.
+      ppobFeeCap: env.PPOB_TOPUP_FEE_CAP,
       // Persen komisi pesanan tunai, hanya untuk driver dan hanya bila komisi menyala: halaman top up memakainya untuk
       // menunjukkan seberapa banyak pesanan tunai yang dibuka oleh saldo yang diisi (nilai riil biaya Rp2.500 bagi driver).
       commissionPercent: payerIsDriver && env.DRIVER_COMMISSION_ENABLED ? env.DRIVER_COMMISSION_PERCENT : null,

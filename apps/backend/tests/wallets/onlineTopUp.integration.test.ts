@@ -148,7 +148,7 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
     }
   });
 
-  it("offers a quote per payment method: the driver (WALLET) pays at most the cap, PPOB pays the full fee", async () => {
+  it("offers a quote per payment method: the driver (WALLET) and every PPOB top up pay at most the cap", async () => {
     const user = await createDriverUser("ONL000020");
     type Options = { data: { methods: Array<{ id: string }>; walletFeeCap: number; quotes: Array<{ method: string; fee: number; gross: number }> } };
     const read = async (query: string) => ((await (await api(`/api/v1/web/wallet/topup/options?${query}`, { token: tokenFor(user, "WEB") })).json()) as Options).data;
@@ -163,8 +163,9 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
     ]);
 
     const ppob = await read("amount=50000&target=PPOB");
+    expect((ppob as unknown as { ppobFeeCap: number }).ppobFeeCap).toBe(2500);
     expect(ppob.quotes).toEqual([
-      { method: "bank_transfer", fee: 4440, gross: 54440 },
+      { method: "bank_transfer", fee: 2500, gross: 52500 },
       { method: "gopay", fee: 1021, gross: 51021 },
       { method: "qris", fee: 353, gross: 50353 }
     ]);
@@ -280,7 +281,7 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
     const body = (await created.json()) as {
       data: { id: string; reference: string; baseAmount: number; feeAmount: number; grossAmount: number; redirectUrl: string; target: string };
     };
-    expect(body.data).toMatchObject({ baseAmount: 50000, feeAmount: 4440, grossAmount: 54440, target: "PPOB" });
+    expect(body.data).toMatchObject({ baseAmount: 50000, feeAmount: 2500, grossAmount: 52500, target: "PPOB" });
     expect(body.data.redirectUrl).toContain("midtrans.com");
 
     // Midtrans ditagih nominal + biaya, dan rincian item menjumlah tepat ke total itu.
@@ -288,17 +289,17 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
       transaction_details: { gross_amount: number };
       item_details: Array<{ price: number; quantity: number }>;
     };
-    expect(request.transaction_details.gross_amount).toBe(54440);
-    expect(request.item_details.reduce((sum, item) => sum + item.price * item.quantity, 0)).toBe(54440);
+    expect(request.transaction_details.gross_amount).toBe(52500);
+    expect(request.item_details.reduce((sum, item) => sum + item.price * item.quantity, 0)).toBe(52500);
 
-    const settled = await notify(body.data.reference, "54440.00");
+    const settled = await notify(body.data.reference, "52500.00");
     expect(settled.status).toBe(200);
     const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
     expect(decimalString(wallet.ppobBalance)).toBe("50000.00");
     expect(decimalString(wallet.balance)).toBe("0.00");
 
     // Notifikasi ulang tidak menambah saldo.
-    expect((await notify(body.data.reference, "54440.00")).status).toBe(200);
+    expect((await notify(body.data.reference, "52500.00")).status).toBe(200);
     const again = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
     expect(decimalString(again.ppobBalance)).toBe("50000.00");
     const ledger = await prisma.walletTransaction.findMany({ where: { walletId: wallet.id, type: "TOPUP" } });
@@ -364,7 +365,7 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
     const own = await api(`/api/v1/web/wallet/topup/online/${body.data.id}`, { token: tokenFor(owner, "WEB") });
     expect(own.status).toBe(200);
     const summary = (await own.json()) as { data: { status: string; baseAmount: number; feeAmount: number; grossAmount: number; target: string } };
-    expect(summary.data).toMatchObject({ status: "PENDING", baseAmount: 50000, feeAmount: 4440, grossAmount: 54440, target: "PPOB" });
+    expect(summary.data).toMatchObject({ status: "PENDING", baseAmount: 50000, feeAmount: 2500, grossAmount: 52500, target: "PPOB" });
     expect(summary.data).toMatchObject({ online: true });
     // Tautan lanjut bayar hanya untuk pemilik; token Snap mentah tidak ikut.
     expect((summary.data as unknown as { resumeUrl: string }).resumeUrl).toContain("midtrans.com");
@@ -397,13 +398,14 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
     expect((await notify(body.data.reference, "102500.00")).status).toBe(200);
   });
 
-  it("records that the customer paid the gateway fee, which the cost report relies on", async () => {
+  it("records the customer fee and the real gateway fee, which the cost report relies on", async () => {
     const user = await createUser("ONL000012");
     const created = await createOnline(user, 50000, "PPOB");
     const body = (await created.json()) as { data: { reference: string } };
-    await notify(body.data.reference, "54440.00", "bank_transfer");
+    await notify(body.data.reference, "52500.00", "bank_transfer");
     const order = await prisma.walletTopUpOrder.findFirstOrThrow({ where: { userId: user.id } });
-    expect(order.metadata).toMatchObject({ feeBorneByCustomer: true, feeAmount: 4440, paymentType: "bank_transfer" });
+    // Biaya pelanggan Rp2.500 dari biaya sebenarnya Rp4.440: sisanya ditanggung perusahaan dan harus terbaca laporan biaya.
+    expect(order.metadata).toMatchObject({ feeBorneByCustomer: false, feeAmount: 2500, gatewayFeeEstimate: "4440.00", paymentType: "bank_transfer" });
   });
 });
 

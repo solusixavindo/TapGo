@@ -44,37 +44,50 @@ describe("fullTopUpFee: biaya yang menutup seluruh biaya Midtrans", () => {
 describe("customerTopUpFee: yang ditagihkan ke pelanggan", () => {
   const cap = 2500;
 
-  it("Saldo PPOB: biaya penuh (margin PPOB terlalu tipis untuk menanggung biaya gateway)", () => {
-    expect(customerTopUpFee({ target: "PPOB", method: "bank_transfer", amount: 25_000, walletCap: cap, payerIsDriver: false })).toBe(4440);
-    expect(customerTopUpFee({ target: "PPOB", method: "gopay", amount: 25_000, walletCap: cap, payerIsDriver: false })).toBe(511);
+  it("Saldo PPOB (semua pelanggan, keputusan Owner 16 Okt): dibatasi Rp2.500, selisihnya ditanggung perusahaan", () => {
+    for (const payerIsDriver of [false, true]) {
+      for (const amount of [25_000, 50_000, 200_000]) {
+        expect(customerTopUpFee({ target: "PPOB", method: "bank_transfer", amount, walletCap: cap, ppobCap: cap, payerIsDriver })).toBe(2500);
+      }
+    }
+    expect(companyBorneGatewayFee("bank_transfer", 25_000 + 2500, 2500).fee.toNumber()).toBe(1940);
+    // Metode berbiaya persen tidak pernah ditagih lebih dari biaya sebenarnya.
+    expect(customerTopUpFee({ target: "PPOB", method: "qris", amount: 25_000, walletCap: cap, ppobCap: cap, payerIsDriver: false })).toBe(177);
+    expect(customerTopUpFee({ target: "PPOB", method: "gopay", amount: 25_000, walletCap: cap, ppobCap: cap, payerIsDriver: false })).toBe(511);
+    expect(customerTopUpFee({ target: "PPOB", method: "gopay", amount: 200_000, walletCap: cap, ppobCap: cap, payerIsDriver: false })).toBe(2500);
+  });
+
+  it("batas PPOB berdiri sendiri dari batas Saldo TapGo", () => {
+    expect(customerTopUpFee({ target: "PPOB", method: "bank_transfer", amount: 50_000, walletCap: 0, ppobCap: 3000, payerIsDriver: true })).toBe(3000);
+    expect(customerTopUpFee({ target: "WALLET", method: "bank_transfer", amount: 50_000, walletCap: 0, ppobCap: 3000, payerIsDriver: true })).toBe(0);
   });
 
   it("Saldo TapGo (driver): transfer bank dibatasi Rp2.500, sisanya Rp1.940 ditanggung perusahaan", () => {
     for (const amount of [25_000, 50_000, 100_000, 200_000]) {
-      expect(customerTopUpFee({ target: "WALLET", method: "bank_transfer", amount, walletCap: cap, payerIsDriver: true })).toBe(2500);
+      expect(customerTopUpFee({ target: "WALLET", method: "bank_transfer", amount, walletCap: cap, ppobCap: cap, payerIsDriver: true })).toBe(2500);
     }
     const gross = 50_000 + 2500;
     expect(companyBorneGatewayFee("bank_transfer", gross, 2500).fee.toNumber()).toBe(1940);
   });
 
   it("Saldo TapGo: metode berbiaya persen tidak pernah ditagih lebih dari biaya sebenarnya, dan dibatasi Rp2.500", () => {
-    expect(customerTopUpFee({ target: "WALLET", method: "qris", amount: 50_000, walletCap: cap, payerIsDriver: true })).toBe(353);
-    expect(customerTopUpFee({ target: "WALLET", method: "gopay", amount: 100_000, walletCap: cap, payerIsDriver: true })).toBe(2041);
+    expect(customerTopUpFee({ target: "WALLET", method: "qris", amount: 50_000, walletCap: cap, ppobCap: cap, payerIsDriver: true })).toBe(353);
+    expect(customerTopUpFee({ target: "WALLET", method: "gopay", amount: 100_000, walletCap: cap, ppobCap: cap, payerIsDriver: true })).toBe(2041);
     // Di atas titik impas batas, perusahaan menanggung sisanya.
-    expect(customerTopUpFee({ target: "WALLET", method: "gopay", amount: 200_000, walletCap: cap, payerIsDriver: true })).toBe(2500);
+    expect(customerTopUpFee({ target: "WALLET", method: "gopay", amount: 200_000, walletCap: cap, ppobCap: cap, payerIsDriver: true })).toBe(2500);
     expect(companyBorneGatewayFee("gopay", 200_000 + 2500, 2500).fee.toNumber()).toBe(1550); // 2% x 202.500 = 4.050 - 2.500
-    expect(customerTopUpFee({ target: "WALLET", method: "dana", amount: 200_000, walletCap: cap, payerIsDriver: true })).toBe(2500);
+    expect(customerTopUpFee({ target: "WALLET", method: "dana", amount: 200_000, walletCap: cap, ppobCap: cap, payerIsDriver: true })).toBe(2500);
     expect(companyBorneGatewayFee("dana", 200_000 + 2500, 2500).fee.toNumber()).toBeCloseTo(871.63, 1);
   });
 
   it("Saldo TapGo milik penumpang (bukan driver): biaya penuh, karena perjalanan digital hanya memberi perusahaan 8% dari tarif", () => {
-    expect(customerTopUpFee({ target: "WALLET", method: "bank_transfer", amount: 50_000, walletCap: cap, payerIsDriver: false })).toBe(4440);
-    expect(customerTopUpFee({ target: "WALLET", method: "gopay", amount: 200_000, walletCap: cap, payerIsDriver: false })).toBe(4082);
+    expect(customerTopUpFee({ target: "WALLET", method: "bank_transfer", amount: 50_000, walletCap: cap, ppobCap: cap, payerIsDriver: false })).toBe(4440);
+    expect(customerTopUpFee({ target: "WALLET", method: "gopay", amount: 200_000, walletCap: cap, ppobCap: cap, payerIsDriver: false })).toBe(4082);
   });
 
   it("batas dapat diubah lewat konfigurasi (0 = perusahaan menanggung semuanya)", () => {
-    expect(customerTopUpFee({ target: "WALLET", method: "bank_transfer", amount: 50_000, walletCap: 0, payerIsDriver: true })).toBe(0);
-    expect(customerTopUpFee({ target: "WALLET", method: "bank_transfer", amount: 50_000, walletCap: 10_000, payerIsDriver: true })).toBe(4440);
+    expect(customerTopUpFee({ target: "WALLET", method: "bank_transfer", amount: 50_000, walletCap: 0, ppobCap: cap, payerIsDriver: true })).toBe(0);
+    expect(customerTopUpFee({ target: "WALLET", method: "bank_transfer", amount: 50_000, walletCap: 10_000, ppobCap: cap, payerIsDriver: true })).toBe(4440);
   });
 });
 
