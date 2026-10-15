@@ -289,8 +289,7 @@ export default function AmountForm() {
           </p>
           {target === "WALLET" && options?.commissionPercent && options.commissionPercent > 0 ? (
             <p className="rounded-xl bg-brand-gold/10 px-3 py-2 text-xs font-semibold leading-6 themed-text" data-testid="commission-capacity">
-              Saldo {formatRupiah(amount)} cukup untuk pesanan tunai senilai sekitar{" "}
-              {formatRupiah(Math.floor((amount * 100) / options.commissionPercent))}.
+              Saldo {formatRupiah(amount)} cukup untuk menerima pesanan tunai.
             </p>
           ) : null}
         </dl>
