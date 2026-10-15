@@ -9,7 +9,9 @@ import {
   TOPUP_ORDER_KEY,
   TOPUP_TARGETS,
   TOPUP_TARGET_KEY,
+  TopUpMethodId,
   TopUpOptions,
+  TopUpQuote,
   TopUpTarget,
   createManualTopUp,
   createOnlineTopUp,
@@ -33,9 +35,12 @@ export default function AmountForm() {
   // undefined = belum dimuat; null = gagal dimuat (kembali ke transfer manual seperti semula).
   const [options, setOptions] = useState<TopUpOptions | null | undefined>(PREVIEW_MODE ? null : undefined);
 
+  // Penawaran harga per metode untuk nominal ini (dari server); null selama belum dimuat atau server lama.
+  const [quotes, setQuotes] = useState<TopUpQuote[] | null>(null);
+  const [method, setMethod] = useState<TopUpMethodId | null>(null);
+
   const config = TOPUP_TARGETS[target];
   const online = options?.online === true;
-  const fee = online ? options!.onlineFee : 0;
   const minimum = options?.minimum?.[target] ?? config.min;
   const maximum = options?.maximum ?? TOPUP_MAX_AMOUNT;
   const unavailable = options != null && !options.online && !options.manualTransfer;
@@ -68,7 +73,37 @@ export default function AmountForm() {
   }
 
   const amount = custom.trim() ? Number(custom.replace(/[^0-9]/g, "")) : selected;
-  const valid = Number.isFinite(amount) && amount >= minimum && amount <= maximum && !unavailable && options !== undefined;
+  const amountOk = Number.isFinite(amount) && amount >= minimum && amount <= maximum;
+
+  // Muat penawaran harga tiap metode setiap kali nominal atau tujuan berubah (jeda singkat saat mengetik).
+  useEffect(() => {
+    if (PREVIEW_MODE || !online || !amountOk || !options?.methods?.length) {
+      setQuotes(null);
+      return;
+    }
+    let alive = true;
+    const timer = window.setTimeout(() => {
+      getTopUpOptions(readSession(TOKEN_KEY), { amount, target })
+        .then((result) => {
+          if (!alive) return;
+          setQuotes(result.quotes ?? null);
+          // Pertahankan metode pilihan bila masih tersedia; selain itu pakai yang pertama.
+          setMethod((current) => (result.quotes?.some((q) => q.method === current) ? current : (result.quotes?.[0]?.method ?? null)));
+        })
+        .catch(() => (alive ? setQuotes(null) : undefined));
+    }, 250);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [online, amountOk, amount, target, options]);
+
+  const quote = quotes?.find((item) => item.method === method) ?? null;
+  // Server lama (tanpa metode): satu biaya tunggal. Server baru: biaya metode terpilih.
+  const hasMethods = (options?.methods?.length ?? 0) > 0;
+  const fee = !online ? 0 : hasMethods ? (quote?.fee ?? 0) : (options?.onlineFee ?? 0);
+  const quoteReady = !hasMethods || quote !== null;
+  const valid = amountOk && !unavailable && options !== undefined && (!online || quoteReady);
   const total = (amount || 0) + fee;
 
   async function onContinue() {
@@ -82,7 +117,7 @@ export default function AmountForm() {
       }
       const token = readSession(TOKEN_KEY);
       if (online) {
-        const order = await createOnlineTopUp(token, amount, target);
+        const order = await createOnlineTopUp(token, amount, target, hasMethods && method ? method : undefined);
         if (!isSafePaymentUrl(order.redirectUrl)) {
           throw new Error("Halaman pembayaran belum dapat dibuka. Coba lagi beberapa saat lagi.");
         }
@@ -174,6 +209,40 @@ export default function AmountForm() {
         </p>
       ) : null}
 
+      {online && hasMethods && amountOk ? (
+        <div className="mt-6" data-testid="method-picker">
+          <p className="text-xs font-bold uppercase tracking-wider themed-text-muted">Bayar dengan</p>
+          <div role="radiogroup" aria-label="Metode pembayaran" className="mt-3 space-y-2.5">
+            {options!.methods!.map((item) => {
+              const itemQuote = quotes?.find((q) => q.method === item.id);
+              const active = method === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  data-testid={`method-${item.id}`}
+                  onClick={() => setMethod(item.id)}
+                  className={[
+                    "flex w-full items-center justify-between gap-4 rounded-2xl border-2 px-4 py-3.5 text-left transition",
+                    active ? "border-brand-gold bg-brand-gold/10 shadow-lg" : "themed-border themed-card-bg hover:border-white/20"
+                  ].join(" ")}
+                >
+                  <span>
+                    <span className={`block text-sm font-black ${active ? "themed-accent" : "themed-text"}`}>{item.label}</span>
+                    <span className="mt-0.5 block text-xs themed-text-muted">{item.description}</span>
+                  </span>
+                  <span className="shrink-0 text-right text-xs font-bold themed-text">
+                    {itemQuote ? `Biaya ${formatRupiah(itemQuote.fee)}` : "…"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
       {online && amount > 0 ? (
         <dl
           className="mt-6 space-y-2.5 rounded-2xl border themed-border themed-card-bg px-4 py-4 text-sm"
@@ -193,6 +262,9 @@ export default function AmountForm() {
           </div>
           <p className="pt-1 text-xs leading-6 themed-text-muted">
             Saldo bertambah sebesar {formatRupiah(amount)}. Biaya layanan dipungut penyedia pembayaran dan tidak masuk ke saldo.
+            {target === "WALLET" && options?.walletFeeCap
+              ? ` Untuk Saldo TapGo, biaya layanan paling banyak ${formatRupiah(options.walletFeeCap)}; selebihnya ditanggung TapGo.`
+              : ""}
           </p>
         </dl>
       ) : null}

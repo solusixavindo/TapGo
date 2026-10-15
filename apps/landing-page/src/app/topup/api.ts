@@ -76,8 +76,9 @@ export const TOPUP_TARGETS: Record<
     short: "Driver dan perjalanan",
     description:
       "Untuk mitra driver (komisi pesanan tunai dipotong dari saldo ini) dan pembayaran perjalanan.",
-    min: 50000,
-    quick: [50000, 100000, 200000, 500000, 1000000]
+    // Rp25.000 tetap tersedia; Rp50.000 dipilihkan lebih dulu (indeks 1 di bawah).
+    min: 25000,
+    quick: [25000, 50000, 100000, 200000, 500000]
   },
   PPOB: {
     label: "Saldo PPOB",
@@ -140,17 +141,33 @@ export const PREVIEW_MANUAL_TOPUP: ManualTopUpOrder = {
   bank: { bankName: "BRI", accountNumber: "0000000000", accountHolder: "PT Contoh" }
 };
 
-/** Opsi top up dari server: apakah bayar online dibuka, biayanya, batas nominal, dan transfer manual. */
+/** Metode bayar online. Biaya tiap metode berbeda, jadi pelanggan memilih metode sebelum pesanan dibuat. */
+export type TopUpMethodId = "bank_transfer" | "gopay" | "qris" | "dana";
+
+export type TopUpMethodInfo = { id: TopUpMethodId; label: string; description: string };
+
+/** Penawaran harga satu metode untuk nominal dan tujuan tertentu: biaya layanan dan total yang dibayar. */
+export type TopUpQuote = { method: TopUpMethodId; fee: number; gross: number };
+
+/** Opsi top up dari server: apakah bayar online dibuka, metode dan biayanya, batas nominal, dan transfer manual. */
 export type TopUpOptions = {
   online: boolean;
+  /** Biaya transfer bank penuh; dipakai hanya bila server belum mengirim `quotes` (server lama). */
   onlineFee: number;
+  /** Tidak ada pada server lama: halaman kembali ke satu biaya tunggal tanpa pilihan metode. */
+  methods?: TopUpMethodInfo[];
+  quotes?: TopUpQuote[];
+  /** Batas biaya layanan Saldo TapGo; selisihnya ditanggung TapGo. */
+  walletFeeCap?: number;
   minimum: Record<TopUpTarget, number>;
   maximum: number;
   manualTransfer: boolean;
 };
 
-export async function getTopUpOptions(token: string): Promise<TopUpOptions> {
-  return request<TopUpOptions>("/web/wallet/topup/options", {
+/** Bila `amount` dan `target` diberikan, server menyertakan penawaran harga per metode. */
+export async function getTopUpOptions(token: string, quote?: { amount: number; target: TopUpTarget }): Promise<TopUpOptions> {
+  const query = quote ? `?amount=${encodeURIComponent(String(quote.amount))}&target=${quote.target}` : "";
+  return request<TopUpOptions>(`/web/wallet/topup/options${query}`, {
     headers: { authorization: `Bearer ${token}` }
   });
 }
@@ -159,6 +176,7 @@ export type OnlineTopUp = {
   id: string;
   reference: string;
   target: TopUpTarget;
+  method?: TopUpMethodId | null;
   baseAmount: number;
   feeAmount: number;
   grossAmount: number;
@@ -166,11 +184,16 @@ export type OnlineTopUp = {
 };
 
 /** Top up online: nominal + biaya layanan ditagih sekali; saldo bertambah sebesar nominal saja. */
-export async function createOnlineTopUp(token: string, amount: number, target: TopUpTarget): Promise<OnlineTopUp> {
+export async function createOnlineTopUp(
+  token: string,
+  amount: number,
+  target: TopUpTarget,
+  method?: TopUpMethodId
+): Promise<OnlineTopUp> {
   return request<OnlineTopUp>("/web/wallet/topup/online", {
     method: "POST",
     headers: { authorization: `Bearer ${token}` },
-    body: JSON.stringify({ amount, target })
+    body: JSON.stringify({ amount, target, ...(method ? { method } : {}) })
   });
 }
 
