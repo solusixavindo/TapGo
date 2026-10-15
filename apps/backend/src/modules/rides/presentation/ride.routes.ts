@@ -6,7 +6,7 @@ import { prisma } from "../../../config/prisma.js";
 import { AppError } from "../../../core/errors/AppError.js";
 import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
-import { requireAuth, requireRoles } from "../../../core/security/authContext.js";
+import { requireAuth, requireChannel, requireRoles } from "../../../core/security/authContext.js";
 import { maskForOperator } from "../../../core/security/adminMasking.js";
 import {
   faceCheckRateLimiter,
@@ -115,7 +115,7 @@ function idempotencyKeyOf(headerValue: unknown): string | undefined {
 // Penumpang — /api/v1/rides
 // ---------------------------------------------------------------------------
 
-rideRouter.use(requireAuth);
+rideRouter.use(requireAuth, requireChannel("APP"));
 
 rideRouter.post(
   "/quotes",
@@ -231,7 +231,7 @@ rideRouter.post(
 // state database terkini (User.status + RideDriverProfile.status). Dengan ini
 // suspend/reject berlaku SEKETIKA walau access token lama masih valid, dan
 // ADMIN/SUPER_ADMIN tidak mendapat bypass ke route operasional driver.
-driverRideRouter.use(requireAuth, createRequireDriverCapability(prisma));
+driverRideRouter.use(requireAuth, requireChannel("APP"), createRequireDriverCapability(prisma));
 
 // Hanya MEMBACA availability profil dari database; tidak menulis apa pun. Klien
 // memakainya agar kartu beranda mengikuti server (bukan memori aplikasi) saat

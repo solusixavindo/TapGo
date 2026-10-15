@@ -8,7 +8,7 @@ import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { parseBuildNumber } from "../../../core/http/legacyMobileClientGate.js";
 import { logger } from "../../../core/logger/logger.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
-import { requireAuth } from "../../../core/security/authContext.js";
+import { requireAuth, requireChannel } from "../../../core/security/authContext.js";
 import { paymentRateLimiter } from "../../../core/security/rateLimit.js";
 import { PpobService } from "../application/PpobService.js";
 import { POSTPAID_CATEGORIES, PpobProviderGateway } from "../domain/ppobProvider.js";
@@ -304,7 +304,9 @@ function requireIdempotencyKey(req: Request): string {
 
 export const ppobRouter = Router();
 
-ppobRouter.use(requireAuth);
+// Kanal APP saja: halaman web (upgrade/top up/mitra) tidak pernah memanggil rute PPOB. Token WEB hidup di sessionStorage
+// peramban (permukaan serangan lebih luas), jadi tidak boleh bisa membeli produk dari saldo.
+ppobRouter.use(requireAuth, requireChannel("APP"));
 
 // ---- Kontrak klien R2: /catalog ----
 ppobRouter.get("/catalog", asyncHandler(async (_req, res) => {

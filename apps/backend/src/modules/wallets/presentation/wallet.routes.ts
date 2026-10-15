@@ -2,7 +2,7 @@ import { Router } from "express";
 import { prisma } from "../../../config/prisma.js";
 import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
-import { requireAuth, requireRoles } from "../../../core/security/authContext.js";
+import { requireAuth, requireChannel, requireRoles } from "../../../core/security/authContext.js";
 import { maskForOperator } from "../../../core/security/adminMasking.js";
 import { verifyPassword } from "../../../core/security/passwordHasher.js";
 import { walletTransferRateLimiter, withdrawalRateLimiter } from "../../../core/security/rateLimit.js";
@@ -44,15 +44,16 @@ walletRouter.use(requireAuth);
 walletRouter.get("/", asyncHandler(controller.wallet));
 walletRouter.get("/transactions", validateRequest(walletTransactionQuerySchema), asyncHandler(controller.transactions));
 walletRouter.get("/bank-account", asyncHandler(controller.bankAccount));
-walletRouter.put("/bank-account", validateRequest(bankAccountSchema), asyncHandler(controller.updateBankAccount));
+walletRouter.put("/bank-account", requireChannel("APP"), validateRequest(bankAccountSchema), asyncHandler(controller.updateBankAccount));
 walletRouter.get("/withdrawals", validateRequest(walletTransactionQuerySchema), asyncHandler(controller.withdrawals));
-walletRouter.post("/withdrawals", withdrawalRateLimiter, validateRequest(withdrawalRequestSchema), asyncHandler(controller.requestWithdrawal));
+walletRouter.post("/withdrawals", requireChannel("APP"), withdrawalRateLimiter, validateRequest(withdrawalRequestSchema), asyncHandler(controller.requestWithdrawal));
 walletRouter.get("/withdraws", validateRequest(walletTransactionQuerySchema), asyncHandler(controller.withdrawals));
-walletRouter.post("/withdraw", withdrawalRateLimiter, validateRequest(withdrawalRequestSchema), asyncHandler(controller.requestWithdrawal));
+walletRouter.post("/withdraw", requireChannel("APP"), withdrawalRateLimiter, validateRequest(withdrawalRequestSchema), asyncHandler(controller.requestWithdrawal));
 
 walletRouter.get("/transfers", validateRequest(transferListSchema), asyncHandler(controller.transfers));
 walletRouter.post(
   "/transfer",
+  requireChannel("APP"),
   walletTransferRateLimiter,
   validateRequest(transferRequestSchema),
   asyncHandler(controller.transfer)
