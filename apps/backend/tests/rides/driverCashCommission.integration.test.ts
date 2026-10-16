@@ -47,6 +47,7 @@ describe.skipIf(!runIntegration)("Komisi pesanan tunai dari saldo driver (D4)", 
 
   afterAll(() => {
     backendEnv.DRIVER_COMMISSION_ENABLED = false;
+    backendEnv.DRIVER_MIN_CASH_BALANCE = 0;
   });
 
   beforeEach(async () => {
@@ -54,6 +55,7 @@ describe.skipIf(!runIntegration)("Komisi pesanan tunai dari saldo driver (D4)", 
     await seedMemberships();
     backendEnv.DRIVER_COMMISSION_ENABLED = true;
     backendEnv.DRIVER_COMMISSION_PERCENT = 8;
+    backendEnv.DRIVER_MIN_CASH_BALANCE = 0;
     await prisma.rideEvent.deleteMany();
     await prisma.rideDriverLocation.deleteMany();
     await prisma.rideOrder.deleteMany();
@@ -526,6 +528,97 @@ describe.skipIf(!runIntegration)("Komisi pesanan tunai dari saldo driver (D4)", 
       where: { walletId: (await walletOf(loser.user.id)).id, referenceType: "RIDE_COMMISSION_FEE" }
     });
     expect(loserHolds).toHaveLength(0);
+  });
+
+  describe("saldo minimal untuk menerima pesanan tunai (DRIVER_MIN_CASH_BALANCE, dihitung SEBELUM komisi ditahan)", () => {
+    it("saldo di bawah batas ditolak 402 RIDE_CASH_MIN_BALANCE walau cukup untuk komisi; saldo tidak berubah; pesanan tetap terbuka", async () => {
+      backendEnv.DRIVER_MIN_CASH_BALANCE = 50_000;
+      const { user } = await createDriver();
+      await fund(user.id, 49_999);
+      const { order } = await createOrder(north(1)); // komisi hanya 720, tetapi saldo < 50.000
+      await expect(service().acceptOrder({ userId: user.id, publicReference: order.publicReference })).rejects.toMatchObject({
+        code: "RIDE_CASH_MIN_BALANCE",
+        statusCode: 402
+      });
+      expect((await walletOf(user.id)).balance.toString()).toBe("49999");
+      expect((await prisma.rideOrder.findUniqueOrThrow({ where: { id: order.id } })).status).toBe("SEARCHING_DRIVER");
+      expect(await prisma.walletTransaction.count()).toBe(0);
+    });
+
+    it("pesan menyebut batas dan saldo driver", async () => {
+      backendEnv.DRIVER_MIN_CASH_BALANCE = 50_000;
+      const { user } = await createDriver();
+      await fund(user.id, 25_000);
+      const { order } = await createOrder(north(1));
+      const error = await service().acceptOrder({ userId: user.id, publicReference: order.publicReference }).catch((e: Error) => e);
+      expect((error as Error).message).toContain("minimal Rp50.000");
+      expect((error as Error).message).toContain("Rp25.000");
+    });
+
+    it("saldo tepat 50.000 boleh; batas dihitung sebelum komisi, sehingga sisa 49.280 dan penerimaan berikutnya ditolak", async () => {
+      backendEnv.DRIVER_MIN_CASH_BALANCE = 50_000;
+      const { user } = await createDriver();
+      await fund(user.id, 50_000);
+      const first = await createOrder(north(1));
+      await service().acceptOrder({ userId: user.id, publicReference: first.order.publicReference });
+      expect((await walletOf(user.id)).balance.toString()).toBe("49280");
+      // Pesanan pertama selesai/dibatalkan agar driver bebas; di sini cukup dibatalkan driver (hold kembali utuh).
+      await service().cancelByDriver({ userId: user.id, publicReference: first.order.publicReference, reason: "OTHER" });
+      expect((await walletOf(user.id)).balance.toString()).toBe("50000");
+      // Terima lagi lalu selesaikan: sisa 49.280 < 50.000, jadi pesanan tunai kedua ditolak.
+      const second = await createOrder(north(1));
+      await service().acceptOrder({ userId: user.id, publicReference: second.order.publicReference });
+      await drive(user.id, second.order.publicReference);
+      expect((await walletOf(user.id)).balance.toString()).toBe("49280");
+      const third = await createOrder(north(1));
+      await expect(service().acceptOrder({ userId: user.id, publicReference: third.order.publicReference })).rejects.toMatchObject({
+        code: "RIDE_CASH_MIN_BALANCE"
+      });
+    });
+
+    it("dua penerimaan serentak dengan saldo tepat di batas: hanya satu yang menahan komisi", async () => {
+      backendEnv.DRIVER_MIN_CASH_BALANCE = 50_000;
+      const { user } = await createDriver();
+      await fund(user.id, 50_000);
+      const a = await createOrder(north(1));
+      const b = await createOrder(north(1));
+      const results = await Promise.allSettled([
+        service().acceptOrder({ userId: user.id, publicReference: a.order.publicReference }),
+        service().acceptOrder({ userId: user.id, publicReference: b.order.publicReference })
+      ]);
+      expect(results.filter((r) => r.status === "fulfilled").length).toBeLessThanOrEqual(1);
+      expect(Number((await walletOf(user.id)).balance)).toBeGreaterThanOrEqual(49_280);
+    });
+
+    it("batas 0 = mati: saldo kecil tetap boleh asal cukup untuk komisi", async () => {
+      backendEnv.DRIVER_MIN_CASH_BALANCE = 0;
+      const { user } = await createDriver();
+      await fund(user.id, 1_000);
+      const { order } = await createOrder(north(1));
+      await service().acceptOrder({ userId: user.id, publicReference: order.publicReference });
+      expect((await walletOf(user.id)).balance.toString()).toBe("280");
+    });
+
+    it("komisi mati: batas tidak berlaku sama sekali", async () => {
+      backendEnv.DRIVER_COMMISSION_ENABLED = false;
+      backendEnv.DRIVER_MIN_CASH_BALANCE = 50_000;
+      const { user } = await createDriver();
+      const { order } = await createOrder(north(1));
+      await service().acceptOrder({ userId: user.id, publicReference: order.publicReference });
+      expect((await prisma.rideOrder.findUniqueOrThrow({ where: { id: order.id } })).status).not.toBe("SEARCHING_DRIVER");
+    });
+
+    it("ringkasan saldo menyertakan batas dan ambang peringatan (0 bila komisi mati)", async () => {
+      backendEnv.DRIVER_MIN_CASH_BALANCE = 50_000;
+      const { user } = await createDriver();
+      const on = await service().walletSummary(user.id);
+      expect(on.minCashBalance).toBe(50_000);
+      expect(on.lowBalanceWarnAt).toBe(10_000);
+      backendEnv.DRIVER_COMMISSION_ENABLED = false;
+      const off = await service().walletSummary(user.id);
+      expect(off.minCashBalance).toBe(0);
+      expect(off.lowBalanceWarnAt).toBe(0);
+    });
   });
 
   it("flag mati: perilaku lama — tanpa dompet pun bisa terima, tidak ada potongan", async () => {

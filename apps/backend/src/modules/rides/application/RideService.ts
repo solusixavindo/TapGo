@@ -1063,6 +1063,10 @@ export class RideService {
       balance: wallet?.balance.toNumber() ?? 0,
       commissionEnabled: env.DRIVER_COMMISSION_ENABLED,
       commissionPercent: env.DRIVER_COMMISSION_PERCENT,
+      // Saldo minimal untuk menerima pesanan tunai; 0 = tanpa batas.
+      minCashBalance: env.DRIVER_COMMISSION_ENABLED ? env.DRIVER_MIN_CASH_BALANCE : 0,
+      // Saldo pada/di bawah angka ini = aplikasi menampilkan peringatan isi saldo; 0 = tanpa peringatan.
+      lowBalanceWarnAt: env.DRIVER_COMMISSION_ENABLED ? env.DRIVER_LOW_BALANCE_WARN : 0,
       topUpUrl: "https://tapgolion.id/topup",
       entries: rows.map((r) => {
         const isFee = r.referenceType === "RIDE_COMMISSION_FEE";
@@ -2498,6 +2502,9 @@ export class RideService {
       select: { id: true, balance: true, cashBalance: true },
     });
     const fromCash = Prisma.Decimal.min(fee, wallet.cashBalance);
+    // Saldo minimal untuk menerima pesanan tunai: dihitung dari saldo SEBELUM komisi ditahan. Dibaca dari wallet yang sama
+    // dengan compare-and-set di bawah, jadi tidak bisa dilewati lewat dua penerimaan serentak.
+    this.assertCashMinimumBalance(wallet.balance);
     // Kurang dari bacaan ini saja sudah pasti kurang — ditolak SEBELUM
     // updateMany, supaya tidak pernah mencoba tulisan yang dijamin melanggar
     // CHECK constraint (L1) hanya untuk menangkap errornya belakangan.
@@ -2528,6 +2535,7 @@ export class RideService {
     });
     if (applied.count !== 1) {
       const fresh = await tx.wallet.findUniqueOrThrow({ where: { id: wallet.id }, select: { balance: true } });
+      this.assertCashMinimumBalance(fresh.balance);
       if (fresh.balance.lt(fee)) {
         const shortBy = fee.minus(fresh.balance).toNumber();
         throw new AppError(
@@ -2558,6 +2566,18 @@ export class RideService {
         },
       },
     });
+  }
+
+  /** Menolak penerimaan pesanan tunai bila saldo driver di bawah DRIVER_MIN_CASH_BALANCE (0 = tanpa batas). */
+  private assertCashMinimumBalance(balance: Prisma.Decimal) {
+    const minimum = env.DRIVER_MIN_CASH_BALANCE;
+    if (minimum > 0 && balance.lt(minimum)) {
+      throw new AppError(
+        `Untuk menerima pesanan tunai, Saldo TapGo Anda minimal Rp${minimum.toLocaleString("id-ID")} (saldo Anda Rp${balance.toNumber().toLocaleString("id-ID")}). Isi saldo di tapgolion.id lalu coba lagi.`,
+        StatusCodes.PAYMENT_REQUIRED,
+        "RIDE_CASH_MIN_BALANCE",
+      );
+    }
   }
 
   private async findCommissionHold(tx: Prisma.TransactionClient, orderId: string) {

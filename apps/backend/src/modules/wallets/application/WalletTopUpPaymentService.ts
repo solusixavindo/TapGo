@@ -157,6 +157,9 @@ export class WalletTopUpPaymentService {
       // Persen komisi pesanan tunai, hanya untuk driver dan hanya bila komisi menyala: halaman top up memakainya untuk
       // menunjukkan seberapa banyak pesanan tunai yang dibuka oleh saldo yang diisi (nilai riil biaya Rp2.500 bagi driver).
       commissionPercent: payerIsDriver && env.DRIVER_COMMISSION_ENABLED ? env.DRIVER_COMMISSION_PERCENT : null,
+      // Saldo minimal untuk menerima pesanan tunai (rupiah); null bila tidak berlaku (bukan driver, komisi mati, atau tanpa batas).
+      cashOrderMinBalance:
+        payerIsDriver && env.DRIVER_COMMISSION_ENABLED && env.DRIVER_MIN_CASH_BALANCE > 0 ? env.DRIVER_MIN_CASH_BALANCE : null,
       minimum: { WALLET: minimumAmountFor("WALLET"), PPOB: minimumAmountFor("PPOB") },
       maximum: env.MANUAL_TOPUP_MAX_AMOUNT,
     };

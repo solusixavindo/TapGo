@@ -134,7 +134,7 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
       ((await (await api("/api/v1/web/wallet/topup/options?amount=25000&target=WALLET", { token: tokenFor(user, "WEB") })).json()) as {
         data: { commissionPercent: number | null };
       }).data.commissionPercent;
-    const saved = { enabled: backendEnv.DRIVER_COMMISSION_ENABLED, percent: backendEnv.DRIVER_COMMISSION_PERCENT };
+    const saved = { enabled: backendEnv.DRIVER_COMMISSION_ENABLED, percent: backendEnv.DRIVER_COMMISSION_PERCENT, min: backendEnv.DRIVER_MIN_CASH_BALANCE };
     try {
       backendEnv.DRIVER_COMMISSION_ENABLED = true;
       backendEnv.DRIVER_COMMISSION_PERCENT = 8;
@@ -142,9 +142,25 @@ describe.skipIf(!runIntegration)("Online wallet top up (fee borne by the custome
       expect(await read(passenger)).toBeNull();
       backendEnv.DRIVER_COMMISSION_ENABLED = false;
       expect(await read(driver)).toBeNull();
+
+      // Saldo minimal untuk menerima pesanan tunai: hanya driver, hanya bila komisi menyala dan batasnya > 0.
+      const readMin = async (user: User) =>
+        ((await (await api("/api/v1/web/wallet/topup/options?amount=25000&target=WALLET", { token: tokenFor(user, "WEB") })).json()) as {
+          data: { cashOrderMinBalance: number | null };
+        }).data.cashOrderMinBalance;
+      backendEnv.DRIVER_COMMISSION_ENABLED = true;
+      backendEnv.DRIVER_MIN_CASH_BALANCE = 50_000;
+      expect(await readMin(driver)).toBe(50_000);
+      expect(await readMin(passenger)).toBeNull();
+      backendEnv.DRIVER_MIN_CASH_BALANCE = 0;
+      expect(await readMin(driver)).toBeNull();
+      backendEnv.DRIVER_COMMISSION_ENABLED = false;
+      backendEnv.DRIVER_MIN_CASH_BALANCE = 50_000;
+      expect(await readMin(driver)).toBeNull();
     } finally {
       backendEnv.DRIVER_COMMISSION_ENABLED = saved.enabled;
       backendEnv.DRIVER_COMMISSION_PERCENT = saved.percent;
+      backendEnv.DRIVER_MIN_CASH_BALANCE = saved.min;
     }
   });
 
