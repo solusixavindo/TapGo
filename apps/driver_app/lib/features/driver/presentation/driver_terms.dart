@@ -155,7 +155,7 @@ const List<DriverTermsSection> kDriverTermsSections = [
     title: '7. Komisi, saldo, dan pembayaran',
     groups: [
       DriverTermsGroup(items: [
-        'Pesanan tunai: komisi (saat ini 8% dari tarif, dibulatkan ke atas) ditahan dari Saldo TapGo saat Anda menerima pesanan. Untuk menerima pesanan tunai, Saldo TapGo Anda harus minimal Rp50.000 saat pesanan diterima (dihitung sebelum komisi ditahan; angka yang berlaku tampil di aplikasi). Saldo di bawah batas itu, atau yang kurang untuk komisinya, membuat pesanan tunai tidak dapat diterima. Pesanan dibatalkan: komisi dikembalikan. Pesanan selesai: komisi menjadi biaya final. Saat saldo hampir habis (Rp10.000 atau kurang), aplikasi memperingatkan Anda untuk mengisi saldo.',
+        'Pesanan tunai: komisi (saat ini 8% dari tarif, dibulatkan ke atas) ditahan dari Saldo TapGo saat Anda menerima pesanan. Untuk menerima pesanan tunai, Saldo TapGo Anda harus minimal Rp50.000 saat pesanan diterima (dihitung sebelum komisi ditahan; angka yang berlaku tampil di aplikasi). Saldo di bawah batas itu, atau yang kurang untuk komisinya, membuat pesanan tunai tidak dapat diterima. Pesanan dibatalkan: komisi dikembalikan. Pesanan selesai: komisi menjadi biaya final.',
         'Pesanan digital (TapGoPay): penumpang membayar lebih dulu. Saat pesanan selesai, tarif dikurangi komisi masuk ke saldo Anda dan dapat ditarik lewat tapgolion.id sesuai ketentuan penarikan. Pesanan dibatalkan: dana dikembalikan kepada penumpang.',
         'Saldo TapGo diisi lewat tapgolion.id. Biaya layanan pembayaran ditampilkan lebih dulu sebelum Anda membayar.',
         'Perubahan tarif atau komisi diumumkan lewat aplikasi sebelum berlaku.',

@@ -181,23 +181,6 @@ class _WalletCard extends StatelessWidget {
                 key: const ValueKey('wallet-commission-note'),
                 style: theme.textTheme.bodySmall,
               ),
-              if (wallet.isLowBalance || wallet.belowCashMinimum) ...[
-                const SizedBox(height: 8),
-                Container(
-                  key: const ValueKey('wallet-low-balance-warning'),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.errorContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    wallet.isLowBalance
-                        ? 'Saldo Anda hampir habis (${_rupiah(wallet.balance)}). Isi saldo agar tetap bisa menerima pesanan tunai.'
-                        : 'Saldo Anda ${_rupiah(wallet.balance)}, di bawah batas menerima pesanan tunai. Isi saldo untuk menerimanya.',
-                    style: TextStyle(color: theme.colorScheme.onErrorContainer),
-                  ),
-                ),
-              ],
             ],
             const SizedBox(height: 12),
             OutlinedButton.icon(

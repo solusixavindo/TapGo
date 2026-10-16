@@ -854,7 +854,6 @@ class DriverWalletSummary {
     required this.topUpUrl,
     required this.entries,
     this.minCashBalance = 0,
-    this.lowBalanceWarnAt = 0,
   });
 
   factory DriverWalletSummary.fromJson(Map<String, dynamic> json) {
@@ -865,7 +864,6 @@ class DriverWalletSummary {
       commissionPercent: _intOf(json['commissionPercent']) ?? 8,
       topUpUrl: _trustedTopUpUrl(json['topUpUrl']),
       minCashBalance: _intOf(json['minCashBalance']) ?? 0,
-      lowBalanceWarnAt: _intOf(json['lowBalanceWarnAt']) ?? 0,
       entries: raw is List
           ? raw
               .whereType<Map>()
@@ -883,17 +881,6 @@ class DriverWalletSummary {
 
   /// Saldo minimal untuk menerima pesanan tunai (0 = tanpa batas). Server yang menegakkan; ini hanya untuk tampilan.
   final int minCashBalance;
-
-  /// Saldo pada/di bawah angka ini memunculkan peringatan isi saldo (0 = tanpa peringatan).
-  final int lowBalanceWarnAt;
-
-  /// Peringatan isi saldo hanya berarti bila komisi menyala (tanpa komisi saldo tidak dipakai pesanan tunai).
-  bool get isLowBalance =>
-      commissionEnabled && lowBalanceWarnAt > 0 && balance <= lowBalanceWarnAt;
-
-  /// Saldo di bawah batas menerima pesanan tunai: tawaran tunai akan ditolak server.
-  bool get belowCashMinimum =>
-      commissionEnabled && minCashBalance > 0 && balance < minCashBalance;
 }
 
 class DriverEarningsSummary {
