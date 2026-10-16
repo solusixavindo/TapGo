@@ -1134,6 +1134,39 @@ export class RideService {
       acceptanceRate: totalOffers > 0 ? assignedEvents / totalOffers : null,
       completionRate: totalDecided > 0 ? completedOrders / totalDecided : null,
       cancellationRate: totalDecided > 0 ? cancelledOrders / totalDecided : null,
+      // Penilaian penumpang; null bila belum ada (bukan "5,0" palsu).
+      ratingAverage: profile.ratingCount > 0 ? Number(profile.ratingAverage) : null,
+      ratingCount: profile.ratingCount,
+    };
+  }
+
+  /**
+   * Penilaian yang diterima driver: rata-rata, sebaran bintang, dan ulasan terbaru.
+   * Identitas penumpang TIDAK ikut dikirim (hanya bintang, catatan, dan tanggal).
+   */
+  async listRatingsForDriver(userId: string, limit = 20) {
+    const profile = await this.requireDriverProfile(userId);
+    const take = Math.min(Math.max(Math.trunc(limit) || 20, 1), 50);
+    const [recent, grouped] = await Promise.all([
+      this.prisma.rideRating.findMany({
+        where: { driverProfileId: profile.id },
+        orderBy: { createdAt: "desc" },
+        take,
+        select: { stars: true, note: true, createdAt: true },
+      }),
+      this.prisma.rideRating.groupBy({
+        by: ["stars"],
+        where: { driverProfileId: profile.id },
+        _count: { _all: true },
+      }),
+    ]);
+    const distribution: Record<string, number> = { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 };
+    for (const row of grouped) distribution[String(row.stars)] = row._count._all;
+    return {
+      ratingAverage: profile.ratingCount > 0 ? Number(profile.ratingAverage) : null,
+      ratingCount: profile.ratingCount,
+      distribution,
+      recent,
     };
   }
 

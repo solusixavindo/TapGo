@@ -456,4 +456,64 @@ describeIntegration("sinyal penolakan dan penilaian perjalanan", () => {
       ).rejects.toThrow();
     });
   });
+
+  describe("penilaian yang diterima driver", () => {
+    it("driver melihat rata-rata, sebaran bintang, dan ulasan tanpa identitas penumpang", async () => {
+      const driver = await createDriverWithVehicle("Driver Dinilai");
+      const bobot = [5, 5, 4, 1];
+      for (const [index, stars] of bobot.entries()) {
+        const passenger = await createUser("USER", `Rahasia Penumpang ${index}`);
+        const order = await createOrder({
+          passengerId: passenger.id,
+          status: "COMPLETED",
+          driverProfileId: driver.profile.id,
+          vehicleId: driver.vehicle.id
+        });
+        const result = await rate(tokenFor(passenger), order.publicReference, {
+          stars,
+          ...(stars === 1 ? { note: "Terlambat jemput" } : {})
+        });
+        expect(result.status).toBe(201);
+      }
+
+      const performance = await api("/api/v1/driver/performance", tokenFor(driver.user));
+      expect(performance.body.data.ratingCount).toBe(4);
+      expect(performance.body.data.ratingAverage).toBeCloseTo(3.75, 2);
+
+      const ratings = await api("/api/v1/driver/ratings", tokenFor(driver.user));
+      expect(ratings.status).toBe(200);
+      expect(ratings.body.data.ratingCount).toBe(4);
+      expect(ratings.body.data.distribution).toEqual({ "1": 1, "2": 0, "3": 0, "4": 1, "5": 2 });
+      expect(ratings.body.data.recent).toHaveLength(4);
+      expect(ratings.body.data.recent.find((r: { stars: number }) => r.stars === 1).note).toBe("Terlambat jemput");
+      expect(ratings.raw).not.toContain("Rahasia Penumpang");
+      expect(ratings.raw).not.toMatch(/passenger/i);
+    });
+
+    it("driver tanpa penilaian mendapat null, bukan 5,0 palsu; driver lain tidak terlihat", async () => {
+      const driver = await createDriverWithVehicle("Driver Baru");
+      const other = await createDriverWithVehicle("Driver Lain");
+      const passenger = await createUser("USER");
+      const order = await createOrder({
+        passengerId: passenger.id,
+        status: "COMPLETED",
+        driverProfileId: other.profile.id,
+        vehicleId: other.vehicle.id
+      });
+      await rate(tokenFor(passenger), order.publicReference, { stars: 2 });
+
+      const mine = await api("/api/v1/driver/ratings", tokenFor(driver.user));
+      expect(mine.body.data.ratingAverage).toBeNull();
+      expect(mine.body.data.ratingCount).toBe(0);
+      expect(mine.body.data.recent).toEqual([]);
+      const performance = await api("/api/v1/driver/performance", tokenFor(driver.user));
+      expect(performance.body.data.ratingAverage).toBeNull();
+    });
+
+    it("bukan driver ditolak", async () => {
+      const passenger = await createUser("USER");
+      const response = await api("/api/v1/driver/ratings", tokenFor(passenger));
+      expect(response.status).toBe(403);
+    });
+  });
 });

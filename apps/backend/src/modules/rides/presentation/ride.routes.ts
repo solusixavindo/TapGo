@@ -303,6 +303,15 @@ driverRideRouter.get(
 );
 
 driverRideRouter.get(
+  "/ratings",
+  asyncHandler(async (req, res) => {
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    const data = await rideService.listRatingsForDriver(req.auth!.userId, limit);
+    res.json({ success: true, data });
+  }),
+);
+
+driverRideRouter.get(
   "/performance",
   asyncHandler(async (req, res) => {
     const data = await rideService.performanceSummary(req.auth!.userId);
