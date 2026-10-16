@@ -19,7 +19,7 @@ final driverPerformanceProvider =
 
 /// Kemajuan insentif harian. Galat atau tanpa aturan aktif = kartu tidak tampil (bukan layar galat).
 final driverIncentivesProvider =
-    FutureProvider.autoDispose<List<DriverIncentiveItem>>((ref) {
+    FutureProvider.autoDispose<DriverIncentiveProgress>((ref) {
   return ref.watch(driverRepositoryProvider).incentiveProgress();
 });
 
@@ -103,9 +103,9 @@ class _DriverEarningsScreenState extends ConsumerState<DriverEarningsScreen>
             ),
         const SizedBox(height: 16),
         ...ref.watch(driverIncentivesProvider).maybeWhen(
-              data: (items) => items.isEmpty
+              data: (progress) => progress.isEmpty
                   ? const <Widget>[]
-                  : [_IncentiveCard(items: items), const SizedBox(height: 16)],
+                  : [_IncentiveCard(progress: progress), const SizedBox(height: 16)],
               orElse: () => const <Widget>[],
             ),
         Wrap(
@@ -257,8 +257,8 @@ class _WalletCard extends StatelessWidget {
 
 /// Target perjalanan hari ini dan bonusnya. Hari dihitung WIB; bonus masuk otomatis ke saldo saat target tercapai.
 class _IncentiveCard extends StatelessWidget {
-  const _IncentiveCard({required this.items});
-  final List<DriverIncentiveItem> items;
+  const _IncentiveCard({required this.progress});
+  final DriverIncentiveProgress progress;
 
   @override
   Widget build(BuildContext context) {
@@ -278,9 +278,17 @@ class _IncentiveCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 4),
-            Text('Bonus masuk otomatis ke saldo saat target tercapai. Hari dihitung pukul 00.00 sampai 24.00 WIB.',
+            Text('Bonus masuk ke saldo setelah diverifikasi (paling lama ${progress.holdHours} jam sejak target tercapai). Hari dihitung pukul 00.00 sampai 24.00 WIB.',
                 style: theme.textTheme.bodySmall),
-            for (final item in items) ...[
+            if (progress.waitingCount > 0) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Menunggu verifikasi: ${_rupiah(progress.waitingAmount)}',
+                key: const ValueKey('incentive-waiting'),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ],
+            for (final item in progress.items) ...[
               const SizedBox(height: 14),
               Row(
                 children: [
@@ -291,7 +299,7 @@ class _IncentiveCard extends StatelessWidget {
                     '+${_rupiah(item.bonusAmount)}',
                     style: TextStyle(
                       fontWeight: FontWeight.w800,
-                      color: item.claimed ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                      color: item.isPaid ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -306,12 +314,16 @@ class _IncentiveCard extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                item.claimed
+                item.isPaid
                     ? 'Bonus sudah masuk ke saldo Anda'
-                    : item.budgetExhausted
-                        ? 'Kuota bonus hari ini sudah habis'
-                        : '${item.tripCount} dari ${item.targetTrips} perjalanan'
-                            '${item.minTripFare > 0 ? ' (tarif minimal ${_rupiah(item.minTripFare)})' : ''}',
+                    : item.isWaiting
+                        ? 'Target tercapai. Bonus sedang diverifikasi dan akan masuk ke saldo'
+                        : item.isDenied
+                            ? 'Bonus tidak dibayarkan karena tidak lolos verifikasi'
+                            : item.budgetExhausted
+                                ? 'Kuota bonus hari ini sudah habis'
+                                : '${item.tripCount} dari ${item.targetTrips} perjalanan'
+                                    '${item.minTripFare > 0 ? ' (tarif minimal ${_rupiah(item.minTripFare)})' : ''}',
                 key: ValueKey('incentive-status-${item.name}'),
                 style: theme.textTheme.bodySmall,
               ),

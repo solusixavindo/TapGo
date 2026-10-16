@@ -1088,13 +1088,16 @@ class DriverSupportTicket {
 
 
 /// Satu aturan insentif harian beserta kemajuan driver hari ini (GET /driver/incentives).
+///
+/// `claimStatus`: null = target belum tercapai; PENDING/REVIEW = tercapai, menunggu verifikasi; PAID = sudah masuk saldo;
+/// REJECTED/REVERSED = tidak dibayarkan. Bonus tidak pernah langsung masuk saldo (masa tahan + verifikasi ulang).
 class DriverIncentiveItem {
   const DriverIncentiveItem({
     required this.name,
     required this.targetTrips,
     required this.bonusAmount,
     required this.tripCount,
-    required this.claimed,
+    this.claimStatus,
     this.minTripFare = 0,
     this.budgetExhausted = false,
   });
@@ -1105,7 +1108,7 @@ class DriverIncentiveItem {
       targetTrips: _intOf(json['targetTrips']) ?? 0,
       bonusAmount: _intOf(json['bonusAmount']) ?? 0,
       tripCount: _intOf(json['tripCount']) ?? 0,
-      claimed: json['claimed'] == true,
+      claimStatus: json['claimStatus']?.toString(),
       minTripFare: _intOf(json['minTripFare']) ?? 0,
       budgetExhausted: json['budgetExhausted'] == true,
     );
@@ -1115,7 +1118,44 @@ class DriverIncentiveItem {
   final int targetTrips;
   final int bonusAmount;
   final int tripCount;
-  final bool claimed;
+  final String? claimStatus;
   final int minTripFare;
   final bool budgetExhausted;
+
+  bool get isPaid => claimStatus == 'PAID';
+  bool get isWaiting => claimStatus == 'PENDING' || claimStatus == 'REVIEW';
+  bool get isDenied => claimStatus == 'REJECTED' || claimStatus == 'REVERSED';
+}
+
+/// Kemajuan insentif hari ini plus bonus yang masih menunggu verifikasi (dari hari mana pun).
+class DriverIncentiveProgress {
+  const DriverIncentiveProgress({
+    this.items = const [],
+    this.waitingCount = 0,
+    this.waitingAmount = 0,
+    this.holdHours = 24,
+  });
+
+  factory DriverIncentiveProgress.fromJson(Map<String, dynamic> json) {
+    final raw = json['items'];
+    final waiting = json['waiting'];
+    return DriverIncentiveProgress(
+      items: raw is List
+          ? raw
+              .whereType<Map>()
+              .map((e) => DriverIncentiveItem.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
+      waitingCount: waiting is Map ? _intOf(waiting['count']) ?? 0 : 0,
+      waitingAmount: waiting is Map ? _intOf(waiting['amount']) ?? 0 : 0,
+      holdHours: _intOf(json['holdHours']) ?? 24,
+    );
+  }
+
+  final List<DriverIncentiveItem> items;
+  final int waitingCount;
+  final int waitingAmount;
+  final int holdHours;
+
+  bool get isEmpty => items.isEmpty && waitingCount == 0;
 }

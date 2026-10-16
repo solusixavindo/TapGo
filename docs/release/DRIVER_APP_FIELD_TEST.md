@@ -46,7 +46,7 @@ aturan tetap `DRIVER_APP_READINESS_PLAN.md`).
 | # | Skenario | Yang harus terjadi | Hasil | Catatan |
 |---|---|---|---|---|
 | 9 | Penilaian dua arah | Selesaikan satu perjalanan. Penumpang menilai driver 4 bintang. Di HP driver: panel "Bagaimana penumpang ini?" muncul, beri 5 bintang. Buka tab Pendapatan > Performa > Penilaian penumpang. | Panel hanya sekali per perjalanan; rata-rata dan ulasan tampil tanpa nama penumpang | |
-| 10 | Insentif harian | Di konsol buat aturan kecil (mis. 2 perjalanan, bonus Rp5.000, anggaran Rp50.000). Selesaikan 2 perjalanan di HP driver. | Kartu "Insentif hari ini" bergerak 1/2 lalu 2/2; bonus masuk saldo sekali, tampil di Riwayat saldo; konsol menampilkan "Hari ini: 1 driver" | | 
+| 10 | Insentif harian | Di konsol buat aturan kecil (mis. 2 perjalanan, bonus Rp5.000, anggaran Rp50.000). Selesaikan 2 perjalanan di HP driver. | Kartu "Insentif hari ini" bergerak 1/2 lalu 2/2 dan menampilkan "menunggu verifikasi"; di konsol klaim muncul (tab Menunggu masa tahan); SETELAH masa tahan (atau jatuh tempo dimajukan) bonus masuk saldo sekali dan tampil di Riwayat saldo. Pesanan dari akun sendiri / perjalanan < 3 menit / driver diam di tempat TIDAK dihitung | | 
 | 11 | Pusat Bantuan | Akun > Pusat Bantuan: buka satu pertanyaan, kirim pertanyaan lewat "Tanya TapGo", balas dari konsol admin. | Tiket muncul di daftar; balasan tim terlihat setelah tarik layar | |
 
 ## F2. Uang sungguhan — tiga langkah Owner

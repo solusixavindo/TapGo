@@ -29,8 +29,9 @@ Berpasangan dengan backend `tapgo-c3b62f4` (sudah aktif di produksi); komisi bar
 10. **Pusat Bantuan** (Akun > Bantuan): 8 pertanyaan umum (komisi, saldo minimal, isi saldo, penarikan, SOS, verifikasi wajah,
     tawaran tidak muncul, pembatalan) dan "Tanya TapGo" (tiket dengan balasan tim).
 11. **Insentif harian**: kartu "Insentif hari ini" di tab Pendapatan (target perjalanan, kemajuan, bonus). Bonus otomatis masuk ke
-    saldo yang dapat ditarik dan tampil di riwayat saldo. Aturan diatur Super Admin di konsol (Keuangan > Insentif Driver);
-    tanpa aturan aktif, kartu tidak tampil.
+    saldo yang dapat ditarik SETELAH diverifikasi (paling lama 24 jam; hanya perjalanan nyata yang dihitung) dan tampil di riwayat
+    saldo. Aturan diatur Super Admin di konsol (Keuangan > Insentif Driver); tanpa aturan aktif, kartu tidak tampil.
+12. **Jeda pembatalan berulang**: 3 pembatalan setelah pesanan diterima dalam 24 jam menjeda menerima pesanan 30 menit.
 
 Berpasangan dengan backend yang memuat dua migrasi baru (`ride_passenger_ratings`, `driver_incentives`). Tanpa backend itu,
 fitur Fase 2 diam (kartu tidak tampil, penilaian penumpang gagal dengan pesan, tiket tetap berfungsi).

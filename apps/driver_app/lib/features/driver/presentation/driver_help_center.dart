@@ -31,6 +31,12 @@ const _driverFaq = <(String, String)>[
         'dan rekening bank atas nama Anda. Penarikan tidak dilakukan di aplikasi ini.',
   ),
   (
+    'Kapan bonus insentif masuk ke saldo?',
+    'Bonus tidak langsung masuk. Saat target tercapai, bonus diverifikasi dulu (paling lama 24 jam) lalu masuk ke saldo yang dapat '
+        'ditarik. Yang dihitung hanya perjalanan nyata: berjalan minimal 3 menit, benar-benar berpindah tempat, dan dengan penumpang '
+        'yang berbeda. Pesanan rekayasa tidak dihitung dan dapat membuat bonus ditolak atau ditarik kembali.',
+  ),
+  (
     'Apa yang terjadi saat saya menekan SOS?',
     'Sinyal darurat beserta lokasi terakhir Anda dikirim ke tim TapGo yang memantau. Dalam bahaya langsung, hubungi 112 '
         'lebih dulu. Anda juga dapat menghubungi TapGo lewat WhatsApp pada menu ini.',
@@ -48,6 +54,7 @@ const _driverFaq = <(String, String)>[
   (
     'Apa dampak membatalkan pesanan?',
     'Pembatalan oleh driver mengurangi tingkat penyelesaian Anda dan dapat memengaruhi status akun bila terlalu sering. '
+        'Bila Anda membatalkan 3 pesanan yang sudah diterima dalam 24 jam, Anda dijeda menerima pesanan selama 30 menit. '
         'Batalkan hanya bila perlu, dan pilih alasan yang sesuai.',
   ),
 ];

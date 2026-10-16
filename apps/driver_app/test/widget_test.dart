@@ -3033,22 +3033,42 @@ void main() {
       expect(find.text('Belum ada penilaian'), findsOneWidget);
     });
 
-    testWidgets('kartu insentif harian: progres, bonus sudah masuk, dan kuota habis', (tester) async {
+    testWidgets('kartu insentif harian: progres, menunggu verifikasi, sudah masuk, ditolak, dan kuota habis', (tester) async {
       final repo = FakeDriverRepository(session: demoSession)
-        ..incentivesResult = const [
-          DriverIncentiveItem(name: 'Rajin 5', targetTrips: 5, bonusAmount: 25000, tripCount: 3, claimed: false, minTripFare: 8000),
-          DriverIncentiveItem(name: 'Pagi 2', targetTrips: 2, bonusAmount: 10000, tripCount: 2, claimed: true),
-          DriverIncentiveItem(name: 'Malam 8', targetTrips: 8, bonusAmount: 60000, tripCount: 1, claimed: false, budgetExhausted: true),
-        ];
+        ..incentivesResult = const DriverIncentiveProgress(
+          waitingCount: 1,
+          waitingAmount: 10000,
+          holdHours: 24,
+          items: [
+            DriverIncentiveItem(name: 'Rajin 5', targetTrips: 5, bonusAmount: 25000, tripCount: 3, minTripFare: 8000),
+            DriverIncentiveItem(name: 'Pagi 2', targetTrips: 2, bonusAmount: 10000, tripCount: 2, claimStatus: 'PENDING'),
+            DriverIncentiveItem(name: 'Siang 4', targetTrips: 4, bonusAmount: 30000, tripCount: 4, claimStatus: 'PAID'),
+            DriverIncentiveItem(name: 'Sore 6', targetTrips: 6, bonusAmount: 40000, tripCount: 6, claimStatus: 'REJECTED'),
+            DriverIncentiveItem(name: 'Malam 8', targetTrips: 8, bonusAmount: 60000, tripCount: 1, budgetExhausted: true),
+          ],
+        );
       await pumpDriver(tester, repo);
       await tester.tap(find.byIcon(Icons.savings_rounded));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('incentive-card')), findsOneWidget);
       expect(find.text('3 dari 5 perjalanan (tarif minimal Rp8.000)'), findsOneWidget);
+      expect(find.text('Target tercapai. Bonus sedang diverifikasi dan akan masuk ke saldo'), findsOneWidget);
       expect(find.text('Bonus sudah masuk ke saldo Anda'), findsOneWidget);
+      expect(find.text('Bonus tidak dibayarkan karena tidak lolos verifikasi'), findsOneWidget);
       expect(find.text('Kuota bonus hari ini sudah habis'), findsOneWidget);
-      expect(find.text('+Rp25.000'), findsOneWidget);
+      expect(find.text('Menunggu verifikasi: Rp10.000'), findsOneWidget);
+      expect(find.textContaining('paling lama 24 jam'), findsOneWidget);
+    });
+
+    testWidgets('bonus menunggu dari hari kemarin tetap tampil walau tidak ada aturan aktif hari ini', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession)
+        ..incentivesResult = const DriverIncentiveProgress(waitingCount: 1, waitingAmount: 25000);
+      await pumpDriver(tester, repo);
+      await tester.tap(find.byIcon(Icons.savings_rounded));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('incentive-waiting')), findsOneWidget);
+      expect(find.text('Menunggu verifikasi: Rp25.000'), findsOneWidget);
     });
 
     testWidgets('tanpa aturan aktif atau gagal memuat: kartu insentif tidak tampil dan halaman tetap normal', (tester) async {
@@ -4776,11 +4796,11 @@ class FakeDriverRepository implements DriverRepository {
   Object? performanceError;
   int performanceCalls = 0;
 
-  List<DriverIncentiveItem> incentivesResult = const [];
+  DriverIncentiveProgress incentivesResult = const DriverIncentiveProgress();
   Object? incentivesError;
 
   @override
-  Future<List<DriverIncentiveItem>> incentiveProgress() async {
+  Future<DriverIncentiveProgress> incentiveProgress() async {
     if (incentivesError != null) throw incentivesError!;
     return incentivesResult;
   }
