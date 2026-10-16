@@ -220,6 +220,29 @@ class DemoDriverRepository implements DriverRepository {
     );
   }
 
+  final List<DriverSupportTicket> _tickets = [];
+
+  @override
+  Future<List<DriverSupportTicket>> supportTickets() async => List.of(_tickets);
+
+  @override
+  Future<void> createSupportTicket({
+    required String category,
+    required String subject,
+    required String message,
+  }) async {
+    _tickets.insert(
+      0,
+      DriverSupportTicket(
+        reference: 'TKT-DEMO${_tickets.length + 1}',
+        subject: subject,
+        status: 'OPEN',
+        createdAt: DateTime.now(),
+        messages: [DriverTicketMessage(body: message, fromAdmin: false)],
+      ),
+    );
+  }
+
   @override
   Future<DriverRatingsSummary> ratingsSummary() async {
     return DriverRatingsSummary(

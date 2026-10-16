@@ -1521,6 +1521,13 @@ class DriverAccountScreen extends ConsumerWidget {
           title: 'Bantuan',
           rows: [
             _AccountRow(
+              key: const ValueKey('support-help-center'),
+              icon: Icons.help_outline_rounded,
+              title: 'Pusat Bantuan',
+              subtitle: 'Pertanyaan umum dan tanya TapGo',
+              onTap: () => _push(context, const DriverHelpCenterScreen()),
+            ),
+            _AccountRow(
               key: const ValueKey('support-whatsapp'),
               icon: Icons.chat_bubble_outline_rounded,
               title: 'Hubungi TapGo (WhatsApp)',

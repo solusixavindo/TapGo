@@ -56,6 +56,14 @@ abstract class DriverRepository {
   /// Penilaian penumpang: sebaran bintang dan ulasan terbaru.
   Future<DriverRatingsSummary> ratingsSummary();
 
+  /// Pusat Bantuan: tiket milik driver dan pembuatan tiket baru.
+  Future<List<DriverSupportTicket>> supportTickets();
+  Future<void> createSupportTicket({
+    required String category,
+    required String subject,
+    required String message,
+  });
+
   /// Ringkasan dokumen milik driver yang sedang masuk.
   Future<List<DriverDocumentSummary>> documents();
 

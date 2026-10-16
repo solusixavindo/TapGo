@@ -1022,3 +1022,61 @@ class DriverRatingsSummary {
   final Map<int, int> distribution;
   final List<DriverReview> recent;
 }
+
+
+/// Satu pesan dalam tiket bantuan. `fromAdmin` benar bila dibalas tim TapGo.
+class DriverTicketMessage {
+  const DriverTicketMessage({required this.body, required this.fromAdmin, this.createdAt});
+
+  factory DriverTicketMessage.fromJson(Map<String, dynamic> json) {
+    return DriverTicketMessage(
+      body: json['body']?.toString() ?? '',
+      fromAdmin: json['authorRole']?.toString() == 'ADMIN',
+      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
+    );
+  }
+
+  final String body;
+  final bool fromAdmin;
+  final DateTime? createdAt;
+}
+
+/// Tiket bantuan milik driver (GET /support/tickets).
+class DriverSupportTicket {
+  const DriverSupportTicket({
+    required this.reference,
+    required this.subject,
+    required this.status,
+    this.createdAt,
+    this.messages = const [],
+  });
+
+  factory DriverSupportTicket.fromJson(Map<String, dynamic> json) {
+    final messages = json['messages'];
+    return DriverSupportTicket(
+      reference: json['reference']?.toString() ?? '',
+      subject: json['subject']?.toString() ?? '',
+      status: json['status']?.toString() ?? 'OPEN',
+      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
+      messages: messages is List
+          ? messages
+              .whereType<Map>()
+              .map((e) => DriverTicketMessage.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
+    );
+  }
+
+  final String reference;
+  final String subject;
+  final String status;
+  final DateTime? createdAt;
+  final List<DriverTicketMessage> messages;
+
+  String get statusLabel => switch (status) {
+        'IN_PROGRESS' => 'Diproses',
+        'RESOLVED' => 'Selesai',
+        'CLOSED' => 'Ditutup',
+        _ => 'Terkirim',
+      };
+}

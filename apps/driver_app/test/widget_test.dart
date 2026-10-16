@@ -2053,6 +2053,96 @@ void main() {
     });
   });
 
+  group('Pusat Bantuan', () {
+    Future<void> openHelp(WidgetTester tester, FakeDriverRepository repo) async {
+      await pumpDriver(tester, repo);
+      await tester.tap(find.byIcon(Icons.person_rounded));
+      await tester.pumpAndSettle();
+      await tester.dragUntilVisible(
+        find.byKey(const ValueKey('support-help-center')),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tapReachable(tester, find.byKey(const ValueKey('support-help-center')));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> reveal(WidgetTester tester, Finder target) async {
+      await tester.dragUntilVisible(target, find.byKey(const ValueKey('help-scroll')), const Offset(0, -300));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('FAQ memuat aturan komisi dan saldo minimal sesuai server', (tester) async {
+      await openHelp(tester, FakeDriverRepository(session: demoSession));
+      expect(find.text('Pusat Bantuan'), findsWidgets);
+      await tester.tap(find.byKey(const ValueKey('faq-Berapa komisi TapGo dan bagaimana cara kerjanya?')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Komisi 8%'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('faq-Mengapa saya tidak bisa menerima pesanan tunai?')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('minimal Rp50.000'), findsOneWidget);
+      await reveal(tester, find.text('Belum ada pertanyaan'));
+      expect(find.text('Belum ada pertanyaan'), findsOneWidget);
+    });
+
+    testWidgets('driver mengirim pertanyaan; balasan tim tampil di tiket', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession)
+        ..ticketsResult = [
+          DriverSupportTicket(
+            reference: 'TKT-ABC123',
+            subject: 'Saldo belum masuk',
+            status: 'RESOLVED',
+            messages: const [
+              DriverTicketMessage(body: 'Top up saya belum masuk', fromAdmin: false),
+              DriverTicketMessage(body: 'Sudah kami cek, saldo sudah masuk.', fromAdmin: true),
+            ],
+          ),
+        ];
+      await openHelp(tester, repo);
+      await reveal(tester, find.byKey(const ValueKey('ticket-TKT-ABC123')));
+      await tester.tap(find.byKey(const ValueKey('ticket-TKT-ABC123')));
+      await tester.pumpAndSettle();
+      expect(find.text('Sudah kami cek, saldo sudah masuk.'), findsOneWidget);
+      expect(find.text('Tim TapGo'), findsOneWidget);
+
+      await tester.dragUntilVisible(
+        find.byKey(const ValueKey('help-new-ticket')),
+        find.byKey(const ValueKey('help-scroll')),
+        const Offset(0, 300),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('help-new-ticket')));
+      await tester.pumpAndSettle();
+      // Kosong ditolak lokal, tanpa menyentuh server.
+      await tester.tap(find.byKey(const ValueKey('ticket-submit')));
+      await tester.pumpAndSettle();
+      expect(find.text('Judul dan pesan wajib diisi.'), findsOneWidget);
+      expect(repo.createdTickets, isEmpty);
+
+      await tester.enterText(find.byKey(const ValueKey('ticket-subject')), 'Tidak ada tawaran');
+      await tester.enterText(find.byKey(const ValueKey('ticket-message')), 'Sudah online 1 jam');
+      await tester.tap(find.byKey(const ValueKey('ticket-submit')));
+      await tester.pumpAndSettle();
+      expect(repo.createdTickets, [('OTHER', 'Tidak ada tawaran', 'Sudah online 1 jam')]);
+      expect(find.byKey(const ValueKey('ticket-submit')), findsNothing);
+    });
+
+    testWidgets('gagal kirim menampilkan pesan dan lembar tetap terbuka', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession)
+        ..createTicketError = const DriverApiException(code: 'NETWORK_ERROR', message: 'Koneksi belum stabil.');
+      await openHelp(tester, repo);
+      await reveal(tester, find.byKey(const ValueKey('help-new-ticket')));
+      await tester.tap(find.byKey(const ValueKey('help-new-ticket')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('ticket-subject')), 'Halo');
+      await tester.enterText(find.byKey(const ValueKey('ticket-message')), 'Tes');
+      await tester.tap(find.byKey(const ValueKey('ticket-submit')));
+      await tester.pumpAndSettle();
+      expect(find.text('Koneksi belum stabil.'), findsOneWidget);
+      expect(find.byKey(const ValueKey('ticket-submit')), findsOneWidget);
+    });
+  });
+
   group('Tombol SOS darurat', () {
     testWidgets(
         'kirim SOS berhasil: lokasi terlampir, dialog tertutup, SnackBar tampil',
@@ -4648,6 +4738,23 @@ class FakeDriverRepository implements DriverRepository {
   DriverPerformanceSummary? performanceSummaryResult;
   Object? performanceError;
   int performanceCalls = 0;
+
+  List<DriverSupportTicket> ticketsResult = const [];
+  final createdTickets = <(String, String, String)>[];
+  Object? createTicketError;
+
+  @override
+  Future<List<DriverSupportTicket>> supportTickets() async => ticketsResult;
+
+  @override
+  Future<void> createSupportTicket({
+    required String category,
+    required String subject,
+    required String message,
+  }) async {
+    if (createTicketError != null) throw createTicketError!;
+    createdTickets.add((category, subject, message));
+  }
 
   DriverRatingsSummary ratingsSummaryResult = const DriverRatingsSummary();
   int ratingsCalls = 0;
