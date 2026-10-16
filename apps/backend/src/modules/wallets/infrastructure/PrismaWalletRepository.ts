@@ -451,21 +451,43 @@ export class PrismaWalletRepository implements WalletRepository {
     const fromWallet = await this.getOrCreateWallet(input.fromUserId, tx);
     const toWallet = await this.getOrCreateWallet(input.toUserId, tx);
 
-    const debited = await tx.wallet.updateMany({
-      where: { id: fromWallet.id, cashBalance: { gte: input.amount } },
-      data: {
-        cashBalance: { decrement: input.amount },
-        balance: { decrement: input.amount }
+    // Saldo yang bisa dikirim = seluruh Saldo TapGo (termasuk hasil top up).
+    // `cashBalance` adalah bagian yang boleh ditarik; sisa (`balance - cashBalance`)
+    // berasal dari top up. Pengirim membayar dari bagian top up lebih dulu, lalu dari
+    // bagian yang bisa ditarik. Penerima menerima bagian top up sebagai top up
+    // (tidak bisa ditarik) dan bagian tarik sebagai bagian yang bisa ditarik, jadi
+    // transfer tidak pernah mengubah top up menjadi uang yang bisa dicairkan.
+    // Pembaruan bersyarat (CAS) pada saldo yang dibaca menjaga dari transfer paralel.
+    let fromCashPart = new Prisma.Decimal(0);
+    let debited = false;
+    for (let attempt = 0; attempt < 3 && !debited; attempt += 1) {
+      const current = await tx.wallet.findUniqueOrThrow({
+        where: { id: fromWallet.id },
+        select: { balance: true, cashBalance: true }
+      });
+      if (current.balance.lt(input.amount)) {
+        throw new AppError("Insufficient wallet balance", StatusCodes.BAD_REQUEST, "INSUFFICIENT_BALANCE");
       }
-    });
-    if (debited.count !== 1) {
-      throw new AppError("Insufficient wallet balance", StatusCodes.BAD_REQUEST, "INSUFFICIENT_BALANCE");
+      const topUpPart = Prisma.Decimal.max(current.balance.minus(current.cashBalance), new Prisma.Decimal(0));
+      fromCashPart = Prisma.Decimal.max(input.amount.minus(topUpPart), new Prisma.Decimal(0));
+      const result = await tx.wallet.updateMany({
+        where: { id: fromWallet.id, balance: current.balance, cashBalance: current.cashBalance },
+        data: {
+          cashBalance: { decrement: fromCashPart },
+          balance: { decrement: input.amount }
+        }
+      });
+      debited = result.count === 1;
     }
+    if (!debited) {
+      throw new AppError("Saldo sedang berubah, coba lagi.", StatusCodes.CONFLICT, "TRANSFER_BALANCE_BUSY");
+    }
+    const fromTopUpPart = input.amount.minus(fromCashPart);
 
     await tx.wallet.update({
       where: { id: toWallet.id },
       data: {
-        cashBalance: { increment: input.amount },
+        cashBalance: { increment: fromCashPart },
         balance: { increment: input.amount }
       }
     });
@@ -488,7 +510,12 @@ export class PrismaWalletRepository implements WalletRepository {
         amount: input.amount.neg(),
         referenceType: "WALLET_TRANSFER",
         referenceId: transfer.id,
-        metadata: { toUserId: input.toUserId, publicReference: transfer.publicReference }
+        metadata: {
+          toUserId: input.toUserId,
+          publicReference: transfer.publicReference,
+          fromTopUp: fromTopUpPart.toString(),
+          fromWithdrawable: fromCashPart.toString()
+        }
       }
     });
     await tx.walletTransaction.create({
@@ -498,7 +525,12 @@ export class PrismaWalletRepository implements WalletRepository {
         amount: input.amount,
         referenceType: "WALLET_TRANSFER",
         referenceId: transfer.id,
-        metadata: { fromUserId: input.fromUserId, publicReference: transfer.publicReference }
+        metadata: {
+          fromUserId: input.fromUserId,
+          publicReference: transfer.publicReference,
+          asTopUp: fromTopUpPart.toString(),
+          asWithdrawable: fromCashPart.toString()
+        }
       }
     });
 

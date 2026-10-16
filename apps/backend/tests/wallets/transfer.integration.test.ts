@@ -2,6 +2,7 @@ import { Prisma, User, UserRole } from "@prisma/client";
 import http, { Server } from "node:http";
 import { AddressInfo } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { hashPassword } from "../../src/core/security/passwordHasher.js";
 import {
   cleanDatabase,
   decimalString,
@@ -10,6 +11,8 @@ import {
   seedMemberships,
   testDatabaseUrl
 } from "../helpers/referralWalletHarness.js";
+
+const TEST_PASSWORD = "Transfer-Pass-123";
 
 type SignAccessToken = (payload: { sub: string; role: UserRole; sessionId: string }) => string;
 
@@ -99,6 +102,64 @@ describe.skipIf(!runIntegration)("Wallet Transfer API", () => {
     await expectWallet(recipient.id, "0.00");
   });
 
+  it("requires the sender's password and moves nothing when it is wrong or missing", async () => {
+    const sender = await createUser("TFPASS01", "USER", "500000.00");
+    const recipient = await createUser("TFPASS02", "USER", "0.00");
+
+    const wrong = await transfer(sender, recipient.phone, 100000, "transfer-pass-1", "salah-password");
+    const wrongBody = (await wrong.json()) as { code?: string };
+    const missing = await transfer(sender, recipient.phone, 100000, "transfer-pass-2", null);
+
+    expect(wrong.status).toBe(403);
+    expect(wrongBody.code).toBe("TRANSFER_PASSWORD_INVALID");
+    expect(missing.status).toBe(400);
+    await expectWallet(sender.id, "500000.00");
+    await expectWallet(recipient.id, "0.00");
+    await expectLedgerCount(sender.id, "TRANSFER_OUT", 0);
+  });
+
+  it("lets a sender with only top-up balance transfer it, and the recipient cannot withdraw it", async () => {
+    const sender = await createUser("TFTOP001", "USER", "0.00", "300000.00");
+    const recipient = await createUser("TFTOP002", "USER", "0.00");
+
+    const response = await transfer(sender, recipient.phone, 100000, "transfer-topup-1");
+
+    expect(response.status).toBe(201);
+    await expectWallet(sender.id, "200000.00", "0.00");
+    await expectWallet(recipient.id, "100000.00", "0.00");
+  });
+
+  it("spends the top-up part first and passes the withdrawable part on as withdrawable", async () => {
+    const sender = await createUser("TFMIX001", "USER", "200000.00", "50000.00");
+    const recipient = await createUser("TFMIX002", "USER", "0.00");
+
+    const response = await transfer(sender, recipient.phone, 120000, "transfer-mix-1");
+
+    expect(response.status).toBe(201);
+    // 50.000 dari top up + 70.000 dari bagian yang bisa ditarik.
+    await expectWallet(sender.id, "130000.00", "130000.00");
+    await expectWallet(recipient.id, "120000.00", "70000.00");
+    const outRow = await prisma.walletTransaction.findFirstOrThrow({
+      where: { type: "TRANSFER_OUT", wallet: { userId: sender.id } }
+    });
+    expect(outRow.metadata).toMatchObject({ fromTopUp: "50000", fromWithdrawable: "70000" });
+  });
+
+  it("never lets two parallel transfers spend the same balance", async () => {
+    const sender = await createUser("TFRACE01", "USER", "0.00", "150000.00");
+    const recipient = await createUser("TFRACE02", "USER", "0.00");
+
+    const results = await Promise.all([
+      transfer(sender, recipient.phone, 100000, "transfer-race-a"),
+      transfer(sender, recipient.phone, 100000, "transfer-race-b")
+    ]);
+    const statuses = results.map((r) => r.status).sort();
+
+    expect(statuses.filter((s) => s === 201)).toHaveLength(1);
+    const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: sender.id } });
+    expect(decimalString(wallet.balance)).toBe("50000.00");
+  });
+
   it("rejects transfer to self", async () => {
     const sender = await createUser("TFSEND03", "USER", "500000.00");
 
@@ -183,15 +244,26 @@ describe.skipIf(!runIntegration)("Wallet Transfer API", () => {
   });
 });
 
-function transfer(sender: User, recipientPhone: string, amount: number, idempotencyKey: string) {
+function transfer(
+  sender: User,
+  recipientPhone: string,
+  amount: number,
+  idempotencyKey: string,
+  password: string | null = TEST_PASSWORD
+) {
   return api("/api/v1/wallet/transfer", {
     method: "POST",
     token: tokenFor(sender),
-    body: { recipientPhone, amount, idempotencyKey }
+    body: { recipientPhone, amount, idempotencyKey, ...(password !== null ? { password } : {}) }
   });
 }
 
-async function createUser(referralCode: string, role: UserRole, walletBalance: string): Promise<User> {
+async function createUser(
+  referralCode: string,
+  role: UserRole,
+  walletBalance: string,
+  topUpPart = "0.00"
+): Promise<User> {
   const basic = await prisma.membership.findUniqueOrThrow({ where: { tier: "BASIC" } });
   const user = await prisma.user.create({
     data: {
@@ -199,14 +271,16 @@ async function createUser(referralCode: string, role: UserRole, walletBalance: s
       phone: `+628${referralCode.padStart(9, "0")}`,
       referralCode,
       role,
-      membershipId: basic.id
+      membershipId: basic.id,
+      passwordHash: await hashPassword(TEST_PASSWORD)
     }
   });
 
+  // `walletBalance` = bagian yang bisa ditarik; `topUpPart` = saldo hasil top up (tidak bisa ditarik).
   await prisma.wallet.create({
     data: {
       userId: user.id,
-      balance: new Prisma.Decimal(walletBalance),
+      balance: new Prisma.Decimal(walletBalance).plus(topUpPart),
       cashBalance: new Prisma.Decimal(walletBalance),
       ppobBalance: new Prisma.Decimal(0),
       currency: "IDR"
@@ -239,10 +313,10 @@ async function api(path: string, options: {
   });
 }
 
-async function expectWallet(userId: string, expectedBalance: string) {
+async function expectWallet(userId: string, expectedBalance: string, expectedCash = expectedBalance) {
   const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId } });
   expect(decimalString(wallet.balance)).toBe(expectedBalance);
-  expect(decimalString(wallet.cashBalance)).toBe(expectedBalance);
+  expect(decimalString(wallet.cashBalance)).toBe(expectedCash);
 }
 
 async function expectLedgerCount(userId: string, type: "TRANSFER_OUT" | "TRANSFER_IN", count: number) {

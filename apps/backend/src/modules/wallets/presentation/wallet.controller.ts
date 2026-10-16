@@ -164,6 +164,10 @@ export class WalletController {
 
   transfer = async (req: Request, res: Response) => {
     this.assertTransferEnabled();
+    const passwordOk = await this.verifyUserPassword(req.auth!.userId, String(req.body.password));
+    if (!passwordOk) {
+      throw new AppError("Password tidak sesuai.", StatusCodes.FORBIDDEN, "TRANSFER_PASSWORD_INVALID");
+    }
     const result = await this.walletService.transfer({
       fromUserId: req.auth!.userId,
       recipientPhone: String(req.body.recipientPhone),
