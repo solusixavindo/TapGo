@@ -5,15 +5,17 @@ Disusun 16 Oktober 2026 dari kondisi kode dan produksi yang SUNGGUH berlaku. Sem
 `GOOGLE_PLAY_DRIVER_APP_LISTING_DRAFT.md` dan `DRIVER_APP_PLAY_CONSOLE_OWNER_STEPS.md`; rincian Data Safety ada di
 `GOOGLE_PLAY_DRIVER_APP_DATA_SAFETY_MAPPING.md` (sudah diperbarui).
 
-> **Prasyarat teknis (sudah beres):** backend `tapgo-3668799` aktif, termasuk Hapus Akun, Pusat Bantuan, insentif. APK/AAB dibangun dari
-> `driver-readiness-100` dan lulus gerbang rilis. **Yang BELUM ada di AAB `+16` yang sudah dibangun: layar Hapus Akun di aplikasi**
-> (ditambahkan sesudahnya; wajib untuk Play). AAB harus DIBANGUN ULANG sebelum diunggah — lihat bagian 0.
+> **Prasyarat teknis (sudah beres):** backend `tapgo-3668799` aktif (Pusat Bantuan, insentif, hapus akun). AAB `+16` sudah DIBANGUN ULANG
+> pada 16 Okt 2026 dengan layar **Hapus Akun** di dalam aplikasi (syarat Play) dan lulus gerbang rilis (294 tes, TLS live, anchor, 16 KB).
 
 ## 0. Berkas yang diunggah
 
 | Berkas | Lokasi | Catatan |
 |---|---|---|
-| AAB | `~/Documents/dari DESKTOP/arsip-rilis-tapgo/tapgo-driver-1.0.0+16.aab` | Dibangun ulang sesudah penambahan Hapus Akun; cek `.sha256` di sebelahnya |
+| AAB | `~/Documents/dari DESKTOP/arsip-rilis-tapgo/tapgo-driver-1.0.0+16.aab` | sha256 `132a5f66d67fb5b4c6d2ffe653bf4a66fed20ddd2d8d422aa95dbcc9dd801385` (cocokkan dengan `.sha256` di sebelahnya) |
+| File deobfuscation | `.../tapgo-driver-1.0.0+16-mapping.txt` | Unggah di rilis (App bundle explorer / kolom "Deobfuscation file") supaya laporan crash terbaca |
+| Simbol native | `.../tapgo-driver-1.0.0+16-native-debug-symbols.zip` | Unggah di tempat yang sama (debug symbols) |
+| APK uji | `~/Desktop/tapgo-driver-1.0.0+16.apk` | Hanya untuk uji HP; Play memakai AAB |
 | Ikon 512×512 | `google-play-assets/driver/tapgo-driver-icon-512.png` | |
 | Feature graphic 1024×500 | `google-play-assets/driver/tapgo-driver-feature-graphic-1024x500.png` | |
 | Screenshot HP | dari HP Owner (bagian 3) | minimal 2, disarankan 4–8 |
@@ -154,7 +156,7 @@ Tanpa ini, Login dengan Google hanya jalan untuk daftar test user dan **gagal un
 `DRIVER_APP_PLAY_CONSOLE_OWNER_STEPS.md` bagian "Langkah 5". Kerjakan SEBELUM rilis produksi.
 
 ## 7. Urutan kerja Owner (centang satu per satu)
-1. [ ] Saya bangun ulang AAB (+16) dengan layar Hapus Akun, jalankan gerbang rilis, serahkan checksum. *(dikerjakan asisten)*
+1. [x] AAB (+16) dibangun ulang dengan layar Hapus Akun, gerbang rilis lolos. *(selesai)*
 2. [ ] Unggah zip landing `tapgolion-hostinger-upload-privasi-driver.zip` ke Hostinger dan cek `/privacy-policy` dan `/hapus-akun`.
 3. [ ] Buat akun reviewer (bagian 5).
 4. [ ] Ambil screenshot dan rekam video layanan latar depan (bagian 3–4).
