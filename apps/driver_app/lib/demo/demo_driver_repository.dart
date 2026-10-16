@@ -284,6 +284,9 @@ class DemoDriverRepository implements DriverRepository {
   }
 
   @override
+  Future<void> ratePassenger(String reference, int stars, {String? note}) async {}
+
+  @override
   Future<DriverRide> cancel(String reference, String reason) async {
     _scenario = DriverScenario.cancelled;
     return _demoRide(RideStatus.cancelledByDriver);

@@ -549,6 +549,24 @@ class ApiDriverRepository implements DriverRepository {
   Future<DriverRide> complete(String reference) =>
       _rideMutation('/driver/rides/$reference/complete');
   @override
+  Future<void> ratePassenger(String reference, int stars, {String? note}) async {
+    try {
+      await _request(
+        () => _dio.post<dynamic>(
+          '/driver/rides/$reference/rate-passenger',
+          data: {
+            'stars': stars,
+            if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+          },
+        ),
+      );
+    } on DriverApiException catch (error) {
+      if (error.code == 'RIDE_PASSENGER_RATING_ALREADY_SUBMITTED') return;
+      rethrow;
+    }
+  }
+
+  @override
   Future<DriverRide> cancel(String reference, String reason) async {
     final data = await _request(
       () => _dio.post<dynamic>(

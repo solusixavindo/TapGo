@@ -2625,6 +2625,62 @@ void main() {
       expect(find.byKey(const ValueKey('trip-primary-action')), findsNothing);
     });
 
+    testWidgets('perjalanan selesai: driver bisa menilai penumpang (bintang + catatan) sekali', (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        current: demoRide(RideStatus.completed),
+      );
+      await pumpDriverOrders(tester, repo);
+      final submit = find.byKey(const ValueKey('rate-passenger-submit'));
+      await tester.ensureVisible(submit);
+      await tester.pumpAndSettle();
+      // Belum memilih bintang: tombol kirim mati.
+      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+
+      await tester.ensureVisible(find.byKey(const ValueKey('rate-passenger-star-4')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('rate-passenger-star-4')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('rate-passenger-note')), 'Sopan');
+      await tester.ensureVisible(submit);
+      await tester.pumpAndSettle();
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+
+      expect(repo.ratedPassengers, hasLength(1));
+      expect(repo.ratedPassengers.single.$2, 4);
+      expect(repo.ratedPassengers.single.$3, 'Sopan');
+      expect(find.byKey(const ValueKey('rate-passenger-done')), findsOneWidget);
+      expect(find.byKey(const ValueKey('rate-passenger-submit')), findsNothing);
+    });
+
+    testWidgets('penilaian penumpang boleh dilewati dan kegagalan menampilkan pesan', (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        current: demoRide(RideStatus.completed),
+      )..ratePassengerError =
+          const DriverApiException(code: 'NETWORK_ERROR', message: 'Koneksi belum stabil.');
+      await pumpDriverOrders(tester, repo);
+      await tester.ensureVisible(find.byKey(const ValueKey('rate-passenger-star-5')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('rate-passenger-star-5')));
+      await tester.pumpAndSettle();
+      final submit = find.byKey(const ValueKey('rate-passenger-submit'));
+      await tester.ensureVisible(submit);
+      await tester.pumpAndSettle();
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(find.text('Koneksi belum stabil.'), findsOneWidget);
+      expect(repo.ratedPassengers, isEmpty);
+
+      final skip = find.byKey(const ValueKey('rate-passenger-skip'));
+      await tester.ensureVisible(skip);
+      await tester.pumpAndSettle();
+      await tester.tap(skip);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('rate-passenger-submit')), findsNothing);
+    });
+
     testWidgets('lifecycle resume melakukan tepat satu refresh current ride',
         (tester) async {
       final repo = FakeDriverRepository(
@@ -2849,10 +2905,10 @@ void main() {
           ratingAverage: 4.75,
           ratingCount: 4,
         ),
-      )..ratingsSummaryResult = DriverRatingsSummary(
+      )..ratingsSummaryResult = const DriverRatingsSummary(
           ratingAverage: 4.75,
           ratingCount: 4,
-          distribution: const {1: 0, 2: 0, 3: 0, 4: 1, 5: 3},
+          distribution: {1: 0, 2: 0, 3: 0, 4: 1, 5: 3},
           recent: [DriverReview(stars: 4, note: 'Tepat waktu')],
         );
       await pumpDriver(tester, repo);
@@ -4644,6 +4700,15 @@ class FakeDriverRepository implements DriverRepository {
     startCalls += 1;
     current = demoRide(RideStatus.inTrip);
     return current!;
+  }
+
+  final ratedPassengers = <(String, int, String?)>[];
+  Object? ratePassengerError;
+
+  @override
+  Future<void> ratePassenger(String reference, int stars, {String? note}) async {
+    if (ratePassengerError != null) throw ratePassengerError!;
+    ratedPassengers.add((reference, stars, note));
   }
 
   @override

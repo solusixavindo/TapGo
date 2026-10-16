@@ -1901,6 +1901,10 @@ class ActiveRideCard extends ConsumerWidget {
                 child: const Text('Batalkan Perjalanan'),
               ),
             ],
+            if (ride.status == RideStatus.completed) ...[
+              _RatePassengerPanel(key: ValueKey('rate-passenger-${ride.reference}'), reference: ride.reference),
+              const SizedBox(height: 12),
+            ],
             if (ride.isTerminal)
               const EmptyStateCard(
                 key: ValueKey('terminal-ride-state'),
@@ -1911,6 +1915,139 @@ class ActiveRideCard extends ConsumerWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Penilaian singkat untuk penumpang setelah perjalanan selesai. Boleh dilewati; hanya dicatat untuk keselamatan.
+class _RatePassengerPanel extends ConsumerStatefulWidget {
+  const _RatePassengerPanel({required this.reference, super.key});
+  final String reference;
+
+  @override
+  ConsumerState<_RatePassengerPanel> createState() => _RatePassengerPanelState();
+}
+
+class _RatePassengerPanelState extends ConsumerState<_RatePassengerPanel> {
+  int _stars = 0;
+  bool _sending = false;
+  bool _done = false;
+  bool _skipped = false;
+  String? _error;
+  final _note = TextEditingController();
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_stars == 0 || _sending) return;
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    try {
+      await ref.read(driverRepositoryProvider).ratePassenger(
+            widget.reference,
+            _stars,
+            note: _note.text,
+          );
+      if (mounted) setState(() => _done = true);
+    } on DriverApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_skipped) return const SizedBox.shrink();
+    if (_done) {
+      return const Padding(
+        padding: EdgeInsets.only(bottom: 4),
+        child: Row(
+          key: ValueKey('rate-passenger-done'),
+          children: [
+            Icon(Icons.check_circle_rounded, color: Color(0xFF1B8A5A)),
+            SizedBox(width: 8),
+            Expanded(child: Text('Terima kasih, penilaian penumpang tersimpan.')),
+          ],
+        ),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Bagaimana penumpang ini?',
+              style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 4),
+          Text('Penilaian hanya dilihat tim TapGo dan tidak ditampilkan ke penumpang.',
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              for (var star = 1; star <= 5; star++)
+                Expanded(
+                  child: IconButton(
+                    key: ValueKey('rate-passenger-star-$star'),
+                    tooltip: '$star bintang',
+                    padding: EdgeInsets.zero,
+                    onPressed: _sending ? null : () => setState(() => _stars = star),
+                    icon: Icon(
+                      star <= _stars ? Icons.star_rounded : Icons.star_outline_rounded,
+                      color: const Color(0xFFF5A623),
+                      size: 32,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          if (_stars > 0) ...[
+            TextField(
+              key: const ValueKey('rate-passenger-note'),
+              controller: _note,
+              maxLength: 280,
+              enabled: !_sending,
+              decoration: const InputDecoration(
+                hintText: 'Catatan (opsional)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(_error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              FilledButton(
+                key: const ValueKey('rate-passenger-submit'),
+                onPressed: _stars == 0 || _sending ? null : _submit,
+                child: Text(_sending ? 'Mengirim...' : 'Kirim penilaian'),
+              ),
+              TextButton(
+                key: const ValueKey('rate-passenger-skip'),
+                onPressed: _sending ? null : () => setState(() => _skipped = true),
+                child: const Text('Lewati'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -33,6 +33,9 @@ abstract class DriverRepository {
   Future<DriverRide> arrived(String reference);
   Future<DriverRide> start(String reference);
   Future<DriverRide> complete(String reference);
+
+  /// Driver menilai penumpang setelah perjalanan selesai (1..5 bintang). Penilaian ganda dianggap berhasil.
+  Future<void> ratePassenger(String reference, int stars, {String? note});
   Future<DriverRide> cancel(String reference, String reason);
 
   /// Riwayat seluruh perjalanan milik driver, terbaru dulu — termasuk yang
