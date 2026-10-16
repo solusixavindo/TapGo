@@ -1,5 +1,7 @@
 # Google Play Store Listing Draft — TapGo Driver
 
+> **USANG (16 Okt 2026).** Teks terbaru dan siap salin ada di `PLAY_CONSOLE_DRIVER_SIAP_SALIN.md`. Draf ini menjanjikan verifikasi wajah harian yang belum diwajibkan di produksi.
+
 Draf untuk Play Console. Semua teks di bawah boleh disalin langsung; sesuaikan bila Owner ingin nada
 yang berbeda.
 

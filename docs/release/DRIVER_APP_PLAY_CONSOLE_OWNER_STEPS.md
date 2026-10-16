@@ -1,5 +1,7 @@
 # Langkah Owner di Play Console — driver_app
 
+> **Mulai dari `PLAY_CONSOLE_DRIVER_SIAP_SALIN.md`** (16 Okt 2026): isian terbaru, teks siap salin, naskah video, dan urutan kerja. Dokumen ini tetap dipakai untuk rincian OAuth consent (Langkah 5).
+
 Status: **BLOCKED**. Setiap langkah di bawah hanya bisa dilakukan di dalam Play
 Console/Google Cloud Console sungguhan oleh Owner — tidak ada kredensial Google
 Play di sesi ini, dan tidak seharusnya ada (login Play Console bukan sesuatu yang

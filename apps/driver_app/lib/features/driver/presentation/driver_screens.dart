@@ -1543,6 +1543,13 @@ class DriverAccountScreen extends ConsumerWidget {
               onTap: () => _push(context, const DriverTermsScreen()),
             ),
             _AccountRow(
+              key: const ValueKey('support-delete-account'),
+              icon: Icons.delete_outline_rounded,
+              title: 'Hapus Akun',
+              subtitle: 'Ajukan penghapusan akun dan data',
+              onTap: () => _push(context, const DriverDeleteAccountScreen()),
+            ),
+            _AccountRow(
               key: const ValueKey('support-privacy-policy'),
               icon: Icons.privacy_tip_outlined,
               title: 'Kebijakan Privasi',

@@ -1159,3 +1159,31 @@ class DriverIncentiveProgress {
 
   bool get isEmpty => items.isEmpty && waitingCount == 0;
 }
+
+
+/// Pengajuan hapus akun terakhir milik driver (GET /account/delete-request). null = belum pernah mengajukan.
+class DriverDeletionRequest {
+  const DriverDeletionRequest({required this.status, this.createdAt});
+
+  static DriverDeletionRequest? fromJson(Map<String, dynamic> json) {
+    final status = json['status']?.toString();
+    if (status == null || status.isEmpty) return null;
+    return DriverDeletionRequest(
+      status: status,
+      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
+    );
+  }
+
+  final String status;
+  final DateTime? createdAt;
+
+  bool get isOpen => status == 'PENDING' || status == 'APPROVED';
+
+  String get statusLabel => switch (status) {
+        'PENDING' => 'Menunggu tinjauan tim TapGo',
+        'APPROVED' => 'Disetujui, sedang diproses',
+        'COMPLETED' => 'Selesai',
+        'REJECTED' => 'Ditolak',
+        _ => status,
+      };
+}

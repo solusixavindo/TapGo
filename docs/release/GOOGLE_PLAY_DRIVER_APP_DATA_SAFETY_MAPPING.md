@@ -13,15 +13,15 @@ WAJIB diperbarui dan form Play Console WAJIB disesuaikan ulang sebelum rilis ver
 - **Does your app collect or share any of the required user data types?** Ya.
 - **Is all of the user data collected by your app encrypted in transit?** Ya (HTTPS/TLS ke seluruh
   endpoint backend TapGo).
-- **Does your app provide a way for users to request that their data is deleted?** Ya — menu Hapus
-  Akun di aplikasi, atau https://tapgolion.id/hapus-akun, atau email support@tapgolion.id.
+- **Does your app provide a way for users to request that their data is deleted?** Ya — Akun > Bantuan > Hapus
+  Akun di aplikasi (ditambahkan 16 Okt 2026), atau https://tapgolion.id/hapus-akun, atau email support@tapgolion.id.
 
 ## Location
 
 | Jenis | Dikumpulkan | Dibagikan | Tujuan | Opsional/Wajib | Catatan |
 |---|---|---|---|---|---|
 | Approximate location | Ya | Tidak | App functionality (pencocokan pesanan) | Wajib untuk fitur Online | Berasal dari GPS yang sama dengan precise location |
-| Precise location | Ya | Tidak | App functionality (pencocokan pesanan, rute, posisi live) | Wajib untuk fitur Online | Dikirim berkala HANYA selama status ONLINE atau ada perjalanan aktif; via layanan latar depan (foreground service) dengan notifikasi tetap. TIDAK memakai izin background location. Berhenti seketika saat driver OFFLINE |
+| Precise location | Ya | Tidak | App functionality (pencocokan pesanan, rute, posisi live) | Wajib untuk fitur Online | Dikirim berkala HANYA selama status ONLINE atau ada perjalanan aktif; via layanan latar depan (foreground service) dengan notifikasi tetap. TIDAK memakai izin background location. Berhenti seketika saat driver OFFLINE. Titik yang terkait perjalanan disimpan 14 hari (keselamatan, sengketa, verifikasi insentif); titik tanpa perjalanan dihapus setelah 1 hari |
 
 Jawab "No" untuk pertanyaan izin lokasi latar belakang / background location — aplikasi ini
 eksplisit tidak memintanya (lihat `AndroidManifest.xml`, hanya `ACCESS_FINE_LOCATION` /
@@ -52,6 +52,8 @@ lewat transfer + konfirmasi admin) — tidak ada integrasi payment gateway di si
 | Jenis | Dikumpulkan | Dibagikan | Tujuan |
 |---|---|---|---|
 | Photos | Ya | Tidak | App functionality (verifikasi wajah harian — diproses ON-DEVICE, tidak diunggah; dokumen KTP/SIM/STNK — diunggah terenkripsi untuk verifikasi mitra) |
+
+Catatan: verifikasi wajah harian hanya berjalan bila server mewajibkannya (`DRIVER_FACE_CHECK_ENABLED`; TIDAK diset di produksi per 16 Okt 2026), jadi pada peluncuran yang dikumpulkan hanya foto dokumen. Jawaban "Photos: Ya" tetap benar.
 
 Catatan penting untuk form: foto verifikasi wajah **tidak meninggalkan perangkat** (pemrosesan
 liveness + embedding sepenuhnya on-device). Foto dokumen identitas (KTP/SIM/STNK) **diunggah ke

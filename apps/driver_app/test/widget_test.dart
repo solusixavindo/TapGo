@@ -2143,6 +2143,61 @@ void main() {
     });
   });
 
+  group('Hapus akun', () {
+    Future<void> openDelete(WidgetTester tester, FakeDriverRepository repo) async {
+      await pumpDriver(tester, repo);
+      await tester.tap(find.byIcon(Icons.person_rounded));
+      await tester.pumpAndSettle();
+      await tester.dragUntilVisible(
+        find.byKey(const ValueKey('support-delete-account')),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tapReachable(tester, find.byKey(const ValueKey('support-delete-account')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('Akun > Bantuan > Hapus Akun: ajukan dengan konfirmasi, lalu status tampil dan tombol hilang', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await openDelete(tester, repo);
+      expect(find.text('Penghapusan akun ditinjau tim TapGo.'), findsOneWidget);
+      await tester.enterText(find.byKey(const ValueKey('delete-account-reason')), 'Berhenti jadi driver');
+      await tester.tap(find.byKey(const ValueKey('delete-account-submit')));
+      await tester.pumpAndSettle();
+      // Dibatalkan di dialog: tidak ada yang terkirim.
+      await tester.tap(find.byKey(const ValueKey('delete-account-cancel')));
+      await tester.pumpAndSettle();
+      expect(repo.deletionReasons, isEmpty);
+
+      await tester.tap(find.byKey(const ValueKey('delete-account-submit')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('delete-account-confirm')));
+      await tester.pumpAndSettle();
+      expect(repo.deletionReasons, ['Berhenti jadi driver']);
+      expect(find.textContaining('Menunggu tinjauan tim TapGo'), findsOneWidget);
+      expect(find.byKey(const ValueKey('delete-account-submit')), findsNothing);
+    });
+
+    testWidgets('pengajuan yang sudah berjalan tidak bisa diajukan ulang; gagal kirim menampilkan pesan', (tester) async {
+      final open = FakeDriverRepository(session: demoSession)..deletionResult = const DriverDeletionRequest(status: 'APPROVED');
+      await openDelete(tester, open);
+      expect(find.byKey(const ValueKey('delete-account-submit')), findsNothing);
+      expect(find.textContaining('sedang diproses'), findsWidgets);
+    });
+
+    testWidgets('gagal mengirim menampilkan pesan dan tombol tetap ada', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession)
+        ..deletionError = const DriverApiException(code: 'NETWORK_ERROR', message: 'Koneksi belum stabil.');
+      await openDelete(tester, repo);
+      await tester.tap(find.byKey(const ValueKey('delete-account-submit')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('delete-account-confirm')));
+      await tester.pumpAndSettle();
+      expect(find.text('Koneksi belum stabil.'), findsOneWidget);
+      expect(find.byKey(const ValueKey('delete-account-submit')), findsOneWidget);
+    });
+  });
+
   group('Tombol SOS darurat', () {
     testWidgets(
         'kirim SOS berhasil: lokasi terlampir, dialog tertutup, SnackBar tampil',
@@ -4795,6 +4850,20 @@ class FakeDriverRepository implements DriverRepository {
   DriverPerformanceSummary? performanceSummaryResult;
   Object? performanceError;
   int performanceCalls = 0;
+
+  DriverDeletionRequest? deletionResult;
+  Object? deletionError;
+  final deletionReasons = <String?>[];
+
+  @override
+  Future<DriverDeletionRequest?> accountDeletionRequest() async => deletionResult;
+
+  @override
+  Future<DriverDeletionRequest?> submitAccountDeletionRequest({String? reason}) async {
+    if (deletionError != null) throw deletionError!;
+    deletionReasons.add(reason);
+    return deletionResult = const DriverDeletionRequest(status: 'PENDING');
+  }
 
   DriverIncentiveProgress incentivesResult = const DriverIncentiveProgress();
   Object? incentivesError;

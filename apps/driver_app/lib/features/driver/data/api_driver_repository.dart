@@ -505,6 +505,23 @@ class ApiDriverRepository implements DriverRepository {
   }
 
   @override
+  Future<DriverDeletionRequest?> accountDeletionRequest() async {
+    final data = await _request(() => _dio.get<dynamic>('/account/delete-request'));
+    return DriverDeletionRequest.fromJson(data);
+  }
+
+  @override
+  Future<DriverDeletionRequest?> submitAccountDeletionRequest({String? reason}) async {
+    final data = await _request(
+      () => _dio.post<dynamic>(
+        '/account/delete-request',
+        data: {if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim()},
+      ),
+    );
+    return DriverDeletionRequest.fromJson(data);
+  }
+
+  @override
   Future<List<DriverSupportTicket>> supportTickets() async {
     final data = await _request(() => _dio.get<dynamic>('/support/tickets'));
     final items = data['items'] ?? data['tickets'] ?? data;

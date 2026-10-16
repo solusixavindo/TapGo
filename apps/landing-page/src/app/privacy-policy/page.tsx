@@ -77,6 +77,35 @@ export default function PrivacyPolicy() {
         kontak perangkat untuk fitur ini.
       </p>
       <p>
+        <strong>Jejak lokasi perjalanan.</strong> Titik lokasi yang terkait dengan sebuah perjalanan
+        disimpan selama 14 hari untuk keselamatan, penyelesaian sengketa, dan verifikasi insentif;
+        titik lokasi yang tidak terkait perjalanan (driver hanya online) dihapus setelah 1 hari.
+      </p>
+      <p>
+        <strong>Penilaian dan ulasan.</strong> Aplikasi menampilkan kepada driver penilaian bintang
+        dan ulasan singkat yang diberikan penumpang, tanpa identitas penumpang. Setelah perjalanan
+        selesai, driver juga dapat menilai penumpang (bintang dan catatan singkat); penilaian ini
+        hanya dilihat tim TapGo untuk keselamatan dan tidak ditampilkan kepada penumpang maupun
+        driver lain.
+      </p>
+      <p>
+        <strong>Insentif harian.</strong> Untuk membayar bonus insentif, TapGo memverifikasi
+        perjalanan yang dihitung (waktu mulai dan selesai, jejak lokasi, penumpang, dan ID
+        perangkat) guna mencegah pesanan rekayasa. Bonus yang tidak lolos verifikasi dapat ditolak
+        atau ditarik kembali.
+      </p>
+      <p>
+        <strong>Pusat Bantuan.</strong> Pertanyaan yang Anda kirim lewat Pusat Bantuan di aplikasi
+        disimpan sebagai tiket bantuan beserta balasan tim TapGo, dan hanya dilihat tim dukungan
+        yang berwenang.
+      </p>
+      <p>
+        <strong>Hapus akun.</strong> Driver dapat mengajukan penghapusan akun langsung di aplikasi
+        (Akun &gt; Bantuan &gt; Hapus Akun) atau lewat https://tapgolion.id/hapus-akun. Pengajuan
+        ditinjau tim TapGo; data transaksi yang wajib disimpan untuk audit dan kepatuhan hukum
+        tetap disimpan.
+      </p>
+      <p>
         Seperti aplikasi penumpang, aplikasi driver juga menyimpan pesan chat dengan penumpang
         selama perjalanan aktif, serta mengirim ID dan sidik perangkat serta versi aplikasi untuk
         keamanan akun.

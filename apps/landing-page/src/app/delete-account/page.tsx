@@ -21,6 +21,7 @@ const retainedData = [
   "Invoice",
   "Transaksi pembayaran",
   "Riwayat withdrawal",
+  "Riwayat perjalanan, komisi, dan bonus insentif driver",
   "Data yang diwajibkan oleh hukum, perpajakan, keamanan, audit, atau penyelesaian administrasi"
 ];
 

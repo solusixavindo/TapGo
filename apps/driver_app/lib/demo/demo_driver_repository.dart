@@ -232,6 +232,15 @@ class DemoDriverRepository implements DriverRepository {
         ],
       );
 
+  DriverDeletionRequest? _deletion;
+
+  @override
+  Future<DriverDeletionRequest?> accountDeletionRequest() async => _deletion;
+
+  @override
+  Future<DriverDeletionRequest?> submitAccountDeletionRequest({String? reason}) async =>
+      _deletion = DriverDeletionRequest(status: 'PENDING', createdAt: DateTime.now());
+
   final List<DriverSupportTicket> _tickets = [];
 
   @override

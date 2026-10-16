@@ -59,6 +59,10 @@ abstract class DriverRepository {
   /// Insentif harian: aturan aktif beserta kemajuan driver hari ini (kosong bila tidak ada aturan aktif).
   Future<DriverIncentiveProgress> incentiveProgress();
 
+  /// Hapus akun (syarat Google Play): status pengajuan terakhir dan pengajuan baru.
+  Future<DriverDeletionRequest?> accountDeletionRequest();
+  Future<DriverDeletionRequest?> submitAccountDeletionRequest({String? reason});
+
   /// Pusat Bantuan: tiket milik driver dan pembuatan tiket baru.
   Future<List<DriverSupportTicket>> supportTickets();
   Future<void> createSupportTicket({
