@@ -19,6 +19,9 @@ Berpasangan dengan backend `tapgo-c3b62f4` (sudah aktif di produksi); komisi bar
    catatan kartu saldo tab Pendapatan. Tanpa banner peringatan saldo (keputusan Owner). Pernyataan versi 2026-10-16.2.
    Berpasangan dengan backend yang memuat `DRIVER_MIN_CASH_BALANCE` (env produksi: 50000).
 
+7. **Buka aplikasi lebih cepat**: perjalanan aktif tidak lagi dibaca dua kali berturut-turut saat membuka aplikasi (pemeriksaan
+   sesi dan pemuatan ruang kerja memakai satu permintaan). Satu putaran jaringan lebih sedikit sebelum beranda tampil.
+
 ## Belum terbukti
 - Batas "gerak tampil di penumpang <= 3 dtk" terukur 218-808 ms di server lokal; waktu radio seluler dan GPS HP BELUM diuji.
   Uji lapangan dua HP (`DRIVER_APP_FIELD_TEST.md`) berlaku.
