@@ -48,6 +48,7 @@ part 'features/driver/presentation/driver_face_check_screen.dart';
 part 'features/driver/application/face_check_pipeline.dart';
 part 'features/driver/presentation/driver_ride_history.dart';
 part 'features/driver/presentation/driver_earnings_screen.dart';
+part 'features/driver/presentation/driver_ratings_screen.dart';
 part 'features/driver/presentation/ride_chat_screen.dart';
 part 'features/driver/presentation/driver_account_pages.dart';
 part 'features/driver/presentation/driver_documents.dart';

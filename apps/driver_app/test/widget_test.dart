@@ -2840,6 +2840,53 @@ void main() {
       expect(find.text('10%'), findsOneWidget);
     });
 
+    testWidgets('penilaian penumpang tampil di kartu performa dan membuka layar ulasan',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        performanceSummaryResult: const DriverPerformanceSummary(
+          totalTrips: 10,
+          ratingAverage: 4.75,
+          ratingCount: 4,
+        ),
+      )..ratingsSummaryResult = DriverRatingsSummary(
+          ratingAverage: 4.75,
+          ratingCount: 4,
+          distribution: const {1: 0, 2: 0, 3: 0, 4: 1, 5: 3},
+          recent: [DriverReview(stars: 4, note: 'Tepat waktu')],
+        );
+      await pumpDriver(tester, repo);
+
+      await tester.tap(find.byIcon(Icons.savings_rounded));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('performance-rating-row')), 300);
+      expect(find.text('4,8 (4)'), findsOneWidget);
+
+      await tester.ensureVisible(find.byKey(const ValueKey('performance-rating-row')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('performance-rating-row')));
+      await tester.pumpAndSettle();
+      expect(find.text('Penilaian penumpang'), findsWidgets);
+      expect(find.byKey(const ValueKey('ratings-summary-card')), findsOneWidget);
+      expect(find.text('Tepat waktu'), findsOneWidget);
+      expect(repo.ratingsCalls, 1);
+    });
+
+    testWidgets('belum ada penilaian: layar ulasan menjelaskan, bukan 0,0', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, repo);
+
+      await tester.tap(find.byIcon(Icons.savings_rounded));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('performance-rating-row')), 300);
+      expect(find.text('Belum ada'), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const ValueKey('performance-rating-row')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('performance-rating-row')));
+      await tester.pumpAndSettle();
+      expect(find.text('Belum ada penilaian'), findsOneWidget);
+    });
+
     testWidgets('rentang berbeda memanggil ulang ringkasan pendapatan',
         (tester) async {
       final repo = FakeDriverRepository(session: demoSession);
@@ -4545,6 +4592,15 @@ class FakeDriverRepository implements DriverRepository {
   DriverPerformanceSummary? performanceSummaryResult;
   Object? performanceError;
   int performanceCalls = 0;
+
+  DriverRatingsSummary ratingsSummaryResult = const DriverRatingsSummary();
+  int ratingsCalls = 0;
+
+  @override
+  Future<DriverRatingsSummary> ratingsSummary() async {
+    ratingsCalls += 1;
+    return ratingsSummaryResult;
+  }
 
   @override
   Future<DriverPerformanceSummary> performanceSummary() async {

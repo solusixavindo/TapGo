@@ -935,8 +935,8 @@ class DriverEarningsDay {
   final int grossFare;
 }
 
-/// Statistik objektif dari GET /driver/performance — TIDAK ada rating
-/// bintang di sini (lihat catatan di RideService.performanceSummary).
+/// Statistik objektif dari GET /driver/performance. Penilaian penumpang (`ratingAverage`) null
+/// bila belum ada penilaian, bukan 5,0 palsu.
 /// Setiap rate bernilai null bila datanya belum ada, bukan 0 — pembeda
 /// penting antara "belum ada tawaran sama sekali" dan "tidak pernah
 /// menerima satu pun tawaran".
@@ -946,6 +946,8 @@ class DriverPerformanceSummary {
     this.acceptanceRate,
     this.completionRate,
     this.cancellationRate,
+    this.ratingAverage,
+    this.ratingCount = 0,
   });
 
   factory DriverPerformanceSummary.fromJson(Map<String, dynamic> json) {
@@ -954,6 +956,8 @@ class DriverPerformanceSummary {
       acceptanceRate: _doubleOf(json['acceptanceRate']),
       completionRate: _doubleOf(json['completionRate']),
       cancellationRate: _doubleOf(json['cancellationRate']),
+      ratingAverage: _doubleOf(json['ratingAverage']),
+      ratingCount: _intOf(json['ratingCount']) ?? 0,
     );
   }
 
@@ -961,4 +965,60 @@ class DriverPerformanceSummary {
   final double? acceptanceRate;
   final double? completionRate;
   final double? cancellationRate;
+  final double? ratingAverage;
+  final int ratingCount;
+}
+
+/// Satu ulasan penumpang (tanpa identitas penumpang).
+class DriverReview {
+  const DriverReview({required this.stars, this.note, this.createdAt});
+
+  factory DriverReview.fromJson(Map<String, dynamic> json) {
+    return DriverReview(
+      stars: _intOf(json['stars']) ?? 0,
+      note: json['note']?.toString(),
+      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
+    );
+  }
+
+  final int stars;
+  final String? note;
+  final DateTime? createdAt;
+}
+
+/// Ringkasan penilaian dari GET /driver/ratings.
+class DriverRatingsSummary {
+  const DriverRatingsSummary({
+    this.ratingAverage,
+    this.ratingCount = 0,
+    this.distribution = const {1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
+    this.recent = const [],
+  });
+
+  factory DriverRatingsSummary.fromJson(Map<String, dynamic> json) {
+    final raw = json['distribution'];
+    final distribution = <int, int>{for (var s = 1; s <= 5; s++) s: 0};
+    if (raw is Map) {
+      for (var s = 1; s <= 5; s++) {
+        distribution[s] = _intOf(raw['$s']) ?? 0;
+      }
+    }
+    final recent = json['recent'];
+    return DriverRatingsSummary(
+      ratingAverage: _doubleOf(json['ratingAverage']),
+      ratingCount: _intOf(json['ratingCount']) ?? 0,
+      distribution: distribution,
+      recent: recent is List
+          ? recent
+              .whereType<Map>()
+              .map((e) => DriverReview.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
+    );
+  }
+
+  final double? ratingAverage;
+  final int ratingCount;
+  final Map<int, int> distribution;
+  final List<DriverReview> recent;
 }

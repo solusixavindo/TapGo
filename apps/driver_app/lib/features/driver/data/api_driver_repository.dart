@@ -498,6 +498,12 @@ class ApiDriverRepository implements DriverRepository {
     return DriverPerformanceSummary.fromJson(data);
   }
 
+  @override
+  Future<DriverRatingsSummary> ratingsSummary() async {
+    final data = await _request(() => _dio.get<dynamic>('/driver/ratings'));
+    return DriverRatingsSummary.fromJson(data);
+  }
+
   /// Perjalanan aktif hasil pemeriksaan sesi saat membuka aplikasi. Hanya dipakai SEKALI oleh pemanggilan
   /// [currentRide] pertama yang menyusul dalam [_restoredRideTtl], lalu dibuang: pembacaan berikutnya (polling,
   /// setelah terima/batal) selalu ke server, jadi tidak pernah basi.

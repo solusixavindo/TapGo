@@ -221,6 +221,20 @@ class DemoDriverRepository implements DriverRepository {
   }
 
   @override
+  Future<DriverRatingsSummary> ratingsSummary() async {
+    return DriverRatingsSummary(
+      ratingAverage: 4.8,
+      ratingCount: 3,
+      distribution: const {1: 0, 2: 0, 3: 0, 4: 1, 5: 2},
+      recent: [
+        DriverReview(stars: 5, note: 'Ramah dan tepat waktu', createdAt: DateTime(2026, 10, 14)),
+        DriverReview(stars: 5, createdAt: DateTime(2026, 10, 13)),
+        DriverReview(stars: 4, note: 'Aman sampai tujuan', createdAt: DateTime(2026, 10, 12)),
+      ],
+    );
+  }
+
+  @override
   Future<DriverPerformanceSummary> performanceSummary() async {
     if (_scenario == DriverScenario.networkError) {
       throw const DriverApiException(

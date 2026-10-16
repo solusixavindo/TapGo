@@ -47,9 +47,11 @@ abstract class DriverRepository {
   /// Saldo TapGo dan riwayat isi saldo / potongan komisi driver.
   Future<DriverWalletSummary> walletSummary();
 
-  /// Statistik objektif (acceptance/completion/cancellation rate) — bukan
-  /// rating bintang, lihat catatan di [DriverPerformanceSummary].
+  /// Statistik objektif (acceptance/completion/cancellation rate) dan rata-rata penilaian penumpang.
   Future<DriverPerformanceSummary> performanceSummary();
+
+  /// Penilaian penumpang: sebaran bintang dan ulasan terbaru.
+  Future<DriverRatingsSummary> ratingsSummary();
 
   /// Ringkasan dokumen milik driver yang sedang masuk.
   Future<List<DriverDocumentSummary>> documents();

@@ -344,6 +344,31 @@ class _PerformanceCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            InkWell(
+              key: const ValueKey('performance-rating-row'),
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const DriverRatingsScreen()),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  children: [
+                    const Expanded(child: Text('Penilaian penumpang')),
+                    const Icon(Icons.star_rounded, size: 18, color: Color(0xFFF5A623)),
+                    const SizedBox(width: 4),
+                    Text(
+                      summary.ratingAverage == null
+                          ? 'Belum ada'
+                          : '${_ratingText(summary.ratingAverage!)} (${summary.ratingCount})',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const Icon(Icons.chevron_right_rounded),
+                  ],
+                ),
+              ),
+            ),
+            const Divider(height: 20),
             _PerformanceRow(label: 'Tingkat penerimaan tawaran', value: summary.acceptanceRate),
             const Divider(height: 20),
             _PerformanceRow(label: 'Tingkat penyelesaian', value: summary.completionRate),
