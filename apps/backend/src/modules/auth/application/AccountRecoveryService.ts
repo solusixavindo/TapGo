@@ -1,6 +1,7 @@
 import { AuthChallengeChannel, AuthChallengePurpose, PrismaClient, User } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../core/errors/AppError.js";
+import { logger } from "../../../core/logger/logger.js";
 import { hashPassword } from "../../../core/security/passwordHasher.js";
 import { phoneLookupVariants } from "../../../core/security/phone.js";
 import {
@@ -351,11 +352,15 @@ export class AccountRecoveryService {
       );
     }
 
+    // Pengguna sudah login dan menunggu langsung di layar: email dikirim di latar belakang
+    // supaya jawaban tidak menunggu SMTP (~2 dtk). Bila pengiriman gagal, masa tunggu kirim
+    // ulang dibuka agar pengguna bisa langsung meminta lagi.
     await this.issueChallenge({
       user,
       purpose: input.channel === "PHONE" ? "PHONE_VERIFICATION" : "EMAIL_VERIFICATION",
       channel: input.channel,
-      destination
+      destination,
+      background: true
     });
 
     return {
@@ -483,6 +488,7 @@ export class AccountRecoveryService {
     purpose: AuthChallengePurpose;
     channel: AuthChallengeChannel;
     destination: string;
+    background?: boolean;
   }) {
     const now = new Date();
     const existing = await this.prisma.authChallenge.findFirst({
@@ -529,12 +535,27 @@ export class AccountRecoveryService {
     // Pengiriman dilakukan SETELAH tantangan tersimpan. Bila provider gagal,
     // tantangan tetap ada tetapi tidak ada kode yang beredar — aman, dan
     // pengguna dapat mencoba lagi setelah cooldown.
-    await this.provider.send({
+    const delivery = this.provider.send({
       channel: input.channel,
       destination: input.destination,
       code,
       expiresAt,
       purpose: input.purpose
+    });
+    if (!input.background) {
+      await delivery;
+      return;
+    }
+    delivery.catch(async (error: unknown) => {
+      logger.error({ err: error, purpose: input.purpose }, "OTP delivery failed (background)");
+      try {
+        await this.prisma.authChallenge.updateMany({
+          where: { userId: input.user.id, purpose: input.purpose, consumedAt: null, codeDigest: payload.codeDigest },
+          data: { lastSentAt: new Date(0) }
+        });
+      } catch (resetError) {
+        logger.error({ err: resetError }, "Failed to reopen OTP resend cooldown");
+      }
     });
   }
 

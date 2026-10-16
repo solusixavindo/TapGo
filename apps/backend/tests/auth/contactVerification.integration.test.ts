@@ -412,4 +412,57 @@ describeIntegration("Production hotfix — contact verification", () => {
       setOtpDeliveryProvider(provider);
     }
   });
+
+  it("jawaban permintaan kode tidak menunggu pengiriman yang lambat", async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started = 0;
+    const slow: OtpDeliveryProvider = {
+      name: "slow-test-adapter",
+      supports: () => true,
+      async send() {
+        started += 1;
+        await gate;
+        return { providerReference: "slow" };
+      }
+    };
+    setOtpDeliveryProvider(slow);
+    try {
+      const { token } = await createAccountAndLogin();
+      const requested = await api("POST", "/api/v1/auth/verification/request", { channel: "PHONE" }, token);
+      // Sudah dijawab padahal pengiriman belum selesai.
+      expect(requested.status).toBe(202);
+      expect(started).toBe(1);
+      release();
+    } finally {
+      release();
+      setOtpDeliveryProvider(provider);
+    }
+  });
+
+  it("pengiriman latar belakang yang gagal membuka kembali masa tunggu kirim ulang", async () => {
+    const failing: OtpDeliveryProvider = {
+      name: "failing-test-adapter",
+      supports: () => true,
+      async send() {
+        throw new Error("SMTP down");
+      }
+    };
+    setOtpDeliveryProvider(failing);
+    try {
+      const { user, token } = await createAccountAndLogin();
+      const first = await api("POST", "/api/v1/auth/verification/request", { channel: "PHONE" }, token);
+      expect(first.status).toBe(202);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      const challenge = await prisma.authChallenge.findFirstOrThrow({ where: { userId: user.id } });
+      expect(challenge.lastSentAt.getTime()).toBe(0);
+      // Tidak terkena 429: pengguna boleh langsung meminta lagi.
+      const again = await api("POST", "/api/v1/auth/verification/request", { channel: "PHONE" }, token);
+      expect(again.status).toBe(202);
+    } finally {
+      setOtpDeliveryProvider(provider);
+    }
+  });
 });
