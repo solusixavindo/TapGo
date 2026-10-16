@@ -23,8 +23,13 @@ bantuan, dompet dan pencairan di aplikasi.
   tidak dapat melampaui anggaran (diuji 5 driver paralel, anggaran untuk 3).
 - Hanya Super Admin yang dapat membuat/mengubah aturan; semua perubahan tercatat di audit log; aturan tidak dihapus (hanya dinonaktifkan).
 - Pembukuan: bonus yang dibayar menjadi beban usaha "Insentif harian driver" di Laba Rugi.
-- **Risiko yang tersisa**: tidak ada deteksi kecurangan (mis. driver memesan perjalanan dari akun lain sendiri). Pengaman yang ada:
-  tarif minimum per aturan, anggaran harian, dan batas bonus. Disarankan mulai dengan aturan kecil dan anggaran harian terpasang.
+- **Pengaman kecurangan (pesanan rekayasa oleh driver sendiri; pesanan TUNAI tidak memindahkan uang sungguhan, sedangkan bonus uang
+  nyata)**: perjalanan harus benar-benar berjalan (mulai sampai selesai minimal 3 menit, waktu dicatat server); satu penumpang
+  dihitung SEKALI per hari per driver; penumpang yang berbagi perangkat dengan akun driver (deviceId token push sama) tidak dihitung;
+  tarif minimum per aturan; anggaran harian; batas bonus Rp500.000.
+- **Risiko yang tersisa**: driver yang memakai beberapa HP dan beberapa akun penumpang berbeda masih dapat menyusun perjalanan
+  rekayasa. Biayanya (komisi 8% dari tarif, waktu 3 menit per perjalanan, banyak akun) jauh di bawah bonus bila bonus besar, jadi:
+  mulai dengan bonus kecil, SELALU pasang anggaran harian, dan tinjau klaim harian di konsol sebelum menaikkan bonus.
 
 ## Yang SENGAJA tidak dikerjakan
 - **Telepon anonim**: butuh penyedia telepon virtual berbayar (kontrak dan biaya per menit); tidak ada di kode. Chat dalam aplikasi tetap ada.
