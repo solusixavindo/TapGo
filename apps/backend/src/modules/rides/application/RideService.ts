@@ -1065,8 +1065,6 @@ export class RideService {
       commissionPercent: env.DRIVER_COMMISSION_PERCENT,
       // Saldo minimal untuk menerima pesanan tunai; 0 = tanpa batas.
       minCashBalance: env.DRIVER_COMMISSION_ENABLED ? env.DRIVER_MIN_CASH_BALANCE : 0,
-      // Saldo pada/di bawah angka ini = aplikasi menampilkan peringatan isi saldo; 0 = tanpa peringatan.
-      lowBalanceWarnAt: env.DRIVER_COMMISSION_ENABLED ? env.DRIVER_LOW_BALANCE_WARN : 0,
       topUpUrl: "https://tapgolion.id/topup",
       entries: rows.map((r) => {
         const isFee = r.referenceType === "RIDE_COMMISSION_FEE";

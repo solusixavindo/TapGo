@@ -608,16 +608,12 @@ describe.skipIf(!runIntegration)("Komisi pesanan tunai dari saldo driver (D4)", 
       expect((await prisma.rideOrder.findUniqueOrThrow({ where: { id: order.id } })).status).not.toBe("SEARCHING_DRIVER");
     });
 
-    it("ringkasan saldo menyertakan batas dan ambang peringatan (0 bila komisi mati)", async () => {
+    it("ringkasan saldo menyertakan batas (0 bila komisi mati)", async () => {
       backendEnv.DRIVER_MIN_CASH_BALANCE = 50_000;
       const { user } = await createDriver();
-      const on = await service().walletSummary(user.id);
-      expect(on.minCashBalance).toBe(50_000);
-      expect(on.lowBalanceWarnAt).toBe(10_000);
+      expect((await service().walletSummary(user.id)).minCashBalance).toBe(50_000);
       backendEnv.DRIVER_COMMISSION_ENABLED = false;
-      const off = await service().walletSummary(user.id);
-      expect(off.minCashBalance).toBe(0);
-      expect(off.lowBalanceWarnAt).toBe(0);
+      expect((await service().walletSummary(user.id)).minCashBalance).toBe(0);
     });
   });
 

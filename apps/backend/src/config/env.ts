@@ -254,9 +254,6 @@ const envSchema = z.object({
   /// Saldo TapGo minimal (rupiah) yang harus dimiliki driver SAAT menerima pesanan TUNAI, dihitung sebelum komisinya ditahan
   /// (keputusan Owner 16 Okt 2026: Rp50.000). 0 = tanpa batas (hanya saldo >= komisi pesanan itu). Hanya berlaku bila komisi menyala.
   DRIVER_MIN_CASH_BALANCE: z.coerce.number().int().min(0).max(5_000_000).default(0),
-  /// Saldo TapGo (rupiah) pada atau di bawahnya aplikasi driver menampilkan peringatan untuk isi saldo (keputusan Owner 16 Okt 2026:
-  /// Rp10.000). 0 = tanpa peringatan. Hanya berlaku bila komisi menyala.
-  DRIVER_LOW_BALANCE_WARN: z.coerce.number().int().min(0).max(5_000_000).default(10_000),
   RIDE_OFFER_RADIUS_METERS: z.coerce.number().int().min(500).max(50000).default(5000),
   /// Pesanan yang belum mendapat driver setelah selama ini otomatis menjadi NO_DRIVER.
   RIDE_SEARCH_TIMEOUT_SECONDS: z.coerce.number().int().min(30).max(1800).default(180),
