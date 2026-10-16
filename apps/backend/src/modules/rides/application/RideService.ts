@@ -77,7 +77,16 @@ const TRACKABLE_STATUSES: ReadonlySet<string> = new Set([
   "IN_TRIP",
 ]);
 
+/** Lama (ms) estimasi rute pelacakan penumpang dipakai ulang per pesanan+tujuan, dan batas jumlah entri di memori. */
+const TRACK_ROUTE_CACHE_MS = 5_000;
+const TRACK_ROUTE_CACHE_MAX = 1_000;
+
 export class RideService {
+  private readonly trackRouteCache = new Map<
+    string,
+    { at: number; value: { distanceMeters: number; etaSeconds: number; routePolyline?: string | undefined } }
+  >();
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly distance: DistancePort,
@@ -638,11 +647,26 @@ export class RideService {
     let etaSeconds: number;
     let routePolyline: string | undefined;
     try {
-      const estimate = await this.distance.estimate({
-        pickup: driverPoint,
-        dropoff: target,
-        serviceType: order.serviceType,
-      });
+      // Rute dari penyedia (OSRM) memakan ~0,5 dtk per panggilan, sedangkan penumpang mengambil posisi tiap 1,5 dtk.
+      // Estimasi rute dipakai ulang beberapa detik per pesanan dan tujuan: posisi marker tetap yang terbaru dari
+      // titik driver, hanya garis rute/jarak/ETA yang paling lama TRACK_ROUTE_CACHE_MS tertinggal.
+      const cacheKey = `${order.id}:${toDropoff ? "D" : "P"}`;
+      const cached = this.trackRouteCache.get(cacheKey);
+      let estimate: { distanceMeters: number; etaSeconds: number; routePolyline?: string | undefined };
+      if (cached && now.getTime() - cached.at < TRACK_ROUTE_CACHE_MS) {
+        estimate = cached.value;
+      } else {
+        estimate = await this.distance.estimate({
+          pickup: driverPoint,
+          dropoff: target,
+          serviceType: order.serviceType,
+        });
+        this.trackRouteCache.set(cacheKey, { at: now.getTime(), value: estimate });
+        if (this.trackRouteCache.size > TRACK_ROUTE_CACHE_MAX) {
+          const oldest = this.trackRouteCache.keys().next().value;
+          if (oldest !== undefined) this.trackRouteCache.delete(oldest);
+        }
+      }
       distanceMeters = estimate.distanceMeters;
       etaSeconds = estimate.etaSeconds;
       routePolyline = estimate.routePolyline;
