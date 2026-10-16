@@ -808,7 +808,11 @@ class DriverWalletEntry {
   factory DriverWalletEntry.fromJson(Map<String, dynamic> json) =>
       DriverWalletEntry(
         id: '${json['id'] ?? ''}',
-        kind: json['kind'] == 'COMMISSION' ? 'COMMISSION' : 'TOPUP',
+        kind: switch (json['kind']) {
+          'COMMISSION' => 'COMMISSION',
+          'INCENTIVE' => 'INCENTIVE',
+          _ => 'TOPUP',
+        },
         amount: _intOf(json['amount']) ?? 0,
         createdAt: DateTime.tryParse('${json['createdAt'] ?? ''}'),
         rideReference: json['rideReference'] as String?,
@@ -825,6 +829,7 @@ class DriverWalletEntry {
   final int shortfall;
 
   bool get isCommission => kind == 'COMMISSION';
+  bool get isIncentive => kind == 'INCENTIVE';
 }
 
 const String _defaultTopUpUrl = 'https://tapgolion.id/topup';
@@ -1079,4 +1084,38 @@ class DriverSupportTicket {
         'CLOSED' => 'Ditutup',
         _ => 'Terkirim',
       };
+}
+
+
+/// Satu aturan insentif harian beserta kemajuan driver hari ini (GET /driver/incentives).
+class DriverIncentiveItem {
+  const DriverIncentiveItem({
+    required this.name,
+    required this.targetTrips,
+    required this.bonusAmount,
+    required this.tripCount,
+    required this.claimed,
+    this.minTripFare = 0,
+    this.budgetExhausted = false,
+  });
+
+  factory DriverIncentiveItem.fromJson(Map<String, dynamic> json) {
+    return DriverIncentiveItem(
+      name: json['name']?.toString() ?? '',
+      targetTrips: _intOf(json['targetTrips']) ?? 0,
+      bonusAmount: _intOf(json['bonusAmount']) ?? 0,
+      tripCount: _intOf(json['tripCount']) ?? 0,
+      claimed: json['claimed'] == true,
+      minTripFare: _intOf(json['minTripFare']) ?? 0,
+      budgetExhausted: json['budgetExhausted'] == true,
+    );
+  }
+
+  final String name;
+  final int targetTrips;
+  final int bonusAmount;
+  final int tripCount;
+  final bool claimed;
+  final int minTripFare;
+  final bool budgetExhausted;
 }

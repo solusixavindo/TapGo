@@ -499,6 +499,18 @@ class ApiDriverRepository implements DriverRepository {
   }
 
   @override
+  Future<List<DriverIncentiveItem>> incentiveProgress() async {
+    final data = await _request(() => _dio.get<dynamic>('/driver/incentives'));
+    final items = data['items'];
+    return items is List
+        ? items
+            .whereType<Map>()
+            .map((e) => DriverIncentiveItem.fromJson(Map<String, dynamic>.from(e)))
+            .toList()
+        : const [];
+  }
+
+  @override
   Future<List<DriverSupportTicket>> supportTickets() async {
     final data = await _request(() => _dio.get<dynamic>('/support/tickets'));
     final items = data['items'] ?? data['tickets'] ?? data;

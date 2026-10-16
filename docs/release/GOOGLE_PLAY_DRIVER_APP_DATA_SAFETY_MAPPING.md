@@ -61,7 +61,8 @@ server** dan dienkripsi, dilihat tim verifikasi TapGo, dihapus otomatis maksimal
 
 | Jenis | Dikumpulkan | Dibagikan | Tujuan |
 |---|---|---|---|
-| In-app messages | Ya | Tidak | App functionality (chat dengan penumpang selama perjalanan aktif) |
+| In-app messages | Ya | Tidak | App functionality (chat dengan penumpang selama perjalanan aktif; pertanyaan ke tim TapGo lewat Pusat Bantuan dan balasannya) |
+| Other user-generated content | Ya | Tidak | App functionality (penilaian bintang dan catatan singkat driver terhadap penumpang setelah perjalanan; hanya dilihat tim TapGo untuk keselamatan, tidak ditampilkan ke pihak lain) |
 
 ## App activity
 

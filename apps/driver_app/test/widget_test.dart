@@ -2087,12 +2087,12 @@ void main() {
 
     testWidgets('driver mengirim pertanyaan; balasan tim tampil di tiket', (tester) async {
       final repo = FakeDriverRepository(session: demoSession)
-        ..ticketsResult = [
+        ..ticketsResult = const [
           DriverSupportTicket(
             reference: 'TKT-ABC123',
             subject: 'Saldo belum masuk',
             status: 'RESOLVED',
-            messages: const [
+            messages: [
               DriverTicketMessage(body: 'Top up saya belum masuk', fromAdmin: false),
               DriverTicketMessage(body: 'Sudah kami cek, saldo sudah masuk.', fromAdmin: true),
             ],
@@ -3031,6 +3031,43 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('performance-rating-row')));
       await tester.pumpAndSettle();
       expect(find.text('Belum ada penilaian'), findsOneWidget);
+    });
+
+    testWidgets('kartu insentif harian: progres, bonus sudah masuk, dan kuota habis', (tester) async {
+      final repo = FakeDriverRepository(session: demoSession)
+        ..incentivesResult = const [
+          DriverIncentiveItem(name: 'Rajin 5', targetTrips: 5, bonusAmount: 25000, tripCount: 3, claimed: false, minTripFare: 8000),
+          DriverIncentiveItem(name: 'Pagi 2', targetTrips: 2, bonusAmount: 10000, tripCount: 2, claimed: true),
+          DriverIncentiveItem(name: 'Malam 8', targetTrips: 8, bonusAmount: 60000, tripCount: 1, claimed: false, budgetExhausted: true),
+        ];
+      await pumpDriver(tester, repo);
+      await tester.tap(find.byIcon(Icons.savings_rounded));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('incentive-card')), findsOneWidget);
+      expect(find.text('3 dari 5 perjalanan (tarif minimal Rp8.000)'), findsOneWidget);
+      expect(find.text('Bonus sudah masuk ke saldo Anda'), findsOneWidget);
+      expect(find.text('Kuota bonus hari ini sudah habis'), findsOneWidget);
+      expect(find.text('+Rp25.000'), findsOneWidget);
+    });
+
+    testWidgets('tanpa aturan aktif atau gagal memuat: kartu insentif tidak tampil dan halaman tetap normal', (tester) async {
+      final empty = FakeDriverRepository(session: demoSession);
+      await pumpDriver(tester, empty);
+      await tester.tap(find.byIcon(Icons.savings_rounded));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('incentive-card')), findsNothing);
+      expect(find.byKey(const ValueKey('earnings-summary-card')), findsOneWidget);
+    });
+
+    testWidgets('gagal memuat insentif tidak merusak halaman pendapatan', (tester) async {
+      final broken = FakeDriverRepository(session: demoSession)
+        ..incentivesError = const DriverApiException(code: 'NETWORK_ERROR', message: 'Koneksi belum stabil.');
+      await pumpDriver(tester, broken);
+      await tester.tap(find.byIcon(Icons.savings_rounded));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('incentive-card')), findsNothing);
+      expect(find.byKey(const ValueKey('earnings-summary-card')), findsOneWidget);
     });
 
     testWidgets('rentang berbeda memanggil ulang ringkasan pendapatan',
@@ -4738,6 +4775,15 @@ class FakeDriverRepository implements DriverRepository {
   DriverPerformanceSummary? performanceSummaryResult;
   Object? performanceError;
   int performanceCalls = 0;
+
+  List<DriverIncentiveItem> incentivesResult = const [];
+  Object? incentivesError;
+
+  @override
+  Future<List<DriverIncentiveItem>> incentiveProgress() async {
+    if (incentivesError != null) throw incentivesError!;
+    return incentivesResult;
+  }
 
   List<DriverSupportTicket> ticketsResult = const [];
   final createdTickets = <(String, String, String)>[];

@@ -17,6 +17,12 @@ final driverPerformanceProvider =
   return repository.performanceSummary();
 });
 
+/// Kemajuan insentif harian. Galat atau tanpa aturan aktif = kartu tidak tampil (bukan layar galat).
+final driverIncentivesProvider =
+    FutureProvider.autoDispose<List<DriverIncentiveItem>>((ref) {
+  return ref.watch(driverRepositoryProvider).incentiveProgress();
+});
+
 final driverWalletProvider =
     FutureProvider.autoDispose<DriverWalletSummary>((ref) {
   return ref.watch(driverRepositoryProvider).walletSummary();
@@ -62,6 +68,7 @@ class _DriverEarningsScreenState extends ConsumerState<DriverEarningsScreen>
 
   Future<void> _refreshAll() async {
     ref.invalidate(driverWalletProvider);
+    ref.invalidate(driverIncentivesProvider);
     ref.invalidate(driverEarningsProvider(_range));
     ref.invalidate(driverPerformanceProvider);
     try {
@@ -95,6 +102,12 @@ class _DriverEarningsScreenState extends ConsumerState<DriverEarningsScreen>
               data: (wallet) => _WalletCard(wallet: wallet),
             ),
         const SizedBox(height: 16),
+        ...ref.watch(driverIncentivesProvider).maybeWhen(
+              data: (items) => items.isEmpty
+                  ? const <Widget>[]
+                  : [_IncentiveCard(items: items), const SizedBox(height: 16)],
+              orElse: () => const <Widget>[],
+            ),
         Wrap(
           spacing: 8,
           children: [
@@ -215,7 +228,9 @@ class _WalletCard extends StatelessWidget {
                   dense: true,
                   title: Text(entry.isCommission
                       ? 'Komisi pesanan tunai'
-                      : 'Isi saldo'),
+                      : entry.isIncentive
+                          ? 'Bonus insentif harian'
+                          : 'Isi saldo'),
                   subtitle: Text([
                     _shortDate(entry.createdAt),
                     if (entry.rideReference != null) entry.rideReference!,
@@ -232,6 +247,74 @@ class _WalletCard extends StatelessWidget {
                     ),
                   ),
                 ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Target perjalanan hari ini dan bonusnya. Hari dihitung WIB; bonus masuk otomatis ke saldo saat target tercapai.
+class _IncentiveCard extends StatelessWidget {
+  const _IncentiveCard({required this.items});
+  final List<DriverIncentiveItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      key: const ValueKey('incentive-card'),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.emoji_events_rounded, color: Color(0xFFF5A623)),
+                const SizedBox(width: 8),
+                Text('Insentif hari ini', style: theme.textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text('Bonus masuk otomatis ke saldo saat target tercapai. Hari dihitung pukul 00.00 sampai 24.00 WIB.',
+                style: theme.textTheme.bodySmall),
+            for (final item in items) ...[
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                  Text(
+                    '+${_rupiah(item.bonusAmount)}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: item.claimed ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  minHeight: 8,
+                  value: item.targetTrips == 0 ? 0 : item.tripCount / item.targetTrips,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                item.claimed
+                    ? 'Bonus sudah masuk ke saldo Anda'
+                    : item.budgetExhausted
+                        ? 'Kuota bonus hari ini sudah habis'
+                        : '${item.tripCount} dari ${item.targetTrips} perjalanan'
+                            '${item.minTripFare > 0 ? ' (tarif minimal ${_rupiah(item.minTripFare)})' : ''}',
+                key: ValueKey('incentive-status-${item.name}'),
+                style: theme.textTheme.bodySmall,
+              ),
             ],
           ],
         ),

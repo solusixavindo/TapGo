@@ -220,6 +220,17 @@ class DemoDriverRepository implements DriverRepository {
     );
   }
 
+  @override
+  Future<List<DriverIncentiveItem>> incentiveProgress() async => const [
+        DriverIncentiveItem(
+          name: 'Rajin 5 perjalanan',
+          targetTrips: 5,
+          bonusAmount: 25000,
+          tripCount: 3,
+          claimed: false,
+        ),
+      ];
+
   final List<DriverSupportTicket> _tickets = [];
 
   @override

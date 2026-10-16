@@ -56,6 +56,9 @@ abstract class DriverRepository {
   /// Penilaian penumpang: sebaran bintang dan ulasan terbaru.
   Future<DriverRatingsSummary> ratingsSummary();
 
+  /// Insentif harian: aturan aktif beserta kemajuan driver hari ini (kosong bila tidak ada aturan aktif).
+  Future<List<DriverIncentiveItem>> incentiveProgress();
+
   /// Pusat Bantuan: tiket milik driver dan pembuatan tiket baru.
   Future<List<DriverSupportTicket>> supportTickets();
   Future<void> createSupportTicket({
