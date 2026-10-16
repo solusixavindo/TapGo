@@ -897,6 +897,46 @@ export function resolveSosAlert(id: string, note: string) {
   return request<SosAlert>(`/admin/rides/sos/${id}/resolve`, { method: "PATCH", body: JSON.stringify({ note }) });
 }
 
+// --- Insentif harian driver (Super Admin) -------------------------------------------------
+
+export type IncentiveRule = {
+  id: string;
+  name: string;
+  targetTrips: number;
+  bonusAmount: number;
+  minTripFare: number;
+  dailyBudget: number | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  isActive: boolean;
+  createdAt: string;
+  paidTodayCount: number;
+  paidTodayAmount: number;
+};
+
+export type IncentiveRuleInput = {
+  name: string;
+  targetTrips: number;
+  bonusAmount: number;
+  minTripFare: number;
+  dailyBudget: number | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  isActive: boolean;
+};
+
+export function listIncentiveRules() {
+  return request<IncentiveRule[]>("/admin/driver-incentives");
+}
+
+export function createIncentiveRule(input: IncentiveRuleInput) {
+  return request<IncentiveRule>("/admin/driver-incentives", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function updateIncentiveRule(id: string, patch: Partial<IncentiveRuleInput>) {
+  return request<IncentiveRule>(`/admin/driver-incentives/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+}
+
 // --- Laba rugi (hanya SUPER_ADMIN_VIP) ----------------------------------------
 
 export type ProfitLossReport = {
@@ -925,6 +965,8 @@ export type ProfitLossReport = {
     rewardAccrued: string;
     rewardPaid: string;
     profitSharing: string;
+    /** Bonus insentif harian driver yang dibayarkan; tidak ada pada server lama. */
+    driverIncentives?: string;
     gatewayFee: string;
     serverCost: string;
     total: string;

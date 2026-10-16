@@ -91,6 +91,9 @@ export async function cleanDatabase() {
   // mana pun yang berjalan SETELAH uji verifikasi wajah gagal di deleteMany() di bawah — urutan
   // berkas dapat berubah antar-run (vitest mengurutkan berdasarkan hasil run sebelumnya).
   await prisma.driverFaceCheck.deleteMany();
+  // Klaim insentif menahan aturan (RESTRICT): hapus klaim dulu, lalu aturan.
+  await prisma.driverIncentiveClaim.deleteMany();
+  await prisma.driverIncentiveRule.deleteMany();
   await prisma.user.deleteMany();
   // User dihapus dulu; PpobTransaction cascade-delete mengikuti user. Produk
   // dibersihkan setelah transaksinya hilang (relation RESTRICT pada produk).

@@ -129,6 +129,8 @@ enum WalletTransactionType {
   /// Transfer P2P TapGoPay: sisi pengirim (debit) dan penerima (kredit).
   TRANSFER_OUT
   TRANSFER_IN
+  /// Bonus insentif harian driver (DriverIncentiveRule); dikreditkan ke saldo yang dapat ditarik.
+  INCENTIVE_BONUS
 }
 
 enum ChatSenderType {
@@ -2133,4 +2135,45 @@ model PpobTransaction {
   @@index([userId, createdAt(sort: Desc)])
   @@index([status, createdAt])
   @@map("ppob_transactions")
+}
+
+/// Aturan insentif harian driver: selesaikan `targetTrips` perjalanan dalam satu hari (WIB) dan dapatkan
+/// `bonusAmount`. Hanya perjalanan dengan tarif >= `minTripFare` yang dihitung. `dailyBudget` membatasi
+/// total bonus aturan ini per hari. Diatur Super Admin; setiap perubahan tercatat di audit log.
+model DriverIncentiveRule {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @db.VarChar(80)
+  targetTrips Int       @map("target_trips")
+  bonusAmount Decimal   @map("bonus_amount") @db.Decimal(14, 2)
+  minTripFare Decimal   @default(0) @map("min_trip_fare") @db.Decimal(14, 2)
+  dailyBudget Decimal?  @map("daily_budget") @db.Decimal(14, 2)
+  startsAt    DateTime? @map("starts_at")
+  endsAt      DateTime? @map("ends_at")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdById String    @map("created_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  claims DriverIncentiveClaim[]
+
+  @@map("driver_incentive_rules")
+}
+
+/// Satu bonus yang sudah dibayarkan. Unik per (aturan, driver, hari WIB) sehingga tidak pernah dibayar dua kali.
+model DriverIncentiveClaim {
+  id              String   @id @default(uuid()) @db.Uuid
+  ruleId          String   @map("rule_id") @db.Uuid
+  driverProfileId String   @map("driver_profile_id") @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  dayKey          String   @map("day_key") @db.VarChar(10)
+  tripCount       Int      @map("trip_count")
+  amount          Decimal  @db.Decimal(14, 2)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  rule DriverIncentiveRule @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+
+  @@unique([ruleId, driverProfileId, dayKey])
+  @@index([dayKey])
+  @@index([userId, createdAt])
+  @@map("driver_incentive_claims")
 }

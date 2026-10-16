@@ -39,6 +39,7 @@ const NAV_GROUPS: Array<{
     title: "Keuangan",
     items: [
       { href: "/penarikan", label: "Penarikan Dana", minimum: "SUPER_ADMIN", icon: "wallet" },
+      { href: "/insentif", label: "Insentif Driver", minimum: "SUPER_ADMIN", icon: "wallet" },
       { href: "/top-up-manual", label: "Top Up Manual", minimum: "SUPER_ADMIN", icon: "wallet" },
       { href: "/pembayaran-online", label: "Pembayaran Online", minimum: "SUPER_ADMIN", icon: "wallet" },
       { href: "/saldo-digiflazz", label: "Saldo Digiflazz", minimum: "SUPER_ADMIN", icon: "chart" },

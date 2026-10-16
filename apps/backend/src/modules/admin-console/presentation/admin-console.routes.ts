@@ -17,6 +17,7 @@ import { PrismaWalletRepository } from "../../wallets/infrastructure/PrismaWalle
 import { MembershipDocumentService } from "../../memberships/application/MembershipDocumentService.js";
 import { DriverDocumentService } from "../../drivers/application/DriverDocumentService.js";
 import { DriverDocumentController } from "../../drivers/presentation/driver-document.controller.js";
+import { DriverIncentiveService } from "../../rides/application/DriverIncentiveService.js";
 import { AdminRoleService } from "../application/AdminRoleService.js";
 import { MembershipRefundService } from "../../memberships/application/MembershipRefundService.js";
 import { MembershipOrderService } from "../../memberships/application/MembershipOrderService.js";
@@ -44,6 +45,8 @@ import {
   adminDigiflazzBalanceQuerySchema,
   adminDigiflazzTransactionQuerySchema,
   adminInsightsQuerySchema,
+  adminIncentiveCreateSchema,
+  adminIncentiveUpdateSchema,
   adminPaymentQuerySchema,
   adminReportQuerySchema,
   adminRewardActionSchema,
@@ -60,6 +63,7 @@ const walletService = new WalletService(new PrismaWalletRepository(prisma));
 const membershipOrderService = new MembershipOrderService(prisma);
 const manualMembershipTransferService = new ManualMembershipTransferService(prisma, membershipOrderService);
 const adminRoleService = new AdminRoleService(prisma);
+const driverIncentiveService = new DriverIncentiveService(prisma);
 const membershipRefundService = new MembershipRefundService(prisma);
 const systemHealthService = new SystemHealthService(prisma, redis);
 const errorMonitoringService = new ErrorMonitoringService({
@@ -358,6 +362,32 @@ adminConsoleRouter.post(
   requireRoles("SUPER_ADMIN"),
   validateRequest(adminWithdrawalActionSchema),
   asyncHandler(controller.markWithdrawalPaid)
+);
+// Insentif harian driver: uang keluar dari perusahaan, jadi hanya Super Admin yang boleh melihat dan mengubah aturan.
+adminConsoleRouter.get(
+  "/driver-incentives",
+  requireRoles("SUPER_ADMIN"),
+  asyncHandler(async (_req, res) => {
+    res.json({ success: true, data: await driverIncentiveService.listRules() });
+  })
+);
+adminConsoleRouter.post(
+  "/driver-incentives",
+  requireRoles("SUPER_ADMIN"),
+  validateRequest(adminIncentiveCreateSchema),
+  asyncHandler(async (req, res) => {
+    const data = await driverIncentiveService.createRule(req.body, req.auth!.userId);
+    res.status(201).json({ success: true, data });
+  })
+);
+adminConsoleRouter.patch(
+  "/driver-incentives/:id",
+  requireRoles("SUPER_ADMIN"),
+  validateRequest(adminIncentiveUpdateSchema),
+  asyncHandler(async (req, res) => {
+    const data = await driverIncentiveService.updateRule(String(req.params.id), req.body, req.auth!.userId);
+    res.json({ success: true, data });
+  })
 );
 adminConsoleRouter.get("/delete-requests", validateRequest(adminGenericStatusQuerySchema), asyncHandler(controller.deleteRequests));
 adminConsoleRouter.get("/contact-messages", validateRequest(adminGenericStatusQuerySchema), asyncHandler(controller.contactMessages));

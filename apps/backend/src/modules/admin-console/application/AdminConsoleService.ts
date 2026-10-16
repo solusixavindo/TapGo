@@ -1058,6 +1058,7 @@ export class AdminConsoleService {
       level,
       reward,
       profitSharing,
+      driverIncentives,
       paidInvoices,
       membershipPayments,
       topUpPayments,
@@ -1095,6 +1096,8 @@ export class AdminConsoleService {
       this.sumCommissionByTypesInRange(levelTypes, input),
       this.rewardSummaryReport(input),
       this.profitSharingSummaryReport(input),
+      // Bonus insentif harian yang sudah dibayarkan ke driver (beban usaha).
+      this.prisma.driverIncentiveClaim.aggregate({ where: { ...range }, _sum: { amount: true } }),
       this.prisma.invoice.findMany({
         where: { status: "PAID", ...invoiceDateRange },
         select: {
@@ -1280,6 +1283,7 @@ export class AdminConsoleService {
     // mencapai 10 Silver langsung), bukan saat admin membayarnya. Yang REJECTED tidak dihitung.
     const rewardAccrued = rewardPaid.plus(dec(reward.totalApproved)).plus(dec(reward.totalPending));
     const profitSharingPaid = dec(profitSharing.totalPaid);
+    const driverIncentiveCost = dec(driverIncentives._sum.amount);
     const periodFrom = input.dateFrom ?? firstUser._min.createdAt ?? new Date();
     const periodTo = input.dateTo ?? new Date();
     const server = prorateMonthlyCost(config.serverCostMonthly, periodFrom, periodTo);
@@ -1288,6 +1292,7 @@ export class AdminConsoleService {
       .plus(levelBonus)
       .plus(rewardAccrued)
       .plus(profitSharingPaid)
+      .plus(driverIncentiveCost)
       .plus(gatewayTotal)
       .plus(serverCost);
 
@@ -1337,6 +1342,7 @@ export class AdminConsoleService {
         rewardAccrued: rewardAccrued.toFixed(2),
         rewardPaid: rewardPaid.toFixed(2),
         profitSharing: profitSharingPaid.toFixed(2),
+        driverIncentives: driverIncentiveCost.toFixed(2),
         gatewayFee: gatewayTotal.toFixed(2),
         serverCost: serverCost.toFixed(2),
         total: opexTotal.toFixed(2)

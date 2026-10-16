@@ -37,6 +37,8 @@ import {
   LOCATION_MAX_ACCURACY_METERS,
   LOCATION_MAX_AGE_SECONDS,
 } from "../domain/ridePorts.js";
+import { logger } from "../../../core/logger/logger.js";
+import { DriverIncentiveService } from "./DriverIncentiveService.js";
 import { haversineMeters } from "../infrastructure/LocalDistanceAdapter.js";
 import {
   AdminCorrectableStatus,
@@ -93,6 +95,7 @@ export class RideService {
     private readonly matching: MatchingPort,
     private readonly faceCheck: DriverFaceCheckService = new DriverFaceCheckService(prisma),
     private readonly push: PushNotifier = lazyPushNotifier,
+    private readonly incentives: DriverIncentiveService = new DriverIncentiveService(prisma),
   ) {}
 
   /**
@@ -1552,7 +1555,20 @@ export class RideService {
       return this.toOrderView(updated);
     });
     if (transitioned) this.notifyPassengerOfStatus(input.publicReference, input.next);
+    if (transitioned && input.next === "COMPLETED") {
+      // Insentif harian dihitung SETELAH perjalanan commit dan tidak pernah menggagalkannya. Bila gagal di sini,
+      // evaluasi berikutnya (perjalanan lain atau driver membuka progres) menyusul karena klaim idempoten.
+      this.incentives.evaluateForDriver(profile.id, input.userId).catch((error: unknown) => {
+        logger.error({ err: error }, "Driver incentive evaluation failed");
+      });
+    }
     return view;
+  }
+
+  /** Progres insentif harian driver (target, perjalanan terhitung, sudah dibayar atau belum). */
+  async incentiveProgress(userId: string) {
+    const profile = await this.requireDriverProfile(userId);
+    return this.incentives.progressForDriver(profile.id, userId);
   }
 
   async cancelByDriver(input: {

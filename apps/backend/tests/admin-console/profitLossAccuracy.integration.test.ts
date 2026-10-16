@@ -168,6 +168,29 @@ describe.skipIf(!runIntegration)("Laporan laba rugi: ketepatan hitungan", () => 
     expect(data.revenue.rideCommission).toBe("1816.00");
     expect(data.revenue.total).toBe("1816.00");
   });
+
+  it("insentif harian driver yang dibayarkan menjadi beban usaha dan mengurangi laba", async () => {
+    const vip = await createUser("SUPER_ADMIN_VIP");
+    const driver = await createUser("USER");
+    const rule = await prisma.driverIncentiveRule.create({
+      data: { name: "Uji", targetTrips: 3, bonusAmount: new Prisma.Decimal(20_000), createdById: vip.id }
+    });
+    const profile = await prisma.rideDriverProfile.create({ data: { userId: driver.id, status: "ACTIVE" } });
+    for (const [day, amount] of [["2026-10-14", 20_000], ["2026-10-15", 20_000]] as const) {
+      await prisma.driverIncentiveClaim.create({
+        data: { ruleId: rule.id, driverProfileId: profile.id, userId: driver.id, dayKey: day, tripCount: 3, amount: new Prisma.Decimal(amount) }
+      });
+    }
+
+    const data = await report(vip);
+    expect(data.opex.driverIncentives).toBe("40000.00");
+    expect(data.opex.total).toBe("40000.00");
+    expect(data.operatingProfit).toBe("-40000.00");
+
+    // Di luar periode: tidak dihitung.
+    const none = await report(vip, { from: new Date(Date.now() + DAY), to: new Date(Date.now() + 2 * DAY) });
+    expect(none.opex.driverIncentives).toBe("0.00");
+  });
 });
 
 /* ------------------------------ helper ------------------------------ */

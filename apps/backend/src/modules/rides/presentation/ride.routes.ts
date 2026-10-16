@@ -319,6 +319,14 @@ driverRideRouter.post(
 );
 
 driverRideRouter.get(
+  "/incentives",
+  asyncHandler(async (req, res) => {
+    const data = await rideService.incentiveProgress(req.auth!.userId);
+    res.json({ success: true, data });
+  }),
+);
+
+driverRideRouter.get(
   "/ratings",
   asyncHandler(async (req, res) => {
     const limit = req.query.limit ? Number(req.query.limit) : undefined;

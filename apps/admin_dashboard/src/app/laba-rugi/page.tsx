@@ -209,6 +209,9 @@ export default function ProfitLossPage() {
                   <Line label="Bonus tingkat" value={report.opex.levelBonus} revenue={revenueTotal} indent negative />
                   <Line label="Reward milestone (saat tercapai)" value={report.opex.rewardAccrued} revenue={revenueTotal} indent negative />
                   <Line label="Bagi hasil dibayar" value={report.opex.profitSharing} revenue={revenueTotal} indent negative />
+                  {report.opex.driverIncentives !== undefined ? (
+                    <Line label="Insentif harian driver" value={report.opex.driverIncentives} revenue={revenueTotal} indent negative />
+                  ) : null}
                   <Line label="Biaya gateway pembayaran (Midtrans)" value={report.opex.gatewayFee} revenue={revenueTotal} indent negative />
                   <Line label="Server" value={report.opex.serverCost} revenue={revenueTotal} indent negative />
                   <Line label="Total beban usaha" value={report.opex.total} revenue={revenueTotal} bold negative />

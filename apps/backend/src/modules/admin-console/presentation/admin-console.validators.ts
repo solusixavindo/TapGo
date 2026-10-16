@@ -245,3 +245,44 @@ export const adminMemberStatusSchema = z.object({
     reason: z.string().trim().min(3).max(300)
   })
 });
+
+const incentiveRuleFields = {
+  name: z.string().trim().min(1).max(80),
+  targetTrips: z.number().int().min(1).max(100),
+  bonusAmount: z.number().min(1000).max(500000),
+  minTripFare: z.number().min(0).max(10_000_000),
+  dailyBudget: z.number().min(1000).max(1_000_000_000).nullable(),
+  startsAt: z.coerce.date().nullable(),
+  endsAt: z.coerce.date().nullable(),
+  isActive: z.boolean()
+};
+
+export const adminIncentiveCreateSchema = z.object({
+  body: z.object({
+    name: incentiveRuleFields.name,
+    targetTrips: incentiveRuleFields.targetTrips,
+    bonusAmount: incentiveRuleFields.bonusAmount,
+    minTripFare: incentiveRuleFields.minTripFare.optional(),
+    dailyBudget: incentiveRuleFields.dailyBudget.optional(),
+    startsAt: incentiveRuleFields.startsAt.optional(),
+    endsAt: incentiveRuleFields.endsAt.optional(),
+    isActive: incentiveRuleFields.isActive.optional()
+  })
+});
+
+export const adminIncentiveUpdateSchema = z.object({
+  params: z.object({ id: z.string().uuid() }),
+  body: z
+    .object({
+      name: incentiveRuleFields.name,
+      targetTrips: incentiveRuleFields.targetTrips,
+      bonusAmount: incentiveRuleFields.bonusAmount,
+      minTripFare: incentiveRuleFields.minTripFare,
+      dailyBudget: incentiveRuleFields.dailyBudget,
+      startsAt: incentiveRuleFields.startsAt,
+      endsAt: incentiveRuleFields.endsAt,
+      isActive: incentiveRuleFields.isActive
+    })
+    .partial()
+    .refine((value) => Object.keys(value).length > 0, "Tidak ada perubahan.")
+});
