@@ -6,6 +6,8 @@ const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 const MAX_ACTIVE_RULES = 10;
 export const INCENTIVE_MIN_BONUS = 1_000;
 export const INCENTIVE_MAX_BONUS = 500_000;
+/** Perjalanan yang lebih singkat dari ini (mulai -> selesai) tidak dihitung: pesanan rekayasa biasanya diselesaikan seketika. */
+export const INCENTIVE_MIN_TRIP_SECONDS = 180;
 
 /** Hari kalender WIB (UTC+7, tanpa DST): kunci "YYYY-MM-DD" dan batas [start, end) dalam UTC. */
 export function wibDay(date: Date) {
@@ -154,7 +156,7 @@ export class DriverIncentiveService {
     const claimed = new Set(claims.map((claim) => claim.ruleId));
     const items = [];
     for (const rule of rules) {
-      const tripCount = await this.countTrips(driverProfileId, rule, day);
+      const tripCount = await this.countTrips(driverProfileId, userId, rule, day);
       let budgetExhausted = false;
       if (rule.dailyBudget && !claimed.has(rule.id)) {
         const paid = await this.prisma.driverIncentiveClaim.aggregate({
@@ -183,7 +185,7 @@ export class DriverIncentiveService {
     const rules = (await this.prisma.driverIncentiveRule.findMany()).filter((rule) => isEffective(rule, now));
     let paid = 0;
     for (const rule of rules) {
-      const tripCount = await this.countTrips(driverProfileId, rule, day);
+      const tripCount = await this.countTrips(driverProfileId, userId, rule, day);
       if (tripCount < rule.targetTrips) continue;
       if (await this.claim(rule, driverProfileId, userId, day.key, tripCount)) paid += 1;
     }
@@ -192,15 +194,47 @@ export class DriverIncentiveService {
 
   // ------------------------------------------------------------- Internal
 
-  private countTrips(driverProfileId: string, rule: RuleRow, day: { start: Date; end: Date }) {
-    return this.prisma.rideOrder.count({
+  /**
+   * Jumlah perjalanan yang sah dihitung untuk satu aturan hari itu. Pengaman anti-kecurangan (pesanan rekayasa
+   * oleh driver sendiri, terutama pesanan TUNAI yang tidak memindahkan uang sungguhan):
+   * - hanya perjalanan SELESAI bertarif >= minimum aturan;
+   * - perjalanan harus benar-benar berjalan (mulai -> selesai >= INCENTIVE_MIN_TRIP_SECONDS);
+   * - satu penumpang dihitung SEKALI per hari per driver (mencegah mengulang pesanan dari satu akun);
+   * - penumpang yang memakai perangkat yang sama dengan akun driver (token push berbagi deviceId) tidak dihitung.
+   */
+  private async countTrips(driverProfileId: string, driverUserId: string, rule: RuleRow, day: { start: Date; end: Date }) {
+    const orders = await this.prisma.rideOrder.findMany({
       where: {
         driverProfileId,
         status: "COMPLETED",
         completedAt: { gte: day.start, lt: day.end },
-        totalFare: { gte: Math.ceil(Number(rule.minTripFare)) }
-      }
+        totalFare: { gte: Math.ceil(Number(rule.minTripFare)) },
+        startedAt: { not: null }
+      },
+      orderBy: { completedAt: "asc" },
+      take: 500,
+      select: { passengerId: true, startedAt: true, completedAt: true }
     });
+    const real = orders.filter(
+      (order) =>
+        order.startedAt && order.completedAt && (order.completedAt.getTime() - order.startedAt.getTime()) / 1000 >= INCENTIVE_MIN_TRIP_SECONDS
+    );
+    if (real.length === 0) return 0;
+    const passengerIds = Array.from(new Set(real.map((order) => order.passengerId)));
+    const driverDevices = await this.prisma.pushToken.findMany({
+      where: { userId: driverUserId, deviceId: { not: null } },
+      select: { deviceId: true }
+    });
+    const deviceIds = driverDevices.map((row) => row.deviceId!).filter(Boolean);
+    const sharedDevice = new Set<string>();
+    if (deviceIds.length > 0) {
+      const shared = await this.prisma.pushToken.findMany({
+        where: { userId: { in: passengerIds }, deviceId: { in: deviceIds } },
+        select: { userId: true }
+      });
+      for (const row of shared) sharedDevice.add(row.userId);
+    }
+    return passengerIds.filter((id) => !sharedDevice.has(id)).length;
   }
 
   private async claim(rule: RuleRow, driverProfileId: string, userId: string, dayKey: string, tripCount: number) {

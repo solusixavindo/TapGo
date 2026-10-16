@@ -141,7 +141,7 @@ export class WalletService {
     }
 
     try {
-      const transfer = await this.walletRepository.transaction(async (tx) => {
+      const transfer = await this.withSerializationRetry(() => this.walletRepository.transaction(async (tx) => {
         const fromWallet = await this.walletRepository.getOrCreateWallet(input.fromUserId, tx);
         const todaySum = await this.walletRepository.sumTodayTransferOut(fromWallet.id, tx);
         if (todaySum.plus(input.amount).gt(MAX_TRANSFER_PER_DAY)) {
@@ -161,7 +161,7 @@ export class WalletService {
           },
           tx
         );
-      });
+      }));
       // Setelah commit; replay idempoten tidak sampai sini, jadi tidak menggandakan.
       pushQuietly(this.push, recipient.id, accountPushMessages.transferReceived, { type: "wallet_transfer" });
       return { transfer, replayed: false };
@@ -183,6 +183,26 @@ export class WalletService {
         }
       }
       throw error;
+    }
+  }
+
+  /**
+   * Transaksi Serializable yang bertabrakan dengan transfer lain dari akun yang sama (P2034) diulang beberapa kali.
+   * Yang kalah bertemu saldo terbaru dan dijawab dengan benar (mis. saldo kurang), bukan 500. Bila tetap bertabrakan
+   * jawabannya 409 yang jelas; tidak ada saldo yang pernah bergerak pada percobaan yang gagal.
+   */
+  private async withSerializationRetry<T>(run: () => Promise<T>): Promise<T> {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await run();
+      } catch (error) {
+        const conflict = error instanceof Prisma.PrismaClientKnownRequestError && (error.code === "P2034" || error.code === "P2037");
+        if (!conflict) throw error;
+        if (attempt >= 3) {
+          throw new AppError("Saldo sedang berubah, coba lagi.", StatusCodes.CONFLICT, "TRANSFER_BALANCE_BUSY");
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25 * attempt));
+      }
     }
   }
 

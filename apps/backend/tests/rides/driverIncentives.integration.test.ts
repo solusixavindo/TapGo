@@ -221,7 +221,10 @@ describeIntegration("insentif harian driver", () => {
         driverProfileId: driver.profile.id,
         vehicleId: driver.vehicle.id
       });
-      await prisma.rideOrder.update({ where: { id: order.id }, data: { completedAt, totalFare } });
+      await prisma.rideOrder.update({
+        where: { id: order.id },
+        data: { completedAt, totalFare, startedAt: new Date(completedAt.getTime() - 10 * 60_000) }
+      });
     }
   }
 
@@ -329,6 +332,8 @@ describeIntegration("insentif harian driver", () => {
       driverProfileId: driver.profile.id,
       vehicleId: driver.vehicle.id
     });
+    // Perjalanan sungguhan sudah berjalan 10 menit sebelum diselesaikan.
+    await prisma.rideOrder.update({ where: { id: order.id }, data: { startedAt: new Date(Date.now() - 10 * 60_000) } });
     const before = await api("/api/v1/driver/incentives", tokenFor(driver.user));
     expect(before.status).toBe(200);
     expect(before.body.data.items[0]).toMatchObject({ tripCount: 0, claimed: false });
@@ -352,6 +357,53 @@ describeIntegration("insentif harian driver", () => {
   it("bukan driver ditolak", async () => {
     const passenger = await createUser("USER");
     expect((await api("/api/v1/driver/incentives", tokenFor(passenger))).status).toBe(403);
+  });
+
+  describe("pengaman kecurangan", () => {
+    it("perjalanan yang diselesaikan seketika (di bawah 3 menit) atau tanpa waktu mulai tidak dihitung", async () => {
+      const driver = await createDriverWithVehicle();
+      await makeRule({ targetTrips: 2 });
+      await completedTrips(driver, 1, NOW);
+      for (const [start, label] of [[new Date(NOW.getTime() - 30_000), "30 detik"], [null, "tanpa mulai"]] as const) {
+        const passenger = await createUser("USER", label);
+        const order = await createOrder({ passengerId: passenger.id, status: "COMPLETED", driverProfileId: driver.profile.id, vehicleId: driver.vehicle.id });
+        await prisma.rideOrder.update({ where: { id: order.id }, data: { completedAt: NOW, startedAt: start, totalFare: 12000 } });
+      }
+      const progress = await service().progressForDriver(driver.profile.id, driver.user.id, NOW);
+      expect(progress.items[0]).toMatchObject({ tripCount: 1, claimed: false });
+      expect(await prisma.driverIncentiveClaim.count()).toBe(0);
+    });
+
+    it("satu penumpang dihitung sekali per hari walau memesan berkali-kali", async () => {
+      const driver = await createDriverWithVehicle();
+      await makeRule({ targetTrips: 3 });
+      const sameRider = await createUser("USER", "Pemesan Berulang");
+      for (let i = 0; i < 5; i += 1) {
+        const order = await createOrder({ passengerId: sameRider.id, status: "COMPLETED", driverProfileId: driver.profile.id, vehicleId: driver.vehicle.id });
+        await prisma.rideOrder.update({
+          where: { id: order.id },
+          data: { completedAt: NOW, startedAt: new Date(NOW.getTime() - 600_000), totalFare: 12000 }
+        });
+      }
+      expect(await service().evaluateForDriver(driver.profile.id, driver.user.id, NOW)).toBe(0);
+      const progress = await service().progressForDriver(driver.profile.id, driver.user.id, NOW);
+      expect(progress.items[0]).toMatchObject({ tripCount: 1, claimed: false });
+      expect(await prisma.wallet.count({ where: { userId: driver.user.id } })).toBe(0);
+    });
+
+    it("penumpang yang berbagi perangkat dengan akun driver tidak dihitung", async () => {
+      const driver = await createDriverWithVehicle();
+      await makeRule({ targetTrips: 2 });
+      await prisma.pushToken.create({ data: { userId: driver.user.id, platform: "android", token: "tok-driver", deviceId: "dev-sama" } });
+      await completedTrips(driver, 1, NOW); // penumpang sah
+      const own = await createUser("USER", "Akun Kedua Driver");
+      await prisma.pushToken.create({ data: { userId: own.id, platform: "android", token: "tok-own", deviceId: "dev-sama" } });
+      const order = await createOrder({ passengerId: own.id, status: "COMPLETED", driverProfileId: driver.profile.id, vehicleId: driver.vehicle.id });
+      await prisma.rideOrder.update({ where: { id: order.id }, data: { completedAt: NOW, startedAt: new Date(NOW.getTime() - 600_000), totalFare: 12000 } });
+
+      const progress = await service().progressForDriver(driver.profile.id, driver.user.id, NOW);
+      expect(progress.items[0]).toMatchObject({ tripCount: 1, claimed: false });
+    });
   });
 
   describe("pengelolaan aturan oleh admin", () => {

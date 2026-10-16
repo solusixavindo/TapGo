@@ -156,6 +156,8 @@ describe.skipIf(!runIntegration)("Wallet Transfer API", () => {
     const statuses = results.map((r) => r.status).sort();
 
     expect(statuses.filter((s) => s === 201)).toHaveLength(1);
+    // Yang kalah ditolak dengan galat klien yang jelas, bukan 500.
+    expect(statuses.filter((s) => s >= 500)).toEqual([]);
     const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: sender.id } });
     expect(decimalString(wallet.balance)).toBe("50000.00");
   });
