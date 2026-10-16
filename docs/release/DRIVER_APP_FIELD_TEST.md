@@ -42,6 +42,13 @@ berturut-turut** (bila ada yang GAGAL di hari mana pun, perbaiki, lalu ulangi
 SELURUH rangkaian skenario itu dari awal — bukan cuma bagian yang gagal, sesuai
 aturan tetap `DRIVER_APP_READINESS_PLAN.md`).
 
+## F1b. Fase 2 — tiga skenario tambahan (Owner)
+| # | Skenario | Yang harus terjadi | Hasil | Catatan |
+|---|---|---|---|---|
+| 9 | Penilaian dua arah | Selesaikan satu perjalanan. Penumpang menilai driver 4 bintang. Di HP driver: panel "Bagaimana penumpang ini?" muncul, beri 5 bintang. Buka tab Pendapatan > Performa > Penilaian penumpang. | Panel hanya sekali per perjalanan; rata-rata dan ulasan tampil tanpa nama penumpang | |
+| 10 | Insentif harian | Di konsol buat aturan kecil (mis. 2 perjalanan, bonus Rp5.000, anggaran Rp50.000). Selesaikan 2 perjalanan di HP driver. | Kartu "Insentif hari ini" bergerak 1/2 lalu 2/2; bonus masuk saldo sekali, tampil di Riwayat saldo; konsol menampilkan "Hari ini: 1 driver" | | 
+| 11 | Pusat Bantuan | Akun > Pusat Bantuan: buka satu pertanyaan, kirim pertanyaan lewat "Tanya TapGo", balas dari konsol admin. | Tiket muncul di daftar; balasan tim terlihat setelah tarik layar | |
+
 ## F2. Uang sungguhan — tiga langkah Owner
 
 Prasyarat: `DRIVER_COMMISSION_ENABLED` **masih false** di server produksi sampai
