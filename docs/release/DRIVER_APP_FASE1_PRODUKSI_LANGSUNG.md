@@ -43,6 +43,8 @@ dipakai: Google Play membatasinya untuk aplikasi panggilan/alarm dan itu risiko 
 | 8 | Keputusan Owner: biaya top up Saldo PPOB dibatasi Rp2.500 untuk semua nominal dan semua pelanggan | `PPOB_TOPUP_FEE_CAP` (bawaan 2500), landing menuliskan batasnya, beban tercatat di Laba Rugi | `midtransTopUpFees`, `onlineTopUp.integration` |
 | 7 | Driver tidak melihat nilai biaya terhadap pendapatan yang dibuka | halaman top up menulis kapasitas komisi ("cukup untuk komisi 8% pesanan tunai senilai sekitar ...") | `onlineTopUp.integration` |
 
+| 9 | Keputusan Owner 16 Okt: pesanan tunai hanya bisa diterima bila Saldo TapGo driver >= Rp50.000 (dihitung SEBELUM komisi ditahan) dan peringatan isi saldo saat saldo <= Rp10.000 | `DRIVER_MIN_CASH_BALANCE=50000` (bawaan 0 = mati) menolak tawaran tunai dengan 402 `RIDE_CASH_MIN_BALANCE` (dicek pada baca-tulis atomik yang sama dengan penahanan komisi); `DRIVER_LOW_BALANCE_WARN` (bawaan 10000); ringkasan saldo membawa `minCashBalance` dan `lowBalanceWarnAt`; aplikasi: banner di Beranda dan peringatan di kartu saldo; landing: kalimat top up mengikuti batas; Pernyataan v2026-10-16.2 | `driverCashCommission` (batas, serentak, nonaktif), `onlineTopUp`, `widget_test` |
+
 Catatan keterbatasan: uji ujung-ke-ujung berjalan di satu mesin dengan jaringan lokal; waktu radio seluler dan penerimaan GPS HP
 ditambahkan di atas angka itu, jadi batas 3 detik harus dikonfirmasi lagi pada uji lapangan dua HP.
 
@@ -52,7 +54,7 @@ tetapi tidak ditagihkan (dana digital dikembalikan penuh), jadi pernyataan drive
 ## Syarat sebelum rilis ke produksi
 Backend (Owner di VPS, dipandu satu langkah per pesan): cadangan DB; latihan 2 migrasi (`ride_sos_alerts`,
 `driver_fatigue_and_face_recheck`) di database sementara; cutover; env `DRIVER_COMMISSION_ENABLED=true`
-(`DRIVER_COMMISSION_PERCENT` bawaan 8); pastikan `GOOGLE_OAUTH_CLIENT_ID` terisi dan `WALLET_TOPUP_ENABLED=true`; `DRIVER_FACE_CHECK_ENABLED` TIDAK diset;
+(`DRIVER_COMMISSION_PERCENT` bawaan 8), `DRIVER_MIN_CASH_BALANCE=50000`; pastikan `GOOGLE_OAUTH_CLIENT_ID` terisi dan `WALLET_TOPUP_ENABLED=true`; `DRIVER_FACE_CHECK_ENABLED` TIDAK diset;
 pasang zip konsol admin baru.
 
 Aplikasi: versi `1.0.0+16`, gerbang rilis lolos, APK diuji Owner di HP (**uji lapangan dua HP, 8 skenario, dua hari berbeda**),

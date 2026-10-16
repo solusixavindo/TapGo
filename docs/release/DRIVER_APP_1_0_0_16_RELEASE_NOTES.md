@@ -15,6 +15,10 @@ Berpasangan dengan backend `tapgo-c3b62f4` (sudah aktif di produksi); komisi bar
 4. **Akun > Password tapgolion.id**: akun Google dapat membuat password untuk isi Saldo TapGo di web.
 5. **Saldo segar**: saldo dimuat ulang saat kembali dari peramban setelah isi saldo, dan tarik layar di tab Pendapatan.
 
+6. **Saldo minimal menerima pesanan tunai** (Rp50.000, dihitung sebelum komisi ditahan; ditegakkan server) dan **peringatan isi saldo**
+   saat saldo <= Rp10.000: banner di Beranda dan peringatan di kartu saldo tab Pendapatan. Pernyataan versi 2026-10-16.2.
+   Berpasangan dengan backend yang memuat `DRIVER_MIN_CASH_BALANCE` (env produksi: 50000).
+
 ## Belum terbukti
 - Batas "gerak tampil di penumpang <= 3 dtk" terukur 218-808 ms di server lokal; waktu radio seluler dan GPS HP BELUM diuji.
   Uji lapangan dua HP (`DRIVER_APP_FIELD_TEST.md`) berlaku.
