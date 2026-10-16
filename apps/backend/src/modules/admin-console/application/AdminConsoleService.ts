@@ -1096,8 +1096,17 @@ export class AdminConsoleService {
       this.sumCommissionByTypesInRange(levelTypes, input),
       this.rewardSummaryReport(input),
       this.profitSharingSummaryReport(input),
-      // Bonus insentif harian yang sudah dibayarkan ke driver (beban usaha).
-      this.prisma.driverIncentiveClaim.aggregate({ where: { ...range }, _sum: { amount: true } }),
+      // Bonus insentif harian yang benar-benar dibayarkan ke driver (beban usaha), per tanggal pencairan. Klaim yang
+      // ditahan, ditolak, atau ditarik kembali (REVERSED) bukan beban.
+      this.prisma.driverIncentiveClaim.aggregate({
+        where: {
+          status: "PAID",
+          ...(input.dateFrom || input.dateTo
+            ? { settledAt: { ...(input.dateFrom ? { gte: input.dateFrom } : {}), ...(input.dateTo ? { lte: input.dateTo } : {}) } }
+            : {})
+        },
+        _sum: { amount: true }
+      }),
       this.prisma.invoice.findMany({
         where: { status: "PAID", ...invoiceDateRange },
         select: {

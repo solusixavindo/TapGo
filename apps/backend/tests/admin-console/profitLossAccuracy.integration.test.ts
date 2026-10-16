@@ -169,18 +169,26 @@ describe.skipIf(!runIntegration)("Laporan laba rugi: ketepatan hitungan", () => 
     expect(data.revenue.total).toBe("1816.00");
   });
 
-  it("insentif harian driver yang dibayarkan menjadi beban usaha dan mengurangi laba", async () => {
+  it("hanya bonus insentif yang BENAR-BENAR dibayar menjadi beban usaha (per tanggal pencairan)", async () => {
     const vip = await createUser("SUPER_ADMIN_VIP");
     const driver = await createUser("USER");
     const rule = await prisma.driverIncentiveRule.create({
       data: { name: "Uji", targetTrips: 3, bonusAmount: new Prisma.Decimal(20_000), createdById: vip.id }
     });
     const profile = await prisma.rideDriverProfile.create({ data: { userId: driver.id, status: "ACTIVE" } });
-    for (const [day, amount] of [["2026-10-14", 20_000], ["2026-10-15", 20_000]] as const) {
-      await prisma.driverIncentiveClaim.create({
-        data: { ruleId: rule.id, driverProfileId: profile.id, userId: driver.id, dayKey: day, tripCount: 3, amount: new Prisma.Decimal(amount) }
+    const claim = (dayKey: string, status: "PAID" | "PENDING" | "REVIEW" | "REJECTED" | "REVERSED", settledAt: Date | null) =>
+      prisma.driverIncentiveClaim.create({
+        data: {
+          ruleId: rule.id, driverProfileId: profile.id, userId: driver.id, dayKey, tripCount: 3, amount: new Prisma.Decimal(20_000),
+          status, settleAfter: new Date(), settledAt, countedOrderIds: []
+        }
       });
-    }
+    await claim("2026-10-10", "PAID", new Date());
+    await claim("2026-10-11", "PAID", new Date());
+    await claim("2026-10-12", "PENDING", null);
+    await claim("2026-10-13", "REVIEW", null);
+    await claim("2026-10-14", "REJECTED", new Date());
+    await claim("2026-10-15", "REVERSED", new Date());
 
     const data = await report(vip);
     expect(data.opex.driverIncentives).toBe("40000.00");

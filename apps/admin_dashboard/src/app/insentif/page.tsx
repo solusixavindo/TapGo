@@ -2,10 +2,15 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
+  IncentiveClaim,
+  IncentiveClaimStatus,
   IncentiveRule,
   IncentiveRuleInput,
+  actOnIncentiveClaim,
   createIncentiveRule,
+  formatMoment,
   formatRupiah,
+  listIncentiveClaims,
   listIncentiveRules,
   readRole,
   readToken,
@@ -72,6 +77,20 @@ function parseDraft(draft: Draft): { input?: Omit<IncentiveRuleInput, "isActive"
   return { input: { name, targetTrips: target, bonusAmount: bonus, minTripFare: minFare, dailyBudget: budget, startsAt, endsAt } };
 }
 
+const FLAG_LABEL: Record<string, string> = {
+  NEW_ACCOUNTS: "Mayoritas penumpang akun baru (< 72 jam)",
+  UNVERIFIED_PASSENGERS: "Mayoritas penumpang belum terverifikasi",
+  SAME_ROUTE: "Rute yang sama berulang",
+  HIGH_VOLUME: "Jumlah perjalanan tidak wajar dalam sehari",
+  PRIOR_FRAUD: "Driver pernah punya klaim ditolak atau ditarik kembali"
+};
+
+const CLAIM_TABS: Array<{ id: IncentiveClaimStatus; label: string }> = [
+  { id: "REVIEW", label: "Perlu tinjauan" },
+  { id: "PENDING", label: "Menunggu masa tahan" },
+  { id: "PAID", label: "Sudah dibayar" }
+];
+
 function Field(props: { label: string; hint?: string; value: string; onChange: (value: string) => void; type?: string; inputMode?: "numeric"; testId: string }) {
   return (
     <label className="block text-sm">
@@ -98,6 +117,18 @@ export default function IncentivePage() {
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [busy, setBusy] = useState(false);
+  const [claimTab, setClaimTab] = useState<IncentiveClaimStatus>("REVIEW");
+  const [claims, setClaims] = useState<IncentiveClaim[] | null>(null);
+  const [acting, setActing] = useState<{ id: string; action: "reject" | "reverse" } | null>(null);
+  const [claimNote, setClaimNote] = useState("");
+
+  const loadClaims = useCallback(async () => {
+    try {
+      setClaims(await listIncentiveClaims(claimTab));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Klaim belum dapat dimuat.");
+    }
+  }, [claimTab]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -124,6 +155,47 @@ export default function IncentivePage() {
     setRole(current);
     void load();
   }, [router, load]);
+
+  useEffect(() => {
+    if (!readToken() || !roleAtLeast(readRole(), "SUPER_ADMIN")) return;
+    void loadClaims();
+  }, [loadClaims]);
+
+  async function approveClaim(claim: IncentiveClaim) {
+    if (busy) return;
+    if (!window.confirm(`Setujui bonus ${formatRupiah(claim.amount)} untuk ${claim.driver.fullName}? Uang langsung masuk ke saldo driver yang dapat ditarik.`)) return;
+    setBusy(true);
+    try {
+      await actOnIncentiveClaim(claim.id, "approve", "");
+      setError("");
+      await Promise.all([loadClaims(), load()]);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Klaim belum dapat disetujui.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitClaimAction() {
+    if (busy || !acting) return;
+    const note = claimNote.trim();
+    if (note.length < 3) {
+      setError("Tulis alasan (minimal 3 huruf).");
+      return;
+    }
+    setBusy(true);
+    try {
+      await actOnIncentiveClaim(acting.id, acting.action, note);
+      setActing(null);
+      setClaimNote("");
+      setError("");
+      await Promise.all([loadClaims(), load()]);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Tindakan belum dapat diproses.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function startNew() {
     setEditing("new");
@@ -163,7 +235,7 @@ export default function IncentivePage() {
     if (busy) return;
     const message = rule.isActive
       ? `Nonaktifkan "${rule.name}"? Bonus baru tidak akan dibayarkan, bonus yang sudah dibayar tetap.`
-      : `Aktifkan "${rule.name}"? Driver yang sudah memenuhi target hari ini akan langsung menerima bonus saat berikutnya mereka membuka progres atau menyelesaikan perjalanan.`;
+      : `Aktifkan "${rule.name}"? Driver yang sudah memenuhi target hari ini akan mendapat klaim yang diverifikasi dulu sebelum dibayar.`;
     if (!window.confirm(message)) return;
     setBusy(true);
     try {
@@ -182,7 +254,7 @@ export default function IncentivePage() {
       <div className="mx-auto max-w-5xl">
         <ConsoleHeader
           title="Insentif Driver"
-          subtitle="Bonus harian untuk driver yang mencapai target perjalanan. Bonus langsung masuk ke saldo driver yang dapat ditarik dan tercatat sebagai beban di Laba Rugi."
+          subtitle="Bonus harian untuk driver yang mencapai target perjalanan. Bonus masuk ke saldo driver yang dapat ditarik setelah masa tahan dan verifikasi ulang, dan baru tercatat sebagai beban di Laba Rugi saat dibayar."
           role={role}
           actions={
             <button
@@ -277,6 +349,101 @@ export default function IncentivePage() {
             </section>
           ))}
         </div>
+
+        <section className="mt-10" data-testid="incentive-claims">
+          <h2 className="text-xl font-black">Klaim bonus</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Bonus tidak langsung masuk saldo: setiap klaim diverifikasi ulang setelah masa tahan. Klaim dengan tanda kecurigaan ditahan di sini
+            sampai Anda menyetujui atau menolaknya.
+          </p>
+          <div className="mb-4 mt-3 flex flex-wrap gap-1.5" role="tablist" aria-label="Status klaim">
+            {CLAIM_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={claimTab === tab.id}
+                onClick={() => setClaimTab(tab.id)}
+                className={["rounded-lg px-3.5 py-1.5 text-sm font-bold transition", claimTab === tab.id ? "bg-brand-navy text-white" : "bg-white text-slate-600 hover:bg-slate-200"].join(" ")}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          {claims && claims.length === 0 ? (
+            <p className="rounded-2xl bg-white px-6 py-8 text-center text-sm text-slate-500 shadow-sm">Tidak ada klaim pada tab ini.</p>
+          ) : null}
+          <div className="space-y-3">
+            {(claims ?? []).map((claim) => (
+              <article key={claim.id} data-testid="claim-row" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-black">{claim.driver.fullName}</h3>
+                    <p className="text-sm text-slate-600">
+                      {claim.driver.phone} · {claim.ruleName} · {claim.dayKey} · {claim.tripCount} perjalanan
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-black">{formatRupiah(claim.amount)}</p>
+                    <p className="text-xs text-slate-500">
+                      {claim.status === "PAID" && claim.settledAt ? `Dibayar ${formatMoment(claim.settledAt)}` : `Jatuh tempo ${formatMoment(claim.settleAfter)}`}
+                    </p>
+                  </div>
+                </div>
+                {claim.flags.length > 0 ? (
+                  <ul className="mt-3 space-y-1 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+                    {claim.flags.map((flag) => (
+                      <li key={flag}>⚠ {FLAG_LABEL[flag] ?? flag}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                {claim.reviewNote ? <p className="mt-2 text-xs text-slate-500">Catatan: {claim.reviewNote}</p> : null}
+
+                {acting?.id === claim.id ? (
+                  <div className="mt-3 rounded-xl bg-slate-50 p-4">
+                    <label className="text-sm font-bold" htmlFor={`claim-note-${claim.id}`}>
+                      {acting.action === "reject" ? "Alasan penolakan" : "Alasan menarik kembali bonus"}
+                    </label>
+                    <textarea
+                      id={`claim-note-${claim.id}`}
+                      value={claimNote}
+                      onChange={(event) => setClaimNote(event.target.value)}
+                      maxLength={280}
+                      rows={2}
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                    />
+                    <div className="mt-2 flex gap-2">
+                      <button type="button" disabled={busy} onClick={() => void submitClaimAction()} className="rounded-lg bg-rose-700 px-4 py-2 text-sm font-bold text-white hover:bg-rose-800 disabled:opacity-50">
+                        {busy ? "Memproses…" : acting.action === "reject" ? "Tolak klaim" : "Tarik kembali"}
+                      </button>
+                      <button type="button" disabled={busy} onClick={() => { setActing(null); setClaimNote(""); }} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700">
+                        Batal
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {claim.status === "REVIEW" ? (
+                      <button type="button" disabled={busy} onClick={() => void approveClaim(claim)} className="rounded-lg bg-emerald-700 px-3.5 py-1.5 text-sm font-bold text-white hover:bg-emerald-800">
+                        Setujui dan bayar
+                      </button>
+                    ) : null}
+                    {claim.status === "REVIEW" || claim.status === "PENDING" ? (
+                      <button type="button" disabled={busy} onClick={() => { setActing({ id: claim.id, action: "reject" }); setClaimNote(""); setError(""); }} className="rounded-lg bg-rose-50 px-3.5 py-1.5 text-sm font-bold text-rose-700 hover:bg-rose-100">
+                        Tolak
+                      </button>
+                    ) : null}
+                    {claim.status === "PAID" ? (
+                      <button type="button" disabled={busy} onClick={() => { setActing({ id: claim.id, action: "reverse" }); setClaimNote(""); setError(""); }} className="rounded-lg bg-rose-50 px-3.5 py-1.5 text-sm font-bold text-rose-700 hover:bg-rose-100">
+                        Tarik kembali
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        </section>
       </div>
     </main>
   );

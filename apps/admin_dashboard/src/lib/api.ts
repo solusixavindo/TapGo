@@ -937,6 +937,35 @@ export function updateIncentiveRule(id: string, patch: Partial<IncentiveRuleInpu
   return request<IncentiveRule>(`/admin/driver-incentives/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
 }
 
+export type IncentiveClaimStatus = "PENDING" | "REVIEW" | "PAID" | "REJECTED" | "REVERSED";
+
+export type IncentiveClaim = {
+  id: string;
+  ruleName: string;
+  dayKey: string;
+  tripCount: number;
+  amount: number;
+  status: IncentiveClaimStatus;
+  /** Kode tanda kecurigaan yang menahan klaim. */
+  flags: string[];
+  settleAfter: string;
+  settledAt: string | null;
+  reviewNote: string | null;
+  createdAt: string;
+  driver: { fullName: string; phone: string };
+};
+
+export function listIncentiveClaims(status?: IncentiveClaimStatus) {
+  return request<IncentiveClaim[]>(`/admin/driver-incentives/claims${status ? `?status=${status}` : ""}`);
+}
+
+export function actOnIncentiveClaim(id: string, action: "approve" | "reject" | "reverse", note: string) {
+  return request<{ id: string; status: IncentiveClaimStatus }>(`/admin/driver-incentives/claims/${id}/${action}`, {
+    method: "POST",
+    body: JSON.stringify({ note })
+  });
+}
+
 // --- Laba rugi (hanya SUPER_ADMIN_VIP) ----------------------------------------
 
 export type ProfitLossReport = {

@@ -2159,20 +2159,40 @@ model DriverIncentiveRule {
   @@map("driver_incentive_rules")
 }
 
-/// Satu bonus yang sudah dibayarkan. Unik per (aturan, driver, hari WIB) sehingga tidak pernah dibayar dua kali.
+enum DriverIncentiveClaimStatus {
+  PENDING
+  REVIEW
+  PAID
+  REJECTED
+  REVERSED
+}
+
+/// Satu klaim bonus (dibayar setelah masa tahan dan verifikasi ulang). Unik per (aturan, driver, hari WIB) sehingga tidak pernah dibayar dua kali.
 model DriverIncentiveClaim {
-  id              String   @id @default(uuid()) @db.Uuid
-  ruleId          String   @map("rule_id") @db.Uuid
-  driverProfileId String   @map("driver_profile_id") @db.Uuid
-  userId          String   @map("user_id") @db.Uuid
-  dayKey          String   @map("day_key") @db.VarChar(10)
-  tripCount       Int      @map("trip_count")
-  amount          Decimal  @db.Decimal(14, 2)
-  createdAt       DateTime @default(now()) @map("created_at")
+  id              String                     @id @default(uuid()) @db.Uuid
+  ruleId          String                     @map("rule_id") @db.Uuid
+  driverProfileId String                     @map("driver_profile_id") @db.Uuid
+  userId          String                     @map("user_id") @db.Uuid
+  dayKey          String                     @map("day_key") @db.VarChar(10)
+  tripCount       Int                        @map("trip_count")
+  amount          Decimal                    @db.Decimal(14, 2)
+  /// PENDING = menunggu masa tahan lalu diverifikasi ulang; REVIEW = ditahan untuk tinjauan admin (ada tanda
+  /// kecurigaan); PAID = sudah masuk saldo; REJECTED = tidak dibayar; REVERSED = sudah dibayar lalu ditarik kembali.
+  status          DriverIncentiveClaimStatus @default(PENDING)
+  settleAfter     DateTime                   @map("settle_after")
+  settledAt       DateTime?                  @map("settled_at")
+  /// Snapshot id perjalanan yang dihitung, untuk verifikasi ulang saat pencairan dan untuk audit.
+  countedOrderIds Json                       @map("counted_order_ids")
+  /// Alasan penahanan untuk tinjauan (kode tanda kecurigaan).
+  flags           Json?
+  reviewedById    String?                    @map("reviewed_by_id") @db.Uuid
+  reviewNote      String?                    @map("review_note") @db.VarChar(280)
+  createdAt       DateTime                   @default(now()) @map("created_at")
 
   rule DriverIncentiveRule @relation(fields: [ruleId], references: [id], onDelete: Restrict)
 
   @@unique([ruleId, driverProfileId, dayKey])
+  @@index([status, settleAfter])
   @@index([dayKey])
   @@index([userId, createdAt])
   @@map("driver_incentive_claims")

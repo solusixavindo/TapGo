@@ -8,6 +8,7 @@ import { initSentry } from "./core/monitoring/sentry.js";
 import { disconnectRateLimitStore } from "./core/security/rateLimitStore.js";
 import { DriverDocumentService } from "./modules/drivers/application/DriverDocumentService.js";
 import { expireStaleRideSearches } from "./modules/rides/application/rideSearchExpiry.js";
+import { DriverIncentiveService } from "./modules/rides/application/DriverIncentiveService.js";
 import { purgeOldDriverLocations } from "./modules/rides/application/rideLocationRetention.js";
 import { MembershipDocumentService } from "./modules/memberships/application/MembershipDocumentService.js";
 import { PpobService } from "./modules/ppob/application/PpobService.js";
@@ -159,6 +160,20 @@ async function purgeDriverLocations() {
     logger.error({ err: error }, "Failed to purge old driver location points");
   }
 }
+
+/** Klaim insentif yang lewat masa tahan diverifikasi ulang dan dicairkan tiap 10 menit (juga dilakukan saat driver membuka progres). */
+const INCENTIVE_SETTLE_INTERVAL_MS = 10 * 60 * 1000;
+const incentiveSettler = new DriverIncentiveService(prisma);
+async function settleIncentiveClaims() {
+  try {
+    const settled = await incentiveSettler.settleDueClaims();
+    if (settled > 0) logger.info({ settled }, "Driver incentive claims settled");
+  } catch (error) {
+    logger.error({ err: error }, "Failed to settle driver incentive claims");
+  }
+}
+const incentiveSettleTimer = setInterval(() => void settleIncentiveClaims(), INCENTIVE_SETTLE_INTERVAL_MS);
+incentiveSettleTimer.unref();
 
 const locationPurgeTimer = setInterval(() => void purgeDriverLocations(), LOCATION_PURGE_INTERVAL_MS);
 locationPurgeTimer.unref();

@@ -309,6 +309,8 @@ export class RideService {
       }
     }
 
+    await this.assertNotInLateCancelCooldown({ passengerId: input.userId });
+
     const order = await this.prisma.$transaction(async (tx) => {
       const quote = await tx.rideQuote.findUnique({
         where: { id: input.quoteId },
@@ -696,6 +698,48 @@ export class RideService {
       etaSeconds,
       ...(routePolyline ? { routePolyline } : {}),
     };
+  }
+
+  /**
+   * Penumpang yang berulang kali membatalkan SETELAH driver ditugaskan, atau driver yang berulang kali membatalkan SETELAH
+   * menerima, dijeda sebentar. Pembatalan tidak dikenai biaya uang, jadi tanpa ini pesan-lalu-batal (mengerjai driver,
+   * atau driver yang menimbun-lalu-melepas pesanan demi pesanan yang lebih baik) tidak punya konsekuensi apa pun.
+   * Batas dan jeda dari env (RIDE_LATE_CANCEL_LIMIT = 0 mematikannya).
+   */
+  private async assertNotInLateCancelCooldown(who: { passengerId: string } | { driverProfileId: string }) {
+    const limit = env.RIDE_LATE_CANCEL_LIMIT;
+    if (limit <= 0) return;
+    const now = Date.now();
+    const recent = await this.prisma.rideOrder.findMany({
+      where:
+        "passengerId" in who
+          ? {
+              passengerId: who.passengerId,
+              status: "CANCELLED_BY_PASSENGER",
+              cancellationFee: { gt: 0 },
+              cancelledAt: { gte: new Date(now - 24 * 3600_000) },
+            }
+          : {
+              driverProfileId: who.driverProfileId,
+              status: "CANCELLED_BY_DRIVER",
+              cancelledAt: { gte: new Date(now - 24 * 3600_000) },
+            },
+      orderBy: { cancelledAt: "desc" },
+      take: limit,
+      select: { cancelledAt: true },
+    });
+    if (recent.length < limit) return;
+    const latest = recent[0]!.cancelledAt!.getTime();
+    const until = latest + env.RIDE_LATE_CANCEL_COOLDOWN_MINUTES * 60_000;
+    if (until <= now) return;
+    const minutes = Math.max(1, Math.ceil((until - now) / 60_000));
+    throw new AppError(
+      "passengerId" in who
+        ? `Anda terlalu sering membatalkan pesanan setelah driver ditugaskan. Coba lagi ${minutes} menit lagi.`
+        : `Anda terlalu sering membatalkan pesanan yang sudah diterima. Terima pesanan lagi ${minutes} menit lagi.`,
+      StatusCodes.TOO_MANY_REQUESTS,
+      "passengerId" in who ? "RIDE_PASSENGER_CANCEL_COOLDOWN" : "RIDE_DRIVER_CANCEL_COOLDOWN",
+    );
   }
 
   async cancelByPassenger(input: {
@@ -1237,6 +1281,7 @@ export class RideService {
         "RIDE_DRIVER_NOT_ACTIVE",
       );
     }
+    await this.assertNotInLateCancelCooldown({ driverProfileId: profile.id });
     // Lapis pertahanan KEDUA untuk gerbang recheck (lihat listOffersForDriver)
     // — otoritatif di titik penerimaan sungguhan, bukan cuma di daftar tawaran.
     if (await this.faceCheck.isRecheckDue(input.userId)) {

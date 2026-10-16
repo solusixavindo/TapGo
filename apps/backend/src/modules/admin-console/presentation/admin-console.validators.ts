@@ -286,3 +286,12 @@ export const adminIncentiveUpdateSchema = z.object({
     .partial()
     .refine((value) => Object.keys(value).length > 0, "Tidak ada perubahan.")
 });
+
+export const adminIncentiveClaimListSchema = z.object({
+  query: z.object({ status: z.enum(["PENDING", "REVIEW", "PAID", "REJECTED", "REVERSED"]).optional() })
+});
+
+export const adminIncentiveClaimActionSchema = z.object({
+  params: z.object({ id: z.string().uuid() }),
+  body: z.object({ note: z.string().trim().max(280).optional() })
+});

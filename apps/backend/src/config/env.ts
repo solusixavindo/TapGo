@@ -260,6 +260,13 @@ const envSchema = z.object({
   /// Berapa hari jejak lokasi driver yang terkait sebuah perjalanan disimpan (bukti sengketa/keselamatan).
   /// Titik tanpa perjalanan (driver hanya online) dibuang setelah 1 hari. Lihat rideLocationRetention.ts.
   RIDE_LOCATION_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(14),
+  /// Masa tahan bonus insentif harian driver sebelum diverifikasi ulang dan dibayar (jam). Bonus tidak pernah
+  /// langsung masuk saldo: masa ini memberi waktu bagi pengembalian dana, pembatalan, dan tinjauan admin.
+  INCENTIVE_HOLD_HOURS: z.coerce.number().min(0).max(168).default(24),
+  /// Pembatalan setelah driver ditugaskan (penumpang) atau setelah menerima (driver): berapa kali dalam 24 jam sebelum
+  /// akun itu dijeda, dan lama jedanya. 0 = tanpa batas.
+  RIDE_LATE_CANCEL_LIMIT: z.coerce.number().int().min(0).max(50).default(3),
+  RIDE_LATE_CANCEL_COOLDOWN_MINUTES: z.coerce.number().int().min(1).max(1440).default(30),
   /// Adapter provider PPOB (Stage R2.7/R2.8). Default "disabled": setiap
   /// pembelian dibatalkan dengan refund penuh dan 503 PPOB_PROVIDER_DISABLED.
   /// "stub" menyalakan adapter sintetis deterministik untuk UAT. "digiflazz"

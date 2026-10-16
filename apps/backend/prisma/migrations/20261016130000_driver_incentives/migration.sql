@@ -20,6 +20,9 @@ CREATE TABLE "driver_incentive_rules" (
     CONSTRAINT "driver_incentive_rules_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateEnum
+CREATE TYPE "DriverIncentiveClaimStatus" AS ENUM ('PENDING', 'REVIEW', 'PAID', 'REJECTED', 'REVERSED');
+
 -- CreateTable
 CREATE TABLE "driver_incentive_claims" (
     "id" UUID NOT NULL,
@@ -29,6 +32,13 @@ CREATE TABLE "driver_incentive_claims" (
     "day_key" VARCHAR(10) NOT NULL,
     "trip_count" INTEGER NOT NULL,
     "amount" DECIMAL(14,2) NOT NULL,
+    "status" "DriverIncentiveClaimStatus" NOT NULL DEFAULT 'PENDING',
+    "settle_after" TIMESTAMP(3) NOT NULL,
+    "settled_at" TIMESTAMP(3),
+    "counted_order_ids" JSONB NOT NULL,
+    "flags" JSONB,
+    "reviewed_by_id" UUID,
+    "review_note" VARCHAR(280),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "driver_incentive_claims_pkey" PRIMARY KEY ("id")
@@ -39,6 +49,9 @@ CREATE UNIQUE INDEX "driver_incentive_claims_rule_id_driver_profile_id_day_key_k
 
 -- CreateIndex
 CREATE INDEX "driver_incentive_claims_day_key_idx" ON "driver_incentive_claims"("day_key");
+
+-- CreateIndex
+CREATE INDEX "driver_incentive_claims_status_settle_after_idx" ON "driver_incentive_claims"("status", "settle_after");
 
 -- CreateIndex
 CREATE INDEX "driver_incentive_claims_user_id_created_at_idx" ON "driver_incentive_claims"("user_id", "created_at");

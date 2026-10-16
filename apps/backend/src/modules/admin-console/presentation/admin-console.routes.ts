@@ -46,6 +46,8 @@ import {
   adminDigiflazzTransactionQuerySchema,
   adminInsightsQuerySchema,
   adminIncentiveCreateSchema,
+  adminIncentiveClaimActionSchema,
+  adminIncentiveClaimListSchema,
   adminIncentiveUpdateSchema,
   adminPaymentQuerySchema,
   adminReportQuerySchema,
@@ -378,6 +380,43 @@ adminConsoleRouter.post(
   asyncHandler(async (req, res) => {
     const data = await driverIncentiveService.createRule(req.body, req.auth!.userId);
     res.status(201).json({ success: true, data });
+  })
+);
+// Klaim bonus: yang ditahan untuk tinjauan (REVIEW) dan yang menunggu masa tahan (PENDING). Aksi hanya Super Admin dan tercatat di audit.
+adminConsoleRouter.get(
+  "/driver-incentives/claims",
+  requireRoles("SUPER_ADMIN"),
+  validateRequest(adminIncentiveClaimListSchema),
+  asyncHandler(async (req, res) => {
+    const status = req.query.status as "PENDING" | "REVIEW" | "PAID" | "REJECTED" | "REVERSED" | undefined;
+    res.json({ success: true, data: await driverIncentiveService.listClaims(status) });
+  })
+);
+adminConsoleRouter.post(
+  "/driver-incentives/claims/:id/approve",
+  requireRoles("SUPER_ADMIN"),
+  validateRequest(adminIncentiveClaimActionSchema),
+  asyncHandler(async (req, res) => {
+    const data = await driverIncentiveService.approveClaim(String(req.params.id), req.auth!.userId, req.body.note);
+    res.json({ success: true, data });
+  })
+);
+adminConsoleRouter.post(
+  "/driver-incentives/claims/:id/reject",
+  requireRoles("SUPER_ADMIN"),
+  validateRequest(adminIncentiveClaimActionSchema),
+  asyncHandler(async (req, res) => {
+    const data = await driverIncentiveService.rejectClaim(String(req.params.id), req.auth!.userId, req.body.note ?? "");
+    res.json({ success: true, data });
+  })
+);
+adminConsoleRouter.post(
+  "/driver-incentives/claims/:id/reverse",
+  requireRoles("SUPER_ADMIN"),
+  validateRequest(adminIncentiveClaimActionSchema),
+  asyncHandler(async (req, res) => {
+    const data = await driverIncentiveService.reverseClaim(String(req.params.id), req.auth!.userId, req.body.note ?? "");
+    res.json({ success: true, data });
   })
 );
 adminConsoleRouter.patch(
