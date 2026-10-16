@@ -22,6 +22,21 @@ Berpasangan dengan backend `tapgo-c3b62f4` (sudah aktif di produksi); komisi bar
 7. **Buka aplikasi lebih cepat**: perjalanan aktif tidak lagi dibaca dua kali berturut-turut saat membuka aplikasi (pemeriksaan
    sesi dan pemuatan ruang kerja memakai satu permintaan). Satu putaran jaringan lebih sedikit sebelum beranda tampil.
 
+## Fase 2 (ikut rilis pertama)
+8. **Penilaian penumpang**: rata-rata bintang di kartu Performa (tab Pendapatan) dan layar "Penilaian penumpang" (sebaran bintang,
+   ulasan terbaru). Identitas penumpang tidak pernah dikirim. Belum ada penilaian = "Belum ada", bukan 0,0.
+9. **Driver menilai penumpang** setelah perjalanan selesai (1-5 bintang + catatan, boleh dilewati). Hanya dilihat tim TapGo.
+10. **Pusat Bantuan** (Akun > Bantuan): 8 pertanyaan umum (komisi, saldo minimal, isi saldo, penarikan, SOS, verifikasi wajah,
+    tawaran tidak muncul, pembatalan) dan "Tanya TapGo" (tiket dengan balasan tim).
+11. **Insentif harian**: kartu "Insentif hari ini" di tab Pendapatan (target perjalanan, kemajuan, bonus). Bonus otomatis masuk ke
+    saldo yang dapat ditarik dan tampil di riwayat saldo. Aturan diatur Super Admin di konsol (Keuangan > Insentif Driver);
+    tanpa aturan aktif, kartu tidak tampil.
+
+Berpasangan dengan backend yang memuat dua migrasi baru (`ride_passenger_ratings`, `driver_incentives`). Tanpa backend itu,
+fitur Fase 2 diam (kartu tidak tampil, penilaian penumpang gagal dengan pesan, tiket tetap berfungsi).
+
+Tidak ikut (alasan di `DRIVER_APP_FASE2.md`): telepon anonim, peta area ramai, antrean offline, penarikan di dalam aplikasi.
+
 ## Belum terbukti
 - Batas "gerak tampil di penumpang <= 3 dtk" terukur 218-808 ms di server lokal; waktu radio seluler dan GPS HP BELUM diuji.
   Uji lapangan dua HP (`DRIVER_APP_FIELD_TEST.md`) berlaku.
