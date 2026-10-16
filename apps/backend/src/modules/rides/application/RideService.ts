@@ -1045,10 +1045,9 @@ export class RideService {
   }
 
   /**
-   * Statistik objektif dari data yang benar-benar ada — TIDAK ada rating
-   * bintang penumpang→driver di sini: model Review yang ada di schema
-   * menempel ke tabel Ride legacy yang sudah tidak dipakai jalur manapun
-   * sejak Release 2, jadi menampilkan "rating" dari sana akan menyesatkan.
+   * Statistik objektif dari data yang benar-benar ada. Penilaian bintang diambil dari
+   * RideDriverProfile.ratingAverage/ratingCount (tabel RideRating, Release 2), BUKAN dari
+   * model Review lama yang menempel ke tabel Ride legacy.
    *
    * - acceptanceRate: DRIVER_ASSIGNED vs DRIVER_REJECTED_OFFER (RideEvent).
    * - completionRate/cancellationRate: dihitung hanya dari order yang
@@ -1138,6 +1137,55 @@ export class RideService {
       ratingAverage: profile.ratingCount > 0 ? Number(profile.ratingAverage) : null,
       ratingCount: profile.ratingCount,
     };
+  }
+
+  /**
+   * Driver menilai penumpang setelah perjalanan selesai. Satu penilaian per order; hanya driver order itu.
+   * Hanya dicatat (keselamatan dan tinjauan admin): tidak dikirim ke penumpang maupun driver lain.
+   */
+  async ratePassenger(input: {
+    userId: string;
+    publicReference: string;
+    stars: number;
+    note?: string;
+  }) {
+    const profile = await this.requireDriverProfile(input.userId);
+    const order = await this.prisma.rideOrder.findUnique({
+      where: { publicReference: input.publicReference },
+      select: { id: true, passengerId: true, status: true, driverProfileId: true },
+    });
+    if (!order || order.driverProfileId !== profile.id) {
+      throw new AppError("Perjalanan tidak ditemukan", StatusCodes.NOT_FOUND, "RIDE_ORDER_NOT_FOUND");
+    }
+    if (order.status !== "COMPLETED") {
+      throw new AppError(
+        "Penumpang hanya dapat dinilai setelah perjalanan selesai",
+        StatusCodes.CONFLICT,
+        "RIDE_NOT_COMPLETED",
+      );
+    }
+    const note = input.note?.trim() ? input.note.trim() : null;
+    try {
+      return await this.prisma.ridePassengerRating.create({
+        data: {
+          rideOrderId: order.id,
+          passengerId: order.passengerId,
+          driverProfileId: profile.id,
+          stars: input.stars,
+          note,
+        },
+        select: { stars: true, note: true, createdAt: true },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new AppError(
+          "Penumpang pada perjalanan ini sudah dinilai",
+          StatusCodes.CONFLICT,
+          "RIDE_PASSENGER_RATING_ALREADY_SUBMITTED",
+        );
+      }
+      throw error;
+    }
   }
 
   /**

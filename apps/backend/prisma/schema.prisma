@@ -1812,15 +1812,16 @@ model RideOrder {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  passenger     User                 @relation("RideOrderPassenger", fields: [passengerId], references: [id], onDelete: Cascade)
-  driverProfile RideDriverProfile?   @relation("RideOrderDriver", fields: [driverProfileId], references: [id])
-  vehicle       RideVehicle?         @relation("RideOrderVehicle", fields: [vehicleId], references: [id])
-  quote         RideQuote            @relation(fields: [quoteId], references: [id])
-  events        RideEvent[]
-  locations     RideDriverLocation[]
-  chatMessages  ChatMessage[]
-  rating        RideRating?
-  sosAlerts     RideSosAlert[]
+  passenger       User                 @relation("RideOrderPassenger", fields: [passengerId], references: [id], onDelete: Cascade)
+  driverProfile   RideDriverProfile?   @relation("RideOrderDriver", fields: [driverProfileId], references: [id])
+  vehicle         RideVehicle?         @relation("RideOrderVehicle", fields: [vehicleId], references: [id])
+  quote           RideQuote            @relation(fields: [quoteId], references: [id])
+  events          RideEvent[]
+  locations       RideDriverLocation[]
+  chatMessages    ChatMessage[]
+  rating          RideRating?
+  passengerRating RidePassengerRating?
+  sosAlerts       RideSosAlert[]
 
   @@index([passengerId, createdAt])
   @@index([driverProfileId, createdAt])
@@ -1846,6 +1847,24 @@ model RideRating {
 
   @@index([driverProfileId])
   @@map("ride_ratings")
+}
+
+/// Penilaian driver terhadap penumpang untuk satu order selesai (1..5 bintang, catatan
+/// opsional). SATU baris per order. Hanya dicatat untuk keselamatan dan tinjauan admin:
+/// TIDAK dikirim ke driver lain maupun ke penumpang.
+model RidePassengerRating {
+  id              String   @id @default(uuid()) @db.Uuid
+  rideOrderId     String   @unique @map("ride_order_id") @db.Uuid
+  passengerId     String   @map("passenger_id") @db.Uuid
+  driverProfileId String   @map("driver_profile_id") @db.Uuid
+  stars           Int      @db.SmallInt
+  note            String?  @db.VarChar(280)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  rideOrder RideOrder @relation(fields: [rideOrderId], references: [id], onDelete: Cascade)
+
+  @@index([passengerId])
+  @@map("ride_passenger_ratings")
 }
 
 /// Catatan audit immutable untuk setiap transisi material.

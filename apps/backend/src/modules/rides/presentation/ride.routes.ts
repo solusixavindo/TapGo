@@ -56,6 +56,7 @@ import {
   driverSosSchema,
   listRidesSchema,
   rateRideSchema,
+  ratePassengerSchema,
   rideReferenceSchema,
 } from "./ride.validators.js";
 
@@ -299,6 +300,21 @@ driverRideRouter.get(
   asyncHandler(async (req, res) => {
     const data = await rideService.walletSummary(req.auth!.userId);
     res.json({ success: true, data });
+  }),
+);
+
+driverRideRouter.post(
+  "/rides/:reference/rate-passenger",
+  rideWriteRateLimiter,
+  validateRequest(ratePassengerSchema),
+  asyncHandler(async (req, res) => {
+    const data = await rideService.ratePassenger({
+      userId: req.auth!.userId,
+      publicReference: referenceParam(req.params.reference),
+      stars: req.body.stars,
+      ...(req.body.note ? { note: req.body.note } : {}),
+    });
+    res.status(201).json({ success: true, data });
   }),
 );
 

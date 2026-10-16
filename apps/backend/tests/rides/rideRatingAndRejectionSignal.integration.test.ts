@@ -516,4 +516,53 @@ describeIntegration("sinyal penolakan dan penilaian perjalanan", () => {
       expect(response.status).toBe(403);
     });
   });
+
+  describe("driver menilai penumpang", () => {
+    const ratePassenger = (token: string, reference: string, body: unknown) =>
+      api(`/api/v1/driver/rides/${reference}/rate-passenger`, token, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body)
+      });
+
+    it("driver order menilai sekali; hasil tidak bocor ke penumpang", async () => {
+      const { passenger, driver, order } = await completedOrder();
+      const first = await ratePassenger(tokenFor(driver.user), order.publicReference, { stars: 4, note: "Sopan" });
+      expect(first.status).toBe(201);
+      expect(first.body.data).toMatchObject({ stars: 4, note: "Sopan" });
+      const stored = await prisma.ridePassengerRating.findUniqueOrThrow({ where: { rideOrderId: order.id } });
+      expect(stored.passengerId).toBe(passenger.id);
+      expect(stored.driverProfileId).toBe(driver.profile.id);
+
+      const again = await ratePassenger(tokenFor(driver.user), order.publicReference, { stars: 5 });
+      expect(again.status).toBe(409);
+      expect(again.body.code).toBe("RIDE_PASSENGER_RATING_ALREADY_SUBMITTED");
+
+      const view = await detail(tokenFor(passenger), order.publicReference);
+      expect(view.raw).not.toContain("Sopan");
+    });
+
+    it("hanya driver order itu, hanya setelah selesai, bintang 1..5", async () => {
+      const { driver, order } = await completedOrder();
+      const stranger = await createDriverWithVehicle("Driver Asing");
+      expect((await ratePassenger(tokenFor(stranger.user), order.publicReference, { stars: 5 })).status).toBe(404);
+
+      const passenger = await createUser("USER");
+      const running = await createOrder({
+        passengerId: passenger.id,
+        status: "IN_TRIP",
+        driverProfileId: driver.profile.id,
+        vehicleId: driver.vehicle.id
+      });
+      const early = await ratePassenger(tokenFor(driver.user), running.publicReference, { stars: 5 });
+      expect(early.status).toBe(409);
+      expect(early.body.code).toBe("RIDE_NOT_COMPLETED");
+
+      expect((await ratePassenger(tokenFor(driver.user), order.publicReference, { stars: 6 })).status).toBe(400);
+      expect((await ratePassenger(tokenFor(driver.user), order.publicReference, { stars: 3.5 })).status).toBe(400);
+      // Penumpang tidak bisa memakai rute driver.
+      const buyer = await createUser("USER");
+      expect((await ratePassenger(tokenFor(buyer), order.publicReference, { stars: 5 })).status).toBe(403);
+    });
+  });
 });

@@ -85,6 +85,8 @@ export const rateRideSchema = z.object({
   }),
 });
 
+export const ratePassengerSchema = rateRideSchema;
+
 export const cancelRideSchema = z.object({
   params: z.object({ reference: publicReference }),
   body: z.object({
