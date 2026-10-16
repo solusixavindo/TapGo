@@ -360,6 +360,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _passwordFocusNode = FocusNode();
   bool _isRegister = false;
   bool _isSubmitting = false;
+  Future<Map<String, dynamic>?>? _earlyVerificationStatus;
   int _logoTapCount = 0;
 
   Future<void> _continueToDashboard() async {
@@ -390,6 +391,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       _tapGoDebugLog('[TapGo Auth] auth_response_mapping:$authMode');
       _validateAuthResult(authResult);
       _apiClient.setAccessToken(authResult.accessToken);
+      // Status verifikasi diminta SEKARANG, berjalan bersamaan dengan penyimpanan sesi di bawah, bukan baru setelahnya
+      // (sebelumnya: simpan sesi lalu satu putaran jaringan lagi sebelum beranda tampil).
+      _earlyVerificationStatus = _fetchVerificationStatusQuietly();
       var session = _sessionFromAuthUser(
         authResult.user,
         accessToken: authResult.accessToken,
@@ -487,10 +491,20 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   /// backend tetap menjadi penjaga sebenarnya untuk setiap aksi, dan
   /// mengunci pengguna di luar aplikasi karena satu permintaan status yang
   /// gagal akan lebih merugikan daripada melewatkan gate satu kali.
+  Future<Map<String, dynamic>?> _fetchVerificationStatusQuietly() async {
+    try {
+      return await _apiClient.verificationStatus();
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _runVerificationGateIfNeeded() async {
     try {
-      final status = await _apiClient.verificationStatus();
-      if (!mounted || status['requiresVerification'] != true) {
+      final status =
+          await (_earlyVerificationStatus ?? _fetchVerificationStatusQuietly());
+      _earlyVerificationStatus = null;
+      if (!mounted || status == null || status['requiresVerification'] != true) {
         return;
       }
       await Navigator.of(context).push(

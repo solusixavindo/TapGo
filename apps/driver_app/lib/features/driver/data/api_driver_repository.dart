@@ -233,7 +233,10 @@ class ApiDriverRepository implements DriverRepository {
     _applyToken();
     if (_session == null) return null;
     try {
-      await currentRide();
+      // Pemeriksaan sesi ini sekaligus membaca perjalanan aktif. Hasilnya disimpan sebentar supaya pemuatan
+      // ruang kerja yang langsung menyusul (refreshWorkspace) tidak mengulang permintaan yang sama.
+      final ride = await _fetchCurrentRide();
+      _restoredRide = (ride: ride, at: DateTime.now());
       return _session;
     } on DriverApiException catch (error) {
       // Hanya kegagalan auth sungguhan yang menghapus sesi. Status
@@ -495,8 +498,24 @@ class ApiDriverRepository implements DriverRepository {
     return DriverPerformanceSummary.fromJson(data);
   }
 
+  /// Perjalanan aktif hasil pemeriksaan sesi saat membuka aplikasi. Hanya dipakai SEKALI oleh pemanggilan
+  /// [currentRide] pertama yang menyusul dalam [_restoredRideTtl], lalu dibuang: pembacaan berikutnya (polling,
+  /// setelah terima/batal) selalu ke server, jadi tidak pernah basi.
+  ({DriverRide? ride, DateTime at})? _restoredRide;
+  static const _restoredRideTtl = Duration(seconds: 5);
+
   @override
   Future<DriverRide?> currentRide() async {
+    final restored = _restoredRide;
+    _restoredRide = null;
+    if (restored != null &&
+        DateTime.now().difference(restored.at) < _restoredRideTtl) {
+      return restored.ride;
+    }
+    return _fetchCurrentRide();
+  }
+
+  Future<DriverRide?> _fetchCurrentRide() async {
     final data =
         await _request(() => _dio.get<dynamic>('/driver/rides/current'));
     if (data.isEmpty || data['isNull'] == true) return null;

@@ -405,24 +405,13 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
                   onTimeout: () => restoredSession!,
                 );
           }
-          try {
-            final production = await _apiClient.productionSnapshot();
-            restoredSession = restoredSession.copyWith(
-              activePackageName: production.sessionPatch.activePackageName,
-              walletBalance: production.sessionPatch.walletBalance,
-              ppobBalance: production.sessionPatch.ppobBalance,
-              lastInvoiceNumber: production.sessionPatch.lastInvoiceNumber,
-              membershipJoinedAt: production.sessionPatch.membershipJoinedAt,
-              isDemoMode: false,
-            );
-          } catch (error) {
-            _tapGoDebugLog(
-              '[TapGo Binding] restore production sync failed: $error',
-            );
-          }
+          // Snapshot produksi (paket + saldo) TIDAK diambil di sini: beranda memuatnya sendiri begitu tampil
+          // (_productionSnapshotProvider), jadi mengambilnya di sini hanya menambah satu putaran jaringan berurutan
+          // sebelum layar pertama muncul dan menggandakan permintaan yang sama. Selama menunggu, beranda memakai
+          // paket dan saldo tersimpan dari sesi terakhir.
           auth = true;
           await _persistentStore
-              .saveSession(restoredSession!)
+              .saveSession(restoredSession)
               .timeout(const Duration(seconds: 2), onTimeout: () => false);
         } catch (error) {
           _tapGoDebugLog('[TapGo Auth] auth/me restore failed: $error');
