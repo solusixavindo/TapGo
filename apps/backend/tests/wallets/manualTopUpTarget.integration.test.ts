@@ -162,7 +162,7 @@ describe.skipIf(!runIntegration)("Top up manual: tujuan Saldo TapGo dan Saldo PP
     expect(ledger.metadata).toMatchObject({ target: "WALLET" });
   });
 
-  it("saldo hasil top up tidak dapat ditarik maupun ditransfer, tetapi penghasilan yang sudah ada tetap dapat ditarik", async () => {
+  it("saldo hasil top up tidak dapat ditarik tetapi dapat ditransfer, dan penerima tetap tidak dapat menariknya", async () => {
     const user = await makeUser();
     const peer = await makeUser();
     const admin = await makeUser("SUPER_ADMIN");
@@ -181,21 +181,24 @@ describe.skipIf(!runIntegration)("Top up manual: tujuan Saldo TapGo dan Saldo PP
     const bank = { bankName: "BCA", accountNumber: "1234567890", accountHolderName: "Uji" };
     // Tarik lebih dari bagian yang dapat ditarik (Rp80.000) ditolak walau saldo total cukup.
     await expect(walletService.requestWithdrawal({ userId: user.id, amount: new Prisma.Decimal(100_000), ...bank })).rejects.toThrow();
-    // Transfer P2P juga hanya dari bagian yang dapat ditarik.
-    await expect(
-      walletService.transfer({ fromUserId: user.id, recipientPhone: peer.phone, amount: new Prisma.Decimal(100_000), idempotencyKey: "uji-top-up-transfer-1" })
-    ).rejects.toThrow();
-    expect((await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } })).balance.toNumber()).toBe(80_000 + order.transferAmount);
 
-    // Kontrol positif: transfer dalam batas bagian yang dapat ditarik BERHASIL, jadi penolakan di atas memang
-    // karena saldo top up, bukan karena penerima atau aturan lain.
-    await walletService.transfer({ fromUserId: user.id, recipientPhone: peer.phone, amount: new Prisma.Decimal(20_000), idempotencyKey: "uji-top-up-transfer-2" });
-    // Penghasilan Rp50.000 (<= sisa bagian yang dapat ditarik) tetap bisa ditarik.
+    // Transfer P2P boleh memakai saldo hasil top up: Rp100.000 diambil dari bagian top up
+    // lebih dulu, sehingga bagian yang dapat ditarik pengirim tidak berkurang.
+    await walletService.transfer({ fromUserId: user.id, recipientPhone: peer.phone, amount: new Prisma.Decimal(100_000), idempotencyKey: "uji-top-up-transfer-1" });
+    const sender = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
+    expect(sender.cashBalance.toNumber()).toBe(80_000);
+    expect(sender.balance.toNumber()).toBe(80_000 + order.transferAmount - 100_000);
+    // Penerima mendapat saldo itu sebagai saldo top up: tidak dapat ditarik.
+    const received = await prisma.wallet.findUniqueOrThrow({ where: { userId: peer.id } });
+    expect(received.balance.toNumber()).toBe(100_000);
+    expect(received.cashBalance.toNumber()).toBe(0);
+    await expect(walletService.requestWithdrawal({ userId: peer.id, amount: new Prisma.Decimal(50_000), ...bank })).rejects.toThrow();
+
+    // Penghasilan Rp50.000 (<= bagian yang dapat ditarik) tetap bisa ditarik.
     await walletService.requestWithdrawal({ userId: user.id, amount: new Prisma.Decimal(50_000), ...bank });
     const after = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
-    // 80.000 - 20.000 (transfer) - 50.000 (tarik) = 10.000 dapat ditarik; saldo top up utuh.
-    expect(after.cashBalance.toNumber()).toBe(10_000);
-    expect(after.balance.toNumber()).toBe(10_000 + order.transferAmount);
+    expect(after.cashBalance.toNumber()).toBe(30_000);
+    expect(after.balance.toNumber()).toBe(30_000 + order.transferAmount - 100_000);
   });
 
   it("pesanan lama tanpa penanda tujuan dikredit ke Saldo TapGo seperti semula", async () => {
