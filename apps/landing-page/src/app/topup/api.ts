@@ -161,6 +161,8 @@ export type TopUpOptions = {
   walletFeeCap?: number | null;
   /** Persen komisi pesanan tunai; hanya untuk akun driver saat komisi menyala (null selainnya). */
   commissionPercent?: number | null;
+  /** Saldo minimal (rupiah) untuk menerima pesanan tunai; null bila tidak berlaku. Hanya akun driver saat komisi menyala. */
+  cashOrderMinBalance?: number | null;
   /** Batas biaya layanan top up Saldo PPOB untuk semua akun; selisihnya ditanggung TapGo. */
   ppobFeeCap?: number | null;
   minimum: Record<TopUpTarget, number>;

@@ -820,6 +820,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                 children: [
                   _StatusHeroCard(state: state),
                   const _NotificationOffBanner(),
+                  const _LowBalanceBanner(),
                   if (state.message != null) ...[
                     const SizedBox(height: 12),
                     ErrorNotice(message: state.message!),
@@ -2465,6 +2466,61 @@ String _formatDuration(int minutes) {
 /// Banner keselamatan non-blocking (kelelahan atau ajakan verifikasi ulang)
 /// — beda dari [ErrorNotice]: warna netral (bukan merah error) karena ini
 /// bukan kegagalan, dan opsional punya tombol aksi.
+/// Peringatan isi saldo di Beranda: saldo TapGo pada/di bawah ambang (Rp10.000 menurut server) saat komisi menyala.
+/// Data dari ringkasan saldo yang sama dengan tab Pendapatan; dimuat ulang saat aplikasi kembali ke depan
+/// (mis. setelah isi saldo di peramban). Tidak tampil sama sekali bila komisi mati atau ringkasan gagal dimuat.
+class _LowBalanceBanner extends ConsumerStatefulWidget {
+  const _LowBalanceBanner();
+
+  @override
+  ConsumerState<_LowBalanceBanner> createState() => _LowBalanceBannerState();
+}
+
+class _LowBalanceBannerState extends ConsumerState<_LowBalanceBanner>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.invalidate(driverWalletProvider);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final wallet = ref.watch(driverWalletProvider).maybeWhen(
+          data: (value) => value,
+          orElse: () => null,
+        );
+    if (wallet == null || !wallet.isLowBalance) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: _SafetyBanner(
+        key: const ValueKey('low-balance-banner'),
+        icon: Icons.account_balance_wallet_outlined,
+        text:
+            'Saldo TapGo Anda hampir habis (${_rupiah(wallet.balance)}). Isi saldo agar tetap bisa menerima pesanan tunai.',
+        buttonLabel: 'Isi Saldo',
+        onPressed: () => launchUrl(
+          Uri.parse(wallet.topUpUrl),
+          mode: LaunchMode.externalApplication,
+        ),
+      ),
+    );
+  }
+}
+
 class _SafetyBanner extends StatelessWidget {
   const _SafetyBanner({
     required this.icon,

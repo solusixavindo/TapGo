@@ -289,7 +289,9 @@ export default function AmountForm() {
           </p>
           {target === "WALLET" && options?.commissionPercent && options.commissionPercent > 0 ? (
             <p className="rounded-xl bg-brand-gold/10 px-3 py-2 text-xs font-semibold leading-6 themed-text" data-testid="commission-capacity">
-              Saldo {formatRupiah(amount)} cukup untuk menerima pesanan tunai.
+              {options.cashOrderMinBalance && amount < options.cashOrderMinBalance
+                ? `Pesanan tunai membutuhkan saldo minimal ${formatRupiah(options.cashOrderMinBalance)} (termasuk saldo Anda saat ini).`
+                : `Saldo ${formatRupiah(amount)} cukup untuk menerima pesanan tunai.`}
             </p>
           ) : null}
         </dl>

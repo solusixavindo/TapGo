@@ -1984,7 +1984,7 @@ void main() {
 
   group('Pernyataan kemitraan', () {
     test('naskah memuat semua topik yang diminta Owner dan versinya terisi', () {
-      expect(RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(kDriverTermsVersion), isTrue);
+      expect(RegExp(r'^\d{4}-\d{2}-\d{2}(\.\d+)?$').hasMatch(kDriverTermsVersion), isTrue);
       final titles = kDriverTermsSections.map((s) => s.title.toLowerCase()).join(' | ');
       for (final topic in [
         'hak anda',
@@ -2516,6 +2516,97 @@ void main() {
       await tester.pumpAndSettle();
       expect(repo.walletCalls, greaterThan(callsBefore));
       expect(find.text('Rp31.000'), findsOneWidget);
+    });
+
+    DriverWalletSummary walletWith(
+      int balance, {
+      bool commission = true,
+      int min = 50000,
+      int warn = 10000,
+    }) =>
+        DriverWalletSummary(
+          balance: balance,
+          commissionEnabled: commission,
+          commissionPercent: 8,
+          topUpUrl: 'https://tapgolion.id/topup',
+          entries: const [],
+          minCashBalance: min,
+          lowBalanceWarnAt: warn,
+        );
+
+    test('model saldo: batas menerima pesanan tunai dan ambang peringatan', () {
+      expect(walletWith(10000).isLowBalance, isTrue, reason: 'tepat di ambang = peringatan');
+      expect(walletWith(10001).isLowBalance, isFalse);
+      expect(walletWith(0, commission: false).isLowBalance, isFalse, reason: 'komisi mati: tanpa peringatan');
+      expect(walletWith(5000, warn: 0).isLowBalance, isFalse, reason: 'ambang 0 = mati');
+      expect(walletWith(49999).belowCashMinimum, isTrue);
+      expect(walletWith(50000).belowCashMinimum, isFalse, reason: 'saldo tepat Rp50.000 boleh menerima');
+      expect(walletWith(100, min: 0).belowCashMinimum, isFalse);
+      final parsed = DriverWalletSummary.fromJson({'balance': 7000, 'commissionEnabled': true, 'commissionPercent': 8, 'minCashBalance': 50000, 'lowBalanceWarnAt': 10000, 'topUpUrl': 'https://tapgolion.id/topup', 'entries': []});
+      expect(parsed.minCashBalance, 50000);
+      expect(parsed.lowBalanceWarnAt, 10000);
+      final old = DriverWalletSummary.fromJson({'balance': 7000, 'commissionEnabled': true, 'commissionPercent': 8, 'entries': []});
+      expect(old.minCashBalance, 0, reason: 'server lama tanpa field: tanpa batas');
+      expect(old.isLowBalance, isFalse);
+    });
+
+    testWidgets('Beranda: saldo <= Rp10.000 menampilkan peringatan isi saldo; di atasnya tidak; saldo dimuat ulang saat kembali ke depan',
+        (tester) async {
+      final repo = FakeDriverRepository(session: demoSession)..walletResult = walletWith(8000);
+      await pumpDriver(tester, repo);
+      expect(find.byKey(const ValueKey('low-balance-banner')), findsOneWidget);
+      expect(find.textContaining('hampir habis (Rp8.000)'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Isi Saldo'), findsOneWidget);
+
+      // Driver mengisi saldo di peramban lalu kembali: banner hilang tanpa berpindah tab.
+      repo.walletResult = walletWith(52000);
+      for (final state in [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('low-balance-banner')), findsNothing);
+    });
+
+    testWidgets('Beranda: tidak ada peringatan bila saldo di atas ambang atau komisi mati', (tester) async {
+      final above = FakeDriverRepository(session: demoSession)..walletResult = walletWith(10001);
+      await pumpDriver(tester, above);
+      expect(find.byKey(const ValueKey('low-balance-banner')), findsNothing);
+    });
+
+    testWidgets('Beranda: komisi mati = tanpa peringatan walau saldo nol', (tester) async {
+      final off = FakeDriverRepository(session: demoSession)..walletResult = walletWith(0, commission: false);
+      await pumpDriver(tester, off);
+      expect(find.byKey(const ValueKey('low-balance-banner')), findsNothing);
+    });
+
+    testWidgets('kartu saldo: menyebut saldo minimal Rp50.000; saldo di bawah batas diberi peringatan, di atas batas tidak',
+        (tester) async {
+      Future<void> openWallet(WidgetTester t, int balance) async {
+        final repo = FakeDriverRepository(session: demoSession)..walletResult = walletWith(balance);
+        await pumpDriver(t, repo);
+        await t.tap(find.byIcon(Icons.savings_rounded));
+        await t.pumpAndSettle();
+      }
+
+      await openWallet(tester, 25000);
+      expect(find.textContaining('saldo minimal Rp50.000'), findsOneWidget);
+      expect(find.byKey(const ValueKey('wallet-low-balance-warning')), findsOneWidget);
+      expect(find.textContaining('di bawah batas menerima pesanan tunai'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await openWallet(tester, 8000);
+      expect(find.textContaining('hampir habis (Rp8.000)'), findsWidgets);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await openWallet(tester, 60000);
+      expect(find.byKey(const ValueKey('wallet-low-balance-warning')), findsNothing);
     });
 
     testWidgets('komisi mati: tidak ada catatan komisi, saldo nol tetap tampil',
