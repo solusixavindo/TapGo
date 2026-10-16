@@ -146,6 +146,26 @@ class _TapGoPersistentStore {
   /// dari aplikasi: pendaftaran hanya lewat aplikasi resmi Play Store dan
   /// peningkatan member lewat web. Data yang tertinggal di HP dari versi lama
   /// dibersihkan sekali saat aplikasi dibuka.
+  static const _legacyPurgeDoneKey = 'tapgo.legacy_purge_done.v1';
+
+  /// Membersihkan data pendaftaran lama SEKALI per instalasi (penanda di SharedPreferences, yang cepat dibaca), bukan
+  /// dua penghapusan penyimpanan terenkripsi pada setiap pembukaan aplikasi.
+  Future<void> purgeLegacyRegisteredUsersOnce() async {
+    if (tapGoDisablePersistenceForTests) {
+      return;
+    }
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      if (preferences.getBool(_legacyPurgeDoneKey) ?? false) {
+        return;
+      }
+      await purgeLegacyRegisteredUsers();
+      await preferences.setBool(_legacyPurgeDoneKey, true);
+    } catch (error) {
+      _tapGoDebugLog('[TapGo Startup] legacy purge skipped: $error');
+    }
+  }
+
   Future<void> purgeLegacyRegisteredUsers() async {
     if (tapGoDisablePersistenceForTests) {
       return;
@@ -324,24 +344,51 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
       // dari "memang belum pernah login", lalu cabang di bawah menghapus
       // sesi yang SEBENARNYA MASIH VALID (dibuktikan: file storage terenkripsi
       // masih utuh persis sebelum baca ini, lalu terhapus tepat sesudahnya).
-      unawaited(_persistentStore.purgeLegacyRegisteredUsers());
-      final storedAuth = await _restoreLocalStateWithRetry(
-        _persistentStore.restoreAuth,
-        false,
-      );
-      final session = await _restoreLocalStateWithRetry(
-        _persistentStore.restoreSession,
-        null,
-      );
-      var tokens = await _restoreLocalStateWithRetry(
-        _persistentStore.restoreTokens,
-        (accessToken: null, refreshToken: null),
-      );
+      // Keempat pembacaan berjalan BERSAMAAN (sebelumnya berurutan: tiap pembacaan menunggu yang sebelumnya, dan dua
+      // penghapusan data lama berebut penyimpanan terenkripsi yang sama di awal). Inisialisasi Keystore hanya terjadi
+      // sekali; pembacaan lain menunggu inisialisasi yang sama, bukan menjumlahkan waktunya.
+      final restored = await Future.wait<Object?>([
+        _restoreLocalStateWithRetry(_persistentStore.restoreAuth, false),
+        _restoreLocalStateWithRetry<DemoClientSession?>(
+          _persistentStore.restoreSession,
+          null,
+        ),
+        _restoreLocalStateWithRetry(
+          _persistentStore.restoreTokens,
+          (accessToken: null, refreshToken: null),
+        ),
+      ]);
+      final storedAuth = restored[0]! as bool;
+      final session = restored[1] as DemoClientSession?;
+      var tokens =
+          restored[2]! as ({String? accessToken, String? refreshToken});
       if (!mounted) {
         return;
       }
       auth = storedAuth;
       restoredSession = session;
+      // Sesi tersimpan lengkap (masuk + sesi + access token): beranda ditampilkan SEGERA dengan data tersimpan, dan
+      // pemeriksaan ke server (/auth/me, penukaran token bila perlu) berjalan di latar belakang. Layar putih
+      // berputar sebelumnya menunggu satu putaran jaringan penuh sebelum apa pun tampil. Bila server menolak sesi,
+      // alur di bawah mengeluarkan pengguna seperti biasa (sebagian besar penolakan tiba lewat
+      // onSessionExpired, yang didaftarkan di sini juga). Penukaran refresh token tetap satu pintu lewat koordinator,
+      // jadi permintaan beranda dan pemeriksaan latar belakang tidak berlomba.
+      if (storedAuth &&
+          session != null &&
+          (tokens.accessToken ?? '').isNotEmpty) {
+        _apiClient.setAccessToken(tokens.accessToken);
+        ref.read(_demoSessionProvider.notifier).state = session.copyWith(
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+        );
+        ref.read(_isAuthenticatedProvider.notifier).state = true;
+        setState(() => _loaded = true);
+        _apiClient.onSessionExpired = _handleSessionExpired;
+        // Data lama dibersihkan setelah layar tampil, dan cukup sekali per instalasi.
+        unawaited(_persistentStore.purgeLegacyRegisteredUsersOnce());
+      } else {
+        unawaited(_persistentStore.purgeLegacyRegisteredUsersOnce());
+      }
       if (_isTapGoProductionBuild &&
           (tokens.accessToken == null || tokens.accessToken!.isEmpty)) {
         // Access token hilang bukan otomatis berarti "belum pernah login" —

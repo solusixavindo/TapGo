@@ -19,6 +19,7 @@ class _WalletTransferScreenState extends ConsumerState<WalletTransferScreen> {
   final _phoneController = TextEditingController();
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
+  final _passwordController = TextEditingController();
   final _submitGuard = TapGoSingleFlightGuard();
 
   // Key dibuat SEKALI per layar: rebuild/retry tetap memakai key yang sama
@@ -28,9 +29,11 @@ class _WalletTransferScreenState extends ConsumerState<WalletTransferScreen> {
       'transfer-${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}';
 
   bool _isSubmitting = false;
+  bool _showPassword = false;
 
   @override
   void dispose() {
+    _passwordController.dispose();
     _phoneController.dispose();
     _amountController.dispose();
     _noteController.dispose();
@@ -51,6 +54,7 @@ class _WalletTransferScreenState extends ConsumerState<WalletTransferScreen> {
           recipientPhone: tapGoSanitizePhoneInput(_phoneController.text),
           amount: tapGoCanonicalRupiahValue(_amountController.text),
           note: _noteController.text,
+          password: _passwordController.text,
           idempotencyKey: _idempotencyKey,
         );
         return true;
@@ -163,6 +167,27 @@ class _WalletTransferScreenState extends ConsumerState<WalletTransferScreen> {
                 hint: 'Mis. bayar patungan',
                 readOnly: _isSubmitting,
               ),
+              const SizedBox(height: 12),
+              _InputField(
+                controller: _passwordController,
+                icon: Icons.lock_rounded,
+                label: 'Password akun Anda',
+                hint: 'Masukkan password untuk konfirmasi',
+                obscureText: !_showPassword,
+                readOnly: _isSubmitting,
+                suffixIcon: IconButton(
+                  tooltip: _showPassword ? 'Sembunyikan' : 'Tampilkan',
+                  icon: Icon(
+                    _showPassword
+                        ? Icons.visibility_off_rounded
+                        : Icons.visibility_rounded,
+                  ),
+                  onPressed: () => setState(() => _showPassword = !_showPassword),
+                ),
+                validator: (value) => (value ?? '').isEmpty
+                    ? 'Password wajib diisi untuk konfirmasi transfer'
+                    : null,
+              ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -212,6 +237,10 @@ String tapGoTransferErrorMessage(Object error) {
           return 'Tidak dapat transfer ke akun sendiri.';
         case 'TRANSFER_IDEMPOTENCY_CONFLICT':
           return 'Permintaan duplikat terdeteksi. Periksa riwayat transfer Anda.';
+        case 'TRANSFER_PASSWORD_INVALID':
+          return 'Password tidak sesuai.';
+        case 'TRANSFER_BALANCE_BUSY':
+          return 'Saldo sedang berubah. Coba lagi sebentar lagi.';
         case 'WALLET_TRANSFER_DISABLED':
           return 'Fitur transfer belum tersedia saat ini.';
       }

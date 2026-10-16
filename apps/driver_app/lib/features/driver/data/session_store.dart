@@ -38,13 +38,20 @@ class SecureSessionStore implements SessionStore {
 
   @override
   Future<DriverSession?> read() async {
-    final access = await _safeRead(_access);
-    final refresh = await _safeRead(_refresh);
+    // Tiga pembacaan BERSAMAAN (sebelumnya berurutan): inisialisasi Keystore terjadi sekali dan pembacaan lain menunggu
+    // inisialisasi yang sama, jadi waktunya tidak dijumlahkan di cold start.
+    final values = await Future.wait<String?>([
+      _safeRead(_access),
+      _safeRead(_refresh),
+      _safeRead(_name),
+    ]);
+    final access = values[0];
+    final refresh = values[1];
     if (access == null || refresh == null) return null;
     return DriverSession(
       accessToken: access,
       refreshToken: refresh,
-      driverName: await _safeRead(_name) ?? 'Driver TapGo',
+      driverName: values[2] ?? 'Driver TapGo',
     );
   }
 

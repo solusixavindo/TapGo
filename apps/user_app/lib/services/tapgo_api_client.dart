@@ -930,6 +930,7 @@ class _TapGoApiClient {
     required String recipientPhone,
     required int amount,
     String? note,
+    required String password,
     required String idempotencyKey,
   }) {
     return post(
@@ -938,6 +939,7 @@ class _TapGoApiClient {
         'recipientPhone': recipientPhone,
         'amount': amount,
         if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+        'password': password,
         'idempotencyKey': idempotencyKey,
       },
     );
