@@ -48,10 +48,13 @@ Future<void> openTransfer(WidgetTester tester, {int balance = 500000}) async {
 }
 
 Future<void> fill(WidgetTester tester,
-    {String phone = '081234567890', String amount = '50000'}) async {
+    {String phone = '081234567890',
+    String amount = '50000',
+    String password = 'rahasia-uji'}) async {
   final fields = find.byType(TextFormField);
   await tester.enterText(fields.at(0), phone);
   await tester.enterText(fields.at(1), amount);
+  await tester.enterText(fields.at(3), password);
   await tester.pump();
 }
 
@@ -90,6 +93,20 @@ void main() {
         reason: 'validasi gagal tidak boleh menyentuh server');
   });
 
+  testWidgets('password kosong ditahan di layar tanpa menyentuh server',
+      (tester) async {
+    final api = FakeApi({
+      'POST /wallet/transfer': (_) => FakeReply.ok({'id': 'trf-x'}),
+    });
+    tapGoSetHttpAdapterForTests(api);
+    await openTransfer(tester);
+    await fill(tester, password: '');
+    await submit(tester);
+    expect(find.text('Password wajib diisi untuk konfirmasi transfer'),
+        findsOneWidget);
+    expect(api.calls, isEmpty);
+  });
+
   testWidgets('sukses: kirim isi yang benar lalu tutup layar dengan konfirmasi',
       (tester) async {
     final api = FakeApi({
@@ -110,6 +127,7 @@ void main() {
     expect(body['note'], 'bayar patungan');
     expect(body['recipientPhone'], isNotEmpty);
     expect(body['idempotencyKey'], startsWith('transfer-'));
+    expect(body['password'], 'rahasia-uji');
     expect(calls.single.headers['Authorization'], 'Bearer token-uji');
     await tester.pumpAndSettle();
     expect(find.byType(WalletTransferScreen), findsNothing);
