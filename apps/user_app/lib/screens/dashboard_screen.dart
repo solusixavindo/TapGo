@@ -247,10 +247,8 @@ class _ProductionBindingBanner extends ConsumerWidget {
       );
     } else {
       stateKey = 'ready';
-      child = const _InlineStatePill(
-        icon: Icons.cloud_done_rounded,
-        label: 'Data TapGo tersinkron',
-      );
+      // Data sudah termuat: tidak ada yang perlu ditampilkan.
+      child = const SizedBox.shrink();
     }
 
     return AnimatedSwitcher(
@@ -539,47 +537,6 @@ class _CompactRetryPill extends StatelessWidget {
                     'Muat Ulang',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _InlineStatePill extends StatelessWidget {
-  const _InlineStatePill({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: colorScheme.outlineVariant),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
-            children: [
-              Icon(icon, size: 16, color: _brandBlue),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: colorScheme.onSurfaceVariant,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
