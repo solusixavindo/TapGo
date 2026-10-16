@@ -1073,7 +1073,7 @@ export class RideService {
       ? await this.prisma.walletTransaction.findMany({
           where: {
             walletId: wallet.id,
-            OR: [{ type: "TOPUP" }, { referenceType: "RIDE_COMMISSION_FEE" }],
+            OR: [{ type: "TOPUP" }, { referenceType: "RIDE_COMMISSION_FEE" }, { type: "INCENTIVE_BONUS" }],
           },
           orderBy: { createdAt: "desc" },
           take: 30,
@@ -1098,7 +1098,7 @@ export class RideService {
         const order = isFee && r.referenceId ? byId.get(r.referenceId) : undefined;
         return {
           id: r.id,
-          kind: isFee ? "COMMISSION" : "TOPUP",
+          kind: isFee ? "COMMISSION" : r.type === "INCENTIVE_BONUS" ? "INCENTIVE" : "TOPUP",
           amount: r.amount.toNumber(),
           createdAt: r.createdAt,
           rideReference: order?.publicReference ?? null,

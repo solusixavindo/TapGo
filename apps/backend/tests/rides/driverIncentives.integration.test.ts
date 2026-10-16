@@ -342,6 +342,11 @@ describeIntegration("insentif harian driver", () => {
     expect(await prisma.driverIncentiveClaim.count()).toBe(1);
     const after = await api("/api/v1/driver/incentives", tokenFor(driver.user));
     expect(after.body.data.items[0]).toMatchObject({ tripCount: 1, claimed: true });
+
+    // Bonus tampil di riwayat saldo driver.
+    const wallet = await api("/api/v1/driver/wallet", tokenFor(driver.user));
+    expect(wallet.body.data.balance).toBe(15000);
+    expect(wallet.body.data.entries).toEqual([expect.objectContaining({ kind: "INCENTIVE", amount: 15000 })]);
   });
 
   it("bukan driver ditolak", async () => {
