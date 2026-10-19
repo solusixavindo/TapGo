@@ -85,3 +85,8 @@ flutter:
           weight: 500
         - asset: assets/fonts/Roboto-Bold.ttf
           weight: 700
+
+# Tambalan notifikasi layanan latar depan (lihat third_party/geolocator_android/TAPGO_PATCH.md).
+dependency_overrides:
+  geolocator_android:
+    path: third_party/geolocator_android

@@ -401,12 +401,11 @@ packages:
     source: hosted
     version: "13.0.4"
   geolocator_android:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: geolocator_android
-      sha256: fcb1760a50d7500deca37c9a666785c047139b5f9ee15aa5469fae7dbbe3170d
-      url: "https://pub.dev"
-    source: hosted
+      path: "third_party/geolocator_android"
+      relative: true
+    source: path
     version: "4.6.2"
   geolocator_apple:
     dependency: transitive
