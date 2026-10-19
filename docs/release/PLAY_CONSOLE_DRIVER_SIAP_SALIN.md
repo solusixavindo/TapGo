@@ -12,7 +12,7 @@ Disusun 16 Oktober 2026 dari kondisi kode dan produksi yang SUNGGUH berlaku. Sem
 
 | Berkas | Lokasi | Catatan |
 |---|---|---|
-| AAB | `~/Documents/dari DESKTOP/arsip-rilis-tapgo/tapgo-driver-1.0.0+16.aab` | sha256 `02a4d07c60192b30bd24c0760d39972eb2e1e305e621d90a8a0c3b3071255bef` (cocokkan dengan `.sha256` di sebelahnya) |
+| AAB | `~/Documents/dari DESKTOP/arsip-rilis-tapgo/tapgo-driver-1.0.0+16.aab` | sha256 `333140384090c2168ee3332cf1ac7c8e8304b8f2d62aafcd8a48e4bc50143b85` (cocokkan dengan `.sha256` di sebelahnya) |
 | File deobfuscation | `.../tapgo-driver-1.0.0+16-mapping.txt` | Unggah di rilis (App bundle explorer / kolom "Deobfuscation file") supaya laporan crash terbaca |
 | Simbol native | `.../tapgo-driver-1.0.0+16-native-debug-symbols.zip` | Unggah di tempat yang sama (debug symbols) |
 | APK uji | `~/Desktop/tapgo-driver-1.0.0+16.apk` | Hanya untuk uji HP; Play memakai AAB |
