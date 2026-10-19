@@ -24,7 +24,8 @@
     "admin:vip-bootstrap": "tsx scripts/super-admin-vip-bootstrap.ts",
     "admin:owner-bootstrap": "tsx scripts/owner-account-bootstrap.ts",
     "admin:scope-bootstrap": "tsx scripts/admin-scope-bootstrap.ts",
-    "audit:leaked-seed": "tsx scripts/leaked-seed-credential-audit.ts"
+    "audit:leaked-seed": "tsx scripts/leaked-seed-credential-audit.ts",
+    "driver:reviewer-bootstrap": "tsx scripts/driver-reviewer-account-bootstrap.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
