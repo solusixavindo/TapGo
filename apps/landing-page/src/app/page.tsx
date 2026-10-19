@@ -54,7 +54,7 @@ const services = [
     icon: "membership",
     title: "Membership",
     headline: "Mulai usaha tanpa menyiapkan stok barang",
-    desc: "Setiap tingkat keanggotaan sudah membawa saldo PPOB sebagai modal awal — jadi Anda bisa langsung berjualan di hari yang sama, bukan menunggu barang datang.",
+    desc: "Setiap tingkat keanggotaan sudah membawa saldo PPOB — jadi Anda bisa langsung memakainya untuk melayani pembelian pulsa dan tagihan di hari yang sama.",
     linkLabel: "Bandingkan paket"
   }
 ];
@@ -285,7 +285,7 @@ const stats = [
 const faqs = [
   {
     q: "Apa saja layanan yang tersedia di TapGo?",
-    a: "Empat layanan: ojek online untuk perjalanan harian, kemitraan driver bagi yang ingin berpenghasilan, layanan PPOB untuk pulsa dan tagihan, serta program membership dengan tiga tingkatan."
+    a: "Empat layanan: ojek online untuk perjalanan harian, kemitraan driver bagi yang ingin bergabung sebagai mitra, layanan PPOB untuk pulsa dan tagihan, serta program membership dengan tiga tingkatan."
   },
   {
     q: "Di mana aplikasi TapGo dapat diunduh?",
@@ -312,7 +312,7 @@ const faqs = [
 export const metadata: Metadata = {
   title: "TapGo Lion Indonesia | Ojek Online, Mitra Driver, PPOB & Membership",
   description:
-    "TapGo menyatukan ojek online, kemitraan driver, dan layanan pembayaran PPOB dalam satu akun. Tarif pasti sejak awal, atau jadikan aplikasi ini sumber penghasilan."
+    "TapGo menyatukan ojek online, kemitraan driver, dan layanan pembayaran PPOB dalam satu akun. Tarif pasti sejak awal, dan kemitraan driver dengan komisi yang transparan."
 };
 
 function ArrowIcon() {
@@ -479,12 +479,12 @@ export default function Home() {
         <div className="mx-auto max-w-3xl text-center">
           <h1 className="text-4xl font-black leading-tight tracking-tight md:text-6xl">
             Aplikasi yang mengantar Anda hari ini, dan{" "}
-            <span className="themed-accent">menghidupi Anda besok</span>
+            <span className="themed-accent">membuka peluang kemitraan besok</span>
           </h1>
           <p className="themed-text-muted mx-auto mt-6 max-w-2xl text-lg leading-8">
             TapGo menyatukan ojek online, kemitraan driver, dan layanan pembayaran PPOB dalam satu akun. Pesan
-            perjalanan dengan tarif yang sudah pasti sejak awal — atau ubah aplikasi yang sama menjadi sumber
-            penghasilan, dengan modal awal dan pendampingan yang jelas sejak hari pertama.
+            perjalanan dengan tarif yang sudah pasti sejak awal — atau bergabung sebagai mitra driver dengan komisi
+            yang transparan dan pendampingan yang jelas sejak hari pertama.
           </p>
           <ul className="themed-text-secondary mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm font-semibold">
             {["Gratis diunduh", "Tanpa biaya tersembunyi", "Daftar dalam hitungan menit"].map((item) => (
