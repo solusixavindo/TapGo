@@ -138,6 +138,8 @@ class GeolocatorDriverLocationPort implements DriverLocationPort {
               'Lokasi dibagikan agar Anda menerima pesanan terdekat. Ketuk untuk membuka.',
           notificationChannelName: 'Status online driver',
           enableWakeLock: true,
+          // Tidak dapat digeser: notifikasi ini bukti bagi driver bahwa lokasinya sedang dibagikan.
+          setOngoing: true,
         ),
       ),
     ).listen(
