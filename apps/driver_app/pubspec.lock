@@ -401,7 +401,7 @@ packages:
     source: hosted
     version: "13.0.4"
   geolocator_android:
-    dependency: "direct overridden"
+    dependency: "direct dev"
     description:
       path: "third_party/geolocator_android"
       relative: true
@@ -416,7 +416,7 @@ packages:
     source: hosted
     version: "2.3.14"
   geolocator_platform_interface:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: geolocator_platform_interface
       sha256: "94db8255dc183d268765df682580440617ca35877fc82cacb5420ad03b86198d"

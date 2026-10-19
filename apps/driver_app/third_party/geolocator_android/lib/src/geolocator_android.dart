@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:geolocator_android/geolocator_android.dart';
@@ -36,6 +37,7 @@ class GeolocatorAndroid extends GeolocatorPlatform {
   bool forcedLocationManager = false;
 
   Stream<Position>? _positionStream;
+  String? _positionStreamKey;
   Stream<ServiceStatus>? _serviceStatusStream;
 
   final Uuid _uuid = const Uuid();
@@ -164,9 +166,14 @@ class GeolocatorAndroid extends GeolocatorPlatform {
 
   @override
   Stream<Position> getPositionStream({LocationSettings? locationSettings}) {
-    if (_positionStream != null) {
+    // TAMBALAN TapGo: upstream mengembalikan aliran tersimpan milik pemanggil PERTAMA dan mengabaikan pengaturan
+    // pemanggil berikutnya, sehingga konfigurasi layanan latar depan (notifikasi) tidak pernah berlaku bila ada
+    // pemanggil lain yang lebih dulu. Aliran dipakai ulang hanya bila pengaturannya SAMA.
+    final settingsKey = jsonEncode(locationSettings?.toJson());
+    if (_positionStream != null && _positionStreamKey == settingsKey) {
       return _positionStream!;
     }
+    _positionStreamKey = settingsKey;
     var originalStream = _eventChannel.receiveBroadcastStream(
       locationSettings?.toJson(),
     );

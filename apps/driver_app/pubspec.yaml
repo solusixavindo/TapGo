@@ -70,6 +70,8 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  geolocator_android: any
+  geolocator_platform_interface: any
   flutter_lints: ^5.0.0
 
 flutter:

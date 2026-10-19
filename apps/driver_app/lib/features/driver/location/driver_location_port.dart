@@ -233,12 +233,59 @@ class GeolocatorDriverLocationPort implements DriverLocationPort {
     );
   }
 
+  /// Posisi untuk marker peta. SENGAJA tidak memakai `Geolocator.getPositionStream`: plugin hanya punya satu saluran
+  /// event, dan aliran yang dibuka lebih dulu (dulu: peta di Beranda, tanpa konfigurasi notifikasi) menentukan
+  /// pengaturan seluruhnya. Akibatnya layanan latar depan dan notifikasi pelacakan driver tidak pernah dibuat.
+  /// Di sini posisi diambil dari fix pelacakan bila segar, selain itu dibaca satu kali tiap beberapa detik.
   @override
-  Stream<(double lat, double lng)> get positionStream =>
-      Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          distanceFilter: 10,
-        ),
-      ).map((position) => (position.latitude, position.longitude));
+  Stream<(double lat, double lng)> get positionStream {
+    late final StreamController<(double, double)> controller;
+    Timer? timer;
+    var active = true;
+    var inFlight = false;
+    (double, double)? last;
+
+    Future<void> tick() async {
+      if (!active || inFlight) return;
+      inFlight = true;
+      try {
+        (double, double)? current;
+        final tracked = _lastTracked;
+        if (tracked != null &&
+            DateTime.now().difference(tracked.timestamp) < const Duration(seconds: 10)) {
+          current = (tracked.latitude, tracked.longitude);
+        } else {
+          try {
+            final position = await Geolocator.getCurrentPosition(
+              locationSettings: const LocationSettings(
+                accuracy: LocationAccuracy.high,
+                timeLimit: Duration(seconds: 8),
+              ),
+            );
+            current = (position.latitude, position.longitude);
+          } catch (_) {
+            // Izin/GPS belum tersedia atau waktu habis: coba lagi pada putaran berikutnya.
+          }
+        }
+        if (active && current != null && current != last) {
+          last = current;
+          controller.add(current);
+        }
+      } finally {
+        inFlight = false;
+      }
+    }
+
+    controller = StreamController<(double, double)>(
+      onListen: () {
+        unawaited(tick());
+        timer = Timer.periodic(const Duration(seconds: 3), (_) => unawaited(tick()));
+      },
+      onCancel: () {
+        active = false;
+        timer?.cancel();
+      },
+    );
+    return controller.stream;
+  }
 }
