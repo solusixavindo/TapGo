@@ -201,7 +201,8 @@ class GeolocatorDriverLocationPort implements DriverLocationPort {
       // ke atas supaya pembulatan tidak pernah membuat titik kasar terlihat
       // lebih akurat dari yang sebenarnya.
       accuracyMeters: position.accuracy.ceil(),
-      capturedAt: DateTime.now(),
+      // Waktu fix yang sebenarnya (bukan waktu kirim), supaya posisi yang agak lama tidak tampak segar di server.
+      capturedAt: position.timestamp,
     );
   }
 
@@ -225,12 +226,24 @@ class GeolocatorDriverLocationPort implements DriverLocationPort {
         DateTime.now().difference(cached.timestamp) < _maxFixAge) {
       return cached;
     }
-    return Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 10),
-      ),
-    );
+    try {
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+    } catch (_) {
+      // GPS dingin belum mengunci: posisi terakhir yang diketahui sistem (maks. 30 dtk, akurasi <= 500 m; server menganggap fix segar selama 60 dtk
+      // server) lebih baik daripada tidak mengirim apa pun, supaya sistem pencocokan segera melihat driver.
+      final known = await Geolocator.getLastKnownPosition();
+      if (known != null &&
+          DateTime.now().difference(known.timestamp) < const Duration(seconds: 30) &&
+          known.accuracy <= 500) {
+        return known;
+      }
+      rethrow;
+    }
   }
 
   /// Posisi untuk marker peta. SENGAJA tidak memakai `Geolocator.getPositionStream`: plugin hanya punya satu saluran
@@ -245,31 +258,53 @@ class GeolocatorDriverLocationPort implements DriverLocationPort {
     var inFlight = false;
     (double, double)? last;
 
+    void emit((double, double) point) {
+      if (!active || point == last) return;
+      last = point;
+      controller.add(point);
+    }
+
     Future<void> tick() async {
       if (!active || inFlight) return;
       inFlight = true;
       try {
-        (double, double)? current;
         final tracked = _lastTracked;
         if (tracked != null &&
             DateTime.now().difference(tracked.timestamp) < const Duration(seconds: 10)) {
-          current = (tracked.latitude, tracked.longitude);
-        } else {
-          try {
-            final position = await Geolocator.getCurrentPosition(
-              locationSettings: const LocationSettings(
-                accuracy: LocationAccuracy.high,
-                timeLimit: Duration(seconds: 8),
-              ),
-            );
-            current = (position.latitude, position.longitude);
-          } catch (_) {
-            // Izin/GPS belum tersedia atau waktu habis: coba lagi pada putaran berikutnya.
-          }
+          emit((tracked.latitude, tracked.longitude));
+          return;
         }
-        if (active && current != null && current != last) {
-          last = current;
-          controller.add(current);
+        // Marker tampil SEKETIKA dari posisi terakhir yang diketahui sistem (tanpa menunggu GPS mengunci;
+        // GPS dingin bisa butuh puluhan detik), lalu dipertajam oleh fix presisi di bawah.
+        if (last == null) {
+          try {
+            final known = await Geolocator.getLastKnownPosition();
+            if (known != null) emit((known.latitude, known.longitude));
+          } catch (_) {}
+        }
+        try {
+          final position = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              timeLimit: Duration(seconds: 6),
+            ),
+          );
+          emit((position.latitude, position.longitude));
+        } catch (_) {
+          // GPS belum mengunci. Bila belum ada posisi sama sekali, coba sumber jaringan (cepat, kurang presisi).
+          if (last == null) {
+            try {
+              final coarse = await Geolocator.getCurrentPosition(
+                locationSettings: const LocationSettings(
+                  accuracy: LocationAccuracy.low,
+                  timeLimit: Duration(seconds: 4),
+                ),
+              );
+              emit((coarse.latitude, coarse.longitude));
+            } catch (_) {
+              // Izin/GPS belum tersedia: coba lagi pada putaran berikutnya.
+            }
+          }
         }
       } finally {
         inFlight = false;

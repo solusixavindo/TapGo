@@ -1350,8 +1350,11 @@ class DriverController extends StateNotifier<DriverState>
         state = state.copyWith(clearLocationIssue: true);
       }
       await _locationPort.sendCurrentLocation();
-    } catch (_) {
+    } catch (error) {
       // Kegagalan jaringan/server tetap diam sengaja — lihat catatan di atas.
+      // Posisi belum didapat (GPS dingin belum mengunci): coba lagi pada detak berikutnya (1 dtk), bukan menunggu
+      // 15 dtk. Galat dari server tidak dipercepat supaya tidak membanjiri server.
+      if (error is! DriverApiException) _locationTicks = 0;
     } finally {
       _locationInFlight = false;
     }

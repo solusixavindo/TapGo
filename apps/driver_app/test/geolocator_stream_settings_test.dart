@@ -16,10 +16,14 @@ void main() {
   const methodChannel = MethodChannel('flutter.baseflow.com/geolocator_android');
   final listenArguments = <Object?>[];
   var methodCalls = <String>[];
+  Map<String, dynamic>? lastKnown;
+  var currentDelay = Duration.zero;
 
   setUp(() {
     listenArguments.clear();
     methodCalls = <String>[];
+    lastKnown = null;
+    currentDelay = Duration.zero;
     GeolocatorPlatform.instance = GeolocatorAndroid();
     final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockStreamHandler(
@@ -33,7 +37,10 @@ void main() {
           return true;
         case 'checkPermission':
           return LocationPermission.whileInUse.index;
+        case 'getLastKnownPosition':
+          return lastKnown;
         case 'getCurrentPosition':
+          if (currentDelay > Duration.zero) await Future<void>.delayed(currentDelay);
           return <String, dynamic>{
             'latitude': -6.2,
             'longitude': 106.8,
@@ -97,6 +104,29 @@ void main() {
     expect(listenArguments.length, 1);
     await a.cancel();
     await b.cancel();
+  });
+
+  test('aplikasi: marker peta tampil SEKETIKA dari posisi terakhir yang diketahui, tanpa menunggu GPS mengunci', () async {
+    lastKnown = <String, dynamic>{
+      'latitude': -6.25,
+      'longitude': 106.85,
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+      'accuracy': 30.0,
+      'altitude': 0.0,
+      'altitude_accuracy': 1.0,
+      'heading': 0.0,
+      'heading_accuracy': 1.0,
+      'speed': 0.0,
+      'speed_accuracy': 1.0,
+      'is_mocked': false,
+    };
+    currentDelay = const Duration(seconds: 3); // GPS dingin: fix presisi baru tiba lama kemudian
+    final port = GeolocatorDriverLocationPort(_NoopRepository());
+    final stopwatch = Stopwatch()..start();
+    final first = await port.positionStream.first;
+    stopwatch.stop();
+    expect(first, (-6.25, 106.85));
+    expect(stopwatch.elapsedMilliseconds, lessThan(1500), reason: 'tidak boleh menunggu fix presisi 3 dtk');
   });
 
   test('aplikasi: peta membaca posisi tanpa menyentuh saluran event, jadi pelacakan tetap membawa notifikasi', () async {
