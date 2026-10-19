@@ -6,13 +6,13 @@ Disusun 16 Oktober 2026 dari kondisi kode dan produksi yang SUNGGUH berlaku. Sem
 `GOOGLE_PLAY_DRIVER_APP_DATA_SAFETY_MAPPING.md` (sudah diperbarui).
 
 > **Prasyarat teknis (sudah beres):** backend `tapgo-3668799` aktif (Pusat Bantuan, insentif, hapus akun). AAB `+16` sudah DIBANGUN ULANG
-> pada 16 Okt 2026 dengan layar **Hapus Akun** di dalam aplikasi (syarat Play) dan lulus gerbang rilis (294 tes, TLS live, anchor, 16 KB).
+> pada 19 Okt 2026 dengan layar **Hapus Akun** di dalam aplikasi (syarat Play) dan perbaikan **notifikasi layanan latar depan yang sebelumnya tersembunyi** (lihat `third_party/geolocator_android/TAPGO_PATCH.md`), dan lulus gerbang rilis (294 tes, TLS live, anchor, 16 KB).
 
 ## 0. Berkas yang diunggah
 
 | Berkas | Lokasi | Catatan |
 |---|---|---|
-| AAB | `~/Documents/dari DESKTOP/arsip-rilis-tapgo/tapgo-driver-1.0.0+16.aab` | sha256 `132a5f66d67fb5b4c6d2ffe653bf4a66fed20ddd2d8d422aa95dbcc9dd801385` (cocokkan dengan `.sha256` di sebelahnya) |
+| AAB | `~/Documents/dari DESKTOP/arsip-rilis-tapgo/tapgo-driver-1.0.0+16.aab` | sha256 `39e863d33606831cb0d097b91573860fa882833620efe8c87c6b4c6ed2b51dcb` (cocokkan dengan `.sha256` di sebelahnya) |
 | File deobfuscation | `.../tapgo-driver-1.0.0+16-mapping.txt` | Unggah di rilis (App bundle explorer / kolom "Deobfuscation file") supaya laporan crash terbaca |
 | Simbol native | `.../tapgo-driver-1.0.0+16-native-debug-symbols.zip` | Unggah di tempat yang sama (debug symbols) |
 | APK uji | `~/Desktop/tapgo-driver-1.0.0+16.apk` | Hanya untuk uji HP; Play memakai AAB |
