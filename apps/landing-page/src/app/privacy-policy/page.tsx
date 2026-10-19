@@ -46,7 +46,7 @@ export default function PrivacyPolicy() {
         <strong>Lokasi latar depan selama online.</strong> Selama driver berstatus ONLINE atau
         sedang menjalankan perjalanan, aplikasi mengirim lokasi perangkat secara berkala ke server
         — termasuk saat layar terkunci, lewat layanan latar depan Android dengan notifikasi tetap
-        yang selalu terlihat ("Anda online"). Lokasi berhenti dikirim segera setelah driver
+        yang selalu terlihat ("TapGo Driver aktif"). Lokasi berhenti dikirim segera setelah driver
         berstatus OFFLINE. Aplikasi ini <strong>tidak</strong> meminta maupun memakai izin lokasi
         latar belakang (background location) — pengiriman lokasi hanya berjalan selama layanan
         latar depan tersebut aktif.

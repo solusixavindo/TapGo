@@ -49,7 +49,7 @@ Dengan TapGo Driver, mitra dapat:
 • Mengajukan penghapusan akun langsung dari aplikasi.
 
 Lokasi dan layar mati
-Selama berstatus Online, aplikasi membagikan lokasi perangkat secara berkala ke sistem TapGo lewat layanan latar depan dengan notifikasi tetap "Anda online", supaya penumpang dan sistem pencocokan dapat melihat posisi Anda dan tawaran tetap sampai saat layar mati. Lokasi berhenti dibagikan segera setelah status diubah menjadi Offline. Aplikasi tidak meminta izin lokasi latar belakang.
+Selama berstatus Online, aplikasi membagikan lokasi perangkat secara berkala ke sistem TapGo lewat layanan latar depan dengan notifikasi tetap "TapGo Driver aktif", supaya penumpang dan sistem pencocokan dapat melihat posisi Anda dan tawaran tetap sampai saat layar mati. Lokasi berhenti dibagikan segera setelah status diubah menjadi Offline. Aplikasi tidak meminta izin lokasi latar belakang.
 
 Komisi dan penghasilan
 Komisi per perjalanan ditampilkan jelas pada setiap tawaran. Pesanan tunai membutuhkan Saldo TapGo yang mencukupi; isi saldo dilakukan lewat situs resmi tapgolion.id. Insentif dan benefit lain mengikuti ketentuan resmi TapGo, status akun, serta validasi perjalanan dan sistem anti-penyalahgunaan. TapGo tidak menjanjikan penghasilan tetap; seluruh penghasilan mitra bergantung pada aktivitas, kelayakan, dan validasi sistem.
@@ -119,14 +119,14 @@ Play meminta (a) penjelasan dan (b) **video** pendek yang memperlihatkan fitur y
 **Penjelasan (salin):**
 ```
 TapGo Driver adalah aplikasi mitra pengemudi ojek/mobil online. Saat driver menekan "Online", aplikasi menjalankan layanan latar depan bertipe
-location dengan notifikasi tetap "Anda online" agar posisi driver tetap dikirim ke sistem pencocokan pesanan dan ke penumpang yang sedang
+location dengan notifikasi tetap "TapGo Driver aktif" agar posisi driver tetap dikirim ke sistem pencocokan pesanan dan ke penumpang yang sedang
 dijemput walaupun layar terkunci atau aplikasi berada di latar. Layanan berhenti seketika saat driver menekan "Offline" atau perjalanan
 selesai dan driver offline. Aplikasi tidak memakai izin lokasi latar belakang; lokasi hanya dikirim selama layanan latar depan aktif.
 ```
 
 **Naskah video (45–60 detik, rekam layar HP + suara/teks bebas):**
 1. Buka aplikasi, tunjukkan izin lokasi diminta saat pertama kali menekan Online (izinkan "Saat aplikasi digunakan").
-2. Tekan **Online**: tunjukkan notifikasi tetap "Anda online" di bayangan notifikasi.
+2. Tekan **Online**: tunjukkan notifikasi tetap "TapGo Driver aktif" di bayangan notifikasi.
 3. Kunci layar 10 detik, buka lagi: notifikasi masih ada; tunjukkan di HP kedua (penumpang) bahwa posisi driver bergerak / tawaran sampai.
 4. Tekan **Offline**: notifikasi hilang.
 Unggah ke YouTube sebagai **Tidak publik (unlisted)**, tempel tautannya di formulir.

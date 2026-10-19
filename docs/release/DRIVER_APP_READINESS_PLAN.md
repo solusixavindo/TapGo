@@ -31,7 +31,7 @@ Selesai bila: `GERBANG LOLOS` menghasilkan APK dan AAB bertanda tangan.
 Selesai bila: semua uji lolos, dan uji dua HP menunjukkan driver jauh tidak melihat pesanan.
 
 ### D3. Tetap menerima pesanan saat layar mati — ukuran L
-1. **Layanan latar depan** (izin `FOREGROUND_SERVICE` dan `FOREGROUND_SERVICE_LOCATION`, notifikasi tetap "Anda online") agar lokasi dan polling tetap berjalan; berhenti otomatis saat driver offline.
+1. **Layanan latar depan** (izin `FOREGROUND_SERVICE` dan `FOREGROUND_SERVICE_LOCATION`, notifikasi tetap "TapGo Driver aktif") agar lokasi dan polling tetap berjalan; berhenti otomatis saat driver offline.
 2. **Firebase untuk driver_app** (butuh `google-services.json` untuk `com.xavindo.tapgo.driver`), token didaftarkan ke endpoint yang sudah ada.
 3. **Push tawaran baru**: backend mengirim ke driver ONLINE dalam radius saat pesanan dibuat (kanal berprioritas tinggi, ketuk membuka tawaran); push pembatalan oleh penumpang dan pesan chat.
 4. Deklarasi Play: Foreground service (lokasi) dan kebijakan lokasi; teks kebijakan privasi driver diperbarui.
