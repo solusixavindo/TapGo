@@ -147,7 +147,7 @@ tetapi tidak pernah menerima pesanan sungguhan. Karena komisi menyala, reviewer 
 Masuk dengan nomor HP dan password yang diberikan (kolom Username/Password). Aplikasi ini khusus mitra pengemudi TapGo yang sudah
 terverifikasi. Akun uji dapat membuka semua tab (Beranda, Pesanan, Pendapatan, Akun), menekan Online/Offline, membuka Pusat Bantuan,
 Penilaian penumpang, dan layar Hapus Akun (Akun > Bantuan). Akun ini sengaja tidak memiliki kendaraan terverifikasi sehingga tidak akan
-menerima pesanan sungguhan; ini untuk melindungi penumpang asli selama review. Izin lokasi diperlukan untuk status Online.
+menerima pesanan sungguhan; ini untuk melindungi penumpang asli selama review. Izin lokasi diperlukan untuk status Online. Kartu "Pengajuan Mitra" di tab Akun bersifat opsional (alur pendaftaran mitra baru) dan tidak perlu diisi untuk menilai aplikasi.
 ```
 Jangan menulis nomor/password di berkas repo. Setelah review, akun boleh dibiarkan atau dinonaktifkan.
 
