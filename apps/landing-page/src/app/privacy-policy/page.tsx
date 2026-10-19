@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPolicy() {
   return (
-    <LegalShell title="Privacy Policy" updated="13 Oktober 2026">
+    <LegalShell title="Privacy Policy" updated="20 Oktober 2026">
       <p>
         PT. TapGo Lion Indonesia menghormati privasi pengguna TapGo. Kebijakan ini menjelaskan data
         yang dikumpulkan oleh aplikasi TapGo Penumpang untuk Android, aplikasi TapGo Driver untuk
@@ -198,6 +198,20 @@ export default function PrivacyPolicy() {
         akun ke layanan tersebut. Pada aplikasi TapGo Driver, tombol navigasi membuka aplikasi
         Google Maps di luar TapGo dengan koordinat tujuan; setelah itu berlaku kebijakan privasi
         Google.
+      </p>
+
+      <p>
+        <strong>Masuk dengan Google.</strong> Aplikasi TapGo Driver menyediakan pilihan masuk dengan akun Google. Bila
+        dipilih, Google membagikan nama, alamat email, dan identitas akun Google Anda kepada TapGo untuk membuat atau
+        mencocokkan akun; TapGo tidak menerima password Google Anda. Pemrosesan di sisi Google tunduk pada kebijakan
+        privasi Google.
+      </p>
+
+      <h2>Usia Pengguna</h2>
+      <p>
+        Layanan TapGo tidak ditujukan bagi anak-anak, dan aplikasi TapGo Driver hanya untuk pengguna berusia 18 tahun
+        ke atas. TapGo tidak dengan sengaja mengumpulkan data pribadi anak-anak; bila kami mengetahui hal itu terjadi,
+        data tersebut akan dihapus.
       </p>
 
       <h2>Penghapusan Akun</h2>

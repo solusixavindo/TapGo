@@ -8,6 +8,8 @@ export const metadata: Metadata = {
 };
 
 const erasableData = [
+  "Jejak lokasi perjalanan (dihapus otomatis setelah 14 hari)",
+  "Dokumen identitas dan kendaraan (dihapus otomatis paling lama 72 jam setelah diunggah)",
   "Nama",
   "Nomor HP",
   "Email jika ada",
@@ -66,6 +68,28 @@ export default function DeleteAccountPage() {
               </p>
             </article>
 
+            <article className="rounded-[1.6rem] themed-border themed-card-bg border p-6" data-testid="delete-steps">
+              <h2 className="themed-text text-2xl font-black">Cara mengajukan penghapusan</h2>
+              <p className="themed-text-secondary mt-4 leading-7">
+                Halaman ini berlaku untuk aplikasi <strong>TapGo Driver</strong> (com.xavindo.tapgo.driver) dan aplikasi{" "}
+                <strong>TapGo (Penumpang)</strong>, keduanya dari PT. TapGo Lion Indonesia. Pilih salah satu cara:
+              </p>
+              <ol className="themed-text-secondary mt-4 list-decimal space-y-3 pl-6 leading-7">
+                <li>
+                  <strong>Dari aplikasi TapGo Driver:</strong> buka tab <em>Akun</em> &gt; <em>Bantuan</em> &gt;{" "}
+                  <em>Hapus Akun</em>, lalu tekan <em>Ajukan hapus akun</em>.
+                </li>
+                <li>
+                  <strong>Dari aplikasi TapGo (Penumpang):</strong> buka <em>Akun</em> &gt; <em>Hapus Akun</em>, lalu
+                  kirim pengajuan.
+                </li>
+                <li>
+                  <strong>Dari halaman ini:</strong> isi formulir di samping dengan nama dan nomor HP/email yang
+                  terdaftar. <strong>Atau</strong> kirim email dari alamat yang terdaftar ke support@tapgolion.id.
+                </li>
+              </ol>
+            </article>
+
             <article className="rounded-[1.6rem] themed-border themed-card-bg border p-6">
               <h2 className="themed-text text-2xl font-black">Estimasi proses</h2>
               <p className="themed-text-secondary mt-4 leading-7">
@@ -95,6 +119,11 @@ export default function DeleteAccountPage() {
               <li key={item} className="flex gap-3"><CheckIcon />{item}</li>
             ))}
           </ul>
+          <p className="themed-text-secondary mt-5 leading-7" data-testid="retention-period">
+            Data ini hanya disimpan selama masa simpan yang diwajibkan peraturan perundang-undangan di Indonesia (untuk
+            catatan keuangan dan pajak umumnya hingga 10 tahun), dibatasi pada keperluan audit, perpajakan, dan
+            penyelesaian sengketa, lalu dihapus.
+          </p>
         </article>
 
         <article className="rounded-[1.6rem] themed-border themed-card-bg border p-6 lg:col-span-2">
