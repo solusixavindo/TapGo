@@ -234,6 +234,9 @@ const FRIENDLY_MESSAGES: Record<string, string> = {
 export function friendlyMessage(code: string, status: number, serverMessage?: string): string {
   const mapped = FRIENDLY_MESSAGES[code];
   if (mapped) return mapped;
+  // Layanan sengaja dihentikan (suspend): tampilkan pesan dari server apa adanya. Tanpa ini, 503 jatuh ke pesan
+  // "server mengalami gangguan" di bawah yang menyesatkan pelanggan yang sedang membayar.
+  if (code === "SERVICE_SUSPENDED" && serverMessage) return serverMessage;
   if (status >= 500) return FRIENDLY_MESSAGES.INTERNAL_SERVER_ERROR!;
   if (status === 429) return FRIENDLY_MESSAGES.RATE_LIMITED!;
   return serverMessage ?? "Permintaan belum dapat diproses.";
