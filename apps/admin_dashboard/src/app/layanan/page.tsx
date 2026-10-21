@@ -177,22 +177,25 @@ export default function ServiceStatusPage() {
               ) : null}
 
               <label className="mt-4 block text-sm font-semibold text-slate-700">
-                Ketik <span className="font-mono">{phrase}</span> untuk melanjutkan
-                <input
-                  value={confirm}
-                  onChange={(event) => setConfirm(event.target.value)}
-                  autoComplete="off"
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal"
-                />
-              </label>
-
-              <label className="mt-4 block text-sm font-semibold text-slate-700">
                 Password akun Anda
                 <input
                   type="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   autoComplete="current-password"
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal"
+                />
+              </label>
+
+              <label className="mt-4 block text-sm font-semibold text-slate-700">
+                Ketik <span className="font-mono">{phrase}</span> untuk melanjutkan
+                <input
+                  value={confirm}
+                  onChange={(event) => setConfirm(event.target.value)}
+                  autoComplete="off"
+                  name="konfirmasi-layanan"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal"
                 />
               </label>
