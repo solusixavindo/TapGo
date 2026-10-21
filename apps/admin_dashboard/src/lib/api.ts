@@ -751,6 +751,31 @@ export function systemHealthReport() {
   return request<SystemHealthReport>("/admin/system/health");
 }
 
+/** Status penghentian layanan (suspend). Hanya SUPER_ADMIN_VIP; server tetap penjaga sesungguhnya. */
+export type ServiceSuspensionStatus = {
+  suspended: boolean;
+  message: string;
+  changedAt: string | null;
+  changedById: string | null;
+  changedByName?: string | null;
+};
+
+export function getServiceSuspension() {
+  return request<ServiceSuspensionStatus>("/admin/service-suspension");
+}
+
+export function setServiceSuspension(input: {
+  suspended: boolean;
+  message?: string;
+  confirm: string;
+  password: string;
+}) {
+  return request<ServiceSuspensionStatus>("/admin/service-suspension", {
+    method: "PUT",
+    body: JSON.stringify(input)
+  });
+}
+
 export type SentryIssue = {
   id: string;
   shortId: string;

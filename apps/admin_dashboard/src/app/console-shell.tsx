@@ -51,7 +51,8 @@ const NAV_GROUPS: Array<{
   {
     title: "Tata Kelola",
     items: [
-      { href: "/roles", label: "Pengaturan Role", minimum: "SUPER_ADMIN_VIP", icon: "shield" }
+      { href: "/roles", label: "Pengaturan Role", minimum: "SUPER_ADMIN_VIP", icon: "shield" },
+      { href: "/layanan", label: "Status Layanan", minimum: "SUPER_ADMIN_VIP", icon: "pulse" }
     ]
   },
   {
