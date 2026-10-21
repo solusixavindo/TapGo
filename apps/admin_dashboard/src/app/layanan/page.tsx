@@ -60,7 +60,8 @@ export default function ServiceStatusPage() {
     if (roleAtLeast(current, "SUPER_ADMIN_VIP")) {
       void refresh();
     } else {
-      setLoading(false);
+      // Bukan VIP: halaman ini tidak boleh terlihat ada. Alihkan tanpa pesan apa pun.
+      router.replace("/beranda");
     }
   }, [router, refresh]);
 
@@ -93,6 +94,11 @@ export default function ServiceStatusPage() {
     }
   }
 
+  if (!isVip) {
+    // Sebelum peran terbaca atau selama dialihkan, jangan menampilkan apa pun tentang fitur ini.
+    return <main className="min-h-screen bg-slate-100" />;
+  }
+
   return (
     <main className="min-h-screen bg-slate-100 p-6 text-slate-950">
       <div className="mx-auto max-w-3xl">
@@ -101,12 +107,6 @@ export default function ServiceStatusPage() {
           subtitle="Hentikan atau pulihkan layanan aplikasi. Khusus Super Admin VIP"
           role={role}
         />
-
-        {!loading && !isVip ? (
-          <p role="alert" className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            Halaman ini khusus Super Admin VIP.
-          </p>
-        ) : null}
 
         {error ? (
           <p role="alert" className="mb-4 rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">
