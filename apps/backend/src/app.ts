@@ -7,7 +7,11 @@ import { corsOrigins } from "./config/env.js";
 import { errorHandler, notFoundHandler } from "./core/errors/errorHandler.js";
 import { adminWebOnly } from "./core/http/adminWebOnly.js";
 import { legacyMobileClientGate } from "./core/http/legacyMobileClientGate.js";
-import { serviceSuspensionGate } from "./core/http/serviceSuspensionGate.js";
+import { createServiceSuspensionGate } from "./core/http/serviceSuspensionGate.js";
+import {
+  serviceSuspensionRouter,
+  serviceSuspensionService
+} from "./modules/service-suspension/presentation/service-suspension.routes.js";
 import { auditRequestLogger } from "./core/http/auditRequestLogger.js";
 import { logger } from "./core/logger/logger.js";
 import { adminRateLimiter, apiRateLimiter, liveRideIpRateLimiter, paymentRateLimiter } from "./core/security/rateLimit.js";
@@ -93,7 +97,7 @@ export function createApp() {
   });
 
   // Setelah health check (harus tetap terjangkau), sebelum semua router API.
-  app.use("/api/v1", serviceSuspensionGate);
+  app.use("/api/v1", createServiceSuspensionGate(serviceSuspensionService));
   app.use("/api/v1", legacyMobileClientGate);
 
   app.use("/legal", legalRouter);
@@ -118,6 +122,7 @@ export function createApp() {
   app.use("/api/payments", paymentRateLimiter, dokuPaymentRouter);
   // Backward-compatible alias only. Canonical production webhook: /api/v1/webhooks/doku.
   app.use("/api/webhooks", paymentRateLimiter, dokuWebhookRouter);
+  app.use("/api/v1/admin/service-suspension", adminRateLimiter, serviceSuspensionRouter);
   app.use("/api/v1/admin/profit-sharing", adminRateLimiter, profitSharingRouter);
   app.use("/api/v1/admin/rides", adminRateLimiter, adminRideRouter);
   app.use("/api/v1/admin/driver-review", driverReviewRouter);

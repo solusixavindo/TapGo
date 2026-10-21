@@ -1456,6 +1456,19 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+/// Status penghentian layanan (suspend). SATU baris (id GLOBAL, dijaga CHECK di migration).
+/// Hanya SUPER_ADMIN_VIP yang dapat mengubahnya lewat /admin/service-suspension; setiap
+/// perubahan tercatat di audit_logs. Tidak menghapus data apa pun.
+model ServiceSuspension {
+  id          String   @id @default("GLOBAL") @db.VarChar(16)
+  suspended   Boolean  @default(false)
+  message     String?  @db.VarChar(300)
+  changedById String?  @map("changed_by_id") @db.Uuid
+  changedAt   DateTime @default(now()) @map("changed_at")
+
+  @@map("service_suspension")
+}
+
 // P1-4: counter atomik untuk benefit registrasi berkuota (mis. Basic PPOB
 // Rp5.000 untuk 1.000 user pertama). Slot diklaim via conditional UPDATE
 // (row lock) sehingga aman dari race. CHECK constraint di-manage pada migration.

@@ -1,11 +1,11 @@
 import { NextFunction, Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
-import { env } from "../../config/env.js";
 import { AppError } from "../errors/AppError.js";
+import type { SuspensionReader } from "../../modules/service-suspension/application/ServiceSuspensionService.js";
 
 /**
- * Jalur yang tetap hidup saat layanan dihentikan (SERVICE_SUSPENDED=true).
- * Dipasang pada `app.use("/api/v1", ...)`, jadi `req.path` TANPA awalan /api/v1.
+ * Jalur yang tetap hidup saat layanan dihentikan. Dipasang pada
+ * `app.use("/api/v1", ...)`, jadi `req.path` TANPA awalan /api/v1.
  *
  * - /admin: pemilik tetap bisa memeriksa dan memulihkan lewat konsol.
  * - /webhooks, /payments/midtrans/notification: pemberitahuan dari penyedia
@@ -30,13 +30,22 @@ function isMobileClient(req: Request): boolean {
 /**
  * Menghentikan layanan secara terkendali dan dapat dibalik: tidak mengubah
  * data, hanya menjawab 503 dengan pesan yang jelas agar aplikasi menampilkan
- * kesalahan yang bisa dipahami pengguna.
+ * kesalahan yang bisa dipahami pengguna. Status dibaca dari database (diubah
+ * hanya oleh SUPER_ADMIN_VIP), bukan dari variabel lingkungan.
  */
-export function serviceSuspensionGate(req: Request, _res: Response, next: NextFunction) {
-  if (!env.SERVICE_SUSPENDED || isSuspensionExempt(req.path, isMobileClient(req))) {
-    return next();
-  }
-  return next(
-    new AppError(env.SERVICE_SUSPENDED_MESSAGE, StatusCodes.SERVICE_UNAVAILABLE, "SERVICE_SUSPENDED")
-  );
+export function createServiceSuspensionGate(reader: SuspensionReader) {
+  return async function serviceSuspensionGate(req: Request, _res: Response, next: NextFunction) {
+    try {
+      if (isSuspensionExempt(req.path, isMobileClient(req))) {
+        return next();
+      }
+      const state = await reader.current();
+      if (!state.suspended) {
+        return next();
+      }
+      return next(new AppError(state.message, StatusCodes.SERVICE_UNAVAILABLE, "SERVICE_SUSPENDED"));
+    } catch (error) {
+      return next(error);
+    }
+  };
 }

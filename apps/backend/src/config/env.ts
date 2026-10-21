@@ -152,18 +152,6 @@ const envSchema = z.object({
   /// Nomor build minimum driver_app. 0 = tidak ada batas. Hanya berlaku bila
   /// DRIVER_LEGACY_CLIENT_BLOCK_ENABLED=true.
   DRIVER_MIN_APP_BUILD: z.coerce.number().int().min(0).default(0),
-  /// Saklar penghentian layanan (suspend) atas keputusan pemilik: bila true, semua API publik menjawab 503
-  /// SERVICE_SUSPENDED kecuali health, konsol admin, webhook penyedia pembayaran (agar dana yang sedang berjalan
-  /// tetap tercatat), dan jalur akun (hak pengguna atas data). Tidak menghapus data apa pun; mematikannya
-  /// (false lalu restart) memulihkan layanan. Default mati.
-  SERVICE_SUSPENDED: strictEnvBoolean(false),
-  /// Pesan yang tampil kepada pengguna saat layanan dihentikan.
-  SERVICE_SUSPENDED_MESSAGE: z
-    .string()
-    .trim()
-    .min(1)
-    .max(300)
-    .default("Layanan TapGo sedang dihentikan sementara. Silakan hubungi support@tapgolion.id untuk informasi."),
   /// Pencairan saldo lewat dashboard mitra (kanal WEB saja). Terpisah dari
   /// WALLET_CASH_OUT_ENABLED agar rilis Google Play tetap tertutup walau
   /// pencairan web dinyalakan.
