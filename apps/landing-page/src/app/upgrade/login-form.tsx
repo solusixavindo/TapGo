@@ -10,7 +10,9 @@ import {
   REFERRAL_NOTICE_KEY,
   TOKEN_KEY,
   claimRememberedReferral,
+  clearReferralHint,
   clearSession,
+  normalizeReferralCode,
   login,
   readReferralHint,
   readSession,
@@ -37,8 +39,11 @@ export default function LoginForm() {
 
   // Kode referral dari tautan (/r/KODE -> /upgrade/?ref=KODE) diingat; dikaitkan ke akun setelah masuk.
   const [referral, setReferral] = useState("");
+  const [referralInput, setReferralInput] = useState("");
   useEffect(() => {
-    setReferral(rememberReferral(new URLSearchParams(window.location.search).get("ref")) || readReferralHint());
+    const code = rememberReferral(new URLSearchParams(window.location.search).get("ref")) || readReferralHint();
+    setReferral(code);
+    setReferralInput(code);
   }, []);
 
   // Pesan dari sesi yang baru berakhir (lihat endSession di api.ts); sekali tampil.
@@ -57,6 +62,14 @@ export default function LoginForm() {
       setError("Isi nomor HP dan password terlebih dahulu.");
       return;
     }
+    // Kode referral boleh diisi manual (mis. diberi tahu lisan). Kosong = tidak memakai; bentuk salah = tolak di sini.
+    const typedReferral = referralInput.trim();
+    if (typedReferral && !normalizeReferralCode(typedReferral)) {
+      setError("Kode referral tidak valid. Periksa kembali, atau kosongkan bila tidak ada.");
+      return;
+    }
+    if (typedReferral) rememberReferral(typedReferral);
+    else clearReferralHint();
     setBusy(true);
     setError("");
     try {
@@ -136,6 +149,22 @@ export default function LoginForm() {
             </svg>
           </button>
         </div>
+      </Field>
+
+      <Field
+        label="Kode referral (opsional)"
+        hint="Isi bila Anda diajak seseorang. Dikaitkan ke akun Anda setelah masuk, selama akun belum pernah membeli membership berbayar."
+      >
+        <input
+          className={inputClass}
+          type="text"
+          autoComplete="off"
+          autoCapitalize="characters"
+          placeholder="Contoh: ABCD123456"
+          value={referralInput}
+          onChange={(event) => setReferralInput(event.target.value)}
+          maxLength={24}
+        />
       </Field>
 
       {error ? (
