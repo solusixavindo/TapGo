@@ -296,6 +296,12 @@ export type DriverDocumentQueueRow = {
   documents: DriverDocumentSummary[];
   /** Pengajuan driver yang sedang terbuka untuk ditinjau; null bila tidak ada. */
   application: DriverApplicationReview | null;
+  /**
+   * Status pengajuan terbaru apa pun (termasuk DRAFT); null bila mitra belum pernah membuat pengajuan. Dokumen yang
+   * sudah diunggah membuat kycStatus PENDING walau pengajuan belum dikirim, jadi layar memakai ini untuk membedakan
+   * "menunggu diperiksa" dari "belum dikirim".
+   */
+  latestApplicationStatus?: string | null;
   /** Profil operasional; ada setelah pengajuan disetujui. Harus ACTIVE agar driver dapat menerima pesanan. */
   profile: { id: string; status: "PENDING" | "ACTIVE" | "SUSPENDED" | "REJECTED" } | null;
 };

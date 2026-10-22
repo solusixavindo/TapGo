@@ -37,10 +37,24 @@ const KYC_LABEL: Record<string, string> = {
   REJECTED: "Ditolak"
 };
 
-function kycTone(status: string) {
-  if (status === "APPROVED") return "bg-emerald-100 text-emerald-800";
-  if (status === "REJECTED") return "bg-rose-100 text-rose-800";
-  if (status === "PENDING") return "bg-blue-100 text-blue-800";
+/**
+ * Mengunggah dokumen sudah membuat kycStatus PENDING, padahal pengajuan baru bisa diputuskan setelah mitra menekan
+ * "Kirim Pengajuan" di aplikasi. PENDING tanpa pengajuan terbuka berarti BELUM DIKIRIM, bukan "menunggu pemeriksaan".
+ */
+function notSubmittedYet(row: DriverDocumentQueueRow) {
+  return row.kycStatus === "PENDING" && !row.application;
+}
+
+function statusLabel(row: DriverDocumentQueueRow) {
+  if (notSubmittedYet(row)) return "Dokumen diunggah, pengajuan belum dikirim";
+  return KYC_LABEL[row.kycStatus] ?? row.kycStatus;
+}
+
+function kycTone(row: DriverDocumentQueueRow) {
+  if (notSubmittedYet(row)) return "bg-amber-100 text-amber-800";
+  if (row.kycStatus === "APPROVED") return "bg-emerald-100 text-emerald-800";
+  if (row.kycStatus === "REJECTED") return "bg-rose-100 text-rose-800";
+  if (row.kycStatus === "PENDING") return "bg-blue-100 text-blue-800";
   return "bg-slate-200 text-slate-700";
 }
 
@@ -90,14 +104,15 @@ export default function DriverDocumentsPage() {
     router.replace("/");
   }
 
-  const menungguPemeriksaan = rows.filter((row) => row.kycStatus === "PENDING");
+  const menungguKeputusan = rows.filter((row) => row.application);
+  const belumMengirim = rows.filter((row) => notSubmittedYet(row));
 
   return (
     <main className="min-h-screen bg-slate-100 p-6 text-slate-950 print:bg-white print:p-0">
       <div className="mx-auto max-w-7xl">
         <ConsoleHeader
           title="Dokumen Mitra Driver"
-          subtitle={`${menungguPemeriksaan.length} mitra menunggu pemeriksaan dari ${rows.length} yang memiliki dokumen`}
+          subtitle={`${menungguKeputusan.length} mitra menunggu keputusan, ${belumMengirim.length} belum mengirim pengajuan, dari ${rows.length} yang memiliki dokumen`}
           role={role}
           actions={
             <button
@@ -161,9 +176,9 @@ export default function DriverDocumentsPage() {
                             {row.fullName}
                           </span>
                           <span
-                            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${kycTone(row.kycStatus)}`}
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${kycTone(row)}`}
                           >
-                            {KYC_LABEL[row.kycStatus] ?? row.kycStatus}
+                            {statusLabel(row)}
                           </span>
                         </div>
                         <p className="mt-1 text-xs text-slate-500">{row.phone}</p>
@@ -230,7 +245,7 @@ export default function DriverDocumentsPage() {
                 <div className="flex justify-between gap-4">
                   <dt>Status verifikasi</dt>
                   <dd className="font-semibold text-slate-700">
-                    {KYC_LABEL[selected.kycStatus] ?? selected.kycStatus}
+                    {statusLabel(selected)}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-4">
@@ -261,7 +276,17 @@ export default function DriverDocumentsPage() {
                 </div>
               </dl>
 
-              <DriverDecisionPanel row={selected} onChanged={() => void refresh()} />
+              <DriverDecisionPanel
+                row={selected}
+                retentionLeft={(() => {
+                  const tersedia = selected.documents
+                    .filter((item) => item.available && item.expiresAt)
+                    .map((item) => item.expiresAt as string)
+                    .sort();
+                  return tersedia.length ? remainingRetention(tersedia[0]!) : null;
+                })()}
+                onChanged={() => void refresh()}
+              />
             </article>
           )}
         </div>

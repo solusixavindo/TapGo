@@ -24,9 +24,12 @@ import {
  */
 export default function DriverDecisionPanel({
   row,
+  retentionLeft = null,
   onChanged
 }: {
   row: DriverDocumentQueueRow;
+  /** Sisa masa simpan berkas terdekat (mis. "17 jam 5 menit lagi"); null bila tidak ada berkas tersisa. */
+  retentionLeft?: string | null;
   onChanged: () => void;
 }) {
   const application = row.application;
@@ -109,13 +112,33 @@ export default function DriverDecisionPanel({
     ) : null;
 
   if (!application) {
+    // Dokumen sudah diunggah (kycStatus PENDING) tetapi pengajuan belum dikirim: tombol keputusan memang belum ada.
+    const notSubmitted = row.kycStatus === "PENDING";
     return (
       <div className={box}>
         <p className="text-sm font-bold text-slate-800">Keputusan pengajuan</p>
-        <p className="mt-1 text-xs leading-5 text-slate-500">
-          Tidak ada pengajuan terbuka untuk mitra ini. Status verifikasi saat ini:{" "}
-          <strong>{row.kycStatus}</strong>. Mitra yang ditolak dapat mengajukan ulang dari aplikasinya.
-        </p>
+        {notSubmitted ? (
+          <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-3" data-testid="driver-not-submitted">
+            <p className="text-sm font-bold text-amber-900">Mitra belum mengirim pengajuan</p>
+            <p className="mt-1 text-xs leading-5 text-amber-900">
+              Dokumen sudah diunggah, tetapi keputusan baru bisa diambil setelah mitra menekan{" "}
+              <strong>&quot;Kirim Pengajuan&quot;</strong> di halaman terakhir pendaftaran di aplikasi driver. Langkah itu
+              juga mencatat persetujuan Pernyataan Kemitraan, sehingga tombol Setujui/Tolak sengaja belum tersedia sebelum itu.
+              {row.latestApplicationStatus === "DRAFT" ? " Pengajuannya masih berupa draf." : ""}
+            </p>
+            <p className="mt-2 text-xs leading-5 text-amber-900">
+              Hubungi mitra dan minta ia menyelesaikannya.{" "}
+              {retentionLeft
+                ? `Berkas akan terhapus otomatis ${retentionLeft}; setelah itu mitra harus mengunggah ulang dokumen.`
+                : "Berkasnya sudah terhapus otomatis; mitra harus mengunggah ulang dokumen."}
+            </p>
+          </div>
+        ) : (
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            Tidak ada pengajuan terbuka untuk mitra ini. Status verifikasi saat ini: <strong>{row.kycStatus}</strong>.
+            Mitra yang ditolak dapat mengajukan ulang dari aplikasinya.
+          </p>
+        )}
         {notice ? (
           <p role="status" className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
             {notice}

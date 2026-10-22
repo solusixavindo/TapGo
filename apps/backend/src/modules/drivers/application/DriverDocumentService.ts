@@ -260,6 +260,18 @@ export class DriverDocumentService {
     for (const application of openApplications) {
       if (!applicationByUser.has(application.userId)) applicationByUser.set(application.userId, application);
     }
+    // Pengajuan TERBARU apa pun statusnya (termasuk DRAFT). Dokumen yang sudah diunggah membuat kycStatus PENDING
+    // walau mitra belum menekan "Kirim Pengajuan"; tanpa ini admin tidak bisa membedakan "menunggu diperiksa" dari
+    // "belum dikirim" dan mengira tombol keputusan hilang.
+    const latestApplications = await this.prisma.rideDriverApplication.findMany({
+      where: { userId: { in: drivers.map((driver) => driver.userId) } },
+      orderBy: { createdAt: "desc" },
+      select: { userId: true, status: true },
+    });
+    const latestStatusByUser = new Map<string, (typeof latestApplications)[number]["status"]>();
+    for (const latest of latestApplications) {
+      if (!latestStatusByUser.has(latest.userId)) latestStatusByUser.set(latest.userId, latest.status);
+    }
     // Profil operasional (dibuat saat pengajuan disetujui, status awal PENDING).
     const profiles = await this.prisma.rideDriverProfile.findMany({
       where: { userId: { in: drivers.map((driver) => driver.userId) } },
@@ -282,6 +294,7 @@ export class DriverDocumentService {
             claimExpiresAt: claimActive ? application.claimExpiresAt : null,
           }
         : null,
+      latestApplicationStatus: latestStatusByUser.get(driver.userId) ?? null,
       driverId: driver.id,
       fullName: driver.user.fullName,
       phone: driver.user.phone,

@@ -203,6 +203,47 @@ describe.skipIf(!runIntegration)("Antrian dokumen mitra driver", () => {
     expect(row.application).toBeNull();
   });
 
+  it("dokumen sudah diunggah tetapi pengajuan belum dikirim: KYC PENDING, tanpa pengajuan terbuka, status pengajuan terbaru DRAFT", async () => {
+    // Kasus nyata 22 Okt 2026 (M Dedi Muftiadi): mengunggah dokumen sudah membuat kycStatus PENDING, tetapi tombol
+    // keputusan baru ada setelah mitra menekan "Kirim Pengajuan". Antrian harus membuat perbedaan ini terbaca.
+    const driver = await createDriver();
+    await upload(driver, "ktp", PNG);
+    await prisma.rideDriverApplication.create({ data: { userId: driver.user.id, cycleNumber: 1, status: "DRAFT" } });
+    const admin = await createAdmin();
+
+    const row = (await ambilAntrian(admin.token)).find((item) => item.driverId === driver.driverId) as unknown as {
+      kycStatus: string;
+      application: unknown;
+      latestApplicationStatus: string | null;
+    };
+    expect(row.kycStatus).toBe("PENDING");
+    expect(row.application).toBeNull();
+    expect(row.latestApplicationStatus).toBe("DRAFT");
+  });
+
+  it("tanpa pengajuan sama sekali statusnya null; pengajuan terkirim membuat keduanya SUBMITTED", async () => {
+    const tanpa = await createDriver();
+    await upload(tanpa, "ktp", PNG);
+    const terkirim = await createDriver();
+    await upload(terkirim, "ktp", PNG);
+    await prisma.rideDriverApplication.create({
+      data: { userId: terkirim.user.id, cycleNumber: 1, status: "SUBMITTED", submittedAt: new Date() }
+    });
+    const admin = await createAdmin();
+
+    const rows = (await ambilAntrian(admin.token)) as unknown as Array<{
+      driverId: string;
+      application: { status: string } | null;
+      latestApplicationStatus: string | null;
+    }>;
+    const rowTanpa = rows.find((item) => item.driverId === tanpa.driverId)!;
+    const rowTerkirim = rows.find((item) => item.driverId === terkirim.driverId)!;
+    expect(rowTanpa.latestApplicationStatus).toBeNull();
+    expect(rowTanpa.application).toBeNull();
+    expect(rowTerkirim.application?.status).toBe("SUBMITTED");
+    expect(rowTerkirim.latestApplicationStatus).toBe("SUBMITTED");
+  });
+
   it("hanya menampilkan driver yang benar-benar punya dokumen", async () => {
     const berdokumen = await createDriver();
     await upload(berdokumen, "ktp", PNG);
