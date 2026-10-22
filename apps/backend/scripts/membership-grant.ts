@@ -13,6 +13,8 @@
  *
  * Output memuat nama dan jumlah saja; tidak pernah memuat nomor HP, password, atau token.
  */
+// Memuat .env dari direktori kerja (apps/backend) supaya skrip bisa dijalankan langsung di server tanpa export manual.
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { MembershipGrantService } from "../src/modules/memberships/application/MembershipGrantService.js";
 import { MembershipOrderService } from "../src/modules/memberships/application/MembershipOrderService.js";
