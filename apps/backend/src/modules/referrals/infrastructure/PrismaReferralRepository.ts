@@ -59,6 +59,11 @@ export class PrismaReferralRepository implements ReferralRepository {
     });
   }
 
+  async hasPaidMembershipOrder(userId: string, tx: Prisma.TransactionClient = this.prisma) {
+    const paid = await tx.membershipOrder.count({ where: { userId, status: "PAID" } });
+    return paid > 0;
+  }
+
   async hasReferralPath(ancestorId: string, descendantId: string, tx: Prisma.TransactionClient = this.prisma) {
     const existing = await tx.referralLevel.findUnique({
       where: {

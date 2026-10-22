@@ -762,6 +762,47 @@ export class MembershipOrderService {
     }
   }
 
+  /// Koreksi satu kali: membayar surut bonus referral untuk order yang SUDAH aktif tetapi pembelinya belum punya
+  /// sponsor saat aktivasi (mis. kode referral tidak sampai ke sistem). Memakai fungsi hitung yang SAMA PERSIS dengan
+  /// aktivasi (bonus sponsor, bonus jenjang, hadiah pencapaian sisi sponsor) dan tidak mengulang efek lain aktivasi
+  /// (saldo PPOB, keanggotaan pembeli). Aman diulang: tiap bonus punya kunci unik per order, jadi yang sudah dibayar
+  /// dilewati. Pemanggil wajib menyediakan transaksi dan sudah membuat hubungan referralnya.
+  async applyReferralRewardsForActivatedOrder(tx: PrismaTransaction, orderId: string, now: Date = new Date()) {
+    const order = await tx.membershipOrder.findUnique({ where: { id: orderId }, include: activationOrderInclude });
+    if (!order || order.status !== "PAID" || !order.userMembership || !order.invoice) {
+      throw new AppError(
+        "Order belum lunas dan aktif, tidak dapat membayar bonus referral.",
+        StatusCodes.CONFLICT,
+        "MEMBERSHIP_ORDER_NOT_ACTIVATED"
+      );
+    }
+    const input = {
+      userId: order.userId,
+      orderId: order.id,
+      invoiceId: order.invoice.id,
+      membershipId: order.membershipId,
+      packageName: order.membership.name,
+      packageTier: order.membership.tier,
+      packagePrice: order.membership.price
+    };
+
+    await this.creditSponsorBonus(tx, input);
+    await this.creditLevelBonuses(tx, input);
+
+    const directSponsor = await tx.referral.findUnique({
+      where: { userId: order.userId },
+      select: { sponsorId: true, status: true }
+    });
+    if (directSponsor?.status === "ACTIVE") {
+      await this.evaluateAutoUpgradeForUser(tx, { userId: directSponsor.sponsorId, sourceOrderId: order.id, now });
+      await this.creditRewardBonus(tx, {
+        userId: directSponsor.sponsorId,
+        sourceUserId: order.userId,
+        membershipTier: await this.getUserCurrentTier(tx, directSponsor.sponsorId)
+      });
+    }
+  }
+
   listMyOrders(userId: string) {
     return this.prisma.membershipOrder.findMany({
       where: { userId },

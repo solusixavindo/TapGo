@@ -90,6 +90,8 @@ export interface ReferralRepository {
   findUserById(userId: string, tx?: Prisma.TransactionClient): Promise<User | null>;
   findUserByReferralCode(referralCode: string, tx?: Prisma.TransactionClient): Promise<User | null>;
   findExistingReferral(userId: string, tx?: Prisma.TransactionClient): Promise<{ id: string } | null>;
+  /// Apakah akun ini pernah membayar order membership (status PAID). Dipakai menutup klaim sponsor setelah pembelian.
+  hasPaidMembershipOrder(userId: string, tx?: Prisma.TransactionClient): Promise<boolean>;
   hasReferralPath(ancestorId: string, descendantId: string, tx?: Prisma.TransactionClient): Promise<boolean>;
   getSponsorAncestors(sponsorId: string, tx?: Prisma.TransactionClient): Promise<Array<{ ancestorId: string; level: number }>>;
   getUserMembership(userId: string, tx?: Prisma.TransactionClient): Promise<MembershipCommissionProfile>;

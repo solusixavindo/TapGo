@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../core/errors/AppError.js";
 import { CreateReferralInput, ReferralRepository } from "../domain/ReferralRepository.js";
@@ -8,55 +9,70 @@ export class ReferralService {
   constructor(private readonly repository: ReferralRepository) {}
 
   async claimReferral(input: CreateReferralInput) {
-    return this.repository.transaction(async (tx) => {
-      const user = await this.repository.findUserById(input.userId, tx);
-      if (!user) {
-        throw new AppError("User not found", StatusCodes.NOT_FOUND, "USER_NOT_FOUND");
-      }
+    return this.repository.transaction((tx) => this.linkSponsor(tx, input.userId, input.sponsorCode));
+  }
 
-      const sponsor = await this.repository.findUserByReferralCode(input.sponsorCode, tx);
-      if (!sponsor) {
-        throw new AppError("Sponsor referral code is invalid", StatusCodes.BAD_REQUEST, "SPONSOR_NOT_FOUND");
-      }
+  /// Mengaitkan sponsor ke akun yang sudah ada di dalam transaksi milik pemanggil. Semua pengaman klaim berlaku
+  /// (kode sah, bukan diri sendiri, belum pernah diklaim, tidak melingkar). `allowAfterPurchase` HANYA untuk koreksi
+  /// admin satu kali (ReferralBackfillService); jalur klaim biasa tidak pernah menyalakannya.
+  async linkSponsor(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    sponsorCode: string,
+    options: { allowAfterPurchase?: boolean } = {}
+  ) {
+    const user = await this.repository.findUserById(userId, tx);
+    if (!user) {
+      throw new AppError("User not found", StatusCodes.NOT_FOUND, "USER_NOT_FOUND");
+    }
 
-      if (sponsor.id === user.id) {
-        throw new AppError("Self referral is not allowed", StatusCodes.BAD_REQUEST, "SELF_REFERRAL_BLOCKED");
-      }
+    const sponsor = await this.repository.findUserByReferralCode(sponsorCode.trim().toUpperCase(), tx);
+    if (!sponsor) {
+      throw new AppError("Sponsor referral code is invalid", StatusCodes.BAD_REQUEST, "SPONSOR_NOT_FOUND");
+    }
 
-      const existingReferral = await this.repository.findExistingReferral(user.id, tx);
-      if (existingReferral) {
-        throw new AppError("Referral has already been claimed", StatusCodes.CONFLICT, "REFERRAL_ALREADY_CLAIMED");
-      }
+    if (sponsor.id === user.id) {
+      throw new AppError("Self referral is not allowed", StatusCodes.BAD_REQUEST, "SELF_REFERRAL_BLOCKED");
+    }
 
-      const wouldCreateCycle = await this.repository.hasReferralPath(user.id, sponsor.id, tx);
-      if (wouldCreateCycle) {
-        throw new AppError("Circular referral is not allowed", StatusCodes.BAD_REQUEST, "CIRCULAR_REFERRAL_BLOCKED");
-      }
+    const existingReferral = await this.repository.findExistingReferral(user.id, tx);
+    if (existingReferral) {
+      throw new AppError("Referral has already been claimed", StatusCodes.CONFLICT, "REFERRAL_ALREADY_CLAIMED");
+    }
 
-      const referral = await this.repository.createReferral(
-        {
-          sponsorId: sponsor.id,
-          userId: user.id
-        },
-        tx
+    // Sponsor hanya boleh dikaitkan SEBELUM membership berbayar pertama. Tanpa aturan ini, kode bisa dipasang
+    // mendekati atau sesudah pembayaran (bonus sponsor dihitung saat pembayaran diproses, jadi pengaitan
+    // sesudahnya tidak membayar surut tetapi tetap bisa dipakai untuk bonus jenjang dan hadiah pencapaian).
+    if (!options.allowAfterPurchase && (await this.repository.hasPaidMembershipOrder(user.id, tx))) {
+      throw new AppError(
+        "Kode referral hanya dapat dipakai sebelum membership berbayar pertama.",
+        StatusCodes.CONFLICT,
+        "REFERRAL_AFTER_PURCHASE_BLOCKED"
       );
+    }
 
-      const sponsorAncestors = await this.repository.getSponsorAncestors(sponsor.id, tx);
-      const referralLevelRows = [
-        { ancestorId: sponsor.id, descendantId: user.id, level: 1 },
-        ...sponsorAncestors
-          .filter((ancestor) => ancestor.level + 1 <= MAX_REFERRAL_LEVEL)
-          .map((ancestor) => ({
-            ancestorId: ancestor.ancestorId,
-            descendantId: user.id,
-            level: ancestor.level + 1
-          }))
-      ];
+    const wouldCreateCycle = await this.repository.hasReferralPath(user.id, sponsor.id, tx);
+    if (wouldCreateCycle) {
+      throw new AppError("Circular referral is not allowed", StatusCodes.BAD_REQUEST, "CIRCULAR_REFERRAL_BLOCKED");
+    }
 
-      await this.repository.createReferralLevels(referralLevelRows, tx);
+    const referral = await this.repository.createReferral({ sponsorId: sponsor.id, userId: user.id }, tx);
 
-      return referral;
-    });
+    const sponsorAncestors = await this.repository.getSponsorAncestors(sponsor.id, tx);
+    const referralLevelRows = [
+      { ancestorId: sponsor.id, descendantId: user.id, level: 1 },
+      ...sponsorAncestors
+        .filter((ancestor) => ancestor.level + 1 <= MAX_REFERRAL_LEVEL)
+        .map((ancestor) => ({
+          ancestorId: ancestor.ancestorId,
+          descendantId: user.id,
+          level: ancestor.level + 1
+        }))
+    ];
+
+    await this.repository.createReferralLevels(referralLevelRows, tx);
+
+    return referral;
   }
 
   getSummary(userId: string) {
