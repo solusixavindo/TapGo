@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { rememberReferral } from "../upgrade/api";
 
 const packageOptions = ["Basic", "Silver", "Gold", "Platinum"];
 
@@ -61,6 +62,12 @@ export default function RegisterForm() {
     notes: ""
   });
   const [error, setError] = useState("");
+
+  // Tautan lama (/daftar/?ref=KODE) tetap berguna: kodenya diingat supaya otomatis dikaitkan saat pelanggan masuk
+  // di halaman upgrade, walau formulir WhatsApp ini tidak menyimpan apa pun di sistem.
+  useEffect(() => {
+    rememberReferral(searchParams.get("ref"));
+  }, [searchParams]);
 
   const whatsappLink = useMemo(() => {
     const message = [
@@ -140,6 +147,16 @@ export default function RegisterForm() {
           </h1>
           <p className="themed-text-secondary mt-5 text-lg leading-8">
             Isi formulir berikut untuk mendapatkan informasi pendaftaran membership TapGo Lion.
+          </p>
+          <p className="themed-text-secondary mt-4 leading-7">
+            Sudah punya akun TapGo dari aplikasi?{" "}
+            <a
+              href={form.referral ? `/upgrade/?ref=${encodeURIComponent(form.referral)}` : "/upgrade/"}
+              className="font-bold themed-accent"
+            >
+              Upgrade langsung di sini
+            </a>
+            ; kode referral Anda otomatis tercatat tanpa WhatsApp.
           </p>
 
           <div className="themed-glass mt-8 rounded-[2rem] p-6">

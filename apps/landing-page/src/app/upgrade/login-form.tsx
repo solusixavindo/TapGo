@@ -3,7 +3,21 @@
 import Link from "../hard-nav";
 import { useHardRouter as useRouter } from "../hard-nav";
 import { FormEvent, useEffect, useState } from "react";
-import { NOTICE_KEY, PACKAGE_HINT_KEY, PREVIEW_MODE, TOKEN_KEY, clearSession, login, readSession, takeNextPath, writeSession } from "./api";
+import {
+  NOTICE_KEY,
+  PACKAGE_HINT_KEY,
+  PREVIEW_MODE,
+  REFERRAL_NOTICE_KEY,
+  TOKEN_KEY,
+  claimRememberedReferral,
+  clearSession,
+  login,
+  readReferralHint,
+  readSession,
+  rememberReferral,
+  takeNextPath,
+  writeSession
+} from "./api";
 import { Field, inputClass, primaryButtonClass } from "./upgrade-shell";
 
 export default function LoginForm() {
@@ -19,6 +33,12 @@ export default function LoginForm() {
   useEffect(() => {
     const wanted = new URLSearchParams(window.location.search).get("paket")?.trim().toUpperCase() ?? "";
     if (["SILVER", "GOLD", "PLATINUM"].includes(wanted)) writeSession(PACKAGE_HINT_KEY, wanted);
+  }, []);
+
+  // Kode referral dari tautan (/r/KODE -> /upgrade/?ref=KODE) diingat; dikaitkan ke akun setelah masuk.
+  const [referral, setReferral] = useState("");
+  useEffect(() => {
+    setReferral(rememberReferral(new URLSearchParams(window.location.search).get("ref")) || readReferralHint());
   }, []);
 
   // Pesan dari sesi yang baru berakhir (lihat endSession di api.ts); sekali tampil.
@@ -44,6 +64,9 @@ export default function LoginForm() {
       // Token disimpan hanya untuk sesi tab ini. Tidak ada data sensitif lain
       // yang ditulis ke perangkat.
       writeSession(TOKEN_KEY, result.accessToken);
+      // Kaitkan kode referral yang diingat (tidak pernah menghalangi masuk); hasilnya tampil di langkah berikutnya.
+      const referralOutcome = await claimRememberedReferral(result.accessToken);
+      if (referralOutcome) writeSession(REFERRAL_NOTICE_KEY, JSON.stringify(referralOutcome));
       router.push(takeNextPath("/upgrade", "/upgrade/paket"));
     } catch (caught) {
       setError(
@@ -58,6 +81,12 @@ export default function LoginForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-5" noValidate>
+      {referral ? (
+        <p role="status" className="themed-text rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm font-semibold">
+          Anda diajak dengan kode referral <span className="font-black tracking-wider">{referral}</span>. Kode ini otomatis
+          dikaitkan ke akun Anda setelah masuk, selama akun belum pernah membeli membership berbayar.
+        </p>
+      ) : null}
       {notice ? (
         <p role="status" className="rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm font-semibold themed-accent">
           {notice}
@@ -120,9 +149,17 @@ export default function LoginForm() {
       </button>
 
       <p className="text-center text-sm themed-text-muted">
-        Belum punya akun TapGo?{" "}
-        <Link href="/daftar" className="font-bold themed-accent">
-          Daftar dulu di sini
+        Belum punya akun TapGo? Pasang aplikasi TapGo dari{" "}
+        <a
+          href="https://play.google.com/store/apps/details?id=com.xavindo.tapgo"
+          className="font-bold themed-accent"
+          rel="noopener noreferrer"
+        >
+          Google Play
+        </a>{" "}
+        dan daftar di sana, lalu kembali ke halaman ini.{referral ? " Kode referral Anda tetap diingat." : ""}{" "}
+        <Link href={referral ? `/daftar?ref=${encodeURIComponent(referral)}` : "/daftar"} className="font-bold themed-accent">
+          Butuh bantuan mendaftar? Hubungi admin
         </Link>
       </p>
     </form>

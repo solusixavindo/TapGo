@@ -59,6 +59,128 @@ export const BUYER_NAME_KEY = "tapgo.buyer.name";
  */
 export const PACKAGE_HINT_KEY = "tapgo.upgrade.packageHint";
 
+/**
+ * Kode referral dari tautan (https://tapgolion.id/r/KODE diarahkan ke /upgrade/?ref=KODE).
+ *
+ * Disimpan di localStorage (bukan sessionStorage) karena orang yang belum punya akun sering lebih dulu memasang
+ * aplikasi dan baru kembali beberapa jam kemudian, mungkin di tab lain. Isinya hanya kode yang memang dibagikan
+ * secara terbuka, bukan data sensitif, dan kedaluwarsa dalam 30 hari. Kode dikaitkan ke akun SETELAH pelanggan
+ * masuk (claimRememberedReferral); hasilnya ditampilkan sekali lewat REFERRAL_NOTICE_KEY.
+ */
+export const REFERRAL_HINT_KEY = "tapgo.referral.hint";
+export const REFERRAL_NOTICE_KEY = "tapgo.referral.notice";
+const REFERRAL_HINT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const REFERRAL_PATTERN = /^[A-Za-z0-9_-]{4,24}$/;
+
+/** Kode sah dari teks mentah (huruf besar), atau string kosong bila bentuknya tidak sah. */
+export function normalizeReferralCode(raw: string | null | undefined): string {
+  const value = (raw ?? "").trim();
+  return REFERRAL_PATTERN.test(value) ? value.toUpperCase() : "";
+}
+
+/** Menyimpan kode dari tautan. Mengembalikan kode yang tersimpan (bisa dari sebelumnya), atau kosong. */
+export function rememberReferral(raw: string | null | undefined): string {
+  const code = normalizeReferralCode(raw);
+  if (code && typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(REFERRAL_HINT_KEY, JSON.stringify({ code, savedAt: Date.now() }));
+    } catch {
+      // Penyimpanan diblokir (mode privat): kode tetap dipakai pada kunjungan ini lewat URL.
+    }
+    return code;
+  }
+  return readReferralHint();
+}
+
+export function readReferralHint(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(REFERRAL_HINT_KEY) ?? "null") as {
+      code?: string;
+      savedAt?: number;
+    } | null;
+    if (!parsed?.code || typeof parsed.savedAt !== "number") return "";
+    if (Date.now() - parsed.savedAt > REFERRAL_HINT_TTL_MS) {
+      window.localStorage.removeItem(REFERRAL_HINT_KEY);
+      return "";
+    }
+    return normalizeReferralCode(parsed.code);
+  } catch {
+    return "";
+  }
+}
+
+export function clearReferralHint() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(REFERRAL_HINT_KEY);
+  } catch {
+    // diabaikan
+  }
+}
+
+export type ReferralNotice = { tone: "success" | "info" | "warn"; message: string };
+
+/** Pesan hasil klaim untuk tiap kode galat server; kode yang tidak dikenali dianggap sementara (kode tetap diingat). */
+function referralOutcomeFor(code: string, sponsorCode: string): { notice: ReferralNotice; final: boolean } {
+  switch (code) {
+    case "REFERRAL_ALREADY_CLAIMED":
+      return {
+        final: true,
+        notice: { tone: "info", message: `Akun Anda sudah tercatat memiliki pemberi referral, jadi kode ${sponsorCode} tidak dipakai.` }
+      };
+    case "REFERRAL_AFTER_PURCHASE_BLOCKED":
+      return {
+        final: true,
+        notice: {
+          tone: "info",
+          message: `Kode referral ${sponsorCode} tidak dapat dipakai karena akun ini sudah pernah membeli membership.`
+        }
+      };
+    case "SPONSOR_NOT_FOUND":
+      return {
+        final: true,
+        notice: { tone: "warn", message: `Kode referral ${sponsorCode} tidak dikenali. Periksa kembali kode dari pemberi referral.` }
+      };
+    case "SELF_REFERRAL_BLOCKED":
+      return { final: true, notice: { tone: "info", message: "Kode referral milik akun Anda sendiri tidak dapat dipakai." } };
+    case "CIRCULAR_REFERRAL_BLOCKED":
+      return { final: true, notice: { tone: "warn", message: `Kode referral ${sponsorCode} tidak dapat dipakai untuk akun ini.` } };
+    default:
+      return {
+        final: false,
+        notice: {
+          tone: "warn",
+          message: `Kode referral ${sponsorCode} belum dapat dikaitkan sekarang. Kode tetap diingat; coba masuk lagi nanti.`
+        }
+      };
+  }
+}
+
+/**
+ * Mengaitkan kode referral yang diingat ke akun yang baru masuk. TIDAK PERNAH melempar galat dan tidak menghalangi
+ * alur masuk: hasilnya berupa pesan untuk ditampilkan. Kode dihapus setelah berhasil atau ditolak secara pasti, dan
+ * dipertahankan bila galatnya sementara (jaringan, server sibuk, layanan dihentikan).
+ */
+export async function claimRememberedReferral(token: string): Promise<ReferralNotice | null> {
+  const sponsorCode = readReferralHint();
+  if (!sponsorCode) return null;
+  try {
+    await request("/referrals/claim", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+      body: JSON.stringify({ sponsorCode, triggerType: "REFERRAL_JOIN" })
+    });
+    clearReferralHint();
+    return { tone: "success", message: `Kode referral ${sponsorCode} berhasil dikaitkan ke akun Anda.` };
+  } catch (caught) {
+    const code = caught instanceof UpgradeApiError ? caught.code : "";
+    const outcome = referralOutcomeFor(code, sponsorCode);
+    if (outcome.final) clearReferralHint();
+    return outcome.notice;
+  }
+}
+
 export type MembershipPackage = {
   id: string;
   name: string;

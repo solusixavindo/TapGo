@@ -1,4 +1,5 @@
 import Link from "../hard-nav";
+import ReferralNoticeBanner from "./referral-notice";
 
 /**
  * Kerangka alur upgrade membership (Stage R2.6 jalur A).
@@ -128,7 +129,10 @@ export function UpgradeShell({
           </h1>
           <p className="themed-text-muted mt-3 text-sm leading-7">{subtitle}</p>
 
-          <div className="mt-8">{children}</div>
+          <div className="mt-8">
+            <ReferralNoticeBanner />
+            {children}
+          </div>
         </div>
 
         <p className="themed-text-muted mx-auto mt-6 max-w-2xl text-center text-xs leading-6">
