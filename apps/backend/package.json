@@ -26,7 +26,8 @@
     "admin:scope-bootstrap": "tsx scripts/admin-scope-bootstrap.ts",
     "audit:leaked-seed": "tsx scripts/leaked-seed-credential-audit.ts",
     "driver:reviewer-bootstrap": "tsx scripts/driver-reviewer-account-bootstrap.ts",
-    "referral:backfill": "tsx scripts/referral-backfill.ts"
+    "referral:backfill": "tsx scripts/referral-backfill.ts",
+    "membership:grant": "tsx scripts/membership-grant.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

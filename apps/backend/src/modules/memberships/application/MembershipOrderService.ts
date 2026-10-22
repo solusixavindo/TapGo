@@ -803,6 +803,111 @@ export class MembershipOrderService {
     }
   }
 
+  /// Pemberian membership TANPA pembelian (keputusan Owner untuk akun tertentu, mis. mitra internal). Memberi hak yang
+  /// dihitung business engine dari status membership: keanggotaan aktif (tingkat bonus sponsor, bonus jenjang, hadiah
+  /// pencapaian, dan pembagian laba tingkat itu) serta benefit saldo PPOB paket. TIDAK membuat order, invoice, atau
+  /// pendapatan, dan TIDAK memicu bonus sponsor atau jenjang ke atasan (tidak ada pembayaran yang dibagi).
+  /// Pemanggil menyediakan transaksi; benefit fisik (BPJS, merchandise) dipenuhi manual di luar sistem.
+  async grantComplimentaryMembership(
+    tx: PrismaTransaction,
+    input: { userId: string; tier: "SILVER" | "GOLD" | "PLATINUM"; reason: string; adminId?: string | undefined },
+    now: Date = new Date()
+  ) {
+    const membership = await tx.membership.findUnique({ where: { tier: input.tier } });
+    if (!membership || !membership.isActive) {
+      throw new AppError("Paket membership tidak tersedia.", StatusCodes.CONFLICT, "MEMBERSHIP_PACKAGE_UNAVAILABLE");
+    }
+    const user = await tx.user.findUnique({ where: { id: input.userId }, select: { id: true } });
+    if (!user) {
+      throw new AppError("Akun tidak ditemukan.", StatusCodes.NOT_FOUND, "USER_NOT_FOUND");
+    }
+
+    const currentTier = await this.getUserCurrentTier(tx, input.userId);
+    if (tierRank[input.tier] <= tierRank[currentTier]) {
+      throw new AppError(
+        "Akun sudah memiliki tingkat membership yang sama atau lebih tinggi.",
+        StatusCodes.CONFLICT,
+        "MEMBERSHIP_GRANT_NOT_AN_UPGRADE"
+      );
+    }
+
+    const previous = await tx.userMembership.findFirst({
+      where: { userId: input.userId, status: "ACTIVE" },
+      include: { membership: true },
+      orderBy: { activeAt: "desc" }
+    });
+    if (previous) {
+      await tx.userMembership.update({
+        where: { id: previous.id },
+        data: {
+          status: "EXPIRED",
+          expiresAt: now,
+          metadata: {
+            ...this.asObject(previous.metadata),
+            upgradedToMembershipId: membership.id,
+            upgradedByGrant: true,
+            upgradedAt: now.toISOString()
+          }
+        }
+      });
+    }
+
+    const granted = await tx.userMembership.create({
+      data: {
+        userId: input.userId,
+        membershipId: membership.id,
+        status: "ACTIVE",
+        activeAt: now,
+        metadata: {
+          grant: "COMPLIMENTARY",
+          reason: input.reason,
+          packageName: membership.name,
+          previousMembershipId: previous?.membershipId ?? null,
+          previousPackageName: previous?.membership.name ?? null,
+          ...(input.adminId ? { grantedBy: input.adminId } : {}),
+          grantedAt: now.toISOString()
+        }
+      },
+      select: { id: true }
+    });
+
+    await tx.user.update({ where: { id: input.userId }, data: { membershipId: membership.id } });
+
+    let ppobCredited = new Prisma.Decimal(0);
+    if (membership.ppobBalance.gt(0)) {
+      const wallet = await tx.wallet.upsert({
+        where: { userId: input.userId },
+        update: { ppobBalance: { increment: membership.ppobBalance } },
+        create: {
+          userId: input.userId,
+          balance: new Prisma.Decimal(0),
+          cashBalance: new Prisma.Decimal(0),
+          ppobBalance: membership.ppobBalance,
+          currency: "IDR"
+        }
+      });
+      await tx.walletTransaction.create({
+        data: {
+          walletId: wallet.id,
+          type: "PPOB_BENEFIT",
+          amount: membership.ppobBalance,
+          referenceType: "MEMBERSHIP_GRANT",
+          referenceId: granted.id,
+          metadata: { grant: "COMPLIMENTARY", membershipId: membership.id, packageName: membership.name, reason: input.reason }
+        }
+      });
+      ppobCredited = membership.ppobBalance;
+    }
+
+    return {
+      userMembershipId: granted.id,
+      previousTier: currentTier,
+      tier: membership.tier,
+      packageName: membership.name,
+      ppobCredited
+    };
+  }
+
   listMyOrders(userId: string) {
     return this.prisma.membershipOrder.findMany({
       where: { userId },
