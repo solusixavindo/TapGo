@@ -9,7 +9,8 @@ export class ProfitSharingController {
     const result = await this.service.createPeriod({
       periodMonth: req.body.periodMonth,
       periodYear: req.body.periodYear,
-      netProfitAmount: new Prisma.Decimal(req.body.netProfitAmount ?? req.body.totalPoolAmount)
+      netProfitAmount: new Prisma.Decimal(req.body.netProfitAmount ?? req.body.totalPoolAmount),
+      actorId: req.auth!.userId
     });
 
     res.status(201).json({ success: true, data: result });
@@ -25,13 +26,18 @@ export class ProfitSharingController {
     res.json({ success: true, data: result });
   };
 
+  preview = async (req: Request, res: Response) => {
+    const result = await this.service.previewDistribution(String(req.params.id));
+    res.json({ success: true, data: result });
+  };
+
   approve = async (req: Request, res: Response) => {
-    const result = await this.service.approvePeriod(String(req.params.id));
+    const result = await this.service.approvePeriod(String(req.params.id), req.auth!.userId);
     res.json({ success: true, data: result });
   };
 
   distribute = async (req: Request, res: Response) => {
-    const result = await this.service.distribute(String(req.params.id));
+    const result = await this.service.distribute(String(req.params.id), req.auth!.userId);
     res.json({ success: true, data: result });
   };
 }

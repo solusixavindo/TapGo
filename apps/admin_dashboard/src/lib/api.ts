@@ -459,6 +459,45 @@ export function completeDeletion(id: string, confirm: string, password: string) 
   return postJson<{ id: string; status: string }>(`/admin/delete-requests/${id}/complete`, { confirm, password });
 }
 
+// --- Pembagian laba (khusus Super Admin) ------------------------------------
+
+export type ProfitPeriodStatus = "DRAFT" | "APPROVED" | "DISTRIBUTED";
+
+export type ProfitPeriod = {
+  id: string;
+  periodMonth: number;
+  periodYear: number;
+  netProfitAmount: string;
+  totalPoolAmount: string;
+  silverAllocation: string;
+  goldAllocation: string;
+  platinumAllocation: string;
+  retainedAmount: string;
+  status: ProfitPeriodStatus;
+  createdAt: string;
+  approvedAt: string | null;
+  distributedAt: string | null;
+  _count?: { distributions: number };
+  distributions?: Array<{
+    id: string;
+    category: string;
+    amount: string;
+    user: { id: string; fullName: string; phone: string; referralCode: string };
+  }>;
+};
+
+export type ProfitPreviewTier = { recipients: number; allocation: string; perMember: string | null };
+export type ProfitPreview = { periodId: string; status: ProfitPeriodStatus; silver: ProfitPreviewTier; gold: ProfitPreviewTier; platinum: ProfitPreviewTier };
+
+export const listProfitPeriods = () => request<ProfitPeriod[]>("/admin/profit-sharing/periods");
+export const getProfitPeriod = (id: string) => request<ProfitPeriod>(`/admin/profit-sharing/periods/${id}`);
+export const previewProfitPeriod = (id: string) => request<ProfitPreview>(`/admin/profit-sharing/periods/${id}/preview`);
+export const createProfitPeriod = (periodMonth: number, periodYear: number, netProfitAmount: number) =>
+  postJson<ProfitPeriod>("/admin/profit-sharing/periods", { periodMonth, periodYear, netProfitAmount });
+export const approveProfitPeriod = (id: string) => postJson<ProfitPeriod>(`/admin/profit-sharing/periods/${id}/approve`);
+/** Memasukkan bagian ke saldo yang dapat ditarik tiap penerima; tidak dapat dibatalkan. */
+export const distributeProfitPeriod = (id: string) => postJson<ProfitPeriod>(`/admin/profit-sharing/periods/${id}/distribute`);
+
 export function listDriverDocumentQueue() {
   const query = new URLSearchParams({ page: "1", pageSize: "50" });
   return request<{ items: DriverDocumentQueueRow[]; total: number }>(

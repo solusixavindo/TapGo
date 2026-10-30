@@ -5,10 +5,11 @@ import { AppError } from "../../../core/errors/AppError.js";
 export class ProfitSharingService {
   constructor(private readonly prisma: PrismaClient) {}
 
-  createPeriod(input: {
+  async createPeriod(input: {
     periodMonth: number;
     periodYear: number;
     netProfitAmount: Prisma.Decimal;
+    actorId?: string;
   }) {
     const poolAmount = input.netProfitAmount.mul(60).div(100);
     const silverAllocation = poolAmount.mul(30).div(100);
@@ -16,19 +17,69 @@ export class ProfitSharingService {
     const platinumAllocation = poolAmount.mul(10).div(100);
     const retainedAmount = poolAmount.minus(silverAllocation).minus(goldAllocation).minus(platinumAllocation);
 
-    return this.prisma.profitSharingPeriod.create({
-      data: {
-        periodMonth: input.periodMonth,
-        periodYear: input.periodYear,
-        netProfitAmount: input.netProfitAmount,
-        totalPoolAmount: poolAmount,
-        silverAllocation,
-        goldAllocation,
-        platinumAllocation,
-        retainedAmount,
-        status: "DRAFT"
-      }
+    return this.prisma.$transaction(async (tx) => {
+      const period = await tx.profitSharingPeriod.create({
+        data: {
+          periodMonth: input.periodMonth,
+          periodYear: input.periodYear,
+          netProfitAmount: input.netProfitAmount,
+          totalPoolAmount: poolAmount,
+          silverAllocation,
+          goldAllocation,
+          platinumAllocation,
+          retainedAmount,
+          status: "DRAFT"
+        }
+      });
+      await this.audit(tx, input.actorId, "PROFIT_SHARING_PERIOD_CREATED", period.id, {
+        periodMonth: period.periodMonth,
+        periodYear: period.periodYear,
+        netProfitAmount: period.netProfitAmount.toFixed(2)
+      });
+      return period;
     });
+  }
+
+  /** Jejak audit keputusan uang; actorId kosong hanya untuk pemanggilan internal/uji lama. */
+  private async audit(
+    tx: Prisma.TransactionClient,
+    actorId: string | undefined,
+    action: string,
+    periodId: string,
+    metadata: Prisma.InputJsonValue
+  ) {
+    if (!actorId) return;
+    await tx.auditLog.create({
+      data: { actorId, action, entityType: "PROFIT_SHARING_PERIOD", entityId: periodId, metadata }
+    });
+  }
+
+  /**
+   * Pratinjau pembagian (hanya membaca): siapa penerima tiap golongan dan berapa tiap orang, dengan aturan yang sama
+   * persis dengan distribute(). Dipakai konsol sebelum Super Admin menekan Bagikan.
+   */
+  async previewDistribution(periodId: string) {
+    const period = await this.prisma.profitSharingPeriod.findUnique({ where: { id: periodId } });
+    if (!period) {
+      throw new AppError("Profit sharing period not found", StatusCodes.NOT_FOUND, "PROFIT_SHARING_PERIOD_NOT_FOUND");
+    }
+    const [silver, gold, platinum] = await Promise.all([
+      this.findSilverQualifiedMembers(this.prisma),
+      this.findActiveMembersByTier(this.prisma, "GOLD"),
+      this.findActiveMembersByTier(this.prisma, "PLATINUM")
+    ]);
+    const tier = (allocation: Prisma.Decimal, recipients: number) => ({
+      recipients,
+      allocation: allocation.toFixed(2),
+      perMember: recipients > 0 ? allocation.div(recipients).toFixed(2) : null
+    });
+    return {
+      periodId: period.id,
+      status: period.status,
+      silver: tier(period.silverAllocation, silver.length),
+      gold: tier(period.goldAllocation, gold.length),
+      platinum: tier(period.platinumAllocation, platinum.length)
+    };
   }
 
   listPeriods() {
@@ -58,7 +109,7 @@ export class ProfitSharingService {
     return period;
   }
 
-  async approvePeriod(periodId: string) {
+  async approvePeriod(periodId: string, actorId?: string) {
     return this.prisma.$transaction(async (tx) => {
       const period = await tx.profitSharingPeriod.findUnique({ where: { id: periodId } });
       if (!period) {
@@ -69,20 +120,25 @@ export class ProfitSharingService {
         throw new AppError("Only draft periods can be approved", StatusCodes.CONFLICT, "PROFIT_SHARING_INVALID_STATE");
       }
 
-      return tx.profitSharingPeriod.update({
+      const approved = await tx.profitSharingPeriod.update({
         where: { id: periodId },
         data: {
           status: "APPROVED",
           approvedAt: new Date()
         }
       });
+      await this.audit(tx, actorId, "PROFIT_SHARING_PERIOD_APPROVED", periodId, {
+        periodMonth: period.periodMonth,
+        periodYear: period.periodYear
+      });
+      return approved;
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       timeout: 15000
     });
   }
 
-  async distribute(periodId: string) {
+  async distribute(periodId: string, actorId?: string) {
     return this.prisma.$transaction(async (tx) => {
       const period = await tx.profitSharingPeriod.findUnique({ where: { id: periodId } });
       if (!period) {
@@ -178,6 +234,13 @@ export class ProfitSharingService {
           retainedAmount: period.totalPoolAmount.minus(allocatedPaid),
           distributedAt: now
         }
+      });
+
+      await this.audit(tx, actorId, "PROFIT_SHARING_PERIOD_DISTRIBUTED", period.id, {
+        periodMonth: period.periodMonth,
+        periodYear: period.periodYear,
+        recipients: actualCount,
+        totalPaid: allocatedPaid.toFixed(2)
       });
 
       return tx.profitSharingPeriod.findUniqueOrThrow({

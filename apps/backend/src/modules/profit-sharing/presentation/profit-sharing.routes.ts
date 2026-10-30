@@ -20,6 +20,11 @@ profitSharingRouter.use(requireAuth, requireRoles("SUPER_ADMIN"));
 profitSharingRouter.post("/periods", validateRequest(createProfitSharingPeriodSchema), asyncHandler(controller.createPeriod));
 profitSharingRouter.get("/periods", asyncHandler(controller.periods));
 profitSharingRouter.get("/periods/:id", validateRequest(profitSharingPeriodParamsSchema), asyncHandler(controller.period));
+profitSharingRouter.get(
+  "/periods/:id/preview",
+  validateRequest(profitSharingPeriodParamsSchema),
+  asyncHandler(controller.preview)
+);
 profitSharingRouter.post(
   "/periods/:id/approve",
   requireRoles("SUPER_ADMIN"),
