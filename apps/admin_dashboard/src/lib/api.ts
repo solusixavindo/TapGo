@@ -419,6 +419,46 @@ export function actOnReward(id: string, action: "approve" | "reject" | "mark-pai
   });
 }
 
+// --- Permintaan hapus akun (khusus VIP) -------------------------------------
+
+export type DeletionStatus = "PENDING" | "APPROVED" | "REJECTED" | "COMPLETED";
+
+export type DeletionRequestRow = {
+  id: string;
+  status: DeletionStatus;
+  reason: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  user: { id: string; fullName: string; phone: string; email: string | null };
+};
+
+export type DeletionPreview = {
+  request: { id: string; status: DeletionStatus; reason: string | null; createdAt: string };
+  user: { id: string; fullName: string; phone: string; email: string | null; role: string; status: string };
+  blockers: Array<{ code: string; message: string }>;
+  canComplete: boolean;
+  willErase: string[];
+  willKeep: string[];
+};
+
+export async function listDeletionRequests(status: DeletionStatus) {
+  const result = await request<{ items: DeletionRequestRow[] }>(`/admin/delete-requests?status=${status}&page=1&pageSize=100`);
+  return result.items;
+}
+
+export function previewDeletion(id: string) {
+  return request<DeletionPreview>(`/admin/delete-requests/${id}/preview`);
+}
+
+export function rejectDeletion(id: string, reason: string) {
+  return postJson<{ id: string; status: string }>(`/admin/delete-requests/${id}/reject`, { reason });
+}
+
+/** Tidak dapat dibatalkan: menganonimkan akun. Server meminta kalimat konfirmasi dan password VIP. */
+export function completeDeletion(id: string, confirm: string, password: string) {
+  return postJson<{ id: string; status: string }>(`/admin/delete-requests/${id}/complete`, { confirm, password });
+}
+
 export function listDriverDocumentQueue() {
   const query = new URLSearchParams({ page: "1", pageSize: "50" });
   return request<{ items: DriverDocumentQueueRow[]; total: number }>(
