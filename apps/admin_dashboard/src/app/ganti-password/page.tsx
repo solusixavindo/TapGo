@@ -40,10 +40,10 @@ export default function GantiPasswordPage() {
       setError("Konfirmasi password tidak sama.");
       return;
     }
-    if (baru.length < 8) {
-      // Server menerima minimal 6. Konsol ini menuntut 8 karena akun di sini
-      // dapat membuka dokumen identitas dan mengubah peran admin lain.
-      setError("Password baru minimal 8 karakter.");
+    if (baru.length < 12) {
+      // Server menuntut minimal 12 untuk akun admin (AuthService.changePassword); akun di sini dapat membuka
+      // dokumen identitas dan mengubah peran admin lain.
+      setError("Password baru minimal 12 karakter.");
       return;
     }
     if (baru === lama) {
@@ -127,7 +127,7 @@ export default function GantiPasswordPage() {
                 className={inputClass}
               />
               <span className="mt-1.5 block text-xs text-slate-500">
-                Minimal 8 karakter. Sebaiknya gabungkan huruf besar, angka, dan simbol.
+                Minimal 12 karakter. Sebaiknya gabungkan huruf besar, angka, dan simbol.
               </span>
             </label>
 

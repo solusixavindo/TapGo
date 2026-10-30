@@ -464,6 +464,32 @@ export class PrismaAuthRepository implements AuthRepository {
 	    return "LOW";
 	  }
 
+  // Kegagalan masuk disimpan sebagai baris audit (tanpa tabel baru): sekaligus menjadi jejak
+  // percobaan tebak password yang dapat diperiksa Super Admin.
+  countRecentLoginFailures(input: { userId: string; since: Date; ipAddress?: string }) {
+    return this.prisma.auditLog.count({
+      where: {
+        action: "AUTH_LOGIN_FAILED",
+        entityType: "USER",
+        entityId: input.userId,
+        createdAt: { gt: input.since },
+        ...(input.ipAddress ? { ipAddress: input.ipAddress } : {})
+      }
+    });
+  }
+
+  async recordLoginFailure(input: { userId: string; ipAddress?: string }) {
+    const base = { actorId: null, action: "AUTH_LOGIN_FAILED", entityType: "USER", entityId: input.userId };
+    try {
+      await this.prisma.auditLog.create({
+        data: { ...base, ...(input.ipAddress ? { ipAddress: input.ipAddress } : {}) }
+      });
+    } catch {
+      // Alamat IP yang tidak berbentuk IP sah tidak boleh membuat login gagal 500; catat tanpa IP.
+      await this.prisma.auditLog.create({ data: base });
+    }
+  }
+
   async updateLastLogin(userId: string) {
     await this.prisma.user.update({
       where: { id: userId },

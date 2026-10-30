@@ -11,6 +11,7 @@ import {
 import type { TokenChannel } from "../../../core/security/tokenService.js";
 import { env } from "../../../config/env.js";
 import { AuthRepository, toPublicUser } from "../domain/AuthRepository.js";
+import { isAdminRole } from "../../../core/security/roleHierarchy.js";
 import { verifyGoogleIdToken as verifyGoogleIdTokenSignature } from "../../../core/security/googleIdToken.js";
 
 /**
@@ -42,6 +43,17 @@ export type AuthClientContext = {
 
 export class AuthService {
   private static readonly maxReferralCodeAttempts = 8;
+  /**
+   * Pembatas tebak password per AKUN untuk akun admin (melengkapi pembatas per IP, yang tidak
+   * menahan penyerang dengan banyak IP). Dua lapis: per (akun, IP) agar pemilik di jaringannya
+   * sendiri tidak ikut terkunci oleh orang lain, dan per akun untuk serangan terdistribusi.
+   * Dihitung sejak percobaan masuk berhasil terakhir, paling lama sejauh jendela.
+   */
+  private static readonly adminLoginWindowMs = 15 * 60 * 1000;
+  private static readonly adminLoginFailuresPerIp = 5;
+  private static readonly adminLoginFailuresPerAccount = 30;
+  /// Password akun admin minimal ini (akun biasa mengikuti passwordSchema di validator).
+  private static readonly adminMinPasswordLength = 12;
   /// Jendela toleransi permintaan refresh ganda setelah rotasi (lihat refresh()).
   private static readonly refreshRotationGraceMs = 30_000;
 
@@ -145,8 +157,36 @@ export class AuthService {
       throw new AppError("Account is not active", StatusCodes.FORBIDDEN, "ACCOUNT_INACTIVE");
     }
 
+    const privileged = isAdminRole(user.role);
+    if (privileged) {
+      const windowStart = new Date(Date.now() - AuthService.adminLoginWindowMs);
+      const since = user.lastLoginAt && user.lastLoginAt > windowStart ? user.lastLoginAt : windowStart;
+      const [fromThisIp, overall] = await Promise.all([
+        input.context.ipAddress
+          ? this.authRepository.countRecentLoginFailures({ userId: user.id, since, ipAddress: input.context.ipAddress })
+          : Promise.resolve(0),
+        this.authRepository.countRecentLoginFailures({ userId: user.id, since })
+      ]);
+      if (
+        fromThisIp >= AuthService.adminLoginFailuresPerIp ||
+        overall >= AuthService.adminLoginFailuresPerAccount
+      ) {
+        throw new AppError(
+          "Terlalu banyak percobaan masuk. Coba lagi dalam 15 menit.",
+          StatusCodes.TOO_MANY_REQUESTS,
+          "LOGIN_TEMPORARILY_LOCKED"
+        );
+      }
+    }
+
     const validPassword = await verifyPassword(user.passwordHash, input.password);
     if (!validPassword) {
+      if (privileged) {
+        await this.authRepository.recordLoginFailure({
+          userId: user.id,
+          ...(input.context.ipAddress ? { ipAddress: input.context.ipAddress } : {})
+        });
+      }
       throw new AppError("Invalid phone or password", StatusCodes.UNAUTHORIZED, "INVALID_CREDENTIALS");
     }
 
@@ -398,6 +438,14 @@ export class AuthService {
     const user = await this.authRepository.findUserById(input.userId);
     if (!user?.passwordHash) {
       throw new AppError("User not found", StatusCodes.NOT_FOUND, "USER_NOT_FOUND");
+    }
+
+    if (isAdminRole(user.role) && input.newPassword.length < AuthService.adminMinPasswordLength) {
+      throw new AppError(
+        `Password akun admin minimal ${AuthService.adminMinPasswordLength} karakter.`,
+        StatusCodes.BAD_REQUEST,
+        "PASSWORD_TOO_SHORT_FOR_ADMIN"
+      );
     }
 
     const cocok = await verifyPassword(user.passwordHash, input.currentPassword);

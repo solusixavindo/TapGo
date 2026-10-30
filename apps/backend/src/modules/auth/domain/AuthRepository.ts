@@ -68,6 +68,9 @@ export interface AuthRepository {
   findUserById(id: string): Promise<User | null>;
   createUser(input: CreateUserInput): Promise<User>;
   updateLastLogin(userId: string): Promise<void>;
+  /** Jumlah percobaan masuk gagal sejak `since` (opsional: dari satu alamat IP saja). */
+  countRecentLoginFailures(input: { userId: string; since: Date; ipAddress?: string }): Promise<number>;
+  recordLoginFailure(input: { userId: string; ipAddress?: string }): Promise<void>;
   /** Versi otorisasi akun saat ini. Dipakai saat menerbitkan token. */
   getAuthVersion(userId: string): Promise<number>;
   createSession(input: CreateSessionInput): Promise<SessionRecord>;
