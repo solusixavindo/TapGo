@@ -7,13 +7,18 @@ import ConsoleHeader from "../console-header";
 import {
   ASSIGNABLE_ROLES,
   AdminAccount,
+  DRIVER_REVIEW_SCOPES,
   ROLE_REASON_CODES,
   RoleCandidate,
+  ScopeGrantRow,
   assignAdminRole,
   formatMoment,
+  grantReviewScopesTo,
+  listActiveScopesOf,
   listAdminAccounts,
   readRole,
   readToken,
+  revokeReviewScopes,
   searchRoleCandidates
 } from "../../lib/api";
 
@@ -294,7 +299,8 @@ function AccountRow({
   const locked = account.role === "SUPER_ADMIN_VIP";
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4">
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="flex flex-wrap items-center justify-between gap-4">
       <div className="min-w-[220px]">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold">{account.fullName}</span>
@@ -350,6 +356,94 @@ function AccountRow({
           </button>
         </div>
       )}
+    </div>
+    {locked ? null : <ReviewScopePanel account={account} />}
+    </div>
+  );
+}
+
+/**
+ * Kewenangan meninjau pengajuan driver. Role admin saja tidak cukup: server menuntut grant scope aktif,
+ * dan hanya VIP pemegang ADMIN_SCOPE_MANAGE yang boleh memberikannya (admin tidak bisa memberi dirinya sendiri).
+ */
+function ReviewScopePanel({ account }: { account: AdminAccount }) {
+  const [grants, setGrants] = useState<ScopeGrantRow[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [failure, setFailure] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      setGrants(await listActiveScopesOf(account.id));
+      setFailure("");
+    } catch (caught) {
+      setGrants(null);
+      setFailure(caught instanceof Error ? caught.message : "Kewenangan belum dapat dimuat.");
+    }
+  }, [account.id]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const held = (grants ?? []).filter((grant) => (DRIVER_REVIEW_SCOPES as readonly string[]).includes(grant.scope));
+  const complete = held.length === DRIVER_REVIEW_SCOPES.length;
+
+  async function act(kind: "give" | "take") {
+    if (busy) return;
+    setBusy(true);
+    setMessage("");
+    setFailure("");
+    try {
+      if (kind === "give") await grantReviewScopesTo(account.id);
+      else await revokeReviewScopes(held);
+      setMessage(kind === "give" ? "Kewenangan review diberikan." : "Kewenangan review dicabut.");
+    } catch (caught) {
+      setFailure(caught instanceof Error ? caught.message : "Perubahan belum dapat diproses.");
+    } finally {
+      await load();
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3" data-testid="review-scope-panel">
+      <div className="min-w-[220px]">
+        <p className="text-xs font-bold text-slate-700">Kewenangan review dokumen driver</p>
+        <p className="mt-0.5 text-xs text-slate-500">
+          {grants === null
+            ? "Memuat…"
+            : complete
+              ? "Aktif: dapat mengambil klaim, menyetujui, dan menolak pengajuan."
+              : held.length > 0
+                ? `Belum lengkap (${held.length} dari ${DRIVER_REVIEW_SCOPES.length}). Tekan Beri untuk melengkapi.`
+                : "Belum ada. Tanpa ini tombol Setujui/Tolak tidak tersedia bagi akun ini."}
+        </p>
+        {message ? <p className="mt-1 text-xs font-semibold text-emerald-700">{message}</p> : null}
+        {failure ? (
+          <p role="alert" className="mt-1 text-xs font-semibold text-rose-700">
+            {failure}
+          </p>
+        ) : null}
+      </div>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={busy || grants === null || complete}
+          onClick={() => void act("give")}
+          className="rounded-lg bg-brand-green px-3 py-2 text-sm font-semibold text-white disabled:opacity-40"
+        >
+          {busy ? "Memproses…" : "Beri kewenangan"}
+        </button>
+        <button
+          type="button"
+          disabled={busy || held.length === 0}
+          onClick={() => void act("take")}
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-40"
+        >
+          Cabut
+        </button>
+      </div>
     </div>
   );
 }

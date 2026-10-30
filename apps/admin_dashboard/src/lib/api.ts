@@ -358,6 +358,37 @@ export async function grantSelfReviewScopes(userId: string) {
   }
 }
 
+/** Empat scope yang cukup untuk meninjau pengajuan driver (ambil klaim, perpanjang, lepas, baca antrian). */
+export const DRIVER_REVIEW_SCOPES = [
+  "DRIVER_APPLICATION_QUEUE_READ",
+  "DRIVER_APPLICATION_CLAIM",
+  "DRIVER_APPLICATION_RENEW",
+  "DRIVER_APPLICATION_RELEASE"
+] as const;
+
+export type ScopeGrantRow = { id: string; userId: string; scope: string; status: string };
+
+/** Khusus VIP pemegang ADMIN_SCOPE_MANAGE: scope aktif milik satu akun. */
+export async function listActiveScopesOf(userId: string) {
+  const query = new URLSearchParams({ userId, status: "ACTIVE", pageSize: "100" });
+  const result = await request<{ items: ScopeGrantRow[] }>(`/admin/scope-grants?${query.toString()}`);
+  return result.items;
+}
+
+/** Memberi akun lain kewenangan review driver; scope yang sudah aktif dilewati server. */
+export async function grantReviewScopesTo(userId: string) {
+  for (const scope of DRIVER_REVIEW_SCOPES) {
+    await postJson("/admin/scope-grants", { targetUserId: userId, scope, reasonCode: "OPERATIONAL_ASSIGNMENT" });
+  }
+}
+
+export async function revokeReviewScopes(grants: ScopeGrantRow[]) {
+  for (const grant of grants) {
+    if (!(DRIVER_REVIEW_SCOPES as readonly string[]).includes(grant.scope)) continue;
+    await postJson(`/admin/scope-grants/${grant.id}/revoke`, { reasonCode: "ACCESS_REMOVAL" });
+  }
+}
+
 export function listDriverDocumentQueue() {
   const query = new URLSearchParams({ page: "1", pageSize: "50" });
   return request<{ items: DriverDocumentQueueRow[]; total: number }>(

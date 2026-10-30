@@ -9,6 +9,7 @@ import {
   claimDriverApplication,
   grantSelfReviewScopes,
   listOwnReviewScopes,
+  readRole,
   rejectDriverApplication,
   releaseDriverApplication,
   renewDriverApplication
@@ -81,7 +82,7 @@ export default function DriverDecisionPanel({
     } catch (caught) {
       setError(
         (caught instanceof Error ? caught.message : "Kewenangan belum dapat diberikan.") +
-          " Hanya akun pengelola kewenangan (ADMIN_SCOPE_MANAGE) yang dapat memberikannya."
+          " Hanya Super Admin VIP pengelola kewenangan (ADMIN_SCOPE_MANAGE) yang dapat memberikannya."
       );
     } finally {
       setBusy(false);
@@ -178,7 +179,7 @@ export default function DriverDecisionPanel({
           {error}
         </p>
       ) : null}
-      {missingScope ? (
+      {missingScope && readRole() === "SUPER_ADMIN_VIP" ? (
         <button
           type="button"
           disabled={busy}
@@ -187,6 +188,12 @@ export default function DriverDecisionPanel({
         >
           Berikan kewenangan review ke akun saya
         </button>
+      ) : null}
+      {missingScope && readRole() !== "SUPER_ADMIN_VIP" ? (
+        <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900" data-testid="ask-vip-for-scope">
+          Akun Anda belum diberi kewenangan review dokumen driver. Minta Super Admin VIP membukanya di menu{" "}
+          <strong>Pengelolaan Role</strong> (baris nama Anda, tombol &quot;Beri kewenangan&quot;). Akun Anda tidak dapat memberikannya sendiri.
+        </p>
       ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2">
