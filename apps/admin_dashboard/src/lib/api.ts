@@ -389,6 +389,36 @@ export async function revokeReviewScopes(grants: ScopeGrantRow[]) {
   }
 }
 
+// --- Hadiah milestone referral (khusus Super Admin) ------------------------
+
+export type RewardStatus = "PENDING" | "APPROVED" | "PAID" | "REJECTED";
+
+export type RewardRow = {
+  id: string;
+  threshold: number;
+  directSilverCount: number;
+  amount: string;
+  status: RewardStatus;
+  createdAt: string;
+  approvedAt: string | null;
+  paidAt: string | null;
+  rejectedAt: string | null;
+  user: { id: string; fullName: string; phone: string; referralCode: string };
+};
+
+export async function listRewards(status: RewardStatus) {
+  const result = await request<{ items: RewardRow[] }>(`/admin/rewards?status=${status}&page=1&pageSize=100`);
+  return result.items;
+}
+
+/** setujui -> (bayar) memasukkan nominal ke saldo yang dapat ditarik anggota; tak dapat dibatalkan. */
+export function actOnReward(id: string, action: "approve" | "reject" | "mark-paid", note?: string) {
+  return request<RewardRow>(`/admin/rewards/${id}/${action}`, {
+    method: "POST",
+    body: JSON.stringify(note ? (action === "reject" ? { reason: note } : { note }) : {})
+  });
+}
+
 export function listDriverDocumentQueue() {
   const query = new URLSearchParams({ page: "1", pageSize: "50" });
   return request<{ items: DriverDocumentQueueRow[]; total: number }>(

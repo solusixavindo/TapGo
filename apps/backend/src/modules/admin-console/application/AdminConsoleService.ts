@@ -772,6 +772,16 @@ export class AdminConsoleService {
         include: this.rewardInclude()
       });
 
+      await tx.auditLog.create({
+        data: {
+          actorId: input.adminId,
+          action: "REWARD_APPROVED",
+          entityType: "REWARD_TRANSACTION",
+          entityId: reward.id,
+          metadata: { userId: reward.userId, threshold: reward.threshold, amount: reward.amount.toFixed(2) }
+        }
+      });
+
       return updated;
     });
   }
@@ -797,6 +807,16 @@ export class AdminConsoleService {
           })
         },
         include: this.rewardInclude()
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: input.adminId,
+          action: "REWARD_REJECTED",
+          entityType: "REWARD_TRANSACTION",
+          entityId: reward.id,
+          metadata: { userId: reward.userId, threshold: reward.threshold, amount: reward.amount.toFixed(2) }
+        }
       });
 
       return updated;
@@ -871,6 +891,21 @@ export class AdminConsoleService {
             rewardTransactionId: reward.id,
             threshold: reward.threshold,
             directSilverCount: reward.directSilverCount
+          }
+        }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: input.adminId,
+          action: "REWARD_PAID",
+          entityType: "REWARD_TRANSACTION",
+          entityId: reward.id,
+          metadata: {
+            userId: reward.userId,
+            threshold: reward.threshold,
+            amount: reward.amount.toFixed(2),
+            walletTransactionId: walletTransaction.id
           }
         }
       });

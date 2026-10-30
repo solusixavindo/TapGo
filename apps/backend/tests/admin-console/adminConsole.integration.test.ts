@@ -162,6 +162,10 @@ describe.skipIf(!runIntegration)("Admin console API", () => {
     });
     expect(duplicatePaid.status).toBe(200);
     expect(await prisma.walletTransaction.count({ where: { type: "REWARD_BONUS", referenceId: "DIRECT_SILVER_10" } })).toBe(1);
+    expect(await prisma.auditLog.count({ where: { action: "REWARD_PAID", entityId: reward.id } })).toBe(1);
+    // Jejak audit database untuk keputusan uang: tepat satu baris per keputusan (pembayaran ulang tidak menggandakan).
+    expect(await prisma.auditLog.count({ where: { action: "REWARD_APPROVED", entityId: reward.id } })).toBe(1);
+    expect(await prisma.auditLog.count({ where: { action: "REWARD_PAID", entityId: reward.id } })).toBe(1);
 
     const rejectPaid = await api(`/api/v1/admin/rewards/${reward.id}/reject`, {
       method: "POST",
@@ -177,6 +181,7 @@ describe.skipIf(!runIntegration)("Admin console API", () => {
     });
     expect(rejected.status).toBe(200);
     expect((await prisma.rewardTransaction.findUniqueOrThrow({ where: { id: rejectedReward.id } })).status).toBe("REJECTED");
+    expect(await prisma.auditLog.count({ where: { action: "REWARD_REJECTED", entityId: rejectedReward.id } })).toBe(1);
 
     const approveRejected = await api(`/api/v1/admin/rewards/${rejectedReward.id}/approve`, {
       method: "POST",
