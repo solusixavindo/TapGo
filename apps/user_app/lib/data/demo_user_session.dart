@@ -12,18 +12,32 @@ final tapGoSessionProviderForTest = _demoSessionProvider;
 
 /// Foto profil dibagikan antara ikon tab "Akun" dan halaman Profil supaya
 /// keduanya konsisten dan tidak masing-masing menembak request sendiri.
-/// null berarti belum ada foto atau gagal dimuat — pemanggil jatuh balik ke
-/// ikon generik, bukan menampilkan error.
-final _accountAvatarBytesProvider = FutureProvider<Uint8List?>((ref) async {
-  if (tapGoDisablePersistenceForTests) {
+/// null berarti belum ada foto (404) — pemanggil jatuh balik ke ikon generik.
+///
+/// Dua sifat yang disengaja:
+/// - Dikunci pada userId: foto akun lain TIDAK PERNAH tampil setelah ganti akun
+///   di HP yang sama (instansi per akun, bukan satu cache bersama).
+/// - Kegagalan jaringan DILEMPAR, bukan diubah menjadi null: saat foto dimuat
+///   ulang (aplikasi kembali ke layar depan) dan gagal, Riverpod mempertahankan
+///   foto sebelumnya sehingga sinyal putus tidak menghapus foto dari layar.
+/// autoDispose: foto dilepas dari memori begitu dashboard ditutup (keluar akun).
+final _accountAvatarBytesProvider =
+    FutureProvider.autoDispose.family<Uint8List?, String?>((ref, userId) async {
+  if (tapGoDisablePersistenceForTests || userId == null) {
     return null;
   }
-  try {
-    return await _apiClient.fetchAvatarBytes();
-  } catch (_) {
-    return null;
-  }
+  return _apiClient.fetchAvatarBytes();
+});
+
+/// Foto milik akun yang sedang masuk (lihat [_accountAvatarBytesProvider]).
+final _accountAvatarProvider =
+    Provider.autoDispose<AsyncValue<Uint8List?>>((ref) {
+  final userId = ref.watch(_demoSessionProvider.select((s) => s.userId));
+  return ref.watch(_accountAvatarBytesProvider(userId));
 });
 
 @visibleForTesting
 final tapGoAccountAvatarProviderForTest = _accountAvatarBytesProvider;
+
+@visibleForTesting
+final tapGoAccountAvatarValueProviderForTest = _accountAvatarProvider;

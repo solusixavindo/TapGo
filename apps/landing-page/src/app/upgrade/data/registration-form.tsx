@@ -35,7 +35,7 @@ const DOCUMENT_LABELS: Record<DocumentSlot, { title: string; hint: string }> = {
   selfie: { title: "Swafoto dengan KTP", hint: "Wajah dan KTP terlihat dalam satu foto." },
   avatar: {
     title: "Foto profil (opsional)",
-    hint: "Foto wajah Anda. Tampil di dashboard mitra dan di aplikasi TapGo."
+    hint: "Foto wajah Anda. Tampil di dashboard mitra dan di aplikasi TapGo; sponsor dan upline Anda di jaringan referral juga dapat melihatnya."
   }
 };
 

@@ -1709,7 +1709,7 @@ class _BottomNav extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final avatarBytes = ref.watch(_accountAvatarBytesProvider).valueOrNull;
+    final avatarBytes = ref.watch(_accountAvatarProvider).valueOrNull;
     final unreadChat =
         _tapGoUnreadChatCount(ref.watch(_chatConversationsProvider));
     final screenWidth = MediaQuery.sizeOf(context).width;
@@ -2158,7 +2158,7 @@ class AccountScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(_demoSessionProvider);
-    final avatarBytes = ref.watch(_accountAvatarBytesProvider).valueOrNull;
+    final avatarBytes = ref.watch(_accountAvatarProvider).valueOrNull;
     // Memuat pilihan bunyi tersimpan agar keterangan "Bunyi: ..." benar.
     unawaited(tapGoAlertToneReady());
     return SingleChildScrollView(
@@ -2847,7 +2847,7 @@ class _ProfileAvatarEditorState extends ConsumerState<_ProfileAvatarEditor> {
   Widget build(BuildContext context) {
     // Foto di halaman ini ikut berubah saat provider bersama dimuat ulang
     // (aplikasi kembali ke layar depan setelah foto diganti dari web).
-    ref.listen<AsyncValue<Uint8List?>>(_accountAvatarBytesProvider, (_, next) {
+    ref.listen<AsyncValue<Uint8List?>>(_accountAvatarProvider, (_, next) {
       final fresh = next.valueOrNull;
       if (fresh != null && mounted && !_isUploading) {
         setState(() => _bytes = fresh);

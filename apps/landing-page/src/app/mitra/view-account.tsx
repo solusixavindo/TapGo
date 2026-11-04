@@ -148,7 +148,7 @@ export default function AccountView({ onLogout }: { onLogout: () => void }) {
             </dl>
             <div className="border-t themed-border px-5 py-4 md:px-6">
               <p className="text-xs leading-5 themed-text-muted">
-                Foto profil (JPG/PNG; diperkecil otomatis) sama dengan foto di aplikasi TapGo: mengganti di sini juga mengganti di aplikasi.
+                Foto profil (JPG/PNG; diperkecil otomatis) sama dengan foto di aplikasi TapGo: mengganti di sini juga mengganti di aplikasi. Sponsor dan upline Anda di jaringan referral dapat melihat foto ini.
                 Untuk mengubah nama, nomor HP, atau email, hubungi tim dukungan TapGo dari halaman Kontak.
               </p>
             </div>
