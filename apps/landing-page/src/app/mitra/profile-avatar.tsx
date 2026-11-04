@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getOwnAvatar, onOwnAvatarChanged } from "./mitra-api";
+import { getOwnAvatar, onOwnAvatarChanged, refreshOwnAvatar } from "./mitra-api";
 import { initials } from "./mitra-format";
 
 /**
  * Foto profil pemilik sesi. Memuat dari server (sumber yang sama dengan aplikasi
- * Play Store) dan memuat ulang otomatis begitu foto diganti dari halaman mana pun.
+ * Play Store) dan memuat ulang otomatis begitu foto diganti dari halaman mana pun
+ * maupun dari aplikasi (saat tab kembali aktif).
  * Bila belum ada foto, tampil inisial nama.
  */
 export default function ProfileAvatar({
@@ -21,6 +22,19 @@ export default function ProfileAvatar({
   const [version, setVersion] = useState(0);
 
   useEffect(() => onOwnAvatarChanged(() => setVersion((value) => value + 1)), []);
+
+  // Foto bisa diganti dari aplikasi TapGo (atau tab lain): muat ulang saat halaman kembali dilihat.
+  useEffect(() => {
+    const onReturn = () => {
+      if (document.visibilityState === "visible") refreshOwnAvatar();
+    };
+    document.addEventListener("visibilitychange", onReturn);
+    window.addEventListener("focus", onReturn);
+    return () => {
+      document.removeEventListener("visibilitychange", onReturn);
+      window.removeEventListener("focus", onReturn);
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;

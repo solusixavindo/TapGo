@@ -7,8 +7,35 @@ class TapGoDashboard extends StatefulWidget {
   State<TapGoDashboard> createState() => _TapGoDashboardState();
 }
 
-class _TapGoDashboardState extends State<TapGoDashboard> {
+class _TapGoDashboardState extends State<TapGoDashboard>
+    with WidgetsBindingObserver {
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Foto profil satu akun dibagi dengan web tapgolion.id. Foto yang diganti di
+  /// web (atau di perangkat lain) harus tampil di sini tanpa menutup aplikasi,
+  /// jadi dimuat ulang setiap aplikasi kembali ke layar depan.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshAccountAvatar();
+  }
+
+  void _refreshAccountAvatar() {
+    if (!mounted) return;
+    ProviderScope.containerOf(context, listen: false)
+        .invalidate(_accountAvatarBytesProvider);
+  }
 
   static const _pages = [
     _HomeTab(),
@@ -19,6 +46,8 @@ class _TapGoDashboardState extends State<TapGoDashboard> {
 
   void _selectTab(int index) {
     HapticFeedback.selectionClick();
+    // Membuka tab Akun: pastikan foto yang tampil adalah yang terbaru di server.
+    if (index == 3 && _selectedIndex != 3) _refreshAccountAvatar();
     setState(() => _selectedIndex = index);
   }
 
@@ -2816,6 +2845,15 @@ class _ProfileAvatarEditorState extends ConsumerState<_ProfileAvatarEditor> {
 
   @override
   Widget build(BuildContext context) {
+    // Foto di halaman ini ikut berubah saat provider bersama dimuat ulang
+    // (aplikasi kembali ke layar depan setelah foto diganti dari web).
+    ref.listen<AsyncValue<Uint8List?>>(_accountAvatarBytesProvider, (_, next) {
+      final fresh = next.valueOrNull;
+      if (fresh != null && mounted && !_isUploading) {
+        setState(() => _bytes = fresh);
+      }
+    });
+
     final colorScheme = Theme.of(context).colorScheme;
     return Center(
       child: Stack(

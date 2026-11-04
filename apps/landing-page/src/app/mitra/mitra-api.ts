@@ -555,6 +555,23 @@ export async function uploadOwnAvatar(file: File): Promise<void> {
   window.dispatchEvent(new Event(AVATAR_CHANGED_EVENT));
 }
 
+let lastOwnAvatarRefresh = 0;
+
+/**
+ * Muat ulang foto profil sendiri. Foto satu akun dibagi dengan aplikasi TapGo: bila diganti dari aplikasi, halaman ini
+ * yang sudah terbuka harus ikut berubah. Dipanggil saat tab kembali aktif; dibatasi supaya tidak mengunduh ulang
+ * berulang-ulang (beberapa tampilan avatar memanggilnya bersamaan).
+ */
+export function refreshOwnAvatar(minIntervalMs = 30_000) {
+  const now = Date.now();
+  if (now - lastOwnAvatarRefresh < minIntervalMs) return;
+  lastOwnAvatarRefresh = now;
+  const old = avatarCache.get(SELF_AVATAR_KEY);
+  avatarCache.delete(SELF_AVATAR_KEY);
+  void old?.then((url) => (url ? URL.revokeObjectURL(url) : undefined));
+  window.dispatchEvent(new Event(AVATAR_CHANGED_EVENT));
+}
+
 export function onOwnAvatarChanged(listener: () => void): () => void {
   window.addEventListener(AVATAR_CHANGED_EVENT, listener);
   return () => window.removeEventListener(AVATAR_CHANGED_EVENT, listener);

@@ -24,3 +24,6 @@ final _accountAvatarBytesProvider = FutureProvider<Uint8List?>((ref) async {
     return null;
   }
 });
+
+@visibleForTesting
+final tapGoAccountAvatarProviderForTest = _accountAvatarBytesProvider;
