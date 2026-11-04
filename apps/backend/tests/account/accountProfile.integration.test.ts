@@ -192,6 +192,36 @@ describe.skipIf(!runIntegration)("Account Profile API", () => {
     expect(response.status).toBe(415);
   });
 
+  it("menolak berkas yang berlabel gambar tetapi isinya bukan gambar (HTML, label tertukar, kosong)", async () => {
+    const user = await createUser("ACCAVT004");
+    const token = tokenFor(user);
+    const attempts: Array<[string, Buffer]> = [
+      ["image/png", Buffer.from("<html><script>alert(1)</script></html>")],
+      ["image/png", Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00])], // isi JPEG berlabel PNG
+      ["image/jpeg", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d])], // isi PNG berlabel JPEG
+      ["image/png", Buffer.from([0x89, 0x50])] // terlalu pendek
+    ];
+    for (const [contentType, rawBody] of attempts) {
+      const response = await api("/api/v1/account/avatar", { method: "POST", token, rawBody, contentType });
+      expect(response.status, contentType).toBe(415);
+    }
+    expect(await prisma.userAvatar.count({ where: { userId: user.id } })).toBe(0);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).avatarUrl).toBeNull();
+  });
+
+  it("menyimpan jenis polos walau klien menambahkan parameter pada header", async () => {
+    const user = await createUser("ACCAVT005");
+    const response = await api("/api/v1/account/avatar", {
+      method: "POST",
+      token: tokenFor(user),
+      rawBody: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0a, 0x1a, 0x0a]),
+      contentType: "image/png; charset=utf-8; x=y"
+    });
+    expect(response.status).toBe(201);
+    const stored = await prisma.userAvatar.findUniqueOrThrow({ where: { userId: user.id } });
+    expect(stored.contentType).toBe("image/png");
+  });
+
   it("returns 404 for an account with no avatar uploaded yet", async () => {
     const user = await createUser("ACCAVT003");
 

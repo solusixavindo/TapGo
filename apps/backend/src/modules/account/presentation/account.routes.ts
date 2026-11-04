@@ -137,6 +137,17 @@ accountRouter.put(
   })
 );
 
+/** Tanda tangan awal berkas: PNG 89 50 4E 47, JPEG FF D8 FF. */
+function avatarSignatureMatches(contentType: string, bytes: Buffer) {
+  if (contentType === "image/png") {
+    return bytes.length >= 4 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+  }
+  if (contentType === "image/jpeg") {
+    return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  }
+  return false;
+}
+
 const rawAvatarBody = express.raw({
   type: ["image/png", "image/jpeg"],
   limit: "4mb"
@@ -162,7 +173,17 @@ accountRouter.post(
       );
     }
 
-    const contentType = String(req.headers["content-type"] ?? "");
+    // Isi berkas HARUS cocok dengan jenis yang dinyatakan (tanda tangan PNG/JPEG). Header saja tidak cukup: berkas
+    // lain yang diberi label gambar akan disajikan ulang ke pemilik dan ke upline yang berhak melihat foto ini.
+    // Yang disimpan jenis polos, bukan seluruh header (tanpa parameter tambahan dari klien).
+    const contentType = String(req.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
+    if (!avatarSignatureMatches(contentType, req.body)) {
+      throw new AppError(
+        "Isi berkas bukan gambar JPG atau PNG yang valid.",
+        StatusCodes.UNSUPPORTED_MEDIA_TYPE,
+        "ACCOUNT_AVATAR_TYPE_INVALID"
+      );
+    }
     const checksum = createHash("sha256").update(req.body).digest("hex");
     const avatarUrl = "/account/avatar";
 
