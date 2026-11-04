@@ -142,12 +142,15 @@ describe.skipIf(!runIntegration)("Pembatas login per akun untuk akun admin", () 
     expect((await login(admin.phone, PASSWORD)).status).toBe(200);
   });
 
-  it("akun non-admin tidak terkena pembatas ini dan tidak mencatat kegagalan", async () => {
-    const member = await createAccount("USER");
-    for (let i = 0; i < 7; i += 1) expect((await login(member.phone, "salah-salah")).status).toBe(401);
-    expect((await login(member.phone, PASSWORD)).status).toBe(200);
-    expect(await failures(member.id)).toBe(0);
-  });
+  // Aplikasi Play (user_app dan driver_app) memakai akun USER dan DRIVER: pembatas ini tidak boleh menyentuh mereka.
+  for (const role of ["USER", "DRIVER"] as const) {
+    it(`akun ${role} tidak terkena pembatas ini dan tidak mencatat kegagalan`, async () => {
+      const member = await createAccount(role);
+      for (let i = 0; i < 7; i += 1) expect((await login(member.phone, "salah-salah")).status).toBe(401);
+      expect((await login(member.phone, PASSWORD)).status).toBe(200);
+      expect(await failures(member.id)).toBe(0);
+    });
+  }
 
   it("nomor yang tidak terdaftar tetap 401 dan tidak membuat catatan apa pun", async () => {
     expect((await login("081299990000", "salah-salah")).status).toBe(401);
