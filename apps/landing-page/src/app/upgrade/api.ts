@@ -658,78 +658,15 @@ export async function payOrder(token: string, orderId: string): Promise<PaymentH
 }
 
 export type PaymentOptions = {
-  /** Pembayaran lewat payment gateway (DOKU / Midtrans). */
+  /** Pembayaran lewat payment gateway (Midtrans / DOKU). Semua pembayaran upgrade membership lewat jalur ini. */
   online: boolean;
-  /** Transfer bank manual dengan kode unik, dikonfirmasi Super Admin. */
-  manualTransfer: boolean;
-};
-
-export type ManualTransferInfo = {
-  orderId: string;
-  invoiceNumber: string;
-  packageName: string;
-  status: string;
-  /** Harga paket; inilah yang dicatat sebagai pembayaran. */
-  baseAmount: number;
-  /** Kode unik 1..999 yang ditambahkan agar transfer dapat dikenali. */
-  uniqueCode: number;
-  /** Nominal yang HARUS ditransfer: harga paket + kode unik. */
-  transferAmount: number;
-  expiresAt: string;
-  expired: boolean;
-  bank: { bankName: string; accountNumber: string; accountHolder: string };
-};
-
-/** Data contoh untuk tinjauan tampilan. Tidak pernah dipakai di produksi. */
-export const PREVIEW_MANUAL_TRANSFER: ManualTransferInfo = {
-  orderId: "preview-order",
-  invoiceNumber: "INV-MBR-20260812-CONTOH",
-  packageName: "Gold",
-  status: "PENDING",
-  baseAmount: 3000000,
-  uniqueCode: 487,
-  transferAmount: 3000487,
-  expiresAt: new Date(Date.now() + 24 * 3600_000).toISOString(),
-  expired: false,
-  bank: { bankName: "BRI", accountNumber: "0000000000", accountHolder: "PT Contoh" }
 };
 
 export async function getPaymentOptions(token: string): Promise<PaymentOptions> {
   const result = await request<Partial<PaymentOptions>>("/web/membership/payment-options", {
     headers: { authorization: `Bearer ${token}` }
   });
-  return { online: result.online === true, manualTransfer: result.manualTransfer === true };
-}
-
-/** Memilih transfer manual. Idempoten: nominal yang sama selama masih berlaku. */
-export async function startManualTransfer(
-  token: string,
-  orderId: string
-): Promise<ManualTransferInfo> {
-  return request<ManualTransferInfo>(`/web/membership/orders/${orderId}/manual-transfer`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${token}` },
-    body: JSON.stringify({})
-  });
-}
-
-/**
- * Petunjuk transfer yang sudah pernah dibuat, atau null bila pengajuan ini belum
- * memilih transfer manual (server membalas 404).
- */
-export async function getManualTransfer(
-  token: string,
-  orderId: string
-): Promise<ManualTransferInfo | null> {
-  try {
-    return await request<ManualTransferInfo>(
-      `/web/membership/orders/${orderId}/manual-transfer`,
-      { headers: { authorization: `Bearer ${token}` } }
-    );
-  } catch (caught) {
-    if (caught instanceof UpgradeApiError && caught.status === 404) return null;
-    throw caught;
-  }
+  return { online: result.online === true };
 }
 
 export type ReferralSummary = {
