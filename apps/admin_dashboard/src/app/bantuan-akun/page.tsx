@@ -269,11 +269,11 @@ export default function AccountAssistPage() {
               )}
             </section>
 
-            {result.codeHistory.length > 0 ? (
+            {(result.codeHistory ?? []).length > 0 ? (
               <section className="rounded-xl border border-slate-200 bg-white p-5" data-testid="assist-history">
                 <h3 className="text-sm font-black">Riwayat kode pemulihan</h3>
                 <ul className="mt-2 divide-y divide-slate-100">
-                  {result.codeHistory.map((entry) => (
+                  {(result.codeHistory ?? []).map((entry) => (
                     <li key={entry.at} className="py-2 text-sm">
                       <p className="font-semibold">
                         {formatMoment(entry.at)} <span className="font-normal text-slate-600">oleh {entry.by ?? "admin"}</span>

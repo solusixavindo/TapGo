@@ -521,8 +521,8 @@ export type AccountAssistLookup = {
     emailVerified: boolean;
   };
   recovery: { automaticViaEmail: boolean; canIssueAssistedCode: boolean; activeCodeUntil: string | null };
-  /** Penerbitan kode terakhir (maks. 5): siapa, kapan, alasan, dan catatan bukti. Tanpa kode. */
-  codeHistory: Array<{ at: string; by: string | null; reasonCode: string | null; evidenceNote: string | null }>;
+  /** Penerbitan kode terakhir (maks. 5): siapa, kapan, alasan, dan catatan bukti. Tanpa kode. Tidak ada pada backend lama. */
+  codeHistory?: Array<{ at: string; by: string | null; reasonCode: string | null; evidenceNote: string | null }>;
   driver: { profileStatus: string; availability: string; readiness: DriverReadiness } | null;
 };
 
