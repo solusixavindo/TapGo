@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "../hard-nav";
 import RecoverForm from "./recover-form";
+import RequestCode from "./minta-kode";
 
 export const metadata: Metadata = {
   title: "Pulihkan Akun TapGo",
@@ -28,14 +29,22 @@ export default function RecoverAccountPage() {
           <h1 className="themed-text mt-7 text-3xl font-black leading-tight">Lupa password? Pulihkan di sini</h1>
           <p className="themed-text-muted mt-3 text-sm leading-7">
             Untuk akun yang tidak bisa dipulihkan lewat email, Admin TapGo memberikan <strong>kode 6 digit</strong> setelah memastikan
-            bahwa Anda pemilik akun. Hubungi admin lewat WhatsApp{" "}
+            bahwa Anda pemilik akun. Ikuti dua langkah di bawah: minta kode lewat WhatsApp{" "}
             <a href="https://wa.me/6283800255588" className="themed-accent font-bold" rel="noopener noreferrer">
               +62 838-0025-5588
-            </a>{" "}
-            dari nomor yang terdaftar di akun Anda, lalu masukkan kodenya di bawah ini.
+            </a>
+            , lalu masukkan kodenya.
           </p>
 
           <div className="mt-8">
+            <RequestCode />
+          </div>
+
+          <div className="themed-border mt-10 border-t pt-8">
+            <h2 className="themed-text text-lg font-black">2. Masukkan kode dari admin</h2>
+            <p className="themed-text-muted mb-5 mt-1 text-sm leading-7">
+              Setelah admin mengirim kode 6 digit, isi di sini bersama password baru pilihan Anda.
+            </p>
             <RecoverForm />
           </div>
         </div>
