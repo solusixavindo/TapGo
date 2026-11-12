@@ -14,6 +14,7 @@ import {
   generateOtpCode,
   generateResetToken
 } from "../../../core/security/otpDigest.js";
+import { isAdminRole } from "../../../core/security/roleHierarchy.js";
 import { OtpDeliveryProvider, channelUnavailableError } from "../domain/OtpDeliveryProvider.js";
 
 /**
@@ -39,6 +40,19 @@ export const OTP_TTL_MS = 5 * 60 * 1000;
 export const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
 /** Percobaan salah maksimum sebelum tantangan dimatikan. */
 export const OTP_MAX_ATTEMPTS = 5;
+/**
+ * Umur kode pemulihan yang diterbitkan admin. Lebih panjang dari OTP otomatis karena kode ini disampaikan manusia
+ * (WhatsApp) kepada pemilik akun, bukan dikirim sistem seketika.
+ */
+export const ASSISTED_CODE_TTL_MS = 30 * 60 * 1000;
+/** Alasan penerbitan kode pemulihan oleh admin (daftar tertutup; ikut ke audit). */
+export const ASSISTED_RECOVERY_REASONS = [
+  "NO_VERIFIED_EMAIL",
+  "LOST_EMAIL_ACCESS",
+  "OTHER_IDENTITY_VERIFIED"
+] as const;
+export type AssistedRecoveryReason = (typeof ASSISTED_RECOVERY_REASONS)[number];
+export const AUTH_ASSIST_TARGET_INVALID = "AUTH_ASSIST_TARGET_INVALID";
 /** Umur reset token setelah OTP terbukti benar. */
 export const RESET_TOKEN_TTL_MS = 10 * 60 * 1000;
 /**
@@ -174,6 +188,13 @@ export class AccountRecoveryService {
       return enforceMinimumDuration(startedAt, response);
     }
 
+    // Provider aktif belum mengirim ke nomor HP (hanya email). Membuat tantangan yang pasti tidak terkirim hanya
+    // menyisakan kode yang tak dikenal siapa pun dan MENIMPA kode pemulihan yang diterbitkan admin untuk akun ini
+    // (lihat issueAssistedCode). Respons tetap sama persis (bukan oracle: bergantung pada jenis pengenal, bukan akun).
+    if (target.channel === "PHONE" && !this.provider.supports("PHONE")) {
+      return enforceMinimumDuration(startedAt, response);
+    }
+
     try {
       await this.issueChallenge({
         user: target.user,
@@ -186,6 +207,70 @@ export class AccountRecoveryService {
     }
 
     return enforceMinimumDuration(startedAt, response);
+  }
+
+  /**
+   * Menerbitkan kode pemulihan untuk akun yang tidak punya jalur pemulihan otomatis (mis. email belum terverifikasi dan
+   * belum ada pengiriman SMS). Admin menyampaikan kode ini kepada pemilik akun SETELAH memastikan identitasnya; pemilik
+   * lalu memakai layar "Lupa password" yang sama (nomor HP + kode), memilih password barunya sendiri, dan semua sesi
+   * lama dicabut. Admin tidak pernah mengetahui atau menetapkan password.
+   *
+   * Hanya akun biasa (USER/DRIVER) yang aktif. Kode sekali pakai, 5 percobaan, berlaku 30 menit, dan disimpan sebagai
+   * digest; teks kodenya hanya dikembalikan satu kali ke pemanggil dan TIDAK masuk audit maupun log.
+   */
+  async issueAssistedCode(input: { targetUserId: string; actorId: string; reasonCode: AssistedRecoveryReason }) {
+    const target = await this.prisma.user.findUnique({ where: { id: input.targetUserId } });
+    if (!target || target.status !== "ACTIVE" || isAdminRole(target.role)) {
+      throw new AppError(
+        "Akun ini tidak dapat dipulihkan lewat jalur bantuan admin.",
+        StatusCodes.CONFLICT,
+        AUTH_ASSIST_TARGET_INVALID
+      );
+    }
+
+    const now = new Date();
+    const code = generateOtpCode();
+    const expiresAt = new Date(now.getTime() + ASSISTED_CODE_TTL_MS);
+    const payload = {
+      destinationDigest: digestDestination(target.phone),
+      codeDigest: digestOtpCode(code),
+      keyVersion: AUTH_RECOVERY_KEY_VERSION,
+      channel: "PHONE" as AuthChallengeChannel,
+      attempts: 0,
+      maxAttempts: OTP_MAX_ATTEMPTS,
+      lastSentAt: now,
+      expiresAt,
+      verifiedAt: null,
+      resetTokenDigest: null,
+      resetExpiresAt: null
+    };
+
+    await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.authChallenge.findFirst({
+        where: { userId: target.id, purpose: "PASSWORD_RECOVERY", consumedAt: null }
+      });
+      if (existing) {
+        await tx.authChallenge.update({
+          where: { id: existing.id },
+          data: { ...payload, resendCount: { increment: 1 } }
+        });
+      } else {
+        await tx.authChallenge.create({
+          data: { userId: target.id, purpose: "PASSWORD_RECOVERY", resendCount: 0, ...payload }
+        });
+      }
+      await tx.auditLog.create({
+        data: {
+          actorId: input.actorId,
+          action: "ACCOUNT_RECOVERY_CODE_ISSUED",
+          entityType: "USER",
+          entityId: target.id,
+          metadata: { reasonCode: input.reasonCode, expiresAt: expiresAt.toISOString() }
+        }
+      });
+    });
+
+    return { code, expiresAt, ttlMinutes: Math.round(ASSISTED_CODE_TTL_MS / 60000), maskedPhone: maskPhone(target.phone) };
   }
 
   /**

@@ -498,6 +498,42 @@ export const approveProfitPeriod = (id: string) => postJson<ProfitPeriod>(`/admi
 /** Memasukkan bagian ke saldo yang dapat ditarik tiap penerima; tidak dapat dibatalkan. */
 export const distributeProfitPeriod = (id: string) => postJson<ProfitPeriod>(`/admin/profit-sharing/periods/${id}/distribute`);
 
+// --- Bantuan akun (khusus VIP) -----------------------------------------------
+
+export const ASSIST_REASONS: Array<{ code: string; label: string }> = [
+  { code: "NO_VERIFIED_EMAIL", label: "Lupa password dan email belum terverifikasi" },
+  { code: "LOST_EMAIL_ACCESS", label: "Lupa password dan tidak bisa membuka emailnya" },
+  { code: "OTHER_IDENTITY_VERIFIED", label: "Alasan lain (identitas sudah dipastikan)" }
+];
+
+export type AccountAssistLookup = {
+  account: {
+    id: string;
+    fullName: string;
+    phone: string;
+    role: string;
+    status: string;
+    createdAt: string;
+    lastLoginAt: string | null;
+    hasPassword: boolean;
+    phoneVerified: boolean;
+    emailMasked: string | null;
+    emailVerified: boolean;
+  };
+  recovery: { automaticViaEmail: boolean; canIssueAssistedCode: boolean; activeCodeUntil: string | null };
+  driver: { profileStatus: string; availability: string; readiness: DriverReadiness } | null;
+};
+
+export const lookupAccountByPhone = (phone: string) =>
+  request<AccountAssistLookup>(`/admin/account-assist?phone=${encodeURIComponent(phone)}`);
+
+/** Kode hanya dikembalikan sekali. Server meminta pernyataan identitas dan password VIP. */
+export const issueRecoveryCode = (userId: string, reasonCode: string, password: string) =>
+  postJson<{ code: string; expiresAt: string; ttlMinutes: number; maskedPhone: string }>(
+    `/admin/account-assist/${userId}/recovery-code`,
+    { reasonCode, identityChecked: true, password }
+  );
+
 export function listDriverDocumentQueue() {
   const query = new URLSearchParams({ page: "1", pageSize: "50" });
   return request<{ items: DriverDocumentQueueRow[]; total: number }>(
@@ -846,6 +882,14 @@ export type AdminRideDriver = {
   }>;
   createdAt: string;
   updatedAt: string;
+  /** Kesiapan menerima pesanan (aturan sama dengan penerimaan pesanan sungguhan); tidak ada di backend lama. */
+  readiness?: DriverReadiness;
+};
+
+export type DriverReadiness = {
+  canAccept: boolean;
+  blockers: Array<{ code: string; message: string; fix: string }>;
+  notes: string[];
 };
 
 export function listAdminRides(params: { status?: string; serviceType?: string; limit?: number }) {

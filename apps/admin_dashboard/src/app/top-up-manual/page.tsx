@@ -18,7 +18,7 @@ import ConsoleHeader from "../console-header";
 import PeriodFilter from "../period-filter";
 
 /**
- * Konfirmasi top up manual (transfer bank ke rekening perusahaan).
+ * Konfirmasi top up manual (transfer bank ke rekening perusahaan atau QRIS resmi TAPGO LION INDO TRANS).
  *
  * Cocokkan NOMINAL TEPAT (termasuk tiga digit kode unik) dengan mutasi bank
  * sebelum menekan "Konfirmasi". Konfirmasi menambah saldo anggota dan tidak
@@ -99,7 +99,7 @@ export default function ManualTopUpPage() {
       <div className="mx-auto max-w-6xl">
         <ConsoleHeader
           title="Top Up Manual"
-          subtitle="Cocokkan nominal transfer (termasuk kode unik tiga digit) dengan mutasi rekening perusahaan, lalu konfirmasi."
+          subtitle="Cocokkan nominal transfer (termasuk kode unik tiga digit) dengan mutasi rekening perusahaan atau mutasi QRIS (aplikasi merchant QRIS TapGo), lalu konfirmasi."
           role={role}
         />
 
@@ -244,7 +244,7 @@ export default function ManualTopUpPage() {
             </dl>
             <p className="mt-4 text-xs leading-5 text-slate-600">
               {pending.action === "confirm"
-                ? "Lakukan HANYA setelah dana dengan nominal TEPAT ini terlihat di mutasi rekening perusahaan. Saldo anggota langsung bertambah dan tidak dapat dibatalkan."
+                ? "Lakukan HANYA setelah dana dengan nominal TEPAT ini terlihat di mutasi rekening perusahaan atau mutasi QRIS. Saldo anggota langsung bertambah dan tidak dapat dibatalkan."
                 : "Top up ditutup tanpa mengubah saldo. Anggota dapat mengajukan top up baru."}
             </p>
             {pending.action === "reject" ? (

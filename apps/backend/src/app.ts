@@ -37,6 +37,7 @@ import { profitSharingRouter } from "./modules/profit-sharing/presentation/profi
 import { referralRouter } from "./modules/referrals/presentation/referral.routes.js";
 import { driverReviewRouter } from "./modules/rides/presentation/driverReview.routes.js";
 import { accountDeletionAdminRouter } from "./modules/account/presentation/account-deletion-admin.routes.js";
+import { accountAssistRouter } from "./modules/admin-console/presentation/account-assist.routes.js";
 import { adminRideRouter, driverRideRouter, rideRouter } from "./modules/rides/presentation/ride.routes.js";
 import { driverDocumentRouter } from "./modules/drivers/presentation/driver-document.routes.js";
 import { driverApplicationRouter } from "./modules/drivers/presentation/driver-application.routes.js";
@@ -130,6 +131,7 @@ export function createApp() {
   app.use("/api/v1/admin/scope-grants", adminScopeRouter);
   app.use("/api/v1/admin/support", adminRateLimiter, adminSupportRouter);
   app.use("/api/v1/admin/delete-requests", adminRateLimiter, accountDeletionAdminRouter);
+  app.use("/api/v1/admin/account-assist", adminRateLimiter, accountAssistRouter);
   app.use("/api/v1/admin", adminRateLimiter, adminConsoleRouter);
   app.use("/api/v1/referrals", referralRouter);
   // Release 2 — domain PPOB (Stage R2.7). Pembelian berada di bawah

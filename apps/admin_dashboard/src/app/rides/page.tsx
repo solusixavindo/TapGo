@@ -336,10 +336,11 @@ export default function RidesMonitoringPage() {
             </div>
           ) : (
             <div className="overflow-x-auto rounded-2xl bg-white shadow-sm">
-              <table className="w-full min-w-[760px] text-left text-sm">
+              <table className="w-full min-w-[980px] text-left text-sm">
                 <thead className="border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                   <tr>
                     <th className="px-4 py-3">Driver</th>
+                    <th className="px-4 py-3">Siap terima order?</th>
                     <th className="px-4 py-3">Kendaraan</th>
                     <th className="px-4 py-3">Rating</th>
                     <th className="px-4 py-3">Ketersediaan</th>
@@ -352,6 +353,34 @@ export default function RidesMonitoringPage() {
                       <td className="px-4 py-3">
                         <p className="font-semibold">{driver.name ?? "—"}</p>
                         <p className="text-xs text-slate-500">{driver.phoneMasked ?? ""}</p>
+                      </td>
+                      <td className="px-4 py-3 text-xs" data-testid="driver-readiness">
+                        {driver.readiness ? (
+                          driver.readiness.canAccept ? (
+                            <>
+                              <StatusBadge label="Siap" tone="bg-emerald-100 text-emerald-800" />
+                              {driver.readiness.notes.map((note) => (
+                                <p key={note} className="mt-1 max-w-[240px] text-[11px] leading-4 text-slate-500">
+                                  {note}
+                                </p>
+                              ))}
+                            </>
+                          ) : (
+                            <>
+                              <StatusBadge label="Tidak bisa" tone="bg-rose-100 text-rose-800" />
+                              <ul className="mt-1 max-w-[280px] space-y-1">
+                                {driver.readiness.blockers.map((blocker) => (
+                                  <li key={blocker.code} className="text-[11px] leading-4 text-slate-700">
+                                    <span className="font-bold text-rose-800">{blocker.message}</span>
+                                    <span className="block text-slate-500">Perbaikan: {blocker.fix}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </>
+                          )
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-600">
                         {driver.vehicles.map((vehicle) => (

@@ -225,7 +225,7 @@ export default function MemberRequestsPage() {
       const late = transfer.expired ? " Batas waktu transfer SUDAH LEWAT; pastikan nominal ini memang masuk dari pemohon." : "";
       if (
         !window.confirm(
-          `Konfirmasi transfer ${formatRupiah(transfer.transferAmount)} dari ${name} sudah masuk di mutasi rekening?${late} Pengajuan lanjut ke verifikasi dokumen; membership belum aktif.`
+          `Konfirmasi transfer ${formatRupiah(transfer.transferAmount)} dari ${name} sudah masuk di mutasi rekening atau mutasi QRIS?${late} Pengajuan lanjut ke verifikasi dokumen; membership belum aktif.`
         )
       )
         return;
@@ -522,7 +522,7 @@ export default function MemberRequestsPage() {
                   <div className="mt-6 border-t border-slate-200 pt-5 print:hidden" data-testid="unpaid-decision">
                     <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Belum dibayar</p>
                     <p className="mt-2 text-sm leading-6 text-slate-600">
-                      Pengajuan ini menunggu pembayaran. Konfirmasi hanya bila dana sudah terlihat di rekening perusahaan. Verifikasi
+                      Pengajuan ini menunggu pembayaran. Konfirmasi hanya bila dana sudah terlihat di rekening perusahaan atau di mutasi QRIS. Verifikasi
                       dokumen dan keputusan setujui / perbaiki / tolak dilakukan sesudah pembayaran dikonfirmasi.
                     </p>
 
@@ -534,10 +534,10 @@ export default function MemberRequestsPage() {
                           className={`mt-4 rounded-xl border p-4 ${transfer.expired ? "border-amber-300 bg-amber-50" : "border-emerald-200 bg-emerald-50/50"}`}
                           data-testid="manual-transfer-info"
                         >
-                          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Transfer bank manual</p>
+                          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Transfer manual (bank atau QRIS)</p>
                           <p className="mt-1 text-2xl font-black tabular-nums text-slate-900">{formatRupiah(transfer.transferAmount)}</p>
                           <p className="mt-1 text-xs leading-5 text-slate-600">
-                            Cocokkan nominal ini PERSIS dengan mutasi masuk
+                            Cocokkan nominal ini PERSIS dengan mutasi masuk (rekening atau QRIS)
                             {transfer.baseAmount !== null && transfer.uniqueCode !== null
                               ? ` (harga paket ${formatRupiah(transfer.baseAmount)} + kode unik ${transfer.uniqueCode})`
                               : ""}

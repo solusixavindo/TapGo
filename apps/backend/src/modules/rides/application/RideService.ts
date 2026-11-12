@@ -15,6 +15,7 @@ import { StatusCodes } from "http-status-codes";
 import { env } from "../../../config/env.js";
 import { AppError } from "../../../core/errors/AppError.js";
 import { DriverFaceCheckService } from "../../drivers/application/DriverFaceCheckService.js";
+import { evaluateDriverReadiness } from "./driverReadiness.js";
 import {
   DisclosureSource,
   PASSENGER_DISCLOSURE_INCLUDE,
@@ -2066,7 +2067,7 @@ export class RideService {
       orderBy: { createdAt: "desc" },
       take: Math.max(1, Math.min(input.limit ?? 50, 100)),
       include: {
-        user: { select: { id: true, fullName: true, phone: true } },
+        user: { select: { id: true, fullName: true, phone: true, status: true } },
         vehicles: {
           select: {
             id: true,
@@ -2078,7 +2079,34 @@ export class RideService {
         },
       },
     });
-    return drivers.map((driver) => this.toAdminDriverView(driver));
+
+    // Kesiapan menerima pesanan per driver (aturan sama dengan acceptOrder), supaya admin melihat penyebabnya langsung.
+    const wallets = await this.prisma.wallet.findMany({
+      where: { userId: { in: drivers.map((driver) => driver.user.id) } },
+      select: { userId: true, balance: true },
+    });
+    const balanceOf = new Map(wallets.map((wallet) => [wallet.userId, wallet.balance.toNumber()]));
+    const now = new Date();
+    return Promise.all(
+      drivers.map(async (driver) => ({
+        ...this.toAdminDriverView(driver),
+        readiness: evaluateDriverReadiness({
+          userStatus: driver.user.status,
+          profileStatus: driver.status,
+          availability: driver.availability,
+          lastSeenAt: driver.lastSeenAt,
+          vehicles: driver.vehicles,
+          walletBalance: balanceOf.get(driver.user.id) ?? null,
+          faceRecheckDue: await this.faceCheck.isRecheckDue(driver.user.id),
+          commission: {
+            enabled: env.DRIVER_COMMISSION_ENABLED,
+            percent: env.DRIVER_COMMISSION_PERCENT,
+            minCashBalance: env.DRIVER_MIN_CASH_BALANCE,
+          },
+          now,
+        }),
+      })),
+    );
   }
 
   async updateDriverStatusByAdmin(input: {
