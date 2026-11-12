@@ -36,9 +36,16 @@ describe("evaluateDriverReadiness", () => {
     expect(result.blockers[0]!.fix).toContain("Aktifkan driver");
   });
 
-  it("saldo nol saat komisi menyala menolak pesanan tunai", () => {
+  it("saldo nol saat komisi menyala menolak pesanan tunai, tetapi hanya itu (non-tunai tetap bisa)", () => {
     expect(codes({ walletBalance: 0 })).toEqual(["RIDE_COMMISSION_BALANCE_INSUFFICIENT"]);
     expect(codes({ walletBalance: null })).toEqual(["RIDE_COMMISSION_BALANCE_INSUFFICIENT"]);
+    const result = evaluateDriverReadiness({ ...READY, walletBalance: 0 });
+    expect(result).toMatchObject({ canAccept: false, cashOnly: true });
+  });
+
+  it("penghalang non-saldo bukan 'hanya tunai', walau saldo juga nol", () => {
+    expect(evaluateDriverReadiness({ ...READY, profileStatus: "PENDING", walletBalance: 0 }).cashOnly).toBe(false);
+    expect(evaluateDriverReadiness(READY).cashOnly).toBe(false);
   });
 
   it("saldo di bawah minimum tunai adalah penghalang tersendiri", () => {

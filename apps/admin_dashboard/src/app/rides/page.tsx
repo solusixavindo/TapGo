@@ -367,7 +367,11 @@ export default function RidesMonitoringPage() {
                             </>
                           ) : (
                             <>
-                              <StatusBadge label="Tidak bisa" tone="bg-rose-100 text-rose-800" />
+                              {driver.readiness.cashOnly ? (
+                                <StatusBadge label="Tunai ditolak" tone="bg-amber-100 text-amber-900" />
+                              ) : (
+                                <StatusBadge label="Tidak bisa" tone="bg-rose-100 text-rose-800" />
+                              )}
                               <ul className="mt-1 max-w-[280px] space-y-1">
                                 {driver.readiness.blockers.map((blocker) => (
                                   <li key={blocker.code} className="text-[11px] leading-4 text-slate-700">

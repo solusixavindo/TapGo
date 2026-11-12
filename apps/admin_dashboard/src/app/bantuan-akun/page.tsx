@@ -255,6 +255,11 @@ export default function AccountAssistPage() {
                   <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Siap menerima order (profil {result.driver.profileStatus}).</p>
                 ) : (
                   <ul className="mt-2 space-y-2">
+                    {result.driver.readiness.cashOnly ? (
+                      <li className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">
+                        Hanya pesanan TUNAI yang ditolak. Pesanan non-tunai tetap bisa diterima.
+                      </li>
+                    ) : null}
                     {result.driver.readiness.blockers.map((blocker) => (
                       <li key={blocker.code} className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm">
                         <p className="font-bold text-rose-800">{blocker.message}</p>

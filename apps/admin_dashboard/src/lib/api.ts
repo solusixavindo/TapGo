@@ -888,6 +888,8 @@ export type AdminRideDriver = {
 
 export type DriverReadiness = {
   canAccept: boolean;
+  /** Semua penghalang hanya soal saldo komisi: pesanan tunai ditolak, non-tunai tetap bisa diterima. */
+  cashOnly?: boolean;
   blockers: Array<{ code: string; message: string; fix: string }>;
   notes: string[];
 };

@@ -14,7 +14,13 @@ export type ReadinessBlocker = {
 };
 
 export type DriverReadiness = {
+  /** true hanya bila tidak ada penghalang sama sekali. */
   canAccept: boolean;
+  /**
+   * true bila SEMUA penghalang hanya menyangkut saldo komisi: pesanan tunai ditolak, tetapi pesanan non-tunai
+   * (dibayar lewat Saldo TapGo penumpang) tetap bisa diterima.
+   */
+  cashOnly: boolean;
   blockers: ReadinessBlocker[];
   /** Hal yang bukan penghalang tetapi layak diketahui admin. */
   notes: string[];
@@ -80,13 +86,13 @@ export function evaluateDriverReadiness(input: DriverReadinessInput): DriverRead
     if (input.commission.minCashBalance > 0 && balance < input.commission.minCashBalance) {
       blockers.push({
         code: "RIDE_CASH_MIN_BALANCE",
-        message: `Saldo TapGo ${rupiah(balance)}, di bawah minimal ${rupiah(input.commission.minCashBalance)} untuk pesanan tunai.`,
+        message: `Saldo TapGo ${rupiah(balance)}, di bawah minimal ${rupiah(input.commission.minCashBalance)} untuk pesanan TUNAI (non-tunai tetap bisa diterima).`,
         fix: "Minta driver mengisi Saldo TapGo (top up) di tapgolion.id/topup."
       });
     } else if (balance <= 0) {
       blockers.push({
         code: "RIDE_COMMISSION_BALANCE_INSUFFICIENT",
-        message: `Saldo TapGo Rp0: komisi ${input.commission.percent}% tidak dapat ditahan, sehingga pesanan tunai ditolak.`,
+        message: `Saldo TapGo Rp0: komisi ${input.commission.percent}% tidak dapat ditahan, sehingga pesanan TUNAI ditolak (pesanan non-tunai tetap bisa diterima).`,
         fix: "Minta driver mengisi Saldo TapGo (top up) di tapgolion.id/topup."
       });
     } else {
@@ -103,5 +109,7 @@ export function evaluateDriverReadiness(input: DriverReadinessInput): DriverRead
     notes.push("Lokasi terakhir driver sudah lama (lebih dari 10 menit): tawaran berbasis jarak mungkin tidak muncul.");
   }
 
-  return { canAccept: blockers.length === 0, blockers, notes };
+  const cashCodes = new Set(["RIDE_COMMISSION_BALANCE_INSUFFICIENT", "RIDE_CASH_MIN_BALANCE"]);
+  const cashOnly = blockers.length > 0 && blockers.every((blocker) => cashCodes.has(blocker.code));
+  return { canAccept: blockers.length === 0, cashOnly, blockers, notes };
 }
