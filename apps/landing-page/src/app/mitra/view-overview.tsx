@@ -158,8 +158,8 @@ export default function OverviewView({ onNavigate }: { onNavigate: (view: ViewId
             </div>
           </div>
           <div className="mt-5 space-y-3">
-            <div className="flex items-center gap-2 rounded-xl themed-fill px-3 py-2.5">
-              <p className="min-w-0 flex-1 select-all break-all text-sm font-bold themed-text" data-testid="overview-referral-code">{summary.referralCode}</p>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl themed-fill px-3 py-2.5">
+              <p className="min-w-[7.5rem] flex-1 select-all break-all text-sm font-bold themed-text" data-testid="overview-referral-code">{summary.referralCode}</p>
               <span className="text-[11px] themed-text-muted">Kode referral</span>
               <button
                 type="button"

@@ -100,6 +100,12 @@ function LoginPanel({ onLoggedIn, expired }: { onLoggedIn: () => void; expired: 
             {busy ? "Memeriksa…" : "Masuk"}
           </button>
         </form>
+        <p className="mt-4 text-center text-xs themed-text-muted">
+          Lupa password?{" "}
+          <a href="/pulihkan-akun/" className="font-bold underline underline-offset-4 hover:themed-text">
+            Pulihkan akun
+          </a>
+        </p>
         <p className="mt-5 flex items-center gap-2 text-xs themed-text-muted">
           <Icon name="lock" className="h-3.5 w-3.5" />
           Sambungan terenkripsi. TapGo tidak pernah meminta password lewat chat.

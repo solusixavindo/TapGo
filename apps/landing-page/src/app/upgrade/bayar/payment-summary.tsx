@@ -1,5 +1,6 @@
 "use client";
 
+import { OFFICIAL_QRIS } from "../../qris";
 import { useHardRouter as useRouter } from "../../hard-nav";
 import { useEffect, useState } from "react";
 import {
@@ -51,6 +52,7 @@ function invoiceFor(order: UpgradeOrder, transfer: ManualTransferInfo): InvoiceD
     ],
     total: transfer.transferAmount,
     bank: transfer.bank,
+    qris: OFFICIAL_QRIS,
     expiresAt: transfer.expiresAt,
     expired: transfer.expired,
     notes: [

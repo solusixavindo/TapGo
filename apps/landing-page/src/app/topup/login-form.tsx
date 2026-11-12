@@ -130,6 +130,12 @@ export default function LoginForm() {
           Daftar dulu di sini
         </Link>
       </p>
+      <p className="text-center text-sm themed-text-muted">
+        Lupa password?{" "}
+        <Link href="/pulihkan-akun" className="font-bold themed-accent">
+          Pulihkan akun
+        </Link>
+      </p>
     </form>
   );
 }

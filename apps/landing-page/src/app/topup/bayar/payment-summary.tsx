@@ -1,5 +1,6 @@
 "use client";
 
+import { OFFICIAL_QRIS } from "../../qris";
 import { useHardRouter as useRouter } from "../../hard-nav";
 import { useEffect, useState } from "react";
 import {
@@ -100,6 +101,7 @@ export default function PaymentSummary() {
     ],
     total: order.transferAmount,
     bank: order.bank,
+    qris: OFFICIAL_QRIS,
     expiresAt: order.expiresAt,
     expired,
     notes: [

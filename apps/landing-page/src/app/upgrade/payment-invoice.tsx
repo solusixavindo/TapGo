@@ -36,8 +36,8 @@ export type InvoiceData = {
   expired?: boolean;
   /** Catatan khusus transaksi (mis. Saldo PPOB tidak dapat ditarik). */
   notes?: string[];
-  /** Slot QRIS resmi perusahaan; kosong sampai QRIS terverifikasi tersedia. */
-  qris?: { imageSrc: string; caption: string };
+  /** QRIS resmi perusahaan (lihat ../qris.ts) sebagai alternatif transfer bank. */
+  qris?: { imageSrc: string; merchantName: string; nmid: string };
   children?: ReactNode;
 };
 
@@ -65,6 +65,13 @@ export function invoiceText(data: InvoiceData): string {
     `Bank: ${data.bank.bankName}`,
     `No. rekening: ${data.bank.accountNumber}`,
     `Atas nama: ${data.bank.accountHolder}`,
+    ...(data.qris
+      ? [
+          "",
+          `Atau bayar dengan QRIS atas nama ${data.qris.merchantName} (NMID ${data.qris.nmid}).`,
+          `Masukkan nominal TEPAT ${formatRupiah(data.total)} (jangan dibulatkan).`
+        ]
+      : []),
     ...(data.expiresAt ? [`Berlaku sampai: ${formatMoment(data.expiresAt)}`] : []),
     "",
     "Pembayaran sah setelah transfer dikonfirmasi tim TapGo."
@@ -197,9 +204,40 @@ export function PaymentInvoice({ data }: { data: InvoiceData }) {
         </div>
 
         {data.qris ? (
-          <div className="mt-5 text-center" data-testid="invoice-qris">
-            <img src={data.qris.imageSrc} alt="QRIS resmi PT. TapGo Lion Indonesia" className="mx-auto h-48 w-48 rounded-xl bg-white p-2" />
-            <p className="mt-2 text-xs themed-text-muted">{data.qris.caption}</p>
+          <div className="mt-5 rounded-2xl border themed-border p-4" data-testid="invoice-qris">
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] themed-text-muted">Atau bayar dengan QRIS</p>
+            <div className="mt-3 grid items-start gap-4 sm:grid-cols-[auto_1fr]">
+              <img
+                src={data.qris.imageSrc}
+                alt={`QRIS resmi ${data.qris.merchantName}, NMID ${data.qris.nmid}`}
+                className="mx-auto w-full max-w-[16rem] rounded-xl bg-white"
+                width={767}
+                height={1080}
+              />
+              <div className="text-sm leading-7 themed-text">
+                <p>
+                  Penerima: <strong>{data.qris.merchantName}</strong>
+                  <br />
+                  NMID: <span className="font-mono font-bold">{data.qris.nmid}</span>
+                </p>
+                <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs leading-6 themed-text-muted">
+                  <li>Buka aplikasi m-banking atau e-wallet, pilih Scan QRIS (atau unggah gambar QRIS ini dari galeri).</li>
+                  <li>
+                    Ketik nominal <strong className="themed-text">{formatRupiah(data.total)}</strong> persis, termasuk kode unik. Jangan dibulatkan.
+                  </li>
+                  <li>
+                    Pastikan nama penerima <strong className="themed-text">{data.qris.merchantName}</strong> sebelum membayar.
+                  </li>
+                </ol>
+                <a
+                  href={data.qris.imageSrc}
+                  download="QRIS-TapGo.jpeg"
+                  className="no-print mt-3 inline-block rounded-full border themed-border px-4 py-2 text-xs font-bold themed-text"
+                >
+                  Unduh gambar QRIS
+                </a>
+              </div>
+            </div>
           </div>
         ) : null}
 
