@@ -312,7 +312,7 @@ export default function PaymentSummary() {
               disabled={busy}
               className={showOnline ? `${secondaryButtonClass} mt-3` : `${primaryButtonClass} mt-6`}
             >
-              {busy ? "Menyiapkan petunjuk…" : "Bayar dengan transfer bank"}
+              {busy ? "Menyiapkan petunjuk…" : "Bayar dengan QRIS atau transfer bank"}
             </button>
           ) : null}
         </>

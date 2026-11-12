@@ -43,9 +43,15 @@ export default function AmountForm() {
   const [quoteSet, setQuoteSet] = useState<{ key: string; list: TopUpQuote[] } | null>(null);
   const [quoteError, setQuoteError] = useState(false);
   const [method, setMethod] = useState<TopUpMethodId | null>(null);
+  // Cara bayar saat server menawarkan keduanya: online (Midtrans) atau QRIS/transfer manual. Bawaan: online (alur lama).
+  const [channel, setChannel] = useState<"ONLINE" | "MANUAL">("ONLINE");
 
   const config = TOPUP_TARGETS[target];
-  const online = options?.online === true;
+  const onlineOffered = options?.online === true;
+  const manualOffered = options?.manualTransfer === true;
+  // Keduanya tersedia: pelanggan memilih. Satu saja: itu yang dipakai (perilaku lama).
+  const choosable = onlineOffered && manualOffered;
+  const online = onlineOffered && (!choosable || channel === "ONLINE");
   const minimum = options?.minimum?.[target] ?? config.min;
   const maximum = options?.maximum ?? TOPUP_MAX_AMOUNT;
   const unavailable = options != null && !options.online && !options.manualTransfer;
@@ -230,6 +236,47 @@ export default function AmountForm() {
         <p className="mt-3 text-xs font-semibold text-rose-400">
           Jumlah {config.label} harus antara {formatRupiah(minimum)} dan {formatRupiah(maximum)}.
         </p>
+      ) : null}
+
+      {choosable && amountOk ? (
+        <div className="mt-6" data-testid="channel-picker">
+          <p className="text-xs font-bold uppercase tracking-wider themed-text-muted">Cara bayar</p>
+          <div role="radiogroup" aria-label="Cara bayar" className="mt-3 space-y-2.5">
+            {(
+              [
+                {
+                  id: "ONLINE",
+                  label: "Bayar online",
+                  description: "Virtual account bank. Saldo bertambah otomatis setelah dibayar. Ada biaya layanan."
+                },
+                {
+                  id: "MANUAL",
+                  label: "QRIS atau transfer bank",
+                  description: "Scan QRIS resmi TapGo atau transfer ke rekening TapGo. Tanpa biaya layanan; saldo bertambah setelah admin TapGo mengonfirmasi."
+                }
+              ] as const
+            ).map((item) => {
+              const active = channel === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  data-testid={`channel-${item.id.toLowerCase()}`}
+                  onClick={() => setChannel(item.id)}
+                  className={[
+                    "w-full rounded-2xl border-2 px-4 py-3.5 text-left transition",
+                    active ? "border-brand-gold bg-brand-gold/10 shadow-lg" : "themed-border themed-card-bg hover:border-white/20"
+                  ].join(" ")}
+                >
+                  <span className={`block text-sm font-black ${active ? "themed-accent" : "themed-text"}`}>{item.label}</span>
+                  <span className="mt-0.5 block text-xs leading-6 themed-text-muted">{item.description}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       ) : null}
 
       {/* Satu metode saja (bawaan: transfer bank) tidak perlu pilihan; biayanya sudah tampil di rincian di bawah. */}
