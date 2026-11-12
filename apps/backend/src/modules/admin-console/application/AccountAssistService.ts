@@ -41,6 +41,28 @@ export class AccountAssistService {
       select: { expiresAt: true }
     });
 
+    // Riwayat penerbitan kode (terbaru dulu) supaya admin berikutnya melihat siapa, kapan, dan buktinya.
+    const issuedLogs = await this.prisma.auditLog.findMany({
+      where: { action: "ACCOUNT_RECOVERY_CODE_ISSUED", entityType: "USER", entityId: user.id },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      select: { actorId: true, createdAt: true, metadata: true }
+    });
+    const actorIds = [...new Set(issuedLogs.map((log) => log.actorId).filter((id): id is string => id !== null))];
+    const actors = actorIds.length
+      ? await this.prisma.user.findMany({ where: { id: { in: actorIds } }, select: { id: true, fullName: true } })
+      : [];
+    const actorName = new Map(actors.map((actor) => [actor.id, actor.fullName]));
+    const codeHistory = issuedLogs.map((log) => {
+      const meta = (log.metadata ?? {}) as { reasonCode?: unknown; evidenceNote?: unknown };
+      return {
+        at: log.createdAt,
+        by: log.actorId ? (actorName.get(log.actorId) ?? null) : null,
+        reasonCode: typeof meta.reasonCode === "string" ? meta.reasonCode : null,
+        evidenceNote: typeof meta.evidenceNote === "string" ? meta.evidenceNote : null
+      };
+    });
+
     const emailVerified = user.email !== null && user.emailVerifiedAt !== null;
     const privileged = user.role === "ADMIN" || user.role === "SUPER_ADMIN" || user.role === "SUPER_ADMIN_VIP";
 
@@ -88,6 +110,7 @@ export class AccountAssistService {
         canIssueAssistedCode: user.status === "ACTIVE" && !privileged,
         activeCodeUntil: activeChallenge?.expiresAt ?? null
       },
+      codeHistory,
       driver
     };
   }

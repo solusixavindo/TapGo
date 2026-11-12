@@ -218,7 +218,13 @@ export class AccountRecoveryService {
    * Hanya akun biasa (USER/DRIVER) yang aktif. Kode sekali pakai, 5 percobaan, berlaku 30 menit, dan disimpan sebagai
    * digest; teks kodenya hanya dikembalikan satu kali ke pemanggil dan TIDAK masuk audit maupun log.
    */
-  async issueAssistedCode(input: { targetUserId: string; actorId: string; reasonCode: AssistedRecoveryReason }) {
+  async issueAssistedCode(input: {
+    targetUserId: string;
+    actorId: string;
+    reasonCode: AssistedRecoveryReason;
+    /** Catatan bukti pemeriksaan identitas dari admin; disimpan di audit (BUKAN kode). */
+    evidenceNote?: string;
+  }) {
     const target = await this.prisma.user.findUnique({ where: { id: input.targetUserId } });
     if (!target || target.status !== "ACTIVE" || isAdminRole(target.role)) {
       throw new AppError(
@@ -265,7 +271,11 @@ export class AccountRecoveryService {
           action: "ACCOUNT_RECOVERY_CODE_ISSUED",
           entityType: "USER",
           entityId: target.id,
-          metadata: { reasonCode: input.reasonCode, expiresAt: expiresAt.toISOString() }
+          metadata: {
+            reasonCode: input.reasonCode,
+            expiresAt: expiresAt.toISOString(),
+            ...(input.evidenceNote ? { evidenceNote: input.evidenceNote } : {})
+          }
         }
       });
     });

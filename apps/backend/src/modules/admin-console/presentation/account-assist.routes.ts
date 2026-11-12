@@ -13,7 +13,7 @@ import { AccountAssistService } from "../application/AccountAssistService.js";
 
 /**
  * Bantuan akun, KHUSUS SUPER_ADMIN_VIP. Menerbitkan kode pemulihan menuntut: (1) role VIP, (2) pernyataan bahwa
- * identitas pemilik sudah dipastikan, (3) password VIP sendiri. Setiap penerbitan tercatat di audit_logs (tanpa kode).
+ * identitas pemilik sudah dipastikan beserta catatan buktinya, (3) password VIP sendiri. Setiap penerbitan tercatat di audit_logs (tanpa kode).
  */
 const assist = new AccountAssistService(prisma);
 const recovery = new AccountRecoveryService(prisma, otpDeliveryProvider);
@@ -27,6 +27,8 @@ const codeSchema = z.object({
   body: z.object({
     reasonCode: z.enum(ASSISTED_RECOVERY_REASONS),
     identityChecked: z.literal(true),
+    /** Bukti pemeriksaan identitas (mis. ringkasan percakapan WhatsApp). Wajib, disimpan di audit. */
+    evidenceNote: z.string().trim().min(10).max(500),
     password: z.string().min(1).max(200)
   })
 });
@@ -47,7 +49,7 @@ accountAssistRouter.post(
   "/:userId/recovery-code",
   validateRequest(codeSchema),
   asyncHandler(async (req, res) => {
-    const { reasonCode, password } = req.body as z.infer<typeof codeSchema>["body"];
+    const { reasonCode, evidenceNote, password } = req.body as z.infer<typeof codeSchema>["body"];
     const actor = await prisma.user.findUnique({ where: { id: req.auth!.userId }, select: { passwordHash: true } });
     const passwordOk = actor?.passwordHash ? await verifyPassword(actor.passwordHash, password) : false;
     if (!passwordOk) {
@@ -56,7 +58,8 @@ accountAssistRouter.post(
     const data = await recovery.issueAssistedCode({
       targetUserId: String(req.params.userId),
       actorId: req.auth!.userId,
-      reasonCode
+      reasonCode,
+      evidenceNote
     });
     // Kode hanya muncul di respons ini. Jangan di-cache.
     res.setHeader("cache-control", "no-store");

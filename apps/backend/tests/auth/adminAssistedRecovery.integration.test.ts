@@ -67,6 +67,7 @@ const issue = (token: string, userId: string, body: Record<string, unknown> = {}
   api("POST", `/api/v1/admin/account-assist/${userId}/recovery-code`, {
     reasonCode: "NO_VERIFIED_EMAIL",
     identityChecked: true,
+    evidenceNote: "WA dari nomor terdaftar, menyebut nama sponsor dengan benar",
     password: VIP_PASSWORD,
     ...body
   }, token);
@@ -179,6 +180,18 @@ describeIntegration("Pemulihan akun dibantu admin (akun tanpa email terverifikas
     const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "ACCOUNT_RECOVERY_CODE_ISSUED", entityId: member.id } });
     expect(audit.actorId).toBe(vip.id);
     expect(JSON.stringify(audit.metadata)).not.toContain(code);
+    expect((audit.metadata as { evidenceNote?: string }).evidenceNote).toBe("WA dari nomor terdaftar, menyebut nama sponsor dengan benar");
+
+    // Pencarian berikutnya menampilkan riwayat: siapa, alasan, dan catatan buktinya (tanpa kode).
+    const looked = await api("GET", `/api/v1/admin/account-assist?phone=${encodeURIComponent(member.phone)}`, undefined, tokenOf(vip));
+    expect(looked.status).toBe(200);
+    expect(looked.body.data.codeHistory).toHaveLength(1);
+    expect(looked.body.data.codeHistory[0]).toMatchObject({
+      by: vip.fullName,
+      reasonCode: "NO_VERIFIED_EMAIL",
+      evidenceNote: "WA dari nomor terdaftar, menyebut nama sponsor dengan benar"
+    });
+    expect(JSON.stringify(looked.body.data.codeHistory)).not.toContain(code);
   });
 
   it("kode salah 5 kali mengunci kode itu; menerbitkan ulang mengganti kode lama", async () => {
@@ -215,6 +228,9 @@ describeIntegration("Pemulihan akun dibantu admin (akun tanpa email terverifikas
     expect((await issue(token, member.id, { identityChecked: false })).status).toBe(400);
     expect((await issue(token, member.id, { identityChecked: undefined })).status).toBe(400);
     expect((await issue(token, member.id, { reasonCode: "SEMBARANG" })).status).toBe(400);
+    expect((await issue(token, member.id, { evidenceNote: undefined })).status).toBe(400);
+    expect((await issue(token, member.id, { evidenceNote: "singkat" })).status).toBe(400);
+    expect((await issue(token, member.id, { evidenceNote: "x".repeat(501) })).status).toBe(400);
     expect((await issue(token, admin.id)).body.code).toBe("AUTH_ASSIST_TARGET_INVALID");
     expect((await issue(token, vip.id)).status).toBe(409);
     expect((await issue(token, suspended.id)).status).toBe(409);

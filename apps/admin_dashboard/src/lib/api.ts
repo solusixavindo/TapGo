@@ -521,17 +521,19 @@ export type AccountAssistLookup = {
     emailVerified: boolean;
   };
   recovery: { automaticViaEmail: boolean; canIssueAssistedCode: boolean; activeCodeUntil: string | null };
+  /** Penerbitan kode terakhir (maks. 5): siapa, kapan, alasan, dan catatan bukti. Tanpa kode. */
+  codeHistory: Array<{ at: string; by: string | null; reasonCode: string | null; evidenceNote: string | null }>;
   driver: { profileStatus: string; availability: string; readiness: DriverReadiness } | null;
 };
 
 export const lookupAccountByPhone = (phone: string) =>
   request<AccountAssistLookup>(`/admin/account-assist?phone=${encodeURIComponent(phone)}`);
 
-/** Kode hanya dikembalikan sekali. Server meminta pernyataan identitas dan password VIP. */
-export const issueRecoveryCode = (userId: string, reasonCode: string, password: string) =>
+/** Kode hanya dikembalikan sekali. Server meminta pernyataan identitas, catatan bukti (10-500 huruf), dan password VIP. */
+export const issueRecoveryCode = (userId: string, reasonCode: string, evidenceNote: string, password: string) =>
   postJson<{ code: string; expiresAt: string; ttlMinutes: number; maskedPhone: string }>(
     `/admin/account-assist/${userId}/recovery-code`,
-    { reasonCode, identityChecked: true, password }
+    { reasonCode, identityChecked: true, evidenceNote, password }
   );
 
 export function listDriverDocumentQueue() {

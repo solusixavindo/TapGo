@@ -25,6 +25,9 @@ import ConsoleHeader from "../console-header";
 
 const RECOVER_URL = "tapgolion.id/pulihkan-akun";
 
+const EVIDENCE_MIN = 10;
+const EVIDENCE_MAX = 500;
+
 const ROLE_LABEL: Record<string, string> = { USER: "Anggota", DRIVER: "Driver", ADMIN: "Admin", SUPER_ADMIN: "Super Admin", SUPER_ADMIN_VIP: "Super Admin VIP" };
 
 export default function AccountAssistPage() {
@@ -37,6 +40,7 @@ export default function AccountAssistPage() {
 
   const [reason, setReason] = useState(ASSIST_REASONS[0]!.code);
   const [identityChecked, setIdentityChecked] = useState(false);
+  const [evidenceNote, setEvidenceNote] = useState("");
   const [password, setPassword] = useState("");
   const [issued, setIssued] = useState<{ code: string; expiresAt: string; ttlMinutes: number; maskedPhone: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -72,6 +76,7 @@ export default function AccountAssistPage() {
     setIssued(null);
     setCopied(false);
     setIdentityChecked(false);
+    setEvidenceNote("");
     setPassword("");
   }
 
@@ -96,7 +101,7 @@ export default function AccountAssistPage() {
     setBusy(true);
     setError("");
     try {
-      setIssued(await issueRecoveryCode(result.account.id, reason, password));
+      setIssued(await issueRecoveryCode(result.account.id, reason, evidenceNote.trim(), password));
       setPassword("");
       setResult(await lookupAccountByPhone(result.account.phone));
     } catch (caught) {
@@ -107,6 +112,8 @@ export default function AccountAssistPage() {
   }
 
   const account = result?.account;
+  const noteLength = evidenceNote.trim().length;
+  const noteValid = noteLength >= EVIDENCE_MIN && noteLength <= EVIDENCE_MAX;
 
   return (
     <main className="min-h-screen bg-slate-100 p-6 text-slate-950">
@@ -227,6 +234,20 @@ export default function AccountAssistPage() {
                     <span>Saya sudah memastikan bahwa yang meminta adalah pemilik akun ini (mis. lewat WhatsApp dari nomor yang sama dan data yang hanya diketahui pemiliknya).</span>
                   </label>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Catatan bukti
+                    <textarea
+                      value={evidenceNote}
+                      onChange={(event) => setEvidenceNote(event.target.value)}
+                      maxLength={EVIDENCE_MAX}
+                      rows={3}
+                      placeholder="Contoh: WA dari nomor terdaftar 22 Okt 14.05, menyebut nama sponsor dan tanggal daftar dengan benar. Tangkapan layar disimpan di folder bukti."
+                      className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case tracking-normal"
+                    />
+                    <span className={`mt-1 block text-[11px] font-normal normal-case tracking-normal ${noteLength > 0 && !noteValid ? "text-rose-700" : "text-slate-500"}`}>
+                      Wajib, {EVIDENCE_MIN}-{EVIDENCE_MAX} huruf ({noteLength}/{EVIDENCE_MAX}). Tersimpan di catatan audit dan terlihat oleh admin VIP berikutnya. Jangan tulis password atau kode.
+                    </span>
+                  </label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
                     Password Anda
                     <input
                       type="password"
@@ -238,7 +259,7 @@ export default function AccountAssistPage() {
                   </label>
                   <button
                     type="button"
-                    disabled={busy || !identityChecked || password.length === 0}
+                    disabled={busy || !identityChecked || !noteValid || password.length === 0}
                     onClick={() => void issue()}
                     className="rounded-lg bg-brand-navy px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40"
                   >
@@ -247,6 +268,25 @@ export default function AccountAssistPage() {
                 </div>
               )}
             </section>
+
+            {result.codeHistory.length > 0 ? (
+              <section className="rounded-xl border border-slate-200 bg-white p-5" data-testid="assist-history">
+                <h3 className="text-sm font-black">Riwayat kode pemulihan</h3>
+                <ul className="mt-2 divide-y divide-slate-100">
+                  {result.codeHistory.map((entry) => (
+                    <li key={entry.at} className="py-2 text-sm">
+                      <p className="font-semibold">
+                        {formatMoment(entry.at)} <span className="font-normal text-slate-600">oleh {entry.by ?? "admin"}</span>
+                      </p>
+                      <p className="text-xs text-slate-500">{ASSIST_REASONS.find((item) => item.code === entry.reasonCode)?.label ?? entry.reasonCode ?? "-"}</p>
+                      <p className="mt-0.5 whitespace-pre-wrap break-words text-xs leading-5 text-slate-700">
+                        {entry.evidenceNote ? `Bukti: ${entry.evidenceNote}` : "Tanpa catatan bukti (dibuat sebelum kolom ini ada)."}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
 
             {result.driver ? (
               <section className="rounded-xl border border-slate-200 bg-white p-5" data-testid="assist-driver">
