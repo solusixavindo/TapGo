@@ -182,7 +182,9 @@ export default function ServiceStatusPage() {
                   type="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  autoComplete="current-password"
+                  autoComplete="new-password"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal"
                 />
               </label>
