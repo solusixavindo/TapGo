@@ -161,6 +161,30 @@ describe.skipIf(!runIntegration)("Penarikan deposit pribadi", () => {
     expect(await state(user.id)).toEqual({ balance: 150000, cash: 50000, locked: 0, deposit: 100000 });
   });
 
+  it("ringkasan dompet (web dan app) menyajikan rincian kantong dan aturan deposit; masa tunggu terlihat", async () => {
+    const user = await createUser({ balance: 200000, cash: 40000, locked: 20000, deposit: 100000, topUpAgeMs: 60 * 60 * 1000 });
+    for (const path of ["/api/v1/web/wallet", "/api/v1/wallet"]) {
+      const res = await fetch(`${baseUrl}${path}`, { headers: { ...headers(user), ...(path === "/api/v1/wallet" ? { authorization: `Bearer ${signAccessToken({ sub: user.id, role: user.role, sessionId: `s-${user.id}`, channel: "APP" })}` } : {}) } });
+      expect(res.status, path).toBe(200);
+      const data = ((await res.json()) as { data: any }).data;
+      expect(data.breakdown).toEqual({ withdrawable: "40000", lockedBonus: "20000", deposit: "100000", other: "40000" });
+      expect(data.depositWithdrawal).toMatchObject({ enabled: true, fee: 2000, minimum: 50000, holdHours: 24 });
+      expect(new Date(data.depositWithdrawal.availableAt).getTime()).toBeGreaterThan(Date.now());
+      expect(data.lockPercent).toBe(20);
+      expect(Number(data.balance)).toBe(200000); // kolom lama tetap
+    }
+    // Sesudah masa tunggu lewat: tidak ada availableAt.
+    const old = await createUser({ balance: 100000, cash: 0, locked: 0, deposit: 100000, topUpAgeMs: 2 * DAY_MS });
+    const res = await fetch(`${baseUrl}/api/v1/web/wallet`, { headers: headers(old) });
+    expect(((await res.json()) as { data: any }).data.depositWithdrawal.availableAt).toBeNull();
+    // Fitur mati: aturan menyatakan tidak aktif dan tidak ada persen kunci.
+    backendEnv.BONUS_LOCK_ENABLED = false;
+    const off = await fetch(`${baseUrl}/api/v1/web/wallet`, { headers: headers(old) });
+    const offData = ((await off.json()) as { data: any }).data;
+    expect(offData.depositWithdrawal.enabled).toBe(false);
+    expect(offData.lockPercent).toBe(0);
+  });
+
   it("penarikan biasa (saldo yang dapat ditarik) tetap bekerja dan tidak menyentuh deposit", async () => {
     const user = await createUser({ balance: 150000, cash: 50000, locked: 0, deposit: 100000, topUpAgeMs: 2 * DAY_MS });
     expect((await withdraw(user, { amount: 50000, password: PASSWORD })).status).toBe(201);

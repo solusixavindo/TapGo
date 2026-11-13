@@ -20,7 +20,7 @@ export class WebWalletController {
   ) {}
 
   wallet = async (req: Request, res: Response) => {
-    const result = await this.walletService.getWallet(req.auth!.userId);
+    const result = await this.walletService.getWalletSummary(req.auth!.userId);
     res.json({ success: true, data: result });
   };
 

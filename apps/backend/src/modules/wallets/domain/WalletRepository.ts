@@ -6,6 +6,10 @@ export type WalletSnapshot = {
   balance: Prisma.Decimal;
   cashBalance: Prisma.Decimal;
   ppobBalance: Prisma.Decimal;
+  /** Bonus terkunci: dapat dipakai, tidak dapat ditarik. */
+  lockedBonusBalance: Prisma.Decimal;
+  /** Deposit pribadi: dapat ditarik kembali (biaya tetap). */
+  depositBalance: Prisma.Decimal;
   currency: string;
   updatedAt: Date;
 };
@@ -98,6 +102,8 @@ export interface WalletRepository {
     accountNumber: string;
     accountHolderName: string;
   }): Promise<NonNullable<BankAccountSnapshot>>;
+  /** Waktu top up terakhir (untuk masa tunggu penarikan deposit); null bila belum pernah. */
+  getLastTopUpAt(userId: string): Promise<Date | null>;
   reserveWithdrawal(input: {
     userId: string;
     amount: Prisma.Decimal;

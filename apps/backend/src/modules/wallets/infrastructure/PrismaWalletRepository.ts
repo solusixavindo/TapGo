@@ -57,6 +57,15 @@ export class PrismaWalletRepository implements WalletRepository {
     });
   }
 
+  async getLastTopUpAt(userId: string): Promise<Date | null> {
+    const row = await this.prisma.walletTransaction.findFirst({
+      where: { type: "TOPUP", wallet: { userId } },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true }
+    });
+    return row?.createdAt ?? null;
+  }
+
   async getWalletByUserId(userId: string): Promise<WalletSnapshot> {
     return this.getOrCreateWallet(userId);
   }

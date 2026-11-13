@@ -23,6 +23,44 @@ export class WalletService {
     private readonly push: PushNotifier = lazyPushNotifier
   ) {}
 
+  /**
+   * Dompet beserta rincian kantong dan aturan penarikan deposit untuk tampilan. Kolom lama tidak berubah; klien lama
+   * mengabaikan field baru. `availableAt` hanya terisi bila masa tunggu deposit masih berjalan.
+   */
+  async getWalletSummary(userId: string) {
+    const wallet = await this.walletRepository.getWalletByUserId(userId);
+    const { env } = await import("../../../config/env.js");
+    const other = wallet.balance
+      .minus(wallet.cashBalance)
+      .minus(wallet.lockedBonusBalance)
+      .minus(wallet.depositBalance);
+    let availableAt: string | null = null;
+    if (env.BONUS_LOCK_ENABLED && env.DEPOSIT_HOLD_HOURS > 0 && wallet.depositBalance.gt(0)) {
+      const lastTopUp = await this.walletRepository.getLastTopUpAt(userId);
+      if (lastTopUp) {
+        const releaseAt = lastTopUp.getTime() + env.DEPOSIT_HOLD_HOURS * 3600_000;
+        if (releaseAt > Date.now()) availableAt = new Date(releaseAt).toISOString();
+      }
+    }
+    return {
+      ...wallet,
+      breakdown: {
+        withdrawable: wallet.cashBalance.toString(),
+        lockedBonus: wallet.lockedBonusBalance.toString(),
+        deposit: wallet.depositBalance.toString(),
+        other: (other.lt(0) ? new Prisma.Decimal(0) : other).toString()
+      },
+      depositWithdrawal: {
+        enabled: env.BONUS_LOCK_ENABLED,
+        fee: env.DEPOSIT_WITHDRAWAL_FEE,
+        minimum: env.DEPOSIT_WITHDRAWAL_MIN,
+        holdHours: env.DEPOSIT_HOLD_HOURS,
+        availableAt
+      },
+      lockPercent: env.BONUS_LOCK_ENABLED ? env.BONUS_LOCK_PERCENT : 0
+    };
+  }
+
   getWallet(userId: string) {
     return this.walletRepository.getWalletByUserId(userId);
   }
