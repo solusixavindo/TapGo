@@ -127,8 +127,11 @@ Sudah (backend, diuji, bendera mati):
 - Skrip migrasi surut `scripts/bonus-lock-migration.ts` (simulasi bawaan, idempoten).
 - Layar admin Penarikan Dana: sumber, biaya, dan jumlah yang harus ditransfer.
 
-Belum: rincian saldo dan tombol tarik deposit di web (tapgolion.id) dan aplikasi; Syarat & Ketentuan dan pemberitahuan
-pengguna; layar admin untuk melihat kantong per anggota.
+Web (tapgolion.id, 14 Nov 2026): kartu rincian saldo di Dompet; Tarik dana memilih sumber (saldo / deposit) dengan biaya,
+minimal, dan masa tunggu; riwayat menandai pengembalian deposit. Hanya tampil bila server mengirim persen kunci > 0.
+
+Belum: rincian saldo di aplikasi Play (user_app/driver_app); Syarat & Ketentuan dan pemberitahuan pengguna; layar admin
+untuk melihat kantong per anggota.
 
 ## 8. Urutan pemasangan (setelah Owner menyetujui)
 
