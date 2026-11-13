@@ -28,6 +28,8 @@ export type WithdrawalItem = {
   fee: Prisma.Decimal;
   finalAmount: Prisma.Decimal;
   status: WithdrawalStatus;
+  /** Asal dana: saldo yang dapat ditarik (bonus, komisi) atau deposit pribadi. */
+  source: "CASH" | "DEPOSIT";
   bankName: string | null;
   accountNumber: string | null;
   accountHolderName: string | null;
@@ -105,6 +107,8 @@ export interface WalletRepository {
     accountHolderName: string;
     fee?: Prisma.Decimal;
     notes?: string;
+    /** Bawaan CASH. DEPOSIT = penarikan deposit pribadi (aturan 24 jam, tanpa pesanan tunai berjalan). */
+    source?: "CASH" | "DEPOSIT";
   }, tx: Prisma.TransactionClient): Promise<WithdrawalItem>;
   listWithdrawals(input: {
     userId?: string;

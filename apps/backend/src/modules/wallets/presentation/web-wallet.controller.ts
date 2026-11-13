@@ -107,6 +107,7 @@ export class WebWalletController {
       accountNumber: bank.accountNumber,
       accountHolderName: bank.accountHolderName,
       ...(typeof req.body.notes === "string" ? { notes: req.body.notes } : {}),
+      ...(req.body.source === "DEPOSIT" ? { source: "DEPOSIT" as const } : {}),
     });
     res.status(StatusCodes.CREATED).json({ success: true, data: result });
   };

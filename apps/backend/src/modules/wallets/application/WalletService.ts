@@ -53,11 +53,34 @@ export class WalletService {
     accountNumber: string;
     accountHolderName: string;
     notes?: string;
+    /** Bawaan CASH. DEPOSIT hanya untuk kanal web dan hanya bila BONUS_LOCK_ENABLED. */
+    source?: "CASH" | "DEPOSIT";
   }) {
     if (input.amount.lt(50000)) {
       throw new AppError("Minimum withdrawal is Rp50.000", StatusCodes.BAD_REQUEST, "WITHDRAWAL_MINIMUM_NOT_MET");
     }
-    return this.walletRepository.transaction((tx) => this.walletRepository.reserveWithdrawal(input, tx));
+    return this.walletRepository.transaction(async (tx) => {
+      if (input.source !== "DEPOSIT") {
+        return this.walletRepository.reserveWithdrawal(input, tx);
+      }
+      // Berkas ini sengaja tidak mengimpor config/env di tingkat modul (lihat komentar di atas): dimuat malas.
+      const { env } = await import("../../../config/env.js");
+      if (!env.BONUS_LOCK_ENABLED) {
+        throw new AppError("Penarikan deposit belum tersedia.", StatusCodes.FORBIDDEN, "DEPOSIT_WITHDRAWAL_DISABLED");
+      }
+      if (input.amount.lt(env.DEPOSIT_WITHDRAWAL_MIN)) {
+        throw new AppError(
+          `Minimal penarikan deposit Rp${env.DEPOSIT_WITHDRAWAL_MIN.toLocaleString("id-ID")}.`,
+          StatusCodes.BAD_REQUEST,
+          "DEPOSIT_WITHDRAWAL_MINIMUM_NOT_MET"
+        );
+      }
+      const fee = new Prisma.Decimal(env.DEPOSIT_WITHDRAWAL_FEE);
+      if (input.amount.lte(fee)) {
+        throw new AppError("Jumlah harus lebih besar dari biaya penarikan.", StatusCodes.BAD_REQUEST, "DEPOSIT_WITHDRAWAL_AMOUNT_INVALID");
+      }
+      return this.walletRepository.reserveWithdrawal({ ...input, fee, source: "DEPOSIT" }, tx);
+    });
   }
 
   listWithdrawals(input: {

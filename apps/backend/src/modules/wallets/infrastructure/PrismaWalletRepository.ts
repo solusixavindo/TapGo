@@ -131,9 +131,11 @@ export class PrismaWalletRepository implements WalletRepository {
       accountHolderName: string;
       fee?: Prisma.Decimal;
       notes?: string;
+      source?: "CASH" | "DEPOSIT";
     },
     tx: Prisma.TransactionClient
   ): Promise<WithdrawalItem> {
+    const source = input.source ?? "CASH";
     const fee = input.fee ?? new Prisma.Decimal(0);
     const finalAmount = input.amount.minus(fee);
     if (finalAmount.lte(0)) {
@@ -141,19 +143,18 @@ export class PrismaWalletRepository implements WalletRepository {
     }
 
     const wallet = await this.getOrCreateWallet(input.userId, tx);
+    if (source === "DEPOSIT") {
+      await this.assertDepositWithdrawable(wallet.id, tx);
+    }
     const reserved = await tx.wallet.updateMany({
-      where: {
-        id: wallet.id,
-        cashBalance: { gte: input.amount }
-      },
-      data: {
-        cashBalance: {
-          decrement: input.amount
-        },
-        balance: {
-          decrement: input.amount
-        }
-      }
+      where:
+        source === "DEPOSIT"
+          ? { id: wallet.id, depositBalance: { gte: input.amount } }
+          : { id: wallet.id, cashBalance: { gte: input.amount } },
+      data:
+        source === "DEPOSIT"
+          ? { depositBalance: { decrement: input.amount }, balance: { decrement: input.amount } }
+          : { cashBalance: { decrement: input.amount }, balance: { decrement: input.amount } }
     });
 
     if (reserved.count !== 1) {
@@ -167,6 +168,7 @@ export class PrismaWalletRepository implements WalletRepository {
         amount: input.amount,
         fee,
         finalAmount,
+        source,
         bankName: input.bankName,
         accountNumber: input.accountNumber,
         accountHolderName: input.accountHolderName,
@@ -189,12 +191,61 @@ export class PrismaWalletRepository implements WalletRepository {
         referenceId: withdrawal.id,
         metadata: {
           status: withdrawal.status,
-          reserved: true
+          reserved: true,
+          ...(source === "DEPOSIT" ? { source } : {})
         }
       }
     });
 
     return withdrawal;
+  }
+
+  /**
+   * Penarikan deposit: (1) top up terakhir sudah mengendap DEPOSIT_HOLD_HOURS jam, supaya uang curian/kartu tidak
+   * bisa langsung dicairkan; (2) tidak ada pesanan tunai berjalan yang menahan komisi (driver): saldo itu menjamin
+   * komisi pesanan yang sedang berlangsung.
+   */
+  private async assertDepositWithdrawable(walletId: string, tx: Prisma.TransactionClient) {
+    const { env } = await import("../../../config/env.js");
+    if (env.DEPOSIT_HOLD_HOURS > 0) {
+      const lastTopUp = await tx.walletTransaction.findFirst({
+        where: { walletId, type: "TOPUP" },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true }
+      });
+      if (lastTopUp) {
+        const releaseAt = lastTopUp.createdAt.getTime() + env.DEPOSIT_HOLD_HOURS * 3600_000;
+        if (Date.now() < releaseAt) {
+          const when = new Date(releaseAt).toLocaleString("id-ID", {
+            timeZone: "Asia/Jakarta",
+            day: "numeric",
+            month: "long",
+            hour: "2-digit",
+            minute: "2-digit"
+          });
+          throw new AppError(
+            `Deposit dapat ditarik ${env.DEPOSIT_HOLD_HOURS} jam setelah top up terakhir, yaitu mulai ${when} WIB.`,
+            StatusCodes.FORBIDDEN,
+            "DEPOSIT_WITHDRAWAL_HOLD"
+          );
+        }
+      }
+    }
+    const openCommission = await tx.walletTransaction.count({
+      where: {
+        walletId,
+        type: "PAYMENT",
+        referenceType: "RIDE_COMMISSION_FEE",
+        metadata: { path: ["status"], equals: "HELD" }
+      }
+    });
+    if (openCommission > 0) {
+      throw new AppError(
+        "Deposit tidak dapat ditarik selama ada pesanan tunai yang sedang berjalan.",
+        StatusCodes.CONFLICT,
+        "DEPOSIT_WITHDRAWAL_CASH_RIDE_ACTIVE"
+      );
+    }
   }
 
   async listWithdrawals(input: {
@@ -327,14 +378,17 @@ export class PrismaWalletRepository implements WalletRepository {
 
     await tx.wallet.update({
       where: { id: withdrawal.walletId },
-      data: {
-        cashBalance: {
-          increment: withdrawal.amount
-        },
-        balance: {
-          increment: withdrawal.amount
-        }
-      }
+      data:
+        withdrawal.source === "DEPOSIT"
+          ? { depositBalance: { increment: withdrawal.amount }, balance: { increment: withdrawal.amount } }
+          : {
+              cashBalance: {
+                increment: withdrawal.amount
+              },
+              balance: {
+                increment: withdrawal.amount
+              }
+            }
     });
 
     await tx.walletTransaction.create({
