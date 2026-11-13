@@ -8,7 +8,7 @@ Status: **RANCANGAN, belum diterapkan.** Menunggu hasil simulasi dan persetujuan
 1. Bonus membership = **seluruh bonus mesin bisnis**: sponsor, level, reward, bagi hasil, insentif driver.
 2. Setiap bonus yang masuk dipecah: **80% dapat ditarik**, **20% dikunci** sebagai Saldo TapGo.
 3. Saldo terkunci **boleh dipakai** untuk perjalanan dan PPOB, **tidak boleh ditarik**.
-4. **Deposit pribadi** (top up) boleh ditarik kembali: **seluruh saldo yang belum terpakai**, **biaya Rp10.000**.
+4. **Deposit pribadi** (top up) boleh ditarik kembali: **seluruh saldo yang belum terpakai**, **biaya Rp2.000** (diubah Owner 14 Nov 2026 dari Rp10.000).
 5. Aturan berlaku juga untuk **bonus yang sudah masuk sebelumnya** (berlaku surut).
 
 ## 2. Model saldo sekarang (dibaca dari kode)
@@ -57,7 +57,7 @@ bersyarat (`updateMany ... where kolom >= nilai`) seperti pola yang sekarang, ag
 kolom negatif.
 
 **Penarikan deposit (baru):**
-- Jumlah = seluruh `depositBalance` (atau sebagian); biaya tetap Rp10.000 dipotong dari jumlah; harus sisa positif.
+- Jumlah = seluruh `depositBalance` (atau sebagian); biaya tetap Rp2.000 dipotong dari jumlah; harus sisa positif.
 - Mencatat `Withdrawal` dengan sumber `DEPOSIT`, melewati persetujuan admin yang sama seperti penarikan bonus.
 - Mengurangi `depositBalance` dan `balance`. Ditolak mengembalikannya.
 - Aturan anti-penyalahgunaan: lihat keputusan 3.
