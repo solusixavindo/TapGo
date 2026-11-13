@@ -64,6 +64,12 @@ const ACTION_COPY = {
 
 type PendingAction = { item: AdminWithdrawal; action: keyof typeof ACTION_COPY };
 
+/** Yang harus ditransfer ke rekening: finalAmount dari server; bila tidak ada (server lama) = jumlah penuh. */
+function transferAmount(item: { amount: string; finalAmount?: string | undefined }): number {
+  const final = item.finalAmount !== undefined ? Number(item.finalAmount) : Number.NaN;
+  return Number.isFinite(final) && final > 0 ? final : Number(item.amount);
+}
+
 export default function WithdrawalsPage() {
   const router = useRouter();
   const [role, setRole] = useState("");
@@ -238,6 +244,19 @@ export default function WithdrawalsPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <p className="font-black tabular-nums">{formatRupiah(item.amount)}</p>
+                        {item.source === "DEPOSIT" ? (
+                          <span
+                            data-testid="withdrawal-source-deposit"
+                            className="mt-1 inline-block rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-bold text-sky-900"
+                          >
+                            Pengembalian deposit
+                          </span>
+                        ) : null}
+                        {transferAmount(item) !== Number(item.amount) ? (
+                          <p className="mt-1 text-xs text-slate-600" data-testid="withdrawal-transfer-amount">
+                            Biaya {formatRupiah(item.fee ?? "0")}. <strong className="text-slate-900">Transfer {formatRupiah(String(transferAmount(item)))}</strong>
+                          </p>
+                        ) : null}
                         {needsVip ? (
                           <span className="mt-1 inline-block rounded-full bg-brand-gold/25 px-2 py-0.5 text-[11px] font-bold text-amber-900">
                             Perlu VIP
@@ -328,6 +347,12 @@ export default function WithdrawalsPage() {
                 <dt className="text-slate-500">Jumlah</dt>
                 <dd className="font-black tabular-nums">{formatRupiah(pending.item.amount)}</dd>
               </div>
+              {transferAmount(pending.item) !== Number(pending.item.amount) ? (
+                <div className="flex justify-between gap-4 rounded-lg bg-sky-50 px-2 py-1.5">
+                  <dt className="font-bold text-sky-900">Transfer ke rekening (setelah biaya {formatRupiah(pending.item.fee ?? "0")})</dt>
+                  <dd className="font-black tabular-nums text-sky-900">{formatRupiah(String(transferAmount(pending.item)))}</dd>
+                </div>
+              ) : null}
               <div className="flex justify-between gap-4">
                 <dt className="text-slate-500">Rekening</dt>
                 <dd className="text-right font-semibold">

@@ -1061,6 +1061,12 @@ export type WithdrawalStatus = "PENDING" | "APPROVED" | "REJECTED" | "PAID" | "C
 export type AdminWithdrawal = {
   id: string;
   amount: string;
+  /** Biaya penarikan (Rp2.000 untuk deposit, 0 untuk saldo yang dapat ditarik). Server lama tidak mengirimnya. */
+  fee?: string;
+  /** Yang HARUS ditransfer ke rekening: amount dikurangi biaya. */
+  finalAmount?: string;
+  /** DEPOSIT = pengembalian deposit pribadi; CASH = bonus/komisi. Server lama tidak mengirimnya (berarti CASH). */
+  source?: "CASH" | "DEPOSIT";
   status: WithdrawalStatus;
   bankName: string | null;
   accountNumber: string | null;
