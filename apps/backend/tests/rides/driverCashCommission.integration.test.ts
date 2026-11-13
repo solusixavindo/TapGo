@@ -368,6 +368,28 @@ describe.skipIf(!runIntegration)("Komisi pesanan tunai dari saldo driver (D4)", 
     expect((rows[1]!.metadata as { reversedFrom: string }).reversedFrom).toBe(rows[0]!.id);
   });
 
+  it("KANTONG: komisi ditahan mulai dari saldo yang dapat ditarik, lalu lain-lain, terkunci, deposit; pembatalan memulihkan semuanya persis", async () => {
+    const { user } = await createDriver();
+    // balance 10.000 = tarik 100 + lain-lain 100 + terkunci 400 + deposit 9.400. Komisi 720 menyentuh keempatnya.
+    await prisma.wallet.upsert({
+      where: { userId: user.id },
+      update: { balance: 10_000, cashBalance: 100, lockedBonusBalance: 400, depositBalance: 9_400 },
+      create: { userId: user.id, balance: 10_000, cashBalance: 100, lockedBonusBalance: 400, depositBalance: 9_400 }
+    });
+    const { order } = await createOrder(north(1)); // komisi 720
+    await service().acceptOrder({ userId: user.id, publicReference: order.publicReference });
+    let wallet = await walletOf(user.id);
+    expect([wallet.balance.toNumber(), wallet.cashBalance.toNumber(), wallet.lockedBonusBalance.toNumber(), wallet.depositBalance.toNumber()])
+      .toEqual([9_280, 0, 0, 9_280]); // 100 tarik, 100 lain-lain, 400 terkunci, 120 deposit
+    const hold = await prisma.walletTransaction.findFirstOrThrow({ where: { walletId: wallet.id, referenceType: "RIDE_COMMISSION_FEE", type: "PAYMENT" } });
+    expect((hold.metadata as { buckets?: Record<string, string> }).buckets).toEqual({ other: "100", locked: "400", deposit: "120", cash: "100" });
+
+    await service().cancelByDriver({ userId: user.id, publicReference: order.publicReference, reason: "OTHER" });
+    wallet = await walletOf(user.id);
+    expect([wallet.balance.toNumber(), wallet.cashBalance.toNumber(), wallet.lockedBonusBalance.toNumber(), wallet.depositBalance.toNumber()])
+      .toEqual([10_000, 100, 400, 9_400]);
+  });
+
   it("saldo hasil top up online (hanya balance, cashBalance nol): komisi tetap bisa ditahan, dan pembatalan TIDAK mengubahnya jadi saldo yang bisa ditarik", async () => {
     // Kebijakan 14 Okt 2026: top up Saldo TapGo hanya menambah `balance`. Driver yang mengisi saldo lewat tapgolion.id
     // berada persis di keadaan ini. Komisi harus tetap berjalan, dan uang top up tidak boleh bocor ke cashBalance.

@@ -135,6 +135,61 @@ describe.skipIf(!runIntegration)("Ride digital payment (TapGoPay)", () => {
     expect(await walletOf(passenger)).toEqual({ balance: "54000", cash: "50000" });
   });
 
+  it("KANTONG: tarif ditahan berurutan lain-lain, terkunci, deposit, tarik; pembatalan memulihkan SEMUA kantong persis", async () => {
+    const fare = await createQuoteFare();
+    const other = Math.floor(fare / 4);
+    const locked = Math.floor(fare / 4);
+    const deposit = fare; // lebih dari cukup: tarif habis sebelum menyentuh saldo yang dapat ditarik
+    const cash = 40000;
+    const passenger = await createPassenger({ balance: other + locked + deposit + cash, cash });
+    await prisma.wallet.update({
+      where: { userId: passenger.id },
+      data: { lockedBonusBalance: new Prisma.Decimal(locked), depositBalance: new Prisma.Decimal(deposit) },
+    });
+    const before = await prisma.wallet.findUniqueOrThrow({ where: { userId: passenger.id } });
+
+    const quote = await createQuote(passenger);
+    const created = await order(passenger, quote.quoteId);
+    expect(created.status).toBe(201);
+    const reference = ((await created.json()) as { data: { reference: string } }).data.reference;
+
+    const held = await prisma.wallet.findUniqueOrThrow({ where: { userId: passenger.id } });
+    const fromDeposit = fare - other - locked;
+    expect(Number(held.balance)).toBe(Number(before.balance) - fare);
+    expect(Number(held.lockedBonusBalance)).toBe(0); // terkunci habis dulu
+    expect(Number(held.depositBalance)).toBe(deposit - fromDeposit);
+    expect(Number(held.cashBalance)).toBe(cash); // yang dapat ditarik tidak tersentuh
+    const ledger = await prisma.walletTransaction.findFirstOrThrow({ where: { referenceType: "RIDE_ORDER", type: "PAYMENT" } });
+    expect((ledger.metadata as { buckets?: Record<string, string> }).buckets).toEqual({
+      other: String(other),
+      locked: String(locked),
+      deposit: String(fromDeposit),
+      cash: "0",
+    });
+
+    const cancel = await api(`/api/v1/rides/${reference}/cancel`, {
+      method: "POST",
+      token: tokenFor(passenger),
+      body: { reason: "CHANGE_OF_PLAN" },
+    });
+    expect(cancel.status).toBe(200);
+    const restored = await prisma.wallet.findUniqueOrThrow({ where: { userId: passenger.id } });
+    expect(restored.balance.toString()).toBe(before.balance.toString());
+    expect(restored.cashBalance.toString()).toBe(before.cashBalance.toString());
+    expect(restored.lockedBonusBalance.toString()).toBe(before.lockedBonusBalance.toString());
+    expect(restored.depositBalance.toString()).toBe(before.depositBalance.toString());
+  });
+
+  it("KANTONG: saldo hanya dari bonus terkunci tetap bisa membayar perjalanan (boleh dipakai, tidak boleh ditarik)", async () => {
+    const fare = await createQuoteFare();
+    const passenger = await createPassenger({ balance: fare + 500, cash: 0 });
+    await prisma.wallet.update({ where: { userId: passenger.id }, data: { lockedBonusBalance: new Prisma.Decimal(fare + 500) } });
+    const quote = await createQuote(passenger);
+    expect((await order(passenger, quote.quoteId)).status).toBe(201);
+    const after = await prisma.wallet.findUniqueOrThrow({ where: { userId: passenger.id } });
+    expect([Number(after.balance), Number(after.cashBalance), Number(after.lockedBonusBalance)]).toEqual([500, 0, 500]);
+  });
+
   it("batal sebelum ada driver: dana kembali penuh, dan batal ulang tidak menggandakan", async () => {
     const passenger = await createPassenger({ balance: 100000, cash: 0 });
     const quote = await createQuote(passenger);

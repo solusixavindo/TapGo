@@ -51,6 +51,7 @@ import {
 } from "../domain/rideStateMachine.js";
 import { lazyPushNotifier } from "../../notifications/application/pushServiceFactory.js";
 import { ridePushMessage, type PushNotifier } from "../../notifications/application/rideNotifications.js";
+import { bucketSelect, creditData, debitData, ledgerBuckets, planDebit, restorePlan, sameBucketsWhere } from "../../wallets/application/walletDebit.js";
 
 const CANCELLATION_POLICY_VERSION = "RIDE_CANCEL_POLICY_V1";
 const CANCELLATION_FEE = 2_000; // integer rupiah
@@ -2520,7 +2521,7 @@ export class RideService {
   ) {
     const wallet = await tx.wallet.findUnique({
       where: { userId: input.passengerId },
-      select: { id: true, balance: true, cashBalance: true },
+      select: bucketSelect,
     });
     const fare = new Prisma.Decimal(input.totalFare);
     if (!wallet || wallet.balance.lt(fare)) {
@@ -2531,19 +2532,14 @@ export class RideService {
       );
     }
 
-    const nonCash = wallet.balance.minus(wallet.cashBalance);
-    const fromCash = Prisma.Decimal.max(fare.minus(nonCash), new Prisma.Decimal(0));
+    // Urutan: lain-lain, terkunci, deposit, lalu yang dapat ditarik (terakhir). Tanpa kantong baru, ini sama persis
+    // dengan aturan lama "non-tarik dulu".
+    const plan = planDebit(wallet, fare, "NON_CASH_FIRST");
+    const fromCash = plan.cash;
 
     const held = await tx.wallet.updateMany({
-      where: {
-        id: wallet.id,
-        balance: wallet.balance,
-        cashBalance: wallet.cashBalance,
-      },
-      data: {
-        balance: { decrement: fare },
-        cashBalance: { decrement: fromCash },
-      },
+      where: sameBucketsWhere(wallet),
+      data: debitData(plan),
     });
     if (held.count !== 1) {
       throw new AppError(
@@ -2560,7 +2556,7 @@ export class RideService {
         amount: fare.neg(),
         referenceType: "RIDE_ORDER",
         referenceId: input.orderId,
-        metadata: { fromCash: fromCash.toString(), held: true },
+        metadata: { fromCash: fromCash.toString(), held: true, ...ledgerBuckets(plan) },
       },
     });
   }
@@ -2597,13 +2593,11 @@ export class RideService {
     const meta = (payment.metadata ?? {}) as Record<string, unknown>;
     const refund = payment.amount.abs();
     const fromCash = new Prisma.Decimal(String(meta.fromCash ?? "0"));
+    const restore = restorePlan(meta, refund, fromCash);
 
     await tx.wallet.update({
       where: { id: payment.walletId },
-      data: {
-        balance: { increment: refund },
-        cashBalance: { increment: fromCash },
-      },
+      data: creditData(restore),
     });
     await tx.walletTransaction.create({
       data: {
@@ -2691,9 +2685,8 @@ export class RideService {
       where: { userId: driverUserId },
       update: {},
       create: { userId: driverUserId },
-      select: { id: true, balance: true, cashBalance: true },
+      select: bucketSelect,
     });
-    const fromCash = Prisma.Decimal.min(fee, wallet.cashBalance);
     // Saldo minimal untuk menerima pesanan tunai: dihitung dari saldo SEBELUM komisi ditahan. Dibaca dari wallet yang sama
     // dengan compare-and-set di bawah, jadi tidak bisa dilewati lewat dua penerimaan serentak.
     this.assertCashMinimumBalance(wallet.balance);
@@ -2718,12 +2711,12 @@ export class RideService {
     // kecukupan di atas menutup kasus "memang kurang sejak awal"; CAS di
     // bawah menutup kasus "berubah di tengah jalan" — keduanya perlu, bukan
     // saling menggantikan.
+    // Komisi dimulai dari saldo yang dapat ditarik (seperti sebelumnya), lalu lain-lain, terkunci, deposit.
+    const plan = planDebit(wallet, fee, "CASH_FIRST");
+    const fromCash = plan.cash;
     const applied = await tx.wallet.updateMany({
-      where: { id: wallet.id, balance: wallet.balance, cashBalance: wallet.cashBalance },
-      data: {
-        balance: { decrement: fee },
-        cashBalance: { decrement: fromCash },
-      },
+      where: sameBucketsWhere(wallet),
+      data: debitData(plan),
     });
     if (applied.count !== 1) {
       const fresh = await tx.wallet.findUniqueOrThrow({ where: { id: wallet.id }, select: { balance: true } });
@@ -2755,6 +2748,7 @@ export class RideService {
           fee: fee.toString(),
           fromCash: fromCash.toString(),
           status: "HELD",
+          ...ledgerBuckets(plan),
         },
       },
     });
@@ -2834,10 +2828,7 @@ export class RideService {
 
     await tx.wallet.update({
       where: { id: hold.row.walletId },
-      data: {
-        balance: { increment: fee },
-        cashBalance: { increment: fromCash },
-      },
+      data: creditData(restorePlan(hold.meta, fee, fromCash)),
     });
     await tx.walletTransaction.create({
       data: {
