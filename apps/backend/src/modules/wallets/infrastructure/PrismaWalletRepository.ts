@@ -14,6 +14,8 @@ import {
   WalletTransferItem,
   WithdrawalItem
 } from "../domain/WalletRepository.js";
+import { bucketSelect, debitData, ledgerBuckets, planDebit, sameBucketsWhere } from "../application/walletDebit.js";
+import type { BucketAmounts } from "../domain/walletBuckets.js";
 
 /**
  * Ambang default penarikan yang wajib disetujui SUPER_ADMIN_VIP. Controller
@@ -459,25 +461,29 @@ export class PrismaWalletRepository implements WalletRepository {
     // transfer tidak pernah mengubah top up menjadi uang yang bisa dicairkan.
     // Pembaruan bersyarat (CAS) pada saldo yang dibaca menjaga dari transfer paralel.
     let fromCashPart = new Prisma.Decimal(0);
+    let transferPlan: BucketAmounts | null = null;
     let debited = false;
     for (let attempt = 0; attempt < 3 && !debited; attempt += 1) {
       const current = await tx.wallet.findUniqueOrThrow({
         where: { id: fromWallet.id },
-        select: { balance: true, cashBalance: true }
+        select: bucketSelect
       });
       if (current.balance.lt(input.amount)) {
         throw new AppError("Insufficient wallet balance", StatusCodes.BAD_REQUEST, "INSUFFICIENT_BALANCE");
       }
-      const topUpPart = Prisma.Decimal.max(current.balance.minus(current.cashBalance), new Prisma.Decimal(0));
-      fromCashPart = Prisma.Decimal.max(input.amount.minus(topUpPart), new Prisma.Decimal(0));
+      // Pengirim membayar dari yang tidak dapat ditarik lebih dulu (lain-lain, terkunci, deposit), baru yang dapat
+      // ditarik. Penerima hanya menerima bagian "dapat ditarik" sebagai dapat ditarik; sisanya menjadi saldo biasa
+      // (tidak dapat ditarik), sehingga transfer tidak bisa membuka kunci bonus atau mengubah deposit menjadi uang tunai.
+      const plan = planDebit(current, input.amount, "NON_CASH_FIRST");
       const result = await tx.wallet.updateMany({
-        where: { id: fromWallet.id, balance: current.balance, cashBalance: current.cashBalance },
-        data: {
-          cashBalance: { decrement: fromCashPart },
-          balance: { decrement: input.amount }
-        }
+        where: sameBucketsWhere(current),
+        data: debitData(plan)
       });
       debited = result.count === 1;
+      if (debited) {
+        fromCashPart = plan.cash;
+        transferPlan = plan;
+      }
     }
     if (!debited) {
       throw new AppError("Saldo sedang berubah, coba lagi.", StatusCodes.CONFLICT, "TRANSFER_BALANCE_BUSY");
@@ -514,7 +520,8 @@ export class PrismaWalletRepository implements WalletRepository {
           toUserId: input.toUserId,
           publicReference: transfer.publicReference,
           fromTopUp: fromTopUpPart.toString(),
-          fromWithdrawable: fromCashPart.toString()
+          fromWithdrawable: fromCashPart.toString(),
+          ...(transferPlan ? ledgerBuckets(transferPlan) : {})
         }
       }
     });
@@ -644,12 +651,19 @@ export class PrismaWalletRepository implements WalletRepository {
       const orderMeta = (order.metadata ?? {}) as { target?: unknown };
       const target = orderMeta.target === "PPOB" ? "PPOB" : "WALLET";
       const wallet = await this.getOrCreateWallet(order.userId, tx);
+      // Keputusan Owner 12 Nov 2026 (membalik 14 Okt): deposit pribadi boleh ditarik kembali (biaya tetap). Saat fitur
+      // menyala, top up Saldo TapGo dicatat di kantong deposit; Saldo PPOB tidak pernah dapat ditarik.
+      const { env } = await import("../../../config/env.js");
+      const asDeposit = env.BONUS_LOCK_ENABLED && target === "WALLET";
       await tx.wallet.update({
         where: { id: wallet.id },
         data:
           target === "PPOB"
             ? { ppobBalance: { increment: order.amount } }
-            : { balance: { increment: order.amount } }
+            : {
+                balance: { increment: order.amount },
+                ...(asDeposit ? { depositBalance: { increment: order.amount } } : {})
+              }
       });
       await tx.walletTransaction.create({
         data: {
@@ -658,7 +672,12 @@ export class PrismaWalletRepository implements WalletRepository {
           amount: order.amount,
           referenceType: "WALLET_TOPUP",
           referenceId: order.id,
-          metadata: { reference: order.reference, providerReference: input.providerReference, target }
+          metadata: {
+            reference: order.reference,
+            providerReference: input.providerReference,
+            target,
+            ...(asDeposit ? { deposit: order.amount.toString() } : {})
+          }
         }
       });
 

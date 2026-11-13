@@ -1180,7 +1180,7 @@ export class MembershipOrderService {
       select: { id: true }
     });
 
-    const split = splitBonusForCredit(amount);
+    const split = await splitBonusForCredit(amount);
     const walletTransaction = await tx.walletTransaction.create({
       data: {
         walletId: wallet.id,
@@ -1307,7 +1307,7 @@ export class MembershipOrderService {
         select: { id: true }
       });
 
-      const split = splitBonusForCredit(amount);
+      const split = await splitBonusForCredit(amount);
       const walletTransaction = await tx.walletTransaction.create({
         data: {
           walletId: wallet.id,

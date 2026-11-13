@@ -866,7 +866,7 @@ export class AdminConsoleService {
         });
       }
 
-      const split = splitBonusForCredit(reward.amount);
+      const split = await splitBonusForCredit(reward.amount);
       const wallet = await tx.wallet.upsert({
         where: { userId: reward.userId },
         update: bonusWalletUpdate(split),

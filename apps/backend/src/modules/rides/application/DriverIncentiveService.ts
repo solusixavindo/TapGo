@@ -672,7 +672,7 @@ export class DriverIncentiveService {
         create: { userId: claim.userId, balance: new Prisma.Decimal(0), cashBalance: new Prisma.Decimal(0), ppobBalance: new Prisma.Decimal(0), currency: "IDR" },
         select: { id: true }
       });
-      const split = splitBonusForCredit(claim.amount);
+      const split = await splitBonusForCredit(claim.amount);
       await tx.wallet.update({
         where: { id: wallet.id },
         data: bonusWalletUpdate(split)

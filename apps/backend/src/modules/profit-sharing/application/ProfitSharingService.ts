@@ -305,7 +305,7 @@ export class ProfitSharingService {
       select: { id: true }
     });
 
-    const split = splitBonusForCredit(input.amount);
+    const split = await splitBonusForCredit(input.amount);
     const walletTransaction = await tx.walletTransaction.create({
       data: {
         walletId: wallet.id,

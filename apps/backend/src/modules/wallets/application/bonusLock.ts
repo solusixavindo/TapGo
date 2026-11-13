@@ -1,5 +1,4 @@
 import { Prisma } from "@prisma/client";
-import { env } from "../../../config/env.js";
 import { bonusCreditData, splitBonus } from "../domain/walletBuckets.js";
 
 /**
@@ -14,7 +13,17 @@ export interface BonusSplit {
   locked: Prisma.Decimal;
 }
 
-export function splitBonusForCredit(amount: Prisma.Decimal): BonusSplit {
+/**
+ * Konfigurasi dimuat MALAS (saat dipakai), bukan saat modul dimuat. Modul ini terjangkau dari harness tes
+ * (setupFiles global), dan memuat config/env lebih awal akan membekukan variabel lingkungan sebelum tes sempat
+ * mengisinya (kode DOKU, misalnya, membaca konfigurasinya saat dimuat). Di server nyata tidak ada bedanya.
+ */
+async function currentEnv() {
+  return (await import("../../../config/env.js")).env;
+}
+
+export async function splitBonusForCredit(amount: Prisma.Decimal): Promise<BonusSplit> {
+  const env = await currentEnv();
   return splitBonus(amount, { enabled: env.BONUS_LOCK_ENABLED, percent: env.BONUS_LOCK_PERCENT });
 }
 
