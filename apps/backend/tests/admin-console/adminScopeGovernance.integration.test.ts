@@ -200,7 +200,8 @@ describeIntegration("Stage R2.3 — admin scope governance", () => {
     }
     expect(await activeManagers()).toBe(0);
     expect(await auditCount("admin.scope.bootstrap_completed")).toBe(0);
-  });
+    // Tiga proses `npx tsx` berurutan (+-1,7 dtk masing-masing) melewati batas bawaan 5 dtk di mesin yang agak lambat.
+  }, 30_000);
 
   it("4b. bootstrap untuk target SUPER_ADMIN_VIP berhasil (role lebih tinggi tetap memenuhi syarat)", async () => {
     // Sebelumnya CLI membandingkan role secara literal ("=== SUPER_ADMIN"),
