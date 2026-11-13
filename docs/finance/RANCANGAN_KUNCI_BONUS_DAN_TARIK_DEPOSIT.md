@@ -1,7 +1,9 @@
 # Rancangan: kunci 20% bonus membership dan penarikan deposit
 
 Sumber: Formulir Kendala 02/SPT-TAPGO/XAV/XI/2026 butir 4 (12 Nov 2026) dan jawaban Owner (12 Nov 2026).
-Status: **RANCANGAN, belum diterapkan.** Menunggu hasil simulasi dan persetujuan Owner. Kode belum diubah.
+Status: **BACKEND DIBANGUN, bendera `BONUS_LOCK_ENABLED` MATI (belum aktif di produksi).** Keputusan Owner sudah final
+(lihat bagian 5). Tampilan web/aplikasi untuk rincian saldo dan tombol tarik deposit belum dibangun (bagian 7).
+Kode: cabang `release/driver-phase1` (commit dfb6e7a ... e742fae).
 
 ## 1. Aturan dari Owner (final)
 
@@ -87,18 +89,19 @@ angka simulasi bagian 5 menunjukkan besarnya.
 terdampak, berapa rupiah berpindah, siapa yang tidak cukup saldo (kekurangan), dan perkiraan deposit.
 Diuji di database uji dengan data buatan; angkanya cocok dengan hitungan manual.
 
-## 5. Keputusan yang masih perlu persetujuan Owner (disertai usulan)
+## 5. Keputusan Owner (final, 14 Nov 2026)
 
-1. **Urutan pemakaian saldo.** Usulan: lain-lain, lalu terkunci, lalu deposit, lalu yang dapat ditarik.
-2. **Kekurangan pada migrasi** (pengguna yang sudah menarik lebih dari 80% bonusnya). Usulan: **tidak ditagih**,
-   hanya dicatat; tidak ada saldo yang dibuat negatif.
-3. **Penarikan deposit, pembatas.** Usulan: hanya dari deposit yang sudah mengendap **24 jam** sejak top up
-   terakhir; minimal tarik Rp50.000 (sama dengan penarikan bonus); disetujui admin; saldo hasil transfer masuk
-   **tidak** dihitung deposit.
-4. **Driver.** Saldo TapGo driver menahan komisi pesanan tunai. Usulan: deposit driver tidak boleh ditarik
-   selama ada pesanan tunai berjalan, dan saldo minimal untuk menerima pesanan tunai tetap berlaku.
-5. **Persetujuan pengguna.** Pengguna lama kehilangan hak tarik atas 20% bonus lamanya. Usulan: pemberitahuan di
-   aplikasi/web sebelum migrasi dijalankan, dan pembaruan Syarat & Ketentuan.
+1. Kunci 20% berlaku untuk **semua akun tanpa kecuali**, termasuk Super Admin (Rp1.342.000 pada simulasi).
+2. Urutan pemakaian saldo: lain-lain, terkunci, deposit, lalu yang dapat ditarik. (Komisi tunai driver tetap
+   dimulai dari yang dapat ditarik, seperti perilaku lama.)
+3. Kekurangan akibat penarikan lama **tidak ditagih**, hanya dicatat.
+4. Penarikan deposit: **biaya Rp2.000**, **minimal Rp50.000**, setelah deposit **mengendap 24 jam** sejak top up
+   terakhir, disetujui admin; ditolak bila ada pesanan tunai berjalan (komisi ditahan).
+5. Pengguna diberi tahu sebelum migrasi (termasuk pengguna yang seluruh saldo tariknya akan terkunci).
+
+Keputusan ini **membalik** dua keputusan lama, dicatat agar tidak terulang sebagai "temuan": (a) 14 Okt 2026 "uang top up
+tidak dapat ditarik"; (b) audit 30 Sep 2026 (M1) "Saldo PPOB tidak boleh tercampur dengan saldo utama" (kini Saldo
+TapGo boleh dipakai untuk PPOB, Saldo PPOB dipakai dulu).
 
 ## 6. Tahapan (tidak ada yang menyentuh produksi sebelum persetujuan)
 
@@ -110,3 +113,28 @@ Diuji di database uji dengan data buatan; angkanya cocok dengan hitungan manual.
 5. Rilis backend dengan bendera mati; jalankan migrasi surut; nyalakan bendera; pantau.
 6. Tampilan: rincian saldo (dapat ditarik / terkunci / deposit) di web dan aplikasi, tombol tarik deposit di web
    (pembayaran dan penarikan tetap di web sesuai kebijakan Google Play).
+
+## 7. Yang sudah dibangun dan yang belum
+
+Sudah (backend, diuji, bendera mati):
+- Kolom `lockedBonusBalance`, `depositBalance`, `withdrawals.source` + batasan database (tidak ada kantong negatif; jumlah
+  kantong <= saldo). Fungsi murni `walletBuckets.ts` (diuji 10.000 kombinasi acak).
+- Kredit bonus 80/20 di enam jalur (sponsor, level, reward, bagi hasil, insentif) dan pembalikan insentif yang tepat.
+- Debit menurut kantong: bayar perjalanan, penahanan komisi tunai, transfer P2P (penerima tidak bisa membuka kunci atau
+  mengubah deposit jadi tunai), PPOB dari Saldo TapGo (Saldo PPOB dulu), semua dengan pembalikan persis.
+- Top up Saldo TapGo dicatat sebagai deposit; penarikan deposit (web); penolakan admin mengembalikan ke deposit.
+- Ringkasan dompet `GET /web/wallet` dan `GET /wallet` menyajikan `breakdown`, `depositWithdrawal`, `lockPercent`.
+- Skrip migrasi surut `scripts/bonus-lock-migration.ts` (simulasi bawaan, idempoten).
+- Layar admin Penarikan Dana: sumber, biaya, dan jumlah yang harus ditransfer.
+
+Belum: rincian saldo dan tombol tarik deposit di web (tapgolion.id) dan aplikasi; Syarat & Ketentuan dan pemberitahuan
+pengguna; layar admin untuk melihat kantong per anggota.
+
+## 8. Urutan pemasangan (setelah Owner menyetujui)
+
+1. Rilis backend dengan bendera mati (migrasi skema menambah kolom saja). Tidak ada perubahan perilaku.
+2. Cadangan database. Jalankan simulasi `scripts/bonus-lock-migration.ts`; Owner meninjau.
+3. Beri tahu pengguna terdampak.
+4. Nyalakan `BONUS_LOCK_ENABLED=true`, mulai ulang `tapgo-api`.
+5. Segera jalankan `scripts/bonus-lock-migration.ts --apply --confirm-backup-sudah-dibuat` (aman sesudah bendera menyala).
+6. Periksa invarian dan laporan; pasang tampilan web/aplikasi.
