@@ -153,7 +153,8 @@ describe.skipIf(!runIntegration)("Pemrosesan permintaan hapus akun oleh VIP", ()
   it("pratinjau menampilkan halangan: saldo, penarikan, dan pesanan yang belum selesai", async () => {
     const vip = await createUser("SUPER_ADMIN_VIP");
     const { member, wallet, request } = await createMemberWithPersonalData();
-    await prisma.wallet.update({ where: { id: wallet.id }, data: { cashBalance: "5000.00" } });
+    // Dompet yang sah: bagian yang dapat ditarik tidak pernah melebihi saldo total (batasan database).
+    await prisma.wallet.update({ where: { id: wallet.id }, data: { balance: "5000.00", cashBalance: "5000.00" } });
     await prisma.withdrawal.create({
       data: { walletId: wallet.id, userId: member.id, amount: "1000.00", status: "PENDING", bankAccount: { bank: "BCA" } }
     });
