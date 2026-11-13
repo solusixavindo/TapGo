@@ -915,7 +915,8 @@ class DriverController extends StateNotifier<DriverState>
       _dismissedOfferRefs.add(previous);
     }
     _pendingOfferRefs.remove(ride.reference);
-    state = state.copyWith(selectedOffer: ride);
+    // Pesan penolakan dari tawaran sebelumnya tidak boleh terbawa ke tawaran baru.
+    state = state.copyWith(selectedOffer: ride, clearMessage: true);
   }
 
   void closeOffer() {
@@ -950,6 +951,18 @@ class DriverController extends StateNotifier<DriverState>
         _dismissedOfferRefs.add(offer.reference);
         state = state.copyWith(clearSelectedOffer: true);
         unawaited(refreshWorkspace());
+      }
+    } catch (_) {
+      // Kegagalan tak terduga (mis. jawaban server tak terbaca setelah permintaan terkirim). Tanpa ini driver
+      // melihat tombol berkedip tanpa jawaban apa pun. Muat ulang ruang kerja DULU: bila server sudah menugaskan
+      // pesanan ini, perjalanan aktifnya muncul dari sana dan tidak perlu pesan; bila tidak, pesan tampil
+      // (urutan ini penting: refresh menghapus pesan yang diisi lebih awal).
+      await refreshWorkspace();
+      if (state.activeRide == null) {
+        state = state.copyWith(
+          message: state.message ??
+              'Permintaan terima belum dapat dipastikan. Periksa koneksi, lalu coba lagi.',
+        );
       }
     } finally {
       _endFlight('accept:${offer.reference}');

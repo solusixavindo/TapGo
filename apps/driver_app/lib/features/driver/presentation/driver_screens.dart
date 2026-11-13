@@ -2160,6 +2160,16 @@ class OfferDetailSheet extends ConsumerWidget {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          // Lembar ini menutup sebagian besar layar, jadi pesan penolakan (saldo komisi kurang,
+                          // verifikasi wajah, tawaran diambil driver lain, dst.) HARUS tampil di sini; di layar
+                          // belakang ia tidak terlihat dan tombol terasa "tidak merespons".
+                          if (state.message != null) ...[
+                            ErrorNotice(
+                              key: const ValueKey('offer-accept-error'),
+                              message: state.message!,
+                            ),
+                            const SizedBox(height: 10),
+                          ],
                           FilledButton(
                             key: const ValueKey('accept-offer-button'),
                             onPressed: state.isBusy ||

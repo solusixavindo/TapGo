@@ -1007,11 +1007,103 @@ void main() {
           tester, find.byKey(const ValueKey('accept-offer-button')));
       await tester.pumpAndSettle();
       expect(
-          find.text('Perjalanan sudah diambil driver lain.'), findsOneWidget);
+          find.descendant(
+              of: find.byType(OfferDetailSheet),
+              matching: find.text('Perjalanan sudah diambil driver lain.')),
+          findsOneWidget);
       final rejectButton = find.byKey(const ValueKey('reject-offer-button'));
       await tapReachable(tester, rejectButton);
       await tester.pumpAndSettle();
       expect(repo.rejectCalls, 1);
+    });
+
+    testWidgets(
+        'REGRESI Owner 12 Nov 2026: penolakan server saat Terima tampil DI DALAM lembar tawaran, bukan tersembunyi',
+        (tester) async {
+      // Gejala di video: driver menekan "Terima Perjalanan" berulang kali tanpa tanggapan. Server menolak (mis. saldo
+      // komisi kurang), pesannya disimpan di state tetapi digambar di layar BELAKANG lembar tawaran yang menutup
+      // ~86% layar. find.text biasa tetap menemukannya (widget ada di pohon walau tertutup), jadi uji ini mensyaratkan
+      // pesan sebagai keturunan OfferDetailSheet.
+      const message =
+          'Saldo komisi Anda kurang. Isi saldo minimal Rp50.000 untuk menerima pesanan tunai.';
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        availability: DriverAvailability.online,
+        offerItems: [demoOffer],
+        acceptError: const DriverApiException(
+          code: 'RIDE_DRIVER_COMMISSION_BALANCE_LOW',
+          message: message,
+          statusCode: 403,
+        ),
+      );
+      await pumpDriverOrders(tester, repo);
+      await tapReachable(
+          tester, find.byKey(const ValueKey('offer-RIDE-DEMO-001')));
+      await tester.pumpAndSettle();
+      final inSheet = find.descendant(
+          of: find.byType(OfferDetailSheet), matching: find.text(message));
+      expect(inSheet, findsNothing, reason: 'belum ada penolakan sebelum diklik');
+      await tapReachable(
+          tester, find.byKey(const ValueKey('accept-offer-button')));
+      await tester.pumpAndSettle();
+      expect(repo.acceptCalls, 1);
+      expect(find.byKey(const ValueKey('offer-accept-error')), findsOneWidget);
+      expect(inSheet, findsOneWidget);
+      // Tombol kembali bisa ditekan (tidak macet sibuk) dan lembar tidak tertutup diam-diam.
+      expect(find.text('Detail Tawaran'), findsOneWidget);
+    });
+
+    testWidgets(
+        'kegagalan tak terduga saat Terima juga memberi tanggapan di lembar tawaran',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        availability: DriverAvailability.online,
+        offerItems: [demoOffer],
+        acceptError: StateError('jawaban server tak terbaca'),
+      );
+      await pumpDriverOrders(tester, repo);
+      await tapReachable(
+          tester, find.byKey(const ValueKey('offer-RIDE-DEMO-001')));
+      await tester.pumpAndSettle();
+      await tapReachable(
+          tester, find.byKey(const ValueKey('accept-offer-button')));
+      await tester.pumpAndSettle();
+      expect(
+          find.descendant(
+              of: find.byType(OfferDetailSheet),
+              matching: find.textContaining('belum dapat dipastikan')),
+          findsOneWidget);
+      // Detail teknis tidak pernah bocor ke layar.
+      expect(find.textContaining('StateError'), findsNothing);
+      expect(find.textContaining('jawaban server'), findsNothing);
+    });
+
+    testWidgets('pesan penolakan tawaran lama tidak terbawa ke tawaran baru',
+        (tester) async {
+      final repo = FakeDriverRepository(
+        session: demoSession,
+        availability: DriverAvailability.online,
+        offerItems: [demoOffer],
+        acceptError: const DriverApiException(
+          code: 'RIDE_ALREADY_TAKEN',
+          message: 'Perjalanan sudah diambil driver lain.',
+          statusCode: 409,
+        ),
+      );
+      await pumpDriverOrders(tester, repo);
+      await tapReachable(
+          tester, find.byKey(const ValueKey('offer-RIDE-DEMO-001')));
+      await tester.pumpAndSettle();
+      await tapReachable(
+          tester, find.byKey(const ValueKey('accept-offer-button')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('offer-accept-error')), findsOneWidget);
+      // Tutup lembar lalu buka lagi: pesan lama harus hilang.
+      await tapReachable(
+          tester, find.byKey(const ValueKey('reject-offer-button')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('offer-accept-error')), findsNothing);
     });
 
     testWidgets(
@@ -4700,7 +4792,7 @@ class FakeDriverRepository implements DriverRepository {
   DriverAvailability availability;
   DriverApiException? currentError;
   Object? offersError;
-  DriverApiException? acceptError;
+  Object? acceptError;
   DriverApiException? loginError;
   Completer<DriverAvailability>? availabilityCompleter;
   Completer<DriverRide>? acceptCompleter;
