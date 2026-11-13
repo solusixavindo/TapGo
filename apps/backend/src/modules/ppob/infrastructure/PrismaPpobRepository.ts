@@ -15,6 +15,9 @@ import {
   PpobRepository,
   PpobTransactionRecord
 } from "../domain/PpobRepository.js";
+import { bucketSelect, creditData, debitData, planDebit, sameBucketsWhere } from "../../wallets/application/walletDebit.js";
+import { plansFromJson, plansToJson, sumOf } from "../../wallets/domain/walletBuckets.js";
+import type { BucketAmounts } from "../../wallets/domain/walletBuckets.js";
 
 const PRODUCT_SELECT = {
   id: true,
@@ -116,22 +119,62 @@ export class PrismaPpobRepository implements PpobRepository {
     // Debit bersyarat dalam SATU statement: baris wallet hanya berubah bila
     // saldo mencukupi. Dua pembelian bersamaan tidak bisa membuat saldo negatif
     // karena klausa where dievaluasi di bawah row lock.
-    const debited = await tx.wallet.updateMany({
-      where: {
-        userId: input.userId,
-        ppobBalance: { gte: input.totalAmount }
-      },
-      data: {
-        ppobBalance: { decrement: input.totalAmount }
-      }
-    });
+    // Kunci bonus menyala: Saldo PPOB dipakai dulu, kekurangannya diambil dari Saldo TapGo menurut urutan kantong
+    // (lain-lain, terkunci, deposit, dapat ditarik). Mati: perilaku lama, hanya Saldo PPOB.
+    const { env } = await import("../../../config/env.js");
+    let fundedFromWallet: BucketAmounts | null = null;
+    let fundedFromPpob = input.totalAmount;
+    if (!env.BONUS_LOCK_ENABLED) {
+      const debited = await tx.wallet.updateMany({
+        where: {
+          userId: input.userId,
+          ppobBalance: { gte: input.totalAmount }
+        },
+        data: {
+          ppobBalance: { decrement: input.totalAmount }
+        }
+      });
 
-    if (debited.count !== 1) {
-      throw new AppError(
-        "Saldo PPOB tidak mencukupi",
-        StatusCodes.BAD_REQUEST,
-        "INSUFFICIENT_PPOB_BALANCE"
-      );
+      if (debited.count !== 1) {
+        throw new AppError(
+          "Saldo PPOB tidak mencukupi",
+          StatusCodes.BAD_REQUEST,
+          "INSUFFICIENT_PPOB_BALANCE"
+        );
+      }
+    } else {
+      let applied = false;
+      for (let attempt = 0; attempt < 3 && !applied; attempt += 1) {
+        const current = await tx.wallet.findUnique({
+          where: { userId: input.userId },
+          select: { ...bucketSelect, ppobBalance: true }
+        });
+        const ppobPart = current ? Prisma.Decimal.min(current.ppobBalance, input.totalAmount) : new Prisma.Decimal(0);
+        const walletPart = input.totalAmount.minus(ppobPart);
+        if (!current || walletPart.gt(current.balance)) {
+          throw new AppError(
+            "Saldo PPOB dan Saldo TapGo tidak mencukupi",
+            StatusCodes.BAD_REQUEST,
+            "INSUFFICIENT_PPOB_BALANCE"
+          );
+        }
+        const plan = walletPart.gt(0) ? planDebit(current, walletPart, "NON_CASH_FIRST") : null;
+        const result = await tx.wallet.updateMany({
+          where: { ...sameBucketsWhere(current), ppobBalance: current.ppobBalance },
+          data: {
+            ppobBalance: { decrement: ppobPart },
+            ...(plan ? debitData(plan) : {})
+          }
+        });
+        applied = result.count === 1;
+        if (applied) {
+          fundedFromPpob = ppobPart;
+          fundedFromWallet = plan;
+        }
+      }
+      if (!applied) {
+        throw new AppError("Saldo sedang berubah, coba lagi.", StatusCodes.CONFLICT, "PPOB_BALANCE_BUSY");
+      }
     }
 
     const wallet = await tx.wallet.findUniqueOrThrow({
@@ -148,7 +191,11 @@ export class PrismaPpobRepository implements PpobRepository {
         referenceId: input.publicReference,
         metadata: {
           sku: input.product.sku,
-          category: input.product.category
+          category: input.product.category,
+          // Hanya bila sebagian dibayar dari Saldo TapGo: pengembalian dana memulihkan komposisi yang sama persis.
+          ...(fundedFromWallet
+            ? { funding: { ppob: fundedFromPpob.toString(), buckets: plansToJson(fundedFromWallet) } }
+            : {})
         }
       }
     });
@@ -321,9 +368,23 @@ export class PrismaPpobRepository implements PpobRepository {
       select: { id: true }
     });
 
+    // Pembelian yang sebagian dibayar dari Saldo TapGo: kembalikan ke kantong asalnya. Catatan tanpa `funding`
+    // (semua pembelian sebelum fitur ini) dikembalikan seluruhnya ke Saldo PPOB, seperti dulu.
+    const purchaseLedger = await tx.walletTransaction.findFirst({
+      where: { walletId: wallet.id, type: "PPOB_PURCHASE", referenceType: "PPOB_PURCHASE", referenceId: current.publicReference },
+      select: { metadata: true }
+    });
+    const funding = ((purchaseLedger?.metadata ?? {}) as { funding?: { ppob?: string; buckets?: unknown } }).funding;
+    const walletPlan = plansFromJson(funding?.buckets);
+    const refundToPpob = walletPlan
+      ? current.totalAmount.minus(sumOf(walletPlan))
+      : current.totalAmount;
     await tx.wallet.update({
       where: { id: wallet.id },
-      data: { ppobBalance: { increment: current.totalAmount } }
+      data: {
+        ppobBalance: { increment: refundToPpob },
+        ...(walletPlan ? creditData(walletPlan) : {})
+      }
     });
 
     const refundLedger = await tx.walletTransaction.create({

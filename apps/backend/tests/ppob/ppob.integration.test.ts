@@ -210,6 +210,99 @@ describe.skipIf(!runIntegration)("Stage R2.7 — PPOB foundation", () => {
     expect(await prisma.walletTransaction.count({ where: { walletId: wallet.id } })).toBe(0);
   });
 
+  describe("kunci bonus menyala: Saldo TapGo boleh dipakai untuk PPOB", () => {
+    async function withLock<T>(run: () => Promise<T>) {
+      const { env } = await import("../../src/config/env.js");
+      env.BONUS_LOCK_ENABLED = true;
+      try {
+        return await run();
+      } finally {
+        env.BONUS_LOCK_ENABLED = false;
+      }
+    }
+    async function walletWith(ppob: number, balance: number, cash: number, locked: number, deposit: number) {
+      const user = await createUser("USER");
+      await prisma.wallet.create({
+        data: {
+          userId: user.id,
+          balance: new Prisma.Decimal(balance),
+          cashBalance: new Prisma.Decimal(cash),
+          lockedBonusBalance: new Prisma.Decimal(locked),
+          depositBalance: new Prisma.Decimal(deposit),
+          ppobBalance: new Prisma.Decimal(ppob),
+          currency: "IDR"
+        }
+      });
+      return user;
+    }
+    const buy = (user: { id: string; role: UserRole }, key: string, target = "085612345678") =>
+      api("/api/v1/ppob/transactions", { method: "POST", token: tokenFor(user), idempotencyKey: key, body: { sku: "PULSA_TSEL_10", targetNumber: target } });
+    const snap = async (userId: string) => {
+      const w = await prisma.wallet.findUniqueOrThrow({ where: { userId } });
+      return [w.ppobBalance, w.balance, w.cashBalance, w.lockedBonusBalance, w.depositBalance].map((v) => Number(v));
+    };
+
+    it("Saldo PPOB dipakai dulu, kekurangan dari Saldo TapGo (terkunci sebelum deposit sebelum tarik)", async () => {
+      await withLock(async () => {
+        // total 11.500: PPOB 4.000 + Saldo TapGo 7.500 (lain-lain 1.000, terkunci 3.000, deposit 3.500)
+        const user = await walletWith(4000, 1000 + 3000 + 20000 + 30000, 30000, 3000, 20000);
+        expect((await buy(user, "lock-split-1")).status).toBe(201);
+        expect(await snap(user.id)).toEqual([0, 54000 - 7500, 30000, 0, 20000 - 3500]);
+        const ledger = await prisma.walletTransaction.findFirstOrThrow({ where: { type: "PPOB_PURCHASE" } });
+        const funding = (ledger.metadata as { funding?: { ppob: string; buckets: Record<string, string> } }).funding;
+        expect(funding?.ppob).toBe("4000");
+        expect(funding?.buckets).toEqual({ other: "1000", locked: "3000", deposit: "3500", cash: "0" });
+      });
+    });
+
+    it("saldo yang seluruhnya bonus terkunci tetap bisa membeli PPOB", async () => {
+      await withLock(async () => {
+        const user = await walletWith(0, 20000, 0, 20000, 0);
+        expect((await buy(user, "lock-only-1")).status).toBe(201);
+        expect(await snap(user.id)).toEqual([0, 20000 - 11500, 0, 8500, 0]);
+      });
+    });
+
+    it("jumlah Saldo PPOB dan Saldo TapGo tetap kurang: ditolak, tidak ada yang berubah", async () => {
+      await withLock(async () => {
+        const user = await walletWith(2000, 5000, 5000, 0, 0); // total yang dapat dipakai 7.000 < 11.500
+        const res = await buy(user, "lock-short-1");
+        expect(res.status).toBe(400);
+        expect(((await res.json()) as { code?: string }).code).toBe("INSUFFICIENT_PPOB_BALANCE");
+        expect(await snap(user.id)).toEqual([2000, 5000, 5000, 0, 0]);
+        expect(await prisma.walletTransaction.count()).toBe(0);
+        expect(await prisma.ppobTransaction.count()).toBe(0);
+      });
+    });
+
+    it("pembelian gagal di penyedia: pengembalian memulihkan SEMUA kantong persis", async () => {
+      await withLock(async () => {
+        const user = await walletWith(4000, 54000, 30000, 3000, 20000);
+        const before = await snap(user.id);
+        const res = await buy(user, "lock-refund-1", `085612${STUB_FAILURE_TARGET_SUFFIX}`);
+        expect(res.status).toBe(201);
+        expect(((await res.json()) as { data: { status: string } }).data.status).toBe("FAILED");
+        expect(await snap(user.id)).toEqual(before);
+        const types = (await prisma.walletTransaction.findMany({ orderBy: { createdAt: "asc" } })).map((r) => r.type);
+        expect(types).toEqual(["PPOB_PURCHASE", "PPOB_REFUND"]);
+      });
+    });
+
+    it("konfirmasi (inquiry): cukup bila Saldo PPOB + Saldo TapGo menutup total, dengan rincian pembagiannya", async () => {
+      await withLock(async () => {
+        const user = await walletWith(4000, 10000, 10000, 0, 0);
+        const res = await api("/api/v1/ppob/orders/inquiry", { method: "POST", token: tokenFor(user), body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" } });
+        const body = (await res.json()) as { data: { payment: { sufficient: boolean; benefitAmount: unknown; balanceAmount: unknown } } };
+        expect(body.data.payment.sufficient).toBe(true);
+        expect(Number(body.data.payment.benefitAmount)).toBe(4000);
+        expect(Number(body.data.payment.balanceAmount)).toBe(7500);
+        const poor = await walletWith(1000, 1000, 1000, 0, 0);
+        const res2 = await api("/api/v1/ppob/orders/inquiry", { method: "POST", token: tokenFor(poor), body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" } });
+        expect(((await res2.json()) as { data: { payment: { sufficient: boolean } } }).data.payment.sufficient).toBe(false);
+      });
+    });
+  });
+
   it("sku tidak dikenal -> 404, target tidak valid -> 400, tanpa menyentuh saldo", async () => {
     const user = await createUserWithPpobBalance("100000");
 

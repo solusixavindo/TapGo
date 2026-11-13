@@ -177,8 +177,19 @@ async function buildInquiryPayload(input: {
   // tercampur dengan saldo utama. Inquiry mencerminkan itu persis: cukup hanya
   // bila ppobBalance sendirian menutup total. Penting untuk top up: pelanggan
   // yang mengisi Saldo TapGo (saldo utama) tidak boleh dijanjikan bisa membayar PPOB.
-  const sufficient = ppobBalance.gte(totalAmount);
-  const benefitAmount = sufficient ? totalAmount : new Prisma.Decimal(0);
+  // Kunci bonus menyala (Formulir Kendala 02/SPT-TAPGO/XAV/XI/2026 butir 4, membalik keputusan M1): Saldo PPOB dipakai
+  // dulu, kekurangannya dari Saldo TapGo, sehingga janji ini sekarang benar-benar ditepati oleh debit sungguhan.
+  const { env: lazyEnv } = await import("../../../config/env.js");
+  const mainBalance = wallet?.balance ?? new Prisma.Decimal(0);
+  let sufficient: boolean;
+  let benefitAmount: Prisma.Decimal;
+  if (lazyEnv.BONUS_LOCK_ENABLED) {
+    benefitAmount = Prisma.Decimal.min(ppobBalance, totalAmount);
+    sufficient = totalAmount.minus(benefitAmount).lte(mainBalance);
+  } else {
+    sufficient = ppobBalance.gte(totalAmount);
+    benefitAmount = sufficient ? totalAmount : new Prisma.Decimal(0);
+  }
   const balanceAmount = totalAmount.minus(benefitAmount);
   return {
     product: {
@@ -383,9 +394,13 @@ ppobRouter.post(
     });
     const wallet = await prisma.wallet.findUnique({
       where: { userId },
-      select: { ppobBalance: true }
+      select: { balance: true, ppobBalance: true }
     });
     const ppobBalance = wallet?.ppobBalance ?? new Prisma.Decimal(0);
+    const { env: lazyEnv } = await import("../../../config/env.js");
+    const billSufficient = lazyEnv.BONUS_LOCK_ENABLED
+      ? inquiry.totalAmount.minus(Prisma.Decimal.min(ppobBalance, inquiry.totalAmount)).lte(wallet?.balance ?? new Prisma.Decimal(0))
+      : ppobBalance.gte(inquiry.totalAmount);
     res.json({
       success: true,
       data: {
@@ -404,7 +419,7 @@ ppobRouter.post(
         // sejak respons diterima, supaya HP berjam salah tidak salah menilai kedaluwarsa.
         expiresInSeconds: Math.max(0, Math.floor((inquiry.expiresAt.getTime() - Date.now()) / 1000)),
         wallet: { ppobBalance: money(ppobBalance) },
-        sufficient: ppobBalance.gte(inquiry.totalAmount)
+        sufficient: billSufficient
       }
     });
   })
