@@ -37,6 +37,42 @@ export default function WalletView({ onNavigate }: { onNavigate: (view: ViewId) 
   );
   if (!core) return null;
   const { wallet } = core;
+  // Fitur kunci bonus menyala bila server mengirim persen kunci > 0. Mati: tiga kartu seperti semula.
+  const lockOn = wallet.lockPercent > 0;
+  const otherBalance = Math.max(0, wallet.balance - wallet.cashBalance - wallet.lockedBonusBalance - wallet.depositBalance);
+  const balanceCards: Array<{ label: string; value: number; hint: string; strong?: boolean; id: string }> = lockOn
+    ? [
+        { id: "withdrawable", label: "Saldo dapat ditarik", value: wallet.cashBalance, hint: `Komisi dan ${100 - wallet.lockPercent}% dari tiap bonus`, strong: true },
+        {
+          id: "locked",
+          label: "Bonus terkunci",
+          value: wallet.lockedBonusBalance,
+          hint: `${wallet.lockPercent}% dari tiap bonus. Boleh dipakai untuk perjalanan dan PPOB, tidak dapat ditarik`
+        },
+        {
+          id: "deposit",
+          label: "Deposit",
+          value: wallet.depositBalance,
+          hint: wallet.depositRules?.enabled
+            ? `Isi saldo Anda. Dapat ditarik kembali, biaya ${formatRupiah(wallet.depositRules.fee)}`
+            : "Isi saldo Anda"
+        },
+        { id: "ppob", label: "Saldo PPOB", value: wallet.ppobBalance, hint: "Dipakai lebih dulu untuk pulsa, tagihan, dan layanan digital" },
+        {
+          id: "total",
+          label: "Saldo TapGo total",
+          value: wallet.balance,
+          hint:
+            otherBalance > 0
+              ? `Termasuk ${formatRupiah(otherBalance)} saldo lain (transfer masuk, pengembalian dana), dapat dipakai tapi tidak dapat ditarik`
+              : "Gabungan saldo di atas (tanpa Saldo PPOB)"
+        }
+      ]
+    : [
+        { id: "withdrawable", label: "Saldo dapat ditarik", value: wallet.cashBalance, hint: "Komisi dan bonus tunai", strong: true },
+        { id: "ppob", label: "Saldo PPOB", value: wallet.ppobBalance, hint: "Untuk pulsa, tagihan, dan layanan digital" },
+        { id: "total", label: "Saldo total", value: wallet.balance, hint: "Gabungan seluruh saldo" }
+      ];
 
   const visible = list.items.filter((item) =>
     filter === "all" ? true : filter === "in" ? item.amount > 0 : item.amount < 0
@@ -61,13 +97,9 @@ export default function WalletView({ onNavigate }: { onNavigate: (view: ViewId) 
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        {[
-          { label: "Saldo dapat ditarik", value: wallet.cashBalance, hint: "Komisi dan bonus tunai", strong: true },
-          { label: "Saldo PPOB", value: wallet.ppobBalance, hint: "Untuk pulsa, tagihan, dan layanan digital" },
-          { label: "Saldo total", value: wallet.balance, hint: "Gabungan seluruh saldo" }
-        ].map((item) => (
-          <Card key={item.label} as="div" className="p-5">
+      <div className={`grid gap-4 sm:grid-cols-2 ${balanceCards.length > 3 ? "lg:grid-cols-3" : "sm:grid-cols-3"}`} data-testid="wallet-cards">
+        {balanceCards.map((item) => (
+          <Card key={item.label} as="div" className="p-5" testId={`wallet-card-${item.id}`}>
             <p className="text-[11px] font-bold uppercase tracking-wider themed-text-muted">{item.label}</p>
             <p
               className={`m-num mt-2 text-2xl font-black ${item.strong ? "text-[var(--themed-accent-gold)]" : "themed-text"}`}

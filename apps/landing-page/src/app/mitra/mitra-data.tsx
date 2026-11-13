@@ -47,7 +47,7 @@ type MitraData = {
     accountNumber: string;
     accountHolderName: string;
   }) => Promise<void>;
-  withdraw: (input: { amount: number; password: string; notes?: string }) => Promise<Withdrawal>;
+  withdraw: (input: { amount: number; password: string; notes?: string; source?: "CASH" | "DEPOSIT" }) => Promise<Withdrawal>;
 };
 
 const MitraContext = createContext<MitraData | null>(null);
@@ -129,8 +129,9 @@ export function MitraDataProvider({
         const created: Withdrawal = {
           id: `preview-${Date.now()}`,
           amount: input.amount,
-          fee: 0,
-          finalAmount: input.amount,
+          fee: input.source === "DEPOSIT" ? 2000 : 0,
+          finalAmount: input.source === "DEPOSIT" ? input.amount - 2000 : input.amount,
+          source: input.source === "DEPOSIT" ? "DEPOSIT" : "CASH",
           status: "PENDING",
           bankName: PREVIEW_BANK.bankName,
           accountNumber: PREVIEW_BANK.accountNumber,
@@ -144,11 +145,18 @@ export function MitraDataProvider({
           current
             ? {
                 ...current,
-                wallet: {
-                  ...current.wallet,
-                  cashBalance: current.wallet.cashBalance - input.amount,
-                  balance: current.wallet.balance - input.amount
-                },
+                wallet:
+                  input.source === "DEPOSIT"
+                    ? {
+                        ...current.wallet,
+                        depositBalance: current.wallet.depositBalance - input.amount,
+                        balance: current.wallet.balance - input.amount
+                      }
+                    : {
+                        ...current.wallet,
+                        cashBalance: current.wallet.cashBalance - input.amount,
+                        balance: current.wallet.balance - input.amount
+                      },
                 withdrawals: [created, ...current.withdrawals]
               }
             : current

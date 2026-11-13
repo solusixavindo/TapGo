@@ -184,10 +184,27 @@ export type Profile = {
   referralCode: string;
 };
 
+/** Aturan penarikan deposit dari server. Server lama (tanpa fitur kunci bonus) tidak mengirimnya. */
+export type DepositRules = {
+  enabled: boolean;
+  fee: number;
+  minimum: number;
+  holdHours: number;
+  /** Terisi bila masa tunggu sejak top up terakhir masih berjalan (ISO). */
+  availableAt: string | null;
+};
+
 export type WalletBalance = {
   balance: number;
   cashBalance: number;
   ppobBalance: number;
+  /** Bonus terkunci: dapat dipakai (perjalanan, PPOB), tidak dapat ditarik. 0 bila fitur belum menyala. */
+  lockedBonusBalance: number;
+  /** Deposit pribadi (top up): dapat ditarik kembali dengan biaya tetap. */
+  depositBalance: number;
+  /** Persen bonus yang dikunci; 0 = fitur belum menyala. */
+  lockPercent: number;
+  depositRules: DepositRules | null;
 };
 
 export type WalletTransaction = {
@@ -212,6 +229,8 @@ export type Withdrawal = {
   amount: number;
   fee: number;
   finalAmount: number;
+  /** DEPOSIT = pengembalian deposit pribadi; CASH = bonus/komisi. */
+  source: "CASH" | "DEPOSIT";
   status: WithdrawalStatus;
   bankName: string;
   accountNumber: string;
@@ -297,10 +316,24 @@ export async function getProfile(): Promise<Profile> {
 
 export async function getWallet(): Promise<WalletBalance> {
   const raw = await authed<Record<string, unknown>>("/web/wallet");
+  const rules = raw.depositWithdrawal as Record<string, unknown> | undefined;
   return {
     balance: num(raw.balance),
     cashBalance: num(raw.cashBalance),
-    ppobBalance: num(raw.ppobBalance)
+    ppobBalance: num(raw.ppobBalance),
+    lockedBonusBalance: num(raw.lockedBonusBalance),
+    depositBalance: num(raw.depositBalance),
+    lockPercent: num(raw.lockPercent),
+    depositRules:
+      rules && typeof rules === "object"
+        ? {
+            enabled: rules.enabled === true,
+            fee: num(rules.fee),
+            minimum: num(rules.minimum),
+            holdHours: num(rules.holdHours),
+            availableAt: typeof rules.availableAt === "string" && rules.availableAt ? rules.availableAt : null
+          }
+        : null
   };
 }
 
@@ -358,6 +391,8 @@ export async function requestWithdrawal(input: {
   amount: number;
   password: string;
   notes?: string;
+  /** Bawaan CASH. DEPOSIT = penarikan deposit pribadi. */
+  source?: "CASH" | "DEPOSIT";
 }): Promise<Withdrawal> {
   const raw = await authed<Record<string, unknown>>("/web/wallet/withdrawals", {
     method: "POST",
@@ -373,6 +408,7 @@ function toWithdrawal(item: Record<string, unknown>): Withdrawal {
     amount,
     fee: num(item.fee),
     finalAmount: item.finalAmount === undefined ? amount : num(item.finalAmount),
+    source: item.source === "DEPOSIT" ? "DEPOSIT" : "CASH",
     status: (str(item.status) || "PENDING") as WithdrawalStatus,
     bankName: str(item.bankName),
     accountNumber: str(item.accountNumber),

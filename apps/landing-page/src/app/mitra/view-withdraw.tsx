@@ -56,6 +56,13 @@ function errorMessage(caught: unknown): string {
         return "Simpan rekening bank terlebih dahulu.";
       case "INSUFFICIENT_BALANCE":
         return "Saldo yang dapat ditarik tidak mencukupi.";
+      case "DEPOSIT_WITHDRAWAL_HOLD":
+      case "DEPOSIT_WITHDRAWAL_CASH_RIDE_ACTIVE":
+      case "DEPOSIT_WITHDRAWAL_MINIMUM_NOT_MET":
+      case "DEPOSIT_WITHDRAWAL_AMOUNT_INVALID":
+        return caught.message; // pesan server sudah berbahasa Indonesia dan memuat jam/angka yang tepat
+      case "DEPOSIT_WITHDRAWAL_DISABLED":
+        return "Penarikan deposit belum dibuka.";
       case "WITHDRAWAL_RATE_LIMITED":
       case "RATE_LIMITED":
         return "Terlalu banyak percobaan. Tunggu beberapa menit lalu coba lagi.";
@@ -269,13 +276,18 @@ function History({ items }: { items: Withdrawal[] }) {
                     <p className="text-xs themed-text-muted">
                       {item.bankName} · {maskAccount(item.accountNumber)} · {formatDate(item.requestedAt)}
                     </p>
+                    {item.source === "DEPOSIT" ? (
+                      <p className="mt-1 text-xs themed-text-muted" data-testid="history-deposit">
+                        Pengembalian deposit · biaya {formatRupiah(item.fee)} · diterima {formatRupiah(item.finalAmount)}
+                      </p>
+                    ) : null}
                   </div>
                   <Badge tone={meta.tone}>{meta.label}</Badge>
                 </div>
                 <Timeline item={item} />
                 {item.status === "REJECTED" && item.note ? (
                   <p className="mt-3 rounded-lg m-notice-red border px-3 py-2 text-xs leading-5 themed-text-secondary">
-                    Alasan: {item.note}. Saldo sudah dikembalikan ke dompet Anda.
+                    Alasan: {item.note}. {item.source === "DEPOSIT" ? "Dana sudah dikembalikan ke deposit Anda." : "Saldo sudah dikembalikan ke dompet Anda."}
                   </p>
                 ) : null}
               </li>
@@ -305,21 +317,33 @@ export default function WithdrawView() {
     return () => window.clearInterval(timer);
   }, []);
 
+  const [source, setSource] = useState<"CASH" | "DEPOSIT">("CASH");
   const amount = Number(amountText || "0");
   const bank = core?.bank ?? null;
   const cooldownMs = useMemo(() => (bank ? bankCooldownRemaining(bank.updatedAt, now) : 0), [bank, now]);
   if (!core) return null;
 
-  const available = core.wallet.cashBalance;
+  const rules = core.wallet.depositRules;
+  // Pilihan sumber hanya muncul bila fitur menyala dan ada deposit yang dapat ditarik.
+  const depositOffered = Boolean(rules?.enabled) && core.wallet.depositBalance > 0;
+  const fromDeposit = depositOffered && source === "DEPOSIT";
+  const available = fromDeposit ? core.wallet.depositBalance : core.wallet.cashBalance;
+  const minimum = fromDeposit ? (rules?.minimum ?? MIN_WITHDRAWAL) : MIN_WITHDRAWAL;
+  const fee = fromDeposit ? (rules?.fee ?? 0) : 0;
+  const received = Math.max(0, amount - fee);
+  const holdUntil = fromDeposit && rules?.availableAt ? Date.parse(rules.availableAt) : Number.NaN;
+  const holdActive = Number.isFinite(holdUntil) && holdUntil > now;
   const closed = withdrawalOpen === false;
-  const blocked = closed || !bank || cooldownMs > 0;
+  const blocked = closed || !bank || cooldownMs > 0 || holdActive;
 
   function validate(): string {
     if (!bank) return "Simpan rekening bank terlebih dahulu.";
     if (cooldownMs > 0) return `Rekening baru dapat dipakai ${formatDuration(cooldownMs)} lagi.`;
+    if (holdActive) return `Deposit dapat ditarik mulai ${formatDateTime(new Date(holdUntil).toISOString())}.`;
     if (!amount) return "Masukkan jumlah penarikan.";
-    if (amount < MIN_WITHDRAWAL) return `Penarikan minimum ${formatRupiah(MIN_WITHDRAWAL)}.`;
-    if (amount > available) return "Jumlah melebihi saldo yang dapat ditarik.";
+    if (amount < minimum) return `Penarikan minimum ${formatRupiah(minimum)}.`;
+    if (amount > available) return fromDeposit ? "Jumlah melebihi deposit Anda." : "Jumlah melebihi saldo yang dapat ditarik.";
+    if (amount <= fee) return "Jumlah harus lebih besar dari biaya penarikan.";
     if (!password) return "Masukkan password akun Anda untuk konfirmasi.";
     return "";
   }
@@ -337,7 +361,7 @@ export default function WithdrawView() {
     setBusy(true);
     setError("");
     try {
-      await withdraw({ amount, password });
+      await withdraw({ amount, password, ...(fromDeposit ? { source: "DEPOSIT" as const } : {}) });
       setConfirming(false);
       setAmountText("");
       setPassword("");
@@ -371,10 +395,63 @@ export default function WithdrawView() {
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="space-y-6 lg:col-span-3">
           <Card>
-            <CardHeader title="Ajukan penarikan" subtitle="Minimum Rp 50.000 · tanpa biaya penarikan" />
+            <CardHeader
+              title="Ajukan penarikan"
+              subtitle={
+                fromDeposit
+                  ? `Minimum ${formatRupiah(minimum)} · biaya penarikan ${formatRupiah(fee)}`
+                  : "Minimum Rp 50.000 · tanpa biaya penarikan"
+              }
+            />
             <form onSubmit={onSubmit} className="space-y-5 p-5 md:p-6" noValidate>
+              {depositOffered ? (
+                <div role="radiogroup" aria-label="Sumber dana" className="grid gap-2 sm:grid-cols-2" data-testid="withdraw-source">
+                  {(
+                    [
+                      { id: "CASH", label: "Saldo dapat ditarik", value: core.wallet.cashBalance, hint: "Komisi dan bonus" },
+                      { id: "DEPOSIT", label: "Deposit saya", value: core.wallet.depositBalance, hint: `Biaya ${formatRupiah(rules?.fee ?? 0)}` }
+                    ] as const
+                  ).map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={source === option.id}
+                      data-testid={`withdraw-source-${option.id.toLowerCase()}`}
+                      onClick={() => {
+                        setSource(option.id);
+                        setAmountText("");
+                        setFieldError("");
+                      }}
+                      className={`rounded-xl border px-4 py-3 text-left transition ${
+                        source === option.id ? "border-brand-gold m-tone-gold" : "themed-border themed-fill hover:bg-[var(--themed-fill-2)]"
+                      }`}
+                    >
+                      <span className="block text-[11px] font-bold uppercase tracking-wider themed-text-muted">{option.label}</span>
+                      <span className="m-num mt-1 block text-lg font-black themed-text">{formatRupiah(option.value)}</span>
+                      <span className="block text-xs themed-text-muted">{option.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              {fromDeposit ? (
+                <Notice tone="blue" title="Penarikan deposit">
+                  Deposit adalah uang yang Anda isi sendiri. Bonus terkunci tidak ikut. Biaya {formatRupiah(fee)} dipotong dari jumlah
+                  yang ditarik, dan deposit baru dapat ditarik {rules?.holdHours} jam setelah top up terakhir.
+                </Notice>
+              ) : null}
+              {holdActive ? (
+                <Notice tone="amber" title="Deposit belum dapat ditarik">
+                  Top up terakhir Anda masih dalam masa tunggu. Deposit dapat ditarik mulai{" "}
+                  <strong>{formatDateTime(new Date(holdUntil).toISOString())}</strong>.
+                </Notice>
+              ) : null}
+
               <div className="rounded-xl themed-fill px-4 py-3">
-                <p className="text-[11px] font-bold uppercase tracking-wider themed-text-muted">Saldo dapat ditarik</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider themed-text-muted">
+                  {fromDeposit ? "Deposit dapat ditarik" : "Saldo dapat ditarik"}
+                </p>
                 <p className="m-num mt-1 text-2xl font-black text-[var(--themed-accent-gold)]">{formatRupiah(available)}</p>
               </div>
 
@@ -451,11 +528,11 @@ export default function WithdrawView() {
                 </div>
                 <div className="flex justify-between">
                   <dt className="themed-text-muted">Biaya penarikan</dt>
-                  <dd className="m-num font-bold themed-text">Rp 0</dd>
+                  <dd className="m-num font-bold themed-text" data-testid="withdraw-fee">{formatRupiah(fee)}</dd>
                 </div>
                 <div className="flex justify-between border-t themed-border pt-2">
                   <dt className="font-bold themed-text">Diterima di rekening</dt>
-                  <dd className="m-num font-black themed-text">{formatRupiah(amount)}</dd>
+                  <dd className="m-num font-black themed-text" data-testid="withdraw-received">{formatRupiah(received)}</dd>
                 </div>
               </dl>
 
@@ -486,9 +563,25 @@ export default function WithdrawView() {
       <Modal open={confirming} title="Konfirmasi penarikan" onClose={() => (busy ? undefined : setConfirming(false))}>
         <dl className="space-y-3 text-sm">
           <div className="flex justify-between gap-4">
+            <dt className="themed-text-muted">Sumber dana</dt>
+            <dd className="text-right font-bold themed-text">{fromDeposit ? "Deposit" : "Saldo dapat ditarik"}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
             <dt className="themed-text-muted">Jumlah</dt>
             <dd className="m-num font-black themed-text">{formatRupiah(amount)}</dd>
           </div>
+          {fromDeposit ? (
+            <>
+              <div className="flex justify-between gap-4">
+                <dt className="themed-text-muted">Biaya</dt>
+                <dd className="m-num font-bold themed-text">{formatRupiah(fee)}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="font-bold themed-text">Diterima di rekening</dt>
+                <dd className="m-num font-black themed-text">{formatRupiah(received)}</dd>
+              </div>
+            </>
+          ) : null}
           <div className="flex justify-between gap-4">
             <dt className="themed-text-muted">Bank</dt>
             <dd className="text-right font-bold themed-text">{bank?.bankName}</dd>

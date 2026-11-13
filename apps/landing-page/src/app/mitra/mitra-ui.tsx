@@ -122,13 +122,20 @@ export const secondaryButtonClass =
 export function Card({
   children,
   className = "",
-  as: Tag = "section"
+  as: Tag = "section",
+  testId
 }: {
   children: ReactNode;
   className?: string;
   as?: "section" | "div" | "article";
+  /** Diteruskan sebagai data-testid (untuk pemeriksaan tampilan). */
+  testId?: string;
 }) {
-  return <Tag className={`themed-glass rounded-2xl ${className}`}>{children}</Tag>;
+  return (
+    <Tag className={`themed-glass rounded-2xl ${className}`} {...(testId ? { "data-testid": testId } : {})}>
+      {children}
+    </Tag>
+  );
 }
 
 export function CardHeader({

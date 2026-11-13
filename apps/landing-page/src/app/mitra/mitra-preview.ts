@@ -22,9 +22,14 @@ export const PREVIEW_PROFILE: Profile = {
 };
 
 export const PREVIEW_WALLET: WalletBalance = {
+  // balance = tarik 875.000 + terkunci 200.000 + deposit 150.000 + lain-lain 100.000
   balance: 1_325_000,
-  cashBalance: 1_075_000,
-  ppobBalance: 250_000
+  cashBalance: 875_000,
+  ppobBalance: 250_000,
+  lockedBonusBalance: 200_000,
+  depositBalance: 150_000,
+  lockPercent: 20,
+  depositRules: { enabled: true, fee: 2_000, minimum: 50_000, holdHours: 24, availableAt: null }
 };
 
 export const PREVIEW_BANK: BankAccount = {
@@ -87,17 +92,17 @@ export const PREVIEW_TRANSACTIONS: WalletTransaction[] = [
 
 export const PREVIEW_WITHDRAWALS: Withdrawal[] = [
   {
-    id: "w1", amount: 500_000, fee: 0, finalAmount: 500_000, status: "APPROVED",
+    id: "w1", amount: 500_000, fee: 0, finalAmount: 500_000, source: "CASH", status: "APPROVED",
     bankName: "Bank Central Asia (BCA)", accountNumber: "8830123456",
     requestedAt: ago(5), approvedAt: ago(4), paidAt: null, rejectedAt: null, note: ""
   },
   {
-    id: "w2", amount: 1_000_000, fee: 0, finalAmount: 1_000_000, status: "PAID",
+    id: "w2", amount: 1_000_000, fee: 0, finalAmount: 1_000_000, source: "CASH", status: "PAID",
     bankName: "Bank Central Asia (BCA)", accountNumber: "8830123456",
     requestedAt: ago(34), approvedAt: ago(33), paidAt: ago(33), rejectedAt: null, note: ""
   },
   {
-    id: "w3", amount: 250_000, fee: 0, finalAmount: 250_000, status: "REJECTED",
+    id: "w3", amount: 250_000, fee: 2_000, finalAmount: 248_000, source: "DEPOSIT", status: "REJECTED",
     bankName: "Bank Central Asia (BCA)", accountNumber: "8830123456",
     requestedAt: ago(41), approvedAt: null, paidAt: null, rejectedAt: ago(40),
     note: "Nama pemilik rekening tidak sesuai dengan data akun."
