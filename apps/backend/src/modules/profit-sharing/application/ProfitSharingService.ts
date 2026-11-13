@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../../core/errors/AppError.js";
+import { bonusLockMetadata, bonusWalletCreate, bonusWalletUpdate, splitBonusForCredit } from "../../wallets/application/bonusLock.js";
 
 export class ProfitSharingService {
   constructor(private readonly prisma: PrismaClient) {}
@@ -304,6 +305,7 @@ export class ProfitSharingService {
       select: { id: true }
     });
 
+    const split = splitBonusForCredit(input.amount);
     const walletTransaction = await tx.walletTransaction.create({
       data: {
         walletId: wallet.id,
@@ -314,7 +316,8 @@ export class ProfitSharingService {
         metadata: {
           category: input.category,
           periodMonth: input.periodMonth,
-          periodYear: input.periodYear
+          periodYear: input.periodYear,
+          ...bonusLockMetadata(split)
         }
       },
       select: { id: true }
@@ -355,14 +358,7 @@ export class ProfitSharingService {
 
     await tx.wallet.update({
       where: { id: wallet.id },
-      data: {
-        cashBalance: {
-          increment: input.amount
-        },
-        balance: {
-          increment: input.amount
-        }
-      }
+      data: bonusWalletUpdate(split)
     });
   }
 

@@ -145,7 +145,8 @@ export function bonusCreditData(split: { cash: Decimalish; locked: Decimalish })
   return {
     balance: { increment: split.cash.plus(split.locked) },
     cashBalance: { increment: split.cash },
-    lockedBonusBalance: { increment: split.locked },
+    // Hanya bila ada bagian terkunci: dengan bendera mati pembaruan identik dengan perilaku lama.
+    ...(split.locked.gt(0) ? { lockedBonusBalance: { increment: split.locked } } : {}),
   };
 }
 

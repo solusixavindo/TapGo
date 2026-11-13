@@ -169,7 +169,12 @@ describe("kolom Prisma dan penyimpanan rencana", () => {
     const data = bonusCreditData(splitBonus(D(100000), { enabled: true, percent: 20 }));
     expect(data.balance.increment.toString()).toBe("100000");
     expect(data.cashBalance.increment.toString()).toBe("80000");
-    expect(data.lockedBonusBalance.increment.toString()).toBe("20000");
+    expect(data.lockedBonusBalance?.increment.toString()).toBe("20000");
+    // Tanpa bagian terkunci, kolom itu tidak disentuh sama sekali (pembaruan identik dengan perilaku lama).
+    expect(bonusCreditData(splitBonus(D(100000), { enabled: false, percent: 20 }))).toEqual({
+      balance: { increment: D(100000) },
+      cashBalance: { increment: D(100000) },
+    });
   });
 
   it("rencana dapat disimpan dan dibaca kembali; data rusak atau lama menghasilkan null", () => {

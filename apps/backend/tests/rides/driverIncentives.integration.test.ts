@@ -698,6 +698,57 @@ describeIntegration("insentif harian driver", () => {
       expect(await balanceOf(driver.user.id)).toBe(30000);
     });
 
+    it("kunci bonus MENYALA: 20% insentif terkunci saat cair; tarik kembali membalik persis pembagian itu", async () => {
+      const { env } = await import("../../src/config/env.js");
+      env.BONUS_LOCK_ENABLED = true;
+      try {
+        const driver = await createDriverWithVehicle();
+        await makeRule();
+        await addTrips(driver, 3);
+        await service().evaluateForDriver(driver.profile.id, driver.user.id, NOW);
+        await service().settleDueClaims(NOW);
+        const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: driver.user.id } });
+        expect(Number(wallet.balance)).toBe(20000);
+        expect(Number(wallet.cashBalance)).toBe(16000);
+        expect(Number(wallet.lockedBonusBalance)).toBe(4000);
+        expect(Number(wallet.depositBalance)).toBe(0);
+        const ledger = await prisma.walletTransaction.findFirstOrThrow({ where: { walletId: wallet.id, type: "INCENTIVE_BONUS" } });
+        expect(Number(ledger.amount)).toBe(20000);
+        expect((ledger.metadata as { lockedBonus?: string }).lockedBonus).toBe("4000");
+
+        const [claim] = await claims();
+        const boss = tokenFor(await admin("SUPER_ADMIN"));
+        // Bagian terkunci sudah terpakai: tarik kembali gagal, tidak ada uang yang bergerak.
+        await prisma.wallet.update({ where: { userId: driver.user.id }, data: { lockedBonusBalance: 0, balance: 16000 } });
+        const blocked = await send(boss, "POST", `/claims/${claim!.id}/reverse`, { note: "Terbukti curang" });
+        expect(blocked.status).toBe(409);
+        expect(blocked.body.code).toBe("INCENTIVE_REVERSE_INSUFFICIENT");
+        const unchanged = await prisma.wallet.findUniqueOrThrow({ where: { userId: driver.user.id } });
+        expect([Number(unchanged.balance), Number(unchanged.cashBalance), Number(unchanged.lockedBonusBalance)]).toEqual([16000, 16000, 0]);
+
+        // Dipulihkan: tarik kembali memakai 16.000 dari yang dapat ditarik dan 4.000 dari yang terkunci.
+        await prisma.wallet.update({ where: { userId: driver.user.id }, data: { lockedBonusBalance: 4000, balance: 20000 } });
+        const done = await send(boss, "POST", `/claims/${claim!.id}/reverse`, { note: "Terbukti curang" });
+        expect(done.body.data.status).toBe("REVERSED");
+        const after = await prisma.wallet.findUniqueOrThrow({ where: { userId: driver.user.id } });
+        expect([Number(after.balance), Number(after.cashBalance), Number(after.lockedBonusBalance)]).toEqual([0, 0, 0]);
+      } finally {
+        env.BONUS_LOCK_ENABLED = false;
+      }
+    });
+
+    it("kunci bonus MATI: insentif tetap 100% dapat ditarik dan tanpa penanda di buku besar (perilaku lama)", async () => {
+      const driver = await createDriverWithVehicle();
+      await makeRule();
+      await addTrips(driver, 3);
+      await service().evaluateForDriver(driver.profile.id, driver.user.id, NOW);
+      await service().settleDueClaims(NOW);
+      const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: driver.user.id } });
+      expect([Number(wallet.balance), Number(wallet.cashBalance), Number(wallet.lockedBonusBalance)]).toEqual([20000, 20000, 0]);
+      const ledger = await prisma.walletTransaction.findFirstOrThrow({ where: { walletId: wallet.id, type: "INCENTIVE_BONUS" } });
+      expect((ledger.metadata as Record<string, unknown>).lockedBonus).toBeUndefined();
+    });
+
     it("Admin biasa dan driver ditolak pada semua aksi klaim", async () => {
       const { claim } = await reviewClaim();
       const regular = tokenFor(await admin("ADMIN"));

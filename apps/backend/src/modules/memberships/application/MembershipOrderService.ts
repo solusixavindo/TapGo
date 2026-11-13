@@ -12,6 +12,7 @@ import { lazyPushNotifier } from "../../notifications/application/pushServiceFac
 import { accountPushMessages, pushQuietly } from "../../notifications/application/accountNotifications.js";
 import type { PushNotifier } from "../../notifications/application/rideNotifications.js";
 import { isAdminRole } from "../../../core/security/roleHierarchy.js";
+import { bonusLockMetadata, bonusWalletCreate, bonusWalletUpdate, splitBonusForCredit } from "../../wallets/application/bonusLock.js";
 
 type PrismaTransaction = Prisma.TransactionClient;
 
@@ -1179,6 +1180,7 @@ export class MembershipOrderService {
       select: { id: true }
     });
 
+    const split = splitBonusForCredit(amount);
     const walletTransaction = await tx.walletTransaction.create({
       data: {
         walletId: wallet.id,
@@ -1195,7 +1197,8 @@ export class MembershipOrderService {
           referralId: referral.id,
           sponsorTier,
           rate: isBasicSponsor ? null : "8.00",
-          rule: isBasicSponsor ? "basic_sponsor_paid_membership_fixed_bonus" : "paid_membership_direct_sponsor_8_percent"
+          rule: isBasicSponsor ? "basic_sponsor_paid_membership_fixed_bonus" : "paid_membership_direct_sponsor_8_percent",
+          ...bonusLockMetadata(split)
         }
       },
       select: { id: true }
@@ -1227,14 +1230,7 @@ export class MembershipOrderService {
 
     await tx.wallet.update({
       where: { id: wallet.id },
-      data: {
-        cashBalance: {
-          increment: amount
-        },
-        balance: {
-          increment: amount
-        }
-      }
+      data: bonusWalletUpdate(split)
     });
   }
 
@@ -1311,6 +1307,7 @@ export class MembershipOrderService {
         select: { id: true }
       });
 
+      const split = splitBonusForCredit(amount);
       const walletTransaction = await tx.walletTransaction.create({
         data: {
           walletId: wallet.id,
@@ -1327,7 +1324,8 @@ export class MembershipOrderService {
             level: upline.level,
             rate: rate.toFixed(2),
             uplineTier,
-            unlockedLevel
+            unlockedLevel,
+            ...bonusLockMetadata(split)
           }
         },
         select: { id: true }
@@ -1359,14 +1357,7 @@ export class MembershipOrderService {
 
       await tx.wallet.update({
         where: { id: wallet.id },
-        data: {
-          cashBalance: {
-            increment: amount
-          },
-          balance: {
-            increment: amount
-          }
-        }
+        data: bonusWalletUpdate(split)
       });
     }
   }

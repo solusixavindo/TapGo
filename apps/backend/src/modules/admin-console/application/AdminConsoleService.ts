@@ -28,6 +28,7 @@ import { env } from "../../../config/env.js";
 import { AppError } from "../../../core/errors/AppError.js";
 import { hashPassword } from "../../../core/security/passwordHasher.js";
 import { normalizePhoneNumber, phoneLookupVariants } from "../../../core/security/phone.js";
+import { bonusLockMetadata, bonusWalletCreate, bonusWalletUpdate, splitBonusForCredit } from "../../wallets/application/bonusLock.js";
 
 type PageInput = {
   page: number;
@@ -865,16 +866,13 @@ export class AdminConsoleService {
         });
       }
 
+      const split = splitBonusForCredit(reward.amount);
       const wallet = await tx.wallet.upsert({
         where: { userId: reward.userId },
-        update: {
-          balance: { increment: reward.amount },
-          cashBalance: { increment: reward.amount }
-        },
+        update: bonusWalletUpdate(split),
         create: {
           userId: reward.userId,
-          balance: reward.amount,
-          cashBalance: reward.amount,
+          ...bonusWalletCreate(split),
           ppobBalance: new Prisma.Decimal(0),
           currency: "IDR"
         }
@@ -890,7 +888,8 @@ export class AdminConsoleService {
           metadata: {
             rewardTransactionId: reward.id,
             threshold: reward.threshold,
-            directSilverCount: reward.directSilverCount
+            directSilverCount: reward.directSilverCount,
+            ...bonusLockMetadata(split)
           }
         }
       });

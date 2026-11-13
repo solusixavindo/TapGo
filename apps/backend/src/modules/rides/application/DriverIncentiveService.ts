@@ -3,6 +3,7 @@ import { StatusCodes } from "http-status-codes";
 import { env } from "../../../config/env.js";
 import { AppError } from "../../../core/errors/AppError.js";
 import { haversineMeters } from "../infrastructure/LocalDistanceAdapter.js";
+import { bonusLockMetadata, bonusWalletUpdate, splitBonusForCredit } from "../../wallets/application/bonusLock.js";
 
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -260,9 +261,29 @@ export class DriverIncentiveService {
       const claim = await tx.driverIncentiveClaim.findUnique({ where: { id: claimId } });
       if (!claim) throw new AppError("Klaim tidak ditemukan", StatusCodes.NOT_FOUND, "INCENTIVE_CLAIM_NOT_FOUND");
       if (claim.status !== "PAID") throw this.claimNotActionable();
+      // Bonus yang dulu dikunci sebagian: tarik kembali persis pembagian yang sama (bagian terkunci dari kantong
+      // terkunci, sisanya dari saldo yang dapat ditarik). Catatan lama tanpa penanda dibalik seluruhnya dari yang
+      // dapat ditarik, seperti sebelumnya.
+      const creditedLedger = await tx.walletTransaction.findFirst({
+        where: { type: "INCENTIVE_BONUS", referenceType: "DRIVER_INCENTIVE", referenceId: claim.id },
+        select: { metadata: true }
+      });
+      const lockedPart = new Prisma.Decimal(
+        String(((creditedLedger?.metadata ?? {}) as { lockedBonus?: string }).lockedBonus ?? "0")
+      );
+      const cashPart = claim.amount.minus(lockedPart);
       const debited = await tx.wallet.updateMany({
-        where: { userId: claim.userId, cashBalance: { gte: claim.amount }, balance: { gte: claim.amount } },
-        data: { cashBalance: { decrement: claim.amount }, balance: { decrement: claim.amount } }
+        where: {
+          userId: claim.userId,
+          cashBalance: { gte: cashPart },
+          lockedBonusBalance: { gte: lockedPart },
+          balance: { gte: claim.amount }
+        },
+        data: {
+          cashBalance: { decrement: cashPart },
+          balance: { decrement: claim.amount },
+          ...(lockedPart.gt(0) ? { lockedBonusBalance: { decrement: lockedPart } } : {})
+        }
       });
       if (debited.count !== 1) {
         throw new AppError(
@@ -651,9 +672,10 @@ export class DriverIncentiveService {
         create: { userId: claim.userId, balance: new Prisma.Decimal(0), cashBalance: new Prisma.Decimal(0), ppobBalance: new Prisma.Decimal(0), currency: "IDR" },
         select: { id: true }
       });
+      const split = splitBonusForCredit(claim.amount);
       await tx.wallet.update({
         where: { id: wallet.id },
-        data: { cashBalance: { increment: claim.amount }, balance: { increment: claim.amount } }
+        data: bonusWalletUpdate(split)
       });
       await tx.walletTransaction.create({
         data: {
@@ -662,7 +684,7 @@ export class DriverIncentiveService {
           amount: claim.amount,
           referenceType: "DRIVER_INCENTIVE",
           referenceId: claim.id,
-          metadata: { ruleId: claim.ruleId, ruleName: probe.rule.name, dayKey: claim.dayKey, tripCount: result.count }
+          metadata: { ruleId: claim.ruleId, ruleName: probe.rule.name, dayKey: claim.dayKey, tripCount: result.count, ...bonusLockMetadata(split) }
         }
       });
       const paid = await tx.driverIncentiveClaim.update({

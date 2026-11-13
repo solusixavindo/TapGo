@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from "@prisma/client";
+import { bonusLockMetadata, bonusWalletUpdate, splitBonusForCredit } from "../../wallets/application/bonusLock.js";
 import {
   CommissionLedgerItem,
   CommissionDistribution,
@@ -228,6 +229,7 @@ export class PrismaReferralRepository implements ReferralRepository {
       select: { id: true }
     });
 
+    const split = splitBonusForCredit(input.amount);
     const walletTransaction = await tx.walletTransaction.create({
       data: {
         walletId: wallet.id,
@@ -238,7 +240,8 @@ export class PrismaReferralRepository implements ReferralRepository {
         metadata: {
           level: input.level,
           triggerType: input.triggerType,
-          sourceUserId: input.sourceUserId
+          sourceUserId: input.sourceUserId,
+          ...bonusLockMetadata(split)
         }
       },
       select: { id: true }
@@ -264,14 +267,7 @@ export class PrismaReferralRepository implements ReferralRepository {
 
     await tx.wallet.update({
       where: { id: wallet.id },
-      data: {
-        cashBalance: {
-          increment: input.amount
-        },
-        balance: {
-          increment: input.amount
-        }
-      }
+      data: bonusWalletUpdate(split)
     });
   }
 
