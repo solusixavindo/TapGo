@@ -360,6 +360,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _passwordFocusNode = FocusNode();
   bool _isRegister = false;
   bool _isSubmitting = false;
+  // Password tersembunyi bawaan; pengguna bisa melihatnya agar tidak salah ketik saat mendaftar.
+  bool _obscurePassword = true;
   Future<Map<String, dynamic>?>? _earlyVerificationStatus;
   int _logoTapCount = 0;
 
@@ -742,10 +744,23 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       icon: Icons.lock_rounded,
                       label: 'Password',
                       hint: 'Minimal 6 karakter',
-                      obscureText: true,
+                      obscureText: _obscurePassword,
                       validator: _passwordValidator,
                       textInputAction: TextInputAction.done,
                       onFieldSubmitted: (_) => _continueToDashboard(),
+                      suffixIcon: IconButton(
+                        key: const ValueKey('auth-password-visibility'),
+                        tooltip: _obscurePassword
+                            ? 'Tampilkan password'
+                            : 'Sembunyikan password',
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_off_rounded
+                              : Icons.visibility_rounded,
+                        ),
+                        onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword),
+                      ),
                     ),
                   ],
                 ),

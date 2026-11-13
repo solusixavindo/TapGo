@@ -2689,7 +2689,8 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> {
               const SizedBox(height: 10),
               _ProfileInfoPanel(
                 children: [
-                  const _ProfileDetailRow(label: 'Paket', value: 'Basic'),
+                  // Paket NYATA dari identitas member (mis. Platinum), bukan tulisan tetap "Basic".
+                  _ProfileDetailRow(label: 'Paket', value: profile.membership),
                   _ProfileDetailRow(label: 'Status', value: statusLabel),
                   _ProfileDetailRow(
                     label: 'Tanggal bergabung',

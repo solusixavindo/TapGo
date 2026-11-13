@@ -335,12 +335,16 @@ class _AccountHero extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        const Wrap(
+                        Wrap(
                           spacing: 8,
                           runSpacing: 8,
                           children: [
-                            _PlayStatusPill(label: 'Basic', emphasized: true),
-                            _PlayStatusPill(label: 'Aktif'),
+                            // Tingkat membership NYATA dari server (Basic/Silver/Gold/Platinum), bukan tulisan tetap.
+                            _PlayStatusPill(
+                              label: session.activePackageName,
+                              emphasized: true,
+                            ),
+                            const _PlayStatusPill(label: 'Aktif'),
                           ],
                         ),
                       ],
