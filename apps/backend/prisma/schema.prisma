@@ -172,6 +172,12 @@ enum CommissionStatus {
   REVERSED
 }
 
+/// Asal dana penarikan: `CASH` = saldo yang dapat ditarik (bonus, komisi, insentif); `DEPOSIT` = deposit pribadi.
+enum WithdrawalSource {
+  CASH
+  DEPOSIT
+}
+
 enum WithdrawalStatus {
   PENDING
   APPROVED
@@ -1031,6 +1037,11 @@ model Wallet {
   balance     Decimal  @default(0) @db.Decimal(14, 2)
   cashBalance Decimal  @default(0) @map("cash_balance") @db.Decimal(14, 2)
   ppobBalance Decimal  @default(0) @map("ppob_balance") @db.Decimal(14, 2)
+  /// Bonus membership yang dikunci (bagian `balance`, BUKAN `cashBalance`): boleh dipakai untuk perjalanan dan PPOB,
+  /// tidak boleh ditarik. Lihat docs/finance/RANCANGAN_KUNCI_BONUS_DAN_TARIK_DEPOSIT.md.
+  lockedBonusBalance Decimal @default(0) @map("locked_bonus_balance") @db.Decimal(14, 2)
+  /// Deposit pribadi (top up Saldo TapGo) yang boleh ditarik kembali (bagian `balance`).
+  depositBalance     Decimal @default(0) @map("deposit_balance") @db.Decimal(14, 2)
   currency    String   @default("IDR") @db.VarChar(8)
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -1272,6 +1283,7 @@ model Withdrawal {
   fee               Decimal          @default(0) @db.Decimal(14, 2)
   finalAmount       Decimal          @default(0) @map("final_amount") @db.Decimal(14, 2)
   status            WithdrawalStatus @default(PENDING)
+  source            WithdrawalSource @default(CASH)
   bankName          String?          @map("bank_name") @db.VarChar(80)
   accountNumber     String?          @map("account_number") @db.VarChar(40)
   accountHolderName String?          @map("account_holder_name") @db.VarChar(120)

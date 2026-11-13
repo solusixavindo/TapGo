@@ -168,6 +168,17 @@ const envSchema = z.object({
   /// MEMBERSHIP_PURCHASE_APP_ENABLED: tetap false untuk aplikasi Play karena
   /// pembayaran eksternal in-app menuntut Play Billing.
   WALLET_TOPUP_ENABLED: strictEnvBoolean(false),
+  /// Kunci bonus membership + deposit yang dapat ditarik (Formulir Kendala butir 4). Mati = perilaku lama persis:
+  /// bonus masuk 100% ke saldo yang dapat ditarik dan top up tidak dicatat sebagai deposit.
+  BONUS_LOCK_ENABLED: strictEnvBoolean(false),
+  /// Persen bonus yang dikunci sebagai Saldo TapGo (0-100).
+  BONUS_LOCK_PERCENT: z.coerce.number().int().min(0).max(100).default(20),
+  /// Biaya tetap penarikan deposit (rupiah), dipotong dari jumlah yang ditarik.
+  DEPOSIT_WITHDRAWAL_FEE: z.coerce.number().int().min(0).default(2000),
+  /// Minimal penarikan deposit (rupiah).
+  DEPOSIT_WITHDRAWAL_MIN: z.coerce.number().int().min(1).default(50000),
+  /// Deposit hanya dapat ditarik bila top up terakhir sudah mengendap sekian jam.
+  DEPOSIT_HOLD_HOURS: z.coerce.number().int().min(0).default(24),
   /// Top up saldo lewat transfer bank manual (kode unik + konfirmasi Super
   /// Admin), kanal WEB saja. Independen dari WALLET_TOPUP_ENABLED (gateway).
   MANUAL_TOPUP_ENABLED: strictEnvBoolean(false),
