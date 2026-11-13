@@ -294,6 +294,7 @@ describe.skipIf(!runIntegration)("Stage R2.7 — PPOB foundation", () => {
         const res = await api("/api/v1/ppob/orders/inquiry", { method: "POST", token: tokenFor(user), body: { sku: "PULSA_TSEL_10", targetNumber: "085612345678" } });
         const body = (await res.json()) as { data: { payment: { sufficient: boolean; benefitAmount: unknown; balanceAmount: unknown } } };
         expect(body.data.payment.sufficient).toBe(true);
+        expect((body.data.payment as { usesWalletBalance?: boolean }).usesWalletBalance).toBe(true);
         expect(Number(body.data.payment.benefitAmount)).toBe(4000);
         expect(Number(body.data.payment.balanceAmount)).toBe(7500);
         const poor = await walletWith(1000, 1000, 1000, 0, 0);

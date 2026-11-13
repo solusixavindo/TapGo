@@ -201,7 +201,10 @@ async function buildInquiryPayload(input: {
       amount: money(totalAmount),
       benefitAmount: money(benefitAmount),
       balanceAmount: money(balanceAmount),
-      sufficient
+      sufficient,
+      // Hanya bila Saldo TapGo ikut membayar (kunci bonus menyala): aplikasi memakai ini untuk memilih kalimat yang benar.
+      // Sengaja tidak dikirim saat mati supaya bentuk jawaban lama tidak berubah.
+      ...(lazyEnv.BONUS_LOCK_ENABLED ? { usesWalletBalance: true } : {})
     },
     wallet: {
       balance: money(wallet?.balance ?? new Prisma.Decimal(0)),
@@ -419,7 +422,8 @@ ppobRouter.post(
         // sejak respons diterima, supaya HP berjam salah tidak salah menilai kedaluwarsa.
         expiresInSeconds: Math.max(0, Math.floor((inquiry.expiresAt.getTime() - Date.now()) / 1000)),
         wallet: { ppobBalance: money(ppobBalance) },
-        sufficient: billSufficient
+        sufficient: billSufficient,
+        ...(lazyEnv.BONUS_LOCK_ENABLED ? { usesWalletBalance: true, walletBalance: money(wallet?.balance ?? new Prisma.Decimal(0)) } : {})
       }
     });
   })
