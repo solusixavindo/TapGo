@@ -19,7 +19,8 @@ import {
   readRole,
   readToken,
   revokeReviewScopes,
-  searchRoleCandidates
+  searchRoleCandidates,
+  setWithdrawalFreeze
 } from "../../lib/api";
 
 /**
@@ -223,6 +224,7 @@ export default function RolesPage() {
                 account={account}
                 busy={busyId === account.id}
                 onChange={change}
+                onFreezeChanged={refresh}
               />
             ))}
           </div>
@@ -288,11 +290,13 @@ function CandidateRow({
 function AccountRow({
   account,
   busy,
-  onChange
+  onChange,
+  onFreezeChanged
 }: {
   account: AdminAccount;
   busy: boolean;
   onChange: (target: AdminAccount, role: string, reasonCode: string) => void;
+  onFreezeChanged: () => Promise<void>;
 }) {
   const [role, setRole] = useState(account.role);
   const [reason, setReason] = useState<string>("RESPONSIBILITY_CHANGE");
@@ -310,6 +314,11 @@ function AccountRow({
           {account.holdsScopeManage ? (
             <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-bold text-blue-800">
               Pengelola scope
+            </span>
+          ) : null}
+          {account.withdrawalFrozenAt ? (
+            <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-800" data-testid="frozen-badge">
+              Penarikan dibekukan
             </span>
           ) : null}
         </div>
@@ -357,7 +366,65 @@ function AccountRow({
         </div>
       )}
     </div>
+    {locked ? null : <WithdrawalFreezePanel account={account} onChanged={onFreezeChanged} />}
     {locked ? null : <ReviewScopePanel account={account} />}
+    </div>
+  );
+}
+
+/** Membekukan penarikan dana akun admin/Super Admin (khusus pemilik). Alasan wajib; tercatat di Log Aktivitas. */
+function WithdrawalFreezePanel({ account, onChanged }: { account: AdminAccount; onChanged: () => Promise<void> }) {
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const frozen = Boolean(account.withdrawalFrozenAt);
+
+  async function submit() {
+    if (busy || reason.trim().length < 3) return;
+    const verb = frozen ? "membuka pembekuan penarikan" : "membekukan penarikan";
+    if (!window.confirm(`Yakin ${verb} untuk ${account.fullName}?`)) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      await setWithdrawalFreeze(account.id, !frozen, reason.trim());
+      setReason("");
+      await onChanged();
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Belum dapat diproses.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 border-t border-slate-200 pt-3" data-testid="freeze-panel">
+      <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Penarikan dana</p>
+      {frozen ? (
+        <p className="mt-1 text-xs leading-5 text-rose-700">
+          Dibekukan{account.withdrawalFrozenReason ? `: ${account.withdrawalFrozenReason}` : ""}. Akun ini tidak dapat mengajukan, dan penarikannya
+          tidak dapat disetujui atau ditransfer.
+        </p>
+      ) : (
+        <p className="mt-1 text-xs leading-5 text-slate-500">Normal. Pembekuan menolak pengajuan baru dan menahan persetujuan/pencairan penarikan akun ini.</p>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <input
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          placeholder={frozen ? "Alasan membuka pembekuan" : "Alasan pembekuan (wajib)"}
+          maxLength={300}
+          className="min-w-[220px] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+        <button
+          type="button"
+          onClick={() => void submit()}
+          disabled={busy || reason.trim().length < 3}
+          className={`rounded-lg px-3 py-2 text-sm font-semibold text-white disabled:opacity-40 ${frozen ? "bg-brand-ink" : "bg-rose-700"}`}
+        >
+          {busy ? "Memproses…" : frozen ? "Buka pembekuan" : "Bekukan penarikan"}
+        </button>
+      </div>
+      {message ? <p className="mt-1 text-xs text-rose-700">{message}</p> : null}
     </div>
   );
 }

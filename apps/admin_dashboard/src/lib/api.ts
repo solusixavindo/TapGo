@@ -589,7 +589,18 @@ export type AdminAccount = {
   createdAt: string;
   lastLoginAt: string | null;
   holdsScopeManage: boolean;
+  /** Penarikan dana akun ini dibekukan pemilik. */
+  withdrawalFrozenAt?: string | null;
+  withdrawalFrozenReason?: string | null;
 };
+
+/** Membekukan atau membuka pembekuan penarikan dana satu akun (khusus Super Admin VIP; alasan wajib dan tercatat di audit). */
+export function setWithdrawalFreeze(userId: string, frozen: boolean, reason: string) {
+  return request<{ userId: string; frozen: boolean }>(`/admin/members/${userId}/withdrawal-freeze`, {
+    method: "PUT",
+    body: JSON.stringify({ frozen, reason })
+  });
+}
 
 export type RoleCandidate = {
   id: string;

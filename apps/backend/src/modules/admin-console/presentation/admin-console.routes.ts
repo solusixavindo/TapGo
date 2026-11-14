@@ -184,12 +184,13 @@ adminConsoleRouter.post(
   validateRequest(adminMemberPaymentConfirmSchema),
   asyncHandler(controller.approveMemberRequest)
 );
-// Konfirmasi transfer bank manual membership: hanya Super Admin (uang), dan
+// Konfirmasi transfer bank manual membership: hanya Super Admin VIP (keputusan pemilik 14 Nov 2026: tidak ada kenaikan
+// membership tanpa persetujuan pemilik, setelah kasus konfirmasi tanpa bukti), dan
 // hanya untuk pengajuan yang memang memakai transfer manual. Verifikasi dokumen
 // tetap langkah terpisah sesudahnya.
 adminConsoleRouter.post(
   "/member-requests/:id/confirm-transfer",
-  requireRoles("SUPER_ADMIN"),
+  requireRoles("SUPER_ADMIN_VIP"),
   validateRequest(adminMemberRequestActionSchema),
   asyncHandler(async (req, res) => {
     const data = await manualMembershipTransferService.confirm({

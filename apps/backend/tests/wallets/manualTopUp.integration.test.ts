@@ -114,6 +114,17 @@ describe.skipIf(!runIntegration)("Top up manual transfer bank", () => {
     expect(await prisma.auditLog.count({ where: { action: "MANUAL_TOPUP_CONFIRMED", entityId: data.id } })).toBeGreaterThanOrEqual(1);
   });
 
+  it("admin tidak dapat mengonfirmasi top up manual untuk akunnya sendiri (konflik kepentingan); admin lain boleh", async () => {
+    const admin = await makeUser("SUPER_ADMIN");
+    const other = await makeUser("SUPER_ADMIN");
+    const { data } = (await (await create(admin, 200_000)).json()) as { data: { id: string } };
+    const own = await confirm(admin, data.id);
+    expect(own.status).toBe(403);
+    expect(((await own.json()) as { code?: string }).code).toBe("MANUAL_TOPUP_SELF_CONFIRM_FORBIDDEN");
+    expect(await prisma.wallet.count({ where: { userId: admin.id } })).toBe(0);
+    expect((await confirm(other, data.id)).status).toBe(200);
+  });
+
   it("ADMIN biasa, member, dan token APP tidak dapat mengonfirmasi", async () => {
     const user = await makeUser();
     const operator = await makeUser("ADMIN");

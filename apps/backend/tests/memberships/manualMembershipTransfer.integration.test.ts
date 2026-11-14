@@ -354,14 +354,16 @@ describe.skipIf(!runIntegration)("Transfer bank manual untuk membership", () => 
 
   // ---- konfirmasi Super Admin ---------------------------------------------
 
-  it("hanya SUPER_ADMIN yang boleh mengonfirmasi: tanpa token 401, USER dan ADMIN 403", async () => {
+  it("hanya SUPER_ADMIN_VIP yang boleh mengonfirmasi: tanpa token 401, USER, ADMIN, dan SUPER_ADMIN 403", async () => {
     const { order, buyer } = await createWebOrder();
     await startTransfer(order.id, buyer);
     const admin = await createUser("ADM", "ADMIN");
+    const superAdmin = await createUser("SAD", "SUPER_ADMIN");
 
     expect((await confirmTransfer(order.id)).status).toBe(401);
     expect((await confirmTransfer(order.id, buyer)).status).toBe(403);
     expect((await confirmTransfer(order.id, admin)).status).toBe(403);
+    expect((await confirmTransfer(order.id, superAdmin)).status).toBe(403);
 
     const stored = await prisma.membershipOrder.findUniqueOrThrow({ where: { id: order.id } });
     expect(stored.status).toBe("PENDING");
@@ -370,7 +372,7 @@ describe.skipIf(!runIntegration)("Transfer bank manual untuk membership", () => 
   it("SUPER_ADMIN mengonfirmasi: lunas, TETAPI belum aktif dan belum ada bonus (menunggu verifikasi dokumen)", async () => {
     const { order, buyer, sponsor, price } = await createWebOrder();
     const { data } = (await (await startTransfer(order.id, buyer)).json()) as { data: TransferView };
-    const finance = await createUser("FIN", "SUPER_ADMIN");
+    const finance = await createUser("FIN", "SUPER_ADMIN_VIP");
 
     const res = await confirmTransfer(order.id, finance);
     expect(res.status).toBe(200);
@@ -409,7 +411,7 @@ describe.skipIf(!runIntegration)("Transfer bank manual untuk membership", () => 
   it("konfirmasi dua kali idempoten: tidak ada efek, audit, atau pembayaran ganda", async () => {
     const { order, buyer } = await createWebOrder();
     await startTransfer(order.id, buyer);
-    const finance = await createUser("FIN", "SUPER_ADMIN");
+    const finance = await createUser("FIN", "SUPER_ADMIN_VIP");
 
     expect((await confirmTransfer(order.id, finance)).status).toBe(200);
     const again = await confirmTransfer(order.id, finance);
@@ -423,7 +425,7 @@ describe.skipIf(!runIntegration)("Transfer bank manual untuk membership", () => 
   it("dua konfirmasi serentak: tepat satu yang menang, tidak ada pembukuan ganda", async () => {
     const { order, buyer } = await createWebOrder();
     await startTransfer(order.id, buyer);
-    const finance = await createUser("FIN", "SUPER_ADMIN");
+    const finance = await createUser("FIN", "SUPER_ADMIN_VIP");
 
     const [a, b] = await Promise.all([confirmTransfer(order.id, finance), confirmTransfer(order.id, finance)]);
     expect([a.status, b.status].sort()).toEqual([200, 200]);
@@ -438,7 +440,7 @@ describe.skipIf(!runIntegration)("Transfer bank manual untuk membership", () => 
 
   it("menolak konfirmasi untuk pengajuan yang tidak memakai transfer manual", async () => {
     const { order } = await createWebOrder();
-    const finance = await createUser("FIN", "SUPER_ADMIN");
+    const finance = await createUser("FIN", "SUPER_ADMIN_VIP");
     const res = await confirmTransfer(order.id, finance);
     expect(res.status).toBe(409);
     expect(await codeOf(res)).toBe("MEMBERSHIP_MANUAL_TRANSFER_NOT_FOUND");
@@ -448,7 +450,7 @@ describe.skipIf(!runIntegration)("Transfer bank manual untuk membership", () => 
   it("menolak konfirmasi untuk pengajuan yang sudah dibatalkan; 404 untuk id yang tidak ada", async () => {
     const { order, buyer } = await createWebOrder();
     await startTransfer(order.id, buyer);
-    const finance = await createUser("FIN", "SUPER_ADMIN");
+    const finance = await createUser("FIN", "SUPER_ADMIN_VIP");
 
     const cancel = await fetch(`${baseUrl}/api/v1/admin/member-requests/${order.id}/reject`, {
       method: "POST",
@@ -468,7 +470,7 @@ describe.skipIf(!runIntegration)("Transfer bank manual untuk membership", () => 
     const { order, buyer } = await createWebOrder();
     await startTransfer(order.id, buyer);
     await expirePayment(order.id);
-    const finance = await createUser("FIN", "SUPER_ADMIN");
+    const finance = await createUser("FIN", "SUPER_ADMIN_VIP");
 
     const res = await confirmTransfer(order.id, finance);
     expect(res.status).toBe(200);
@@ -495,7 +497,7 @@ describe.skipIf(!runIntegration)("Transfer bank manual untuk membership", () => 
         expiresAt: new Date(Date.now() + 3600_000)
       }
     });
-    const finance = await createUser("FIN", "SUPER_ADMIN");
+    const finance = await createUser("FIN", "SUPER_ADMIN_VIP");
 
     const res = await confirmTransfer(order.id, finance);
     expect(res.status).toBe(409);
@@ -507,7 +509,7 @@ describe.skipIf(!runIntegration)("Transfer bank manual untuk membership", () => 
     const { order, buyer } = await createWebOrder();
     await startTransfer(order.id, buyer);
     backendEnv.MANUAL_MEMBERSHIP_TRANSFER_ENABLED = false;
-    const finance = await createUser("FIN", "SUPER_ADMIN");
+    const finance = await createUser("FIN", "SUPER_ADMIN_VIP");
     expect((await confirmTransfer(order.id, finance)).status).toBe(200);
   });
 
@@ -516,7 +518,7 @@ describe.skipIf(!runIntegration)("Transfer bank manual untuk membership", () => 
   it("alur penuh: bayar manual -> konfirmasi Super Admin -> verifikasi dokumen -> membership aktif + bonus sponsor", async () => {
     const { order, buyer, sponsor } = await createWebOrder({ withDocuments: true });
     await startTransfer(order.id, buyer);
-    const finance = await createUser("FIN", "SUPER_ADMIN");
+    const finance = await createUser("FIN", "SUPER_ADMIN_VIP");
     const admin = await createUser("ADM", "ADMIN");
 
     expect((await confirmTransfer(order.id, finance)).status).toBe(200);
@@ -542,7 +544,7 @@ describe.skipIf(!runIntegration)("Transfer bank manual untuk membership", () => 
   it("daftar pengajuan admin memuat nominal transfer berkode unik untuk pencocokan mutasi", async () => {
     const { order, buyer } = await createWebOrder();
     const { data } = (await (await startTransfer(order.id, buyer)).json()) as { data: TransferView };
-    const finance = await createUser("FIN", "SUPER_ADMIN");
+    const finance = await createUser("FIN", "SUPER_ADMIN_VIP");
 
     const list = await getJson("/api/v1/admin/member-requests?status=PENDING", finance);
     const row = (list.data.items as Array<{ id: string; payments: Array<{ provider: string; metadata: { transferAmount: number } }> }>).find(

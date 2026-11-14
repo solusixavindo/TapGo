@@ -1,5 +1,8 @@
 /** Nama aksi audit dalam bahasa operator. Aksi yang belum terdaftar tampil apa adanya (jangan disembunyikan). */
 export const AUDIT_ACTION_LABEL: Record<string, string> = {
+  WITHDRAWAL_FREEZE_SET: "Penarikan akun dibekukan",
+  WITHDRAWAL_FREEZE_CLEARED: "Pembekuan penarikan dibuka",
+  UNVERIFIED_ORDER_REVERSED: "Pesanan tanpa bukti dibalik",
   ADMIN_LOGIN: "Masuk ke konsol",
   ADMIN_LOGOUT: "Keluar dari konsol",
   ADMIN_PASSWORD_CHANGED: "Mengganti password",

@@ -195,6 +195,14 @@ export class ManualTopUpService {
     });
     if (!order) throw new AppError("Top up tidak ditemukan", StatusCodes.NOT_FOUND, "MANUAL_TOPUP_NOT_FOUND");
     if (order.status === "PAID") return { id: order.id, status: "PAID" as const, alreadyConfirmed: true };
+    // Konflik kepentingan: admin tidak boleh mengonfirmasi top up yang menambah saldo akunnya sendiri.
+    if (order.userId === input.actorId) {
+      throw new AppError(
+        "Anda tidak dapat mengonfirmasi top up untuk akun Anda sendiri.",
+        StatusCodes.FORBIDDEN,
+        "MANUAL_TOPUP_SELF_CONFIRM_FORBIDDEN",
+      );
+    }
     if (order.status !== "PENDING") {
       throw new AppError("Top up ini sudah ditutup dan tidak bisa dikonfirmasi.", StatusCodes.CONFLICT, "MANUAL_TOPUP_NOT_PENDING");
     }
