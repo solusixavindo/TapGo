@@ -453,6 +453,26 @@ export class AdminConsoleService {
     });
   }
 
+  /// Tagihan pesanan membership: pembanding nominal untuk konfirmasi pembayaran manual.
+  async memberOrderTotal(orderId: string) {
+    const order = await this.prisma.membershipOrder.findUnique({ where: { id: orderId }, select: { totalAmount: true, status: true } });
+    if (!order) {
+      throw new AppError("Pengajuan member tidak ditemukan.", StatusCodes.NOT_FOUND, "MEMBERSHIP_ORDER_NOT_FOUND");
+    }
+    return order;
+  }
+
+  /// Menyimpan bukti pada pembayaran yang ditandai lunas manual, agar terbaca di Pembayaran Online.
+  async attachManualPaymentEvidence(orderId: string, data: { evidence: string; receivedAmount: number; confirmedBy: string }) {
+    const payment = await this.prisma.membershipPayment.findFirst({ where: { orderId }, orderBy: { createdAt: "desc" } });
+    if (!payment) return;
+    const current = payment.metadata && typeof payment.metadata === "object" && !Array.isArray(payment.metadata) ? payment.metadata : {};
+    await this.prisma.membershipPayment.update({
+      where: { id: payment.id },
+      data: { metadata: { ...(current as Prisma.JsonObject), manualEvidence: data.evidence, manualReceivedAmount: data.receivedAmount, manualConfirmedById: data.confirmedBy } }
+    });
+  }
+
   async memberRequests(input: PageInput & { status?: MembershipOrderStatus }) {
     const where: Prisma.MembershipOrderWhereInput = {
       ...(input.status ? { status: input.status } : {})
@@ -1991,6 +2011,8 @@ export class AdminConsoleService {
       /// "ADMIN-<id>" = konfirmasi manual tanpa bukti; "MANUAL:<id>" = konfirmasi transfer bank dengan nominal unik.
       manualConfirmedBy: string | null;
       manualConfirmKind: "ADMIN" | "BANK_TRANSFER" | null;
+      /// Bukti yang diisi VIP saat konfirmasi manual (nomor referensi transfer/kode transaksi).
+      manualEvidence: string | null;
     };
     const confirmerIds = [
       ...new Set(
@@ -2026,7 +2048,8 @@ export class AdminConsoleService {
           expiresAt: row.expiresAt,
           overdue: row.status === "PENDING" && row.expiresAt !== null && row.expiresAt < now,
           manualConfirmedBy: null,
-          manualConfirmKind: null
+          manualConfirmKind: null,
+          manualEvidence: null
         };
       }),
       ...membershipRows.map((row): Item => {
@@ -2051,8 +2074,9 @@ export class AdminConsoleService {
           overdue: row.status === "PENDING" && expiresAt !== null && expiresAt < now,
           ...(() => {
             const m = /^(ADMIN-|MANUAL:)(.+)$/.exec(row.providerReference ?? "");
-            if (!m || row.status !== "PAID") return { manualConfirmedBy: null, manualConfirmKind: null };
+            if (!m || row.status !== "PAID") return { manualConfirmedBy: null, manualConfirmKind: null, manualEvidence: null };
             return {
+              manualEvidence: typeof meta.manualEvidence === "string" ? meta.manualEvidence : null,
               manualConfirmedBy: confirmerName.get(m[2]!) ?? "Admin tidak dikenal",
               manualConfirmKind: m[1] === "ADMIN-" ? ("ADMIN" as const) : ("BANK_TRANSFER" as const)
             };

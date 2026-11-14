@@ -135,6 +135,15 @@ export const adminOrderQuerySchema = z.object({
   })
 });
 
+/// Konfirmasi pembayaran manual (tanpa kabar dari penyedia): wajib bukti dan nominal yang sungguh diterima.
+export const adminMemberPaymentConfirmSchema = z.object({
+  params: z.object({ id: z.string().uuid() }),
+  body: z.object({
+    evidence: z.string().trim().min(6, "Isi nomor referensi bukti pembayaran (mis. referensi transfer atau kode transaksi Midtrans).").max(120),
+    receivedAmount: z.coerce.number().positive("Isi nominal yang diterima.")
+  })
+});
+
 export const adminMemberRequestActionSchema = z.object({
   params: z.object({
     id: z.string().uuid()

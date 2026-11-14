@@ -33,6 +33,7 @@ import {
   adminGenericStatusQuerySchema,
   adminInvoiceQuerySchema,
   adminAuditLogQuerySchema,
+  adminMemberPaymentConfirmSchema,
   adminOversightQuerySchema,
   adminListQuerySchema,
   adminFinancialReportQuerySchema,
@@ -178,8 +179,8 @@ adminConsoleRouter.get("/members/:id", validateRequest(adminMemberDetailSchema),
 adminConsoleRouter.get("/member-requests", validateRequest(adminOrderQuerySchema), asyncHandler(controller.memberRequests));
 adminConsoleRouter.post(
   "/member-requests/:id/approve",
-  requireRoles("SUPER_ADMIN"),
-  validateRequest(adminMemberRequestActionSchema),
+  requireRoles("SUPER_ADMIN_VIP"),
+  validateRequest(adminMemberPaymentConfirmSchema),
   asyncHandler(controller.approveMemberRequest)
 );
 // Konfirmasi transfer bank manual membership: hanya Super Admin (uang), dan

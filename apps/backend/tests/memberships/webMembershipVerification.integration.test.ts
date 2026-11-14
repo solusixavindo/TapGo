@@ -304,14 +304,36 @@ describe.skipIf(!runIntegration)("Admin membership document verification", () =>
     const APPROVE = (id: string) => `/api/v1/admin/member-requests/${id}/approve`;
     const CANCEL = (id: string) => `/api/v1/admin/member-requests/${id}/reject`;
 
-    it("Super Admin VIP mengonfirmasi pembayaran order WEB: menjadi PAID menunggu verifikasi dokumen, belum aktif", async () => {
+    it("Super Admin VIP mengonfirmasi pembayaran order WEB dengan bukti dan nominal benar: menjadi PAID menunggu verifikasi dokumen, belum aktif; bukti tersimpan", async () => {
       const order = await createWebOrder();
       const vip = await createUser("UNPAIDVIP", "SUPER_ADMIN_VIP");
-      const response = await post(APPROVE(order.id), vip);
+      const total = Number((await prisma.membershipOrder.findUniqueOrThrow({ where: { id: order.id } })).totalAmount);
+      const response = await post(APPROVE(order.id), vip, { evidence: "TRF-BRI-20261113-0042", receivedAmount: total });
       expect(response.status).toBe(200);
       const stored = await prisma.membershipOrder.findUniqueOrThrow({ where: { id: order.id } });
       expect(stored.status).toBe("PAID");
       await expectNotActivated(order.id);
+      const payment = await prisma.membershipPayment.findFirstOrThrow({ where: { orderId: order.id }, orderBy: { createdAt: "desc" } });
+      expect(payment.providerReference).toBe(`ADMIN-${vip.id}`);
+      expect(payment.metadata).toMatchObject({ manualEvidence: "TRF-BRI-20261113-0042", manualReceivedAmount: total });
+      const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "MEMBERSHIP_PAYMENT_CONFIRMED", entityId: order.id } });
+      expect(audit.actorId).toBe(vip.id);
+      expect(audit.metadata).toMatchObject({ manual: true, evidence: "TRF-BRI-20261113-0042" });
+    });
+
+    it("konfirmasi manual: Super Admin biasa ditolak; tanpa bukti 400; nominal berbeda 409 dan pesanan tetap menunggu bayar", async () => {
+      const order = await createWebOrder();
+      const superAdmin = await createUser("UNPAIDSA", "SUPER_ADMIN");
+      const vip = await createUser("UNPAIDVIP2", "SUPER_ADMIN_VIP");
+      const total = Number((await prisma.membershipOrder.findUniqueOrThrow({ where: { id: order.id } })).totalAmount);
+      expect((await post(APPROVE(order.id), superAdmin, { evidence: "TRF-1234567", receivedAmount: total })).status).toBe(403);
+      expect((await post(APPROVE(order.id), vip, { receivedAmount: total })).status).toBe(400);
+      expect((await post(APPROVE(order.id), vip, { evidence: "abc", receivedAmount: total })).status).toBe(400);
+      const wrong = await post(APPROVE(order.id), vip, { evidence: "TRF-1234567", receivedAmount: total - 1000 });
+      expect(wrong.status).toBe(409);
+      expect(((await wrong.json()) as { code?: string }).code).toBe("PAYMENT_AMOUNT_MISMATCH");
+      expect((await prisma.membershipOrder.findUniqueOrThrow({ where: { id: order.id } })).status).toBe("PENDING");
+      expect(await prisma.auditLog.count({ where: { action: "MEMBERSHIP_PAYMENT_CONFIRMED" } })).toBe(0);
     });
 
     it("membatalkan pengajuan belum dibayar dengan alasan; tidak bisa dikonfirmasi sesudahnya", async () => {

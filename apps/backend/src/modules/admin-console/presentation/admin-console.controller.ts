@@ -317,18 +317,33 @@ export class AdminConsoleController {
     res.json({ success: true, data: result });
   };
 
+  /// Konfirmasi pembayaran MANUAL (tanpa kabar dari penyedia): khusus VIP, wajib bukti, dan nominal yang diterima harus
+  /// sama dengan tagihan. Tombol ini memicu aktivasi dan bonus ke upline, jadi tidak boleh tanpa bukti (kasus 13 Nov 2026).
   approveMemberRequest = async (req: Request, res: Response) => {
+    const orderId = String(req.params.id);
+    const { evidence, receivedAmount } = req.body as { evidence: string; receivedAmount: number };
+    const order = await this.adminConsoleService.memberOrderTotal(orderId);
+    const billed = Number(order.totalAmount);
+    if (Math.round(receivedAmount) !== Math.round(billed)) {
+      throw new AppError(
+        `Nominal yang diterima Rp${Math.round(receivedAmount).toLocaleString("id-ID")} tidak sama dengan tagihan Rp${Math.round(billed).toLocaleString("id-ID")}. Pesanan tidak ditandai lunas.`,
+        StatusCodes.CONFLICT,
+        "PAYMENT_AMOUNT_MISMATCH"
+      );
+    }
     const result = await this.membershipOrderService.markPaymentSuccess({
       userId: req.auth!.userId,
       role: req.auth!.role,
-      orderId: String(req.params.id),
+      orderId,
       paymentReference: `ADMIN-${req.auth!.userId}`
     });
+    await this.adminConsoleService.attachManualPaymentEvidence(orderId, { evidence, receivedAmount, confirmedBy: req.auth!.userId });
     await this.adminConsoleService.recordAdminAction({
       actorId: req.auth!.userId,
       action: "MEMBERSHIP_PAYMENT_CONFIRMED",
       entityType: "MembershipOrder",
-      entityId: String(req.params.id)
+      entityId: orderId,
+      metadata: { manual: true, evidence, amount: String(billed), receivedAmount: String(receivedAmount) }
     });
     res.json({ success: true, data: result });
   };
