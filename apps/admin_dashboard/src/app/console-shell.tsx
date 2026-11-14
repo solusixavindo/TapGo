@@ -7,6 +7,7 @@ import { ReactNode, useEffect, useRef, useState } from "react";
 import { clearSession, readRole, roleAtLeast } from "../lib/api";
 import { useTheme } from "../lib/theme";
 import { useNavPill } from "./nav-pill";
+import { enterPage, installSpotlight } from "../lib/motion";
 
 /**
  * Kerangka konsol: bilah samping bergrup + area isi.
@@ -232,14 +233,25 @@ export default function ConsoleShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "/";
   const [role, setRole] = useState("");
   const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => setRole(readRole()), [pathname]);
   useEffect(() => setOpen(false), [pathname]);
+  // Gerak halaman: judul, kartu, dan cahaya latar masuk setiap halaman dimuat; sorotan kaca mengikuti kursor.
+  useEffect(() => {
+    if (!rootRef.current) return;
+    return enterPage(rootRef.current, pathname);
+  }, [pathname]);
+  useEffect(() => installSpotlight(), []);
 
   const isLogin = pathname === "/" || pathname === "";
   if (isLogin) return <>{children}</>;
 
   return (
     <div className="console-root min-h-screen bg-slate-100 lg:pl-64">
+      <div aria-hidden="true" data-ambient className="pointer-events-none fixed inset-0 z-0 overflow-hidden print:hidden">
+        <i data-blob="a" className="ambient-blob ambient-blob-a" />
+        <i data-blob="b" className="ambient-blob ambient-blob-b" />
+      </div>
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-white/10 bg-brand-navy print:hidden lg:block" style={{ backgroundImage: "linear-gradient(180deg, rgba(37,99,235,0.16), rgba(5,11,26,0) 38%)" }}>
         <Sidebar role={role} pathname={pathname} />
       </aside>
@@ -270,7 +282,7 @@ export default function ConsoleShell({ children }: { children: ReactNode }) {
         </div>
       ) : null}
 
-      <div key={pathname} className="page-enter min-w-0">{children}</div>
+      <div key={pathname} ref={rootRef} data-page-root className="relative z-[1] min-w-0">{children}</div>
     </div>
   );
 }

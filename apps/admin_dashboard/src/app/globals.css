@@ -231,48 +231,6 @@ body {
 }
 
 /* ---------- Gerak ---------- */
-@keyframes page-enter {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-    filter: blur(5px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-    filter: none;
-  }
-}
-/* Pengisi "backwards", bukan "both": setelah selesai tidak ada transform/filter yang tersisa. Keduanya akan menjadi
-   acuan posisi bagi dialog fixed di dalam halaman dan menggesernya dari layar. */
-.page-enter {
-  animation: page-enter 0.42s cubic-bezier(0.22, 0.8, 0.28, 1) backwards;
-}
-
-/* Kartu muncul bergiliran: tiap anak langsung .reveal-group mendapat jeda sendiri. */
-@keyframes reveal-up {
-  from {
-    opacity: 0;
-    transform: translateY(14px) scale(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-.reveal-group > * {
-  animation: reveal-up 0.5s cubic-bezier(0.22, 0.8, 0.28, 1) backwards;
-}
-.reveal-group > *:nth-child(1) { animation-delay: 0.04s; }
-.reveal-group > *:nth-child(2) { animation-delay: 0.09s; }
-.reveal-group > *:nth-child(3) { animation-delay: 0.14s; }
-.reveal-group > *:nth-child(4) { animation-delay: 0.19s; }
-.reveal-group > *:nth-child(5) { animation-delay: 0.24s; }
-.reveal-group > *:nth-child(6) { animation-delay: 0.29s; }
-.reveal-group > *:nth-child(7) { animation-delay: 0.34s; }
-.reveal-group > *:nth-child(8) { animation-delay: 0.39s; }
-.reveal-group > *:nth-child(n + 9) { animation-delay: 0.44s; }
-
 /* Kartu angka: terangkat sedikit dan bercahaya saat disorot. */
 .stat-card {
   transition:
@@ -323,10 +281,6 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .page-enter,
-  .reveal-group > * {
-    animation: none;
-  }
   .stat-card,
   .stat-card:hover,
   .click-card,
@@ -342,9 +296,57 @@ body {
     background: #fff !important;
     color: #000 !important;
   }
-  .page-enter,
-  .reveal-group > * {
-    animation: none !important;
-    filter: none !important;
+}
+
+/* Cahaya latar yang bergeser per halaman (digerakkan GSAP, lihat lib/motion.ts). Hanya tema gelap. */
+.ambient-blob {
+  position: absolute;
+  display: block;
+  border-radius: 9999px;
+  filter: blur(60px);
+  will-change: transform;
+}
+.ambient-blob-a {
+  width: 55vw;
+  height: 55vw;
+  left: 10vw;
+  top: -18vw;
+  background: radial-gradient(closest-side, rgba(37, 99, 235, 0.38), transparent);
+}
+.ambient-blob-b {
+  width: 48vw;
+  height: 48vw;
+  right: -8vw;
+  bottom: -16vw;
+  background: radial-gradient(closest-side, rgba(20, 184, 166, 0.22), transparent);
+}
+:root[data-theme="light"] [data-ambient] {
+  display: none;
+}
+
+/* Sorotan kaca yang mengikuti kursor pada kartu yang dapat diklik. */
+.click-card::before,
+.stat-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background: radial-gradient(220px circle at var(--mx, 50%) var(--my, 50%), rgba(140, 180, 255, 0.16), transparent 70%);
+}
+.click-card:hover::before,
+.stat-card:hover::before {
+  opacity: 1;
+}
+:root[data-theme="light"] .click-card::before,
+:root[data-theme="light"] .stat-card::before {
+  display: none;
+}
+@media print {
+  .click-card::before,
+  .stat-card::before {
+    display: none;
   }
 }

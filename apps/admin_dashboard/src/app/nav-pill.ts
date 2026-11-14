@@ -1,24 +1,22 @@
 "use client";
 
+import gsap from "gsap";
 import { RefObject, useLayoutEffect } from "react";
+import { prefersReducedMotion } from "../lib/motion";
 
 /**
- * Pil penanda menu aktif yang meluncur, seperti pada dasbor rujukan.
+ * Pil penanda menu aktif yang meluncur, persis teknik pada dasbor rujukan (slidePill):
+ * satu kotak penuh dipotong clip-path menjadi sebesar menu aktif; tepi DEPAN (arah gerak) bergerak 0,36 dtk
+ * `power3.out`, tepi BELAKANG menyusul 0,55 dtk `power3.inOut`, sehingga pil memanjang lalu mengerut ke menu baru.
  *
- * Pil adalah satu kotak penuh yang dipotong dengan clip-path menjadi sebesar menu aktif. Saat berpindah, tepi DEPAN
- * (arah gerak) bergerak cepat (0,36 dtk, keluar-lambat) dan tepi BELAKANG menyusul lebih pelan (0,55 dtk,
- * masuk-keluar), sehingga pil terlihat memanjang lalu mengerut ke menu baru.
- *
- * Perpindahan halaman konsol adalah muat-ulang penuh (lihat hard-nav), jadi keadaan di memori hilang tiap
- * berpindah. Kesinambungannya dijaga lewat sessionStorage: menu aktif sebelumnya dicatat, dan di halaman baru pil
- * dimulai dari posisi itu lalu meluncur ke menu sekarang. Posisi gulir menu samping dicatat dengan cara yang sama.
+ * Pil mulai bergerak SAAT menu diklik (peristiwa "tapgo:nav" dari tautan konsol), bersamaan dengan animasi keluar
+ * halaman, lalu halaman baru memuat dan memasang pil langsung di tempatnya. Jalur cadangan (halaman dibuka langsung,
+ * atau berpindah lewat jalur lain): pil mulai dari menu aktif sebelumnya yang dicatat di sessionStorage.
  */
 
 const PREV_KEY = "tapgo.nav.prev";
+const DONE_KEY = "tapgo.nav.moved";
 const SCROLL_KEY = "tapgo.nav.scroll";
-
-const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
-const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 type Edges = { t: number; b: number };
 
@@ -33,7 +31,7 @@ function write(key: string, value: string) {
   try {
     window.sessionStorage.setItem(key, value);
   } catch {
-    /* penyimpanan diblokir: pil tetap bekerja, hanya tanpa kesinambungan antarhalaman */
+    /* tanpa kesinambungan antarhalaman */
   }
 }
 
@@ -48,19 +46,29 @@ function paint(pill: HTMLElement, e: Edges) {
   pill.style.clipPath = `inset(${e.t}px 0px ${e.b}px 0px round 12px)`;
 }
 
-function tween(from: number, to: number, ms: number, ease: (t: number) => number, update: (v: number) => void) {
-  const start = performance.now();
-  let raf = 0;
-  const step = (now: number) => {
-    const p = Math.min(1, (now - start) / ms);
-    update(from + (to - from) * ease(p));
-    if (p < 1) raf = requestAnimationFrame(step);
-  };
-  raf = requestAnimationFrame(step);
-  return () => cancelAnimationFrame(raf);
-}
+type PillHost = HTMLElement & { __edges?: Edges; __tweens?: gsap.core.Tween[] };
 
-type PillHost = HTMLElement & { __cancel?: () => void };
+/** slidePill dari dasbor rujukan: dari tepi sekarang ke tepi menu tujuan, depan cepat dan belakang menyusul. */
+function slide(pill: PillHost, track: HTMLElement, target: HTMLElement) {
+  const to = edgesOf(track, target);
+  const from = pill.__edges ?? to;
+  pill.__tweens?.forEach((t) => t.kill());
+  const cur: Edges = { ...from };
+  pill.__edges = cur;
+  if (prefersReducedMotion() || (from.t === to.t && from.b === to.b)) {
+    Object.assign(cur, to);
+    paint(pill, cur);
+    return;
+  }
+  paint(pill, cur);
+  const forward = to.t > from.t;
+  const lead: keyof Edges = forward ? "b" : "t";
+  const trail: keyof Edges = forward ? "t" : "b";
+  pill.__tweens = [
+    gsap.to(cur, { [lead]: to[lead], duration: 0.36, ease: "power3.out", onUpdate: () => paint(pill, cur) }),
+    gsap.to(cur, { [trail]: to[trail], duration: 0.55, ease: "power3.inOut", onUpdate: () => paint(pill, cur) })
+  ];
+}
 
 export function useNavPill(
   trackRef: RefObject<HTMLElement | null>,
@@ -74,12 +82,10 @@ export function useNavPill(
     const pill = pillRef.current as PillHost | null;
     const scroller = scrollRef.current;
     if (!track || !pill) return;
-
     const find = (href: string | null) =>
       href ? track.querySelector<HTMLElement>(`[data-nav-href="${CSS.escape(href)}"]`) : null;
     const target = find(activeHref);
 
-    // Posisi gulir menu samping dipulihkan dulu agar ukuran yang dibaca sesudahnya benar.
     if (scroller) {
       const saved = Number(read(SCROLL_KEY));
       if (Number.isFinite(saved) && saved > 0) scroller.scrollTop = saved;
@@ -90,45 +96,40 @@ export function useNavPill(
       }
     }
 
-    pill.__cancel?.();
+    pill.__tweens?.forEach((t) => t.kill());
     if (!target || track.getBoundingClientRect().height === 0) {
       pill.style.opacity = "0";
       return;
     }
 
     const to = edgesOf(track, target);
+    const movedAtClick = read(DONE_KEY) === activeHref; // pil sudah meluncur saat menu diklik di halaman sebelumnya
     const prevHref = read(PREV_KEY);
-    const prevEl = prevHref && prevHref !== activeHref ? find(prevHref) : null;
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const prevEl = !movedAtClick && prevHref && prevHref !== activeHref ? find(prevHref) : null;
+    window.sessionStorage?.removeItem?.(DONE_KEY);
 
-    if (!prevEl || reduce) {
-      paint(pill, to);
+    if (prevEl) {
+      pill.__edges = edgesOf(track, prevEl);
+      slide(pill, track, target);
     } else {
-      const from = edgesOf(track, prevEl);
-      const forward = to.t > from.t;
-      const cur = { ...from };
-      paint(pill, cur);
-      // Depan = tepi bawah saat turun, tepi atas saat naik; belakang adalah sebaliknya.
-      const leadKey: keyof Edges = forward ? "b" : "t";
-      const trailKey: keyof Edges = forward ? "t" : "b";
-      const cancels = [
-        tween(from[leadKey], to[leadKey], 360, easeOut, (v) => {
-          cur[leadKey] = v;
-          paint(pill, cur);
-        }),
-        tween(from[trailKey], to[trailKey], 550, easeInOut, (v) => {
-          cur[trailKey] = v;
-          paint(pill, cur);
-        })
-      ];
-      pill.__cancel = () => cancels.forEach((c) => c());
+      pill.__edges = { ...to };
+      paint(pill, to);
     }
     if (activeHref) write(PREV_KEY, activeHref);
 
     const onScroll = () => scroller && write(SCROLL_KEY, String(scroller.scrollTop));
     scroller?.addEventListener("scroll", onScroll, { passive: true });
 
-    // Ukuran berubah (jendela diubah, huruf dimuat): tempelkan ulang pil tanpa animasi.
+    // Menu diklik: pil meluncur sekarang, tanpa menunggu halaman baru.
+    const onNav = (event: Event) => {
+      const href = (event as CustomEvent<{ href: string }>).detail?.href;
+      const el = find(href);
+      if (!el) return;
+      slide(pill, track, el);
+      write(DONE_KEY, href);
+    };
+    window.addEventListener("tapgo:nav", onNav);
+
     let first = true; // ResizeObserver melapor sekali saat mulai mengamati; itu bukan perubahan ukuran
     const observer = new ResizeObserver(() => {
       if (first) {
@@ -137,16 +138,19 @@ export function useNavPill(
       }
       const el = find(activeHref);
       if (el && track.getBoundingClientRect().height > 0) {
-        pill.__cancel?.();
-        paint(pill, edgesOf(track, el));
+        pill.__tweens?.forEach((t) => t.kill());
+        const e = edgesOf(track, el);
+        pill.__edges = e;
+        paint(pill, e);
       }
     });
     observer.observe(track);
 
     return () => {
       scroller?.removeEventListener("scroll", onScroll);
+      window.removeEventListener("tapgo:nav", onNav);
       observer.disconnect();
-      pill.__cancel?.();
+      pill.__tweens?.forEach((t) => t.kill());
     };
   }, [trackRef, pillRef, scrollRef, activeHref, layoutKey]);
 }

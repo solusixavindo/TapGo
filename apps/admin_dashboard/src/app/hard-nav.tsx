@@ -1,6 +1,7 @@
 "use client";
 
-import { AnchorHTMLAttributes, useMemo } from "react";
+import { AnchorHTMLAttributes, MouseEvent, useMemo } from "react";
+import { exitPage, prefersReducedMotion } from "../lib/motion";
 
 /**
  * Perpindahan halaman konsol memakai muat-ulang halaman penuh, bukan router sisi-klien Next.js.
@@ -38,6 +39,22 @@ export function useHardRouter() {
 
 type HardLinkProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & { href: string };
 
-export default function HardLink({ href, ...rest }: HardLinkProps) {
-  return <a href={adminHref(href)} {...rest} />;
+/**
+ * Tautan antarhalaman konsol. Klik biasa memutar animasi keluar (halaman mengabur, pil menu meluncur) lalu memuat halaman
+ * baru; klik dengan Ctrl/Cmd/Shift, tombol tengah, atau target baru, dan gerak yang dimatikan, memakai tautan biasa tanpa
+ * animasi. Bila animasi gagal, perpindahan tetap berjalan (lihat exitPage).
+ */
+export default function HardLink({ href, onClick, target, ...rest }: HardLinkProps) {
+  const url = adminHref(href);
+  function handle(event: MouseEvent<HTMLAnchorElement>) {
+    onClick?.(event);
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (target && target !== "_self") return;
+    if (prefersReducedMotion()) return;
+    if (url === `${window.location.pathname}${window.location.search}`) return;
+    event.preventDefault();
+    window.dispatchEvent(new CustomEvent("tapgo:nav", { detail: { href: href.split(/[?#]/)[0] } }));
+    void exitPage(document.querySelector<HTMLElement>("[data-page-root]")).then(() => window.location.assign(url));
+  }
+  return <a href={url} target={target} onClick={handle} {...rest} />;
 }
