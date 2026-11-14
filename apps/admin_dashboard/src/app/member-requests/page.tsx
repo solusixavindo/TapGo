@@ -145,6 +145,8 @@ export default function MemberRequestsPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [accountReason, setAccountReason] = useState("");
   const [refundReference, setRefundReference] = useState("");
+  const [manualEvidence, setManualEvidence] = useState("");
+  const [manualAmount, setManualAmount] = useState("");
 
   const selected = useMemo(
     () => requests.find((item) => item.id === selectedId) ?? null,
@@ -234,7 +236,12 @@ export default function MemberRequestsPage() {
         selected.channel === "WEB"
           ? "Pengajuan lanjut ke verifikasi dokumen; membership belum aktif."
           : "Membership langsung aktif dan bonus sponsor/level diproses. Ini tidak dapat dibatalkan.";
-      if (!window.confirm(`Konfirmasi pembayaran ${name} sudah diterima? ${consequence}`)) return;
+      const received = Number(manualAmount.replace(/\D/g, ""));
+      if (manualEvidence.trim().length < 6 || !(received > 0)) {
+        setError("Isi nomor referensi bukti pembayaran dan nominal yang diterima.");
+        return;
+      }
+      if (!window.confirm(`Tandai LUNAS secara manual: ${name}, diterima ${formatRupiah(received)}, bukti "${manualEvidence.trim()}"? ${consequence}`)) return;
     } else if (!window.confirm(`Batalkan pengajuan ${name}? Pengajuan ditutup dan pemohon dapat mengajukan lagi.`)) {
       return;
     }
@@ -251,8 +258,10 @@ export default function MemberRequestsPage() {
               : "Transfer dikonfirmasi. Pengajuan lanjut ke verifikasi dokumen."
           );
         } else {
-          await confirmMemberPayment(selected.id);
-          setNotice("Pembayaran dikonfirmasi.");
+          await confirmMemberPayment(selected.id, manualEvidence.trim(), Number(manualAmount.replace(/\D/g, "")));
+          setNotice("Pembayaran dikonfirmasi manual dan tercatat dengan bukti.");
+          setManualEvidence("");
+          setManualAmount("");
         }
       } else {
         await cancelUnpaidMemberRequest(selected.id, cancelReason.trim());
@@ -553,14 +562,53 @@ export default function MemberRequestsPage() {
                       );
                     })()}
                     <div className="mt-4 flex flex-wrap items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => void decideUnpaid("confirm")}
-                        disabled={busy}
-                        className="rounded-lg bg-brand-green px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-                      >
-                        {manualTransferOf(selected) ? "Konfirmasi transfer masuk" : "Konfirmasi pembayaran"}
-                      </button>
+                      {manualTransferOf(selected) ? (
+                        <button
+                          type="button"
+                          onClick={() => void decideUnpaid("confirm")}
+                          disabled={busy}
+                          className="rounded-lg bg-brand-green px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                        >
+                          Konfirmasi transfer masuk
+                        </button>
+                      ) : roleAtLeast(role, "SUPER_ADMIN_VIP") ? (
+                        <div className="w-full rounded-xl border border-amber-300 bg-amber-50 p-3" data-testid="manual-confirm-form">
+                          <p className="text-xs font-bold uppercase tracking-wider text-amber-900">Tandai lunas manual (khusus VIP)</p>
+                          <p className="mt-1 text-xs leading-5 text-amber-900">
+                            Hanya bila pembayaran sudah terbukti di luar Midtrans. Aktivasi dan bonus ke upline langsung diproses. Bukti dan nominal tercatat di
+                            Log Aktivitas, dan nominal harus sama dengan tagihan.
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <input
+                              value={manualEvidence}
+                              onChange={(event) => setManualEvidence(event.target.value)}
+                              placeholder="Nomor referensi bukti (transfer / kode Midtrans)"
+                              maxLength={120}
+                              className="min-w-[240px] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                            />
+                            <input
+                              value={manualAmount}
+                              onChange={(event) => setManualAmount(event.target.value)}
+                              placeholder="Nominal diterima (Rp)"
+                              inputMode="numeric"
+                              className="w-48 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => void decideUnpaid("confirm")}
+                              disabled={busy || manualEvidence.trim().length < 6 || !manualAmount.replace(/\D/g, "")}
+                              className="rounded-lg bg-brand-green px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                            >
+                              Tandai lunas
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="w-full rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600" data-testid="manual-confirm-vip-only">
+                          Menandai lunas secara manual hanya dapat dilakukan Super Admin VIP, dengan bukti pembayaran. Pembayaran lewat Midtrans terkonfirmasi
+                          otomatis; transfer bank memakai tombol "Konfirmasi transfer masuk".
+                        </p>
+                      )}
                       <input
                         value={cancelReason}
                         onChange={(event) => setCancelReason(event.target.value)}

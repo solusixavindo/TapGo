@@ -165,11 +165,14 @@ export function verifyDocuments(orderId: string) {
   });
 }
 
-/** Super Admin mengonfirmasi bahwa pembayaran (mis. transfer manual) sudah diterima. */
-export function confirmMemberPayment(orderId: string) {
+/**
+ * Super Admin VIP menandai pembayaran LUNAS secara manual (tanpa kabar dari penyedia pembayaran). Wajib menyertakan bukti
+ * (nomor referensi transfer atau kode transaksi) dan nominal yang sungguh diterima; server menolak bila nominal berbeda.
+ */
+export function confirmMemberPayment(orderId: string, evidence: string, receivedAmount: number) {
   return request<MemberRequest>(`/admin/member-requests/${orderId}/approve`, {
     method: "POST",
-    body: JSON.stringify({})
+    body: JSON.stringify({ evidence, receivedAmount })
   });
 }
 
@@ -1386,6 +1389,8 @@ export type OnlinePaymentItem = {
   manualConfirmedBy?: string | null;
   /** ADMIN = konfirmasi manual tanpa bukti; BANK_TRANSFER = konfirmasi transfer bank (nominal unik). */
   manualConfirmKind?: "ADMIN" | "BANK_TRANSFER" | null;
+  /** Bukti yang diisi VIP saat konfirmasi manual. */
+  manualEvidence?: string | null;
 };
 
 export type OnlinePaymentList = {

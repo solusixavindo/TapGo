@@ -258,7 +258,8 @@ export default function OnlinePaymentsPage() {
                           {item.method ? (METHOD_LABEL[item.method] ?? item.method) : item.manualConfirmKind ? "Tidak lewat penyedia" : "Belum dipilih"}
                           {item.manualConfirmKind === "ADMIN" ? (
                             <p className="mt-1 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-800" data-testid="manual-confirm-admin">
-                              Ditandai lunas manual oleh {item.manualConfirmedBy} (tanpa bukti pembayaran penyedia)
+                              Ditandai lunas manual oleh {item.manualConfirmedBy}
+                              {item.manualEvidence ? ` · bukti: ${item.manualEvidence}` : " (tanpa bukti tercatat)"}
                             </p>
                           ) : null}
                           {item.manualConfirmKind === "BANK_TRANSFER" ? (
