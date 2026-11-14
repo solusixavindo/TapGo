@@ -9,6 +9,7 @@ import { maskForOperator } from "../../../core/security/adminMasking.js";
 import { adminManualTopUpRouter } from "../../wallets/presentation/manual-topup.routes.js";
 import { AdminConsoleService } from "../application/AdminConsoleService.js";
 import { AdminInsightsService } from "../application/AdminInsightsService.js";
+import { AdminOversightService } from "../application/AdminOversightService.js";
 import { SystemHealthService } from "../application/SystemHealthService.js";
 import { ErrorMonitoringService } from "../application/ErrorMonitoringService.js";
 import { AdminConsoleController } from "./admin-console.controller.js";
@@ -32,6 +33,7 @@ import {
   adminGenericStatusQuerySchema,
   adminInvoiceQuerySchema,
   adminAuditLogQuerySchema,
+  adminOversightQuerySchema,
   adminListQuerySchema,
   adminFinancialReportQuerySchema,
   adminMemberDetailSchema,
@@ -84,6 +86,7 @@ const insightsService = new AdminInsightsService(prisma, {
     return { level: overview.level, balance: overview.provider.balance };
   }
 });
+const oversightService = new AdminOversightService(prisma);
 const controller = new AdminConsoleController(
   service,
   walletService,
@@ -122,6 +125,16 @@ adminConsoleRouter.get(
   validateRequest(adminInsightsQuerySchema),
   asyncHandler(controller.insights)
 );
+// Pengawasan aksi admin untuk pemilik: ringkasan per admin dan peringatan pola yang patut ditinjau.
+adminConsoleRouter.get(
+  "/dashboard/oversight",
+  requireRoles("SUPER_ADMIN_VIP"),
+  validateRequest(adminOversightQuerySchema),
+  asyncHandler(async (req, res) => {
+    const hours = Number(req.query.hours) || 24;
+    res.json({ success: true, data: await oversightService.report(hours) });
+  })
+);
 adminConsoleRouter.get(
   "/dashboard/activity",
   requireRoles("SUPER_ADMIN_VIP"),
@@ -150,7 +163,7 @@ adminConsoleRouter.get(
 );
 adminConsoleRouter.get(
   "/audit-logs",
-  requireRoles("SUPER_ADMIN"),
+  requireRoles("SUPER_ADMIN_VIP"),
   validateRequest(adminAuditLogQuerySchema),
   asyncHandler(controller.auditLogs)
 );
@@ -226,13 +239,13 @@ adminConsoleRouter.post(
 );
 adminConsoleRouter.post(
   "/member-requests/:id/execute-refund",
-  requireRoles("SUPER_ADMIN"),
+  requireRoles("SUPER_ADMIN_VIP"),
   validateRequest(adminMemberRequestActionSchema),
   asyncHandler(controller.executeMemberRequestRefund)
 );
 adminConsoleRouter.post(
   "/member-requests/:id/confirm-manual-refund",
-  requireRoles("SUPER_ADMIN"),
+  requireRoles("SUPER_ADMIN_VIP"),
   validateRequest(adminManualRefundSchema),
   asyncHandler(controller.confirmMemberRequestManualRefund)
 );
@@ -459,10 +472,3 @@ adminConsoleRouter.put(
   validateRequest(adminRoleAssignSchema),
   asyncHandler(controller.assignAdminRole)
 );
-adminConsoleRouter.put("/app-settings", requireRoles("SUPER_ADMIN"), (_req, res) => {
-  res.status(501).json({
-    success: false,
-    code: "PRODUCTION_APPROVAL_REQUIRED",
-    message: "Fitur ini membutuhkan approval production."
-  });
-});

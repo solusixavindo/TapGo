@@ -234,7 +234,17 @@ export const adminAuditLogQuerySchema = z.object({
   query: z.object({
     ...paginationQuery,
     action: z.string().trim().min(1).max(120).optional(),
-    entityType: z.string().trim().min(1).max(80).optional()
+    entityType: z.string().trim().min(1).max(80).optional(),
+    /// Hanya aksi oleh akun ini (pengawasan: "apa saja yang dilakukan Bendahara?").
+    actorId: z.string().uuid().optional(),
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional()
+  })
+});
+
+export const adminOversightQuerySchema = z.object({
+  query: z.object({
+    hours: z.coerce.number().int().min(1).max(168).optional()
   })
 });
 

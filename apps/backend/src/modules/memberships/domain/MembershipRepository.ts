@@ -35,19 +35,5 @@ export interface MembershipRepository {
     actorId: string;
     paymentReference: string;
   }, tx: Prisma.TransactionClient): Promise<UserMembershipStatus>;
-  updatePlan(input: {
-    tier: MembershipTier;
-    name?: string;
-    price?: Prisma.Decimal;
-    directBonus?: Prisma.Decimal;
-    activeLevels?: number;
-    isActive?: boolean;
-    benefits?: Array<{
-      level: number;
-      commissionRate: Prisma.Decimal;
-      fixedBonus: Prisma.Decimal;
-      isActive?: boolean;
-    }>;
-    adminId: string;
-  }, tx: Prisma.TransactionClient): Promise<MembershipPlan>;
+
 }

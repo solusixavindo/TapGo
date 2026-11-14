@@ -8,25 +8,6 @@ export const upgradeMembershipSchema = z.object({
   })
 });
 
-export const membershipRulesSchema = z.object({
-  params: z.object({
-    tier: z.nativeEnum(MembershipTier)
-  }),
-  body: z.object({
-    name: z.string().min(2).max(80).optional(),
-    price: z.coerce.number().nonnegative().optional(),
-    directBonus: z.coerce.number().nonnegative().optional(),
-    activeLevels: z.coerce.number().int().min(0).max(10).optional(),
-    isActive: z.boolean().optional(),
-    benefits: z.array(z.object({
-      level: z.coerce.number().int().min(1).max(10),
-      commissionRate: z.coerce.number().min(0).max(100),
-      fixedBonus: z.coerce.number().nonnegative(),
-      isActive: z.boolean().optional()
-    })).max(10).optional()
-  })
-});
-
 export const createMembershipOrderSchema = z.object({
   body: z.object({
     packageId: z.string().uuid(),

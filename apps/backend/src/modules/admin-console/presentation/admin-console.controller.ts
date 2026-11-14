@@ -147,6 +147,8 @@ export class AdminConsoleController {
       pageSize: Number(req.query.pageSize),
       ...(typeof req.query.action === "string" ? { action: req.query.action } : {}),
       ...(typeof req.query.entityType === "string" ? { entityType: req.query.entityType } : {}),
+      ...(typeof req.query.actorId === "string" ? { actorId: req.query.actorId } : {}),
+      ...this.dateRange(req),
       includeAuthority: roleSatisfies(req.auth!.role, "SUPER_ADMIN_VIP")
     });
     res.json({ success: true, data: result });

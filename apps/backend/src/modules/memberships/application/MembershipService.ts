@@ -49,26 +49,4 @@ export class MembershipService {
       );
     });
   }
-
-  updateRules(input: {
-    adminId: string;
-    tier: MembershipTier;
-    name?: string;
-    price?: Prisma.Decimal;
-    directBonus?: Prisma.Decimal;
-    activeLevels?: number;
-    isActive?: boolean;
-    benefits?: Array<{
-      level: number;
-      commissionRate: Prisma.Decimal;
-      fixedBonus: Prisma.Decimal;
-      isActive?: boolean;
-    }>;
-  }) {
-    if (typeof input.activeLevels === "number" && (input.activeLevels < 0 || input.activeLevels > 10)) {
-      throw new AppError("Active levels must be between 0 and 10", StatusCodes.BAD_REQUEST, "INVALID_ACTIVE_LEVELS");
-    }
-
-    return this.membershipRepository.transaction((tx) => this.membershipRepository.updatePlan(input, tx));
-  }
 }

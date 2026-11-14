@@ -27,13 +27,13 @@ profitSharingRouter.get(
 );
 profitSharingRouter.post(
   "/periods/:id/approve",
-  requireRoles("SUPER_ADMIN"),
+  requireRoles("SUPER_ADMIN_VIP"),
   validateRequest(profitSharingPeriodParamsSchema),
   asyncHandler(controller.approve)
 );
 profitSharingRouter.post(
   "/periods/:id/distribute",
-  requireRoles("SUPER_ADMIN"),
+  requireRoles("SUPER_ADMIN_VIP"),
   validateRequest(profitSharingPeriodParamsSchema),
   asyncHandler(controller.distribute)
 );

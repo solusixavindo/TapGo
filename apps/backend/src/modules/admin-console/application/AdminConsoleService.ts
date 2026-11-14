@@ -370,11 +370,16 @@ export class AdminConsoleService {
     pageSize: number;
     action?: string;
     entityType?: string;
+    actorId?: string;
+    dateFrom?: Date;
+    dateTo?: Date;
     includeAuthority: boolean;
   }) {
     const where: Prisma.AuditLogWhereInput = {
       ...(input.action ? { action: input.action } : {}),
       ...(input.entityType ? { entityType: input.entityType } : {}),
+      ...(input.actorId ? { actorId: input.actorId } : {}),
+      ...this.createdAtRange(input),
       ...(input.includeAuthority
         ? {}
         : {
