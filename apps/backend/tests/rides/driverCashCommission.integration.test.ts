@@ -649,6 +649,29 @@ describe.skipIf(!runIntegration)("Komisi pesanan tunai dari saldo driver (D4)", 
     expect(await prisma.walletTransaction.count()).toBe(0);
   });
 
+  it("ringkasan saldo driver: rincian kantong hanya bila kunci bonus menyala; mati = bentuk lama tanpa field baru", async () => {
+    const { user } = await createDriver();
+    await prisma.wallet.upsert({
+      where: { userId: user.id },
+      update: { balance: 100_000, cashBalance: 40_000, lockedBonusBalance: 10_000, depositBalance: 30_000 },
+      create: { userId: user.id, balance: 100_000, cashBalance: 40_000, lockedBonusBalance: 10_000, depositBalance: 30_000 }
+    });
+    const off = await service().walletSummary(user.id);
+    expect(off).not.toHaveProperty("breakdown");
+    expect(off).not.toHaveProperty("lockPercent");
+    expect(off.balance).toBe(100_000);
+
+    backendEnv.BONUS_LOCK_ENABLED = true;
+    try {
+      const on = await service().walletSummary(user.id);
+      expect(on.balance).toBe(100_000);
+      expect((on as { lockPercent?: number }).lockPercent).toBe(20);
+      expect((on as { breakdown?: unknown }).breakdown).toEqual({ earnings: 40_000, lockedBonus: 10_000, deposit: 30_000, other: 20_000 });
+    } finally {
+      backendEnv.BONUS_LOCK_ENABLED = false;
+    }
+  });
+
   it("ringkasan saldo driver: saldo, aturan komisi, riwayat komisi dan isi saldo", async () => {
     const { user } = await createDriver();
     await fund(user.id, 10_000);

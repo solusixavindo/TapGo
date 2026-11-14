@@ -1113,7 +1113,7 @@ export class RideService {
     await this.requireDriverProfile(userId);
     const wallet = await this.prisma.wallet.findUnique({
       where: { userId },
-      select: { id: true, balance: true },
+      select: { id: true, balance: true, cashBalance: true, lockedBonusBalance: true, depositBalance: true },
     });
     const rows = wallet
       ? await this.prisma.walletTransaction.findMany({
@@ -1133,6 +1133,21 @@ export class RideService {
     const byId = new Map(orders.map((o) => [o.id, o]));
     return {
       balance: wallet?.balance.toNumber() ?? 0,
+      // Rincian kantong (hanya tampilan) bila kunci bonus menyala; tidak dikirim saat mati supaya bentuk lama tidak berubah.
+      ...(env.BONUS_LOCK_ENABLED && wallet
+        ? {
+            lockPercent: env.BONUS_LOCK_PERCENT,
+            breakdown: {
+              earnings: wallet.cashBalance.toNumber(),
+              lockedBonus: wallet.lockedBonusBalance.toNumber(),
+              deposit: wallet.depositBalance.toNumber(),
+              other: Math.max(
+                0,
+                wallet.balance.minus(wallet.cashBalance).minus(wallet.lockedBonusBalance).minus(wallet.depositBalance).toNumber(),
+              ),
+            },
+          }
+        : {}),
       commissionEnabled: env.DRIVER_COMMISSION_ENABLED,
       commissionPercent: env.DRIVER_COMMISSION_PERCENT,
       // Saldo minimal untuk menerima pesanan tunai; 0 = tanpa batas.
