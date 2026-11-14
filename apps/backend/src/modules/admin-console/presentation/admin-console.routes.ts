@@ -259,6 +259,9 @@ adminConsoleRouter.get("/reports/ppob", requireRoles("SUPER_ADMIN"), validateReq
 // catatan di AdminConsoleService.ppobTransactionsReport().
 adminConsoleRouter.get("/reports/ppob-transactions.csv", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.ppobTransactionsReportCsv));
 adminConsoleRouter.get("/reports/ppob-transactions", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.ppobTransactionsReport));
+adminConsoleRouter.get("/reports/users.csv", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.usersReportCsv));
+adminConsoleRouter.get("/reports/drivers.csv", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.driversReportCsv));
+adminConsoleRouter.get("/reports/driver-transactions.csv", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.driverTransactionsReportCsv));
 adminConsoleRouter.get("/reports/reward.csv", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.rewardReportCsv));
 adminConsoleRouter.get("/reports/reward", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.rewardReport));
 adminConsoleRouter.get(

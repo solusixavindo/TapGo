@@ -716,6 +716,96 @@ export class AdminConsoleService {
     return this.bonusReport({ ...input, type: "REWARD_BONUS" });
   }
 
+  /** Ekspor data pengguna (Formulir Kendala 02/SPT-TAPGO/XAV/XI/2026 butir 2). Tanpa password, token, atau rekening bank. */
+  async usersReport(input: DateRangeInput) {
+    const where: Prisma.UserWhereInput = { role: "USER", ...this.createdAtRange(input) };
+    const [total, items] = await Promise.all([
+      this.prisma.user.count({ where }),
+      this.prisma.user.findMany({
+        where,
+        select: {
+          fullName: true,
+          phone: true,
+          email: true,
+          referralCode: true,
+          status: true,
+          lastLoginAt: true,
+          createdAt: true,
+          membership: { select: { tier: true } },
+          wallet: { select: { balance: true, cashBalance: true, lockedBonusBalance: true, depositBalance: true, ppobBalance: true } }
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        skip: this.skip(input),
+        take: input.pageSize
+      })
+    ]);
+    return this.page(items, total, input);
+  }
+
+  /** Ekspor data driver: profil, status, kendaraan, jumlah perjalanan selesai. Tanpa dokumen identitas. */
+  async driversReport(input: DateRangeInput) {
+    const where: Prisma.DriverWhereInput = { ...this.createdAtRange(input) };
+    const [total, items] = await Promise.all([
+      this.prisma.driver.count({ where }),
+      this.prisma.driver.findMany({
+        where,
+        select: {
+          id: true,
+          status: true,
+          kycStatus: true,
+          vehicleType: true,
+          vehiclePlate: true,
+          ratingAverage: true,
+          ratingCount: true,
+          createdAt: true,
+          user: { select: { fullName: true, phone: true, email: true, status: true } }
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        skip: this.skip(input),
+        take: input.pageSize
+      })
+    ]);
+    const completed = items.length
+      ? await this.prisma.ride.groupBy({
+          by: ["driverId"],
+          where: { driverId: { in: items.map((item) => item.id) }, status: "COMPLETED" },
+          _count: { _all: true }
+        })
+      : [];
+    const completedBy = new Map(completed.map((row) => [row.driverId, row._count._all]));
+    return this.page(
+      items.map((item) => ({ ...item, completedRides: completedBy.get(item.id) ?? 0 })),
+      total,
+      input
+    );
+  }
+
+  /** Ekspor transaksi dompet milik driver (pendapatan, komisi, insentif, penarikan, top up). */
+  async driverTransactionsReport(input: DateRangeInput) {
+    const where: Prisma.WalletTransactionWhereInput = {
+      wallet: { user: { driver: { isNot: null } } },
+      ...this.createdAtRange(input)
+    };
+    const [total, items] = await Promise.all([
+      this.prisma.walletTransaction.count({ where }),
+      this.prisma.walletTransaction.findMany({
+        where,
+        select: {
+          type: true,
+          amount: true,
+          referenceType: true,
+          referenceId: true,
+          createdAt: true,
+          wallet: { select: { user: { select: { fullName: true, phone: true } } } }
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        skip: this.skip(input),
+        take: input.pageSize
+      })
+    ]);
+    return this.page(items, total, input);
+  }
+
   async rewards(input: RewardListInput) {
     const where: Prisma.RewardTransactionWhereInput = {
       ...(input.status ? { status: input.status } : {}),

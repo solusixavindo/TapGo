@@ -755,7 +755,9 @@ export function ppobSummaryReportApi(range?: PeriodQuery) {
  * sama dengan fetchDocumentObjectUrl — ambil sebagai blob lalu picu unduhan
  * lewat elemen <a> sementara.
  */
-export async function downloadReportCsv(kind: "bonus" | "ppob" | "ppob-transactions" | "reward", range?: PeriodQuery) {
+export type ReportCsvKind = "bonus" | "ppob" | "ppob-transactions" | "reward" | "users" | "drivers" | "driver-transactions";
+
+export async function downloadReportCsv(kind: ReportCsvKind, range?: PeriodQuery) {
   const response = await fetch(`${API_BASE}/admin/reports/${kind}.csv${periodSuffix(range)}`, {
     headers: { authorization: `Bearer ${readToken()}` },
     credentials: "omit"

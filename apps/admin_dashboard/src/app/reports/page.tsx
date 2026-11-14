@@ -5,6 +5,7 @@ import {
   FinancialSummary,
   PpobSummary,
   downloadReportCsv,
+  type ReportCsvKind,
   financialSummaryReport,
   formatRupiah,
   ppobSummaryReportApi,
@@ -18,7 +19,7 @@ import { useHardRouter as useRouter } from "../hard-nav";
 import PeriodFilter from "../period-filter";
 
 const CSV_REPORTS: Array<{
-  kind: "bonus" | "ppob" | "ppob-transactions" | "reward";
+  kind: ReportCsvKind;
   label: string;
   description: string;
 }> = [
@@ -33,7 +34,18 @@ const CSV_REPORTS: Array<{
     label: "Laporan Benefit PPOB Membership",
     description: "Kredit PPOB GRATIS dari paket membership (Silver/Gold/Platinum) — bukan transaksi beli."
   },
-  { kind: "reward", label: "Laporan Reward", description: "Riwayat reward — pending, disetujui, dibayar, ditolak." }
+  { kind: "reward", label: "Laporan Reward", description: "Riwayat reward — pending, disetujui, dibayar, ditolak." },
+  {
+    kind: "users",
+    label: "Data Pengguna",
+    description: "Nama, telepon, paket, status, dan saldo per kantong. Tanpa password dan rekening. Dapat dibuka di Excel."
+  },
+  { kind: "drivers", label: "Data Driver", description: "Profil, status, verifikasi, kendaraan, dan jumlah perjalanan selesai. Dapat dibuka di Excel." },
+  {
+    kind: "driver-transactions",
+    label: "Transaksi Driver",
+    description: "Pendapatan, komisi, insentif, top up, dan penarikan semua driver pada periode. Dapat dibuka di Excel."
+  }
 ];
 
 export default function ReportsPage() {
@@ -76,7 +88,7 @@ export default function ReportsPage() {
     void refresh();
   }, [router, refresh]);
 
-  async function onDownload(kind: "bonus" | "ppob" | "ppob-transactions" | "reward") {
+  async function onDownload(kind: ReportCsvKind) {
     if (downloading) return;
     setDownloading(kind);
     setError("");

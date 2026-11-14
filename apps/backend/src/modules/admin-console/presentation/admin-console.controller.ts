@@ -577,6 +577,94 @@ export class AdminConsoleController {
     this.sendCsv(res, "tapgo-reward-report.csv", this.commissionRows(items));
   };
 
+  usersReportCsv = async (req: Request, res: Response) => {
+    const items = await this.collectAllPages((page) =>
+      this.adminConsoleService.usersReport({ page, pageSize: CSV_PAGE_SIZE, ...this.dateRange(req) })
+    );
+    await this.auditExport(req, "users", items.length);
+    const date = (value: unknown) => (value instanceof Date ? value.toISOString() : "");
+    this.sendCsv(
+      res,
+      "tapgo-data-pengguna.csv",
+      items.map((item) => ({
+        nama: item.fullName,
+        telepon: item.phone,
+        email: item.email ?? "",
+        kodeReferral: item.referralCode,
+        paket: item.membership?.tier ?? "BASIC",
+        statusAkun: item.status,
+        terdaftar: date(item.createdAt),
+        loginTerakhir: date(item.lastLoginAt),
+        saldoTotal: String(item.wallet?.balance ?? 0),
+        saldoDapatDitarik: String(item.wallet?.cashBalance ?? 0),
+        bonusTerkunci: String(item.wallet?.lockedBonusBalance ?? 0),
+        deposit: String(item.wallet?.depositBalance ?? 0),
+        saldoPpob: String(item.wallet?.ppobBalance ?? 0)
+      })),
+      ["nama", "telepon", "email", "kodeReferral", "paket", "statusAkun", "terdaftar", "loginTerakhir", "saldoTotal", "saldoDapatDitarik", "bonusTerkunci", "deposit", "saldoPpob"],
+      true
+    );
+  };
+
+  driversReportCsv = async (req: Request, res: Response) => {
+    const items = await this.collectAllPages((page) =>
+      this.adminConsoleService.driversReport({ page, pageSize: CSV_PAGE_SIZE, ...this.dateRange(req) })
+    );
+    await this.auditExport(req, "drivers", items.length);
+    this.sendCsv(
+      res,
+      "tapgo-data-driver.csv",
+      items.map((item) => ({
+        nama: item.user.fullName,
+        telepon: item.user.phone,
+        email: item.user.email ?? "",
+        statusAkun: item.user.status,
+        statusDriver: item.status,
+        verifikasi: item.kycStatus,
+        kendaraan: item.vehicleType,
+        plat: item.vehiclePlate ?? "",
+        perjalananSelesai: String(item.completedRides),
+        ratingRataRata: String(item.ratingAverage),
+        jumlahPenilaian: String(item.ratingCount),
+        terdaftar: item.createdAt.toISOString()
+      })),
+      ["nama", "telepon", "email", "statusAkun", "statusDriver", "verifikasi", "kendaraan", "plat", "perjalananSelesai", "ratingRataRata", "jumlahPenilaian", "terdaftar"],
+      true
+    );
+  };
+
+  driverTransactionsReportCsv = async (req: Request, res: Response) => {
+    const items = await this.collectAllPages((page) =>
+      this.adminConsoleService.driverTransactionsReport({ page, pageSize: CSV_PAGE_SIZE, ...this.dateRange(req) })
+    );
+    await this.auditExport(req, "driver-transactions", items.length);
+    this.sendCsv(
+      res,
+      "tapgo-transaksi-driver.csv",
+      items.map((item) => ({
+        tanggal: item.createdAt.toISOString(),
+        driver: item.wallet.user.fullName,
+        telepon: item.wallet.user.phone,
+        jenis: item.type,
+        jumlah: String(item.amount),
+        referensi: [item.referenceType, item.referenceId].filter(Boolean).join(":")
+      })),
+      ["tanggal", "driver", "telepon", "jenis", "jumlah", "referensi"],
+      true
+    );
+  };
+
+  /** Ekspor memuat data pribadi: setiap unduhan dicatat (siapa, jenis, berapa baris). */
+  private async auditExport(req: Request, report: string, rows: number) {
+    await this.adminConsoleService.recordAdminAction({
+      actorId: req.auth!.userId,
+      action: "REPORT_EXPORT",
+      entityType: "REPORT",
+      entityId: report,
+      metadata: { rows, dateFrom: typeof req.query.dateFrom === "string" ? req.query.dateFrom : null, dateTo: typeof req.query.dateTo === "string" ? req.query.dateTo : null }
+    });
+  }
+
   /**
    * Mengambil SEMUA baris untuk ekspor CSV, bukan hanya halaman pertama. Dulu ekspor memanggil layanan dengan
    * pageSize 100 sehingga laporan tahunan diam-diam hanya memuat 100 baris terbaru. Batas CSV_MAX_ROWS menjaga
@@ -653,7 +741,8 @@ export class AdminConsoleController {
     res: Response,
     filename: string,
     rows: Array<Record<string, string>>,
-    headers: readonly string[] = ["user", "phone", "type", "amount", "status", "date"]
+    headers: readonly string[] = ["user", "phone", "type", "amount", "status", "date"],
+    excelBom = false
   ) {
     const truncated = rows.length >= CSV_MAX_ROWS;
     const csv = [
@@ -663,7 +752,8 @@ export class AdminConsoleController {
     ].join("\n");
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.send(csv);
+    // BOM UTF-8 agar Excel membaca huruf Indonesia (nama, alamat) dengan benar; hanya untuk ekspor baru.
+    res.send(excelBom ? `\uFEFF${csv}` : csv);
   }
 
   private csvCell(value: string) {
