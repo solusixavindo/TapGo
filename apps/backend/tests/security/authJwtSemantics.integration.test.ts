@@ -218,7 +218,8 @@ describe.skipIf(!runIntegration)("Stage 5.4 — semantik JWT & batas router admi
       where: { id: driver.id },
     });
     expect(after.status).toBe("ACTIVE");
-    expect(await prisma.auditLog.count()).toBe(0);
+    // Catatan aktivitas HTTP (ADMIN_REQUEST) memang ikut tercatat; yang dinilai: tidak ada audit AKSI (perubahan) yang tertulis.
+    expect(await prisma.auditLog.count({ where: { action: { not: "ADMIN_REQUEST" } } })).toBe(0);
   });
 
   it("aturan authVersion untuk user yang MASIH ADA tidak berubah oleh perbaikan M3", async () => {

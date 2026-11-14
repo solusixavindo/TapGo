@@ -264,7 +264,8 @@ describe.skipIf(!runIntegration)("Stage 5.3 review — pengetatan moderasi admin
       where: { id: driver.profile.id },
     });
     expect(profile.status).toBe("ACTIVE");
-    expect(await prisma.auditLog.count()).toBe(0);
+    // Catatan aktivitas HTTP (ADMIN_REQUEST) memang ikut tercatat; yang dinilai: tidak ada audit AKSI (perubahan) yang tertulis.
+    expect(await prisma.auditLog.count({ where: { action: { not: "ADMIN_REQUEST" } } })).toBe(0);
   });
 
   // --- D2: audit moderasi wajib ada meski driver belum punya ride ----------
