@@ -166,6 +166,82 @@ String _shortDate(DateTime? value) {
   return '${two(local.day)}/${two(local.month)}/${local.year} ${two(local.hour)}.${two(local.minute)}';
 }
 
+/// Rincian Saldo TapGo: hanya informasi, tanpa tombol atau tautan. Seluruh bagian dapat dipakai untuk komisi dan
+/// pembayaran; bonus terkunci tidak dapat ditarik.
+class _BalanceBreakdown extends StatelessWidget {
+  const _BalanceBreakdown({required this.wallet});
+  final DriverWalletSummary wallet;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final rows = <({String key, String label, String hint, int value})>[
+      (
+        key: 'earnings',
+        label: 'Saldo bonus dan penghasilan',
+        hint: '${100 - wallet.lockPercent}% dari tiap bonus dan penghasilan perjalanan.',
+        value: wallet.earningsBalance
+      ),
+      (
+        key: 'locked',
+        label: 'Bonus terkunci',
+        hint: '${wallet.lockPercent}% dari tiap bonus. Dapat dipakai, tidak dapat ditarik.',
+        value: wallet.lockedBonusBalance
+      ),
+      (
+        key: 'deposit',
+        label: 'Deposit',
+        hint: 'Saldo yang Anda isi sendiri.',
+        value: wallet.depositBalance
+      ),
+      if (wallet.otherBalance > 0)
+        (
+          key: 'other',
+          label: 'Lainnya',
+          hint: 'Transfer masuk dan pengembalian dana.',
+          value: wallet.otherBalance
+        ),
+    ];
+    return Container(
+      key: const ValueKey('wallet-breakdown'),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Rincian saldo', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                key: ValueKey('wallet-breakdown-${row.key}'),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(row.label, style: theme.textTheme.bodyMedium),
+                        Text(row.hint, style: theme.textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(_rupiah(row.value),
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _WalletCard extends StatelessWidget {
   const _WalletCard({required this.wallet});
   final DriverWalletSummary wallet;
@@ -185,6 +261,10 @@ class _WalletCard extends StatelessWidget {
             Text(_rupiah(wallet.balance),
                 key: const ValueKey('wallet-balance'),
                 style: theme.textTheme.headlineMedium),
+            if (wallet.hasBreakdown) ...[
+              const SizedBox(height: 12),
+              _BalanceBreakdown(wallet: wallet),
+            ],
             if (wallet.commissionEnabled) ...[
               const SizedBox(height: 8),
               Text(

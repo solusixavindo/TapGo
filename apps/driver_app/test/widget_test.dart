@@ -2717,6 +2717,60 @@ void main() {
       expect(find.byKey(const ValueKey('wallet-topup-button')), findsOneWidget);
     });
 
+    testWidgets('rincian saldo (kunci bonus): tampil dari server, hanya informasi, tidak tampil bila server lama',
+        (tester) async {
+      final withBreakdown = DriverWalletSummary.fromJson({
+        'balance': 100000,
+        'commissionEnabled': true,
+        'commissionPercent': 8,
+        'minCashBalance': 50000,
+        'topUpUrl': 'https://tapgolion.id/topup',
+        'entries': <Object>[],
+        'lockPercent': 20,
+        'breakdown': {'earnings': 40000, 'lockedBonus': 10000, 'deposit': 30000, 'other': 20000},
+      });
+      // Pembacaan JSON server (bukan nilai yang disuntik): semua kantong terbaca.
+      expect(withBreakdown.hasBreakdown, isTrue);
+      expect(
+          [withBreakdown.earningsBalance, withBreakdown.lockedBonusBalance, withBreakdown.depositBalance, withBreakdown.otherBalance],
+          [40000, 10000, 30000, 20000]);
+
+      final repo = FakeDriverRepository(session: demoSession)..walletResult = withBreakdown;
+      await pumpDriver(tester, repo);
+      await tester.tap(find.byIcon(Icons.savings_rounded));
+      await tester.pumpAndSettle();
+      final card = find.byKey(const ValueKey('wallet-breakdown'));
+      expect(card, findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text('Bonus terkunci')), findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text('Rp10.000')), findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text('Rp30.000')), findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text('Rp40.000')), findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text('Rp20.000')), findsOneWidget);
+      // Hanya informasi: tidak ada tombol di dalam kartu rincian.
+      expect(find.descendant(of: card, matching: find.byType(OutlinedButton)), findsNothing);
+      expect(find.descendant(of: card, matching: find.byType(TextButton)), findsNothing);
+      expect(find.descendant(of: card, matching: find.byType(FilledButton)), findsNothing);
+    });
+
+    testWidgets('rincian saldo: server lama (tanpa breakdown) tidak menampilkan kartu rincian',
+        (tester) async {
+      final old = DriverWalletSummary.fromJson({
+        'balance': 84280,
+        'commissionEnabled': true,
+        'commissionPercent': 8,
+        'topUpUrl': 'https://tapgolion.id/topup',
+        'entries': <Object>[],
+      });
+      expect(old.hasBreakdown, isFalse);
+      final repo = FakeDriverRepository(session: demoSession)..walletResult = old;
+      await pumpDriver(tester, repo);
+      await tester.tap(find.byIcon(Icons.savings_rounded));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('wallet-card')), findsOneWidget);
+      expect(find.byKey(const ValueKey('wallet-breakdown')), findsNothing);
+      expect(find.text('Rp84.280'), findsOneWidget);
+    });
+
     testWidgets(
         'setelah isi saldo di peramban: kembali ke aplikasi memuat ulang saldo, tarik layar juga memuat ulang',
         (tester) async {

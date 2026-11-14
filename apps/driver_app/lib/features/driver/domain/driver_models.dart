@@ -859,11 +859,24 @@ class DriverWalletSummary {
     required this.topUpUrl,
     required this.entries,
     this.minCashBalance = 0,
+    this.lockPercent = 0,
+    this.earningsBalance = 0,
+    this.lockedBonusBalance = 0,
+    this.depositBalance = 0,
+    this.otherBalance = 0,
   });
 
   factory DriverWalletSummary.fromJson(Map<String, dynamic> json) {
     final raw = json['entries'];
+    final breakdown = json['breakdown'] is Map
+        ? Map<String, dynamic>.from(json['breakdown'] as Map)
+        : const <String, dynamic>{};
     return DriverWalletSummary(
+      lockPercent: _intOf(json['lockPercent']) ?? 0,
+      earningsBalance: _intOf(breakdown['earnings']) ?? 0,
+      lockedBonusBalance: _intOf(breakdown['lockedBonus']) ?? 0,
+      depositBalance: _intOf(breakdown['deposit']) ?? 0,
+      otherBalance: _intOf(breakdown['other']) ?? 0,
       balance: _intOf(json['balance']) ?? 0,
       commissionEnabled: json['commissionEnabled'] == true,
       commissionPercent: _intOf(json['commissionPercent']) ?? 8,
@@ -886,6 +899,16 @@ class DriverWalletSummary {
 
   /// Saldo minimal untuk menerima pesanan tunai (0 = tanpa batas). Server yang menegakkan; ini hanya untuk tampilan.
   final int minCashBalance;
+
+  /// Rincian kantong Saldo TapGo (hanya tampilan). [lockPercent] 0 = server lama atau fitur belum menyala:
+  /// rincian tidak ditampilkan.
+  final int lockPercent;
+  final int earningsBalance;
+  final int lockedBonusBalance;
+  final int depositBalance;
+  final int otherBalance;
+
+  bool get hasBreakdown => lockPercent > 0;
 }
 
 class DriverEarningsSummary {
