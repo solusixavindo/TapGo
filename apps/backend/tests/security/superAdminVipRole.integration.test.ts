@@ -63,7 +63,6 @@ const SUPER_ADMIN_ENDPOINTS: ReadonlyArray<Endpoint> = [
   { method: "GET", path: "/api/v1/admin/commission-settings" },
   { method: "GET", path: "/api/v1/admin/roles" },
   { method: "PUT", path: "/api/v1/admin/roles/00000000-0000-4000-8000-000000000000" },
-  { method: "PUT", path: "/api/v1/admin/app-settings" },
 ];
 
 let server: Server | undefined;

@@ -97,7 +97,8 @@ describe.skipIf(!runIntegration)("Alur pembagian laba (HTTP)", () => {
   });
 
   it("buat -> pratinjau (tanpa mengubah saldo) -> setujui -> bagikan; Platinum dibagi rata dan audit tercatat", async () => {
-    const actor = await createUser("SUPER_ADMIN");
+    // Menyetujui dan membagikan laba khusus Super Admin VIP (keputusan Owner 14 Nov 2026).
+    const actor = await createUser("SUPER_ADMIN_VIP");
     const token = tokenOf(actor);
     const platinumA = await createUser("USER");
     const platinumB = await createUser("USER");

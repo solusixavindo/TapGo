@@ -280,9 +280,9 @@ describe.skipIf(!runIntegration)("Stage 5.4 — semantik JWT & batas router admi
 
   it("delapan route admin sah tetap mencapai handler yang benar", async () => {
     const admin = await createUser("ADMIN");
-    // Moderasi driver dan koreksi status ride memindahkan/mengembalikan uang
-    // (refund TapGoPay), jadi hanya SUPER_ADMIN; sisanya cukup ADMIN.
-    const superAdmin = await createUser("SUPER_ADMIN");
+    // Menangguhkan driver dan koreksi status ride memindahkan/mengembalikan uang
+    // (refund TapGoPay), jadi hanya SUPER_ADMIN_VIP; sisanya cukup ADMIN.
+    const superAdmin = await createUser("SUPER_ADMIN_VIP");
     const driver = await createDriverProfile();
     const vehicle = await prisma.rideVehicle.findFirstOrThrow({
       where: { driverProfileId: driver.id },

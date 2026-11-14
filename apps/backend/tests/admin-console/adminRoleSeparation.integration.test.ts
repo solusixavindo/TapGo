@@ -149,7 +149,7 @@ describe.skipIf(!runIntegration)("Admin role separation", () => {
     expect(asSuper).toContain("085863268373");
   });
 
-  it("log audit: SUPER_ADMIN tidak melihat aksi otoritas, VIP melihat semuanya", async () => {
+  it("log audit: khusus VIP (Super Admin ditolak), VIP melihat semua termasuk aksi otoritas", async () => {
     const superAdmin = await createUser("SUPER_ADMIN");
     const vip = await createUser("SUPER_ADMIN_VIP");
     await prisma.auditLog.createMany({
@@ -160,13 +160,8 @@ describe.skipIf(!runIntegration)("Admin role separation", () => {
       ]
     });
 
-    const forSuper = (await (await call(superAdmin, "/api/v1/admin/audit-logs")).json()) as {
-      data: { items: Array<{ action: string }> };
-    };
-    const superActions = forSuper.data.items.map((item) => item.action);
-    expect(superActions).toContain("WITHDRAWAL_APPROVED");
-    expect(superActions).not.toContain("ADMIN_ROLE_ASSIGNED");
-    expect(superActions).not.toContain("admin.scope.granted");
+    // Pengawasan aksi admin adalah hak pemilik: Super Admin tidak membaca log (keputusan Owner 14 Nov 2026).
+    expect((await call(superAdmin, "/api/v1/admin/audit-logs")).status).toBe(403);
 
     const forVip = (await (await call(vip, "/api/v1/admin/audit-logs")).json()) as {
       data: { items: Array<{ action: string }> };
@@ -174,7 +169,6 @@ describe.skipIf(!runIntegration)("Admin role separation", () => {
     const vipActions = forVip.data.items.map((item) => item.action);
     expect(vipActions).toEqual(expect.arrayContaining(["WITHDRAWAL_APPROVED", "ADMIN_ROLE_ASSIGNED", "admin.scope.granted"]));
   });
-
 
   it("hanya SUPER_ADMIN_VIP yang dapat menentukan role ADMIN dan SUPER_ADMIN", async () => {
     const admin = await createUser("ADMIN");

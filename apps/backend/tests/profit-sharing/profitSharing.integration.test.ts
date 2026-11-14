@@ -58,7 +58,7 @@ describe.skipIf(!runIntegration)("Profit sharing admin API", () => {
   });
 
   it("allows admin to create a profit sharing period", async () => {
-    const admin = await createApiUser("ADMINPS1", "SUPER_ADMIN");
+    const admin = await createApiUser("ADMINPS1", "SUPER_ADMIN_VIP");
 
     const response = await createPeriod(admin, 5, 2026, 300000);
     const body = await response.json() as { data: { status: string; periodMonth: number; periodYear: number; netProfitAmount: string; totalPoolAmount: string } };
@@ -72,7 +72,7 @@ describe.skipIf(!runIntegration)("Profit sharing admin API", () => {
   });
 
   it("allows super admin to approve a draft period", async () => {
-    const admin = await createApiUser("ADMINPS2", "SUPER_ADMIN");
+    const admin = await createApiUser("ADMINPS2", "SUPER_ADMIN_VIP");
     const period = await createPeriodData(admin);
 
     const response = await api(`/api/v1/admin/profit-sharing/periods/${period.id}/approve`, {
@@ -87,7 +87,7 @@ describe.skipIf(!runIntegration)("Profit sharing admin API", () => {
   });
 
   it("distributes final profit sharing only to qualified categories", async () => {
-    const admin = await createApiUser("ADMINPS3", "SUPER_ADMIN");
+    const admin = await createApiUser("ADMINPS3", "SUPER_ADMIN_VIP");
     const activeA = await createActiveMember("ACTIVEA", "SILVER");
     const activeB = await createActiveMember("ACTIVEB", "GOLD");
     await createApiUser("INACTIVE");
@@ -110,7 +110,7 @@ describe.skipIf(!runIntegration)("Profit sharing admin API", () => {
   });
 
   it("does not distribute to inactive members", async () => {
-    const admin = await createApiUser("ADMINPS4", "SUPER_ADMIN");
+    const admin = await createApiUser("ADMINPS4", "SUPER_ADMIN_VIP");
     const active = await createActiveMember("ACTIVE1", "PLATINUM");
     const inactive = await createActiveMember("OLDMEMB", "SILVER");
     await prisma.userMembership.updateMany({
@@ -128,7 +128,7 @@ describe.skipIf(!runIntegration)("Profit sharing admin API", () => {
   });
 
   it("blocks distributing a period twice", async () => {
-    const admin = await createApiUser("ADMINPS5", "SUPER_ADMIN");
+    const admin = await createApiUser("ADMINPS5", "SUPER_ADMIN_VIP");
     await createActiveMember("ACTIVEDP", "GOLD");
     const period = await createPeriodData(admin, 100000);
     await approvePeriod(admin, period.id);
@@ -142,7 +142,7 @@ describe.skipIf(!runIntegration)("Profit sharing admin API", () => {
   });
 
   it("skips a member who already has a distribution row and only credits the remaining one (M7 retry safety)", async () => {
-    const admin = await createApiUser("ADMINPS7", "SUPER_ADMIN");
+    const admin = await createApiUser("ADMINPS7", "SUPER_ADMIN_VIP");
     const alreadyPaid = await createActiveMember("PAIDGOLD", "GOLD");
     const notYetPaid = await createActiveMember("NEWGOLD", "GOLD");
     const period = await createPeriodData(admin, 100000);
@@ -201,7 +201,7 @@ describe.skipIf(!runIntegration)("Profit sharing admin API", () => {
   });
 
   it("records wallet transactions and commission history", async () => {
-    const admin = await createApiUser("ADMINPS6", "SUPER_ADMIN");
+    const admin = await createApiUser("ADMINPS6", "SUPER_ADMIN_VIP");
     const active = await createActiveMember("ACTIVEPS", "GOLD");
     const period = await createPeriodData(admin, 100000);
     await approvePeriod(admin, period.id);

@@ -83,7 +83,7 @@ describe.skipIf(!runIntegration)("TapGo business engine E2E", () => {
   });
 
   it("validates full membership, referral, wallet, commission, reward, and profit sharing flow", async () => {
-    const admin = await registerUser("Admin TapGo", "080000000000", "SUPER_ADMIN");
+    const admin = await registerUser("Admin TapGo", "080000000000", "SUPER_ADMIN_VIP");
 
     const userA = await registerUser("User A", "081000000001");
     await expectWalletPpobBalance(userA.id, "5000.00");
