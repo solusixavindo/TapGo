@@ -255,7 +255,15 @@ export default function OnlinePaymentsPage() {
                           ) : null}
                         </td>
                         <td className="px-4 py-3 text-xs text-slate-600">
-                          {item.method ? (METHOD_LABEL[item.method] ?? item.method) : "Belum dipilih"}
+                          {item.method ? (METHOD_LABEL[item.method] ?? item.method) : item.manualConfirmKind ? "Tidak lewat penyedia" : "Belum dipilih"}
+                          {item.manualConfirmKind === "ADMIN" ? (
+                            <p className="mt-1 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-800" data-testid="manual-confirm-admin">
+                              Ditandai lunas manual oleh {item.manualConfirmedBy} (tanpa bukti pembayaran penyedia)
+                            </p>
+                          ) : null}
+                          {item.manualConfirmKind === "BANK_TRANSFER" ? (
+                            <p className="mt-1 text-[11px] font-semibold text-slate-500">Transfer bank dikonfirmasi oleh {item.manualConfirmedBy}</p>
+                          ) : null}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${style.className}`}>{style.label}</span>

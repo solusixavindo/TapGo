@@ -436,6 +436,8 @@ export type DeletionPreview = {
   request: { id: string; status: DeletionStatus; reason: string | null; createdAt: string };
   user: { id: string; fullName: string; phone: string; email: string | null; role: string; status: string };
   blockers: Array<{ code: string; message: string }>;
+  /** Tidak menghalangi, tetapi harus diketahui sebelum menghapus (mis. saldo PPOB gratis yang hangus). */
+  warnings?: Array<{ code: string; message: string }>;
   canComplete: boolean;
   willErase: string[];
   willKeep: string[];
@@ -701,6 +703,34 @@ export function fetchOversight(hours = 24) {
   return request<OversightReport>(`/admin/dashboard/oversight?hours=${hours}`);
 }
 
+/** Unduh Log Aktivitas (Excel) dengan saringan layar. Khusus VIP. */
+export async function downloadAuditLog(filters: AuditLogFilters) {
+  const q = new URLSearchParams();
+  for (const key of ["action", "actorId", "dateFrom", "dateTo"] as const) {
+    const value = filters[key];
+    if (value) q.set(key, value);
+  }
+  if (filters.hideReadOnly) q.set("hideReadOnly", "true");
+  const response = await fetch(`${API_BASE}/admin/audit-logs.xlsx${q.size > 0 ? `?${q.toString()}` : ""}`, {
+    headers: { authorization: `Bearer ${readToken()}` },
+    credentials: "omit"
+  });
+  endSessionIfExpired(response);
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { message?: string };
+    throw new Error(payload.message ?? "Log belum dapat diunduh.");
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `tapgo-log-aktivitas-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export type AuditLogEntry = {
   id: string;
   action: string;
@@ -713,12 +743,15 @@ export type AuditLogEntry = {
   ipAddress?: string | null;
 };
 
-export function fetchAuditLogs(params: { page: number; pageSize: number; action?: string; actorId?: string; dateFrom?: string; dateTo?: string }) {
+export type AuditLogFilters = { action?: string; actorId?: string; dateFrom?: string; dateTo?: string; hideReadOnly?: boolean };
+
+export function fetchAuditLogs(params: AuditLogFilters & { page: number; pageSize: number }) {
   const q = new URLSearchParams({ page: String(params.page), pageSize: String(params.pageSize) });
   for (const key of ["action", "actorId", "dateFrom", "dateTo"] as const) {
     const value = params[key];
     if (value) q.set(key, value);
   }
+  if (params.hideReadOnly) q.set("hideReadOnly", "true");
   return request<{ total: number; items: AuditLogEntry[] }>(`/admin/audit-logs?${q.toString()}`);
 }
 
@@ -1349,6 +1382,10 @@ export type OnlinePaymentItem = {
   expiresAt: string | null;
   /** Masih menunggu pembayaran padahal batas waktunya lewat (menunggu kabar kedaluwarsa dari Midtrans). */
   overdue: boolean;
+  /** Admin yang menandai pembayaran ini LUNAS secara manual (bukan penyedia pembayaran). */
+  manualConfirmedBy?: string | null;
+  /** ADMIN = konfirmasi manual tanpa bukti; BANK_TRANSFER = konfirmasi transfer bank (nominal unik). */
+  manualConfirmKind?: "ADMIN" | "BANK_TRANSFER" | null;
 };
 
 export type OnlinePaymentList = {

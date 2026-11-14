@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AuditLogEntry,
   OversightReport,
+  downloadAuditLog,
   fetchAuditLogs,
   fetchOversight,
   formatMoment,
@@ -13,7 +14,7 @@ import {
   readToken,
   roleAtLeast
 } from "../../lib/api";
-import { MONEY_AUDIT_ACTIONS, auditLabel } from "../../lib/audit-labels";
+import { AUDIT_FILTER_ACTIONS, MONEY_AUDIT_ACTIONS, auditEntryLabel, auditLabel } from "../../lib/audit-labels";
 import ClickCard from "../click-card";
 import ConsoleHeader from "../console-header";
 
@@ -39,6 +40,8 @@ export default function ActivityLogPage() {
   const [action, setAction] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [hideReadOnly, setHideReadOnly] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [page, setPage] = useState(1);
   const [logs, setLogs] = useState<{ total: number; items: AuditLogEntry[] } | null>(null);
   const [error, setError] = useState("");
@@ -73,7 +76,8 @@ export default function ActivityLogPage() {
           ...(action ? { action } : {}),
           ...(actorId ? { actorId } : {}),
           ...(from ? { dateFrom: dayStart(from) } : {}),
-          ...(to ? { dateTo: dayEnd(to) } : {})
+          ...(to ? { dateTo: dayEnd(to) } : {}),
+          ...(hideReadOnly ? { hideReadOnly: true } : {})
         })
       );
       setError("");
@@ -82,7 +86,7 @@ export default function ActivityLogPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, action, actorId, from, to]);
+  }, [page, action, actorId, from, to, hideReadOnly]);
 
   const isVip = roleAtLeast(role, "SUPER_ADMIN_VIP");
   useEffect(() => {
@@ -93,6 +97,24 @@ export default function ActivityLogPage() {
   }, [isVip, loadLogs]);
 
   const totalPages = logs ? Math.max(1, Math.ceil(logs.total / PAGE_SIZE)) : 1;
+
+  async function download() {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      await downloadAuditLog({
+        ...(action ? { action } : {}),
+        ...(actorId ? { actorId } : {}),
+        ...(from ? { dateFrom: dayStart(from) } : {}),
+        ...(to ? { dateTo: dayEnd(to) } : {}),
+        ...(hideReadOnly ? { hideReadOnly: true } : {})
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Log belum dapat diunduh.");
+    } finally {
+      setDownloading(false);
+    }
+  }
   const filterBy = (id: string) => {
     setActorId(id);
     setPage(1);
@@ -224,11 +246,20 @@ export default function ActivityLogPage() {
               className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
             >
               <option value="">Semua aksi</option>
-              {[...MONEY_AUDIT_ACTIONS].map((a) => (
-                <option key={a} value={a}>
-                  {auditLabel(a)}
-                </option>
-              ))}
+              <optgroup label="Akun admin">
+                {AUDIT_FILTER_ACTIONS.map((a) => (
+                  <option key={a} value={a}>
+                    {auditLabel(a)}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Uang">
+                {[...MONEY_AUDIT_ACTIONS].map((a) => (
+                  <option key={a} value={a}>
+                    {auditLabel(a)}
+                  </option>
+                ))}
+              </optgroup>
             </select>
             <input aria-label="Dari tanggal" type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
             <input aria-label="Sampai tanggal" type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
@@ -239,11 +270,34 @@ export default function ActivityLogPage() {
                 setAction("");
                 setFrom("");
                 setTo("");
+                setHideReadOnly(false);
                 setPage(1);
               }}
               className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50"
             >
               Atur ulang
+            </button>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={hideReadOnly}
+                onChange={(e) => {
+                  setHideReadOnly(e.target.checked);
+                  setPage(1);
+                }}
+              />
+              Hanya yang menekan atau mengubah sesuatu (sembunyikan yang sekadar membuka halaman)
+            </label>
+            <button
+              type="button"
+              onClick={() => void download()}
+              disabled={downloading}
+              className="rounded-lg bg-brand-ink px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+              data-testid="download-log"
+            >
+              {downloading ? "Menyiapkan…" : "Unduh Excel (sesuai saringan)"}
             </button>
           </div>
 
@@ -270,7 +324,10 @@ export default function ActivityLogPage() {
                       {MONEY_AUDIT_ACTIONS.has(entry.action) ? (
                         <span className="mr-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">UANG</span>
                       ) : null}
-                      {auditLabel(entry.action)}
+                      {entry.action === "ADMIN_REQUEST" && (entry.metadata as { ok?: boolean } | null)?.ok === false ? (
+                        <span className="mr-1.5 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800">GAGAL/DITOLAK</span>
+                      ) : null}
+                      {auditEntryLabel(entry.action, entry.metadata)}
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-500">
                       {entry.entityType}
@@ -313,12 +370,17 @@ export default function ActivityLogPage() {
 }
 
 function Details({ value, ip }: { value: unknown; ip: string | null }) {
-  const text = value && typeof value === "object" && Object.keys(value as object).length > 0 ? JSON.stringify(value) : "";
+  const meta = value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+  const text = meta && Object.keys(meta).length > 0 ? JSON.stringify(meta, null, 1) : "";
   if (!text && !ip) return <span className="text-slate-400">—</span>;
+  const status = typeof meta?.statusCode === "number" ? meta.statusCode : null;
   return (
     <details>
-      <summary className="cursor-pointer font-semibold text-brand-blue">Buka</summary>
-      {text ? <pre className="mt-1 max-w-xs whitespace-pre-wrap break-words text-[11px]">{text}</pre> : null}
+      <summary className="cursor-pointer font-semibold text-brand-blue">
+        {typeof meta?.method === "string" ? `${meta.method} · ${status ?? ""}`.trim() : "Buka"}
+      </summary>
+      {typeof meta?.path === "string" ? <p className="mt-1 break-all font-mono text-[11px] text-slate-600">{meta.path}</p> : null}
+      {text ? <pre className="mt-1 max-w-sm whitespace-pre-wrap break-words text-[11px]">{text}</pre> : null}
       {ip ? <p className="mt-1 text-[11px] text-slate-500">IP {ip}</p> : null}
     </details>
   );

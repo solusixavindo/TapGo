@@ -219,6 +219,16 @@ export default function AccountDeletionPage() {
                 Tidak ada halangan. Akun dapat dihapus.
               </p>
             )}
+            {preview.warnings && preview.warnings.length > 0 ? (
+              <div className="mt-3 rounded-lg border border-sky-200 bg-sky-100 p-3" data-testid="deletion-warnings">
+                <p className="text-sm font-bold text-sky-900">Perlu diketahui sebelum menghapus</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-xs leading-5 text-sky-900">
+                  {preview.warnings.map((warning) => (
+                    <li key={warning.code}>{warning.message}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
 
             <div className="mt-4 grid gap-3 text-xs leading-5 sm:grid-cols-2">
               <div>

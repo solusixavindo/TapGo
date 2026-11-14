@@ -1,5 +1,9 @@
 /** Nama aksi audit dalam bahasa operator. Aksi yang belum terdaftar tampil apa adanya (jangan disembunyikan). */
 export const AUDIT_ACTION_LABEL: Record<string, string> = {
+  ADMIN_LOGIN: "Masuk ke konsol",
+  ADMIN_LOGOUT: "Keluar dari konsol",
+  ADMIN_PASSWORD_CHANGED: "Mengganti password",
+  ADMIN_REQUEST: "Menekan/membuka sesuatu di konsol",
   WITHDRAWAL_APPROVED: "Penarikan disetujui",
   WITHDRAWAL_REJECTED: "Penarikan ditolak",
   WITHDRAWAL_PAID: "Penarikan ditandai ditransfer",
@@ -35,11 +39,23 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   REPORT_EXPORT: "Laporan diunduh",
   DRIVER_DOCUMENT_VIEWED: "Dokumen driver dilihat",
   MEMBERSHIP_DOCUMENT_VIEWED: "Dokumen member dilihat",
-  AUTH_LOGIN_FAILED: "Login gagal",
+  AUTH_LOGIN_FAILED: "Percobaan masuk gagal (password salah)",
   SUPPORT_TICKET_UPDATED: "Tiket bantuan diperbarui"
 };
 
 export const auditLabel = (action: string) => AUDIT_ACTION_LABEL[action] ?? action;
+
+/** Uraian satu baris log: untuk ADMIN_REQUEST memakai kalimat yang dicatat server (mis. "Menyetujui penarikan dana"). */
+export function auditEntryLabel(action: string, metadata: unknown): string {
+  if (action === "ADMIN_REQUEST") {
+    const label = (metadata as { label?: unknown } | null)?.label;
+    if (typeof label === "string" && label) return label;
+  }
+  return auditLabel(action);
+}
+
+/** Pilihan penyaring jenis aksi di Log Aktivitas. */
+export const AUDIT_FILTER_ACTIONS = ["ADMIN_LOGIN", "ADMIN_LOGOUT", "AUTH_LOGIN_FAILED", "ADMIN_PASSWORD_CHANGED", "ADMIN_REQUEST"];
 
 /** Aksi yang menggerakkan atau menyetujui uang: ditandai di log. */
 export const MONEY_AUDIT_ACTIONS = new Set([
