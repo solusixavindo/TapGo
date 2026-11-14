@@ -56,7 +56,12 @@ export class AuthController {
   };
 
   logout = async (req: Request, res: Response) => {
-    await this.authService.logout(req.auth!.sessionId);
+    await this.authService.logout(req.auth!.sessionId, {
+      userId: req.auth!.userId,
+      role: req.auth!.role,
+      ...(req.ip ? { ipAddress: req.ip } : {}),
+      ...(typeof req.headers["user-agent"] === "string" ? { userAgent: req.headers["user-agent"] } : {})
+    });
     res.status(StatusCodes.NO_CONTENT).send();
   };
 

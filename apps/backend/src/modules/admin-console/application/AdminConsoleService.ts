@@ -373,9 +373,14 @@ export class AdminConsoleService {
     actorId?: string;
     dateFrom?: Date;
     dateTo?: Date;
+    /// Sembunyikan aktivitas yang hanya membuka halaman (ADMIN_REQUEST bertanda readOnly): tinggal yang menekan/mengubah.
+    hideReadOnly?: boolean;
     includeAuthority: boolean;
   }) {
     const where: Prisma.AuditLogWhereInput = {
+      ...(input.hideReadOnly
+        ? { NOT: [{ action: "ADMIN_REQUEST", metadata: { path: ["readOnly"], equals: true } }] }
+        : {}),
       ...(input.action ? { action: input.action } : {}),
       ...(input.entityType ? { entityType: input.entityType } : {}),
       ...(input.actorId ? { actorId: input.actorId } : {}),
@@ -383,10 +388,14 @@ export class AdminConsoleService {
       ...(input.includeAuthority
         ? {}
         : {
-            NOT: [
-              { action: { startsWith: "ADMIN_ROLE" } },
-              { action: { startsWith: "SUPER_ADMIN_VIP" } },
-              { action: { startsWith: "admin.scope" } }
+            AND: [
+              {
+                NOT: [
+                  { action: { startsWith: "ADMIN_ROLE" } },
+                  { action: { startsWith: "SUPER_ADMIN_VIP" } },
+                  { action: { startsWith: "admin.scope" } }
+                ]
+              }
             ]
           })
     };

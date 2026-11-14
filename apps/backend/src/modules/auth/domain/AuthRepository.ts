@@ -68,6 +68,8 @@ export interface AuthRepository {
   findUserById(id: string): Promise<User | null>;
   createUser(input: CreateUserInput): Promise<User>;
   updateLastLogin(userId: string): Promise<void>;
+  /** Jejak akun admin: masuk, keluar, ganti password. Dibaca pemilik di Log Aktivitas. */
+  recordAdminAuthEvent(input: { userId: string; action: "ADMIN_LOGIN" | "ADMIN_LOGOUT" | "ADMIN_PASSWORD_CHANGED"; ipAddress?: string; userAgent?: string; channel?: string }): Promise<void>;
   /** Jumlah percobaan masuk gagal sejak `since` (opsional: dari satu alamat IP saja). */
   countRecentLoginFailures(input: { userId: string; since: Date; ipAddress?: string }): Promise<number>;
   recordLoginFailure(input: { userId: string; ipAddress?: string }): Promise<void>;

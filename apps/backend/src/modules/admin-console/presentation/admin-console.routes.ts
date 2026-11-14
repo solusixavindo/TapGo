@@ -162,6 +162,12 @@ adminConsoleRouter.get(
   asyncHandler(controller.errorMonitoring)
 );
 adminConsoleRouter.get(
+  ["/audit-logs.csv", "/audit-logs.xlsx"],
+  requireRoles("SUPER_ADMIN_VIP"),
+  validateRequest(adminAuditLogQuerySchema),
+  asyncHandler(controller.auditLogsExport)
+);
+adminConsoleRouter.get(
   "/audit-logs",
   requireRoles("SUPER_ADMIN_VIP"),
   validateRequest(adminAuditLogQuerySchema),

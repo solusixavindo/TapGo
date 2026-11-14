@@ -490,6 +490,25 @@ export class PrismaAuthRepository implements AuthRepository {
     }
   }
 
+  async recordAdminAuthEvent(input: { userId: string; action: "ADMIN_LOGIN" | "ADMIN_LOGOUT" | "ADMIN_PASSWORD_CHANGED"; ipAddress?: string; userAgent?: string; channel?: string }) {
+    const base = {
+      actorId: input.userId,
+      action: input.action,
+      entityType: "USER",
+      entityId: input.userId,
+      metadata: {
+        ...(input.userAgent ? { userAgent: input.userAgent.slice(0, 160) } : {}),
+        ...(input.channel ? { channel: input.channel } : {})
+      }
+    };
+    try {
+      await this.prisma.auditLog.create({ data: { ...base, ...(input.ipAddress ? { ipAddress: input.ipAddress } : {}) } });
+    } catch {
+      // Alamat yang tidak berbentuk IP sah tidak boleh menggagalkan login; catat tanpa alamat.
+      await this.prisma.auditLog.create({ data: base });
+    }
+  }
+
   async updateLastLogin(userId: string) {
     await this.prisma.user.update({
       where: { id: userId },

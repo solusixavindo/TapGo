@@ -238,7 +238,8 @@ export const adminAuditLogQuerySchema = z.object({
     /// Hanya aksi oleh akun ini (pengawasan: "apa saja yang dilakukan Bendahara?").
     actorId: z.string().uuid().optional(),
     dateFrom: z.coerce.date().optional(),
-    dateTo: z.coerce.date().optional()
+    dateTo: z.coerce.date().optional(),
+    hideReadOnly: z.enum(["true", "false"]).optional()
   })
 });
 

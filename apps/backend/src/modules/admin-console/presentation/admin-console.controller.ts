@@ -11,6 +11,7 @@ import { AdminRoleService } from "../application/AdminRoleService.js";
 import { MembershipRefundService } from "../../memberships/application/MembershipRefundService.js";
 import { SystemHealthService } from "../application/SystemHealthService.js";
 import { ErrorMonitoringService, SentryProjectKey } from "../application/ErrorMonitoringService.js";
+import { auditDescription, auditKind } from "../application/auditLabels.js";
 import { buildXlsx, XlsxColumn } from "../../../core/export/xlsx.js";
 
 /** Ekspor CSV mengambil halaman berukuran besar ini sampai habis, dengan batas total baris demi memori server. */
@@ -54,7 +55,20 @@ const XLSX_COLUMNS: Record<string, XlsxColumn> = {
   driver: { header: "Driver", width: 26 },
   jenis: { header: "Jenis", width: 20 },
   jumlah: { header: "Jumlah (Rp)", type: "number", width: 16 },
-  referensi: { header: "Referensi", width: 30 }
+  referensi: { header: "Referensi", width: 30 },
+  waktu: { header: "Waktu (WIB)", type: "datetime", width: 18 },
+  pelaku: { header: "Pelaku", width: 24 },
+  peran: { header: "Peran", width: 16 },
+  golongan: { header: "Golongan", width: 11 },
+  uraian: { header: "Uraian", width: 44 },
+  kodeAksi: { header: "Kode Aksi", width: 30 },
+  sasaran: { header: "Sasaran", width: 34 },
+  metode: { header: "Metode", width: 9 },
+  rute: { header: "Rute", width: 44 },
+  statusHttp: { header: "Status HTTP", type: "number", width: 12 },
+  ip: { header: "Alamat IP", width: 18 },
+  perangkat: { header: "Perangkat/Peramban", width: 40 },
+  isian: { header: "Isian yang dikirim", width: 60 }
 };
 
 const iso = (value: unknown): string => (value instanceof Date ? value.toISOString() : String(value ?? ""));
@@ -148,6 +162,7 @@ export class AdminConsoleController {
       ...(typeof req.query.action === "string" ? { action: req.query.action } : {}),
       ...(typeof req.query.entityType === "string" ? { entityType: req.query.entityType } : {}),
       ...(typeof req.query.actorId === "string" ? { actorId: req.query.actorId } : {}),
+      ...(req.query.hideReadOnly === "true" ? { hideReadOnly: true } : {}),
       ...this.dateRange(req),
       includeAuthority: roleSatisfies(req.auth!.role, "SUPER_ADMIN_VIP")
     });
@@ -710,6 +725,50 @@ export class AdminConsoleController {
       metadata: { rows, dateFrom: typeof req.query.dateFrom === "string" ? req.query.dateFrom : null, dateTo: typeof req.query.dateTo === "string" ? req.query.dateTo : null }
     });
   }
+
+  /** Unduh Log Aktivitas (Excel/CSV) dengan saringan yang sama seperti layar. Khusus VIP; unduhan sendiri tercatat. */
+  auditLogsExport = async (req: Request, res: Response) => {
+    const filters = {
+      ...(typeof req.query.action === "string" ? { action: req.query.action } : {}),
+      ...(typeof req.query.actorId === "string" ? { actorId: req.query.actorId } : {}),
+      ...(req.query.hideReadOnly === "true" ? { hideReadOnly: true } : {}),
+      ...this.dateRange(req)
+    };
+    const items = await this.collectAllPages((page) =>
+      this.adminConsoleService.listAuditLogs({ page, pageSize: CSV_PAGE_SIZE, ...filters, includeAuthority: true }).then((r) => ({
+        items: r.items,
+        pagination: { totalPages: Math.ceil(r.total / CSV_PAGE_SIZE) }
+      }))
+    );
+    await this.auditExport(req, "audit-logs", items.length);
+    const wib = (value: Date) => value.toISOString();
+    this.sendCsv(
+      res,
+      "tapgo-log-aktivitas.csv",
+      items.map((item) => {
+        const meta = (item.metadata && typeof item.metadata === "object" ? item.metadata : {}) as Record<string, unknown>;
+        return {
+          waktu: wib(item.createdAt),
+          pelaku: item.actorName,
+          peran: item.actorRole ?? "",
+          golongan: auditKind(item.action, item.metadata),
+          uraian: auditDescription(item.action, item.metadata),
+          kodeAksi: item.action,
+          sasaran: [item.entityType, item.entityId].filter(Boolean).join(" · "),
+          metode: typeof meta.method === "string" ? meta.method : "",
+          rute: typeof meta.path === "string" ? meta.path : "",
+          statusHttp: typeof meta.statusCode === "number" ? String(meta.statusCode) : "",
+          ip: "ipAddress" in item && item.ipAddress ? String(item.ipAddress) : "",
+          perangkat: typeof meta.userAgent === "string" ? meta.userAgent : "",
+          isian: JSON.stringify(
+            Object.fromEntries(Object.entries(meta).filter(([key]) => !["label", "method", "path", "statusCode", "userAgent", "ok", "readOnly"].includes(key)))
+          )
+        };
+      }),
+      ["waktu", "pelaku", "peran", "golongan", "uraian", "kodeAksi", "sasaran", "metode", "rute", "statusHttp", "ip", "perangkat", "isian"],
+      true
+    );
+  };
 
   /**
    * Mengambil SEMUA baris untuk ekspor CSV, bukan hanya halaman pertama. Dulu ekspor memanggil layanan dengan

@@ -70,13 +70,21 @@ export class AccountDeletionService {
       blockers.push({ code: "ALREADY_DELETED", message: "Akun ini sudah dihapus." });
     }
 
+    // Uang sungguhan (Saldo TapGo) tidak boleh hangus diam-diam: anggota menarik atau memakainya dulu. Saldo PPOB yang
+    // hanya berasal dari bonus/benefit gratis tidak bernilai tunai dan tidak menghalangi (ia hangus, dan itu dicatat);
+    // saldo PPOB yang pernah diisi dengan uang (top up berbayar) tetap menghalangi.
     const wallet = await client.wallet.findUnique({ where: { userId } });
     if (wallet) {
-      const remaining = [wallet.balance, wallet.cashBalance, wallet.ppobBalance].some((amount) => amount.gt(0));
-      if (remaining) {
+      if (wallet.balance.gt(0) || wallet.cashBalance.gt(0)) {
         blockers.push({
           code: "BALANCE_REMAINING",
-          message: `Saldo masih ada (TapGo ${wallet.balance.toFixed(0)}, dapat ditarik ${wallet.cashBalance.toFixed(0)}, PPOB ${wallet.ppobBalance.toFixed(0)}). Minta anggota menarik atau memakainya dulu.`
+          message: `Saldo TapGo masih ada (total ${wallet.balance.toFixed(0)}, dapat ditarik ${wallet.cashBalance.toFixed(0)}). Minta anggota menarik atau memakainya dulu.`
+        });
+      }
+      if (wallet.ppobBalance.gt(0) && (await this.hasPaidPpobTopUp(client, wallet.id))) {
+        blockers.push({
+          code: "PPOB_PAID_BALANCE_REMAINING",
+          message: `Saldo PPOB ${wallet.ppobBalance.toFixed(0)} pernah diisi dengan uang (top up berbayar). Minta anggota memakainya dulu.`
         });
       }
     }
@@ -114,6 +122,27 @@ export class AccountDeletionService {
     return blockers;
   }
 
+  /** Pernah ada top up Saldo PPOB yang dibayar (bukan bonus/benefit gratis)? */
+  private async hasPaidPpobTopUp(client: Prisma.TransactionClient | PrismaClient, walletId: string) {
+    const count = await client.walletTransaction.count({
+      where: { walletId, type: "TOPUP", metadata: { path: ["target"], equals: "PPOB" } }
+    });
+    return count > 0;
+  }
+
+  /** Catatan yang tidak menghalangi tetapi harus diketahui sebelum menghapus. */
+  private async warningsFor(client: Prisma.TransactionClient | PrismaClient, userId: string) {
+    const warnings: DeletionBlocker[] = [];
+    const wallet = await client.wallet.findUnique({ where: { userId } });
+    if (wallet && wallet.ppobBalance.gt(0) && wallet.balance.lte(0) && !(await this.hasPaidPpobTopUp(client, wallet.id))) {
+      warnings.push({
+        code: "PPOB_FREE_BALANCE_FORFEIT",
+        message: `Saldo PPOB Rp${wallet.ppobBalance.toFixed(0)} berasal dari bonus/benefit gratis dan tidak bernilai tunai. Saldo ini akan hangus bersama akun.`
+      });
+    }
+    return warnings;
+  }
+
   async preview(requestId: string) {
     const request = await this.loadRequest(this.prisma, requestId);
     const blockers = request.status === "PENDING" || request.status === "APPROVED"
@@ -123,6 +152,7 @@ export class AccountDeletionService {
       request: { id: request.id, status: request.status, reason: request.reason, createdAt: request.createdAt },
       user: request.user,
       blockers,
+      warnings: blockers.length === 0 ? await this.warningsFor(this.prisma, request.userId) : [],
       canComplete: blockers.length === 0,
       willErase: DELETION_WILL_ERASE,
       willKeep: DELETION_WILL_KEEP
@@ -179,6 +209,31 @@ export class AccountDeletionService {
 
         const userId = request.userId;
         const now = new Date();
+
+        // Saldo PPOB gratis yang tersisa dihanguskan lewat catatan buku besar (bukan dibiarkan menggantung sebagai
+        // "saldo beredar" milik akun yang sudah tiada).
+        const wallet = await tx.wallet.findUnique({ where: { userId } });
+        let forfeitedPpob = new Prisma.Decimal(0);
+        if (wallet && wallet.ppobBalance.gt(0)) {
+          const cleared = await tx.wallet.updateMany({
+            where: { id: wallet.id, ppobBalance: wallet.ppobBalance },
+            data: { ppobBalance: 0 }
+          });
+          if (cleared.count !== 1) {
+            throw new AppError("Saldo berubah saat diproses. Muat ulang dan coba lagi.", StatusCodes.CONFLICT, "DELETION_BALANCE_CHANGED");
+          }
+          forfeitedPpob = wallet.ppobBalance;
+          await tx.walletTransaction.create({
+            data: {
+              walletId: wallet.id,
+              type: "ADJUSTMENT",
+              amount: wallet.ppobBalance.neg(),
+              referenceType: "ACCOUNT_DELETION_FORFEIT",
+              referenceId: request.id,
+              metadata: { kind: "PPOB_FREE_BALANCE_FORFEIT", forfeited: wallet.ppobBalance.toString() }
+            }
+          });
+        }
 
         const erased = {
           sessions: (await tx.session.deleteMany({ where: { userId } })).count,
@@ -251,7 +306,7 @@ export class AccountDeletionService {
             action: "ACCOUNT_DELETION_COMPLETED",
             entityType: "ACCOUNT_DELETION_REQUEST",
             entityId: request.id,
-            metadata: { userId, erased }
+            metadata: { userId, erased, forfeitedPpob: forfeitedPpob.toString() }
           }
         });
 

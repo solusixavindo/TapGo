@@ -168,6 +168,50 @@ describe.skipIf(!runIntegration)("Pemrosesan permintaan hapus akun oleh VIP", ()
     );
   });
 
+  it("saldo PPOB gratis (bonus/benefit) tidak menghalangi: tombol hapus aktif, tercatat hangus, dan saldo PPOB dinolkan", async () => {
+    const vip = await createUser("SUPER_ADMIN_VIP");
+    const { member, wallet, request } = await createMemberWithPersonalData();
+    await prisma.membershipDocument.updateMany({ where: { userId: member.id }, data: { status: "APPROVED" } });
+    await prisma.wallet.update({ where: { id: wallet.id }, data: { balance: "0.00", cashBalance: "0.00", ppobBalance: "5000.00" } });
+    await prisma.walletTransaction.create({
+      data: { walletId: wallet.id, type: "REGISTRATION_BONUS", amount: "5000.00", referenceType: "REGISTRATION_BONUS", referenceId: `rb-${member.id}`, metadata: { target: "PPOB" } }
+    });
+
+    const preview = await call(`/${request.id}/preview`, tokenOf(vip));
+    expect(preview.status).toBe(200);
+    expect(preview.data.canComplete).toBe(true);
+    expect(preview.data.blockers).toEqual([]);
+    expect(preview.data.warnings.map((w: { code: string }) => w.code)).toEqual(["PPOB_FREE_BALANCE_FORFEIT"]);
+    expect(preview.data.warnings[0].message).toContain("5000");
+
+    const result = await call(`/${request.id}/complete`, tokenOf(vip), { confirm: "HAPUS AKUN", password: VIP_PASSWORD });
+    expect(result.status).toBe(200);
+    expect((await prisma.wallet.findUniqueOrThrow({ where: { id: wallet.id } })).ppobBalance.toString()).toBe("0");
+    const forfeit = await prisma.walletTransaction.findFirstOrThrow({ where: { walletId: wallet.id, referenceType: "ACCOUNT_DELETION_FORFEIT" } });
+    expect(Number(forfeit.amount)).toBe(-5000);
+    const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "ACCOUNT_DELETION_COMPLETED", entityId: request.id } });
+    expect(audit.metadata).toMatchObject({ forfeitedPpob: "5000" });
+  });
+
+  it("saldo PPOB yang pernah diisi dengan uang (top up berbayar) tetap menghalangi; Saldo TapGo juga", async () => {
+    const vip = await createUser("SUPER_ADMIN_VIP");
+    const { member, wallet, request } = await createMemberWithPersonalData();
+    await prisma.membershipDocument.updateMany({ where: { userId: member.id }, data: { status: "APPROVED" } });
+    await prisma.wallet.update({ where: { id: wallet.id }, data: { balance: "0.00", cashBalance: "0.00", ppobBalance: "20000.00" } });
+    await prisma.walletTransaction.create({
+      data: { walletId: wallet.id, type: "TOPUP", amount: "20000.00", referenceType: "WALLET_TOPUP", referenceId: `tp-${member.id}`, metadata: { target: "PPOB" } }
+    });
+    const paid = await call(`/${request.id}/preview`, tokenOf(vip));
+    expect(paid.data.canComplete).toBe(false);
+    expect(paid.data.blockers.map((b: { code: string }) => b.code)).toEqual(["PPOB_PAID_BALANCE_REMAINING"]);
+    expect((await call(`/${request.id}/complete`, tokenOf(vip), { confirm: "HAPUS AKUN", password: VIP_PASSWORD })).status).toBe(409);
+    expect((await prisma.wallet.findUniqueOrThrow({ where: { id: wallet.id } })).ppobBalance.toString()).toBe("20000");
+
+    await prisma.wallet.update({ where: { id: wallet.id }, data: { ppobBalance: "0.00", balance: "3000.00" } });
+    const tg = await call(`/${request.id}/preview`, tokenOf(vip));
+    expect(tg.data.blockers.map((b: { code: string }) => b.code)).toEqual(["BALANCE_REMAINING"]);
+  });
+
   it("akun dengan kewajiban terbuka tidak dihapus dan tidak berubah sedikit pun", async () => {
     const vip = await createUser("SUPER_ADMIN_VIP");
     const { member, wallet, request } = await createMemberWithPersonalData();

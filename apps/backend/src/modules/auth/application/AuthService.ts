@@ -192,6 +192,16 @@ export class AuthService {
 
     await this.authRepository.updateLastLogin(user.id);
 
+    if (privileged) {
+      await this.authRepository.recordAdminAuthEvent({
+        userId: user.id,
+        action: "ADMIN_LOGIN",
+        ...(input.context.ipAddress ? { ipAddress: input.context.ipAddress } : {}),
+        ...(input.context.userAgent ? { userAgent: input.context.userAgent } : {}),
+        ...(input.context.channel ? { channel: String(input.context.channel) } : {})
+      });
+    }
+
     return this.issueTokenPair(user.id, user.role, input.context);
   }
 
@@ -411,8 +421,16 @@ export class AuthService {
     };
   }
 
-  async logout(sessionId: string) {
+  async logout(sessionId: string, actor?: { userId: string; role: UserRole; ipAddress?: string; userAgent?: string }) {
     await this.authRepository.revokeSession(sessionId);
+    if (actor && isAdminRole(actor.role)) {
+      await this.authRepository.recordAdminAuthEvent({
+        userId: actor.userId,
+        action: "ADMIN_LOGOUT",
+        ...(actor.ipAddress ? { ipAddress: actor.ipAddress } : {}),
+        ...(actor.userAgent ? { userAgent: actor.userAgent } : {})
+      });
+    }
   }
 
   /**
@@ -464,6 +482,9 @@ export class AuthService {
       passwordHash: await hashPassword(input.newPassword),
       now: new Date()
     });
+    if (isAdminRole(user.role)) {
+      await this.authRepository.recordAdminAuthEvent({ userId: user.id, action: "ADMIN_PASSWORD_CHANGED" });
+    }
   }
 
   /**
