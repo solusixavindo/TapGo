@@ -114,6 +114,10 @@ class WalletScreen extends ConsumerWidget {
                 ),
               ],
             ),
+            if (session.hasBalanceBreakdown) ...[
+              const SizedBox(height: 18),
+              _BalanceBreakdownCard(session: session),
+            ],
             const SizedBox(height: 22),
             Text(
               'Riwayat saldo',
@@ -143,6 +147,106 @@ class WalletScreen extends ConsumerWidget {
               ...history.valueOrNull!.map((item) => _ActivityTile(item: item)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Rincian Saldo TapGo: hanya informasi (tanpa tombol atau tautan). Tampil bila server mengirim persen kunci bonus.
+class _BalanceBreakdownCard extends StatelessWidget {
+  const _BalanceBreakdownCard({required this.session});
+
+  final DemoClientSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final rows = <({String label, int value, String hint})>[
+      (
+        // Kata "komisi" dan "pencairan" sengaja tidak dipakai di layar aplikasi Play (lihat wallet_screen_test).
+        label: 'Saldo bonus',
+        value: session.earningsBalance,
+        hint: '${100 - session.lockPercent}% dari tiap bonus.',
+      ),
+      (
+        label: 'Bonus terkunci',
+        value: session.lockedBonusBalance,
+        hint:
+            '${session.lockPercent}% dari tiap bonus. Dapat dipakai untuk perjalanan dan PPOB.',
+      ),
+      (
+        label: 'Deposit',
+        value: session.depositBalance,
+        hint: 'Saldo yang Anda isi sendiri.',
+      ),
+      if (session.otherBalance > 0)
+        (
+          label: 'Lainnya',
+          value: session.otherBalance,
+          hint: 'Transfer masuk dan pengembalian dana.',
+        ),
+    ];
+    return Container(
+      key: const ValueKey('wallet-breakdown'),
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Rincian Saldo TapGo',
+            style: TextStyle(
+              color: colorScheme.onSurface,
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          row.label,
+                          style: TextStyle(
+                            color: colorScheme.onSurface,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          row.hint,
+                          style: TextStyle(
+                            color: colorScheme.onSurfaceVariant,
+                            fontSize: 12,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    formatRupiah(row.value),
+                    style: TextStyle(
+                      color: colorScheme.onSurface,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }

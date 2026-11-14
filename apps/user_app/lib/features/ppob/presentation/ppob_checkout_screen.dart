@@ -270,8 +270,11 @@ class _PpobCheckoutScreenState extends ConsumerState<PpobCheckoutScreen> {
               // ini menjanjikan campuran saldo utama + saldo benefit PPOB —
               // debit sungguhan di server HANYA memotong saldo benefit PPOB,
               // tidak pernah saldo utama. Teks disamakan dengan kenyataan itu.
-              'Pembayaran memakai saldo benefit PPOB Anda. Saldo utama tidak '
-              'ikut terpakai. Tidak ada tautan pembayaran eksternal.',
+              (_inquiry?.payment.usesWalletBalance ?? false)
+                  ? 'Pembayaran memakai Saldo PPOB lebih dulu, lalu Saldo TapGo bila '
+                      'diperlukan. Tidak ada tautan pembayaran eksternal.'
+                  : 'Pembayaran memakai saldo benefit PPOB Anda. Saldo utama tidak '
+                      'ikut terpakai. Tidak ada tautan pembayaran eksternal.',
               style: theme.textTheme.bodySmall,
             ),
           ],
@@ -357,14 +360,24 @@ class _BreakdownCard extends StatelessWidget {
             _row(context, 'Biaya admin', ppobFormatRupiah(inquiry.product.adminFee)),
             const Divider(height: 20),
             _row(context, 'Total', ppobFormatRupiah(payment.amount), bold: true),
-            _row(context, 'Dari saldo benefit PPOB',
+            _row(
+                context,
+                payment.usesWalletBalance
+                    ? 'Dari Saldo PPOB'
+                    : 'Dari saldo benefit PPOB',
                 ppobFormatRupiah(payment.benefitAmount)),
+            // Saldo TapGo ikut membayar (server menandai usesWalletBalance): tampilkan bagiannya.
+            if (payment.usesWalletBalance &&
+                payment.sufficient &&
+                payment.balanceAmount > 0)
+              _row(context, 'Dari Saldo TapGo',
+                  ppobFormatRupiah(payment.balanceAmount)),
             // Audit keamanan 30 September 2026 (M1): balanceAmount BUKAN lagi
             // "akan diambil dari saldo utama" (itu tidak pernah terjadi di
             // debit sungguhan) — sekarang murni menandai kekurangan saldo
             // PPOB. Baris ini hanya tampil saat memang kurang, dengan label
             // yang jujur soal artinya.
-            if (!payment.sufficient)
+            if (!payment.sufficient && !payment.usesWalletBalance)
               _row(context, 'Kekurangan saldo PPOB',
                   ppobFormatRupiah(payment.balanceAmount)),
             const Divider(height: 20),
@@ -373,8 +386,10 @@ class _BreakdownCard extends StatelessWidget {
             if (!payment.sufficient) ...[
               const SizedBox(height: 10),
               Text(
-                'Saldo benefit PPOB tidak cukup untuk transaksi ini. Saldo utama '
-                'tidak dapat dipakai untuk menutup kekurangan ini.',
+                payment.usesWalletBalance
+                    ? 'Saldo PPOB dan Saldo TapGo tidak cukup untuk transaksi ini.'
+                    : 'Saldo benefit PPOB tidak cukup untuk transaksi ini. Saldo utama '
+                        'tidak dapat dipakai untuk menutup kekurangan ini.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: const Color(0xFFEF4444),
                   fontWeight: FontWeight.w700,

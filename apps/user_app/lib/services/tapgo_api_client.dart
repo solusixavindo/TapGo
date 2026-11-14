@@ -1257,6 +1257,8 @@ class _TapGoProductionSnapshot {
     final invoiceData =
         (orderData?['invoice'] as Map?)?.cast<String, dynamic>();
     final walletBalance = _intFrom(wallet['balance']);
+    final walletBreakdown =
+        (wallet['breakdown'] as Map?)?.cast<String, dynamic>() ?? const {};
     final activePackageName = _titleCase(
       packageData?['tier']?.toString() ??
           packageData?['name']?.toString() ??
@@ -1274,6 +1276,10 @@ class _TapGoProductionSnapshot {
         activePackageName: activePackageName,
         walletBalance: walletBalance,
         ppobBalance: ppobBalance,
+        earningsBalance: _intFrom(walletBreakdown['withdrawable']),
+        lockedBonusBalance: _intFrom(walletBreakdown['lockedBonus']),
+        depositBalance: _intFrom(walletBreakdown['deposit']),
+        lockPercent: _intFrom(wallet['lockPercent']),
         lastInvoiceNumber: invoiceData?['number']?.toString(),
         membershipJoinedAt: _dateLabel(membershipData?['activeAt']),
       ),
@@ -1358,6 +1364,10 @@ final _productionSnapshotProvider = FutureProvider<_TapGoProductionSnapshot>((
     activePackageName: snapshot.sessionPatch.activePackageName,
     walletBalance: snapshot.sessionPatch.walletBalance,
     ppobBalance: snapshot.sessionPatch.ppobBalance,
+    earningsBalance: snapshot.sessionPatch.earningsBalance,
+    lockedBonusBalance: snapshot.sessionPatch.lockedBonusBalance,
+    depositBalance: snapshot.sessionPatch.depositBalance,
+    lockPercent: snapshot.sessionPatch.lockPercent,
     lastInvoiceNumber: snapshot.sessionPatch.lastInvoiceNumber,
     membershipJoinedAt: snapshot.sessionPatch.membershipJoinedAt,
     isDemoMode: false,

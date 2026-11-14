@@ -51,6 +51,9 @@ class _FakePpobWires {
   PpobOrder? createResult;
   double inquiryWalletBalance = 250000;
   double inquiryPpobBalance = 50000;
+
+  /// Meniru server dengan kunci bonus menyala: Saldo PPOB dipakai dulu, kekurangannya dari Saldo TapGo.
+  bool walletFunding = false;
   int createCalls = 0;
   int inquiryCalls = 0;
   Duration createDelay = Duration.zero;
@@ -98,8 +101,12 @@ PpobRepository _repoFrom(_FakePpobWires wires) {
       // buildInquiryPayload di backend — debit sungguhan HANYA memotong
       // ppobBalance, tidak pernah saldo utama. sufficient dan benefitAmount
       // tidak lagi memperhitungkan wires.inquiryWalletBalance sama sekali.
-      final sufficient = wires.inquiryPpobBalance >= amount;
-      final benefit = sufficient ? amount : 0.0;
+      final fromPpob =
+          wires.inquiryPpobBalance < amount ? wires.inquiryPpobBalance : amount;
+      final sufficient = wires.walletFunding
+          ? (amount - fromPpob) <= wires.inquiryWalletBalance
+          : wires.inquiryPpobBalance >= amount;
+      final benefit = wires.walletFunding ? fromPpob : (sufficient ? amount : 0.0);
       return {
         'product': {
           'id': product.id,
@@ -118,6 +125,7 @@ PpobRepository _repoFrom(_FakePpobWires wires) {
           'benefitAmount': benefit,
           'balanceAmount': amount - benefit,
           'sufficient': sufficient,
+          if (wires.walletFunding) 'usesWalletBalance': true,
         },
         'wallet': {
           'balance': wires.inquiryWalletBalance,
@@ -326,6 +334,57 @@ void main() {
       expect(find.text('Kekurangan saldo PPOB'), findsNothing);
       expect(find.text('Dari saldo utama'), findsNothing);
       expect(find.text('Saldo benefit PPOB Anda'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Saldo TapGo ikut membayar: rincian menampilkan bagian Saldo PPOB dan Saldo TapGo, tombol bayar aktif',
+        (tester) async {
+      // Permintaan Owner 12 Nov 2026: Saldo TapGo (termasuk bonus terkunci) boleh dipakai PPOB.
+      final wires = _FakePpobWires()
+        ..walletFunding = true
+        ..inquiryPpobBalance = 4000
+        ..inquiryWalletBalance = 250000;
+      await pumpCheckout(tester, wires);
+      await fillTargetAndInquiry(tester);
+
+      expect(find.text('Dari Saldo PPOB'), findsOneWidget);
+      expect(find.text('Rp4.000'), findsWidgets);
+      expect(find.text('Dari Saldo TapGo'), findsOneWidget);
+      expect(find.text('Rp7.500'), findsWidgets);
+      expect(find.text('Kekurangan saldo PPOB'), findsNothing);
+      expect(find.textContaining('Saldo utama'), findsNothing);
+      expect(find.textContaining('Saldo TapGo bila'), findsOneWidget);
+      final button = tester.widget<FilledButton>(
+        find.ancestor(
+          of: find.text('Bayar Sekarang'),
+          matching: find.byWidgetPredicate((widget) => widget is FilledButton),
+        ),
+      );
+      expect(button.onPressed, isNotNull);
+    });
+
+    testWidgets(
+        'Saldo TapGo ikut membayar tetapi tetap kurang: pesan menyebut kedua saldo, bukan kalimat lama',
+        (tester) async {
+      final wires = _FakePpobWires()
+        ..walletFunding = true
+        ..inquiryPpobBalance = 1000
+        ..inquiryWalletBalance = 2000;
+      await pumpCheckout(tester, wires);
+      await fillTargetAndInquiry(tester);
+
+      expect(
+          find.text('Saldo PPOB dan Saldo TapGo tidak cukup untuk transaksi ini.'),
+          findsOneWidget);
+      expect(find.textContaining('tidak dapat dipakai untuk menutup'), findsNothing);
+      expect(find.text('Dari Saldo TapGo'), findsNothing);
+      final button = tester.widget<FilledButton>(
+        find.ancestor(
+          of: find.text('Bayar Sekarang'),
+          matching: find.byWidgetPredicate((widget) => widget is FilledButton),
+        ),
+      );
+      expect(button.onPressed, isNull);
     });
 
     Future<void> pumpMultiOperator(

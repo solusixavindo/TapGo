@@ -230,6 +230,10 @@ String ppobErrorMessage(Object error) {
         'Saldo Anda tidak cukup. Silakan gunakan nominal lain.',
       // Kode yang sebenarnya dikirim backend (PrismaPpobRepository); sebelumnya
       // jatuh ke "Terjadi kesalahan" generik.
+      // Server baru (Saldo TapGo ikut membayar) mengirim kalimat sendiri yang menyebut Saldo TapGo; server lama
+      // memakai kalimat tetap di bawah.
+      'INSUFFICIENT_PPOB_BALANCE' when error.message.contains('Saldo TapGo') =>
+        error.message,
       'INSUFFICIENT_PPOB_BALANCE' =>
         'Saldo benefit PPOB tidak cukup. Saldo utama tidak dapat dipakai untuk membayar ini.',
       'PPOB_IDEMPOTENCY_CONFLICT' =>

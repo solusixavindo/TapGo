@@ -68,6 +68,71 @@ void main() {
     expect(find.textContaining('ithdraw'), findsNothing);
   });
 
+  group('rincian Saldo TapGo (kunci bonus)', () {
+    Future<void> openWithBreakdown(WidgetTester tester, {required int lockPercent}) async {
+      tapGoSetHttpAdapterForTests(
+          FakeApi({'GET /wallet/transactions': (_) => FakeReply.ok(<Object>[])}));
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            tapGoSessionProviderForTest.overrideWith(
+              (ref) => DemoClientSession.initial().copyWith(
+                accessToken: 'token-uji',
+                isDemoMode: false,
+                walletBalance: 128000,
+                ppobBalance: 5000,
+                earningsBalance: 60000,
+                lockedBonusBalance: 20000,
+                depositBalance: 25000,
+                lockPercent: lockPercent,
+              ),
+            ),
+          ],
+          child: const MaterialApp(home: WalletScreen()),
+        ),
+      );
+      for (var i = 0; i < 15; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    testWidgets('fitur menyala: menampilkan bonus terkunci, deposit, dan sisa saldo; hanya informasi',
+        (tester) async {
+      await openWithBreakdown(tester, lockPercent: 20);
+      final card = find.byKey(const ValueKey('wallet-breakdown'));
+      expect(card, findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text('Bonus terkunci')), findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text('Rp20.000')), findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text('Deposit')), findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text('Rp25.000')), findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text('Saldo bonus')), findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text('Rp60.000')), findsOneWidget);
+      // 128.000 - 60.000 - 20.000 - 25.000 = 23.000 saldo lain.
+      expect(find.descendant(of: card, matching: find.text('Lainnya')), findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text('Rp23.000')), findsOneWidget);
+      expect(find.textContaining('20% dari tiap bonus'), findsOneWidget);
+      // Aturan Play untuk layar ini: tanpa kata komisi/pencairan/withdraw, tanpa tautan atau tombol di kartu.
+      expect(find.descendant(of: card, matching: find.byType(TextButton)), findsNothing);
+      expect(find.descendant(of: card, matching: find.byType(OutlinedButton)), findsNothing);
+      expect(find.descendant(of: card, matching: find.byType(FilledButton)), findsNothing);
+      expect(find.textContaining('omisi'), findsNothing);
+      expect(find.textContaining('ncair'), findsNothing);
+      expect(find.textContaining('ithdraw'), findsNothing);
+      expect(find.textContaining('tapgolion'), findsNothing);
+    });
+
+    testWidgets('fitur belum menyala (server lama atau mati): kartu rincian tidak tampil sama sekali',
+        (tester) async {
+      await openWithBreakdown(tester, lockPercent: 0);
+      expect(find.byKey(const ValueKey('wallet-breakdown')), findsNothing);
+      expect(find.text('Bonus terkunci'), findsNothing);
+      expect(find.text('Rp128.000'), findsOneWidget);
+    });
+  });
+
   testWidgets('tombol Transfer membuka layar transfer', (tester) async {
     final api =
         FakeApi({'GET /wallet/transactions': (_) => FakeReply.ok(<Object>[])});

@@ -14,6 +14,10 @@ class DemoClientSession {
     required this.walletBalance,
     required this.ppobBalance,
     required this.referralCode,
+    this.earningsBalance = 0,
+    this.lockedBonusBalance = 0,
+    this.depositBalance = 0,
+    this.lockPercent = 0,
   });
 
   factory DemoClientSession.initial() {
@@ -42,6 +46,21 @@ class DemoClientSession {
   final int ppobBalance;
   final String referralCode;
 
+  /// Rincian Saldo TapGo dari server (hanya tampilan): komisi dan bonus, bonus terkunci, deposit.
+  /// [lockPercent] 0 = rincian belum berlaku (server lama atau fitur belum menyala): layar tidak menampilkannya.
+  final int earningsBalance;
+  final int lockedBonusBalance;
+  final int depositBalance;
+  final int lockPercent;
+
+  bool get hasBalanceBreakdown => lockPercent > 0;
+
+  /// Saldo yang dapat dipakai tetapi tidak terlacak kantongnya (transfer masuk, pengembalian dana).
+  int get otherBalance {
+    final other = walletBalance - earningsBalance - lockedBonusBalance - depositBalance;
+    return other < 0 ? 0 : other;
+  }
+
   bool get isMember => true;
 
   DemoClientSession copyWith({
@@ -59,6 +78,10 @@ class DemoClientSession {
     int? walletBalance,
     int? ppobBalance,
     String? referralCode,
+    int? earningsBalance,
+    int? lockedBonusBalance,
+    int? depositBalance,
+    int? lockPercent,
   }) {
     return DemoClientSession(
       userId: userId ?? this.userId,
@@ -75,6 +98,10 @@ class DemoClientSession {
       walletBalance: walletBalance ?? this.walletBalance,
       ppobBalance: ppobBalance ?? this.ppobBalance,
       referralCode: referralCode ?? this.referralCode,
+      earningsBalance: earningsBalance ?? this.earningsBalance,
+      lockedBonusBalance: lockedBonusBalance ?? this.lockedBonusBalance,
+      depositBalance: depositBalance ?? this.depositBalance,
+      lockPercent: lockPercent ?? this.lockPercent,
     );
   }
 }

@@ -130,8 +130,11 @@ Sudah (backend, diuji, bendera mati):
 Web (tapgolion.id, 14 Nov 2026): kartu rincian saldo di Dompet; Tarik dana memilih sumber (saldo / deposit) dengan biaya,
 minimal, dan masa tunggu; riwayat menandai pengembalian deposit. Hanya tampil bila server mengirim persen kunci > 0.
 
-Belum: rincian saldo di aplikasi Play (user_app/driver_app); Syarat & Ketentuan dan pemberitahuan pengguna; layar admin
-untuk melihat kantong per anggota.
+Aplikasi Play user_app (14 Nov 2026): kartu "Rincian Saldo TapGo" (hanya tampilan), layar PPOB menampilkan bagian Saldo PPOB
+dan Saldo TapGo dengan kalimat yang benar. Tanpa tombol/tautan penarikan (aturan Play).
+
+Belum: rincian per kantong di driver_app (butuh perubahan endpoint ringkasan saldo driver; saldo total untuk komisi dan batas
+minimal sudah benar); Syarat & Ketentuan dan pemberitahuan pengguna; layar admin untuk melihat kantong per anggota.
 
 ## 8. Urutan pemasangan (setelah Owner menyetujui)
 

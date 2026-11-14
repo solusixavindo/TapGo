@@ -126,6 +126,7 @@ class PpobPaymentBreakdown {
     required this.benefitAmount,
     required this.balanceAmount,
     required this.sufficient,
+    this.usesWalletBalance = false,
   });
 
   final double amount;
@@ -133,12 +134,17 @@ class PpobPaymentBreakdown {
   final double balanceAmount;
   final bool sufficient;
 
+  /// True bila server mengizinkan Saldo TapGo ikut membayar (Saldo PPOB dipakai dulu). Server lama tidak
+  /// mengirimnya (false): kalimat dan rincian lama tetap berlaku.
+  final bool usesWalletBalance;
+
   factory PpobPaymentBreakdown.fromJson(Map<String, dynamic> json) {
     return PpobPaymentBreakdown(
       amount: _moneyFromJson(json['amount']),
       benefitAmount: _moneyFromJson(json['benefitAmount']),
       balanceAmount: _moneyFromJson(json['balanceAmount']),
       sufficient: json['sufficient'] == true,
+      usesWalletBalance: json['usesWalletBalance'] == true,
     );
   }
 }
@@ -234,6 +240,7 @@ class PpobBillInquiry {
     required this.totalAmount,
     required this.ppobBalance,
     required this.sufficient,
+    this.usesWalletBalance = false,
     this.period,
     this.expiresAt,
     DateTime? deadline,
@@ -251,6 +258,9 @@ class PpobBillInquiry {
   final double totalAmount;
   final double ppobBalance;
   final bool sufficient;
+
+  /// Lihat [PpobPaymentBreakdown.usesWalletBalance].
+  final bool usesWalletBalance;
   final DateTime? expiresAt;
 
   /// Batas bayar menurut jam PERANGKAT: sisa detik dari server ditambahkan ke jam
@@ -279,6 +289,7 @@ class PpobBillInquiry {
           ? _moneyFromJson(wallet['ppobBalance'])
           : 0,
       sufficient: json['sufficient'] == true,
+      usesWalletBalance: json['usesWalletBalance'] == true,
       expiresAt: _dateFromJson(json['expiresAt']),
       deadline: json['expiresInSeconds'] is num
           ? DateTime.now()

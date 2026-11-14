@@ -368,8 +368,11 @@ class _PpobBillScreenState extends ConsumerState<PpobBillScreen> {
               ),
             const SizedBox(height: 8),
             Text(
-              'Pembayaran memakai saldo benefit PPOB Anda. Saldo utama tidak '
-              'ikut terpakai. Tagihan berlaku singkat dan hanya untuk hari ini.',
+              (_inquiry?.usesWalletBalance ?? false)
+                  ? 'Pembayaran memakai Saldo PPOB lebih dulu, lalu Saldo TapGo bila '
+                      'diperlukan. Tagihan berlaku singkat dan hanya untuk hari ini.'
+                  : 'Pembayaran memakai saldo benefit PPOB Anda. Saldo utama tidak '
+                      'ikut terpakai. Tagihan berlaku singkat dan hanya untuk hari ini.',
               style: theme.textTheme.bodySmall,
             ),
           ],
@@ -410,13 +413,19 @@ class _BillCard extends StatelessWidget {
             const Divider(height: 20),
             _row(context, 'Total bayar', ppobFormatRupiah(inquiry.totalAmount),
                 bold: true, key: const ValueKey('bill-total')),
-            _row(context, 'Saldo benefit PPOB Anda',
+            _row(
+                context,
+                inquiry.usesWalletBalance
+                    ? 'Saldo PPOB Anda'
+                    : 'Saldo benefit PPOB Anda',
                 ppobFormatRupiah(inquiry.ppobBalance)),
             if (!inquiry.sufficient) ...[
               const SizedBox(height: 10),
               Text(
-                'Saldo benefit PPOB tidak cukup untuk membayar tagihan ini. '
-                'Saldo utama tidak dapat dipakai untuk menutup kekurangan.',
+                inquiry.usesWalletBalance
+                    ? 'Saldo PPOB dan Saldo TapGo tidak cukup untuk membayar tagihan ini.'
+                    : 'Saldo benefit PPOB tidak cukup untuk membayar tagihan ini. '
+                        'Saldo utama tidak dapat dipakai untuk menutup kekurangan.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: const Color(0xFFEF4444),
                   fontWeight: FontWeight.w700,
