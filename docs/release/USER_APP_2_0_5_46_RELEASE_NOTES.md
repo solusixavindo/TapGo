@@ -26,3 +26,12 @@ driver turun dari ~0,5 dtk menjadi puluhan milidetik pada 3 dari 4 pengambilan.
 ## Belum terbukti
 Keuntungan waktu di HP BELUM diukur (hanya diturunkan dari jumlah putaran jaringan yang dihapus). Bila loading masih lama,
 kami butuh: (1) kapan lamanya terjadi (buka aplikasi atau login), (2) jaringan (Wi-Fi/seluler), (3) layar putih polos atau di beranda.
+
+## Ditambahkan 14 Nov 2026 (APK uji untuk Owner; belum untuk Play)
+6. **Masuk/daftar**: tombol lihat/sembunyikan password.
+7. **Profil**: status membership nyata (mis. Platinum) dan foto profil sinkron dengan web (tidak hilang saat muat ulang gagal, tidak
+   bocor antar akun di satu HP); beranda tidak lagi menulis "Data TapGo tersinkron".
+8. **Rincian Saldo TapGo** (hanya tampilan, tanpa tombol tarik/bayar): dapat ditarik, bonus terkunci, deposit, lain-lain. Kartu hanya
+   muncul bila server mengirim persen kunci > 0 (server lama: tampilan lama, tidak berubah).
+9. **PPOB**: kalimat dan rincian benar bila Saldo TapGo ikut membayar (Saldo PPOB dipakai dulu). Server lama: kalimat lama.
+Berpasangan dengan backend `tapgo-<sha>` yang memuat kantong saldo; bendera `BONUS_LOCK_ENABLED` mati = tampilan sama seperti +45.
