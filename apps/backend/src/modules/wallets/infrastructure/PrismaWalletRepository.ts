@@ -140,6 +140,32 @@ export class PrismaWalletRepository implements WalletRepository {
     return bankAccount;
   }
 
+  /**
+   * Akun yang penarikannya dibekukan pemilik tidak dapat mengajukan, dan penarikannya tidak dapat disetujui atau
+   * ditandai ditransfer. Dibaca di dalam transaksi yang sama dengan perubahannya.
+   */
+  private async assertWithdrawalNotFrozen(tx: Prisma.TransactionClient, userId: string) {
+    const user = await tx.user.findUnique({ where: { id: userId }, select: { withdrawalFrozenAt: true } });
+    if (user?.withdrawalFrozenAt) {
+      throw new AppError(
+        "Penarikan dana untuk akun ini sedang dibekukan. Silakan hubungi TapGo.",
+        StatusCodes.FORBIDDEN,
+        "WITHDRAWAL_FROZEN"
+      );
+    }
+  }
+
+  /** Admin tidak boleh menyetujui atau mencairkan penarikan miliknya sendiri; hanya pemilik (VIP) yang boleh. */
+  private assertNoSelfApproval(withdrawalUserId: string, adminId: string, actorRole?: UserRole) {
+    if (withdrawalUserId === adminId && !(actorRole && roleSatisfies(actorRole, "SUPER_ADMIN_VIP"))) {
+      throw new AppError(
+        "Anda tidak dapat menyetujui atau mencairkan penarikan dana milik akun Anda sendiri.",
+        StatusCodes.FORBIDDEN,
+        "WITHDRAWAL_SELF_APPROVAL_FORBIDDEN"
+      );
+    }
+  }
+
   async reserveWithdrawal(
     input: {
       userId: string;
@@ -154,6 +180,7 @@ export class PrismaWalletRepository implements WalletRepository {
     },
     tx: Prisma.TransactionClient
   ): Promise<WithdrawalItem> {
+    await this.assertWithdrawalNotFrozen(tx, input.userId);
     const source = input.source ?? "CASH";
     const fee = input.fee ?? new Prisma.Decimal(0);
     const finalAmount = input.amount.minus(fee);
@@ -316,6 +343,8 @@ export class PrismaWalletRepository implements WalletRepository {
     if (withdrawal.status !== "PENDING") {
       throw new AppError("Only pending withdrawals can be approved", StatusCodes.CONFLICT, "WITHDRAWAL_INVALID_STATE");
     }
+    await this.assertWithdrawalNotFrozen(tx, withdrawal.userId);
+    this.assertNoSelfApproval(withdrawal.userId, input.adminId, input.actorRole);
 
     // Nominal besar wajib disetujui pemilik (SUPER_ADMIN_VIP). Peran yang tidak
     // diketahui diperlakukan sebagai kurang berwenang (fail closed).
@@ -430,7 +459,7 @@ export class PrismaWalletRepository implements WalletRepository {
   }
 
   async markWithdrawalPaid(
-    input: { withdrawalId: string; adminId: string; note?: string },
+    input: { withdrawalId: string; adminId: string; actorRole?: UserRole; note?: string },
     tx: Prisma.TransactionClient
   ): Promise<WithdrawalItem> {
     const withdrawal = await tx.withdrawal.findUnique({ where: { id: input.withdrawalId } });
@@ -441,6 +470,8 @@ export class PrismaWalletRepository implements WalletRepository {
     if (withdrawal.status !== "APPROVED") {
       throw new AppError("Only approved withdrawals can be marked as paid", StatusCodes.CONFLICT, "WITHDRAWAL_INVALID_STATE");
     }
+    await this.assertWithdrawalNotFrozen(tx, withdrawal.userId);
+    this.assertNoSelfApproval(withdrawal.userId, input.adminId, input.actorRole);
 
     const updated = await tx.withdrawal.update({
       where: { id: input.withdrawalId },
@@ -519,6 +550,7 @@ export class PrismaWalletRepository implements WalletRepository {
     },
     tx: Prisma.TransactionClient
   ): Promise<WalletTransferItem> {
+    await this.assertWithdrawalNotFrozen(tx, input.fromUserId); // pembekuan juga menutup jalan memindahkan saldo ke akun lain
     const fromWallet = await this.getOrCreateWallet(input.fromUserId, tx);
     const toWallet = await this.getOrCreateWallet(input.toUserId, tx);
 

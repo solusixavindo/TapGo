@@ -143,7 +143,7 @@ export class WalletService {
     return this.walletRepository.transaction((tx) => this.walletRepository.rejectWithdrawal(input, tx));
   }
 
-  markWithdrawalPaid(input: { withdrawalId: string; adminId: string; note?: string }) {
+  markWithdrawalPaid(input: { withdrawalId: string; adminId: string; actorRole?: UserRole; note?: string }) {
     return this.walletRepository.transaction((tx) => this.walletRepository.markWithdrawalPaid(input, tx));
   }
 

@@ -267,6 +267,12 @@ model User {
   referralCode String        @unique @map("referral_code") @db.VarChar(24)
   lastLoginAt  DateTime?     @map("last_login_at")
 
+  /// Pembekuan penarikan dana (keputusan pemilik): selama terisi, akun ini tidak dapat mengajukan penarikan, dan penarikan
+  /// yang sudah diajukan tidak dapat disetujui atau ditandai ditransfer. Hanya Super Admin VIP yang mengubahnya; selalu diaudit.
+  withdrawalFrozenAt     DateTime? @map("withdrawal_frozen_at")
+  withdrawalFrozenBy     String?   @map("withdrawal_frozen_by") @db.Uuid
+  withdrawalFrozenReason String?   @map("withdrawal_frozen_reason") @db.VarChar(300)
+
   /// Kepemilikan nomor telepon terbukti lewat OTP. NULL berarti belum
   /// terbukti — termasuk untuk akun legacy, yang SENGAJA tidak di-backfill.
   phoneVerifiedAt   DateTime? @map("phone_verified_at")

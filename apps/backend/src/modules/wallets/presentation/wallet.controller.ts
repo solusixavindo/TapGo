@@ -157,6 +157,7 @@ export class WalletController {
     const result = await this.walletService.markWithdrawalPaid({
       withdrawalId: req.params.withdrawalId as string,
       adminId: req.auth!.userId,
+      actorRole: req.auth!.role,
       ...this.optionalNote(req.body.note)
     });
     res.json({ success: true, data: result });

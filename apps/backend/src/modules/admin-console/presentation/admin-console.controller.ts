@@ -303,6 +303,7 @@ export class AdminConsoleController {
     const result = await this.walletService.markWithdrawalPaid({
       withdrawalId: String(req.params.id),
       adminId: req.auth!.userId,
+      actorRole: req.auth!.role,
       ...(typeof req.body.note === "string" ? { note: req.body.note } : {})
     });
     res.json({ success: true, data: result });
@@ -422,6 +423,16 @@ export class AdminConsoleController {
 
   adminRoleCandidates = async (req: Request, res: Response) => {
     const result = await this.adminRoleService.searchCandidates(String(req.query.q ?? ""));
+    res.json({ success: true, data: result });
+  };
+
+  setWithdrawalFreeze = async (req: Request, res: Response) => {
+    const result = await this.adminConsoleService.setWithdrawalFreeze({
+      actorId: req.auth!.userId,
+      userId: String(req.params.userId),
+      frozen: req.body.frozen,
+      reason: req.body.reason
+    });
     res.json({ success: true, data: result });
   };
 

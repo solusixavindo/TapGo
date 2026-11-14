@@ -43,6 +43,7 @@ import {
   adminOrderQuerySchema,
   adminRoleAssignSchema,
   adminMemberStatusSchema,
+  adminWithdrawalFreezeSchema,
   adminRoleCandidateSchema,
   adminOnlinePaymentQuerySchema,
   adminDigiflazzBalanceQuerySchema,
@@ -472,6 +473,12 @@ adminConsoleRouter.put(
   requireRoles("SUPER_ADMIN_VIP"),
   validateRequest(adminMemberStatusSchema),
   asyncHandler(controller.setMemberStatus)
+);
+adminConsoleRouter.put(
+  "/members/:userId/withdrawal-freeze",
+  requireRoles("SUPER_ADMIN_VIP"),
+  validateRequest(adminWithdrawalFreezeSchema),
+  asyncHandler(controller.setWithdrawalFreeze)
 );
 adminConsoleRouter.put(
   "/roles/:userId",

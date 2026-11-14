@@ -1910,12 +1910,44 @@ export class AdminConsoleService {
         phone: user.phone,
         referralCode: user.referralCode,
         status: user.status,
-        joinedAt: user.createdAt
+        joinedAt: user.createdAt,
+        withdrawalFrozen: user.withdrawalFrozenAt !== null,
+        withdrawalFrozenAt: user.withdrawalFrozenAt,
+        withdrawalFrozenReason: user.withdrawalFrozenReason
       },
       activeMembership: user.userMemberships[0] ?? null,
       invoices: user.invoices,
       commissions: user.commissions
     };
+  }
+
+  /**
+   * Membekukan atau membuka pembekuan penarikan dana satu akun (khusus Super Admin VIP). Pembekuan menolak pengajuan
+   * baru, persetujuan, dan pencairan penarikan akun itu; saldonya tidak berubah. Selalu diaudit dengan alasannya.
+   */
+  async setWithdrawalFreeze(input: { actorId: string; userId: string; frozen: boolean; reason: string }) {
+    const user = await this.prisma.user.findUnique({ where: { id: input.userId }, select: { id: true, fullName: true, withdrawalFrozenAt: true } });
+    if (!user) {
+      throw new AppError("Akun tidak ditemukan.", StatusCodes.NOT_FOUND, "ADMIN_MEMBER_NOT_FOUND");
+    }
+    return this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: input.frozen
+          ? { withdrawalFrozenAt: new Date(), withdrawalFrozenBy: input.actorId, withdrawalFrozenReason: input.reason }
+          : { withdrawalFrozenAt: null, withdrawalFrozenBy: null, withdrawalFrozenReason: null }
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId: input.actorId,
+          action: input.frozen ? "WITHDRAWAL_FREEZE_SET" : "WITHDRAWAL_FREEZE_CLEARED",
+          entityType: "user",
+          entityId: user.id,
+          metadata: { reason: input.reason, targetName: user.fullName, wasFrozen: user.withdrawalFrozenAt !== null }
+        }
+      });
+      return { userId: user.id, frozen: input.frozen };
+    });
   }
 
   async payments(input: PaymentListInput) {

@@ -258,6 +258,14 @@ export const adminOversightQuerySchema = z.object({
   })
 });
 
+export const adminWithdrawalFreezeSchema = z.object({
+  params: z.object({ userId: z.string().uuid() }),
+  body: z.object({
+    frozen: z.boolean(),
+    reason: z.string().trim().min(3, "Isi alasan pembekuan atau pembukaan.").max(300)
+  })
+});
+
 export const adminMemberStatusSchema = z.object({
   params: z.object({ userId: z.string().uuid() }),
   body: z.object({

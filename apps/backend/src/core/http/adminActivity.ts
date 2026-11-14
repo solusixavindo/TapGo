@@ -44,6 +44,7 @@ const LABELS: Array<[RegExp, string, string]> = [
   [/^POST \/profit-sharing\/periods\/:id\/distribute$/, "Membagikan laba", ""],
   [/^PUT \/roles\/:id$/, "Mengubah role admin", ""],
   [/^PUT \/members\/:id\/status$/, "Mengubah status akun member", ""],
+  [/^PUT \/members\/:id\/withdrawal-freeze$/, "Membekukan/membuka pembekuan penarikan akun", ""],
   [/^GET \/members\/:id$/, "Melihat detail member", ""],
   [/^GET \/members$/, "Membuka Direktori Member", ""],
   [/^GET \/wallets\/:id\/transactions$/, "Melihat riwayat saldo seorang member", ""],

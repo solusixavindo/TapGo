@@ -82,7 +82,9 @@ export class AdminRoleService {
         role: true,
         status: true,
         createdAt: true,
-        lastLoginAt: true
+        lastLoginAt: true,
+        withdrawalFrozenAt: true,
+        withdrawalFrozenReason: true
       },
       orderBy: [{ role: "desc" }, { fullName: "asc" }]
     });
