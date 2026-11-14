@@ -6,19 +6,16 @@ import { cleanDatabase, prisma, runIntegration, seedMemberships, testDatabaseUrl
 
 /**
  * Pemisahan kewenangan Super Admin / Super Admin VIP (keputusan Owner 14 Nov 2026): VIP memegang pembagian laba, koreksi
- * status perjalanan/driver, refund manual, dan pengawasan (log audit). Pencairan dan konfirmasi uang tetap di Super Admin. Tiap rute di tabel ini harus
+ * status perjalanan, penangguhan driver, dan pengawasan (log audit). Pencairan dan konfirmasi uang tetap di Super Admin. Tiap rute di tabel ini harus
  * ditolak untuk ADMIN dan Super Admin (403 persis), dan tidak ditolak untuk VIP (ditolak guard = 403, bukan validasi/404).
  */
 type Endpoint = { method: string; path: string };
 const ZERO = "00000000-0000-4000-8000-000000000000";
 
 const VIP_ONLY: ReadonlyArray<Endpoint> = [
-  { method: "POST", path: `/api/v1/admin/member-requests/${ZERO}/execute-refund` },
-  { method: "POST", path: `/api/v1/admin/member-requests/${ZERO}/confirm-manual-refund` },
   { method: "POST", path: `/api/v1/admin/profit-sharing/periods/${ZERO}/approve` },
   { method: "POST", path: `/api/v1/admin/profit-sharing/periods/${ZERO}/distribute` },
   { method: "PATCH", path: "/api/v1/admin/rides/RID-NOTEXIST/status" },
-  { method: "PATCH", path: `/api/v1/admin/rides/drivers/${ZERO}/status` },
   { method: "GET", path: "/api/v1/admin/audit-logs" },
   { method: "GET", path: "/api/v1/admin/dashboard/oversight" }
 ];
@@ -35,6 +32,8 @@ const SUPER_ADMIN_KEEPS: ReadonlyArray<Endpoint> = [
   { method: "PATCH", path: `/api/v1/admin/driver-incentives/${ZERO}` },
   { method: "POST", path: `/api/v1/admin/driver-incentives/claims/${ZERO}/reverse` },
   { method: "POST", path: `/api/v1/admin/manual-topups/${ZERO}/confirm` },
+  { method: "POST", path: `/api/v1/admin/member-requests/${ZERO}/execute-refund` },
+  { method: "POST", path: `/api/v1/admin/member-requests/${ZERO}/confirm-manual-refund` },
   { method: "POST", path: `/api/v1/admin/withdrawals/${ZERO}/approve` },
   { method: "POST", path: `/api/v1/admin/withdrawals/${ZERO}/reject` },
   { method: "POST", path: `/api/v1/admin/rewards/${ZERO}/approve` },
@@ -166,5 +165,24 @@ describe.skipIf(!runIntegration)("Pemisahan kewenangan Super Admin dan VIP", () 
 
     const tooLong = await fetch(`${baseUrl}/api/v1/admin/dashboard/oversight?hours=9999`, { headers: headers(vip) });
     expect(tooLong.status).toBe(400);
+  });
+
+  it("status driver: Super Admin boleh mengaktifkan (alur harian), menangguhkan/menolak hanya VIP", async () => {
+    const superAdmin = await user("SUPER_ADMIN");
+    const vip = await user("SUPER_ADMIN_VIP");
+    const patch = (who: User, status: string) =>
+      fetch(`${baseUrl}/api/v1/admin/rides/drivers/${ZERO}/status`, {
+        method: "PATCH",
+        headers: headers(who),
+        body: JSON.stringify({ status, reason: "Pengujian peran" })
+      });
+    // Profil tidak ada: lolos penjaga = 404, bukan 403.
+    expect((await patch(superAdmin, "ACTIVE")).status).toBe(404);
+    for (const status of ["SUSPENDED", "REJECTED", "PENDING"]) {
+      const denied = await patch(superAdmin, status);
+      expect(denied.status, status).toBe(403);
+      expect(((await denied.json()) as { code?: string }).code).toBe("DRIVER_STATUS_VIP_REQUIRED");
+      expect((await patch(vip, status)).status, `VIP ${status}`).toBe(404);
+    }
   });
 });

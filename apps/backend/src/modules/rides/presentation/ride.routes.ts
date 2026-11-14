@@ -4,6 +4,7 @@ import { StatusCodes } from "http-status-codes";
 import { env } from "../../../config/env.js";
 import { prisma } from "../../../config/prisma.js";
 import { AppError } from "../../../core/errors/AppError.js";
+import { roleSatisfies } from "../../../core/security/roleHierarchy.js";
 import { asyncHandler } from "../../../core/http/asyncHandler.js";
 import { validateRequest } from "../../../core/http/validateRequest.js";
 import { requireAuth, requireChannel, requireRoles } from "../../../core/security/authContext.js";
@@ -626,9 +627,18 @@ adminRideRouter.patch(
 
 adminRideRouter.patch(
   "/drivers/:driverProfileId/status",
-  requireRoles("SUPER_ADMIN_VIP"),
+  requireRoles("SUPER_ADMIN"),
   validateRequest(adminDriverStatusSchema),
   asyncHandler(async (req, res) => {
+    // Mengaktifkan driver yang dokumennya disetujui adalah pekerjaan harian Super Admin. Menangguhkan atau menolak
+    // (mencabut kemampuan mencari nafkah) hanya Super Admin VIP.
+    if (req.body.status !== "ACTIVE" && !roleSatisfies(req.auth!.role, "SUPER_ADMIN_VIP")) {
+      throw new AppError(
+        "Menangguhkan atau menolak driver hanya untuk Super Admin VIP.",
+        StatusCodes.FORBIDDEN,
+        "DRIVER_STATUS_VIP_REQUIRED",
+      );
+    }
     const data = await rideService.updateDriverStatusByAdmin({
       adminUserId: req.auth!.userId,
       driverProfileId: String(req.params.driverProfileId),
