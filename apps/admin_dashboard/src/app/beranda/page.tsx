@@ -32,6 +32,7 @@ import {
 import ConsoleHeader from "../console-header";
 import VipInsightsView from "./vip-insights";
 import CountUp from "./count-up";
+import ClickCard from "../click-card";
 
 const ACTIVITY_LABEL: Record<string, string> = {
   ADMIN_ROLE_ASSIGNED: "Mengubah role admin",
@@ -255,7 +256,7 @@ export default function BerandaPage() {
             ) : null}
 
             {!isVip ? (
-            <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+            <ClickCard as="section" href="/members?daftar=30" label="Buka rincian Tren pendaftaran 30 hari" className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 pb-8">
               <h2 className="text-sm font-bold text-slate-700">Tren pendaftaran 30 hari</h2>
               <div className="mt-4 h-64">
                 <ResponsiveContainer width="100%" height="100%">
@@ -285,7 +286,7 @@ export default function BerandaPage() {
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
-            </section>
+            </ClickCard>
             ) : null}
 
             {roleAtLeast(role, "SUPER_ADMIN") ? (

@@ -17,6 +17,7 @@ import { PeriodState, defaultPeriod, periodLabel, periodQuery } from "../../lib/
 import ConsoleHeader from "../console-header";
 import { useHardRouter as useRouter } from "../hard-nav";
 import PeriodFilter from "../period-filter";
+import ClickCard from "../click-card";
 
 const CSV_REPORTS: Array<{
   kind: ReportCsvKind;
@@ -132,37 +133,37 @@ export default function ReportsPage() {
             <section>
               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Upgrade membership dan bonus (periode ini)</h2>
               <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
-                <MoneyCard label="Pendapatan upgrade (lunas)" value={financial?.totalMembershipRevenuePaid} />
-                <MoneyCard label="Bonus referral" value={financial?.totalSponsorBonus} />
-                <MoneyCard label="Bonus tingkat" value={financial?.totalLevelBonus} />
-                <MoneyCard label="Bagi hasil terbayar" value={financial?.totalProfitSharing} />
+                <MoneyCard href="/member-requests" label="Pendapatan upgrade (lunas)" value={financial?.totalMembershipRevenuePaid} />
+                <MoneyCard href="/members" label="Bonus referral" value={financial?.totalSponsorBonus} />
+                <MoneyCard href="/members" label="Bonus tingkat" value={financial?.totalLevelBonus} />
+                <MoneyCard href="/pembagian-laba" label="Bagi hasil terbayar" value={financial?.totalProfitSharing} />
               </div>
               <h3 className="mt-5 text-xs font-bold uppercase tracking-wider text-slate-400">Jumlah member aktif saat ini (tidak mengikuti periode)</h3>
               <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
-                <Card label="Basic" value={String(financial?.totalActiveBasic ?? 0)} />
-                <Card label="Silver" value={String(financial?.totalActiveSilver ?? 0)} />
-                <Card label="Gold" value={String(financial?.totalActiveGold ?? 0)} />
-                <Card label="Platinum" value={String(financial?.totalActivePlatinum ?? 0)} />
+                <Card href="/members" label="Basic" value={String(financial?.totalActiveBasic ?? 0)} />
+                <Card href="/members" label="Silver" value={String(financial?.totalActiveSilver ?? 0)} />
+                <Card href="/members" label="Gold" value={String(financial?.totalActiveGold ?? 0)} />
+                <Card href="/members" label="Platinum" value={String(financial?.totalActivePlatinum ?? 0)} />
               </div>
             </section>
 
             <section className="mt-6">
               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Saldo member saat ini (tidak mengikuti periode)</h2>
               <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
-                <MoneyCard label="Saldo TapGoPay beredar" value={financial?.totalWalletLiability} />
-                <MoneyCard label="Di antaranya dapat ditarik" value={financial?.totalCashWalletLiability} />
-                <MoneyCard label="Saldo PPOB beredar" value={financial?.totalPpobLiability} />
-                <MoneyCard label="Penarikan menunggu (periode ini)" value={financial?.totalWithdrawalPending} />
+                <MoneyCard href="/members" label="Saldo TapGoPay beredar" value={financial?.totalWalletLiability} />
+                <MoneyCard href="/members" label="Di antaranya dapat ditarik" value={financial?.totalCashWalletLiability} />
+                <MoneyCard href="/members" label="Saldo PPOB beredar" value={financial?.totalPpobLiability} />
+                <MoneyCard href="/penarikan?status=PENDING" label="Penarikan menunggu (periode ini)" value={financial?.totalWithdrawalPending} />
               </div>
             </section>
 
             <section className="mt-6" data-testid="ppob-flow">
               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Penjualan PPOB (Digiflazz), periode ini</h2>
               <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
-                <MoneyCard label={`Penjualan berhasil${sales ? ` (${sales.successCount} transaksi)` : ""}`} value={sales?.salesTotal} />
-                <MoneyCard label="Modal dibayar ke Digiflazz" value={sales?.providerCost} />
-                <MoneyCard label="Selisih (pendapatan perusahaan)" value={sales?.margin} />
-                <MoneyCard label={`Masih diproses${sales ? ` (${sales.openCount})` : ""}`} value={sales?.openAmount} />
+                <MoneyCard href="/transaksi-digiflazz" label={`Penjualan berhasil${sales ? ` (${sales.successCount} transaksi)` : ""}`} value={sales?.salesTotal} />
+                <MoneyCard href="/transaksi-digiflazz" label="Modal dibayar ke Digiflazz" value={sales?.providerCost} />
+                <MoneyCard href="/transaksi-digiflazz" label="Selisih (pendapatan perusahaan)" value={sales?.margin} />
+                <MoneyCard href="/transaksi-digiflazz" label={`Masih diproses${sales ? ` (${sales.openCount})` : ""}`} value={sales?.openAmount} />
               </div>
               {sales && sales.withoutCostCount > 0 ? (
                 <p className="mt-2 text-xs text-amber-700">
@@ -172,10 +173,10 @@ export default function ReportsPage() {
 
               <h3 className="mt-5 text-xs font-bold uppercase tracking-wider text-slate-400">Dari mana uang untuk penjualan itu</h3>
               <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
-                <MoneyCard label={`Top up saldo PPOB online (${funding?.topUpOnlineCount ?? 0})`} value={funding?.topUpOnline} />
-                <MoneyCard label={`Top up saldo PPOB manual (${funding?.topUpManualCount ?? 0})`} value={funding?.topUpManual} />
-                <MoneyCard label="Benefit paket membership" value={ppob?.packagePpobBenefitTotal} />
-                <MoneyCard label="Bonus registrasi Basic" value={ppob?.basicRegistrationPpobTotal} />
+                <MoneyCard href="/pembayaran-online" label={`Top up saldo PPOB online (${funding?.topUpOnlineCount ?? 0})`} value={funding?.topUpOnline} />
+                <MoneyCard href="/top-up-manual" label={`Top up saldo PPOB manual (${funding?.topUpManualCount ?? 0})`} value={funding?.topUpManual} />
+                <MoneyCard href="/members" label="Benefit paket membership" value={ppob?.packagePpobBenefitTotal} />
+                <MoneyCard href="/members" label="Bonus registrasi Basic" value={ppob?.basicRegistrationPpobTotal} />
               </div>
 
               {sales ? (
@@ -233,22 +234,22 @@ export default function ReportsPage() {
   );
 }
 
-function Card({ label, value }: { label: string; value: string }) {
+function Card({ label, value, href }: { label: string; value: string; href: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <ClickCard href={href} label={`Buka rincian ${label}`} className="rounded-2xl border border-slate-200 bg-white p-4 pb-7">
       <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p>
       <p className="mt-2 text-lg font-black text-brand-navy">{value}</p>
-    </div>
+    </ClickCard>
   );
 }
 
-function MoneyCard({ label, value }: { label: string; value?: string }) {
+function MoneyCard({ label, value, href }: { label: string; value?: string; href: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <ClickCard href={href} label={`Buka rincian ${label}`} className="rounded-2xl border border-slate-200 bg-white p-4 pb-7">
       <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p>
       <p className="mt-2 text-lg font-black text-brand-navy">
         {value !== undefined ? formatRupiah(value) : "—"}
       </p>
-    </div>
+    </ClickCard>
   );
 }

@@ -5,6 +5,7 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContaine
 import { VipInsights, formatRupiah, getVipInsights } from "../../lib/api";
 import { PeriodState, defaultPeriod, periodLabel, periodQuery } from "../../lib/period";
 import Link from "../hard-nav";
+import ClickCard from "../click-card";
 import PeriodFilter from "../period-filter";
 import {
   ChartTooltip,
@@ -192,6 +193,7 @@ export default function VipInsightsView() {
           <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <KpiTile
               label="Pendaftar baru"
+              href="/members"
               value={data ? number(data.totals.registrations.current) : "—"}
               sub={data ? `${number(sum(data.series.registrations.members))} member · ${number(sum(data.series.registrations.drivers))} pengemudi` : ""}
               delta={data?.totals.registrations}
@@ -200,6 +202,7 @@ export default function VipInsightsView() {
             />
             <KpiTile
               label="Pendapatan kotor"
+              href="/laba-rugi"
               value={data ? compactRupiah(data.totals.revenue.current) : "—"}
               sub="upgrade + selisih PPOB + komisi ojek"
               delta={data?.totals.revenue}
@@ -208,19 +211,20 @@ export default function VipInsightsView() {
             />
             <KpiTile
               label="Perjalanan selesai"
+              href="/rides"
               value={data ? number(data.totals.ridesCompleted.current) : "—"}
               sub={data?.rides.completionRate != null ? `${data.rides.completionRate.toLocaleString("id-ID")}% dari ${number(data.rides.total)} pesanan` : "belum ada pesanan"}
               delta={data?.totals.ridesCompleted}
               spark={rows.map((row) => row.ridesCompleted)}
               color="#34D399"
             />
-            <div className="rounded-2xl bg-white/[0.07] p-4 ring-1 ring-white/10">
+            <ClickCard href="/driver-documents" label="Buka rincian Rating pengemudi" className="rounded-2xl bg-white/[0.07] p-4 pb-7 ring-1 ring-white/10">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-300">Rating pengemudi</p>
               <p className="mt-2 text-3xl font-black tabular-nums">{data?.totals.rating.average != null ? data.totals.rating.average.toLocaleString("id-ID") : "—"}</p>
               <div className="mt-1">{data?.totals.rating.average != null ? <Stars value={data.totals.rating.average} size={17} /> : null}</div>
               <p className="mt-2 text-xs text-slate-300">{data ? `${number(data.totals.rating.count)} penilaian sepanjang waktu` : ""}</p>
-            </div>
-            <div className="rounded-2xl bg-white/[0.07] p-4 ring-1 ring-white/10">
+            </ClickCard>
+            <ClickCard href="/rides" label="Buka rincian Pengemudi online" className="rounded-2xl bg-white/[0.07] p-4 pb-7 ring-1 ring-white/10">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-300">Pengemudi online</p>
               <p className="mt-2 text-3xl font-black tabular-nums">
                 {data ? number(data.totals.driversOnline) : "—"}
@@ -233,7 +237,7 @@ export default function VipInsightsView() {
                 />
               </div>
               <p className="mt-2 text-xs text-slate-300">aktif = sudah lolos verifikasi</p>
-            </div>
+            </ClickCard>
           </div>
         </div>
       </section>
@@ -285,7 +289,7 @@ export default function VipInsightsView() {
 
           {/* Pertumbuhan dan pendapatan */}
           <div className="grid gap-6 lg:grid-cols-2">
-            <Panel title="Pertumbuhan pendaftar" subtitle="Member dan pengemudi baru per waktu">
+            <Panel href="/members" title="Pertumbuhan pendaftar" subtitle="Member dan pengemudi baru per waktu">
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
@@ -311,7 +315,7 @@ export default function VipInsightsView() {
               <Legend items={[{ label: "Member", color: PALETTE.blue }, { label: "Pengemudi", color: PALETTE.gold }]} />
             </Panel>
 
-            <Panel title="Pendapatan kotor" subtitle="Belum dikurangi PPN dan biaya; angka akuntansi ada di Laba Rugi">
+            <Panel href="/laba-rugi" title="Pendapatan kotor" subtitle="Belum dikurangi PPN dan biaya; angka akuntansi ada di Laba Rugi">
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -6 }}>
@@ -338,7 +342,7 @@ export default function VipInsightsView() {
 
           {/* Perjalanan */}
           <div className="grid gap-6 lg:grid-cols-3">
-            <Panel className="lg:col-span-2" title="Aktivitas perjalanan" subtitle="Pesanan masuk dibanding yang selesai">
+            <Panel className="lg:col-span-2" href="/rides" title="Aktivitas perjalanan" subtitle="Pesanan masuk dibanding yang selesai">
               <div className="h-60">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
@@ -369,7 +373,7 @@ export default function VipInsightsView() {
               </dl>
             </Panel>
 
-            <Panel title="Status pesanan" subtitle="Seluruh pesanan pada periode ini">
+            <Panel href="/rides" title="Status pesanan" subtitle="Seluruh pesanan pada periode ini">
               <Donut
                 centerValue={number(data.rides.total)}
                 centerLabel="pesanan"
@@ -388,10 +392,10 @@ export default function VipInsightsView() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-3">
-            <Panel className="lg:col-span-2" title="Jam sibuk" subtitle="Pesanan menurut hari dan jam (WIB) pada periode ini">
+            <Panel className="lg:col-span-2" href="/rides" title="Jam sibuk" subtitle="Pesanan menurut hari dan jam (WIB) pada periode ini">
               {data.rides.total === 0 ? <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Belum ada pesanan pada periode ini.</p> : <Heatmap matrix={data.rides.heatmap} />}
             </Panel>
-            <Panel title="Paket member" subtitle="Member aktif saat ini">
+            <Panel href="/members" title="Paket member" subtitle="Member aktif saat ini">
               <Donut
                 centerValue={number(sum(data.composition.tiers.map((row) => row.count)))}
                 centerLabel="member"
@@ -404,7 +408,7 @@ export default function VipInsightsView() {
           <div className="grid gap-6 lg:grid-cols-3">
             <Panel
               className="lg:col-span-2"
-              title="Sebaran wilayah"
+              href="/members" title="Sebaran wilayah"
               subtitle="Dibaca dari alamat yang diketik, jadi perkiraan"
               action={
                 <div className="flex flex-wrap gap-1" role="tablist" aria-label="Sumber wilayah">
@@ -426,7 +430,7 @@ export default function VipInsightsView() {
               <RegionPanel data={data} view={regionView} />
             </Panel>
 
-            <Panel title="Sumber pendaftaran" subtitle="Dari mana akun baru mendaftar pada periode ini">
+            <Panel href="/members" title="Sumber pendaftaran" subtitle="Dari mana akun baru mendaftar pada periode ini">
               <Donut
                 centerValue={number(sum(Object.values(data.composition.signupSources)))}
                 centerLabel="pendaftar"
@@ -444,7 +448,7 @@ export default function VipInsightsView() {
 
           {/* Usia pengemudi */}
           <div className="grid gap-6 lg:grid-cols-3">
-            <Panel className="lg:col-span-2" title="Usia pengemudi" subtitle="Dari tanggal lahir pada data pengajuan pengemudi">
+            <Panel className="lg:col-span-2" href="/driver-documents" title="Usia pengemudi" subtitle="Dari tanggal lahir pada data pengajuan pengemudi">
               <div className="h-52">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data.driverAges.buckets} margin={{ top: 8, right: 8, bottom: 0, left: -22 }}>
@@ -467,7 +471,7 @@ export default function VipInsightsView() {
                 <Metric color="#CBD5E1" label="Belum ada tanggal lahir" value={number(data.driverAges.unknown)} />
               </dl>
             </Panel>
-            <Panel title="Status pengemudi" subtitle="Seluruh pendaftar pengemudi">
+            <Panel href="/driver-documents" title="Status pengemudi" subtitle="Seluruh pendaftar pengemudi">
               <Donut
                 centerValue={number(data.totals.drivers)}
                 centerLabel="pengemudi"
@@ -479,7 +483,7 @@ export default function VipInsightsView() {
 
           {/* Rating dan ulasan */}
           <div className="grid gap-6 lg:grid-cols-3" id="ulasan">
-            <Panel title="Penilaian penumpang" subtitle="Bintang untuk pengemudi, periode ini">
+            <Panel href="/rides" title="Penilaian penumpang" subtitle="Bintang untuk pengemudi, periode ini">
               <div className="flex items-center gap-4">
                 <div>
                   <p className="text-5xl font-black tabular-nums text-slate-900">{data.ratings.periodAverage != null ? data.ratings.periodAverage.toLocaleString("id-ID") : "—"}</p>
@@ -504,14 +508,14 @@ export default function VipInsightsView() {
               {data.ratings.periodCount === 0 ? <p className="mt-4 rounded-xl bg-slate-50 px-3 py-2.5 text-xs text-slate-500">Belum ada penilaian pada periode ini.</p> : null}
             </Panel>
 
-            <Panel title="Pengemudi" subtitle="Rata-rata seumur hidup, minimal 3 penilaian">
+            <Panel href="/driver-documents" title="Pengemudi" subtitle="Rata-rata seumur hidup, minimal 3 penilaian">
               <DriverList title="Terbaik" tone="emerald" drivers={data.ratings.topDrivers} empty="Belum ada pengemudi dengan 3 penilaian." />
               <div className="mt-5">
                 <DriverList title="Perlu perhatian (di bawah 4,0)" tone="rose" drivers={data.ratings.attentionDrivers} empty="Tidak ada pengemudi di bawah 4,0." />
               </div>
             </Panel>
 
-            <Panel title="Ulasan terbaru" subtitle="Komentar penumpang pada penilaian">
+            <Panel href="/rides" title="Ulasan terbaru" subtitle="Komentar penumpang pada penilaian">
               {data.ratings.recent.length === 0 ? (
                 <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Belum ada ulasan bertulis.</p>
               ) : (
@@ -626,6 +630,7 @@ function DriverList({ title, tone, drivers, empty }: { title: string; tone: "eme
 
 function KpiTile({
   label,
+  href,
   value,
   sub,
   delta,
@@ -633,6 +638,7 @@ function KpiTile({
   color
 }: {
   label: string;
+  href: string;
   value: string;
   sub: string;
   delta?: { current: number; previous: number };
@@ -640,7 +646,7 @@ function KpiTile({
   color: string;
 }) {
   return (
-    <div className="rounded-2xl bg-white/[0.07] p-4 ring-1 ring-white/10">
+    <ClickCard href={href} label={`Buka rincian ${label}`} className="rounded-2xl bg-white/[0.07] p-4 pb-7 ring-1 ring-white/10">
       <div className="flex items-start justify-between gap-2">
         <p className="text-[11px] font-bold uppercase tracking-wider text-slate-300">{label}</p>
         {delta ? <DeltaChip current={delta.current} previous={delta.previous} onDark /> : null}
@@ -651,7 +657,7 @@ function KpiTile({
       <div className="mt-2">
         <Sparkline values={spark.length > 1 ? spark : [0, 0]} color={color} />
       </div>
-    </div>
+    </ClickCard>
   );
 }
 

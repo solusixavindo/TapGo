@@ -14,6 +14,7 @@ import {
   readRole,
   readToken
 } from "../../lib/api";
+import ClickCard from "../click-card";
 import ConsoleHeader from "../console-header";
 
 /**
@@ -193,25 +194,39 @@ export default function RidesMonitoringPage() {
         ) : null}
 
         <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <ClickCard
+            label="Tampilkan semua perjalanan terbaru"
+            onActivate={() => {
+              setStatusFilter("");
+              document.getElementById("perjalanan-terbaru")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+            className="rounded-2xl border border-slate-200 bg-white p-4 pb-7"
+          >
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Perjalanan aktif</p>
             <p className="mt-2 text-lg font-black text-brand-navy">{totalActive}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          </ClickCard>
+          <ClickCard
+            label="Tampilkan perjalanan yang sedang mencari driver"
+            onActivate={() => {
+              setStatusFilter("SEARCHING_DRIVER");
+              document.getElementById("perjalanan-terbaru")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+            className="rounded-2xl border border-slate-200 bg-white p-4 pb-7"
+          >
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Mencari driver</p>
             <p className="mt-2 text-lg font-black text-brand-navy">{activeCounts.SEARCHING_DRIVER ?? 0}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          </ClickCard>
+          <ClickCard href="#daftar-driver" label="Lihat daftar driver" className="rounded-2xl border border-slate-200 bg-white p-4 pb-7">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Driver online</p>
             <p className="mt-2 text-lg font-black text-emerald-700">{driverCounts.ONLINE}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          </ClickCard>
+          <ClickCard href="#daftar-driver" label="Lihat daftar driver" className="rounded-2xl border border-slate-200 bg-white p-4 pb-7">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Driver sibuk (dalam order)</p>
             <p className="mt-2 text-lg font-black text-amber-700">{driverCounts.BUSY}</p>
-          </div>
+          </ClickCard>
         </section>
 
-        <section className="mt-6">
+        <section id="perjalanan-terbaru" className="mt-6 scroll-mt-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
               Perjalanan terbaru ({orders.length})
@@ -326,7 +341,7 @@ export default function RidesMonitoringPage() {
           )}
         </section>
 
-        <section className="mt-6">
+        <section id="daftar-driver" className="mt-6 scroll-mt-4">
           <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">
             Driver ({drivers.length})
           </h2>

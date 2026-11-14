@@ -1,5 +1,6 @@
 "use client";
 
+import ClickCard from "../click-card";
 import { useHardRouter as useRouter } from "../hard-nav";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -44,7 +45,7 @@ function Kpi({
   tone?: "neutral" | "profit";
 }) {
   return (
-    <div className={`rounded-2xl p-5 shadow-sm ${tone === "profit" ? "bg-brand-navy text-white" : "bg-white"}`}>
+    <ClickCard href="/reports" label={`Buka rincian ${label} di Laporan Keuangan`} className={`rounded-2xl p-5 pb-8 shadow-sm ${tone === "profit" ? "bg-brand-navy text-white" : "bg-white"}`}>
       <p className={`text-[11px] font-bold uppercase tracking-wider ${tone === "profit" ? "text-slate-300" : "text-slate-500"}`}>{label}</p>
       <p className="mt-2 text-2xl font-black tabular-nums">{value}</p>
       {note ? (
@@ -52,7 +53,7 @@ function Kpi({
           {note.text}
         </p>
       ) : null}
-    </div>
+    </ClickCard>
   );
 }
 

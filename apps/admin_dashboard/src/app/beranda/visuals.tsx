@@ -1,5 +1,6 @@
 "use client";
 
+import ClickCard from "../click-card";
 import { ReactNode } from "react";
 import { Area, AreaChart, Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 
@@ -51,8 +52,11 @@ export function Panel({
   action,
   children,
   className = "",
-  id
+  id,
+  href
 }: {
+  /** Tujuan saat kartu diklik (halaman konsol atau "#bagian"). */
+  href?: string;
   title: string;
   subtitle?: string;
   action?: ReactNode;
@@ -61,7 +65,7 @@ export function Panel({
   id?: string;
 }) {
   return (
-    <section id={id} className={`min-w-0 rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm ${className}`}>
+    <ClickCard as="section" id={id} href={href} label={`Buka rincian ${title}`} className={`min-w-0 rounded-2xl border border-slate-200/70 bg-white p-5 pb-8 shadow-sm ${className}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h2 className="text-sm font-black tracking-tight text-slate-900">{title}</h2>
@@ -70,7 +74,7 @@ export function Panel({
         {action}
       </div>
       <div className="mt-4">{children}</div>
-    </section>
+    </ClickCard>
   );
 }
 

@@ -11,6 +11,7 @@ import {
   readToken,
   systemHealthReport
 } from "../../lib/api";
+import ClickCard from "../click-card";
 import ConsoleHeader from "../console-header";
 
 const REFRESH_INTERVAL_MS = 10_000;
@@ -96,7 +97,7 @@ export default function SystemHealthPage() {
         ) : report ? (
           <>
             <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <ClickCard href="/error-monitoring" label="Buka Error &amp; Bugs" className="rounded-2xl border border-slate-200 bg-white p-4 pb-7">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Database</p>
                   <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${tone(report.database.connected)}`}>
@@ -107,9 +108,9 @@ export default function SystemHealthPage() {
                   {report.database.latencyMs !== null ? `${report.database.latencyMs} ms` : "—"}
                 </p>
                 {report.database.error ? <p className="mt-1 text-xs text-rose-600">{report.database.error}</p> : null}
-              </div>
+              </ClickCard>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <ClickCard href="/error-monitoring" label="Buka Error &amp; Bugs" className="rounded-2xl border border-slate-200 bg-white p-4 pb-7">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Redis</p>
                   {report.redis.configured ? (
@@ -126,11 +127,11 @@ export default function SystemHealthPage() {
                   {report.redis.latencyMs !== null ? `${report.redis.latencyMs} ms` : "—"}
                 </p>
                 {report.redis.error ? <p className="mt-1 text-xs text-rose-600">{report.redis.error}</p> : null}
-              </div>
+              </ClickCard>
             </section>
 
             <section className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <ClickCard href="/error-monitoring" label="Buka Error &amp; Bugs" className="rounded-2xl border border-slate-200 bg-white p-4 pb-7">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Memori</p>
                 <p className="mt-2 text-lg font-black text-brand-navy">
                   {formatBytes(report.memory.usedBytes)} / {formatBytes(report.memory.totalBytes)} ({report.memory.usedPercent}%)
@@ -139,9 +140,9 @@ export default function SystemHealthPage() {
                 <p className="mt-2 text-xs text-slate-500">
                   Proses backend: {formatBytes(report.memory.processRssBytes)} RSS · {formatBytes(report.memory.processHeapUsedBytes)} heap
                 </p>
-              </div>
+              </ClickCard>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <ClickCard href="/error-monitoring" label="Buka Error &amp; Bugs" className="rounded-2xl border border-slate-200 bg-white p-4 pb-7">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Disk</p>
                 {report.disk.available ? (
                   <>
@@ -153,28 +154,28 @@ export default function SystemHealthPage() {
                 ) : (
                   <p className="mt-2 text-sm text-slate-400">Tidak tersedia di lingkungan ini.</p>
                 )}
-              </div>
+              </ClickCard>
             </section>
 
             <section className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <ClickCard href="/error-monitoring" label="Buka Error &amp; Bugs" className="rounded-2xl border border-slate-200 bg-white p-4 pb-7">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Uptime proses</p>
                 <p className="mt-2 text-lg font-black text-brand-navy">{formatDuration(report.server.processUptimeSeconds)}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              </ClickCard>
+              <ClickCard href="/error-monitoring" label="Buka Error &amp; Bugs" className="rounded-2xl border border-slate-200 bg-white p-4 pb-7">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Uptime server</p>
                 <p className="mt-2 text-lg font-black text-brand-navy">{formatDuration(report.server.systemUptimeSeconds)}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              </ClickCard>
+              <ClickCard href="/error-monitoring" label="Buka Error &amp; Bugs" className="rounded-2xl border border-slate-200 bg-white p-4 pb-7">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Beban rata-rata (1 mnt)</p>
                 <p className="mt-2 text-lg font-black text-brand-navy">{report.server.loadAverage[0].toFixed(2)}</p>
                 <p className="text-xs text-slate-500">dari {report.server.cpuCount} CPU</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              </ClickCard>
+              <ClickCard href="/error-monitoring" label="Buka Error &amp; Bugs" className="rounded-2xl border border-slate-200 bg-white p-4 pb-7">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Node.js</p>
                 <p className="mt-2 text-lg font-black text-brand-navy">{report.server.nodeVersion}</p>
                 <p className="truncate text-xs text-slate-500">{report.server.platform}</p>
-              </div>
+              </ClickCard>
             </section>
 
             <p className="mt-6 rounded-xl bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-500">
