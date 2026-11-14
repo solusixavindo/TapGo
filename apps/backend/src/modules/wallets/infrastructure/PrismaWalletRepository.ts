@@ -58,11 +58,21 @@ export class PrismaWalletRepository implements WalletRepository {
   }
 
   async getLastTopUpAt(userId: string): Promise<Date | null> {
-    const row = await this.prisma.walletTransaction.findFirst({
-      where: { type: "TOPUP", wallet: { userId } },
+    return this.lastDepositTopUpAt({ wallet: { userId } }, this.prisma);
+  }
+
+  /** Top up terakhir yang masuk ke Saldo TapGo. Top up Saldo PPOB tidak menjadi deposit dan tidak menunda penarikan. */
+  private async lastDepositTopUpAt(
+    where: Prisma.WalletTransactionWhereInput,
+    client: Prisma.TransactionClient | PrismaClient
+  ): Promise<Date | null> {
+    const rows = await client.walletTransaction.findMany({
+      where: { ...where, type: "TOPUP" },
       orderBy: { createdAt: "desc" },
-      select: { createdAt: true }
+      take: 50,
+      select: { createdAt: true, metadata: true }
     });
+    const row = rows.find((r) => (r.metadata as { target?: string } | null)?.target !== "PPOB");
     return row?.createdAt ?? null;
   }
 
@@ -217,13 +227,9 @@ export class PrismaWalletRepository implements WalletRepository {
   private async assertDepositWithdrawable(walletId: string, tx: Prisma.TransactionClient) {
     const { env } = await import("../../../config/env.js");
     if (env.DEPOSIT_HOLD_HOURS > 0) {
-      const lastTopUp = await tx.walletTransaction.findFirst({
-        where: { walletId, type: "TOPUP" },
-        orderBy: { createdAt: "desc" },
-        select: { createdAt: true }
-      });
-      if (lastTopUp) {
-        const releaseAt = lastTopUp.createdAt.getTime() + env.DEPOSIT_HOLD_HOURS * 3600_000;
+      const lastTopUpAt = await this.lastDepositTopUpAt({ walletId }, tx);
+      if (lastTopUpAt) {
+        const releaseAt = lastTopUpAt.getTime() + env.DEPOSIT_HOLD_HOURS * 3600_000;
         if (Date.now() < releaseAt) {
           const when = new Date(releaseAt).toLocaleString("id-ID", {
             timeZone: "Asia/Jakarta",

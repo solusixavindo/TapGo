@@ -106,6 +106,25 @@ describe.skipIf(!runIntegration)("Penarikan deposit pribadi", () => {
     expect(await state(user.id)).toEqual({ balance: 100000, cash: 0, locked: 0, deposit: 100000 });
   });
 
+  it("top up Saldo PPOB yang baru tidak menunda penarikan deposit (hanya top up Saldo TapGo yang menunda)", async () => {
+    const user = await createUser({ balance: 100000, cash: 0, locked: 0, deposit: 100000, topUpAgeMs: 2 * DAY_MS });
+    const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
+    await prisma.walletTransaction.create({
+      data: { walletId: wallet.id, type: "TOPUP", amount: new Prisma.Decimal(10000), referenceType: "WALLET_TOPUP", referenceId: `ppob-${user.id}`, metadata: { target: "PPOB" } },
+    });
+    const ok = await withdraw(user, { amount: 100000, source: "DEPOSIT", password: PASSWORD });
+    expect(ok.status).toBe(201);
+
+    const other = await createUser({ balance: 100000, cash: 0, locked: 0, deposit: 100000, topUpAgeMs: 2 * DAY_MS });
+    const w2 = await prisma.wallet.findUniqueOrThrow({ where: { userId: other.id } });
+    await prisma.walletTransaction.create({
+      data: { walletId: w2.id, type: "TOPUP", amount: new Prisma.Decimal(10000), referenceType: "WALLET_TOPUP", referenceId: `tg-${other.id}`, metadata: { target: "WALLET" } },
+    });
+    const blocked = await withdraw(other, { amount: 100000, source: "DEPOSIT", password: PASSWORD });
+    expect(blocked.status).toBe(403);
+    expect(((await blocked.json()) as { code?: string }).code).toBe("DEPOSIT_WITHDRAWAL_HOLD");
+  });
+
   it("pesanan tunai berjalan (komisi ditahan) mengunci deposit driver", async () => {
     const user = await createUser({ balance: 100000, cash: 0, locked: 0, deposit: 100000, topUpAgeMs: 2 * DAY_MS });
     const wallet = await prisma.wallet.findUniqueOrThrow({ where: { userId: user.id } });
