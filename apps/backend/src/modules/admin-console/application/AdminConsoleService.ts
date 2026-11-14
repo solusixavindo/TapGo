@@ -1987,7 +1987,22 @@ export class AdminConsoleService {
       paidAt: Date | null;
       expiresAt: Date | null;
       overdue: boolean;
+      /// Nama admin bila pembayaran ini ditandai LUNAS manual oleh admin (bukan oleh penyedia pembayaran).
+      /// "ADMIN-<id>" = konfirmasi manual tanpa bukti; "MANUAL:<id>" = konfirmasi transfer bank dengan nominal unik.
+      manualConfirmedBy: string | null;
+      manualConfirmKind: "ADMIN" | "BANK_TRANSFER" | null;
     };
+    const confirmerIds = [
+      ...new Set(
+        membershipRows
+          .map((row) => /^(?:ADMIN-|MANUAL:)(.+)$/.exec(row.providerReference ?? "")?.[1])
+          .filter((id): id is string => typeof id === "string")
+      )
+    ];
+    const confirmers = confirmerIds.length
+      ? await this.prisma.user.findMany({ where: { id: { in: confirmerIds } }, select: { id: true, fullName: true } })
+      : [];
+    const confirmerName = new Map(confirmers.map((u) => [u.id, u.fullName]));
     const items: Item[] = [
       ...topUpRows.map((row): Item => {
         const meta = asObject(row.metadata);
@@ -2009,7 +2024,9 @@ export class AdminConsoleService {
           createdAt: row.createdAt,
           paidAt: row.paidAt,
           expiresAt: row.expiresAt,
-          overdue: row.status === "PENDING" && row.expiresAt !== null && row.expiresAt < now
+          overdue: row.status === "PENDING" && row.expiresAt !== null && row.expiresAt < now,
+          manualConfirmedBy: null,
+          manualConfirmKind: null
         };
       }),
       ...membershipRows.map((row): Item => {
@@ -2031,7 +2048,15 @@ export class AdminConsoleService {
           createdAt: row.createdAt,
           paidAt: row.paidAt,
           expiresAt,
-          overdue: row.status === "PENDING" && expiresAt !== null && expiresAt < now
+          overdue: row.status === "PENDING" && expiresAt !== null && expiresAt < now,
+          ...(() => {
+            const m = /^(ADMIN-|MANUAL:)(.+)$/.exec(row.providerReference ?? "");
+            if (!m || row.status !== "PAID") return { manualConfirmedBy: null, manualConfirmKind: null };
+            return {
+              manualConfirmedBy: confirmerName.get(m[2]!) ?? "Admin tidak dikenal",
+              manualConfirmKind: m[1] === "ADMIN-" ? ("ADMIN" as const) : ("BANK_TRANSFER" as const)
+            };
+          })()
         };
       })
     ]

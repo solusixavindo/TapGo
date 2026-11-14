@@ -193,6 +193,30 @@ describe.skipIf(!runIntegration)("Pemantauan pembayaran online dan saldo Digifla
       expect(times).toEqual([...times].sort((a, b) => b - a));
     });
 
+    it("pembayaran yang ditandai LUNAS manual oleh admin diberi tanda dan nama adminnya (bukan tampil seperti lunas dari penyedia)", async () => {
+      const buyer = await createUser("USER", "+6281234567890");
+      const confirmer = await createUser("SUPER_ADMIN");
+      const vip = await createUser("SUPER_ADMIN_VIP");
+      const platinum = await prisma.membership.findUniqueOrThrow({ where: { tier: "PLATINUM" } });
+      const mk = async (ref: string, providerReference: string | null) => {
+        const order = await prisma.membershipOrder.create({
+          data: { userId: buyer.id, membershipId: platinum.id, status: "PAID", totalAmount: new Prisma.Decimal(5_500_000), packageSnapshot: {}, expiresAt: new Date(Date.now() + 3_600_000) }
+        });
+        const invoice = await prisma.invoice.create({
+          data: { orderId: order.id, userId: buyer.id, number: ref, status: "PAID", amount: new Prisma.Decimal(5_500_000) }
+        });
+        await prisma.membershipPayment.create({
+          data: { orderId: order.id, invoiceId: invoice.id, userId: buyer.id, status: "PAID", amount: new Prisma.Decimal(5_500_000), provider: "MIDTRANS", providerReference, paidAt: new Date(), ...(ref === "INV-GW" ? { metadata: { paymentType: "bank_transfer" } } : {}) }
+        });
+      };
+      await mk("INV-ADMIN", `ADMIN-${confirmer.id}`);
+      await mk("INV-GW", "midtrans-ref-123");
+      const data = ((await (await call(vip, "/api/v1/admin/online-payments")).json()) as { data: { items: Array<Record<string, unknown>> } }).data;
+      const byRef = Object.fromEntries(data.items.map((i) => [i.reference as string, i]));
+      expect(byRef["INV-ADMIN"]).toMatchObject({ status: "PAID", method: null, manualConfirmKind: "ADMIN", manualConfirmedBy: confirmer.fullName });
+      expect(byRef["INV-GW"]).toMatchObject({ status: "PAID", method: "bank_transfer", manualConfirmKind: null, manualConfirmedBy: null });
+    });
+
     it("notifikasi Midtrans 'pending' mencatat metode yang dipilih pembeli tanpa mengubah status", async () => {
       const buyer = await createUser("USER");
       await prisma.walletTopUpOrder.create({
