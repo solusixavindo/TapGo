@@ -11,9 +11,53 @@ import { AdminRoleService } from "../application/AdminRoleService.js";
 import { MembershipRefundService } from "../../memberships/application/MembershipRefundService.js";
 import { SystemHealthService } from "../application/SystemHealthService.js";
 import { ErrorMonitoringService, SentryProjectKey } from "../application/ErrorMonitoringService.js";
+import { buildXlsx, XlsxColumn } from "../../../core/export/xlsx.js";
 
 /** Ekspor CSV mengambil halaman berukuran besar ini sampai habis, dengan batas total baris demi memori server. */
 const CSV_PAGE_SIZE = 1000;
+
+/** Judul dan jenis kolom untuk berkas Excel, menurut kunci baris laporan. Kunci tak dikenal tampil apa adanya sebagai teks. */
+const XLSX_COLUMNS: Record<string, XlsxColumn> = {
+  user: { header: "Nama", width: 26 },
+  phone: { header: "Telepon", width: 17 },
+  type: { header: "Jenis", width: 20 },
+  amount: { header: "Jumlah (Rp)", type: "number", width: 16 },
+  status: { header: "Status", width: 14 },
+  date: { header: "Tanggal (WIB)", type: "datetime", width: 18 },
+  reference: { header: "Referensi", width: 26 },
+  category: { header: "Kategori", width: 14 },
+  product: { header: "Produk", width: 30 },
+  provider_cost: { header: "Modal Provider (Rp)", type: "number", width: 18 },
+  margin: { header: "Selisih (Rp)", type: "number", width: 14 },
+  failure_code: { header: "Kode Gagal", width: 16 },
+  nama: { header: "Nama", width: 26 },
+  telepon: { header: "Telepon", width: 17 },
+  email: { header: "Email", width: 28 },
+  kodeReferral: { header: "Kode Referral", width: 16 },
+  paket: { header: "Paket", width: 12 },
+  statusAkun: { header: "Status Akun", width: 16 },
+  terdaftar: { header: "Terdaftar (WIB)", type: "datetime", width: 18 },
+  loginTerakhir: { header: "Login Terakhir (WIB)", type: "datetime", width: 20 },
+  saldoTotal: { header: "Saldo Total (Rp)", type: "number", width: 16 },
+  saldoDapatDitarik: { header: "Dapat Ditarik (Rp)", type: "number", width: 18 },
+  bonusTerkunci: { header: "Bonus Terkunci (Rp)", type: "number", width: 18 },
+  deposit: { header: "Deposit (Rp)", type: "number", width: 14 },
+  saldoPpob: { header: "Saldo PPOB (Rp)", type: "number", width: 16 },
+  statusDriver: { header: "Status Driver", width: 14 },
+  verifikasi: { header: "Verifikasi", width: 16 },
+  kendaraan: { header: "Kendaraan", width: 12 },
+  plat: { header: "Plat", width: 14 },
+  perjalananSelesai: { header: "Perjalanan Selesai", type: "number", width: 18 },
+  ratingRataRata: { header: "Rating", type: "number", width: 10 },
+  jumlahPenilaian: { header: "Jumlah Penilaian", type: "number", width: 16 },
+  tanggal: { header: "Tanggal (WIB)", type: "datetime", width: 18 },
+  driver: { header: "Driver", width: 26 },
+  jenis: { header: "Jenis", width: 20 },
+  jumlah: { header: "Jumlah (Rp)", type: "number", width: 16 },
+  referensi: { header: "Referensi", width: 30 }
+};
+
+const iso = (value: unknown): string => (value instanceof Date ? value.toISOString() : String(value ?? ""));
 const CSV_MAX_ROWS = 50_000;
 const PPOB_TRANSACTION_CSV_HEADERS = [
   "date",
@@ -693,7 +737,7 @@ export class AdminConsoleController {
         type: String(item.type ?? ""),
         amount: String(item.amount ?? ""),
         status: String(item.status ?? ""),
-        date: String(item.createdAt ?? "")
+        date: iso(item.createdAt)
       };
     });
   }
@@ -708,7 +752,7 @@ export class AdminConsoleController {
         type: String(item.type ?? ""),
         amount: String(item.amount ?? ""),
         status: "POSTED",
-        date: String(item.createdAt ?? "")
+        date: iso(item.createdAt)
       };
     });
   }
@@ -720,7 +764,7 @@ export class AdminConsoleController {
       const cost = item.providerCost === null || item.providerCost === undefined ? null : Number(item.providerCost);
       const success = item.status === "SUCCESS";
       return {
-        date: String(item.createdAt ?? ""),
+        date: iso(item.createdAt),
         reference: String(item.publicReference ?? ""),
         user: String(user.fullName ?? ""),
         phone: String(user.phone ?? ""),
@@ -737,6 +781,10 @@ export class AdminConsoleController {
     });
   }
 
+  /**
+   * Mengirim laporan sebagai Excel (.xlsx) bila alamatnya berakhiran .xlsx, selain itu CSV. Excel berbahasa Indonesia
+   * membaca CSV berkoma sebagai satu sel panjang, jadi dasbor admin memakai .xlsx; CSV dipertahankan untuk alat lain.
+   */
   private sendCsv(
     res: Response,
     filename: string,
@@ -745,6 +793,18 @@ export class AdminConsoleController {
     excelBom = false
   ) {
     const truncated = rows.length >= CSV_MAX_ROWS;
+    if (res.req.path.endsWith(".xlsx")) {
+      const columns = headers.map((key) => XLSX_COLUMNS[key] ?? { header: key });
+      const data = rows.map((row) => headers.map((key) => row[key] ?? ""));
+      if (truncated) {
+        data.push([`BERKAS TERPOTONG: hanya ${CSV_MAX_ROWS} baris pertama. Persempit periodenya.`, ...headers.slice(1).map(() => "")]);
+      }
+      const title = filename.replace(/^tapgo-/, "").replace(/\.csv$/, "");
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename.replace(/\.csv$/, ".xlsx")}"`);
+      res.send(buildXlsx({ sheetName: title, columns, rows: data }));
+      return;
+    }
     const csv = [
       headers.join(","),
       ...rows.map((row) => headers.map((header) => this.csvCell(row[header] ?? "")).join(",")),

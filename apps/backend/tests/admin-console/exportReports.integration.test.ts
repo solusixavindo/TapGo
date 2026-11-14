@@ -2,6 +2,7 @@ import { Prisma, User, UserRole } from "@prisma/client";
 import http, { Server } from "node:http";
 import { AddressInfo } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { readZip } from "../helpers/zipReader.js";
 import { cleanDatabase, prisma, runIntegration, seedMemberships, testDatabaseUrl } from "../helpers/referralWalletHarness.js";
 
 /**
@@ -134,5 +135,34 @@ describe.skipIf(!runIntegration)("Admin console — ekspor pengguna, driver, tra
     const text = await res.text();
     expect(text).toContain("Anggota Lama");
     expect(text).not.toContain(recent.fullName);
+  });
+
+  it("Excel (.xlsx): tiap kolom menjadi sel sendiri, judul Indonesia, angka berupa angka; ADMIN biasa ditolak", async () => {
+    const admin = await user("SUPER_ADMIN");
+    const plain = await user("ADMIN");
+    const member = await user("USER", "Sri Wahyuni");
+    await prisma.wallet.create({
+      data: { userId: member.id, balance: new Prisma.Decimal(100000), cashBalance: new Prisma.Decimal(50000), lockedBonusBalance: new Prisma.Decimal(20000), depositBalance: new Prisma.Decimal(30000) }
+    });
+    expect((await get("users.xlsx", plain)).status).toBe(403);
+
+    const res = await get("users.xlsx", admin);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    expect(res.headers.get("content-disposition")).toContain("tapgo-data-pengguna.xlsx");
+    const files = readZip(Buffer.from(await res.arrayBuffer()));
+    const sheet = files.get("xl/worksheets/sheet1.xml")!;
+    for (const header of ["Nama", "Telepon", "Bonus Terkunci (Rp)", "Deposit (Rp)", "Terdaftar (WIB)"]) expect(sheet).toContain(`>${header}</t>`);
+    expect(sheet).toContain("Sri Wahyuni");
+    expect(sheet).toMatch(/<c r="I2" s="2"><v>100000<\/v><\/c>/); // saldoTotal angka
+    expect(sheet).not.toContain("RAHASIA-HASH");
+    expect(sheet).not.toContain("9988776655");
+    expect(await prisma.auditLog.count({ where: { action: "REPORT_EXPORT", entityId: "users" } })).toBe(1);
+
+    // Laporan lama (CSV berkoma) juga tersedia sebagai Excel dengan judul Indonesia.
+    const bonus = await get("bonus.xlsx", admin);
+    expect(bonus.status).toBe(200);
+    const bonusSheet = readZip(Buffer.from(await bonus.arrayBuffer())).get("xl/worksheets/sheet1.xml")!;
+    for (const header of ["Nama", "Telepon", "Jenis", "Jumlah (Rp)", "Status", "Tanggal (WIB)"]) expect(bonusSheet).toContain(`>${header}</t>`);
   });
 });

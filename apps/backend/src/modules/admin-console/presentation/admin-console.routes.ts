@@ -250,19 +250,19 @@ adminConsoleRouter.get("/ppob/transactions", requireRoles("SUPER_ADMIN"), valida
 adminConsoleRouter.get("/ppob/digiflazz-balance", requireRoles("SUPER_ADMIN"), validateRequest(adminDigiflazzBalanceQuerySchema), asyncHandler(controller.digiflazzBalance));
 adminConsoleRouter.get("/invoices", requireRoles("SUPER_ADMIN"), validateRequest(adminInvoiceQuerySchema), asyncHandler(controller.invoices));
 adminConsoleRouter.get("/commissions", requireRoles("SUPER_ADMIN"), validateRequest(adminCommissionQuerySchema), asyncHandler(controller.commissions));
-adminConsoleRouter.get("/reports/bonus.csv", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.bonusReportCsv));
+adminConsoleRouter.get(["/reports/bonus.csv", "/reports/bonus.xlsx"], requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.bonusReportCsv));
 adminConsoleRouter.get("/reports/bonus", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.bonusReport));
-adminConsoleRouter.get("/reports/ppob.csv", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.ppobReportCsv));
+adminConsoleRouter.get(["/reports/ppob.csv", "/reports/ppob.xlsx"], requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.ppobReportCsv));
 adminConsoleRouter.get("/reports/ppob", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.ppobReport));
 // Transaksi PPOB sungguhan (beli pulsa/token/dll) — beda dari /reports/ppob
 // di atas, yang melaporkan kredit benefit PPOB gratis dari membership. Lihat
 // catatan di AdminConsoleService.ppobTransactionsReport().
-adminConsoleRouter.get("/reports/ppob-transactions.csv", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.ppobTransactionsReportCsv));
+adminConsoleRouter.get(["/reports/ppob-transactions.csv", "/reports/ppob-transactions.xlsx"], requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.ppobTransactionsReportCsv));
 adminConsoleRouter.get("/reports/ppob-transactions", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.ppobTransactionsReport));
-adminConsoleRouter.get("/reports/users.csv", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.usersReportCsv));
-adminConsoleRouter.get("/reports/drivers.csv", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.driversReportCsv));
-adminConsoleRouter.get("/reports/driver-transactions.csv", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.driverTransactionsReportCsv));
-adminConsoleRouter.get("/reports/reward.csv", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.rewardReportCsv));
+adminConsoleRouter.get(["/reports/users.csv", "/reports/users.xlsx"], requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.usersReportCsv));
+adminConsoleRouter.get(["/reports/drivers.csv", "/reports/drivers.xlsx"], requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.driversReportCsv));
+adminConsoleRouter.get(["/reports/driver-transactions.csv", "/reports/driver-transactions.xlsx"], requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.driverTransactionsReportCsv));
+adminConsoleRouter.get(["/reports/reward.csv", "/reports/reward.xlsx"], requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.rewardReportCsv));
 adminConsoleRouter.get("/reports/reward", requireRoles("SUPER_ADMIN"), validateRequest(adminReportQuerySchema), asyncHandler(controller.rewardReport));
 adminConsoleRouter.get(
   "/reports/financial-summary",

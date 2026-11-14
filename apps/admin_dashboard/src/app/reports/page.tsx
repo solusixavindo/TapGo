@@ -38,13 +38,13 @@ const CSV_REPORTS: Array<{
   {
     kind: "users",
     label: "Data Pengguna",
-    description: "Nama, telepon, paket, status, dan saldo per kantong. Tanpa password dan rekening. Dapat dibuka di Excel."
+    description: "Nama, telepon, paket, status, dan saldo per kantong. Tanpa password dan rekening."
   },
-  { kind: "drivers", label: "Data Driver", description: "Profil, status, verifikasi, kendaraan, dan jumlah perjalanan selesai. Dapat dibuka di Excel." },
+  { kind: "drivers", label: "Data Driver", description: "Profil, status, verifikasi, kendaraan, dan jumlah perjalanan selesai." },
   {
     kind: "driver-transactions",
     label: "Transaksi Driver",
-    description: "Pendapatan, komisi, insentif, top up, dan penarikan semua driver pada periode. Dapat dibuka di Excel."
+    description: "Pendapatan, komisi, insentif, top up, dan penarikan semua driver pada periode."
   }
 ];
 
@@ -202,7 +202,7 @@ export default function ReportsPage() {
             </section>
 
             <section className="mt-6">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Unduh laporan (CSV) untuk periode yang dipilih</h2>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Unduh laporan (Excel) untuk periode yang dipilih</h2>
               <div className="mt-3 grid gap-3 md:grid-cols-4">
                 {CSV_REPORTS.map((report) => (
                   <div key={report.kind} className="rounded-xl border border-slate-200 bg-white p-4">
@@ -214,7 +214,7 @@ export default function ReportsPage() {
                       onClick={() => onDownload(report.kind)}
                       className="mt-3 rounded-lg bg-brand-ink px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
                     >
-                      {downloading === report.kind ? "Mengunduh…" : "Unduh CSV"}
+                      {downloading === report.kind ? "Mengunduh…" : "Unduh Excel"}
                     </button>
                   </div>
                 ))}

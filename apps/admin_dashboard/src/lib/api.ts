@@ -758,7 +758,7 @@ export function ppobSummaryReportApi(range?: PeriodQuery) {
 export type ReportCsvKind = "bonus" | "ppob" | "ppob-transactions" | "reward" | "users" | "drivers" | "driver-transactions";
 
 export async function downloadReportCsv(kind: ReportCsvKind, range?: PeriodQuery) {
-  const response = await fetch(`${API_BASE}/admin/reports/${kind}.csv${periodSuffix(range)}`, {
+  const response = await fetch(`${API_BASE}/admin/reports/${kind}.xlsx${periodSuffix(range)}`, {
     headers: { authorization: `Bearer ${readToken()}` },
     credentials: "omit"
   });
@@ -772,7 +772,7 @@ export async function downloadReportCsv(kind: ReportCsvKind, range?: PeriodQuery
   const link = document.createElement("a");
   link.href = url;
   const stamp = range?.dateFrom ? `${range.dateFrom.slice(0, 10)}_${(range.dateTo ?? "").slice(0, 10)}` : "semua-waktu";
-  link.download = `tapgo-${kind}-${stamp}.csv`;
+  link.download = `tapgo-${kind}-${stamp}.xlsx`;
   document.body.appendChild(link);
   link.click();
   link.remove();
