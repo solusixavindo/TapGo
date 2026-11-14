@@ -676,6 +676,52 @@ export function documentsNearingRetention() {
   return request<RetentionWarningDocument[]>("/admin/dashboard/documents-nearing-retention");
 }
 
+export type OversightAlert = {
+  key: string;
+  severity: "warning" | "info";
+  message: string;
+  actorId: string | null;
+  actorName: string | null;
+  count: number;
+  firstAt: string;
+  lastAt: string;
+};
+export type OversightAdmin = {
+  actorId: string;
+  name: string;
+  role: string;
+  total: number;
+  moneyTotal: number;
+  byAction: Record<string, number>;
+};
+export type OversightReport = { windowHours: number; generatedAt: string; admins: OversightAdmin[]; alerts: OversightAlert[] };
+
+/** Pengawasan aksi admin (khusus Super Admin VIP). */
+export function fetchOversight(hours = 24) {
+  return request<OversightReport>(`/admin/dashboard/oversight?hours=${hours}`);
+}
+
+export type AuditLogEntry = {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  metadata: unknown;
+  createdAt: string;
+  actorName: string;
+  actorRole: string | null;
+  ipAddress?: string | null;
+};
+
+export function fetchAuditLogs(params: { page: number; pageSize: number; action?: string; actorId?: string; dateFrom?: string; dateTo?: string }) {
+  const q = new URLSearchParams({ page: String(params.page), pageSize: String(params.pageSize) });
+  for (const key of ["action", "actorId", "dateFrom", "dateTo"] as const) {
+    const value = params[key];
+    if (value) q.set(key, value);
+  }
+  return request<{ total: number; items: AuditLogEntry[] }>(`/admin/audit-logs?${q.toString()}`);
+}
+
 export function recentAdminActivity() {
   return request<AdminActivityEntry[]>("/admin/dashboard/activity?limit=20");
 }

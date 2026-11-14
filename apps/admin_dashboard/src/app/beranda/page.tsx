@@ -32,6 +32,7 @@ import {
 import ConsoleHeader from "../console-header";
 import VipInsightsView from "./vip-insights";
 import CountUp from "./count-up";
+import OversightCard from "./oversight-card";
 import ClickCard from "../click-card";
 
 const ACTIVITY_LABEL: Record<string, string> = {
@@ -179,7 +180,12 @@ export default function BerandaPage() {
           <p className="text-sm text-slate-500">Memuat…</p>
         ) : (
           <>
-            {isVip ? <VipInsightsView /> : null}
+            {isVip ? (
+              <>
+                <OversightCard />
+                <VipInsightsView />
+              </>
+            ) : null}
 
             {!isVip ? (
             <section className="reveal-group grid grid-cols-2 gap-3 md:grid-cols-4">

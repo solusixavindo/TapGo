@@ -57,6 +57,7 @@ const NAV_GROUPS: Array<{
     items: [
       { href: "/roles", label: "Pengaturan Role", minimum: "SUPER_ADMIN_VIP", icon: "shield" },
       { href: "/layanan", label: "Status Layanan", minimum: "SUPER_ADMIN_VIP", icon: "pulse" },
+      { href: "/log-aktivitas", label: "Log Aktivitas", minimum: "SUPER_ADMIN_VIP", icon: "pulse" },
       { href: "/bantuan-akun", label: "Bantuan Akun", minimum: "SUPER_ADMIN_VIP", icon: "users" },
       { href: "/hapus-akun", label: "Permintaan Hapus Akun", minimum: "SUPER_ADMIN_VIP", icon: "shield" }
     ]

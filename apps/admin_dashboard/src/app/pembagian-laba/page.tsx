@@ -314,7 +314,14 @@ export default function ProfitSharingPage() {
                   </div>
                 ) : null}
 
-                {selected.status === "DRAFT" ? (
+                {(selected.status === "DRAFT" || selected.status === "APPROVED") && !roleAtLeast(role, "SUPER_ADMIN_VIP") ? (
+                  <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800" data-testid="vip-only-note">
+                    {selected.status === "DRAFT" ? "Menyetujui periode" : "Membagikan laba"} hanya dapat dilakukan Super Admin VIP (pemilik). Pembagian
+                    memasukkan uang ke banyak saldo sekaligus dan tidak dapat dibatalkan.
+                  </p>
+                ) : null}
+
+                {selected.status === "DRAFT" && roleAtLeast(role, "SUPER_ADMIN_VIP") ? (
                   <button
                     type="button"
                     disabled={busy}
@@ -325,7 +332,7 @@ export default function ProfitSharingPage() {
                   </button>
                 ) : null}
 
-                {selected.status === "APPROVED" ? (
+                {selected.status === "APPROVED" && roleAtLeast(role, "SUPER_ADMIN_VIP") ? (
                   confirmOpen ? (
                     <div className="mt-4 space-y-3 rounded-lg border border-rose-200 bg-rose-50 p-3">
                       <p className="text-xs leading-5 text-rose-900">
