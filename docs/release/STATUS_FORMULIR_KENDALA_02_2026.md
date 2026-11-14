@@ -13,3 +13,20 @@ Status jujur: "Selesai di kode" belum berarti "aktif di produksi".
 Risiko sisa yang disadari (tidak dapat ditutup dengan aturan tanpa merusak alur sah):
 - Perjalanan palsu antara dua akun kenalan dapat memindahkan saldo terkunci menjadi saldo tarik driver. Jenis yang sama sudah ada untuk saldo top up sejak dulu; pengendalinya pemantauan admin (Transaksi Driver kini dapat diekspor), bukan aturan.
 - Deposit dari top up kartu dapat ditarik setelah 24 jam; bila ada chargeback kartu kemudian, kerugian ditanggung. Pengendali: persetujuan admin atas setiap penarikan deposit.
+
+## Pemisahan kewenangan Super Admin dan Super Admin VIP (keputusan Owner, 14 Nov 2026)
+
+Prinsip: Owner (VIP) tidak memegang akses rekening perusahaan, jadi semua yang memerlukan cek mutasi bank atau pencairan tetap di
+Super Admin, dan Owner mengawasi lewat Log Aktivitas dan peringatan.
+
+| Kewenangan | Sekarang |
+|---|---|
+| Pencairan penarikan, top up manual (semua nominal), hadiah, insentif driver, refund | Super Admin (tetap) |
+| Menyetujui periode dan membagikan laba | **Khusus VIP** |
+| Koreksi status perjalanan (API) dan menangguhkan/menolak driver | **Khusus VIP** (mengaktifkan driver tetap Super Admin) |
+| Membaca log audit dan pengawasan admin | **Khusus VIP** |
+| Ubah harga paket (`PUT /memberships/admin/plans/:tier`) dan `PUT /admin/app-settings` | **Dihapus** |
+
+Pengawasan VIP: halaman Log Aktivitas (filter pelaku, aksi, tanggal), panel di Beranda, dan peringatan pola (penarikan >=10/jam oleh satu admin,
+top up manual >=5/jam, login admin gagal >=5/jam, uang diproses >=Rp20 juta/jendela). Ambang ada di `AdminOversightService.ts`.
+Risiko sisa: satu Super Admin masih bisa menyetujui dan mencairkan sendiri. Pengendalinya pengawasan, bukan pemisahan dua orang.
