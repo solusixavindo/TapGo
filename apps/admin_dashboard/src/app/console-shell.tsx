@@ -3,8 +3,10 @@
 import Link from "./hard-nav";
 import { usePathname } from "next/navigation";
 import { useHardRouter as useRouter } from "./hard-nav";
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { clearSession, readRole, roleAtLeast } from "../lib/api";
+import { useTheme } from "../lib/theme";
+import { useNavPill } from "./nav-pill";
 
 /**
  * Kerangka konsol: bilah samping bergrup + area isi.
@@ -116,10 +118,42 @@ function Icon({ name }: { name: IconName }) {
   );
 }
 
+function ThemeButton({ className = "" }: { className?: string }) {
+  const [theme, toggle] = useTheme();
+  const dark = theme === "dark";
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-label={dark ? "Ganti ke tema terang" : "Ganti ke tema gelap"}
+      title={dark ? "Tema terang" : "Tema gelap"}
+      className={`inline-flex items-center justify-center rounded-lg border border-white/20 text-white transition hover:bg-white/10 ${className}`}
+    >
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+        {dark ? (
+          <path d="M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6 4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />
+        ) : (
+          <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7Z" />
+        )}
+      </svg>
+    </button>
+  );
+}
+
 function Sidebar({ role, pathname, onNavigate }: { role: string; pathname: string; onNavigate?: () => void }) {
   const router = useRouter();
   const info = ROLE_INFO[role] ?? ROLE_INFO.ADMIN!;
   const effective = role || "ADMIN";
+  const trackRef = useRef<HTMLDivElement>(null);
+  const pillRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLElement>(null);
+
+  const visibleGroups = NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => roleAtLeast(effective, item.minimum))
+  })).filter((group) => group.items.length > 0);
+  const activeItem = visibleGroups.flatMap((g) => g.items).find((item) => pathname === item.href || pathname === `${item.href}/`);
+  useNavPill(trackRef, pillRef, scrollRef, activeItem?.href ?? null, effective);
 
   return (
     <div className="flex h-full flex-col">
@@ -132,28 +166,27 @@ function Sidebar({ role, pathname, onNavigate }: { role: string; pathname: strin
         </div>
       </div>
 
-      <nav aria-label="Menu konsol" className="flex-1 space-y-5 overflow-y-auto px-3 py-5">
-        {NAV_GROUPS.map((group) => {
-          const items = group.items.filter((item) => roleAtLeast(effective, item.minimum));
-          if (items.length === 0) return null;
-          return (
-            <div key={group.title}>
+      <nav ref={scrollRef} aria-label="Menu konsol" className="flex-1 overflow-y-auto px-3 py-5">
+        <div ref={trackRef} className="relative space-y-5">
+          <div ref={pillRef} aria-hidden="true" className="nav-pill" style={{ opacity: 0 }} />
+          {visibleGroups.map((group) => (
+            <div key={group.title} className="relative">
               <p className="px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">{group.title}</p>
               <ul className="mt-2 space-y-0.5">
-                {items.map((item) => {
+                {group.items.map((item) => {
                   const active = pathname === item.href || pathname === `${item.href}/`;
                   return (
                     <li key={item.href}>
                       <Link
                         href={item.href}
+                        data-nav-href={item.href}
                         onClick={onNavigate}
                         aria-current={active ? "page" : undefined}
                         className={[
-                          "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition",
-                          active ? "bg-white/10 text-white" : "text-slate-300 hover:bg-white/5 hover:text-white"
+                          "relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition-colors",
+                          active ? "text-white" : "text-slate-300 hover:bg-white/5 hover:text-white"
                         ].join(" ")}
                       >
-                        {active ? <span aria-hidden="true" className="absolute inset-y-1.5 left-0 w-[3px] rounded-r bg-brand-gold" /> : null}
                         <Icon name={item.icon} />
                         {item.label}
                       </Link>
@@ -162,18 +195,18 @@ function Sidebar({ role, pathname, onNavigate }: { role: string; pathname: strin
                 })}
               </ul>
             </div>
-          );
-        })}
+          ))}
+        </div>
       </nav>
 
       <div className="border-t border-white/10 p-4">
-        <div className="rounded-xl bg-white/5 p-3">
+        <div className="rounded-xl border border-white/10 bg-white/5 p-3">
           <span className="inline-block rounded-full bg-brand-gold/20 px-2.5 py-0.5 text-[11px] font-bold text-brand-gold">
             {info.title}
           </span>
           <p className="mt-2 text-xs leading-5 text-slate-300">{info.duty}</p>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="mt-3 grid grid-cols-[1fr_1fr_auto] gap-2">
           <Link href="/ganti-password" onClick={onNavigate} className="whitespace-nowrap rounded-lg border border-white/20 px-2 py-2 text-center text-[11px] font-semibold text-white hover:bg-white/10">
             Ganti password
           </Link>
@@ -187,6 +220,7 @@ function Sidebar({ role, pathname, onNavigate }: { role: string; pathname: strin
           >
             Keluar
           </button>
+          <ThemeButton className="h-full w-9" />
         </div>
       </div>
     </div>
@@ -204,8 +238,8 @@ export default function ConsoleShell({ children }: { children: ReactNode }) {
   if (isLogin) return <>{children}</>;
 
   return (
-    <div className="min-h-screen bg-slate-100 lg:pl-64">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 bg-brand-navy print:hidden lg:block">
+    <div className="console-root min-h-screen bg-slate-100 lg:pl-64">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-white/10 bg-brand-navy print:hidden lg:block" style={{ backgroundImage: "linear-gradient(180deg, rgba(37,99,235,0.16), rgba(5,11,26,0) 38%)" }}>
         <Sidebar role={role} pathname={pathname} />
       </aside>
 
@@ -229,13 +263,13 @@ export default function ConsoleShell({ children }: { children: ReactNode }) {
       {open ? (
         <div className="fixed inset-0 z-40 lg:hidden print:hidden">
           <button type="button" aria-label="Tutup menu" onClick={() => setOpen(false)} className="absolute inset-0 bg-brand-navyDeep/60" />
-          <aside className="absolute inset-y-0 left-0 w-72 bg-brand-navy shadow-xl">
+          <aside className="absolute inset-y-0 left-0 w-72 bg-brand-navy shadow-xl" style={{ backgroundImage: "linear-gradient(180deg, rgba(37,99,235,0.16), rgba(5,11,26,0) 38%)" }}>
             <Sidebar role={role} pathname={pathname} onNavigate={() => setOpen(false)} />
           </aside>
         </div>
       ) : null}
 
-      <div className="min-w-0">{children}</div>
+      <div key={pathname} className="page-enter min-w-0">{children}</div>
     </div>
   );
 }

@@ -2,8 +2,47 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Tema konsol admin.
+ *
+ * Gelap (bawaan) mengikuti tampilan dasbor kaca berlatar biru-navy; terang adalah tampilan lama yang tidak
+ * diubah. Pilihan operator disimpan di peramban (data-theme pada <html>); tanpa pilihan = gelap.
+ *
+ * Halaman yang ada ditulis dengan kelas Tailwind terang (bg-white, text-slate-500, ...). Alih-alih menyunting
+ * puluhan halaman yang memegang uang satu per satu, kelas-kelas itu dipetakan ulang di bawah ini hanya saat tema
+ * gelap. Tema terang tidak tersentuh sama sekali, jadi jalan mundurnya cukup tombol tema.
+ */
+
 :root {
+  color-scheme: dark;
+  --canvas-0: #050b1a;
+  --canvas-1: #0a1630;
+  --glass: rgba(17, 31, 64, 0.58);
+  --glass-solid: rgba(13, 24, 50, 0.94);
+  --glass-soft: rgba(255, 255, 255, 0.045);
+  --glass-hover: rgba(255, 255, 255, 0.09);
+  --line: rgba(148, 170, 255, 0.16);
+  --ink-1: #e9efff;
+  --ink-2: #bcc8e6;
+  --ink-3: #8fa1c8;
+  --ink-4: #7384ac;
+  --accent: #4f8cff;
+  --accent-2: #22d3ee;
+  --chart-grid: rgba(148, 170, 255, 0.16);
+  --chart-axis: #8fa1c8;
+  --chart-empty: rgba(255, 255, 255, 0.1);
+  --tooltip-bg: rgba(10, 20, 44, 0.96);
+  --tooltip-ink: #e9efff;
+}
+
+:root[data-theme="light"] {
   color-scheme: light;
+  --line: #e2e8f0;
+  --chart-grid: #e2e8f0;
+  --chart-axis: #64748b;
+  --chart-empty: #e2e8f0;
+  --tooltip-bg: #ffffff;
+  --tooltip-ink: #0f172a;
 }
 
 body {
@@ -11,4 +50,278 @@ body {
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
+}
+
+/* Hanya layar: hasil cetak (dokumen identitas) tetap terang dan terbaca. */
+@media screen {
+/* Latar: gradasi navy dengan dua cahaya lembut, tetap di tempat saat halaman digulir. */
+:root:not([data-theme="light"]) body {
+  background-color: var(--canvas-0);
+  background-image:
+    radial-gradient(60rem 36rem at 8% -6%, rgba(37, 99, 235, 0.34), transparent 62%),
+    radial-gradient(46rem 30rem at 100% 100%, rgba(20, 184, 166, 0.17), transparent 60%),
+    linear-gradient(180deg, var(--canvas-1), var(--canvas-0));
+  background-attachment: fixed;
+  color: var(--ink-1);
+}
+
+/* ---------- Pemetaan kelas terang -> gelap (hanya tema gelap) ---------- */
+:root:not([data-theme="light"]) main.bg-slate-100 {
+  background: transparent;
+}
+:root:not([data-theme="light"]) .bg-white {
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  border-color: var(--line);
+}
+:root:not([data-theme="light"]) .bg-slate-50 {
+  background: var(--glass-soft);
+}
+:root:not([data-theme="light"]) .bg-slate-100 {
+  background: rgba(255, 255, 255, 0.07);
+}
+:root:not([data-theme="light"]) .bg-slate-200 {
+  background: rgba(255, 255, 255, 0.12);
+}
+:root:not([data-theme="light"]) .hover\:bg-slate-50:hover {
+  background: var(--glass-hover);
+}
+:root:not([data-theme="light"]) .hover\:bg-slate-200:hover {
+  background: rgba(255, 255, 255, 0.17);
+}
+:root:not([data-theme="light"]) .border-slate-100,
+:root:not([data-theme="light"]) .border-slate-200,
+:root:not([data-theme="light"]) .border-slate-300,
+:root:not([data-theme="light"]) .border-slate-200\/70,
+:root:not([data-theme="light"]) .hover\:border-slate-300:hover {
+  border-color: var(--line);
+}
+:root:not([data-theme="light"]) .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(148, 170, 255, 0.1);
+}
+:root:not([data-theme="light"]) .text-slate-950,
+:root:not([data-theme="light"]) .text-slate-900,
+:root:not([data-theme="light"]) .text-slate-800,
+:root:not([data-theme="light"]) .text-brand-navy {
+  color: var(--ink-1);
+}
+:root:not([data-theme="light"]) .text-slate-700 {
+  color: var(--ink-2);
+}
+:root:not([data-theme="light"]) .text-slate-600 {
+  color: #aab8da;
+}
+:root:not([data-theme="light"]) .text-slate-500 {
+  color: var(--ink-3);
+}
+:root:not([data-theme="light"]) .text-slate-400 {
+  color: var(--ink-4);
+}
+:root:not([data-theme="light"]) .hover\:text-slate-800:hover {
+  color: var(--ink-1);
+}
+
+/* Tombol utama bernavy gelap menghilang di latar gelap: jadi biru beraksen. */
+:root:not([data-theme="light"]) .bg-brand-ink,
+:root:not([data-theme="light"]) main .bg-brand-navy,
+:root:not([data-theme="light"]) .bg-brand-green {
+  background: linear-gradient(135deg, #2f6df0, #4f8cff);
+  box-shadow: 0 6px 20px -8px rgba(79, 140, 255, 0.7);
+}
+:root:not([data-theme="light"]) .border-brand-navy,
+:root:not([data-theme="light"]) .border-brand-green {
+  border-color: rgba(79, 140, 255, 0.6);
+}
+:root:not([data-theme="light"]) .text-brand-green,
+:root:not([data-theme="light"]) .text-brand-blue {
+  color: #7fb0ff;
+}
+
+/* Lencana status: warna pastel menjadi tinta tembus pandang dengan huruf terang. */
+:root:not([data-theme="light"]) .bg-rose-50,
+:root:not([data-theme="light"]) .bg-rose-100,
+:root:not([data-theme="light"]) .hover\:bg-rose-100:hover,
+:root:not([data-theme="light"]) .hover\:bg-rose-50:hover {
+  background: rgba(244, 63, 94, 0.16);
+}
+:root:not([data-theme="light"]) .text-rose-600,
+:root:not([data-theme="light"]) .text-rose-700,
+:root:not([data-theme="light"]) .text-rose-800,
+:root:not([data-theme="light"]) .text-rose-900 {
+  color: #fda4b4;
+}
+:root:not([data-theme="light"]) .border-rose-200,
+:root:not([data-theme="light"]) .border-rose-300,
+:root:not([data-theme="light"]) .border-rose-400 {
+  border-color: rgba(244, 63, 94, 0.4);
+}
+:root:not([data-theme="light"]) .bg-amber-50,
+:root:not([data-theme="light"]) .bg-amber-100,
+:root:not([data-theme="light"]) .hover\:bg-amber-50:hover,
+:root:not([data-theme="light"]) .hover\:bg-amber-100:hover {
+  background: rgba(245, 158, 11, 0.16);
+}
+:root:not([data-theme="light"]) .text-amber-700,
+:root:not([data-theme="light"]) .text-amber-800,
+:root:not([data-theme="light"]) .text-amber-900 {
+  color: #fcd34d;
+}
+:root:not([data-theme="light"]) .border-amber-200,
+:root:not([data-theme="light"]) .border-amber-300 {
+  border-color: rgba(245, 158, 11, 0.4);
+}
+:root:not([data-theme="light"]) .bg-emerald-50,
+:root:not([data-theme="light"]) .bg-emerald-100 {
+  background: rgba(16, 185, 129, 0.16);
+}
+:root:not([data-theme="light"]) .text-emerald-700,
+:root:not([data-theme="light"]) .text-emerald-800,
+:root:not([data-theme="light"]) .text-emerald-900 {
+  color: #6ee7b7;
+}
+:root:not([data-theme="light"]) .border-emerald-200 {
+  border-color: rgba(16, 185, 129, 0.4);
+}
+:root:not([data-theme="light"]) .bg-blue-100,
+:root:not([data-theme="light"]) .bg-sky-100,
+:root:not([data-theme="light"]) .hover\:bg-sky-100:hover {
+  background: rgba(56, 189, 248, 0.16);
+}
+:root:not([data-theme="light"]) .text-blue-800,
+:root:not([data-theme="light"]) .text-sky-800,
+:root:not([data-theme="light"]) .text-sky-900 {
+  color: #7dd3fc;
+}
+:root:not([data-theme="light"]) .text-indigo-800 {
+  color: #a5b4fc;
+}
+
+/* Kolom isian dan kotak dialog. */
+:root:not([data-theme="light"]) input,
+:root:not([data-theme="light"]) select,
+:root:not([data-theme="light"]) textarea {
+  color: var(--ink-1);
+}
+:root:not([data-theme="light"]) input.bg-white,
+:root:not([data-theme="light"]) select.bg-white,
+:root:not([data-theme="light"]) textarea.bg-white,
+:root:not([data-theme="light"]) input:not([class*="bg-"]),
+:root:not([data-theme="light"]) textarea:not([class*="bg-"]) {
+  background: rgba(8, 16, 38, 0.6);
+}
+:root:not([data-theme="light"]) input::placeholder,
+:root:not([data-theme="light"]) textarea::placeholder {
+  color: var(--ink-4);
+}
+:root:not([data-theme="light"]) option {
+  background: #0d1832;
+  color: var(--ink-1);
+}
+:root:not([data-theme="light"]) .console-root.bg-slate-100 {
+  background: transparent;
+}
+/* Dialog (kotak melayang) harus nyaris buram: kaca tembus pandang mengacaukan teks di atas isi halaman. */
+:root:not([data-theme="light"]) [role="dialog"].bg-white,
+:root:not([data-theme="light"]) [aria-modal="true"].bg-white,
+:root:not([data-theme="light"]) .shadow-xl.bg-white {
+  background: var(--glass-solid);
+}
+
+}
+
+/* ---------- Gerak ---------- */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+/* Pengisi "backwards", bukan "both": setelah selesai tidak ada transform/filter yang tersisa. Keduanya akan menjadi
+   acuan posisi bagi dialog fixed di dalam halaman dan menggesernya dari layar. */
+.page-enter {
+  animation: page-enter 0.42s cubic-bezier(0.22, 0.8, 0.28, 1) backwards;
+}
+
+/* Kartu muncul bergiliran: tiap anak langsung .reveal-group mendapat jeda sendiri. */
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.reveal-group > * {
+  animation: reveal-up 0.5s cubic-bezier(0.22, 0.8, 0.28, 1) backwards;
+}
+.reveal-group > *:nth-child(1) { animation-delay: 0.04s; }
+.reveal-group > *:nth-child(2) { animation-delay: 0.09s; }
+.reveal-group > *:nth-child(3) { animation-delay: 0.14s; }
+.reveal-group > *:nth-child(4) { animation-delay: 0.19s; }
+.reveal-group > *:nth-child(5) { animation-delay: 0.24s; }
+.reveal-group > *:nth-child(6) { animation-delay: 0.29s; }
+.reveal-group > *:nth-child(7) { animation-delay: 0.34s; }
+.reveal-group > *:nth-child(8) { animation-delay: 0.39s; }
+.reveal-group > *:nth-child(n + 9) { animation-delay: 0.44s; }
+
+/* Kartu angka: terangkat sedikit dan bercahaya saat disorot. */
+.stat-card {
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+.stat-card:hover {
+  transform: translateY(-3px);
+}
+:root:not([data-theme="light"]) .stat-card:hover {
+  border-color: rgba(120, 160, 255, 0.45);
+  box-shadow: 0 16px 36px -18px rgba(79, 140, 255, 0.65);
+}
+
+/* Pil penanda menu aktif: kotak penuh yang dipotong clip-path; diatur dari skrip bilah samping. */
+.nav-pill {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background:
+    linear-gradient(90deg, #7fb0ff 0 3px, transparent 3px),
+    linear-gradient(90deg, rgba(79, 140, 255, 0.34), rgba(79, 140, 255, 0.1));
+  box-shadow: 0 0 28px -6px rgba(79, 140, 255, 0.55);
+  will-change: clip-path;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter,
+  .reveal-group > * {
+    animation: none;
+  }
+  .stat-card,
+  .stat-card:hover {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* Cetak (dokumen identitas dicetak dari konsol): selalu terang, tanpa kaca dan animasi. */
+@media print {
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .page-enter,
+  .reveal-group > * {
+    animation: none !important;
+    filter: none !important;
+  }
 }

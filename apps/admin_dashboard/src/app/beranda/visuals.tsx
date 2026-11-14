@@ -18,8 +18,8 @@ export const PALETTE = {
   amber: "#F59E0B",
   violet: "#7C6CF2",
   slate: "#64748B",
-  grid: "#E2E8F0",
-  axis: "#64748B"
+  grid: "var(--chart-grid)",
+  axis: "var(--chart-axis)"
 } as const;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
@@ -128,10 +128,10 @@ export function Stars({ value, size = 16, label }: { value: number; size?: numbe
             <defs>
               <linearGradient id={id}>
                 <stop offset={`${fill * 100}%`} stopColor={PALETTE.gold} />
-                <stop offset={`${fill * 100}%`} stopColor="#E2E8F0" />
+                <stop offset={`${fill * 100}%`} stopColor="var(--chart-empty)" />
               </linearGradient>
             </defs>
-            <path d={STAR_PATH} fill={`url(#${id})`} stroke={fill > 0 ? PALETTE.amber : "#CBD5E1"} strokeWidth={0.6} strokeLinejoin="round" />
+            <path d={STAR_PATH} fill={`url(#${id})`} stroke={fill > 0 ? PALETTE.amber : "var(--chart-axis)"} strokeWidth={0.6} strokeLinejoin="round" />
           </svg>
         );
       })}
@@ -144,7 +144,7 @@ export type DonutSlice = { label: string; value: number; color: string };
 /** Donat dengan angka di tengah dan legenda bernilai persen. */
 export function Donut({ data, centerValue, centerLabel }: { data: DonutSlice[]; centerValue: string; centerLabel: string }) {
   const total = data.reduce((sum, slice) => sum + slice.value, 0);
-  const shown = total > 0 ? data.filter((slice) => slice.value > 0) : [{ label: "Belum ada data", value: 1, color: "#E2E8F0" }];
+  const shown = total > 0 ? data.filter((slice) => slice.value > 0) : [{ label: "Belum ada data", value: 1, color: "var(--chart-empty)" }];
   return (
     <div className="flex items-center gap-4">
       <div className="relative h-32 w-32 shrink-0">
@@ -232,7 +232,7 @@ export function Heatmap({ matrix }: { matrix: number[][] }) {
                     key={hour}
                     title={`${DAYS[dayIndex]} ${String(hour).padStart(2, "0")}.00 WIB: ${count} pesanan`}
                     className="aspect-square rounded-[3px]"
-                    style={{ backgroundColor: count === 0 ? "#F1F5F9" : PALETTE.blue, opacity: count === 0 ? 1 : 0.18 + 0.82 * (count / max) }}
+                    style={{ backgroundColor: count === 0 ? "var(--chart-empty)" : PALETTE.blue, opacity: count === 0 ? 1 : 0.18 + 0.82 * (count / max) }}
                   />
                 ))}
               </div>

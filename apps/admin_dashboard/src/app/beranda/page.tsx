@@ -3,9 +3,9 @@
 import { useHardRouter as useRouter } from "../hard-nav";
 import { useCallback, useEffect, useState } from "react";
 import {
+  Area,
+  AreaChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -31,6 +31,7 @@ import {
 } from "../../lib/api";
 import ConsoleHeader from "../console-header";
 import VipInsightsView from "./vip-insights";
+import CountUp from "./count-up";
 
 const ACTIVITY_LABEL: Record<string, string> = {
   ADMIN_ROLE_ASSIGNED: "Mengubah role admin",
@@ -180,7 +181,7 @@ export default function BerandaPage() {
             {isVip ? <VipInsightsView /> : null}
 
             {!isVip ? (
-            <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <section className="reveal-group grid grid-cols-2 gap-3 md:grid-cols-4">
               <KpiCard href="/members" label="Total member" value={String(summary?.totalMembers ?? 0)} />
               <KpiCard
                 href="/members?aktif=7"
@@ -258,21 +259,30 @@ export default function BerandaPage() {
               <h2 className="text-sm font-bold text-slate-700">Tren pendaftaran 30 hari</h2>
               <div className="mt-4 h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={growth?.registrationTrend ?? []}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                  <AreaChart data={growth?.registrationTrend ?? []}>
+                    <defs>
+                      <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#4F8CFF" stopOpacity={0.45} />
+                        <stop offset="100%" stopColor="#4F8CFF" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                     <XAxis
                       dataKey="date"
                       tickFormatter={formatDateShort}
-                      tick={{ fontSize: 11, fill: "#64748B" }}
+                      tick={{ fontSize: 11, fill: "var(--chart-axis)" }}
+                      stroke="var(--chart-grid)"
                       interval={4}
                     />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#64748B" }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "var(--chart-axis)" }} stroke="var(--chart-grid)" />
                     <Tooltip
                       labelFormatter={(value) => formatDateShort(String(value))}
                       formatter={(value) => [String(value ?? 0), "Pendaftaran"]}
+                      contentStyle={{ background: "var(--tooltip-bg)", border: "1px solid var(--line)", borderRadius: 10, color: "var(--tooltip-ink)" }}
+                      labelStyle={{ color: "var(--tooltip-ink)" }}
                     />
-                    <Line type="monotone" dataKey="count" stroke="#0877E8" strokeWidth={2} dot={false} />
-                  </LineChart>
+                    <Area type="monotone" dataKey="count" stroke="#4F8CFF" strokeWidth={2.5} fill="url(#trend-fill)" dot={false} animationDuration={1100} />
+                  </AreaChart>
                 </ResponsiveContainer>
               </div>
             </section>
@@ -283,7 +293,7 @@ export default function BerandaPage() {
               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
                 Ringkasan keuangan
               </h2>
-              <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3">
+              <div className="reveal-group mt-3 grid grid-cols-2 gap-3 md:grid-cols-3">
                 <MoneyCard
                   href="/reports"
                   label="Pendapatan upgrade membership"
@@ -332,13 +342,13 @@ export default function BerandaPage() {
 }
 
 const CARD_LINK =
-  "group block rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-brand-green hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-green";
+  "stat-card group block rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-brand-green hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-green";
 
 function KpiCard({ href, label, value, hint }: { href: string; label: string; value: string; hint?: string }) {
   return (
     <Link href={href} className={CARD_LINK}>
       <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-black text-brand-navy">{value}</p>
+      <p className="mt-2 text-2xl font-black text-brand-navy"><CountUp text={value} /></p>
       {hint ? <p className="mt-1 text-xs text-slate-400">{hint}</p> : null}
       <p className="mt-2 text-[11px] font-semibold text-brand-green opacity-0 transition group-hover:opacity-100">Lihat rincian →</p>
     </Link>
@@ -350,7 +360,7 @@ function MoneyCard({ href, label, value }: { href: string; label: string; value?
     <Link href={href} className={CARD_LINK}>
       <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p>
       <p className="mt-2 text-lg font-black text-brand-navy">
-        {value !== undefined ? formatRupiah(value) : "—"}
+        {value !== undefined ? <CountUp text={formatRupiah(value)} /> : "—"}
       </p>
       <p className="mt-2 text-[11px] font-semibold text-brand-green opacity-0 transition group-hover:opacity-100">Lihat rincian →</p>
     </Link>
