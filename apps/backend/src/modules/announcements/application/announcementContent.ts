@@ -13,7 +13,6 @@ export const ANNOUNCEMENT_TITLE_MAX = 80;
 export const ANNOUNCEMENT_BODY_MAX = 1000;
 
 /** Karakter kendali (kecuali baris baru) serta karakter lebar-nol dan pengubah arah teks yang dipakai menyamarkan tulisan. */
-// eslint-disable-next-line no-control-regex
 const INVISIBLE = /[\u0000-\u0008\u000B-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g;
 
 /** Skema/awalan alamat, atau nama situs dengan akhiran yang lazim dipakai penipuan dan pemendek tautan. */
