@@ -202,9 +202,13 @@ export class FcmClient implements PushSender {
               // tapgo_alerts_v2 sudah terkunci di HP yang pernah memasang APK lama, jadi
               // suara yang diubah selalu butuh id baru. `sound: "default"` tetap eksplisit
               // (hanya berlaku di Android < 8; di 8+ suara ditentukan channel).
+              // visibility PUBLIC (uji Owner 15 Nov 2026): tanpa ini Android memperlakukan notifikasi sebagai "pribadi" dan
+              // MENYEMBUNYIKAN teksnya di layar kunci ("Tampilkan konten sensitif hanya saat tidak terkunci"), jadi driver
+              // hanya mendengar bunyi tanpa melihat apa pun. Aman karena SEMUA teks push sengaja tanpa nama, nominal, atau
+              // nomor (dijaga tes pushPrivacy.test.ts); jangan menambah pesan yang memuat data pribadi.
               android: {
                 priority: "HIGH",
-                notification: { channel_id: pushChannelForSound(options.sound), sound: "default" }
+                notification: { channel_id: pushChannelForSound(options.sound), sound: "default", visibility: "PUBLIC" }
               }
             }
           }),

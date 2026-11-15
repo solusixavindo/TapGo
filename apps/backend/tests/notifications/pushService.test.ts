@@ -115,7 +115,7 @@ describe("FcmClient", () => {
     const message = JSON.parse(init.body as string).message;
     expect(message.android).toEqual({
       priority: "HIGH",
-      notification: { channel_id: "tapgo_alerts_v3", sound: "default" }
+      notification: { channel_id: "tapgo_alerts_v3", sound: "default", visibility: "PUBLIC" }
     });
     expect(JSON.stringify(message.android)).not.toContain("tapgo_default");
     expect(JSON.stringify(message.android)).not.toContain("tapgo_alerts_v2");
