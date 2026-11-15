@@ -1,4 +1,5 @@
 import { createSign } from "node:crypto";
+import { logger } from "../../../core/logger/logger.js";
 
 export type PushMessage = {
   title: string;
@@ -65,6 +66,35 @@ export function parseServiceAccount(raw: string | undefined): ServiceAccount | n
   return null;
 }
 
+/**
+ * Memeriksa konfigurasi push dan mengembalikan masalahnya dalam kalimat, atau null bila wajar. Dipanggil saat server
+ * mulai: proyek Firebase yang salah di .env (kejadian 15 Nov 2026: FIREBASE_PROJECT_ID=tapgo-demo padahal kunci dan
+ * aplikasi milik tapgo-c7cb3) membuat SEMUA push ditolak Google dengan 403 tanpa satu pun tanda di log.
+ */
+export function describePushConfigProblem(input: { serviceAccountJson?: string | undefined; projectId?: string | undefined }): string | null {
+  const raw = input.serviceAccountJson?.trim();
+  if (!raw) return null; // push sengaja mati
+  const account = parseServiceAccount(raw);
+  if (!account) return "FIREBASE_SERVICE_ACCOUNT_JSON ada tetapi tidak terbaca (JSON/base64 rusak): push tidak dapat dikirim.";
+  const configured = input.projectId?.trim();
+  if (configured && account.project_id && configured !== account.project_id) {
+    return `FIREBASE_PROJECT_ID (${configured}) tidak sama dengan project_id pada kunci (${account.project_id}): Google akan menolak semua push dengan 403. Samakan atau hapus FIREBASE_PROJECT_ID.`;
+  }
+  return null;
+}
+
+/** Ringkasan galat Google yang aman dicatat: kode, status, dan alasan. Tanpa token perangkat dan tanpa isi pesan. */
+export function summarizeGoogleError(body: unknown): { status?: string; reason?: string; message?: string } {
+  const error = (body as { error?: { status?: string; message?: string; details?: Array<{ reason?: string }> } } | null)?.error;
+  if (!error || typeof error !== "object") return {};
+  const reason = Array.isArray(error.details) ? error.details.find((d) => typeof d?.reason === "string")?.reason : undefined;
+  return {
+    ...(typeof error.status === "string" ? { status: error.status } : {}),
+    ...(reason ? { reason } : {}),
+    ...(typeof error.message === "string" ? { message: error.message.slice(0, 200) } : {})
+  };
+}
+
 const FCM_SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 const DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token";
 const REQUEST_TIMEOUT_MS = 8000;
@@ -117,7 +147,14 @@ export class ServiceAccountTokenProvider {
       }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      const failure = (await response.json().catch(() => ({}))) as { error?: string; error_description?: string };
+      logger.warn(
+        { httpStatus: response.status, error: failure.error, description: failure.error_description?.slice(0, 200) },
+        "FCM: izin OAuth Google ditolak (kunci akun layanan atau jam server bermasalah)"
+      );
+      return null;
+    }
     const payload = (await response.json()) as { access_token?: string; expires_in?: number };
     if (!payload.access_token) return null;
     this.cached = {
@@ -175,17 +212,23 @@ export class FcmClient implements PushSender {
         }
       );
       if (response.ok) return "sent";
-      // 404 UNREGISTERED / 400 INVALID_ARGUMENT untuk token: token mati.
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: { details?: Array<{ errorCode?: string }> };
+      };
+      // 404 UNREGISTERED / 400 INVALID_ARGUMENT untuk token: token mati (kejadian biasa, tidak dicatat).
       if (response.status === 404) return "invalid_token";
       if (response.status === 400) {
-        const payload = (await response.json().catch(() => ({}))) as {
-          error?: { details?: Array<{ errorCode?: string }> };
-        };
         const code = payload.error?.details?.find((d) => d.errorCode)?.errorCode;
         if (code === "INVALID_ARGUMENT" || code === "UNREGISTERED") return "invalid_token";
       }
+      // Selain itu = masalah di pihak kita (proyek/izin/kuota/Google), bukan token. Dulu diam; kini terbaca di log.
+      logger.warn(
+        { httpStatus: response.status, projectId: this.projectId, ...summarizeGoogleError(payload) },
+        "FCM: pengiriman push ditolak"
+      );
       return "failed";
-    } catch {
+    } catch (error) {
+      logger.warn({ err: error instanceof Error ? error.message : String(error), projectId: this.projectId }, "FCM: pengiriman push gagal (jaringan/batas waktu)");
       return "failed";
     }
   }

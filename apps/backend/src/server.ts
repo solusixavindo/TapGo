@@ -18,6 +18,7 @@ import { DigiflazzPpobProvider } from "./modules/ppob/infrastructure/DigiflazzPp
 import { attachRealtime } from "./realtime/socket.js";
 import { setOtpDeliveryProvider } from "./modules/auth/infrastructure/otpProviderRegistry.js";
 import { SmtpOtpProvider } from "./modules/auth/infrastructure/SmtpOtpProvider.js";
+import { describePushConfigProblem } from "./modules/notifications/infrastructure/FcmClient.js";
 
 // Baris pertama yang dieksekusi (impor ESM sudah di-hoist di atasnya, tapi
 // tidak ada modul lain di file ini yang menjalankan kode saat diimpor selain
@@ -78,6 +79,13 @@ if (env.SMTP_HOST) {
   setOtpDeliveryProvider(smtpOtpProvider);
   logger.info({ provider: smtpOtpProvider.name }, "OTP email provider aktif");
 }
+
+// Push: proyek Firebase yang salah di .env menolak SEMUA notifikasi dengan 403 tanpa tanda apa pun (kejadian 15 Nov 2026).
+const pushConfigProblem = describePushConfigProblem({
+  serviceAccountJson: env.FIREBASE_SERVICE_ACCOUNT_JSON,
+  projectId: env.FIREBASE_PROJECT_ID
+});
+if (pushConfigProblem) logger.error({ problem: pushConfigProblem }, "Konfigurasi push bermasalah");
 
 // Fail-closed: null saat REALTIME_ENABLED=false (Release 1 tanpa realtime).
 export const io = attachRealtime(httpServer);
