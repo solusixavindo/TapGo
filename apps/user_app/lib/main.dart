@@ -40,11 +40,13 @@ import 'features/ppob/presentation/ppob_home_screen.dart';
 part 'data/demo_user_session.dart';
 part 'data/demo_user_session_models.dart';
 part 'services/activity_feed.dart';
+part 'services/announcements.dart';
 part 'services/chat_inbox.dart';
 part 'services/push_notifications.dart';
 part 'services/ride_tracking.dart';
 part 'services/alert_tone.dart';
 part 'services/saved_places.dart';
+part 'screens/announcements_screen.dart';
 part 'screens/auth_screen.dart';
 part 'screens/change_password_screen.dart';
 part 'screens/dashboard_screen.dart';
@@ -538,6 +540,7 @@ class TapGoUserApp extends ConsumerWidget {
       ref.invalidate(ppobCatalogProvider);
       ref.invalidate(ppobOrdersProvider);
       ref.invalidate(_chatConversationsProvider);
+      ref.invalidate(_announcementsProvider);
     }
 
     _tapGoPushInvalidateChat =

@@ -59,8 +59,9 @@ class _TapGoDashboardState extends State<TapGoDashboard>
   @override
   Widget build(BuildContext context) {
     return _PendingRatingsFlusher(
-        child: _ChatInboxPoller(
-            child: Scaffold(
+        child: _AnnouncementPoller(
+            child: _ChatInboxPoller(
+                child: Scaffold(
       body: SafeArea(
         child: Stack(
           children: [
@@ -84,7 +85,7 @@ class _TapGoDashboardState extends State<TapGoDashboard>
           ],
         ),
       ),
-    )));
+    ))));
   }
 }
 
@@ -584,6 +585,8 @@ class _TopBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final unreadAnnouncements = ref.watch(_announcementsProvider
+        .select((value) => value.valueOrNull?.unreadCount ?? 0));
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -663,12 +666,13 @@ class _TopBar extends ConsumerWidget {
             ),
           ),
           _HeaderIconButton(
+            key: const ValueKey('bell_button'),
             icon: Icons.notifications_none_rounded,
-            tooltip: 'Notifikasi',
-            onTap: () => _showInfoSnack(
-              context,
-              'Notifikasi belum dapat dibuka saat ini',
-            ),
+            tooltip: unreadAnnouncements > 0
+                ? 'Pengumuman, $unreadAnnouncements baru'
+                : 'Pengumuman',
+            showBadge: unreadAnnouncements > 0,
+            onTap: () => _openDemo(context, const AnnouncementsScreen()),
           ),
           const SizedBox(width: 8),
           _HeaderIconButton(
@@ -684,14 +688,19 @@ class _TopBar extends ConsumerWidget {
 
 class _HeaderIconButton extends StatelessWidget {
   const _HeaderIconButton({
+    super.key,
     required this.icon,
     required this.tooltip,
     required this.onTap,
+    this.showBadge = false,
   });
 
   final IconData icon;
   final String tooltip;
   final VoidCallback onTap;
+
+  /// Titik merah di sudut kanan atas (mis. ada pengumuman yang belum dibuka).
+  final bool showBadge;
 
   @override
   Widget build(BuildContext context) {
@@ -711,7 +720,31 @@ class _HeaderIconButton extends StatelessWidget {
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
             ),
-            child: Icon(icon, color: Colors.white, size: 23),
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                Icon(icon, color: Colors.white, size: 23),
+                if (showBadge)
+                  Positioned(
+                    top: 8,
+                    right: 9,
+                    child: Container(
+                      key: const ValueKey('bell_unread_dot'),
+                      width: 11,
+                      height: 11,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: const Color(0xFF0B5FC7),
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

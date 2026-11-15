@@ -945,6 +945,14 @@ class _TapGoApiClient {
     );
   }
 
+  /// Pengumuman pemilik yang masih tampil untuk akun ini, dengan penanda belum dibaca dan jumlahnya.
+  Future<Map<String, dynamic>> announcements() => get('/announcements');
+
+  /// Menandai semua pengumuman sudah dibuka (server menjawab 204).
+  Future<void> markAnnouncementsSeen() async {
+    await post('/announcements/seen');
+  }
+
   /// Kotak masuk chat perjalanan milik akun yang sedang masuk.
   Future<List<Map<String, dynamic>>> chatConversations() async {
     final data = await get('/chat/conversations');
