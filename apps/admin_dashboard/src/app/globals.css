@@ -197,6 +197,58 @@ body {
   color: #a5b4fc;
 }
 
+/*
+ * Varian TEMBUS PANDANG dan pastel yang belum terpetakan (temuan Owner 15 Nov 2026: kartu daftar di Dokumen
+ * Driver tampil abu-abu terang bertulisan pucat). Tailwind membuat kelas terpisah untuk tiap tingkat
+ * keburaman (bg-white/70, bg-amber-50/60, ...), jadi pemetaan bg-white saja tidak mengenainya. Setiap kelas
+ * yang dipakai halaman wajib terpetakan: tes tema (tests/darkThemeCoverage) menjaganya.
+ */
+:root:not([data-theme="light"]) .bg-white\/70,
+:root:not([data-theme="light"]) .bg-slate-50\/70 {
+  background: var(--glass-soft);
+}
+:root:not([data-theme="light"]) .bg-rose-50\/70,
+:root:not([data-theme="light"]) .bg-rose-50\/60,
+:root:not([data-theme="light"]) .bg-rose-50\/40 {
+  background: rgba(244, 63, 94, 0.12);
+}
+:root:not([data-theme="light"]) .bg-amber-50\/70,
+:root:not([data-theme="light"]) .bg-amber-50\/60,
+:root:not([data-theme="light"]) .bg-amber-50\/40 {
+  background: rgba(245, 158, 11, 0.12);
+}
+:root:not([data-theme="light"]) .bg-emerald-50\/50,
+:root:not([data-theme="light"]) .bg-emerald-50\/40 {
+  background: rgba(16, 185, 129, 0.12);
+}
+:root:not([data-theme="light"]) .bg-sky-50 {
+  background: rgba(56, 189, 248, 0.16);
+}
+:root:not([data-theme="light"]) .bg-violet-100 {
+  background: rgba(139, 92, 246, 0.2);
+}
+:root:not([data-theme="light"]) .bg-indigo-100 {
+  background: rgba(99, 102, 241, 0.2);
+}
+:root:not([data-theme="light"]) .text-violet-800 {
+  color: #c4b5fd;
+}
+:root:not([data-theme="light"]) .text-sky-700 {
+  color: #7dd3fc;
+}
+:root:not([data-theme="light"]) .text-emerald-600 {
+  color: #34d399;
+}
+:root:not([data-theme="light"]) .text-rose-500 {
+  color: #fb7185;
+}
+:root:not([data-theme="light"]) .border-sky-200 {
+  border-color: rgba(56, 189, 248, 0.4);
+}
+:root:not([data-theme="light"]) .border-amber-400 {
+  border-color: rgba(245, 158, 11, 0.5);
+}
+
 /* Kolom isian dan kotak dialog. */
 :root:not([data-theme="light"]) input,
 :root:not([data-theme="light"]) select,
