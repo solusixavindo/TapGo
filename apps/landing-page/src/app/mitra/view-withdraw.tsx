@@ -23,6 +23,7 @@ import {
   Modal,
   Notice,
   PageHeading,
+  PasswordInput,
   Spinner,
   Tone,
   inputClass,
@@ -509,9 +510,8 @@ export default function WithdrawView() {
                     name="lock"
                     className="pointer-events-none absolute left-3.5 top-1/2 mt-0.5 h-4 w-4 -translate-y-1/2 text-slate-500"
                   />
-                  <input
-                    className={`${inputClass} pl-10`}
-                    type="password"
+                  <PasswordInput
+                    leftPad
                     autoComplete="current-password"
                     placeholder="Password akun TapGo"
                     disabled={blocked}

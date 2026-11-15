@@ -15,8 +15,8 @@ import {
   Icon,
   Notice,
   PageHeading,
+  PasswordInput,
   Spinner,
-  inputClass,
   primaryButtonClass,
   secondaryButtonClass,
   useToast
@@ -174,28 +174,22 @@ export default function AccountView({ onLogout }: { onLogout: () => void }) {
             <CardHeader title="Ganti password" subtitle="Semua perangkat akan keluar setelah password diganti" />
             <form onSubmit={onSubmit} className="space-y-4 p-5 md:p-6" noValidate>
               <Field label="Password saat ini">
-                <input
-                  className={inputClass}
-                  type="password"
-                  autoComplete="current-password"
+                <PasswordInput
+                                    autoComplete="current-password"
                   value={current}
                   onChange={(event) => setCurrent(event.target.value)}
                 />
               </Field>
               <Field label="Password baru" hint="Minimal 8 karakter.">
-                <input
-                  className={inputClass}
-                  type="password"
-                  autoComplete="new-password"
+                <PasswordInput
+                                    autoComplete="new-password"
                   value={next}
                   onChange={(event) => setNext(event.target.value)}
                 />
               </Field>
               <Field label="Ulangi password baru">
-                <input
-                  className={inputClass}
-                  type="password"
-                  autoComplete="new-password"
+                <PasswordInput
+                                    autoComplete="new-password"
                   value={confirm}
                   onChange={(event) => setConfirm(event.target.value)}
                 />

@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { InputHTMLAttributes, ReactNode, createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 /* ------------------------------ Ikon ------------------------------ */
 
@@ -112,6 +112,46 @@ export function Icon({ name, className = "h-5 w-5" }: { name: IconName; classNam
 
 export const inputClass =
   "mt-1.5 w-full rounded-xl border themed-border bg-white px-3.5 py-3 text-[15px] text-brand-navyDeep outline-none transition placeholder:text-slate-400 focus:border-brand-gold focus:ring-4 focus:ring-brand-gold/20 disabled:cursor-not-allowed disabled:opacity-60";
+
+/**
+ * Kolom password dengan tombol "Tampilkan/Sembunyikan". Pengguna harus bisa
+ * memeriksa apa yang mereka ketik (catatan uji Owner 15 Nov 2026). Selalu
+ * dimulai tersembunyi; tombolnya tidak ikut mengirim formulir.
+ */
+export function PasswordInput({
+  className = "",
+  leftPad = false,
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & { leftPad?: boolean }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        {...props}
+        type={visible ? "text" : "password"}
+        className={`${inputClass} ${leftPad ? "pl-10" : ""} pr-12 ${className}`}
+      />
+      <button
+        type="button"
+        onClick={() => setVisible((value) => !value)}
+        aria-label={visible ? "Sembunyikan password" : "Tampilkan password"}
+        aria-pressed={visible}
+        className="absolute right-1 top-1.5 inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 transition hover:text-brand-navyDeep focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-gold"
+      >
+        <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinejoin="round"
+          />
+          <circle cx="12" cy="12" r="2.8" stroke="currentColor" strokeWidth="1.8" />
+          {visible ? <path d="m4 20 16-16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /> : null}
+        </svg>
+      </button>
+    </div>
+  );
+}
 
 export const primaryButtonClass =
   "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-brand-gold px-5 text-sm font-black text-brand-navyDeep shadow-sm transition hover:bg-brand-goldDark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold disabled:cursor-not-allowed disabled:opacity-50";

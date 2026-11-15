@@ -471,6 +471,21 @@ export async function changePassword(currentPassword: string, newPassword: strin
 const avatarCache = new Map<string, Promise<string | null>>();
 
 /**
+ * Foto diubah menjadi URL data:, BUKAN blob:. CSP situs (.htaccess) hanya
+ * mengizinkan gambar dari 'self' dan data:, jadi gambar blob: diblokir browser
+ * dan foto profil tidak pernah tampil di web (catatan uji Owner 15 Nov 2026:
+ * foto sudah berubah di aplikasi tetapi tidak di web). Foto dibatasi 4 MB.
+ */
+function blobToDataUrl(blob: Blob): Promise<string | null> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : null);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
  * Foto anggota referral. Rutenya butuh token, jadi tidak bisa dipasang
  * langsung sebagai src gambar: berkas diunduh lalu dijadikan blob lokal.
  * Hasil (termasuk "tidak ada") di-cache selama halaman terbuka.
@@ -491,7 +506,7 @@ export function getMemberAvatar(userId: string): Promise<string | null> {
       if (!response.ok) return null;
       const blob = await response.blob();
       if (!blob.type.startsWith("image/")) return null;
-      return URL.createObjectURL(blob);
+      return await blobToDataUrl(blob);
     } catch {
       return null;
     }
@@ -543,7 +558,7 @@ export function getOwnAvatar(): Promise<string | null> {
       const response = await authedFetch("/account/avatar");
       if (!response.ok) return null;
       const blob = await response.blob();
-      return blob.type.startsWith("image/") ? URL.createObjectURL(blob) : null;
+      return blob.type.startsWith("image/") ? await blobToDataUrl(blob) : null;
     } catch {
       return null;
     }
@@ -585,9 +600,7 @@ export async function uploadOwnAvatar(file: File): Promise<void> {
     throw new Error(payload.message ?? "Foto belum dapat diunggah.");
   }
   // Buang salinan lama lalu beri tahu semua tampilan avatar agar memuat ulang.
-  const old = avatarCache.get(SELF_AVATAR_KEY);
   avatarCache.delete(SELF_AVATAR_KEY);
-  void old?.then((url) => (url ? URL.revokeObjectURL(url) : undefined));
   window.dispatchEvent(new Event(AVATAR_CHANGED_EVENT));
 }
 
@@ -614,9 +627,6 @@ export function onOwnAvatarChanged(listener: () => void): () => void {
 }
 
 export function clearAvatarCache() {
-  avatarCache.forEach((pending) => {
-    void pending.then((url) => (url ? URL.revokeObjectURL(url) : undefined));
-  });
   avatarCache.clear();
 }
 

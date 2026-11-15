@@ -12,6 +12,7 @@ import {
   ErrorState,
   Icon,
   Notice,
+  PasswordInput,
   Skeleton,
   Spinner,
   ToastProvider,
@@ -80,9 +81,7 @@ function LoginPanel({ onLoggedIn, expired }: { onLoggedIn: () => void; expired: 
           </label>
           <label className="block">
             <span className="text-[11px] font-bold uppercase tracking-wider themed-text-muted">Password</span>
-            <input
-              className={inputClass}
-              type="password"
+            <PasswordInput
               autoComplete="current-password"
               placeholder="Password akun TapGo"
               value={password}
