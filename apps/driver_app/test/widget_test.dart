@@ -2075,6 +2075,20 @@ void main() {
   });
 
   group('Pernyataan kemitraan', () {
+    test('saldo minimal di Pernyataan memakai angka yang berlaku (Rp10.000), bukan angka lama', () {
+      expect(kDriverMinCashBalanceLabel, 'Rp10.000');
+      final all = kDriverTermsSections
+          .expand((section) => section.groups)
+          .expand((group) => group.items)
+          .join('\n');
+      expect(all, contains('minimal $kDriverMinCashBalanceLabel saat pesanan diterima'));
+      expect(all, isNot(contains('Rp50.000')));
+    });
+
+    test('naskah berubah => versi naik (2026-11-15.1), format tanggal.nomor', () {
+      expect(kDriverTermsVersion, '2026-11-15.1');
+    });
+
     test('naskah memuat semua topik yang diminta Owner dan versinya terisi', () {
       expect(RegExp(r'^\d{4}-\d{2}-\d{2}(\.\d+)?$').hasMatch(kDriverTermsVersion), isTrue);
       final titles = kDriverTermsSections.map((s) => s.title.toLowerCase()).join(' | ');
@@ -2172,7 +2186,8 @@ void main() {
       expect(find.textContaining('Komisi 8%'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('faq-Mengapa saya tidak bisa menerima pesanan tunai?')));
       await tester.pumpAndSettle();
-      expect(find.textContaining('minimal Rp50.000'), findsOneWidget);
+      expect(find.textContaining('minimal $kDriverMinCashBalanceLabel'), findsOneWidget);
+      expect(find.textContaining('Rp50.000'), findsNothing);
       await reveal(tester, find.text('Belum ada pertanyaan'));
       expect(find.text('Belum ada pertanyaan'), findsOneWidget);
     });

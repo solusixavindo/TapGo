@@ -5,8 +5,9 @@ final driverSupportTicketsProvider =
   return ref.watch(driverRepositoryProvider).supportTickets();
 });
 
-/// Pertanyaan yang paling sering diajukan driver. Angka (8%, Rp50.000) harus sama dengan aturan server dan
-/// Pernyataan Kemitraan; bila aturan berubah, ubah di sini juga.
+/// Pertanyaan yang paling sering diajukan driver. Angka komisi (8%) harus sama dengan aturan server dan Pernyataan
+/// Kemitraan; saldo minimal memakai [kDriverMinCashBalanceLabel] (satu sumber dengan Pernyataan). Bila aturan berubah,
+/// ubah di sini juga.
 const _driverFaq = <(String, String)>[
   (
     'Berapa komisi TapGo dan bagaimana cara kerjanya?',
@@ -16,7 +17,7 @@ const _driverFaq = <(String, String)>[
   ),
   (
     'Mengapa saya tidak bisa menerima pesanan tunai?',
-    'Pesanan tunai membutuhkan Saldo TapGo minimal Rp50.000 dan cukup untuk komisi pesanan itu. '
+    'Pesanan tunai membutuhkan Saldo TapGo minimal $kDriverMinCashBalanceLabel dan cukup untuk komisi pesanan itu. '
         'Isi saldo lewat tapgolion.id/topup, lalu tarik layar di halaman Pendapatan untuk menyegarkan saldo.',
   ),
   (

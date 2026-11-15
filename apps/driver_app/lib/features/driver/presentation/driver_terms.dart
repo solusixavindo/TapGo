@@ -2,7 +2,12 @@ part of '../../../main.dart';
 
 /// Versi naskah pernyataan. Naikkan SETIAP kali isi di bawah berubah: versi ini dikirim ke server saat pengajuan
 /// dan dicatat di audit sebagai bukti naskah mana yang disetujui driver.
-const String kDriverTermsVersion = '2026-10-16.2';
+const String kDriverTermsVersion = '2026-11-15.1';
+
+/// Saldo minimal menerima pesanan tunai, dalam kata-kata. HARUS sama dengan DRIVER_MIN_CASH_BALANCE di server
+/// (Rp10.000 sejak 15 Nov 2026; sebelumnya Rp50.000). Dipakai Pernyataan Kemitraan dan Pusat Bantuan supaya satu angka
+/// saja yang diubah; tes memastikan kedua teks memuatnya. Kartu saldo dan pesan penolakan membaca angka dari server.
+const String kDriverMinCashBalanceLabel = 'Rp10.000';
 
 /// Satu kelompok butir; [label] opsional untuk bagian yang butirnya perlu dikelompokkan.
 class DriverTermsGroup {
@@ -155,7 +160,7 @@ const List<DriverTermsSection> kDriverTermsSections = [
     title: '7. Komisi, saldo, dan pembayaran',
     groups: [
       DriverTermsGroup(items: [
-        'Pesanan tunai: komisi (saat ini 8% dari tarif, dibulatkan ke atas) ditahan dari Saldo TapGo saat Anda menerima pesanan. Untuk menerima pesanan tunai, Saldo TapGo Anda harus minimal Rp50.000 saat pesanan diterima (dihitung sebelum komisi ditahan; angka yang berlaku tampil di aplikasi). Saldo di bawah batas itu, atau yang kurang untuk komisinya, membuat pesanan tunai tidak dapat diterima. Pesanan dibatalkan: komisi dikembalikan. Pesanan selesai: komisi menjadi biaya final.',
+        'Pesanan tunai: komisi (saat ini 8% dari tarif, dibulatkan ke atas) ditahan dari Saldo TapGo saat Anda menerima pesanan. Untuk menerima pesanan tunai, Saldo TapGo Anda harus minimal $kDriverMinCashBalanceLabel saat pesanan diterima (dihitung sebelum komisi ditahan; angka yang berlaku tampil di aplikasi). Saldo di bawah batas itu, atau yang kurang untuk komisinya, membuat pesanan tunai tidak dapat diterima. Pesanan dibatalkan: komisi dikembalikan. Pesanan selesai: komisi menjadi biaya final.',
         'Pesanan digital (TapGoPay): penumpang membayar lebih dulu. Saat pesanan selesai, tarif dikurangi komisi masuk ke saldo Anda dan dapat ditarik lewat tapgolion.id sesuai ketentuan penarikan. Pesanan dibatalkan: dana dikembalikan kepada penumpang.',
         'Saldo TapGo diisi lewat tapgolion.id. Biaya layanan pembayaran ditampilkan lebih dulu sebelum Anda membayar.',
         'Perubahan tarif atau komisi diumumkan lewat aplikasi sebelum berlaku.',
