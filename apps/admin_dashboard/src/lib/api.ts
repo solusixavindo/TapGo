@@ -578,6 +578,43 @@ export async function fetchDriverDocumentObjectUrl(
   };
 }
 
+// --- Pengumuman pemilik (hanya SUPER_ADMIN_VIP) ---------------------------
+
+export type AnnouncementStatus = "ACTIVE" | "EXPIRED" | "ARCHIVED";
+
+export type AnnouncementItem = {
+  id: string;
+  title: string;
+  body: string;
+  audience: string;
+  status: AnnouncementStatus;
+  publishedAt: string;
+  expiresAt: string | null;
+  archivedAt: string | null;
+  createdByName: string | null;
+  archivedByName: string | null;
+};
+
+export const ANNOUNCEMENT_TITLE_MAX = 80;
+export const ANNOUNCEMENT_BODY_MAX = 1000;
+
+export function listAnnouncements(status: "ACTIVE" | "ARCHIVED" | "ALL") {
+  const query = new URLSearchParams({ status, page: "1", pageSize: "50" });
+  return request<{ items: AnnouncementItem[]; pagination: { total: number } }>(`/admin/announcements?${query.toString()}`);
+}
+
+/** Terbitkan ke semua pengguna aplikasi. Tidak dapat diubah sesudahnya; server menolak tautan (422). */
+export function publishAnnouncement(input: { title: string; body: string; expiresAt: string | null }) {
+  return request<AnnouncementItem>("/admin/announcements", {
+    method: "POST",
+    body: JSON.stringify({ title: input.title, body: input.body, expiresAt: input.expiresAt })
+  });
+}
+
+export function archiveAnnouncement(id: string) {
+  return request<AnnouncementItem>(`/admin/announcements/${id}/archive`, { method: "POST" });
+}
+
 // --- Pengelolaan role (hanya SUPER_ADMIN_VIP) ------------------------------
 
 export type AdminAccount = {

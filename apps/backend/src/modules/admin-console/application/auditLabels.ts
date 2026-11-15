@@ -1,5 +1,7 @@
 /** Uraian aksi audit untuk berkas unduhan Log Aktivitas (cermin dari admin_dashboard/src/lib/audit-labels.ts). */
 const LABEL: Record<string, string> = {
+  ANNOUNCEMENT_PUBLISHED: "Pengumuman diterbitkan",
+  ANNOUNCEMENT_ARCHIVED: "Pengumuman diarsipkan",
   WITHDRAWAL_FREEZE_SET: "Penarikan akun dibekukan",
   WITHDRAWAL_FREEZE_CLEARED: "Pembekuan penarikan dibuka",
   ADMIN_LOGIN: "Masuk ke konsol",

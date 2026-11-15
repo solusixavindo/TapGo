@@ -10,6 +10,7 @@ import { adminManualTopUpRouter } from "../../wallets/presentation/manual-topup.
 import { AdminConsoleService } from "../application/AdminConsoleService.js";
 import { AdminInsightsService } from "../application/AdminInsightsService.js";
 import { AdminOversightService } from "../application/AdminOversightService.js";
+import { AnnouncementService } from "../../announcements/application/AnnouncementService.js";
 import { SystemHealthService } from "../application/SystemHealthService.js";
 import { ErrorMonitoringService } from "../application/ErrorMonitoringService.js";
 import { AdminConsoleController } from "./admin-console.controller.js";
@@ -44,6 +45,9 @@ import {
   adminRoleAssignSchema,
   adminMemberStatusSchema,
   adminWithdrawalFreezeSchema,
+  adminAnnouncementArchiveSchema,
+  adminAnnouncementCreateSchema,
+  adminAnnouncementListSchema,
   adminRoleCandidateSchema,
   adminOnlinePaymentQuerySchema,
   adminDigiflazzBalanceQuerySchema,
@@ -89,6 +93,7 @@ const insightsService = new AdminInsightsService(prisma, {
   }
 });
 const oversightService = new AdminOversightService(prisma);
+const announcementService = new AnnouncementService(prisma);
 const controller = new AdminConsoleController(
   service,
   walletService,
@@ -168,6 +173,40 @@ adminConsoleRouter.get(
   requireRoles("SUPER_ADMIN_VIP"),
   validateRequest(adminAuditLogQuerySchema),
   asyncHandler(controller.auditLogsExport)
+);
+// Pengumuman di ikon bel aplikasi user: hanya pemilik (VIP) yang menulis. Tidak dapat diubah setelah terbit; koreksi = arsipkan lalu terbitkan baru.
+adminConsoleRouter.get(
+  "/announcements",
+  requireRoles("SUPER_ADMIN_VIP"),
+  validateRequest(adminAnnouncementListSchema),
+  asyncHandler(async (req, res) => {
+    const { page, pageSize, status } = req.query as unknown as { page: number; pageSize: number; status: "ACTIVE" | "ARCHIVED" | "ALL" };
+    res.json({ success: true, data: await announcementService.adminList({ page, pageSize, status }) });
+  })
+);
+adminConsoleRouter.post(
+  "/announcements",
+  requireRoles("SUPER_ADMIN_VIP"),
+  validateRequest(adminAnnouncementCreateSchema),
+  asyncHandler(async (req, res) => {
+    const body = req.body as { title: string; body: string; audience: "USERS"; expiresAt?: Date | null };
+    const data = await announcementService.publish({
+      actorId: req.auth!.userId,
+      title: body.title,
+      body: body.body,
+      audience: body.audience,
+      expiresAt: body.expiresAt ?? null
+    });
+    res.status(201).json({ success: true, data });
+  })
+);
+adminConsoleRouter.post(
+  "/announcements/:id/archive",
+  requireRoles("SUPER_ADMIN_VIP"),
+  validateRequest(adminAnnouncementArchiveSchema),
+  asyncHandler(async (req, res) => {
+    res.json({ success: true, data: await announcementService.archive({ actorId: req.auth!.userId, id: String(req.params.id) }) });
+  })
 );
 adminConsoleRouter.get(
   "/audit-logs",

@@ -21,6 +21,9 @@ describe("normalizeAdminPath dan describeAdminRequest", () => {
     expect(describeAdminRequest("POST", template)).toBe("Menyetujui penarikan dana");
     expect(describeAdminRequest("POST", "/manual-topups/:id/confirm")).toBe("Mengonfirmasi top up manual");
     expect(describeAdminRequest("PATCH", "/rides/drivers/:id/status")).toBe("Mengubah status driver");
+    expect(describeAdminRequest("POST", "/announcements")).toBe("Menerbitkan pengumuman");
+    expect(describeAdminRequest("POST", "/announcements/:id/archive")).toBe("Mengarsipkan pengumuman");
+    expect(describeAdminRequest("GET", "/announcements")).toBe("Membuka daftar pengumuman");
   });
 
   it("rute yang belum terdaftar tampil apa adanya (tidak disembunyikan)", () => {

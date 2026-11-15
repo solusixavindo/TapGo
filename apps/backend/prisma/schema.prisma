@@ -300,6 +300,7 @@ model User {
   driver                     Driver?
   sessions                   Session[]
   pushTokens                 PushToken[]
+  announcementSeen           AnnouncementSeen?
   rides                      Ride[]                      @relation("RideCustomer")
   wallet                     Wallet?
   reviewsGiven               Review[]                    @relation("ReviewsGiven")
@@ -1038,19 +1039,19 @@ model Payment {
 }
 
 model Wallet {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @unique @map("user_id") @db.Uuid
-  balance     Decimal  @default(0) @db.Decimal(14, 2)
-  cashBalance Decimal  @default(0) @map("cash_balance") @db.Decimal(14, 2)
-  ppobBalance Decimal  @default(0) @map("ppob_balance") @db.Decimal(14, 2)
+  id                 String   @id @default(uuid()) @db.Uuid
+  userId             String   @unique @map("user_id") @db.Uuid
+  balance            Decimal  @default(0) @db.Decimal(14, 2)
+  cashBalance        Decimal  @default(0) @map("cash_balance") @db.Decimal(14, 2)
+  ppobBalance        Decimal  @default(0) @map("ppob_balance") @db.Decimal(14, 2)
   /// Bonus membership yang dikunci (bagian `balance`, BUKAN `cashBalance`): boleh dipakai untuk perjalanan dan PPOB,
   /// tidak boleh ditarik. Lihat docs/finance/RANCANGAN_KUNCI_BONUS_DAN_TARIK_DEPOSIT.md.
-  lockedBonusBalance Decimal @default(0) @map("locked_bonus_balance") @db.Decimal(14, 2)
+  lockedBonusBalance Decimal  @default(0) @map("locked_bonus_balance") @db.Decimal(14, 2)
   /// Deposit pribadi (top up Saldo TapGo) yang boleh ditarik kembali (bagian `balance`).
-  depositBalance     Decimal @default(0) @map("deposit_balance") @db.Decimal(14, 2)
-  currency    String   @default("IDR") @db.VarChar(8)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  depositBalance     Decimal  @default(0) @map("deposit_balance") @db.Decimal(14, 2)
+  currency           String   @default("IDR") @db.VarChar(8)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   ledger             WalletTransaction[]
@@ -2227,4 +2228,33 @@ model DriverIncentiveClaim {
   @@index([dayKey])
   @@index([userId, createdAt])
   @@map("driver_incentive_claims")
+}
+
+/// Pengumuman dari pemilik (Super Admin VIP) yang tampil di ikon bel aplikasi. Tidak dapat diubah setelah terbit:
+/// koreksi = arsipkan lalu terbitkan yang baru, supaya jejak audit tidak dapat ditulis ulang. Teks polos tanpa tautan.
+model Announcement {
+  id          String    @id @default(uuid()) @db.Uuid
+  title       String    @db.VarChar(80)
+  body        String    @db.VarChar(1000)
+  /// USERS (aplikasi user) | DRIVERS | ALL. Tahap 1 hanya USERS; kolom disiapkan agar driver dapat menyusul.
+  audience    String    @default("USERS") @db.VarChar(10)
+  createdBy   String    @map("created_by") @db.Uuid
+  publishedAt DateTime  @default(now()) @map("published_at")
+  expiresAt   DateTime? @map("expires_at")
+  archivedAt  DateTime? @map("archived_at")
+  archivedBy  String?   @map("archived_by") @db.Uuid
+
+  @@index([publishedAt])
+  @@index([createdBy, publishedAt])
+  @@map("announcements")
+}
+
+/// Kapan pengguna terakhir membuka daftar pengumuman; pengumuman yang terbit sesudahnya dihitung belum dibaca.
+model AnnouncementSeen {
+  userId String   @id @map("user_id") @db.Uuid
+  seenAt DateTime @map("seen_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("announcement_seen")
 }

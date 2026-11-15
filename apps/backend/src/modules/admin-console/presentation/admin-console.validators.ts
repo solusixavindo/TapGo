@@ -323,3 +323,24 @@ export const adminIncentiveClaimActionSchema = z.object({
   params: z.object({ id: z.string().uuid() }),
   body: z.object({ note: z.string().trim().max(280).optional() })
 });
+
+/// Pengumuman pemilik. Batas mentah longgar (isi dinormalkan dan dibatasi ketat di layanan); audience tahap 1 hanya USERS.
+export const adminAnnouncementCreateSchema = z.object({
+  body: z.object({
+    title: z.string().min(1, "Judul wajib diisi.").max(300),
+    body: z.string().min(1, "Isi wajib diisi.").max(5000),
+    audience: z.literal("USERS").default("USERS"),
+    expiresAt: z.coerce.date().nullish()
+  })
+});
+
+export const adminAnnouncementListSchema = z.object({
+  query: z.object({
+    ...paginationQuery,
+    status: z.enum(["ACTIVE", "ARCHIVED", "ALL"]).default("ALL")
+  })
+});
+
+export const adminAnnouncementArchiveSchema = z.object({
+  params: z.object({ id: z.string().uuid() })
+});
