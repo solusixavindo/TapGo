@@ -12,9 +12,8 @@ class RideChatScreen extends ConsumerStatefulWidget {
 
   final String rideReference;
 
-  /// Selang pengambilan pesan lewat REST selama layar ini terbuka. Socket.IO
-  /// nonaktif di produksi (REALTIME_ENABLED=false), jadi polling adalah jalur
-  /// utama pesan masuk; socket hanya mempercepat bila suatu saat menyala.
+  /// Selang pengambilan pesan lewat REST selama layar ini terbuka (jalur utama pesan masuk; realtime Socket.IO
+  /// tidak dipakai lagi di aplikasi ini).
   /// [Duration.zero] mematikan polling.
   final Duration pollInterval;
 
@@ -26,11 +25,9 @@ class _RideChatScreenState extends ConsumerState<RideChatScreen> {
   final _messages = <Map<String, dynamic>>[];
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
-  io_client.Socket? _socket;
 
   bool _loadingHistory = true;
   bool _sending = false;
-  bool _socketConnected = false;
   String? _historyError;
   Timer? _pollTimer;
   bool _polling = false;
@@ -40,7 +37,6 @@ class _RideChatScreenState extends ConsumerState<RideChatScreen> {
     super.initState();
     driverOpenChatReference = widget.rideReference;
     _loadHistory();
-    _connectSocket();
     if (widget.pollInterval > Duration.zero) {
       _pollTimer = Timer.periodic(widget.pollInterval, (_) => _poll());
     }
@@ -52,7 +48,6 @@ class _RideChatScreenState extends ConsumerState<RideChatScreen> {
       driverOpenChatReference = null;
     }
     _pollTimer?.cancel();
-    _socket?.dispose();
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -81,7 +76,7 @@ class _RideChatScreenState extends ConsumerState<RideChatScreen> {
     }
   }
 
-  /// Menggabungkan pesan ke daftar tanpa duplikasi (socket, polling, dan
+  /// Menggabungkan pesan ke daftar tanpa duplikasi (polling dan
   /// pengiriman REST dapat membawa pesan yang sama). Mengembalikan true bila
   /// ada pesan lawan bicara yang baru.
   bool _mergeMessages(Iterable<Map<String, dynamic>> incoming) {
@@ -127,41 +122,6 @@ class _RideChatScreenState extends ConsumerState<RideChatScreen> {
     }
   }
 
-  void _connectSocket() {
-    final token = ref.read(driverControllerProvider).session?.accessToken;
-    if (token == null || token.isEmpty) {
-      return;
-    }
-    final socket = io_client.io(
-      _socketRootUrl(),
-      io_client.OptionBuilder()
-          .setTransports(['websocket'])
-          .setAuth({'token': token})
-          // Realtime dimatikan di server: berhenti mencoba setelah 3 kali alih-alih
-          // menyambung ulang tanpa akhir. Polling REST adalah jalur utamanya.
-          .setReconnectionAttempts(3)
-          .disableAutoConnect()
-          .build(),
-    );
-    socket.onConnect((_) {
-      if (!mounted) return;
-      setState(() => _socketConnected = true);
-      socket.emitWithAck('ride:join', widget.rideReference, ack: (_) {});
-    });
-    socket.onDisconnect((_) {
-      if (!mounted) return;
-      setState(() => _socketConnected = false);
-    });
-    socket.on('chat:message', (data) {
-      if (!mounted || data is! Map) return;
-      setState(() => _mergeMessages([Map<String, dynamic>.from(data)]));
-      _scrollToBottom();
-      unawaited(_repository.markChatRead(widget.rideReference));
-    });
-    socket.connect();
-    _socket = socket;
-  }
-
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
@@ -179,22 +139,9 @@ class _RideChatScreenState extends ConsumerState<RideChatScreen> {
     setState(() => _sending = true);
     if (quickReply == null) _textController.clear();
     try {
-      final socket = _socket;
-      if (socket != null && _socketConnected) {
-        final ackResult = await socket.emitWithAckAsync(
-          'chat:send',
-          {'rideId': widget.rideReference, 'message': text},
-        ) as Map?;
-        if (ackResult?['ok'] != true) {
-          _showError('Pesan belum terkirim. Coba lagi.');
-        }
-      } else {
-        await _repository.sendChatMessage(widget.rideReference, text);
-        // REST fallback tidak mengembalikan bentuk pesan tersimpan (beda
-        // dari user_app) — ambil ulang dan gabungkan, karena tidak ada
-        // siaran socket yang akan diterima.
-        await _poll(force: true);
-      }
+      await _repository.sendChatMessage(widget.rideReference, text);
+      // REST tidak mengembalikan bentuk pesan tersimpan: ambil ulang dan gabungkan.
+      await _poll(force: true);
     } catch (error) {
       _showError(
         error is DriverApiException ? error.message : 'Pesan belum terkirim. Coba lagi.',
@@ -380,12 +327,3 @@ const driverQuickReplies = <String>[
   'Mohon tunggu sebentar',
   'Baik, saya mengerti',
 ];
-
-/// kApiBaseUrl selalu diakhiri "/api/v1" (lihat app_config.dart) — Socket.IO
-/// menempel di root server yang sama, bukan di bawah prefiks REST tersebut.
-String _socketRootUrl() {
-  const suffix = '/api/v1';
-  return kApiBaseUrl.endsWith(suffix)
-      ? kApiBaseUrl.substring(0, kApiBaseUrl.length - suffix.length)
-      : kApiBaseUrl;
-}

@@ -5,6 +5,11 @@ part of '../../../main.dart';
 @visibleForTesting
 DateTime Function() driverClockForTests = DateTime.now;
 
+/// Pesan bila jawaban server tak terbaca atau terjadi galat tak terduga setelah permintaan terkirim: hasilnya belum
+/// dapat dipastikan, jadi driver diminta memeriksa koneksi dan mencoba lagi (tombol tidak boleh diam tanpa kabar).
+const String _kUnconfirmedActionMessage =
+    'Permintaan belum dapat dipastikan. Periksa koneksi, lalu coba lagi.';
+
 class DriverController extends StateNotifier<DriverState>
     with WidgetsBindingObserver {
   DriverController({
@@ -281,6 +286,26 @@ class DriverController extends StateNotifier<DriverState>
   /// menganggapnya baru (sudah ada di state.offers) sehingga tidak pernah dibuka.
   final Set<String> _pendingOfferRefs = <String>{};
   final Set<String> _singleFlights = <String>{};
+
+  /// Pesan 'belum dapat dipastikan' di state (tampil di kartu/tab) DAN lewat SnackBar global: daftar Pesanan bisa
+  /// tergulir ke bawah sehingga pesan di bagian atasnya tidak terlihat, sedangkan SnackBar selalu terlihat.
+  void _notifyUnconfirmedAction() {
+    state = state.copyWith(message: _kUnconfirmedActionMessage);
+    driverScaffoldMessengerKey.currentState
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(
+        content: Text(_kUnconfirmedActionMessage),
+        duration: Duration(seconds: 5),
+      ));
+  }
+
+  Future<void> _refreshQuietly() async {
+    try {
+      await refreshWorkspace();
+    } catch (_) {
+      // Muat ulang gagal lagi: pesan umum di pemanggil tetap tampil.
+    }
+  }
 
   Future<void> restore() async {
     state = state.copyWith(
@@ -651,6 +676,9 @@ class DriverController extends StateNotifier<DriverState>
       await refreshWorkspace();
     } on DriverApiException catch (error) {
       _applyCapabilityError(error);
+    } catch (_) {
+      // Galat tak terduga (mis. jawaban server tak terbaca): tombol tidak boleh berhenti tanpa kabar.
+      _notifyUnconfirmedAction();
     } finally {
       _endFlight('availability');
       state = state.copyWith(isBusy: false);
@@ -707,6 +735,10 @@ class DriverController extends StateNotifier<DriverState>
         _applyCapabilityError(error);
         return;
       }
+    } catch (_) {
+      // Galat tak terduga (mis. plugin lokasi atau jawaban server tak terbaca): beri kabar, jangan diam.
+      _notifyUnconfirmedAction();
+      return;
     } finally {
       _endFlight('availability');
     }
@@ -1002,6 +1034,8 @@ class DriverController extends StateNotifier<DriverState>
         ));
     } on DriverApiException catch (error) {
       state = state.copyWith(message: error.message);
+    } catch (_) {
+      _notifyUnconfirmedAction();
     } finally {
       _endFlight('reject:${offer.reference}');
       state = state.copyWith(isBusy: false);
@@ -1101,6 +1135,13 @@ class DriverController extends StateNotifier<DriverState>
       }
     } on DriverApiException catch (error) {
       state = state.copyWith(message: error.message);
+    } catch (_) {
+      // Jawaban server tak terbaca setelah permintaan terkirim: server mungkin sudah memprosesnya. Muat ulang DULU;
+      // pesan hanya tampil bila status perjalanan memang belum berubah (refresh menghapus pesan yang diisi lebih awal).
+      await _refreshQuietly();
+      if (state.activeRide?.status == ride.status) {
+        _notifyUnconfirmedAction();
+      }
     } finally {
       _endFlight('${action.name}:${ride.reference}');
       state = state.copyWith(isBusy: false);
@@ -1120,6 +1161,12 @@ class DriverController extends StateNotifier<DriverState>
       await _syncAvailabilityAfterRide(fallback: DriverAvailability.offline);
     } on DriverApiException catch (error) {
       state = state.copyWith(message: error.message);
+    } catch (_) {
+      await _refreshQuietly();
+      final current = state.activeRide;
+      if (current != null && current.reference == ride.reference && !current.isTerminal) {
+        _notifyUnconfirmedAction();
+      }
     } finally {
       _endFlight('cancel:${ride.reference}');
       state = state.copyWith(isBusy: false);

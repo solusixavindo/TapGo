@@ -278,10 +278,7 @@ class _WalletCard extends StatelessWidget {
             const SizedBox(height: 12),
             OutlinedButton.icon(
               key: const ValueKey('wallet-topup-button'),
-              onPressed: () => launchUrl(
-                Uri.parse(wallet.topUpUrl),
-                mode: LaunchMode.externalApplication,
-              ),
+              onPressed: () => _openExternalLink(Uri.parse(wallet.topUpUrl)),
               icon: const Icon(Icons.add_card_rounded),
               label: const Text('Isi saldo di tapgolion.id'),
             ),

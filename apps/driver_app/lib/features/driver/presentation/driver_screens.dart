@@ -14,9 +14,33 @@ const String driverBrandLogoAsset = 'assets/images/tapgo_logo_512.png';
 /// driver sendiri, bukan mengklaim mengirim pesan lewat server.
 const String _tapGoSupportWhatsAppUrl = 'https://wa.me/6283800255588';
 
-Future<void> _openSupportWhatsApp() => launchUrl(
-    Uri.parse(_tapGoSupportWhatsAppUrl),
-    mode: LaunchMode.externalApplication);
+/// Pembuka tautan luar. Seam uji: default membuka lewat url_launcher di aplikasi luar.
+@visibleForTesting
+Future<bool> Function(Uri uri) driverLaunchUrlForTests =
+    (uri) => launchUrl(uri, mode: LaunchMode.externalApplication);
+
+const String _kLinkOpenFailedMessage =
+    'Tidak dapat membuka tautan di HP ini. Pastikan ada aplikasi peramban atau WhatsApp, lalu coba lagi.';
+
+/// Membuka tautan di aplikasi luar. Gagal (tidak ada peramban/WhatsApp, atau galat platform) tidak boleh membuat
+/// tombol diam: pesan tampil lewat SnackBar global. Mengembalikan true bila berhasil dibuka.
+Future<bool> _openExternalLink(Uri uri) async {
+  var opened = false;
+  try {
+    opened = await driverLaunchUrlForTests(uri);
+  } catch (_) {
+    opened = false;
+  }
+  if (!opened) {
+    driverScaffoldMessengerKey.currentState
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text(_kLinkOpenFailedMessage)));
+  }
+  return opened;
+}
+
+Future<void> _openSupportWhatsApp() =>
+    _openExternalLink(Uri.parse(_tapGoSupportWhatsAppUrl));
 
 /// Dialog konfirmasi tombol SOS — bisa dipanggil dari mana pun di dalam
 /// [DriverShell] (app bar global), sehingga selalu terjangkau apa pun tab
@@ -1452,9 +1476,8 @@ class DriverAccountScreen extends ConsumerWidget {
 
   Future<void> _openWhatsApp() => _openSupportWhatsApp();
 
-  Future<void> _openPrivacyPolicy() => launchUrl(
-      Uri.parse('https://tapgolion.id/privacy-policy'),
-      mode: LaunchMode.externalApplication);
+  Future<void> _openPrivacyPolicy() =>
+      _openExternalLink(Uri.parse('https://tapgolion.id/privacy-policy'));
 
   void _push(BuildContext context, Widget page) =>
       Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
@@ -2816,7 +2839,7 @@ Future<void> _openExternalNavigation(LatLng? target) async {
   final uri = Uri.parse(
     'https://www.google.com/maps/dir/?api=1&destination=${target.latitude},${target.longitude}',
   );
-  await launchUrl(uri, mode: LaunchMode.externalApplication);
+  await _openExternalLink(uri);
 }
 
 /// Membuka layar Pengaturan Android yang tepat untuk memperbaiki alasan

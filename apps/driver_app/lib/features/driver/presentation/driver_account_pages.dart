@@ -329,10 +329,8 @@ class _DriverWebPasswordScreenState
             const SizedBox(height: 20),
             FilledButton.icon(
               key: const ValueKey('web-password-open-topup'),
-              onPressed: () => launchUrl(
-                Uri.parse('https://tapgolion.id/topup'),
-                mode: LaunchMode.externalApplication,
-              ),
+              onPressed: () =>
+                  _openExternalLink(Uri.parse('https://tapgolion.id/topup')),
               icon: const Icon(Icons.add_card_rounded),
               label: const Text('Buka halaman isi saldo'),
             ),

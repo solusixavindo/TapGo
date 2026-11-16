@@ -22,7 +22,6 @@ import 'package:latlong2/latlong.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:socket_io_client/socket_io_client.dart' as io_client;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'core/security/tls_pinning.dart';

@@ -4862,6 +4862,10 @@ class FakeDriverRepository implements DriverRepository {
   DriverApiException? currentError;
   Object? offersError;
   Object? acceptError;
+  Object? rejectError;
+  Object? advanceError; // pickup/arrived/start/complete
+  Object? cancelError;
+  Object? availabilityError;
   DriverApiException? loginError;
   Completer<DriverAvailability>? availabilityCompleter;
   Completer<DriverRide>? acceptCompleter;
@@ -4938,6 +4942,7 @@ class FakeDriverRepository implements DriverRepository {
   Future<DriverAvailability> setAvailability(
       DriverAvailability availability) async {
     availabilityRequests.add(availability);
+    if (availabilityError != null) throw availabilityError!;
     this.availability = availability;
     return availabilityCompleter?.future ?? availability;
   }
@@ -5082,11 +5087,13 @@ class FakeDriverRepository implements DriverRepository {
   @override
   Future<void> reject(String reference) async {
     rejectCalls += 1;
+    if (rejectError != null) throw rejectError!;
   }
 
   @override
   Future<DriverRide> pickup(String reference) async {
     pickupCalls += 1;
+    if (advanceError != null) throw advanceError!;
     current = demoRide(RideStatus.driverToPickup);
     return current!;
   }
@@ -5094,6 +5101,7 @@ class FakeDriverRepository implements DriverRepository {
   @override
   Future<DriverRide> arrived(String reference) async {
     arrivedCalls += 1;
+    if (advanceError != null) throw advanceError!;
     current = demoRide(RideStatus.driverArrived);
     return current!;
   }
@@ -5101,6 +5109,7 @@ class FakeDriverRepository implements DriverRepository {
   @override
   Future<DriverRide> start(String reference) async {
     startCalls += 1;
+    if (advanceError != null) throw advanceError!;
     current = demoRide(RideStatus.inTrip);
     return current!;
   }
@@ -5117,6 +5126,7 @@ class FakeDriverRepository implements DriverRepository {
   @override
   Future<DriverRide> complete(String reference) async {
     completeCalls += 1;
+    if (advanceError != null) throw advanceError!;
     // Server: perjalanan selesai tidak lagi "saat ini" (hanya status aktif),
     // dan releaseDriver mengembalikan profil BUSY -> ONLINE.
     current = null;
@@ -5127,6 +5137,7 @@ class FakeDriverRepository implements DriverRepository {
   @override
   Future<DriverRide> cancel(String reference, String reason) async {
     cancelCalls += 1;
+    if (cancelError != null) throw cancelError!;
     lastCancelReason = reason;
     current = demoRide(RideStatus.cancelledByDriver);
     return current!;

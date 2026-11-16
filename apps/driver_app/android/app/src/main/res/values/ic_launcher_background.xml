@@ -8,4 +8,7 @@
     <color name="ic_launcher_background">#FFC857</color>
     <!-- Warna aksen notifikasi (ikon kecil di bilah status): emas TapGo. -->
     <color name="tapgo_notification_accent">#FFC857</color>
+    <!-- Warna jendela peluncuran = gradasi splash Flutter (#061A2F -> #0877E8). -->
+    <color name="tapgo_launch_start">#061A2F</color>
+    <color name="tapgo_launch_end">#0877E8</color>
 </resources>

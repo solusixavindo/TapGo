@@ -1,7 +1,7 @@
 name: tapgo_driver_app
 description: TapGo driver application.
 publish_to: "none"
-version: 1.0.0+18
+version: 1.0.0+19
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -23,7 +23,6 @@ dependencies:
   # sebagai kotak tofu. Bukan ditambahkan karena laporan lama menyebutnya.
   cupertino_icons: ^1.0.8
   # Chat per-perjalanan (Stage R2.10). Versi disamakan dengan user_app.
-  socket_io_client: ^3.0.0
   # Penanda "onboarding sudah dilihat" (Splash/Onboarding). Versi disamakan
   # dengan user_app, mengikuti konvensi plugin platform yang sama di atas.
   shared_preferences: ^2.3.3
