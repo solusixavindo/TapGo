@@ -299,9 +299,11 @@ Future<T> _restoreLocalStateWithRetry<T>(
 }
 
 class _SessionBootstrap extends ConsumerStatefulWidget {
-  const _SessionBootstrap({required this.child});
+  const _SessionBootstrap({required this.childBuilder});
 
-  final Widget child;
+  /// Layar setelah sesi selesai dipulihkan. Menerima saat layar pertama muncul ([launchedAt]) supaya splash tidak
+  /// menunggu dua kali.
+  final Widget Function(DateTime launchedAt) childBuilder;
 
   @override
   ConsumerState<_SessionBootstrap> createState() => _SessionBootstrapState();
@@ -309,6 +311,7 @@ class _SessionBootstrap extends ConsumerStatefulWidget {
 
 class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
   bool _loaded = false;
+  final DateTime _launchedAt = tapGoClockForTests();
 
   @override
   void initState() {
@@ -320,17 +323,20 @@ class _SessionBootstrapState extends ConsumerState<_SessionBootstrap> {
   @override
   Widget build(BuildContext context) {
     if (!_loaded) {
-      return const Scaffold(
-        backgroundColor: _softBackground,
-        body: Center(child: CircularProgressIndicator(color: _brandBlue)),
-      );
+      // Splash bermerek sejak frame pertama, BUKAN halaman putih dengan lingkaran berputar (laporan Owner 16 Nov 2026).
+      return _BrandLaunchView(launchedAt: _launchedAt, showLoaderIfSlow: true);
     }
-    return widget.child;
+    return widget.childBuilder(_launchedAt);
   }
 
   Future<void> _restore() async {
     var auth = false;
     DemoClientSession? restoredSession;
+    // Pekerjaan awal pembukaan pertama (reset cache lama, sekali per instalasi) dimulai di main() tanpa menunda layar
+    // pertama; urutannya tetap sama seperti dulu: selesai SEBELUM sesi dibaca.
+    // Kosong (tanpa pekerjaan awal) = tidak menunggu apa pun; di produksi diisi oleh _runTapGoUserApp.
+    final startupWork = _tapGoStartupWork;
+    if (startupWork != null) await startupWork;
     try {
       // Baca storage lokal dengan percobaan ulang + jeda longgar, BUKAN
       // fallback diam-diam ke "kosong" pada timeout 2 detik yang lama.

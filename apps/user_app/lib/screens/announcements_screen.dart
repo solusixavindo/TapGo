@@ -38,9 +38,13 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
         _feed = feed;
         _loading = false;
       });
-      if (feed.unreadCount > 0 && !_markedSeen) {
+      final welcomeUnread = feed.items.any((i) => i.isWelcome && i.unread);
+      final serverUnread = feed.unreadCount - (welcomeUnread ? 1 : 0);
+      if ((serverUnread > 0 || welcomeUnread) && !_markedSeen) {
         _markedSeen = true;
-        unawaited(_markSeen());
+        unawaited(
+          _markSeen(markServer: serverUnread > 0, markWelcome: welcomeUnread),
+        );
       }
     } catch (_) {
       if (!mounted) return;
@@ -52,13 +56,19 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
   }
 
   /// Gagal menandai tidak mengganggu pembacaan; dicoba lagi saat layar dibuka berikutnya.
-  Future<void> _markSeen() async {
-    try {
-      await _apiClient.markAnnouncementsSeen();
-      if (mounted) ref.invalidate(_announcementsProvider);
-    } catch (_) {
-      _markedSeen = false;
+  Future<void> _markSeen({
+    required bool markServer,
+    required bool markWelcome,
+  }) async {
+    if (markWelcome) await _tapGoMarkWelcomeRead();
+    if (markServer) {
+      try {
+        await _apiClient.markAnnouncementsSeen();
+      } catch (_) {
+        _markedSeen = false;
+      }
     }
+    if (mounted) ref.invalidate(_announcementsProvider);
   }
 
   @override

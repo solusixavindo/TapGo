@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#06284A</color>
+    <!-- Warna jendela peluncuran = gradasi splash Flutter (#061A32 -> #0569E8). -->
+    <color name="tapgo_launch_start">#061A32</color>
+    <color name="tapgo_launch_end">#0569E8</color>
 </resources>

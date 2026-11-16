@@ -451,17 +451,32 @@ Future<void> main() async {
   );
 }
 
+/// Pekerjaan awal yang tidak boleh menunda layar pertama (di produksi: reset cache lama sekali per instalasi dan
+/// pencatatan jenis instalasi). Dimulai di [_runTapGoUserApp]; _SessionBootstrap menunggunya sebelum membaca sesi.
+Future<void>? _tapGoStartupWork;
+
+@visibleForTesting
+set tapGoStartupWorkForTests(Future<void>? work) => _tapGoStartupWork = work;
+
 Future<void> _runTapGoUserApp() async {
   installTapGoCrashGuards();
   try {
     if (_isTapGoProductionBuild) {
-      await _prepareProductionFinalSync().timeout(
-        const Duration(seconds: 3),
-        onTimeout: () {
-          _tapGoDebugLog('[TapGo Startup] production cache reset timed out.');
-        },
-      );
       _apiClient.setBaseUrl(_productionApiRootUrl);
+      // Dulu `await` di sini menahan runApp sampai 3 dtk pada pembukaan pertama, sehingga pengguna hanya melihat
+      // jendela peluncuran Android yang putih. Kini berjalan SELAMA splash bermerek tampil.
+      _tapGoStartupWork = _prepareProductionFinalSync()
+          .timeout(
+            const Duration(seconds: 3),
+            onTimeout: () {
+              _tapGoDebugLog(
+                '[TapGo Startup] production cache reset timed out.',
+              );
+            },
+          )
+          .catchError((Object error) {
+        _tapGoDebugLog('[TapGo Startup] production init skipped: $error');
+      });
     } else {
       final savedApiBaseUrl = await _serverConfigStore.loadApiBaseUrl().timeout(
             const Duration(seconds: 2),
@@ -498,6 +513,16 @@ Future<void> _prepareProductionFinalSync() async {
   final preferences = await SharedPreferences.getInstance();
   final alreadyReset =
       preferences.getBool(_productionFinalSyncResetKey) ?? false;
+  // Instalasi lama sudah menulis penanda reset; instalasi baru belum. Dicatat SEBELUM penanda ditulis di bawah, untuk
+  // ucapan selamat datang (hanya instalasi baru).
+  try {
+    await tapGoRecordInstallKind(
+      _PrefsWelcomeStorage(preferences),
+      hadPreviousInstall: alreadyReset,
+    );
+  } catch (error) {
+    _tapGoDebugLog('[TapGo Startup] install kind not recorded: $error');
+  }
   if (alreadyReset) {
     return;
   }
@@ -571,8 +596,9 @@ class TapGoUserApp extends ConsumerWidget {
       darkTheme: tapGoReadableTheme(brightness: Brightness.dark),
       themeMode: themePreference.themeMode,
       home: _SessionBootstrap(
-        child:
-            isAuthenticated ? const _RoleDashboardGate() : const SplashGate(),
+        childBuilder: (launchedAt) => isAuthenticated
+            ? const _RoleDashboardGate()
+            : SplashGate(launchedAt: launchedAt),
       ),
     );
   }
